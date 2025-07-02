@@ -247,6 +247,110 @@ AUTH_REDIRECT_PROXY_URL="http://localhost:3000"
 ```
 
 
+## AI Workout Generator (`/packages/ai`)
+
+### Overview
+The AI package provides an intelligent workout generation system using LangGraph and OpenAI. It creates personalized workout plans by combining user preferences with exercise data from the database.
+
+### Architecture
+```
+packages/ai/
+├── src/
+│   ├── graph.ts              # LangGraph workflow definition
+│   ├── run-workout-generator.ts  # CLI entry point
+│   ├── index.ts              # Package exports
+│   ├── types/                # TypeScript definitions
+│   │   ├── exercise.ts       # Exercise data model
+│   │   └── workout.ts        # Workout state types
+│   ├── nodes/                # Graph processing nodes
+│   │   └── generateWorkoutNode.ts  # Main workout generation logic
+│   └── utils/                # Utility functions
+│       ├── fetchExercises.ts # Database queries
+│       ├── selectRandomExercisesByMuscles.ts  # Exercise selection
+│       └── formatWorkoutPlan.ts  # Output formatting
+```
+
+### Key Components
+
+#### LangGraph Workflow
+```typescript
+// Current flow: START → generateWorkoutNode → END
+// Processes user input and generates a 3-day workout plan
+```
+
+#### Exercise Type Definition
+```typescript
+interface Exercise {
+  id: number
+  name: string
+  muscle: string
+  muscle_group?: string
+  equipment?: string
+  level?: string
+  joints?: string
+  modality?: string
+  stance?: string
+  force_type?: string
+  grips?: string
+  description?: string
+  how_to?: string
+  tips?: string
+}
+```
+
+#### Workout State
+```typescript
+type WorkoutState = {
+  userInput: string      // User's workout request
+  workoutPlan: string    // Generated workout plan
+  exercises: Exercise[]  // Selected exercises
+}
+```
+
+### Usage
+```bash
+# Generate a workout plan
+pnpm -F @acme/ai example
+
+# Example output:
+# 🏋️ Workout Generator with Database
+# Input: I want to build muscle at home
+# 
+# Generated Workout Plan:
+# Day 1: Push (Chest, Shoulders, Triceps)
+# - Exercise 1: 3 sets of 8-12
+# ...
+```
+
+### Current Limitations & Improvement Areas
+
+1. **User Input Processing**: Currently ignores user preferences
+2. **Exercise Selection**: Random selection without considering user goals
+3. **Error Handling**: No error handling throughout the system
+4. **Configuration**: Hard-coded workout parameters (sets, reps, muscle groups)
+5. **Performance**: Fetches entire exercise database on each run
+
+### Recommended Improvements
+
+#### Short-term
+- Parse user input for equipment, goals, and experience level
+- Add error handling and validation
+- Implement proper exercise randomization
+- Rename script from "example" to "generate-workout"
+
+#### Long-term
+- Multi-node graph for complex workout logic
+- Configuration system for workout parameters
+- Caching layer for database queries
+- Integration with tRPC API for web/mobile access
+- Exercise progression tracking
+- AI-powered exercise recommendations based on user history
+
+### Integration Points
+- **Database**: Uses existing Drizzle ORM and exercise table
+- **Future API**: Can be exposed through tRPC for web/mobile apps
+- **Authentication**: Can leverage existing auth for personalized workouts
+
 ## Notes and Considerations
 
 ### What's Working Well
@@ -256,6 +360,7 @@ AUTH_REDIRECT_PROXY_URL="http://localhost:3000"
 - ✅ Mobile and web apps working
 - ✅ Real-time data synchronization
 - ✅ Modern React patterns (Suspense, Server Components)
+- ✅ AI workout generation with LangGraph integration
 
 
 ### Development Best Practices
@@ -264,14 +369,4 @@ AUTH_REDIRECT_PROXY_URL="http://localhost:3000"
 - Leverage shared UI components from @acme/ui
 - Add new database tables through Drizzle schema
 - Test on both web and mobile during development
-
-## Getting Started with Fitness Features
-
-1. **Plan Database Schema**: Design tables for workouts, exercises, and progress
-2. **Create API Endpoints**: Add tRPC routers for fitness functionality
-3. **Build UI Components**: Create workout-specific components
-4. **Implement Core Features**: Start with workout creation and logging
-5. **Add Mobile Features**: Leverage camera and health integrations
-6. **Enhance UX**: Add charts, progress visualization, and social features
-
-This reference document should be updated as new features are implemented and the architecture evolves.
+- Use LangGraph for complex AI workflows requiring state management

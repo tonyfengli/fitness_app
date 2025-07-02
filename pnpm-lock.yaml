@@ -330,6 +330,9 @@ importers:
 
   packages/api:
     dependencies:
+      '@acme/ai':
+        specifier: workspace:*
+        version: link:../ai
       '@acme/auth':
         specifier: workspace:*
         version: link:../auth

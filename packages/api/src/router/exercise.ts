@@ -3,6 +3,7 @@ import { z } from "zod/v4";
 
 import { desc, eq, ilike, and, inArray } from "@acme/db";
 import { exercises } from "@acme/db/schema";
+import { filterExercisesFromInput } from "@acme/ai";
 
 import { protectedProcedure, publicProcedure } from "../trpc";
 
@@ -113,6 +114,27 @@ export const exerciseRouter = {
         orderBy: desc(exercises.createdAt),
         limit: input.limit,
       });
+    }),
+
+  filter: publicProcedure
+    .input(z.object({
+      strength: z.enum(["very_low", "low", "moderate", "high", "very_high", "all"]).default("all"),
+      skill: z.enum(["very_low", "low", "moderate", "high", "all"]).default("all"),
+      intensity: z.enum(["low_local", "moderate_local", "high_local", "moderate_systemic", "high_systemic", "metabolic", "all"]).default("all"),
+    }))
+    .query(async ({ input }) => {
+      try {
+        const result = await filterExercisesFromInput({
+          strength: input.strength,
+          skill: input.skill,
+          intensity: input.intensity,
+        });
+        
+        return result.filteredExercises || [];
+      } catch (error) {
+        console.error('Exercise filtering failed:', error);
+        throw new Error('Failed to filter exercises');
+      }
     }),
 
   create: protectedProcedure
