@@ -1,6 +1,14 @@
 import { StateGraph, START, END } from "@langchain/langgraph";
 import { WorkoutState } from "./types";
 import { generateWorkoutNode, rulesBasedFilterNode, llmPreferenceNode } from "./nodes";
+import { getGraphCompileOptions } from "./utils/graphConfig";
+
+// Modern node constants for better maintainability
+const NODES = {
+  GENERATE_WORKOUT: "generateWorkout",
+  RULES_BASED_FILTER: "rulesBasedFilter",
+  LLM_PREFERENCE: "llmPreference",
+} as const;
 
 /**
  * Creates and compiles the workout planning graph
@@ -11,22 +19,19 @@ export function createWorkoutGraph() {
   // Build the graph using the annotation API
   const workflow = new StateGraph(WorkoutState);
 
-  // Add nodes
-  workflow.addNode("generateWorkout", generateWorkoutNode);
-  workflow.addNode("rulesBasedFilter", rulesBasedFilterNode);
-  workflow.addNode("llmPreference", llmPreferenceNode);
+  // Add nodes with modern constants
+  workflow.addNode(NODES.GENERATE_WORKOUT, generateWorkoutNode);
+  workflow.addNode(NODES.RULES_BASED_FILTER, rulesBasedFilterNode);
+  workflow.addNode(NODES.LLM_PREFERENCE, llmPreferenceNode);
   
-  // Set flow using modern API
-  // @ts-expect-error - LangGraph v0.3 types are still being refined
-  workflow.addEdge(START, "generateWorkout");
-  // @ts-expect-error - LangGraph v0.3 types are still being refined  
-  workflow.addEdge("generateWorkout", "rulesBasedFilter");
-  // @ts-expect-error - LangGraph v0.3 types are still being refined  
-  workflow.addEdge("rulesBasedFilter", "llmPreference");
-  // @ts-expect-error - LangGraph v0.3 types are still being refined  
-  workflow.addEdge("llmPreference", END);
+  // Define workflow edges with method chaining
+  workflow
+    .addEdge(START, NODES.GENERATE_WORKOUT)
+    .addEdge(NODES.GENERATE_WORKOUT, NODES.RULES_BASED_FILTER)
+    .addEdge(NODES.RULES_BASED_FILTER, NODES.LLM_PREFERENCE)
+    .addEdge(NODES.LLM_PREFERENCE, END);
 
-  return workflow.compile();
+  return workflow.compile(getGraphCompileOptions());
 }
 
 /**
@@ -38,16 +43,14 @@ export function createFilterGraph() {
   const workflow = new StateGraph(WorkoutState);
 
   // Add both filter nodes for complete filtering pipeline
-  workflow.addNode("rulesBasedFilter", rulesBasedFilterNode);
-  workflow.addNode("llmPreference", llmPreferenceNode);
+  workflow.addNode(NODES.RULES_BASED_FILTER, rulesBasedFilterNode);
+  workflow.addNode(NODES.LLM_PREFERENCE, llmPreferenceNode);
   
-  // Flow: START -> rules filter -> LLM preference -> END
-  // @ts-expect-error - LangGraph v0.3 types are still being refined
-  workflow.addEdge(START, "rulesBasedFilter");
-  // @ts-expect-error - LangGraph v0.3 types are still being refined  
-  workflow.addEdge("rulesBasedFilter", "llmPreference");
-  // @ts-expect-error - LangGraph v0.3 types are still being refined  
-  workflow.addEdge("llmPreference", END);
+  // Define filtering pipeline: START -> rules filter -> LLM preference -> END
+  workflow
+    .addEdge(START, NODES.RULES_BASED_FILTER)
+    .addEdge(NODES.RULES_BASED_FILTER, NODES.LLM_PREFERENCE)
+    .addEdge(NODES.LLM_PREFERENCE, END);
 
-  return workflow.compile();
+  return workflow.compile(getGraphCompileOptions());
 }

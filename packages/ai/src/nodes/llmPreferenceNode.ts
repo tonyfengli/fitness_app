@@ -50,9 +50,12 @@ export async function llmPreferenceNode(state: WorkoutStateType) {
       filteredExercises: filteredExercises,
     };
   } catch (error) {
+    // Re-throw known errors without wrapping
     if (error instanceof LLMPreferenceError) {
       throw error;
     }
+    
+    // Wrap unknown errors with context
     throw new LLMPreferenceError(
       'Unexpected error during LLM preference processing',
       error

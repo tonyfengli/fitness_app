@@ -74,11 +74,14 @@ export async function rulesBasedFilterNode(state: WorkoutStateType) {
       filteredExercises,
     };
   } catch (error) {
+    // Re-throw known errors without wrapping
     if (error instanceof ExerciseFilterError) {
       throw error;
     }
+    
+    // Wrap unknown errors with context
     throw new ExerciseFilterError(
-      'Unexpected error during exercise filtering',
+      'Unexpected error during rules-based filtering',
       error
     );
   }
