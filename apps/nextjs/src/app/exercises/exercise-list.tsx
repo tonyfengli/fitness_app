@@ -5,7 +5,12 @@ import { useTRPC } from "~/trpc/react";
 
 export default function ExerciseList() {
   const trpc = useTRPC();
-  const { data: exercises } = useSuspenseQuery(trpc.exercise.all.queryOptions());
+  const { data: exercises } = useSuspenseQuery(
+    trpc.exercise.all.queryOptions({ limit: 200 }) // Fetch up to 200 exercises
+  );
+
+  // Log all exercises to console
+  console.log('All exercises from database:', exercises);
 
   if (!exercises || exercises.length === 0) {
     return (

@@ -1,0 +1,40 @@
+{
+  "name": "@acme/ai",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "license": "MIT",
+  "scripts": {
+    "build": "tsc",
+    "clean": "git clean -xdf .cache .turbo dist node_modules",
+    "dev": "tsc",
+    "lint": "eslint .",
+    "format": "prettier --check . --ignore-path ../../.gitignore",
+    "typecheck": "tsc --noEmit --emitDeclarationOnly false",
+    "example": "tsx -e \"import { runExample } from './src/examples/simple-workout-graph'; runExample()\""
+  },
+  "dependencies": {
+    "@acme/db": "workspace:*",
+    "@langchain/core": "^0.3.26",
+    "@langchain/langgraph": "^0.3.6",
+    "@langchain/openai": "^0.5.16",
+    "dotenv": "^16.4.7",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@acme/eslint-config": "workspace:*",
+    "@acme/prettier-config": "workspace:*",
+    "@acme/tsconfig": "workspace:*",
+    "eslint": "catalog:",
+    "prettier": "catalog:",
+    "tsx": "^4.19.2",
+    "typescript": "catalog:"
+  },
+  "prettier": "@acme/prettier-config"
+}

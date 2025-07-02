@@ -1,0 +1,9 @@
+{
+  "extends": "@acme/tsconfig/base.json",
+  "compilerOptions": {
+    "tsBuildInfoFile": ".cache/tsbuildinfo.json",
+    "outDir": "dist"
+  },
+  "include": ["src"],
+  "exclude": ["node_modules", "dist"]
+}
