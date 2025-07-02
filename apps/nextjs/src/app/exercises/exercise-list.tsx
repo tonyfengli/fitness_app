@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useSuspenseQuery, useQuery } from "@tanstack/react-query";
 import { useTRPC } from "~/trpc/react";
+import { useBusinessId } from "~/hooks/useBusinessContext";
 
 const STRENGTH_OPTIONS = [
   { value: "all", label: "All Strength Levels" },
@@ -46,11 +47,56 @@ const JOINT_OPTIONS = [
   { value: "rotator_cuff", label: "Rotator Cuff" },
 ];
 
+const PRIMARY_GOAL_OPTIONS = [
+  { value: "mobility", label: "Mobility" },
+  { value: "strength", label: "Strength" },
+  { value: "general_fitness", label: "General Fitness" },
+  { value: "hypertrophy", label: "Hypertrophy" },
+  { value: "burn_fat", label: "Burn Fat" },
+];
+
+const ROUTINE_GOAL_OPTIONS = [
+  { value: "hypertrophy", label: "Hypertrophy" },
+  { value: "mixed_focus", label: "Mixed Focus" },
+  { value: "conditioning", label: "Conditioning" },
+  { value: "mobility", label: "Mobility" },
+  { value: "power", label: "Power" },
+  { value: "stability_control", label: "Stability Control" },
+];
+
+const MUSCLE_OPTIONS = [
+  { value: "glutes", label: "Glutes" },
+  { value: "quads", label: "Quads" },
+  { value: "hamstrings", label: "Hamstrings" },
+  { value: "calves", label: "Calves" },
+  { value: "adductors", label: "Adductors" },
+  { value: "abductors", label: "Abductors" },
+  { value: "core", label: "Core" },
+  { value: "lower_abs", label: "Lower Abs" },
+  { value: "upper_abs", label: "Upper Abs" },
+  { value: "obliques", label: "Obliques" },
+  { value: "chest", label: "Chest" },
+  { value: "upper_chest", label: "Upper Chest" },
+  { value: "lower_chest", label: "Lower Chest" },
+  { value: "lats", label: "Lats" },
+  { value: "traps", label: "Traps" },
+  { value: "biceps", label: "Biceps" },
+  { value: "triceps", label: "Triceps" },
+  { value: "shoulders", label: "Shoulders" },
+  { value: "delts", label: "Delts" },
+  { value: "upper_back", label: "Upper Back" },
+  { value: "lower_back", label: "Lower Back" },
+  { value: "shins", label: "Shins" },
+  { value: "tibialis_anterior", label: "Tibialis Anterior" },
+];
+
 export default function ExerciseList() {
   const trpc = useTRPC();
+  const businessId = useBusinessId();
+  
   const { data: exercises } = useSuspenseQuery(
     trpc.exercise.filter.queryOptions({ 
-      businessId: "d33b41e2-f700-4a08-9489-cb6e3daa7f20", // Tony Gym ID
+      businessId: businessId,
       strengthCapacity: "all" as const,
       skillCapacity: "all" as const,
       clientName: "Web User"
@@ -68,6 +114,24 @@ export default function ExerciseList() {
   
   // Joint avoidance states
   const [avoidJoints, setAvoidJoints] = useState<string[]>([]);
+  
+  // Primary goal state
+  const [primaryGoal, setPrimaryGoal] = useState("general_fitness");
+  
+  // Muscle targeting states
+  const [muscleTarget, setMuscleTarget] = useState<string[]>([]);
+  const [muscleLessen, setMuscleLessen] = useState<string[]>([]);
+  
+  // Routine goal state
+  const [routineGoal, setRoutineGoal] = useState("mixed_focus");
+  
+  // Routine template muscle target state (default to all muscles for full body)
+  const [routineMuscleTarget, setRoutineMuscleTarget] = useState<string[]>(
+    MUSCLE_OPTIONS.map(muscle => muscle.value)
+  );
+  
+  // Routine template intensity state
+  const [routineIntensity, setRoutineIntensity] = useState("moderate_local");
   
   // State to track whether we're showing filtered results
   const [showFiltered, setShowFiltered] = useState(false);
@@ -89,7 +153,7 @@ export default function ExerciseList() {
       includeExercises: filterCriteria?.include || [],
       avoidExercises: filterCriteria?.avoid || [],
       avoidJoints: filterCriteria?.avoidJoints || [],
-      businessId: "d33b41e2-f700-4a08-9489-cb6e3daa7f20", // Tony Gym ID
+      businessId: businessId,
       userInput: "", // No user input for now
     }),
     enabled: filterCriteria !== null,
@@ -127,7 +191,14 @@ export default function ExerciseList() {
     <div className="space-y-4">
       {/* Filter Dropdowns */}
       <div className="bg-white border rounded-lg p-4 shadow-sm">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-4">
+        {/* Client Section */}
+        <div className="mb-6">
+          <h3 className="text-lg font-semibold text-gray-800 mb-3 border-b border-gray-200 pb-2">Client</h3>
+          
+          {/* Phase 1 */}
+          <div className="mb-4">
+            <h4 className="text-md font-medium text-gray-700 mb-2">Phase 1</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-4">
           <div>
             <label htmlFor="strength" className="block text-sm font-medium text-gray-700 mb-1">
               Strength Level
@@ -232,27 +303,166 @@ export default function ExerciseList() {
             </select>
             <p className="text-xs text-gray-500 mt-1">Hold Ctrl/Cmd to select multiple</p>
           </div>
-          
-          {/* Intensity filter temporarily disabled - will be LLM-controlled */}
-          {/* 
-          <div>
-            <label htmlFor="intensity" className="block text-sm font-medium text-gray-700 mb-1">
-              Intensity
-            </label>
-            <select
-              id="intensity"
-              value={intensityFilter}
-              onChange={(e) => setIntensityFilter(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              {INTENSITY_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
+            </div>
           </div>
-          */}
+          
+          {/* Phase 2 */}
+          <div className="mb-4">
+            <h4 className="text-md font-medium text-gray-700 mb-2">Phase 2</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+              <div>
+                <label htmlFor="primaryGoal" className="block text-sm font-medium text-gray-700 mb-1">
+                  Primary Goal
+                </label>
+                <select
+                  id="primaryGoal"
+                  value={primaryGoal}
+                  onChange={(e) => setPrimaryGoal(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  {PRIMARY_GOAL_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              
+              <div>
+                <label htmlFor="muscleTarget" className="block text-sm font-medium text-gray-700 mb-1">
+                  Muscle Target
+                </label>
+                <select
+                  id="muscleTarget"
+                  multiple
+                  value={muscleTarget}
+                  onChange={(e) => {
+                    const selectedOptions = Array.from(e.target.selectedOptions, option => option.value);
+                    setMuscleTarget(selectedOptions);
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 h-24"
+                >
+                  {MUSCLE_OPTIONS.map((muscle) => (
+                    <option key={muscle.value} value={muscle.value}>
+                      {muscle.label}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-gray-500 mt-1">Hold Ctrl/Cmd to select multiple</p>
+              </div>
+              
+              <div>
+                <label htmlFor="muscleLessen" className="block text-sm font-medium text-gray-700 mb-1">
+                  Muscle Lessen
+                </label>
+                <select
+                  id="muscleLessen"
+                  multiple
+                  value={muscleLessen}
+                  onChange={(e) => {
+                    const selectedOptions = Array.from(e.target.selectedOptions, option => option.value);
+                    setMuscleLessen(selectedOptions);
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 h-24"
+                >
+                  {MUSCLE_OPTIONS.map((muscle) => (
+                    <option key={muscle.value} value={muscle.value}>
+                      {muscle.label}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-gray-500 mt-1">Hold Ctrl/Cmd to select multiple</p>
+              </div>
+              
+              <div>
+                <label htmlFor="intensity" className="block text-sm font-medium text-gray-700 mb-1">
+                  Intensity
+                </label>
+                <select
+                  id="intensity"
+                  value={intensityFilter}
+                  onChange={(e) => setIntensityFilter(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  {INTENSITY_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        {/* Routine Template Section */}
+        <div className="mb-6">
+          <h3 className="text-lg font-semibold text-gray-800 mb-3 border-b border-gray-200 pb-2">Routine Template</h3>
+          
+          {/* Phase 2 */}
+          <div className="mb-4">
+            <h4 className="text-md font-medium text-gray-700 mb-2">Phase 2</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+              <div>
+                <label htmlFor="routineGoal" className="block text-sm font-medium text-gray-700 mb-1">
+                  Routine Goal
+                </label>
+                <select
+                  id="routineGoal"
+                  value={routineGoal}
+                  onChange={(e) => setRoutineGoal(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  {ROUTINE_GOAL_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              
+              <div>
+                <label htmlFor="routineMuscleTarget" className="block text-sm font-medium text-gray-700 mb-1">
+                  Muscle Target
+                </label>
+                <select
+                  id="routineMuscleTarget"
+                  multiple
+                  value={routineMuscleTarget}
+                  onChange={(e) => {
+                    const selectedOptions = Array.from(e.target.selectedOptions, option => option.value);
+                    setRoutineMuscleTarget(selectedOptions);
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 h-24"
+                >
+                  {MUSCLE_OPTIONS.map((muscle) => (
+                    <option key={muscle.value} value={muscle.value}>
+                      {muscle.label}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-gray-500 mt-1">Hold Ctrl/Cmd to select multiple (defaults to full body)</p>
+              </div>
+              
+              <div>
+                <label htmlFor="routineIntensity" className="block text-sm font-medium text-gray-700 mb-1">
+                  Routine Intensity
+                </label>
+                <select
+                  id="routineIntensity"
+                  value={routineIntensity}
+                  onChange={(e) => setRoutineIntensity(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  {INTENSITY_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
         </div>
         
         {/* Filter Button */}
@@ -290,7 +500,13 @@ export default function ExerciseList() {
                 setIncludeExercises([]);
                 setAvoidExercises([]);
                 setAvoidJoints([]);
-                // intensityFilter stays as-is since it's disabled
+                setPrimaryGoal("general_fitness");
+                setMuscleTarget([]);
+                setMuscleLessen([]);
+                setIntensityFilter("all");
+                setRoutineGoal("mixed_focus");
+                setRoutineMuscleTarget(MUSCLE_OPTIONS.map(muscle => muscle.value));
+                setRoutineIntensity("moderate_local");
               }}
               className="px-6 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors"
             >

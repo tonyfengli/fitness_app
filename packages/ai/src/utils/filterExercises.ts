@@ -112,7 +112,7 @@ export function filterByIntensity(
 /**
  * Apply all filters to an exercise array with proper priority:
  * 1. Include filters take highest priority (override strength/skill restrictions)
- * 2. Standard filters (strength/skill/intensity) apply to remaining exercises
+ * 2. Standard filters (strength/skill/intensity*) apply to remaining exercises (*intensity is optional)
  * 3. Exclude filters take final priority (remove even if included by other filters)
  * @param exercises - Array of exercises to filter
  * @param filters - Object containing all filter values
@@ -123,7 +123,7 @@ export function applyAllFilters(
   filters: {
     strength: StrengthLevel;
     skill: SkillLevel;
-    intensity: IntensityLevel;
+    intensity?: IntensityLevel;
     include?: string[];
     avoid?: string[];
     avoidJoints?: string[];
@@ -149,7 +149,11 @@ export function applyAllFilters(
   let standardFiltered = remainingExercises;
   standardFiltered = filterByStrength(standardFiltered, filters.strength);
   standardFiltered = filterBySkill(standardFiltered, filters.skill);
-  standardFiltered = filterByIntensity(standardFiltered, filters.intensity);
+  
+  // Only apply intensity filtering if provided (will be handled by LLM later)
+  if (filters.intensity) {
+    standardFiltered = filterByIntensity(standardFiltered, filters.intensity);
+  }
   
   // Apply joint filtering to both included and remaining exercises
   if (filters.avoidJoints && filters.avoidJoints.length > 0) {

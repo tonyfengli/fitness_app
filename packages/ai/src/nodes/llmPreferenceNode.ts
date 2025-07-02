@@ -1,4 +1,4 @@
-import type { WorkoutStateType } from "../types";
+import type { WorkoutRoutineStateType } from "../types";
 import { openAILLM, validateOpenAIConfig } from "../utils/llm";
 
 export class LLMPreferenceError extends Error {
@@ -15,7 +15,7 @@ export class LLMPreferenceError extends Error {
  * @returns Updated state with LLM-scored and preference-filtered exercises
  * @throws {LLMPreferenceError} If LLM processing fails
  */
-export async function llmPreferenceNode(state: WorkoutStateType) {
+export async function llmPreferenceNode(state: WorkoutRoutineStateType) {
   try {
     // Validate OpenAI configuration
     validateOpenAIConfig();

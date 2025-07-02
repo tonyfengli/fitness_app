@@ -1,5 +1,5 @@
 import { StateGraph, START, END } from "@langchain/langgraph";
-import { WorkoutState } from "./types";
+import { WorkoutRoutineState } from "./types";
 import { generateWorkoutNode, rulesBasedFilterNode, llmPreferenceNode } from "./nodes";
 import { getGraphCompileOptions } from "./utils/graphConfig";
 
@@ -17,7 +17,7 @@ const NODES = {
  */
 export function createWorkoutGraph() {
   // Build the graph using the annotation API
-  const workflow = new StateGraph(WorkoutState);
+  const workflow = new StateGraph(WorkoutRoutineState);
 
   // Add nodes with modern constants
   workflow.addNode(NODES.GENERATE_WORKOUT, generateWorkoutNode);
@@ -40,7 +40,7 @@ export function createWorkoutGraph() {
  * @returns Compiled LangGraph workflow for filtering exercises
  */
 export function createFilterGraph() {
-  const workflow = new StateGraph(WorkoutState);
+  const workflow = new StateGraph(WorkoutRoutineState);
 
   // Add both filter nodes for complete filtering pipeline
   workflow.addNode(NODES.RULES_BASED_FILTER, rulesBasedFilterNode);

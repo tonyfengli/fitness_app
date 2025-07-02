@@ -247,109 +247,296 @@ AUTH_REDIRECT_PROXY_URL="http://localhost:3000"
 ```
 
 
-## AI Workout Generator (`/packages/ai`)
+## AI Workout Routine Generator (`/packages/ai`)
 
 ### Overview
-The AI package provides an intelligent workout generation system using LangGraph and OpenAI. It creates personalized workout plans by combining user preferences with exercise data from the database.
+The AI package provides an intelligent workout routine generation system using LangGraph and OpenAI. It creates personalized workout routines by combining client preferences, routine templates, and exercise data from the database through a multi-node workflow with business-specific exercise filtering.
 
 ### Architecture
 ```
 packages/ai/
 ├── src/
-│   ├── graph.ts              # LangGraph workflow definition
-│   ├── run-workout-generator.ts  # CLI entry point
-│   ├── index.ts              # Package exports
-│   ├── types/                # TypeScript definitions
-│   │   ├── exercise.ts       # Exercise data model
-│   │   └── workout.ts        # Workout state types
-│   ├── nodes/                # Graph processing nodes
-│   │   └── generateWorkoutNode.ts  # Main workout generation logic
-│   └── utils/                # Utility functions
-│       ├── fetchExercises.ts # Database queries
-│       ├── selectRandomExercisesByMuscles.ts  # Exercise selection
-│       └── formatWorkoutPlan.ts  # Output formatting
+│   ├── graph.ts                    # LangGraph workflow definitions
+│   ├── run-workout-generator.ts    # CLI entry point
+│   ├── generateWorkoutFromInput.ts # Workout generation API
+│   ├── filterExercisesFromInput.ts # Exercise filtering API
+│   ├── index.ts                    # Package exports
+│   ├── types/                      # TypeScript definitions
+│   │   ├── exercise.ts             # Exercise data model
+│   │   ├── workoutRoutine.ts       # Workout routine state types
+│   │   ├── clientContext.ts        # Client fitness profile
+│   │   └── routineTemplate.ts      # Routine template structure
+│   ├── nodes/                      # Graph processing nodes
+│   │   ├── generateWorkoutNode.ts  # Workout generation logic
+│   │   ├── rulesBasedFilterNode.ts # Deterministic exercise filtering
+│   │   └── llmPreferenceNode.ts    # AI-based preference scoring
+│   └── utils/                      # Utility functions
+│       ├── fetchExercises.ts       # Database queries
+│       ├── filterExercises.ts      # Exercise filtering logic
+│       ├── formatWorkoutPlan.ts    # Output formatting
+│       ├── businessValidation.ts   # Business context validation
+│       ├── llm.ts                  # OpenAI integration
+│       └── graphConfig.ts          # LangGraph configuration
 ```
 
 ### Key Components
 
-#### LangGraph Workflow
-```typescript
-// Current flow: START → generateWorkoutNode → END
-// Processes user input and generates a 3-day workout plan
+#### LangGraph Workflows
+
+**Workout Generation Workflow:**
+```
+START → rulesBasedFilterNode → llmPreferenceNode → END
 ```
 
-#### Exercise Type Definition
+**Exercise Filtering Workflow:**
+```
+START → rulesBasedFilterNode → llmPreferenceNode → END
+```
+
+#### Type Definitions
+
+**Exercise Model:**
 ```typescript
 interface Exercise {
   id: number
   name: string
-  muscle: string
-  muscle_group?: string
-  equipment?: string
-  level?: string
-  joints?: string
-  modality?: string
-  stance?: string
-  force_type?: string
-  grips?: string
-  description?: string
-  how_to?: string
-  tips?: string
+  primaryMuscle: string
+  secondaryMuscles?: string[]
+  loadedJoints?: string[]
+  movementPattern: string
+  modality: string
+  movementTags?: string[]
+  functionTags?: string[]
+  fatigueProfile: string
+  complexityLevel: string
+  equipment?: string[]
+  strengthLevel: string
+  createdAt: Date
+  updatedAt?: Date
 }
 ```
 
-#### Workout State
+**Client Context:**
 ```typescript
-type WorkoutState = {
-  userInput: string      // User's workout request
-  workoutPlan: string    // Generated workout plan
-  exercises: Exercise[]  // Selected exercises
+interface ClientContext {
+  name: string
+  strength_capacity: "very_low" | "low" | "moderate" | "high" | "very_high"
+  skill_capacity: "very_low" | "low" | "moderate" | "high"
+  primary_goal?: "mobility" | "strength" | "general_fitness" | "hypertrophy" | "burn_fat"
+  intensity?: "low_local" | "moderate_local" | "high_local" | "moderate_systemic" | "high_systemic" | "metabolic" | "all"
+  muscle_target?: string[]     // Muscles to target more
+  muscle_lessen?: string[]     // Muscles to work less
+  exercise_requests?: {
+    include: string[]          // Must-include exercises
+    avoid: string[]           // Must-avoid exercises
+  }
+  avoid_joints?: string[]      // Joints to avoid (injuries)
+  business_id?: string         // Multi-tenant business context
 }
 ```
 
-### Usage
+**Routine Template:**
+```typescript
+interface RoutineTemplate {
+  routine_goal: "hypertrophy" | "mixed_focus" | "conditioning" | "mobility" | "power" | "stability_control"
+  muscle_target: string[]      // Template muscle focus
+  routine_intensity: "low_local" | "moderate_local" | "high_local" | "moderate_systemic" | "high_systemic" | "metabolic" | "all"
+}
+```
+
+**Workout Routine State:**
+```typescript
+type WorkoutRoutineStateType = {
+  userInput: string            // User's workout request
+  programmedRoutine: string    // Generated routine plan
+  exercises: Exercise[]        // All available exercises
+  clientContext: ClientContext // Client fitness profile
+  filteredExercises: Exercise[] // Filtered exercise results
+  routineTemplate: RoutineTemplate // Routine programming template
+}
+```
+
+### Multi-Tenant Business Architecture
+
+#### Business Context Integration
+```typescript
+// Business-specific exercise fetching
+if (clientContext?.business_id) {
+  exercises = await fetchExercisesByBusiness(clientContext.business_id)
+} else {
+  exercises = await fetchAllExercises() // Graceful fallback
+}
+```
+
+#### Database Schema
+```sql
+-- Business entity
+business (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name VARCHAR(255) NOT NULL,
+  created_at TIMESTAMP DEFAULT now(),
+  updated_at TIMESTAMP DEFAULT now()
+)
+
+-- Junction table for business-exercise relationships
+business_exercise (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  business_id UUID REFERENCES business(id),
+  exercise_id INTEGER REFERENCES exercises(id),
+  created_at TIMESTAMP DEFAULT now(),
+  UNIQUE(business_id, exercise_id)
+)
+```
+
+### Intelligent Filtering System
+
+#### Rules-Based Filtering (Deterministic)
+```typescript
+// Priority-based filtering logic:
+// 1. Include filters override strength/skill restrictions
+// 2. Standard filters (strength/skill) apply to remaining
+// 3. Joint avoidance applies to all exercises
+// 4. Exclude filters override everything
+```
+
+**Filter Categories:**
+- **Strength Capacity**: Cascading levels (e.g., "moderate" includes very_low, low, moderate)
+- **Skill Capacity**: Progressive complexity filtering
+- **Joint Restrictions**: Injury-safe exercise selection
+- **Exercise Preferences**: Must-include/must-avoid lists
+- **Muscle Targeting**: Client-specific muscle focus
+
+#### LLM-Based Preference Scoring (AI)
+```typescript
+// Future: OpenAI integration for intelligent exercise scoring
+// - Analyzes client goals vs exercise characteristics
+// - Considers muscle targeting preferences
+// - Applies routine template requirements
+// - Provides soft filtering and ranking
+```
+
+### API Integration
+
+#### tRPC Exercise Router
+```typescript
+// Exercise filtering endpoint
+filter: publicProcedure
+  .input(z.object({
+    clientName: z.string().default("Default Client"),
+    strengthCapacity: z.enum(["very_low", "low", "moderate", "high", "very_high", "all"]),
+    skillCapacity: z.enum(["very_low", "low", "moderate", "high", "all"]),
+    includeExercises: z.array(z.string()).default([]),
+    avoidExercises: z.array(z.string()).default([]),
+    avoidJoints: z.array(z.string()).default([]),
+    businessId: z.string().uuid().optional(),
+    userInput: z.string().optional(),
+  }))
+  .query(async ({ input }) => {
+    // Processes through LangGraph filtering workflow
+  })
+```
+
+### Frontend Integration
+
+#### Business Context Management
+```typescript
+// useBusinessContext hook provides:
+// - Dynamic business ID (auth-ready)
+// - Environment configuration support
+// - Graceful fallbacks
+// - Permission system (future)
+```
+
+#### Client Configuration Interface
+**Phase 1 (Rules-Based):**
+- Strength Level, Skill Level
+- Include Exercises, Avoid Exercises, Avoid Joints
+
+**Phase 2 (AI-Enhanced):**
+- Primary Goal, Muscle Target, Muscle Lessen, Intensity
+
+#### Routine Template Interface
+**Phase 2 (Programming):**
+- Routine Goal, Muscle Target, Routine Intensity
+
+### Usage Examples
+
+#### CLI Workout Generation
 ```bash
-# Generate a workout plan
 pnpm -F @acme/ai example
 
-# Example output:
-# 🏋️ Workout Generator with Database
-# Input: I want to build muscle at home
-# 
+# Output:
 # Generated Workout Plan:
 # Day 1: Push (Chest, Shoulders, Triceps)
 # - Exercise 1: 3 sets of 8-12
 # ...
 ```
 
-### Current Limitations & Improvement Areas
+#### API Exercise Filtering
+```typescript
+// Filter exercises with client context
+const result = await filterExercisesFromInput({
+  clientContext: {
+    name: "John Doe",
+    strength_capacity: "moderate",
+    skill_capacity: "low",
+    primary_goal: "hypertrophy",
+    muscle_target: ["chest", "shoulders"],
+    avoid_joints: ["lower_back"],
+    business_id: "business-uuid"
+  }
+})
+```
 
-1. **User Input Processing**: Currently ignores user preferences
-2. **Exercise Selection**: Random selection without considering user goals
-3. **Error Handling**: No error handling throughout the system
-4. **Configuration**: Hard-coded workout parameters (sets, reps, muscle groups)
-5. **Performance**: Fetches entire exercise database on each run
+### OpenAI Integration
 
-### Recommended Improvements
+#### Configuration
+```typescript
+// Environment variables required:
+OPENAI_API_KEY="your-openai-api-key"
 
-#### Short-term
-- Parse user input for equipment, goals, and experience level
-- Add error handling and validation
-- Implement proper exercise randomization
-- Rename script from "example" to "generate-workout"
+// Supported models:
+// - gpt-3.5-turbo (cost-effective)
+// - gpt-4o (latest, most capable)
+```
 
-#### Long-term
-- Multi-node graph for complex workout logic
-- Configuration system for workout parameters
-- Caching layer for database queries
-- Integration with tRPC API for web/mobile access
+#### Error Handling
+- API key validation
+- Rate limiting awareness
+- Graceful fallbacks to rules-based filtering
+- Comprehensive error logging
+
+### Current Implementation Status
+
+#### ✅ Completed Features
+- Multi-node LangGraph workflow architecture
+- Rules-based exercise filtering with priority logic
+- Business-specific exercise management
+- Client context integration (strength, skill, preferences)
+- Routine template structure
+- OpenAI integration framework
+- Comprehensive type safety throughout
+- Business context validation and fallbacks
+- Frontend integration with dynamic business context
+
+#### 🚧 In Development
+- LLM preference scoring logic
+- Advanced routine generation algorithms
+- Client-routine template integration workflow
+
+#### 📋 Planned Features
 - Exercise progression tracking
-- AI-powered exercise recommendations based on user history
+- Workout history analysis
+- Real-time routine adjustments
+- Advanced AI coaching insights
+- Performance analytics integration
 
 ### Integration Points
-- **Database**: Uses existing Drizzle ORM and exercise table
-- **Future API**: Can be exposed through tRPC for web/mobile apps
-- **Authentication**: Can leverage existing auth for personalized workouts
+- **Database**: Drizzle ORM with business-specific exercise filtering
+- **API**: tRPC endpoints for web/mobile exercise filtering
+- **Authentication**: Business context ready for auth integration
+- **AI**: OpenAI integration for intelligent exercise selection
+- **Frontend**: React components with comprehensive client/routine configuration
 
 ## Notes and Considerations
 

@@ -1,4 +1,4 @@
-import type { WorkoutStateType, Exercise } from "../types";
+import type { WorkoutRoutineStateType, Exercise } from "../types";
 import { fetchAllExercises, selectRandomExercisesByMuscles, formatWorkoutPlan } from "../utils";
 import { ExerciseFetchError } from "../utils/fetchExercises";
 import { ExerciseSelectionError } from "../utils/selectRandomExercisesByMuscles";
@@ -17,7 +17,7 @@ export class WorkoutGenerationError extends Error {
  * @returns Updated state with workout plan and selected exercises
  * @throws {WorkoutGenerationError} If workout generation fails
  */
-export async function generateWorkoutNode(state: WorkoutStateType) {
+export async function generateWorkoutNode(state: WorkoutRoutineStateType) {
   try {
     // Fetch all exercises from database
     const allExercises = await fetchAllExercises();
@@ -56,10 +56,10 @@ export async function generateWorkoutNode(state: WorkoutStateType) {
     }
     
     // Format the workout plan
-    const workoutPlan = formatWorkoutPlan(pushExercises, pullExercises, legExercises);
+    const programmedRoutine = formatWorkoutPlan(pushExercises, pullExercises, legExercises);
 
     return {
-      workoutPlan,
+      programmedRoutine,
       exercises: [...pushExercises, ...pullExercises, ...legExercises],
     };
   } catch (error) {

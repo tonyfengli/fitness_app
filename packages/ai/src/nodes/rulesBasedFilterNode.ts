@@ -1,5 +1,5 @@
-import type { WorkoutStateType } from "../types";
-import { applyAllFilters, type StrengthLevel, type SkillLevel, type IntensityLevel } from "../utils/filterExercises";
+import type { WorkoutRoutineStateType } from "../types";
+import { applyAllFilters, type StrengthLevel, type SkillLevel } from "../utils/filterExercises";
 import { extractFilterCriteriaFromContext } from "../types/clientContext";
 
 export class ExerciseFilterError extends Error {
@@ -16,7 +16,7 @@ export class ExerciseFilterError extends Error {
  * @returns Updated state with filtered exercises
  * @throws {ExerciseFilterError} If filtering fails
  */
-export async function rulesBasedFilterNode(state: WorkoutStateType) {
+export async function rulesBasedFilterNode(state: WorkoutRoutineStateType) {
   try {
     // Extract data from state
     const { 
@@ -49,7 +49,6 @@ export async function rulesBasedFilterNode(state: WorkoutStateType) {
     const filteredExercises = applyAllFilters(exercises, {
       strength: filterCriteria.strength as StrengthLevel,
       skill: filterCriteria.skill as SkillLevel,
-      intensity: filterCriteria.intensity as IntensityLevel, // Always "all" - LLM will decide
       include: clientContext.exercise_requests?.include || [],
       avoid: clientContext.exercise_requests?.avoid || [],
       avoidJoints: clientContext.avoid_joints || [],

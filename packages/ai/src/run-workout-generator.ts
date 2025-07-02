@@ -2,7 +2,7 @@ import { config } from "dotenv";
 import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
 import { generateWorkoutFromInput } from "./generateWorkoutFromInput";
-import type { Exercise, WorkoutStateType } from "./types";
+import type { Exercise, WorkoutRoutineStateType } from "./types";
 import { WorkoutGenerationError } from "./nodes/generateWorkoutNode";
 
 // Load environment variables from root .env file
@@ -13,10 +13,10 @@ config({ path: resolve(__dirname, "../../../.env") });
 /**
  * CLI runner for workout generation - displays formatted results
  * @param userInput - The user's workout request
- * @returns Promise<WorkoutStateType> - The generated workout data
+ * @returns Promise<WorkoutRoutineStateType> - The generated workout data
  * @throws {Error} If workout generation fails
  */
-export async function runWorkoutGenerator(userInput = "I want to build muscle at home"): Promise<WorkoutStateType> {
+export async function runWorkoutGenerator(userInput = "I want to build muscle at home"): Promise<WorkoutRoutineStateType> {
   console.log("🏋️ Workout Generator with Database\n");
   
   try {
@@ -24,7 +24,7 @@ export async function runWorkoutGenerator(userInput = "I want to build muscle at
 
     console.log("Input:", result.userInput);
     console.log("\nGenerated Workout Plan:");
-    console.log(result.workoutPlan);
+    console.log(result.programmedRoutine);
     console.log(`\nUsed ${result.exercises.length} exercises from database`);
     
     console.log("\nSelected Exercises:");
