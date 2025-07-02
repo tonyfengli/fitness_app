@@ -118,16 +118,47 @@ export const exerciseRouter = {
 
   filter: publicProcedure
     .input(z.object({
-      strength: z.enum(["very_low", "low", "moderate", "high", "very_high", "all"]).default("all"),
-      skill: z.enum(["very_low", "low", "moderate", "high", "all"]).default("all"),
-      intensity: z.enum(["low_local", "moderate_local", "high_local", "moderate_systemic", "high_systemic", "metabolic", "all"]).default("all"),
+      // Client fitness profile
+      clientName: z.string().default("Default Client"),
+      strengthCapacity: z.enum(["very_low", "low", "moderate", "high", "very_high", "all"]).default("moderate"),
+      skillCapacity: z.enum(["very_low", "low", "moderate", "high", "all"]).default("moderate"),
+      
+      // Exercise inclusion/exclusion
+      includeExercises: z.array(z.string()).default([]),
+      avoidExercises: z.array(z.string()).default([]),
+      
+      // Joint restrictions (for injuries/limitations)
+      avoidJoints: z.array(z.string()).default([]),
+      
+      // Business context
+      businessId: z.string().uuid().optional(),
+      
+      // Optional user input for future LLM processing
+      userInput: z.string().optional(),
     }))
     .query(async ({ input }) => {
       try {
+        console.log('Exercise filter API called with input:', input);
+        
         const result = await filterExercisesFromInput({
-          strength: input.strength,
-          skill: input.skill,
-          intensity: input.intensity,
+          clientContext: {
+            name: input.clientName,
+            strength_capacity: input.strengthCapacity === "all" ? "very_high" : input.strengthCapacity,
+            skill_capacity: input.skillCapacity === "all" ? "high" : input.skillCapacity,
+            exercise_requests: {
+              include: input.includeExercises,
+              avoid: input.avoidExercises,
+            },
+            avoid_joints: input.avoidJoints,
+            business_id: input.businessId
+          },
+          userInput: input.userInput,
+        });
+        
+        console.log('Exercise filter result:', {
+          totalFiltered: result.filteredExercises?.length || 0,
+          includeRequests: input.includeExercises,
+          avoidRequests: input.avoidExercises
         });
         
         return result.filteredExercises || [];

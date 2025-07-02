@@ -1,2 +1,3 @@
 export * from "./generateWorkoutNode";
-export * from "./filterExercisesNode";
+export * from "./rulesBasedFilterNode";
+export * from "./llmPreferenceNode";

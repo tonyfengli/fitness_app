@@ -24,3 +24,36 @@ export const CreatePostSchema = createInsertSchema(Post, {
 
 export * from "./auth-schema";
 export * from "./exercise";
+import { exercises } from "./exercise";
+
+export const Business = pgTable("business", (t) => ({
+  id: t.uuid().notNull().primaryKey().defaultRandom(),
+  name: t.varchar({ length: 255 }).notNull(),
+  createdAt: t.timestamp().defaultNow().notNull(),
+  updatedAt: t
+    .timestamp({ mode: "date", withTimezone: true })
+    .$onUpdateFn(() => sql`now()`),
+}));
+
+export const CreateBusinessSchema = createInsertSchema(Business, {
+  name: z.string().min(1).max(255),
+}).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const BusinessExercise = pgTable("business_exercise", (t) => ({
+  id: t.uuid().notNull().primaryKey().defaultRandom(),
+  businessId: t.uuid().notNull().references(() => Business.id, { onDelete: "cascade" }),
+  exerciseId: t.uuid().notNull().references(() => exercises.id, { onDelete: "cascade" }),
+  createdAt: t.timestamp().defaultNow().notNull(),
+}));
+
+export const CreateBusinessExerciseSchema = createInsertSchema(BusinessExercise, {
+  businessId: z.string().uuid(),
+  exerciseId: z.string().uuid(),
+}).omit({
+  id: true,
+  createdAt: true,
+});

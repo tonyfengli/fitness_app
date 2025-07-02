@@ -1,44 +1,86 @@
 import { createFilterGraph } from "./graph";
-import { fetchAllExercises } from "./utils/fetchExercises";
-import type { WorkoutStateType, FilterCriteria } from "./types";
-import { ExerciseFilterError } from "./nodes/filterExercisesNode";
+import { fetchAllExercises, fetchExercisesByBusiness } from "./utils/fetchExercises";
+import type { WorkoutStateType, FilterCriteria, ClientContext } from "./types";
+import { ExerciseFilterError } from "./nodes/rulesBasedFilterNode";
+import { createDefaultClientContext } from "./types/clientContext";
+
+export interface FilterExercisesOptions {
+  userInput?: string;
+  clientContext?: ClientContext;
+  filterCriteria?: FilterCriteria; // Legacy support
+}
 
 /**
- * Filters exercises based on provided criteria
+ * Filters exercises based on client context and optional user input
  * This is the main API-ready function for exercise filtering
  * 
- * @param filterCriteria - Object containing strength, skill, and intensity filter values
+ * @param options - Object containing client context, user input, or legacy filter criteria
  * @returns Promise<WorkoutStateType> - The filtered exercises
  * @throws {ExerciseFilterError} If filtering fails
  * 
  * @example
  * ```typescript
  * const result = await filterExercisesFromInput({
- *   strength: "moderate",
- *   skill: "low", 
- *   intensity: "low_local"
+ *   clientContext: {
+ *     name: "John Doe",
+ *     fitness_profile: {
+ *       strength_capacity: "moderate",
+ *       skill_capacity: "low"
+ *     }
+ *   },
+ *   userInput: "I want to work out today"
  * });
  * console.log(result.filteredExercises); // Array of filtered exercises
  * ```
  */
-export async function filterExercisesFromInput(filterCriteria: FilterCriteria): Promise<WorkoutStateType> {
+export async function filterExercisesFromInput(options: FilterExercisesOptions): Promise<WorkoutStateType> {
   try {
-    // Fetch all exercises first
-    const allExercises = await fetchAllExercises();
+    const { userInput = "", clientContext, filterCriteria } = options;
+    
+    // Determine which exercises to fetch based on business context
+    let allExercises;
+    
+    if (clientContext?.business_id) {
+      // Fetch business-specific exercises
+      allExercises = await fetchExercisesByBusiness(clientContext.business_id);
+      console.log(`Fetched ${allExercises.length} exercises for business ${clientContext.business_id}`);
+    } else {
+      // Fallback to all exercises if no business context
+      allExercises = await fetchAllExercises();
+      console.log(`Fetched ${allExercises.length} exercises (no business context)`);
+    }
     
     if (!allExercises || allExercises.length === 0) {
-      throw new ExerciseFilterError('No exercises available in database');
+      throw new ExerciseFilterError('No exercises available for this business');
+    }
+    
+    // Handle client context or create from legacy filter criteria
+    let finalClientContext: ClientContext;
+    
+    if (clientContext) {
+      finalClientContext = clientContext;
+    } else if (filterCriteria) {
+      // Legacy support: convert filter criteria to client context
+      finalClientContext = createDefaultClientContext(
+        filterCriteria.strength as any || "moderate",
+        filterCriteria.skill as any || "moderate",
+        { include: [], avoid: [] },
+        undefined // no business ID for legacy
+      );
+    } else {
+      // Default fallback
+      finalClientContext = createDefaultClientContext();
     }
     
     // Create the filter graph
     const app = createFilterGraph();
     
-    // Run the filtering workflow
+    // Run the filtering workflow with client context
     const result = await app.invoke({
-      userInput: "",
+      userInput: userInput.trim(),
       workoutPlan: "",
       exercises: allExercises,
-      filterCriteria,
+      clientContext: finalClientContext,
       filteredExercises: [],
     });
     

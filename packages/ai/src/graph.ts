@@ -1,6 +1,6 @@
 import { StateGraph, START, END } from "@langchain/langgraph";
 import { WorkoutState } from "./types";
-import { generateWorkoutNode, filterExercisesNode } from "./nodes";
+import { generateWorkoutNode, rulesBasedFilterNode, llmPreferenceNode } from "./nodes";
 
 /**
  * Creates and compiles the workout planning graph
@@ -13,15 +13,18 @@ export function createWorkoutGraph() {
 
   // Add nodes
   workflow.addNode("generateWorkout", generateWorkoutNode);
-  workflow.addNode("filterExercises", filterExercisesNode);
+  workflow.addNode("rulesBasedFilter", rulesBasedFilterNode);
+  workflow.addNode("llmPreference", llmPreferenceNode);
   
   // Set flow using modern API
   // @ts-expect-error - LangGraph v0.3 types are still being refined
   workflow.addEdge(START, "generateWorkout");
   // @ts-expect-error - LangGraph v0.3 types are still being refined  
-  workflow.addEdge("generateWorkout", "filterExercises");
+  workflow.addEdge("generateWorkout", "rulesBasedFilter");
   // @ts-expect-error - LangGraph v0.3 types are still being refined  
-  workflow.addEdge("filterExercises", END);
+  workflow.addEdge("rulesBasedFilter", "llmPreference");
+  // @ts-expect-error - LangGraph v0.3 types are still being refined  
+  workflow.addEdge("llmPreference", END);
 
   return workflow.compile();
 }
@@ -34,14 +37,17 @@ export function createWorkoutGraph() {
 export function createFilterGraph() {
   const workflow = new StateGraph(WorkoutState);
 
-  // Add only the filter node
-  workflow.addNode("filterExercises", filterExercisesNode);
+  // Add both filter nodes for complete filtering pipeline
+  workflow.addNode("rulesBasedFilter", rulesBasedFilterNode);
+  workflow.addNode("llmPreference", llmPreferenceNode);
   
-  // Simple flow: START -> filter -> END
+  // Flow: START -> rules filter -> LLM preference -> END
   // @ts-expect-error - LangGraph v0.3 types are still being refined
-  workflow.addEdge(START, "filterExercises");
+  workflow.addEdge(START, "rulesBasedFilter");
   // @ts-expect-error - LangGraph v0.3 types are still being refined  
-  workflow.addEdge("filterExercises", END);
+  workflow.addEdge("rulesBasedFilter", "llmPreference");
+  // @ts-expect-error - LangGraph v0.3 types are still being refined  
+  workflow.addEdge("llmPreference", END);
 
   return workflow.compile();
 }

@@ -1,7 +1,8 @@
 import { Annotation } from "@langchain/langgraph";
 import type { Exercise } from "./exercise";
+import type { ClientContext } from "./clientContext";
 
-// Filter criteria interface
+// Legacy filter criteria interface (for backward compatibility)
 export interface FilterCriteria {
   strength?: string;
   skill?: string;
@@ -13,7 +14,7 @@ export const WorkoutState = Annotation.Root({
   userInput: Annotation<string>,
   workoutPlan: Annotation<string>,
   exercises: Annotation<Exercise[]>,
-  filterCriteria: Annotation<FilterCriteria>,
+  clientContext: Annotation<ClientContext>,
   filteredExercises: Annotation<Exercise[]>
 });
 
