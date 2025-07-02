@@ -142,6 +142,12 @@ export default function ExerciseList() {
     include: string[];
     avoid: string[];
     avoidJoints: string[];
+    primaryGoal?: string;
+    muscleTarget: string[];
+    muscleLessen: string[];
+    routineGoal?: string;
+    routineMuscleTarget: string[];
+    routineIntensity?: string;
   } | null>(null);
 
   // Query for filtered exercises (only runs when filterCriteria is set)
@@ -153,6 +159,13 @@ export default function ExerciseList() {
       includeExercises: filterCriteria?.include || [],
       avoidExercises: filterCriteria?.avoid || [],
       avoidJoints: filterCriteria?.avoidJoints || [],
+      primaryGoal: filterCriteria?.primaryGoal as "mobility" | "strength" | "general_fitness" | "hypertrophy" | "burn_fat" | undefined,
+      intensity: filterCriteria?.intensity as "low_local" | "moderate_local" | "high_local" | "moderate_systemic" | "high_systemic" | "metabolic" | "all" | undefined,
+      muscleTarget: filterCriteria?.muscleTarget || [],
+      muscleLessen: filterCriteria?.muscleLessen || [],
+      routineGoal: filterCriteria?.routineGoal as "hypertrophy" | "mixed_focus" | "conditioning" | "mobility" | "power" | "stability_control" | undefined,
+      routineMuscleTarget: filterCriteria?.routineMuscleTarget || [],
+      routineIntensity: filterCriteria?.routineIntensity as "low_local" | "moderate_local" | "high_local" | "moderate_systemic" | "high_systemic" | "metabolic" | "all" | undefined,
       businessId: businessId,
       userInput: "", // No user input for now
     }),
@@ -469,20 +482,53 @@ export default function ExerciseList() {
         <div className="flex justify-center gap-3">
           <button
             onClick={() => {
-              // Trigger LangGraph filtering (intensity disabled - set to "all")
+              // Build complete client context with all Phase 2 fields
+              const clientContext = {
+                name: "Web User",
+                strength_capacity: strengthFilter as "very_low" | "low" | "moderate" | "high" | "very_high" | "all",
+                skill_capacity: skillFilter as "very_low" | "low" | "moderate" | "high" | "all",
+                primary_goal: primaryGoal as "mobility" | "strength" | "general_fitness" | "hypertrophy" | "burn_fat",
+                intensity: intensityFilter as "low_local" | "moderate_local" | "high_local" | "moderate_systemic" | "high_systemic" | "metabolic" | "all",
+                muscle_target: muscleTarget,
+                muscle_lessen: muscleLessen,
+                exercise_requests: {
+                  include: includeExercises,
+                  avoid: avoidExercises
+                },
+                avoid_joints: avoidJoints,
+                business_id: businessId
+              };
+
+              // Build routine template with all fields
+              const routineTemplate = {
+                routine_goal: routineGoal as "hypertrophy" | "mixed_focus" | "conditioning" | "mobility" | "power" | "stability_control",
+                muscle_target: routineMuscleTarget,
+                routine_intensity: routineIntensity as "low_local" | "moderate_local" | "high_local" | "moderate_systemic" | "high_systemic" | "metabolic" | "all"
+              };
+
+              // Build complete filter criteria with all Phase 2 fields
               const criteria = {
                 strength: strengthFilter,
                 skill: skillFilter,
-                intensity: "all", // Always "all" - intensity will be LLM-controlled
+                intensity: intensityFilter,
                 include: includeExercises,
                 avoid: avoidExercises,
                 avoidJoints: avoidJoints,
+                primaryGoal: primaryGoal,
+                muscleTarget: muscleTarget,
+                muscleLessen: muscleLessen,
+                routineGoal: routineGoal,
+                routineMuscleTarget: routineMuscleTarget,
+                routineIntensity: routineIntensity,
               };
               
               setFilterCriteria(criteria);
               setShowFiltered(true);
               
-              console.log('Applying LangGraph filter with criteria:', criteria);
+              console.log('=== FULL LANGGRAPH CONTEXT ===');
+              console.log('Client Context:', clientContext);
+              console.log('Routine Template:', routineTemplate);
+              console.log('Filter Criteria (sent to API):', criteria);
             }}
             disabled={isFiltering}
             className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
@@ -516,18 +562,53 @@ export default function ExerciseList() {
         </div>
       </div>
 
+      {/* Display Applied Context when Filtering */}
+      {showFiltered && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-4">
+          <h3 className="text-lg font-semibold text-blue-800">Applied LangGraph Context</h3>
+          
+          {/* Client Context Display */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <h4 className="font-medium text-blue-700">Client Context</h4>
+              <div className="bg-white rounded p-3 space-y-1 text-sm">
+                <div><span className="font-medium">Primary Goal:</span> {primaryGoal}</div>
+                <div><span className="font-medium">Strength:</span> {strengthFilter}</div>
+                <div><span className="font-medium">Skill:</span> {skillFilter}</div>
+                <div><span className="font-medium">Intensity:</span> {intensityFilter}</div>
+                <div><span className="font-medium">Muscle Target:</span> {muscleTarget.length > 0 ? muscleTarget.join(", ") : "None"}</div>
+                <div><span className="font-medium">Muscle Lessen:</span> {muscleLessen.length > 0 ? muscleLessen.join(", ") : "None"}</div>
+                <div><span className="font-medium">Include Exercises:</span> {includeExercises.length > 0 ? includeExercises.join(", ") : "None"}</div>
+                <div><span className="font-medium">Avoid Exercises:</span> {avoidExercises.length > 0 ? avoidExercises.join(", ") : "None"}</div>
+                <div><span className="font-medium">Avoid Joints:</span> {avoidJoints.length > 0 ? avoidJoints.join(", ") : "None"}</div>
+              </div>
+            </div>
+            
+            {/* Routine Template Display */}
+            <div className="space-y-2">
+              <h4 className="font-medium text-blue-700">Routine Template</h4>
+              <div className="bg-white rounded p-3 space-y-1 text-sm">
+                <div><span className="font-medium">Routine Goal:</span> {routineGoal}</div>
+                <div><span className="font-medium">Muscle Target:</span> {routineMuscleTarget.length > 0 ? `${routineMuscleTarget.length} muscles selected` : "None"}</div>
+                <div><span className="font-medium">Routine Intensity:</span> {routineIntensity}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <p className="text-sm text-gray-600">
         {showFiltered ? (
           <>
-            Showing {displayedExercises?.length || 0} filtered exercises 
+            <span className="font-medium text-green-600">LangGraph Filtering Applied:</span> Showing {displayedExercises?.length || 0} exercises after rulesBasedFilterNode 
             {filterCriteria && (
               <span className="text-blue-600 ml-1">
-                (Strength: {filterCriteria.strength}, Skill: {filterCriteria.skill})
+                → Ready for llmPreferenceNode
               </span>
             )}
           </>
         ) : (
-          `Showing ${displayedExercises?.length || 0} exercises`
+          `Showing ${displayedExercises?.length || 0} exercises (unfiltered)`
         )}
       </p>
       

@@ -1,5 +1,5 @@
 import type { WorkoutRoutineStateType } from "../types";
-import { openAILLM, validateOpenAIConfig } from "../utils/llm";
+import { validateOpenAIConfig } from "../utils/llm";
 
 export class LLMPreferenceError extends Error {
   constructor(message: string, public cause?: unknown) {
@@ -17,14 +17,12 @@ export class LLMPreferenceError extends Error {
  */
 export async function llmPreferenceNode(state: WorkoutRoutineStateType) {
   try {
-    // Validate OpenAI configuration
-    validateOpenAIConfig();
-    
     // Extract data from state
     const { 
       filteredExercises, 
       userInput,
-      clientContext 
+      clientContext,
+      routineTemplate 
     } = state;
     
     if (!filteredExercises || filteredExercises.length === 0) {
@@ -32,22 +30,39 @@ export async function llmPreferenceNode(state: WorkoutRoutineStateType) {
     }
     
     console.log(
-      `LLM preference node: Processing ${filteredExercises.length} rules-filtered exercises`,
+      `🤖 LLM preference node: Processing ${filteredExercises.length} rules-filtered exercises`,
       {
         clientName: clientContext?.name || 'Unknown',
         userInput: userInput || 'No user input',
         filteringType: 'LLM-based (preference scoring)',
-        exerciseCount: filteredExercises.length
+        exerciseCount: filteredExercises.length,
+        clientGoal: clientContext?.primary_goal || 'Not specified',
+        routineGoal: routineTemplate?.routine_goal || 'Not specified',
+        routineMuscleTargets: routineTemplate?.muscle_target?.length || 0
       }
     );
     
-    // TODO: Add LLM-based scoring logic here
-    // const scoredExercises = await scoreExercisesWithLLM(filteredExercises, clientContext, userInput);
+    // Check if OpenAI is configured for future LLM processing
+    try {
+      validateOpenAIConfig();
+      console.log('✅ OpenAI configuration valid - ready for LLM scoring');
+    } catch (_error) {
+      console.log('⚠️  OpenAI not configured - using pass-through mode');
+    }
+    
+    // TODO: Add LLM-based scoring logic here when OpenAI is available
+    // if (openAIAvailable) {
+    //   const scoredExercises = await scoreExercisesWithLLM(filteredExercises, clientContext, userInput);
+    //   return { filteredExercises: scoredExercises };
+    // }
     
     // For now, pass through the exercises unchanged
     // This will be replaced with actual LLM scoring logic
+    console.log('📤 LLM preference node: Passing through exercises (no scoring applied yet)');
+    
     return {
-      filteredExercises: filteredExercises,
+      ...state, // Preserve all existing state
+      filteredExercises: filteredExercises, // Keep the filtered exercises (no scoring applied yet)
     };
   } catch (error) {
     // Re-throw known errors without wrapping

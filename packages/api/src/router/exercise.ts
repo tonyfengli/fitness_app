@@ -130,6 +130,17 @@ export const exerciseRouter = {
       // Joint restrictions (for injuries/limitations)
       avoidJoints: z.array(z.string()).default([]),
       
+      // Phase 2 Client fields
+      primaryGoal: z.enum(["mobility", "strength", "general_fitness", "hypertrophy", "burn_fat"]).optional(),
+      intensity: z.enum(["low_local", "moderate_local", "high_local", "moderate_systemic", "high_systemic", "metabolic", "all"]).optional(),
+      muscleTarget: z.array(z.string()).default([]),
+      muscleLessen: z.array(z.string()).default([]),
+      
+      // Routine Template fields
+      routineGoal: z.enum(["hypertrophy", "mixed_focus", "conditioning", "mobility", "power", "stability_control"]).optional(),
+      routineMuscleTarget: z.array(z.string()).default([]),
+      routineIntensity: z.enum(["low_local", "moderate_local", "high_local", "moderate_systemic", "high_systemic", "metabolic", "all"]).optional(),
+      
       // Business context
       businessId: z.string().uuid().optional(),
       
@@ -145,6 +156,10 @@ export const exerciseRouter = {
             name: input.clientName,
             strength_capacity: input.strengthCapacity === "all" ? "very_high" : input.strengthCapacity,
             skill_capacity: input.skillCapacity === "all" ? "high" : input.skillCapacity,
+            primary_goal: input.primaryGoal,
+            intensity: input.intensity,
+            muscle_target: input.muscleTarget,
+            muscle_lessen: input.muscleLessen,
             exercise_requests: {
               include: input.includeExercises,
               avoid: input.avoidExercises,
@@ -152,6 +167,11 @@ export const exerciseRouter = {
             avoid_joints: input.avoidJoints,
             business_id: input.businessId
           },
+          routineTemplate: input.routineGoal ? {
+            routine_goal: input.routineGoal,
+            muscle_target: input.routineMuscleTarget,
+            routine_intensity: input.routineIntensity || "moderate_local"
+          } : undefined,
           userInput: input.userInput,
         });
         

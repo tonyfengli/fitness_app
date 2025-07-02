@@ -70,7 +70,8 @@ export async function rulesBasedFilterNode(state: WorkoutRoutineStateType) {
     );
     
     return {
-      filteredExercises,
+      ...state, // Preserve all existing state
+      filteredExercises, // Update only the filtered exercises
     };
   } catch (error) {
     // Re-throw known errors without wrapping
