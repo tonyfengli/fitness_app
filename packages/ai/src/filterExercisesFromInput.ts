@@ -35,6 +35,7 @@ export interface FilterExercisesOptions {
  */
 export async function filterExercisesFromInput(options: FilterExercisesOptions): Promise<WorkoutRoutineStateType> {
   try {
+    console.log('🚀 filterExercisesFromInput called');
     const { userInput = "", clientContext, routineTemplate } = options;
     
     // Determine which exercises to fetch based on business context
@@ -43,11 +44,9 @@ export async function filterExercisesFromInput(options: FilterExercisesOptions):
     if (clientContext?.business_id) {
       // Fetch business-specific exercises
       allExercises = await fetchExercisesByBusiness(clientContext.business_id);
-      console.log(`Fetched ${allExercises.length} exercises for business ${clientContext.business_id}`);
     } else {
       // Fallback to all exercises if no business context
       allExercises = await fetchAllExercises();
-      console.log(`Fetched ${allExercises.length} exercises (no business context)`);
     }
     
     if (!allExercises || allExercises.length === 0) {
@@ -74,20 +73,8 @@ export async function filterExercisesFromInput(options: FilterExercisesOptions):
       }
     };
     
-    console.log('🚀 Starting LangGraph filter workflow:', {
-      userInput: initialState.userInput || 'No user input',
-      exerciseCount: initialState.exercises.length,
-      clientName: finalClientContext.name,
-      routineGoal: (routineTemplate || initialState.routineTemplate).routine_goal
-    });
-    
     // Run the filtering workflow with client context and routine template
     const result = await app.invoke(initialState);
-    
-    console.log('✅ LangGraph workflow completed successfully:', {
-      filteredExerciseCount: result.filteredExercises?.length || 0,
-      workflowNodes: 'rulesBasedFilter → llmPreference'
-    });
     
     // Validate the result
     if (!result.filteredExercises) {
@@ -100,6 +87,9 @@ export async function filterExercisesFromInput(options: FilterExercisesOptions):
     if (error instanceof ExerciseFilterError) {
       throw error;
     }
+    
+    // Log unexpected errors
+    console.error('❌ Unexpected error in filterExercisesFromInput:', error);
     
     // Wrap any other errors
     throw new ExerciseFilterError(

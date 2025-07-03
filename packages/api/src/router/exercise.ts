@@ -62,13 +62,20 @@ export const exerciseRouter = {
       limit: z.number().min(1).max(1000).default(20),
       offset: z.number().min(0).default(0),
     }).optional())
-    .query(({ ctx, input }) => {
+    .query(async ({ ctx, input }) => {
       const { limit = 20, offset = 0 } = input ?? {};
-      return ctx.db.query.exercises.findMany({
+      console.log(`📊 exercise.all called with limit: ${limit}, offset: ${offset}`);
+      
+      const startTime = Date.now();
+      const result = await ctx.db.query.exercises.findMany({
         orderBy: desc(exercises.createdAt),
         limit,
         offset,
       });
+      const duration = Date.now() - startTime;
+      
+      console.log(`✅ exercise.all completed: ${result.length} exercises in ${duration}ms`);
+      return result;
     }),
 
   byId: publicProcedure
@@ -149,8 +156,7 @@ export const exerciseRouter = {
     }))
     .query(async ({ input }) => {
       try {
-        console.log('Exercise filter API called with input:', input);
-        
+        console.log('🔍 exercise.filter API called');
         const result = await filterExercisesFromInput({
           clientContext: {
             name: input.clientName,
@@ -175,15 +181,9 @@ export const exerciseRouter = {
           userInput: input.userInput,
         });
         
-        console.log('Exercise filter result:', {
-          totalFiltered: result.filteredExercises?.length || 0,
-          includeRequests: input.includeExercises,
-          avoidRequests: input.avoidExercises
-        });
-        
         return result.filteredExercises || [];
       } catch (error) {
-        console.error('Exercise filtering failed:', error);
+        console.error('❌ Exercise filtering failed:', error);
         throw new Error('Failed to filter exercises');
       }
     }),

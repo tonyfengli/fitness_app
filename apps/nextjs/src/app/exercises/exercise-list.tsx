@@ -95,11 +95,9 @@ export default function ExerciseList() {
   const businessId = useBusinessId();
   
   const { data: exercises } = useSuspenseQuery(
-    trpc.exercise.filter.queryOptions({ 
-      businessId: businessId,
-      strengthCapacity: "all" as const,
-      skillCapacity: "all" as const,
-      clientName: "Web User"
+    trpc.exercise.all.queryOptions({
+      limit: 1000, // Get all exercises for the library
+      offset: 0
     })
   );
 
@@ -175,18 +173,9 @@ export default function ExerciseList() {
   // Display exercises (either all or filtered)
   const displayedExercises = showFiltered && filteredExercises ? filteredExercises : exercises;
 
-  // Log all exercises to console
-  console.log('All exercises from database:', exercises);
-  
-  // Log filtering state and errors
+  // Log filtering errors
   if (filterError) {
     console.error('Filter error:', filterError);
-  }
-  
-  if (filterCriteria) {
-    console.log('Filter criteria set:', filterCriteria);
-    console.log('Filtered exercises result:', filteredExercises);
-    console.log('Is filtering:', isFiltering);
   }
 
   if (exercises.length === 0) {
@@ -525,10 +514,6 @@ export default function ExerciseList() {
               setFilterCriteria(criteria);
               setShowFiltered(true);
               
-              console.log('=== FULL LANGGRAPH CONTEXT ===');
-              console.log('Client Context:', clientContext);
-              console.log('Routine Template:', routineTemplate);
-              console.log('Filter Criteria (sent to API):', criteria);
             }}
             disabled={isFiltering}
             className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
@@ -562,40 +547,6 @@ export default function ExerciseList() {
         </div>
       </div>
 
-      {/* Display Applied Context when Filtering */}
-      {showFiltered && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-4">
-          <h3 className="text-lg font-semibold text-blue-800">Applied LangGraph Context</h3>
-          
-          {/* Client Context Display */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <h4 className="font-medium text-blue-700">Client Context</h4>
-              <div className="bg-white rounded p-3 space-y-1 text-sm">
-                <div><span className="font-medium">Primary Goal:</span> {primaryGoal}</div>
-                <div><span className="font-medium">Strength:</span> {strengthFilter}</div>
-                <div><span className="font-medium">Skill:</span> {skillFilter}</div>
-                <div><span className="font-medium">Intensity:</span> {intensityFilter}</div>
-                <div><span className="font-medium">Muscle Target:</span> {muscleTarget.length > 0 ? muscleTarget.join(", ") : "None"}</div>
-                <div><span className="font-medium">Muscle Lessen:</span> {muscleLessen.length > 0 ? muscleLessen.join(", ") : "None"}</div>
-                <div><span className="font-medium">Include Exercises:</span> {includeExercises.length > 0 ? includeExercises.join(", ") : "None"}</div>
-                <div><span className="font-medium">Avoid Exercises:</span> {avoidExercises.length > 0 ? avoidExercises.join(", ") : "None"}</div>
-                <div><span className="font-medium">Avoid Joints:</span> {avoidJoints.length > 0 ? avoidJoints.join(", ") : "None"}</div>
-              </div>
-            </div>
-            
-            {/* Routine Template Display */}
-            <div className="space-y-2">
-              <h4 className="font-medium text-blue-700">Routine Template</h4>
-              <div className="bg-white rounded p-3 space-y-1 text-sm">
-                <div><span className="font-medium">Routine Goal:</span> {routineGoal}</div>
-                <div><span className="font-medium">Muscle Target:</span> {routineMuscleTarget.length > 0 ? `${routineMuscleTarget.length} muscles selected` : "None"}</div>
-                <div><span className="font-medium">Routine Intensity:</span> {routineIntensity}</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       <p className="text-sm text-gray-600">
         {showFiltered ? (
@@ -606,11 +557,32 @@ export default function ExerciseList() {
                 → Ready for llmPreferenceNode
               </span>
             )}
+            {/* Check if any exercises have LLM scores */}
+            {displayedExercises?.some(ex => ex.llmScore !== undefined) && (
+              <span className="text-purple-600 ml-1">
+                → 🤖 AI Ranked
+              </span>
+            )}
           </>
         ) : (
           `Showing ${displayedExercises?.length || 0} exercises (unfiltered)`
         )}
       </p>
+
+      {/* Copy-pastable filtered exercises array */}
+      {showFiltered && filteredExercises && (
+        <div className="bg-gray-50 border rounded-lg p-4 mt-4">
+          <h3 className="text-lg font-semibold text-gray-800 mb-2">📋 Copy-Pastable Filtered Exercises Array</h3>
+          <div className="bg-white border rounded p-2 max-h-96 overflow-auto">
+            <pre className="text-xs font-mono whitespace-pre-wrap break-words">
+              {JSON.stringify(filteredExercises, null, 2)}
+            </pre>
+          </div>
+          <p className="text-xs text-gray-500 mt-2">
+            Click in the box above and select all (Ctrl/Cmd+A) to copy the array
+          </p>
+        </div>
+      )}
       
       <div className="grid gap-4">
         {displayedExercises?.map((exercise) => (
@@ -619,18 +591,42 @@ export default function ExerciseList() {
             className="bg-white border rounded-lg p-4 shadow hover:shadow-md transition-shadow"
           >
             <div className="flex justify-between items-start">
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900">
-                  {exercise.name}
-                </h3>
+              <div className="flex-1">
+                <div className="flex items-center gap-3">
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    {exercise.name}
+                  </h3>
+                  {exercise.llmScore !== undefined && (
+                    <div className="flex items-center gap-2">
+                      <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded-full">
+                        🎯 {exercise.llmScore.toFixed(1)}/10
+                      </span>
+                    </div>
+                  )}
+                </div>
                 <p className="text-sm text-gray-600 mt-1">
                   Primary: {exercise.primaryMuscle} | Pattern: {exercise.movementPattern}
                 </p>
                 <p className="text-xs text-gray-500 mt-1">
                   {exercise.modality} • {exercise.complexityLevel} complexity • {exercise.strengthLevel} strength
                 </p>
+                
+                {/* LLM Reasoning */}
+                {exercise.llmReasons && exercise.llmReasons.length > 0 && (
+                  <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                    <h4 className="text-sm font-medium text-blue-900 mb-2">🤖 AI Reasoning:</h4>
+                    <ul className="text-sm text-blue-800 space-y-1">
+                      {exercise.llmReasons.map((reason, index) => (
+                        <li key={index} className="flex items-start gap-2">
+                          <span className="text-blue-600 mt-0.5">•</span>
+                          <span>{reason}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
-              <span className="text-xs text-gray-400">
+              <span className="text-xs text-gray-400 ml-4">
                 {new Date(exercise.createdAt).toLocaleDateString()}
               </span>
             </div>

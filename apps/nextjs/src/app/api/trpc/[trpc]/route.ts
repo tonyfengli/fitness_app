@@ -25,6 +25,12 @@ export const OPTIONS = () => {
 };
 
 const handler = async (req: NextRequest) => {
+  // Log incoming requests
+  const url = new URL(req.url);
+  if (url.pathname.includes('exercise.filter')) {
+    console.log('🔍 tRPC exercise.filter request received');
+  }
+  
   const response = await fetchRequestHandler({
     endpoint: "/api/trpc",
     router: appRouter,

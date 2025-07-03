@@ -25,6 +25,7 @@ export function createWorkoutGraph() {
   workflow.addNode(NODES.LLM_PREFERENCE, llmPreferenceNode);
   
   // Define workflow edges with method chaining
+  // @ts-ignore - LangGraph TypeScript issues
   workflow
     .addEdge(START, NODES.GENERATE_WORKOUT)
     .addEdge(NODES.GENERATE_WORKOUT, NODES.RULES_BASED_FILTER)
@@ -47,6 +48,7 @@ export function createFilterGraph() {
   workflow.addNode(NODES.LLM_PREFERENCE, llmPreferenceNode);
   
   // Define filtering pipeline: START -> rules filter -> LLM preference -> END
+  // @ts-ignore - LangGraph TypeScript issues
   workflow
     .addEdge(START, NODES.RULES_BASED_FILTER)
     .addEdge(NODES.RULES_BASED_FILTER, NODES.LLM_PREFERENCE)

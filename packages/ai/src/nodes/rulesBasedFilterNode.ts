@@ -18,6 +18,7 @@ export class ExerciseFilterError extends Error {
  */
 export async function rulesBasedFilterNode(state: WorkoutRoutineStateType) {
   try {
+    console.log('📐 rulesBasedFilterNode called');
     // Extract data from state
     const { 
       exercises, 
@@ -29,14 +30,8 @@ export async function rulesBasedFilterNode(state: WorkoutRoutineStateType) {
       throw new ExerciseFilterError('No exercises available to filter');
     }
     
-    // Log user input for context (future LLM enhancement)
-    if (userInput) {
-      console.log(`User input: "${userInput}"`);
-    }
-    
     // If no client context provided, return all exercises
     if (!clientContext) {
-      console.log('No client context provided, returning all exercises');
       return {
         filteredExercises: exercises,
       };
@@ -54,20 +49,7 @@ export async function rulesBasedFilterNode(state: WorkoutRoutineStateType) {
       avoidJoints: clientContext.avoid_joints || [],
     });
     
-    console.log(
-      `Rules-based filtering: ${exercises.length} exercises → ${filteredExercises.length} exercises`,
-      {
-        clientName: clientContext.name,
-        strengthCapacity: clientContext.strength_capacity,
-        skillCapacity: clientContext.skill_capacity,
-        includeExercises: clientContext.exercise_requests?.include || [],
-        avoidExercises: clientContext.exercise_requests?.avoid || [],
-        avoidJoints: clientContext.avoid_joints || [],
-        userInput: userInput || 'No user input',
-        filteringType: 'Rules-based (deterministic)',
-        filteringNotes: 'Include filters override strength/skill restrictions, avoid joints filters apply to all exercises, exclude filters override everything'
-      }
-    );
+    
     
     return {
       ...state, // Preserve all existing state
@@ -78,6 +60,9 @@ export async function rulesBasedFilterNode(state: WorkoutRoutineStateType) {
     if (error instanceof ExerciseFilterError) {
       throw error;
     }
+    
+    // Log unexpected errors
+    console.error('❌ Unexpected error in rulesBasedFilterNode:', error);
     
     // Wrap unknown errors with context
     throw new ExerciseFilterError(
