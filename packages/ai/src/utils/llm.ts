@@ -7,8 +7,9 @@ import { ChatOpenAI } from "@langchain/openai";
 export const openAILLM = new ChatOpenAI({
   modelName: "gpt-4o", // Latest and greatest GPT-4 model
   temperature: 0.1, // Low temperature for consistent scoring
-  maxTokens: 1000, // Sufficient for exercise analysis
+  maxTokens: 2000, // Sufficient for exercise analysis
   openAIApiKey: process.env.OPENAI_API_KEY,
+  timeout: 60000, // 60 second timeout
 });
 
 /**

@@ -1,3 +1,3 @@
 export * from "./generateWorkoutNode";
-export * from "./rulesBasedFilterNode";
-export * from "./llmPreferenceNode";
+// Note: rulesBasedFilterNode and customScoringNode have been moved to filtering/
+// They are no longer LangGraph nodes, but direct functions

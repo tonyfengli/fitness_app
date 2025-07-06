@@ -23,13 +23,9 @@ const SKILL_OPTIONS = [
 ];
 
 const INTENSITY_OPTIONS = [
-  { value: "all", label: "All Intensity Levels" },
-  { value: "low_local", label: "Low Local" },
-  { value: "moderate_local", label: "Moderate Local" },
-  { value: "high_local", label: "High Local" },
-  { value: "moderate_systemic", label: "Moderate Systemic" },
-  { value: "high_systemic", label: "High Systemic" },
-  { value: "metabolic", label: "Metabolic" },
+  { value: "low", label: "Low" },
+  { value: "medium", label: "Medium" },
+  { value: "high", label: "High" },
 ];
 
 const JOINT_OPTIONS = [
@@ -47,22 +43,7 @@ const JOINT_OPTIONS = [
   { value: "rotator_cuff", label: "Rotator Cuff" },
 ];
 
-const PRIMARY_GOAL_OPTIONS = [
-  { value: "mobility", label: "Mobility" },
-  { value: "strength", label: "Strength" },
-  { value: "general_fitness", label: "General Fitness" },
-  { value: "hypertrophy", label: "Hypertrophy" },
-  { value: "burn_fat", label: "Burn Fat" },
-];
 
-const ROUTINE_GOAL_OPTIONS = [
-  { value: "hypertrophy", label: "Hypertrophy" },
-  { value: "mixed_focus", label: "Mixed Focus" },
-  { value: "conditioning", label: "Conditioning" },
-  { value: "mobility", label: "Mobility" },
-  { value: "power", label: "Power" },
-  { value: "stability_control", label: "Stability Control" },
-];
 
 const MUSCLE_OPTIONS = [
   { value: "glutes", label: "Glutes" },
@@ -104,7 +85,7 @@ export default function ExerciseList() {
   // Filter states
   const [strengthFilter, setStrengthFilter] = useState("all");
   const [skillFilter, setSkillFilter] = useState("all");
-  const [intensityFilter, setIntensityFilter] = useState("all");
+  const [intensityFilter, setIntensityFilter] = useState("medium");
   
   // Exercise inclusion/exclusion states
   const [includeExercises, setIncludeExercises] = useState<string[]>([]);
@@ -113,23 +94,11 @@ export default function ExerciseList() {
   // Joint avoidance states
   const [avoidJoints, setAvoidJoints] = useState<string[]>([]);
   
-  // Primary goal state
-  const [primaryGoal, setPrimaryGoal] = useState("general_fitness");
   
   // Muscle targeting states
   const [muscleTarget, setMuscleTarget] = useState<string[]>([]);
   const [muscleLessen, setMuscleLessen] = useState<string[]>([]);
   
-  // Routine goal state
-  const [routineGoal, setRoutineGoal] = useState("mixed_focus");
-  
-  // Routine template muscle target state (default to all muscles for full body)
-  const [routineMuscleTarget, setRoutineMuscleTarget] = useState<string[]>(
-    MUSCLE_OPTIONS.map(muscle => muscle.value)
-  );
-  
-  // Routine template intensity state
-  const [routineIntensity, setRoutineIntensity] = useState("moderate_local");
   
   // State to track whether we're showing filtered results
   const [showFiltered, setShowFiltered] = useState(false);
@@ -140,12 +109,8 @@ export default function ExerciseList() {
     include: string[];
     avoid: string[];
     avoidJoints: string[];
-    primaryGoal?: string;
     muscleTarget: string[];
     muscleLessen: string[];
-    routineGoal?: string;
-    routineMuscleTarget: string[];
-    routineIntensity?: string;
   } | null>(null);
 
   // Query for filtered exercises (only runs when filterCriteria is set)
@@ -157,14 +122,10 @@ export default function ExerciseList() {
       includeExercises: filterCriteria?.include || [],
       avoidExercises: filterCriteria?.avoid || [],
       avoidJoints: filterCriteria?.avoidJoints || [],
-      primaryGoal: filterCriteria?.primaryGoal as "mobility" | "strength" | "general_fitness" | "hypertrophy" | "burn_fat" | undefined,
-      intensity: filterCriteria?.intensity as "low_local" | "moderate_local" | "high_local" | "moderate_systemic" | "high_systemic" | "metabolic" | "all" | undefined,
+      intensity: filterCriteria?.intensity as "low" | "medium" | "high" | undefined,
       muscleTarget: filterCriteria?.muscleTarget || [],
       muscleLessen: filterCriteria?.muscleLessen || [],
-      routineGoal: filterCriteria?.routineGoal as "hypertrophy" | "mixed_focus" | "conditioning" | "mobility" | "power" | "stability_control" | undefined,
-      routineMuscleTarget: filterCriteria?.routineMuscleTarget || [],
-      routineIntensity: filterCriteria?.routineIntensity as "low_local" | "moderate_local" | "high_local" | "moderate_systemic" | "high_systemic" | "metabolic" | "all" | undefined,
-      businessId: businessId,
+      businessId: businessId || undefined,
       userInput: "", // No user input for now
     }),
     enabled: filterCriteria !== null,
@@ -176,6 +137,11 @@ export default function ExerciseList() {
   // Log filtering errors
   if (filterError) {
     console.error('Filter error:', filterError);
+    console.error('Filter error details:', {
+      message: filterError.message,
+      data: filterError.data,
+      cause: filterError.cause
+    });
   }
 
   if (exercises.length === 0) {
@@ -311,25 +277,7 @@ export default function ExerciseList() {
           {/* Phase 2 */}
           <div className="mb-4">
             <h4 className="text-md font-medium text-gray-700 mb-2">Phase 2</h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-              <div>
-                <label htmlFor="primaryGoal" className="block text-sm font-medium text-gray-700 mb-1">
-                  Primary Goal
-                </label>
-                <select
-                  id="primaryGoal"
-                  value={primaryGoal}
-                  onChange={(e) => setPrimaryGoal(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  {PRIMARY_GOAL_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
               <div>
                 <label htmlFor="muscleTarget" className="block text-sm font-medium text-gray-700 mb-1">
                   Muscle Target
@@ -397,76 +345,6 @@ export default function ExerciseList() {
           </div>
         </div>
         
-        {/* Routine Template Section */}
-        <div className="mb-6">
-          <h3 className="text-lg font-semibold text-gray-800 mb-3 border-b border-gray-200 pb-2">Routine Template</h3>
-          
-          {/* Phase 2 */}
-          <div className="mb-4">
-            <h4 className="text-md font-medium text-gray-700 mb-2">Phase 2</h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
-              <div>
-                <label htmlFor="routineGoal" className="block text-sm font-medium text-gray-700 mb-1">
-                  Routine Goal
-                </label>
-                <select
-                  id="routineGoal"
-                  value={routineGoal}
-                  onChange={(e) => setRoutineGoal(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  {ROUTINE_GOAL_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              
-              <div>
-                <label htmlFor="routineMuscleTarget" className="block text-sm font-medium text-gray-700 mb-1">
-                  Muscle Target
-                </label>
-                <select
-                  id="routineMuscleTarget"
-                  multiple
-                  value={routineMuscleTarget}
-                  onChange={(e) => {
-                    const selectedOptions = Array.from(e.target.selectedOptions, option => option.value);
-                    setRoutineMuscleTarget(selectedOptions);
-                  }}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 h-24"
-                >
-                  {MUSCLE_OPTIONS.map((muscle) => (
-                    <option key={muscle.value} value={muscle.value}>
-                      {muscle.label}
-                    </option>
-                  ))}
-                </select>
-                <p className="text-xs text-gray-500 mt-1">Hold Ctrl/Cmd to select multiple (defaults to full body)</p>
-              </div>
-              
-              <div>
-                <label htmlFor="routineIntensity" className="block text-sm font-medium text-gray-700 mb-1">
-                  Routine Intensity
-                </label>
-                <select
-                  id="routineIntensity"
-                  value={routineIntensity}
-                  onChange={(e) => setRoutineIntensity(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  {INTENSITY_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          </div>
-        </div>
-        
         {/* Filter Button */}
         <div className="flex justify-center gap-3">
           <button
@@ -476,8 +354,7 @@ export default function ExerciseList() {
                 name: "Web User",
                 strength_capacity: strengthFilter as "very_low" | "low" | "moderate" | "high" | "very_high" | "all",
                 skill_capacity: skillFilter as "very_low" | "low" | "moderate" | "high" | "all",
-                primary_goal: primaryGoal as "mobility" | "strength" | "general_fitness" | "hypertrophy" | "burn_fat",
-                intensity: intensityFilter as "low_local" | "moderate_local" | "high_local" | "moderate_systemic" | "high_systemic" | "metabolic" | "all",
+                intensity: intensityFilter as "low" | "medium" | "high",
                 muscle_target: muscleTarget,
                 muscle_lessen: muscleLessen,
                 exercise_requests: {
@@ -488,12 +365,6 @@ export default function ExerciseList() {
                 business_id: businessId
               };
 
-              // Build routine template with all fields
-              const routineTemplate = {
-                routine_goal: routineGoal as "hypertrophy" | "mixed_focus" | "conditioning" | "mobility" | "power" | "stability_control",
-                muscle_target: routineMuscleTarget,
-                routine_intensity: routineIntensity as "low_local" | "moderate_local" | "high_local" | "moderate_systemic" | "high_systemic" | "metabolic" | "all"
-              };
 
               // Build complete filter criteria with all Phase 2 fields
               const criteria = {
@@ -503,12 +374,8 @@ export default function ExerciseList() {
                 include: includeExercises,
                 avoid: avoidExercises,
                 avoidJoints: avoidJoints,
-                primaryGoal: primaryGoal,
                 muscleTarget: muscleTarget,
                 muscleLessen: muscleLessen,
-                routineGoal: routineGoal,
-                routineMuscleTarget: routineMuscleTarget,
-                routineIntensity: routineIntensity,
               };
               
               setFilterCriteria(criteria);
@@ -531,13 +398,9 @@ export default function ExerciseList() {
                 setIncludeExercises([]);
                 setAvoidExercises([]);
                 setAvoidJoints([]);
-                setPrimaryGoal("general_fitness");
                 setMuscleTarget([]);
                 setMuscleLessen([]);
-                setIntensityFilter("all");
-                setRoutineGoal("mixed_focus");
-                setRoutineMuscleTarget(MUSCLE_OPTIONS.map(muscle => muscle.value));
-                setRoutineIntensity("moderate_local");
+                setIntensityFilter("medium");
               }}
               className="px-6 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors"
             >
@@ -551,17 +414,9 @@ export default function ExerciseList() {
       <p className="text-sm text-gray-600">
         {showFiltered ? (
           <>
-            <span className="font-medium text-green-600">LangGraph Filtering Applied:</span> Showing {displayedExercises?.length || 0} exercises after rulesBasedFilterNode 
-            {filterCriteria && (
-              <span className="text-blue-600 ml-1">
-                → Ready for llmPreferenceNode
-              </span>
-            )}
-            {/* Check if any exercises have LLM scores */}
-            {displayedExercises?.some(ex => ex.llmScore !== undefined) && (
-              <span className="text-purple-600 ml-1">
-                → 🤖 AI Ranked
-              </span>
+            <span className="font-medium text-green-600">Filtering Applied:</span> Showing {displayedExercises?.length || 0} filtered exercises
+            {displayedExercises && displayedExercises.length > 0 && (displayedExercises[0] as any).score !== undefined && (
+              <span className="ml-2 text-blue-600 font-medium">(Scored & Sorted)</span>
             )}
           </>
         ) : (
@@ -569,70 +424,281 @@ export default function ExerciseList() {
         )}
       </p>
 
-      {/* Copy-pastable filtered exercises array */}
-      {showFiltered && filteredExercises && (
-        <div className="bg-gray-50 border rounded-lg p-4 mt-4">
-          <h3 className="text-lg font-semibold text-gray-800 mb-2">📋 Copy-Pastable Filtered Exercises Array</h3>
-          <div className="bg-white border rounded p-2 max-h-96 overflow-auto">
-            <pre className="text-xs font-mono whitespace-pre-wrap break-words">
-              {JSON.stringify(filteredExercises, null, 2)}
-            </pre>
-          </div>
-          <p className="text-xs text-gray-500 mt-2">
-            Click in the box above and select all (Ctrl/Cmd+A) to copy the array
-          </p>
-        </div>
-      )}
-      
-      <div className="grid gap-4">
-        {displayedExercises?.map((exercise) => (
-          <div
-            key={exercise.id}
-            className="bg-white border rounded-lg p-4 shadow hover:shadow-md transition-shadow"
-          >
-            <div className="flex justify-between items-start">
-              <div className="flex-1">
-                <div className="flex items-center gap-3">
-                  <h3 className="text-lg font-semibold text-gray-900">
-                    {exercise.name}
-                  </h3>
-                  {exercise.llmScore !== undefined && (
-                    <div className="flex items-center gap-2">
-                      <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded-full">
-                        🎯 {exercise.llmScore.toFixed(1)}/10
-                      </span>
+      <div className="overflow-x-auto max-h-96 overflow-y-auto border rounded-lg">
+        <table className="w-full bg-white border-gray-200 shadow">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b">
+                Exercise Name
+              </th>
+              <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b">
+                Final Score
+              </th>
+              <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b">
+                Fatigue Profile
+              </th>
+              <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b">
+                Muscle Target
+              </th>
+              <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b">
+                Muscle Lessen
+              </th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-200">
+            {displayedExercises?.map((exercise, index) => {
+              const scoredExercise = exercise as any;
+              const hasScore = scoredExercise.score !== undefined;
+              
+              // Calculate muscle target matches and scoring
+              const muscleTargetCriteria = showFiltered && filterCriteria?.muscleTarget || [];
+              const primaryTargetMatch = muscleTargetCriteria.includes(exercise.primaryMuscle);
+              const secondaryTargetMatches = exercise.secondaryMuscles?.filter(muscle => 
+                muscleTargetCriteria.includes(muscle)
+              ) || [];
+              const hasSecondaryTargetMatch = secondaryTargetMatches.length > 0;
+              
+              // Calculate muscle lessen matches and scoring
+              const muscleLessenCriteria = showFiltered && filterCriteria?.muscleLessen || [];
+              const primaryLessenMatch = muscleLessenCriteria.includes(exercise.primaryMuscle);
+              const secondaryLessenMatches = exercise.secondaryMuscles?.filter(muscle => 
+                muscleLessenCriteria.includes(muscle)
+              ) || [];
+              const hasSecondaryLessenMatch = secondaryLessenMatches.length > 0;
+              
+              // Calculate scoring changes
+              const targetScoreChange = (primaryTargetMatch ? 3.0 : 0) + (hasSecondaryTargetMatch ? 1.5 : 0);
+              const lessenScoreChange = (primaryLessenMatch ? -3.0 : 0) + (hasSecondaryLessenMatch ? -1.5 : 0);
+              
+              // Calculate intensity adjustment if scoring is active
+              const intensityPreference = showFiltered && filterCriteria?.intensity;
+              let intensityAdjustment = 0;
+              if (intensityPreference && intensityPreference !== 'medium' && exercise.fatigueProfile) {
+                const intensityScoring = {
+                  low: {
+                    low_local: 1.5,
+                    moderate_local: 0.75,
+                    high_local: -1.5,
+                    moderate_systemic: -0.75,
+                    high_systemic: -1.5,
+                    metabolic: -1.5,
+                  },
+                  high: {
+                    low_local: -1.5,
+                    moderate_local: -0.75,
+                    high_local: 1.5,
+                    moderate_systemic: 0.75,
+                    high_systemic: 1.5,
+                    metabolic: 1.5,
+                  },
+                };
+                const scoring = intensityScoring[intensityPreference as keyof typeof intensityScoring];
+                if (scoring) {
+                  intensityAdjustment = scoring[exercise.fatigueProfile as keyof typeof scoring] || 0;
+                }
+              }
+              
+              return (
+                <tr key={exercise.id} className={index % 2 === 0 ? "bg-white" : "bg-gray-50"}>
+                  <td className="px-4 py-3">
+                    <div>
+                      <div className="text-sm font-medium text-gray-900">{exercise.name}</div>
+                      <div className="text-xs text-gray-500">
+                        Primary: {exercise.primaryMuscle}
+                        {exercise.secondaryMuscles && exercise.secondaryMuscles.length > 0 && (
+                          <span className="ml-2">
+                            | Secondary: {exercise.secondaryMuscles.join(", ")}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-xs text-gray-400 mt-1">
+                        Strength: {exercise.strengthLevel} • Skill: {exercise.complexityLevel}
+                      </div>
                     </div>
-                  )}
-                </div>
-                <p className="text-sm text-gray-600 mt-1">
-                  Primary: {exercise.primaryMuscle} | Pattern: {exercise.movementPattern}
-                </p>
-                <p className="text-xs text-gray-500 mt-1">
-                  {exercise.modality} • {exercise.complexityLevel} complexity • {exercise.strengthLevel} strength
-                </p>
-                
-                {/* LLM Reasoning */}
-                {exercise.llmReasons && exercise.llmReasons.length > 0 && (
-                  <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
-                    <h4 className="text-sm font-medium text-blue-900 mb-2">🤖 AI Reasoning:</h4>
-                    <ul className="text-sm text-blue-800 space-y-1">
-                      {exercise.llmReasons.map((reason, index) => (
-                        <li key={index} className="flex items-start gap-2">
-                          <span className="text-blue-600 mt-0.5">•</span>
-                          <span>{reason}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    {hasScore ? (
+                      <span className="text-lg font-semibold text-blue-600">
+                        {scoredExercise.score.toFixed(1)}
+                      </span>
+                    ) : (
+                      <span className="text-gray-400">-</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    <div className="space-y-1">
+                      {intensityPreference && intensityPreference !== 'medium' && intensityAdjustment !== 0 && (
+                        <div className={`text-xs px-2 py-1 rounded ${
+                          intensityAdjustment > 0 
+                            ? 'bg-blue-100 text-blue-800' 
+                            : 'bg-orange-100 text-orange-800'
+                        }`}>
+                          {exercise.fatigueProfile} ({intensityAdjustment > 0 ? '+' : ''}{intensityAdjustment})
+                        </div>
+                      )}
+                      {intensityPreference && intensityPreference !== 'medium' && intensityAdjustment === 0 && (
+                        <div className="text-xs bg-gray-50 text-gray-600 px-2 py-1 rounded">
+                          {exercise.fatigueProfile} (0)
+                        </div>
+                      )}
+                      {(!intensityPreference || intensityPreference === 'medium') && (
+                        <span className="text-xs text-gray-400">{exercise.fatigueProfile || '-'}</span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    <div className="space-y-1">
+                      {primaryTargetMatch ? (
+                        <div className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
+                          Primary: {exercise.primaryMuscle} (+3.0)
+                        </div>
+                      ) : hasSecondaryTargetMatch ? (
+                        <div className="text-xs bg-green-50 text-green-700 px-2 py-1 rounded">
+                          Secondary: {secondaryTargetMatches.join(", ")} (+1.5)
+                        </div>
+                      ) : muscleTargetCriteria.length > 0 ? (
+                        <span className="text-xs text-gray-400">No matches</span>
+                      ) : (
+                        <span className="text-xs text-gray-400">-</span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    <div className="space-y-1">
+                      {primaryLessenMatch ? (
+                        <div className="text-xs bg-red-100 text-red-800 px-2 py-1 rounded">
+                          Primary: {exercise.primaryMuscle} (-3.0)
+                        </div>
+                      ) : hasSecondaryLessenMatch ? (
+                        <div className="text-xs bg-red-50 text-red-700 px-2 py-1 rounded">
+                          Secondary: {secondaryLessenMatches.join(", ")} (-1.5)
+                        </div>
+                      ) : muscleLessenCriteria.length > 0 ? (
+                        <span className="text-xs text-gray-400">No matches</span>
+                      ) : (
+                        <span className="text-xs text-gray-400">-</span>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Exercise Blocks Section */}
+      {showFiltered && filteredExercises && (
+        <div className="mt-8 space-y-6">
+          <h2 className="text-xl font-bold text-gray-800 text-center">Exercise Blocks by Function Tags</h2>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {/* Block A - Primary Strength */}
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <h3 className="text-lg font-semibold text-blue-800 mb-3">Block A - Primary Strength</h3>
+              <div className="space-y-2">
+                {filteredExercises
+                  .filter(ex => ex.functionTags?.includes('primary_strength'))
+                  .map((exercise, idx) => (
+                    <div key={exercise.id} className="text-sm">
+                      <span className="font-medium">{exercise.name}</span>
+                      <span className="text-blue-600 ml-2">({exercise.score.toFixed(1)})</span>
+                    </div>
+                  ))}
+                {filteredExercises.filter(ex => ex.functionTags?.includes('primary_strength')).length === 0 && (
+                  <p className="text-sm text-gray-500 italic">No exercises found</p>
                 )}
               </div>
-              <span className="text-xs text-gray-400 ml-4">
-                {new Date(exercise.createdAt).toLocaleDateString()}
-              </span>
+            </div>
+
+            {/* Block B - Secondary Strength */}
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+              <h3 className="text-lg font-semibold text-green-800 mb-3">Block B - Secondary Strength</h3>
+              <div className="space-y-2">
+                {filteredExercises
+                  .filter(ex => ex.functionTags?.includes('secondary_strength'))
+                  .map((exercise, idx) => (
+                    <div key={exercise.id} className="text-sm">
+                      <span className="font-medium">{exercise.name}</span>
+                      <span className="text-green-600 ml-2">({exercise.score.toFixed(1)})</span>
+                    </div>
+                  ))}
+                {filteredExercises.filter(ex => ex.functionTags?.includes('secondary_strength')).length === 0 && (
+                  <p className="text-sm text-gray-500 italic">No exercises found</p>
+                )}
+              </div>
+            </div>
+
+            {/* Block C - Accessory */}
+            <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+              <h3 className="text-lg font-semibold text-purple-800 mb-3">Block C - Accessory</h3>
+              <div className="space-y-2">
+                {filteredExercises
+                  .filter(ex => ex.functionTags?.includes('accessory'))
+                  .map((exercise, idx) => (
+                    <div key={exercise.id} className="text-sm">
+                      <span className="font-medium">{exercise.name}</span>
+                      <span className="text-purple-600 ml-2">({exercise.score.toFixed(1)})</span>
+                    </div>
+                  ))}
+                {filteredExercises.filter(ex => ex.functionTags?.includes('accessory')).length === 0 && (
+                  <p className="text-sm text-gray-500 italic">No exercises found</p>
+                )}
+              </div>
+            </div>
+
+            {/* Block D - Core */}
+            <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+              <h3 className="text-lg font-semibold text-orange-800 mb-3">Block D - Core</h3>
+              <div className="space-y-2">
+                {filteredExercises
+                  .filter(ex => ex.functionTags?.includes('core'))
+                  .map((exercise, idx) => (
+                    <div key={exercise.id} className="text-sm">
+                      <span className="font-medium">{exercise.name}</span>
+                      <span className="text-orange-600 ml-2">({exercise.score.toFixed(1)})</span>
+                    </div>
+                  ))}
+                {filteredExercises.filter(ex => ex.functionTags?.includes('core')).length === 0 && (
+                  <p className="text-sm text-gray-500 italic">No exercises found</p>
+                )}
+              </div>
+            </div>
+
+            {/* Block E - Capacity */}
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+              <h3 className="text-lg font-semibold text-red-800 mb-3">Block E - Capacity</h3>
+              <div className="space-y-2">
+                {filteredExercises
+                  .filter(ex => ex.functionTags?.includes('capacity'))
+                  .map((exercise, idx) => (
+                    <div key={exercise.id} className="text-sm">
+                      <span className="font-medium">{exercise.name}</span>
+                      <span className="text-red-600 ml-2">({exercise.score.toFixed(1)})</span>
+                    </div>
+                  ))}
+                {filteredExercises.filter(ex => ex.functionTags?.includes('capacity')).length === 0 && (
+                  <p className="text-sm text-gray-500 italic">No exercises found</p>
+                )}
+              </div>
             </div>
           </div>
-        ))}
-      </div>
+        </div>
+      )}
+
+      {/* Copy JSON button */}
+      {showFiltered && filteredExercises && (
+        <div className="flex justify-center mt-6">
+          <button
+            onClick={() => {
+              navigator.clipboard.writeText(JSON.stringify(filteredExercises, null, 2));
+            }}
+            className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-colors"
+          >
+            Copy JSON
+          </button>
+        </div>
+      )}
     </div>
   );
 }

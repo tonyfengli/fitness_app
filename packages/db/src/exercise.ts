@@ -133,16 +133,21 @@ export const exercises = pgTable("exercises", {
       "hip_stability",
       "explosive",
       "rotational",
-      "cross_plane"
-    ]
-  }).array(),
-  functionTags: text("function_tags", {
-    enum: [
+      "cross_plane",
       "foundational",
       "rehab_friendly",
       "warmup_friendly",
       "finisher_friendly",
       "mobility_focus"
+    ]
+  }).array(),
+  functionTags: text("function_tags", {
+    enum: [
+      "primary_strength",
+      "secondary_strength",
+      "accessory",
+      "core",
+      "capacity"
     ]
   }).array(),
   fatigueProfile: fatigueProfileEnum("fatigue_profile").notNull(),

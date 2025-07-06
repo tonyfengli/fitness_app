@@ -1,0 +1,16 @@
+
+> @acme/nextjs@0.1.0 dev
+> pnpm with-env next dev --turbopack
+
+
+> @acme/nextjs@0.1.0 with-env /Users/tonyli/Desktop/fitness_app/apps/nextjs
+> dotenv -e ../../.env -- next dev --turbopack
+
+ ⚠ Port 3000 is in use, using available port 3001 instead.
+   ▲ Next.js 15.3.3 (Turbopack)
+   - Local:        http://localhost:3001
+   - Network:      http://192.168.68.133:3001
+
+ ✓ Starting...
+ ✓ Ready in 1832ms
+[?25h

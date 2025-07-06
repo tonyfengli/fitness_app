@@ -13,7 +13,4 @@ export interface Exercise {
   equipment: string[] | null;
   strengthLevel: string;
   createdAt: Date;
-  // LLM scoring fields (added by llmPreferenceNode)
-  llmScore?: number;
-  llmReasons?: string[];
 }

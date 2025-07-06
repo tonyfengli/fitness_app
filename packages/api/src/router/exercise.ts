@@ -37,10 +37,11 @@ const CreateExerciseSchema = z.object({
     "bilateral", "unilateral", "scapular_control", "core_stability",
     "postural_control", "hip_dominant", "knee_dominant", "balance_challenge",
     "isometric_control", "anti_rotation", "end_range_control", "hip_stability",
-    "explosive", "rotational", "cross_plane"
+    "explosive", "rotational", "cross_plane",
+    "foundational", "rehab_friendly", "warmup_friendly", "finisher_friendly", "mobility_focus"
   ])).optional(),
   functionTags: z.array(z.enum([
-    "foundational", "rehab_friendly", "warmup_friendly", "finisher_friendly", "mobility_focus"
+    "primary_strength", "secondary_strength", "accessory", "core", "capacity"
   ])).optional(),
   fatigueProfile: z.enum([
     "low_local", "moderate_local", "high_local", "moderate_systemic", "high_systemic", "metabolic"
@@ -139,49 +140,70 @@ export const exerciseRouter = {
       
       // Phase 2 Client fields
       primaryGoal: z.enum(["mobility", "strength", "general_fitness", "hypertrophy", "burn_fat"]).optional(),
-      intensity: z.enum(["low_local", "moderate_local", "high_local", "moderate_systemic", "high_systemic", "metabolic", "all"]).optional(),
+      intensity: z.enum(["low", "medium", "high"]).optional(),
       muscleTarget: z.array(z.string()).default([]),
       muscleLessen: z.array(z.string()).default([]),
       
-      // Routine Template fields
-      routineGoal: z.enum(["hypertrophy", "mixed_focus", "conditioning", "mobility", "power", "stability_control"]).optional(),
-      routineMuscleTarget: z.array(z.string()).default([]),
-      routineIntensity: z.enum(["low_local", "moderate_local", "high_local", "moderate_systemic", "high_systemic", "metabolic", "all"]).optional(),
       
       // Business context
       businessId: z.string().uuid().optional(),
       
       // Optional user input for future LLM processing
       userInput: z.string().optional(),
-    }))
-    .query(async ({ input }) => {
+    }).optional())
+    .query(async ({ ctx, input }) => {
       try {
         console.log('🔍 exercise.filter API called');
+        console.log('🔍 Input received:', input);
+        // Keep intensity as-is for scoring system
+        // The scoring system expects "low", "medium", "high" not fatigue profile values
+
+        // Apply defaults manually since input can be undefined
+        const safeInput = {
+          clientName: input?.clientName || "Default Client",
+          strengthCapacity: input?.strengthCapacity || "moderate",
+          skillCapacity: input?.skillCapacity || "moderate", 
+          includeExercises: input?.includeExercises || [],
+          avoidExercises: input?.avoidExercises || [],
+          avoidJoints: input?.avoidJoints || [],
+          muscleTarget: input?.muscleTarget || [],
+          muscleLessen: input?.muscleLessen || [],
+          primaryGoal: input?.primaryGoal,
+          intensity: input?.intensity,
+          businessId: input?.businessId,
+          userInput: input?.userInput
+        };
+
+        // Fetch exercises from the database first
+        const allExercises = await ctx.db.query.exercises.findMany();
+        
         const result = await filterExercisesFromInput({
           clientContext: {
-            name: input.clientName,
-            strength_capacity: input.strengthCapacity === "all" ? "very_high" : input.strengthCapacity,
-            skill_capacity: input.skillCapacity === "all" ? "high" : input.skillCapacity,
-            primary_goal: input.primaryGoal,
-            intensity: input.intensity,
-            muscle_target: input.muscleTarget,
-            muscle_lessen: input.muscleLessen,
+            name: safeInput.clientName,
+            strength_capacity: safeInput.strengthCapacity === "all" ? "very_high" : safeInput.strengthCapacity,
+            skill_capacity: safeInput.skillCapacity === "all" ? "high" : safeInput.skillCapacity,
+            primary_goal: safeInput.primaryGoal,
+            intensity: safeInput.intensity,
+            muscle_target: safeInput.muscleTarget,
+            muscle_lessen: safeInput.muscleLessen,
             exercise_requests: {
-              include: input.includeExercises,
-              avoid: input.avoidExercises,
+              include: safeInput.includeExercises,
+              avoid: safeInput.avoidExercises,
             },
-            avoid_joints: input.avoidJoints,
-            business_id: input.businessId
+            avoid_joints: safeInput.avoidJoints,
+            business_id: safeInput.businessId
           },
-          routineTemplate: input.routineGoal ? {
-            routine_goal: input.routineGoal,
-            muscle_target: input.routineMuscleTarget,
-            routine_intensity: input.routineIntensity || "moderate_local"
-          } : undefined,
-          userInput: input.userInput,
+          userInput: safeInput.userInput,
+          exercises: allExercises, // Pass exercises directly
         });
         
-        return result.filteredExercises || [];
+        // Return filtered exercises
+        const filteredExercises = result.filteredExercises || [];
+        console.log('🎯 API returning exercises:', {
+          total: filteredExercises.length
+        });
+        
+        return filteredExercises;
       } catch (error) {
         console.error('❌ Exercise filtering failed:', error);
         throw new Error('Failed to filter exercises');

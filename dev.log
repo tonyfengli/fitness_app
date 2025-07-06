@@ -1,0 +1,261 @@
+turbo 2.5.4
+
+• Packages in scope: @acme/ai, @acme/api, @acme/auth, @acme/db, @acme/eslint-config, @acme/github, @acme/nextjs, @acme/prettier-config, @acme/tailwind-config, @acme/tsconfig, @acme/ui, @acme/validators
+• Running dev in 12 packages
+• Remote caching disabled
+@acme/validators:dev: cache bypass, force executing f960fcde9dc15dd3
+@acme/db:dev: cache bypass, force executing ef9b6842ea1f1851
+@acme/db:dev: 
+@acme/db:dev: > @acme/db@0.1.0 dev /Users/tonyli/Desktop/fitness_app/packages/db
+@acme/db:dev: > tsc
+@acme/db:dev: 
+@acme/validators:dev: 
+@acme/validators:dev: > @acme/validators@0.1.0 dev /Users/tonyli/Desktop/fitness_app/packages/validators
+@acme/validators:dev: > tsc
+@acme/validators:dev: 
+@acme/ai:dev: cache bypass, force executing cd942c4aa4135aa6
+@acme/ai:dev: 
+@acme/ai:dev: > @acme/ai@0.1.0 dev /Users/tonyli/Desktop/fitness_app/packages/ai
+@acme/ai:dev: > tsc
+@acme/ai:dev: 
+@acme/api:dev: cache bypass, force executing 409051bb8080be66
+@acme/api:dev: 
+@acme/api:dev: > @acme/api@0.1.0 dev /Users/tonyli/Desktop/fitness_app/packages/api
+@acme/api:dev: > tsc
+@acme/api:dev: 
+@acme/nextjs:dev: cache bypass, force executing d9a9f7dfbe5a6cd6
+@acme/nextjs:dev: 
+@acme/nextjs:dev: > @acme/nextjs@0.1.0 dev /Users/tonyli/Desktop/fitness_app/apps/nextjs
+@acme/nextjs:dev: > pnpm with-env next dev --turbopack
+@acme/nextjs:dev: 
+@acme/nextjs:dev: 
+@acme/nextjs:dev: > @acme/nextjs@0.1.0 with-env /Users/tonyli/Desktop/fitness_app/apps/nextjs
+@acme/nextjs:dev: > dotenv -e ../../.env -- next dev --turbopack
+@acme/nextjs:dev: 
+@acme/nextjs:dev:    ▲ Next.js 15.3.3 (Turbopack)
+@acme/nextjs:dev:    - Local:        http://localhost:3000
+@acme/nextjs:dev:    - Network:      http://192.168.68.133:3000
+@acme/nextjs:dev: 
+@acme/nextjs:dev:  ✓ Starting...
+@acme/nextjs:dev:  ✓ Ready in 1590ms
+@acme/nextjs:dev:  ○ Compiling /exercises ...
+@acme/nextjs:dev:  ✓ Compiled /exercises in 2.6s
+@acme/nextjs:dev: [30;46m >> query [1;30;46m #1 exercise.all [0m { input: { limit: 1000, offset: 0 } }
+@acme/nextjs:dev:  ○ Compiling /api/trpc/[trpc] ...
+@acme/nextjs:dev:  GET /.well-known/appspecific/com.chrome.devtools.json 404 in 3861ms
+@acme/nextjs:dev:  ✓ Compiled /api/trpc/[trpc] in 4.8s
+@acme/nextjs:dev: 📊 exercise.all called with limit: 1000, offset: 0
+@acme/nextjs:dev: ✅ exercise.all completed: 130 exercises in 790ms
+@acme/nextjs:dev: [TRPC] exercise.all took 1164ms to execute
+@acme/nextjs:dev:  GET /api/trpc/exercise.all?batch=1&input=%7B%220%22%3A%7B%22json%22%3A%7B%22limit%22%3A1000%2C%22offset%22%3A0%7D%7D%7D 200 in 7387ms
+@acme/nextjs:dev: [97;46m << query [1;97;46m #1 exercise.all [0m {
+@acme/nextjs:dev:   input: { limit: 1000, offset: 0 },
+@acme/nextjs:dev:   result: {
+@acme/nextjs:dev:     context: {
+@acme/nextjs:dev:       response: Response {
+@acme/nextjs:dev:         status: 200,
+@acme/nextjs:dev:         statusText: 'OK',
+@acme/nextjs:dev:         headers: Headers {
+@acme/nextjs:dev:           vary: 'RSC, Next-Router-State-Tree, Next-Router-Prefetch, Next-Router-Segment-Prefetch, trpc-accept',
+@acme/nextjs:dev:           'access-control-allow-headers': '*',
+@acme/nextjs:dev:           'access-control-allow-methods': 'OPTIONS, GET, POST',
+@acme/nextjs:dev:           'access-control-allow-origin': '*',
+@acme/nextjs:dev:           'access-control-request-method': '*',
+@acme/nextjs:dev:           'content-type': 'application/json',
+@acme/nextjs:dev:           'transfer-encoding': 'chunked',
+@acme/nextjs:dev:           date: 'Sun, 06 Jul 2025 21:44:23 GMT',
+@acme/nextjs:dev:           connection: 'keep-alive',
+@acme/nextjs:dev:           'keep-alive': 'timeout=5'
+@acme/nextjs:dev:         },
+@acme/nextjs:dev:         body: ReadableStream { locked: true, state: 'errored', supportsBYOB: true },
+@acme/nextjs:dev:         bodyUsed: true,
+@acme/nextjs:dev:         ok: true,
+@acme/nextjs:dev:         redirected: false,
+@acme/nextjs:dev:         type: 'default',
+@acme/nextjs:dev:         url: 'http://localhost:3000/api/trpc/exercise.all?batch=1&input=%7B%220%22%3A%7B%22json%22%3A%7B%22limit%22%3A1000%2C%22offset%22%3A0%7D%7D%7D'
+@acme/nextjs:dev:       }
+@acme/nextjs:dev:     },
+@acme/nextjs:dev:     result: { data: [Array] }
+@acme/nextjs:dev:   },
+@acme/nextjs:dev:   elapsedMs: 7456
+@acme/nextjs:dev: }
+@acme/nextjs:dev: Failed to set fetch cache http://localhost:3000/api/trpc/exercise.all?batch=1&input=%7B%220%22%3A%7B%22json%22%3A%7B%22limit%22%3A1000%2C%22offset%22%3A0%7D%7D%7D [Error [AbortError]: This operation was aborted] {
+@acme/nextjs:dev:   code: 20,
+@acme/nextjs:dev:   INDEX_SIZE_ERR: 1,
+@acme/nextjs:dev:   DOMSTRING_SIZE_ERR: 2,
+@acme/nextjs:dev:   HIERARCHY_REQUEST_ERR: 3,
+@acme/nextjs:dev:   WRONG_DOCUMENT_ERR: 4,
+@acme/nextjs:dev:   INVALID_CHARACTER_ERR: 5,
+@acme/nextjs:dev:   NO_DATA_ALLOWED_ERR: 6,
+@acme/nextjs:dev:   NO_MODIFICATION_ALLOWED_ERR: 7,
+@acme/nextjs:dev:   NOT_FOUND_ERR: 8,
+@acme/nextjs:dev:   NOT_SUPPORTED_ERR: 9,
+@acme/nextjs:dev:   INUSE_ATTRIBUTE_ERR: 10,
+@acme/nextjs:dev:   INVALID_STATE_ERR: 11,
+@acme/nextjs:dev:   SYNTAX_ERR: 12,
+@acme/nextjs:dev:   INVALID_MODIFICATION_ERR: 13,
+@acme/nextjs:dev:   NAMESPACE_ERR: 14,
+@acme/nextjs:dev:   INVALID_ACCESS_ERR: 15,
+@acme/nextjs:dev:   VALIDATION_ERR: 16,
+@acme/nextjs:dev:   TYPE_MISMATCH_ERR: 17,
+@acme/nextjs:dev:   SECURITY_ERR: 18,
+@acme/nextjs:dev:   NETWORK_ERR: 19,
+@acme/nextjs:dev:   ABORT_ERR: 20,
+@acme/nextjs:dev:   URL_MISMATCH_ERR: 21,
+@acme/nextjs:dev:   QUOTA_EXCEEDED_ERR: 22,
+@acme/nextjs:dev:   TIMEOUT_ERR: 23,
+@acme/nextjs:dev:   INVALID_NODE_TYPE_ERR: 24,
+@acme/nextjs:dev:   DATA_CLONE_ERR: 25
+@acme/nextjs:dev: }
+@acme/nextjs:dev:  GET /exercises 200 in 10729ms
+@acme/nextjs:dev: 📊 exercise.all called with limit: 1000, offset: 0
+@acme/nextjs:dev: ✅ exercise.all completed: 130 exercises in 232ms
+@acme/nextjs:dev: [TRPC] exercise.all took 469ms to execute
+@acme/nextjs:dev:  GET /api/trpc/exercise.all?batch=1&input=%7B%220%22%3A%7B%22json%22%3A%7B%22limit%22%3A1000%2C%22offset%22%3A0%7D%7D%7D 200 in 556ms
+@acme/nextjs:dev: [30;46m >> query [1;30;46m #1 exercise.all [0m { input: { limit: 1000, offset: 0 } }
+@acme/nextjs:dev: 📊 exercise.all called with limit: 1000, offset: 0
+@acme/nextjs:dev:  GET /.well-known/appspecific/com.chrome.devtools.json 404 in 335ms
+@acme/nextjs:dev: ✅ exercise.all completed: 130 exercises in 183ms
+@acme/nextjs:dev: [TRPC] exercise.all took 441ms to execute
+@acme/nextjs:dev:  GET /api/trpc/exercise.all?batch=1&input=%7B%220%22%3A%7B%22json%22%3A%7B%22limit%22%3A1000%2C%22offset%22%3A0%7D%7D%7D 200 in 498ms
+@acme/nextjs:dev: [97;46m << query [1;97;46m #1 exercise.all [0m {
+@acme/nextjs:dev:   input: { limit: 1000, offset: 0 },
+@acme/nextjs:dev:   result: {
+@acme/nextjs:dev:     context: {
+@acme/nextjs:dev:       response: Response {
+@acme/nextjs:dev:         status: 200,
+@acme/nextjs:dev:         statusText: 'OK',
+@acme/nextjs:dev:         headers: Headers {
+@acme/nextjs:dev:           vary: 'RSC, Next-Router-State-Tree, Next-Router-Prefetch, Next-Router-Segment-Prefetch, trpc-accept',
+@acme/nextjs:dev:           'access-control-allow-headers': '*',
+@acme/nextjs:dev:           'access-control-allow-methods': 'OPTIONS, GET, POST',
+@acme/nextjs:dev:           'access-control-allow-origin': '*',
+@acme/nextjs:dev:           'access-control-request-method': '*',
+@acme/nextjs:dev:           'content-type': 'application/json',
+@acme/nextjs:dev:           'transfer-encoding': 'chunked',
+@acme/nextjs:dev:           date: 'Sun, 06 Jul 2025 21:44:32 GMT',
+@acme/nextjs:dev:           connection: 'keep-alive',
+@acme/nextjs:dev:           'keep-alive': 'timeout=5'
+@acme/nextjs:dev:         },
+@acme/nextjs:dev:         body: ReadableStream { locked: true, state: 'errored', supportsBYOB: true },
+@acme/nextjs:dev:         bodyUsed: true,
+@acme/nextjs:dev:         ok: true,
+@acme/nextjs:dev:         redirected: false,
+@acme/nextjs:dev:         type: 'default',
+@acme/nextjs:dev:         url: 'http://localhost:3000/api/trpc/exercise.all?batch=1&input=%7B%220%22%3A%7B%22json%22%3A%7B%22limit%22%3A1000%2C%22offset%22%3A0%7D%7D%7D'
+@acme/nextjs:dev:       }
+@acme/nextjs:dev:     },
+@acme/nextjs:dev:     result: { data: [Array] }
+@acme/nextjs:dev:   },
+@acme/nextjs:dev:   elapsedMs: 534
+@acme/nextjs:dev: }
+@acme/nextjs:dev: Failed to set fetch cache http://localhost:3000/api/trpc/exercise.all?batch=1&input=%7B%220%22%3A%7B%22json%22%3A%7B%22limit%22%3A1000%2C%22offset%22%3A0%7D%7D%7D [Error [AbortError]: This operation was aborted] {
+@acme/nextjs:dev:   code: 20,
+@acme/nextjs:dev:   INDEX_SIZE_ERR: 1,
+@acme/nextjs:dev:   DOMSTRING_SIZE_ERR: 2,
+@acme/nextjs:dev:   HIERARCHY_REQUEST_ERR: 3,
+@acme/nextjs:dev:   WRONG_DOCUMENT_ERR: 4,
+@acme/nextjs:dev:   INVALID_CHARACTER_ERR: 5,
+@acme/nextjs:dev:   NO_DATA_ALLOWED_ERR: 6,
+@acme/nextjs:dev:   NO_MODIFICATION_ALLOWED_ERR: 7,
+@acme/nextjs:dev:   NOT_FOUND_ERR: 8,
+@acme/nextjs:dev:   NOT_SUPPORTED_ERR: 9,
+@acme/nextjs:dev:   INUSE_ATTRIBUTE_ERR: 10,
+@acme/nextjs:dev:   INVALID_STATE_ERR: 11,
+@acme/nextjs:dev:   SYNTAX_ERR: 12,
+@acme/nextjs:dev:   INVALID_MODIFICATION_ERR: 13,
+@acme/nextjs:dev:   NAMESPACE_ERR: 14,
+@acme/nextjs:dev:   INVALID_ACCESS_ERR: 15,
+@acme/nextjs:dev:   VALIDATION_ERR: 16,
+@acme/nextjs:dev:   TYPE_MISMATCH_ERR: 17,
+@acme/nextjs:dev:   SECURITY_ERR: 18,
+@acme/nextjs:dev:   NETWORK_ERR: 19,
+@acme/nextjs:dev:   ABORT_ERR: 20,
+@acme/nextjs:dev:   URL_MISMATCH_ERR: 21,
+@acme/nextjs:dev:   QUOTA_EXCEEDED_ERR: 22,
+@acme/nextjs:dev:   TIMEOUT_ERR: 23,
+@acme/nextjs:dev:   INVALID_NODE_TYPE_ERR: 24,
+@acme/nextjs:dev:   DATA_CLONE_ERR: 25
+@acme/nextjs:dev: }
+@acme/nextjs:dev:  GET /exercises 200 in 786ms
+@acme/nextjs:dev: 📊 exercise.all called with limit: 1000, offset: 0
+@acme/nextjs:dev: ✅ exercise.all completed: 130 exercises in 230ms
+@acme/nextjs:dev: [TRPC] exercise.all took 657ms to execute
+@acme/nextjs:dev:  GET /api/trpc/exercise.all?batch=1&input=%7B%220%22%3A%7B%22json%22%3A%7B%22limit%22%3A1000%2C%22offset%22%3A0%7D%7D%7D 200 in 722ms
+@acme/nextjs:dev: 🔍 tRPC exercise.filter request received
+@acme/nextjs:dev: 🔍 exercise.filter API called
+@acme/nextjs:dev: 🔍 Input received: {
+@acme/nextjs:dev:   clientName: 'Web User',
+@acme/nextjs:dev:   strengthCapacity: 'very_low',
+@acme/nextjs:dev:   skillCapacity: 'very_low',
+@acme/nextjs:dev:   includeExercises: [],
+@acme/nextjs:dev:   avoidExercises: [],
+@acme/nextjs:dev:   avoidJoints: [],
+@acme/nextjs:dev:   intensity: 'medium',
+@acme/nextjs:dev:   muscleTarget: [],
+@acme/nextjs:dev:   muscleLessen: [],
+@acme/nextjs:dev:   businessId: 'd33b41e2-f700-4a08-9489-cb6e3daa7f20',
+@acme/nextjs:dev:   userInput: ''
+@acme/nextjs:dev: }
+@acme/nextjs:dev: 🚀 filterExercisesFromInput called
+@acme/nextjs:dev: 🚀 filterExercises called
+@acme/nextjs:dev: ❌ Unexpected error in filterExercisesFromInput: Error: No exercises available
+@acme/nextjs:dev:     at filterExercises (../../packages/ai/src/filtering/filterExercises.ts:49:10)
+@acme/nextjs:dev:     at async filterExercisesFromInput (../../packages/ai/src/filterExercisesFromInput.ts:61:30)
+@acme/nextjs:dev:     at async (../../packages/api/src/router/exercise.ts:181:23)
+@acme/nextjs:dev:     at async (../../packages/api/src/trpc.ts:91:17)
+@acme/nextjs:dev:   47 |   
+@acme/nextjs:dev:   48 |   if (!exercises || exercises.length === 0) {
+@acme/nextjs:dev: > 49 |     throw new Error('No exercises available');
+@acme/nextjs:dev:      |          ^
+@acme/nextjs:dev:   50 |   }
+@acme/nextjs:dev:   51 |   
+@acme/nextjs:dev:   52 |   // Use provided context or create default
+@acme/nextjs:dev: ❌ Exercise filtering failed: Error [ExerciseFilterError]: Failed to filter exercises from input
+@acme/nextjs:dev:     at filterExercisesFromInput (../../packages/ai/src/filterExercisesFromInput.ts:91:10)
+@acme/nextjs:dev:     at async (../../packages/api/src/router/exercise.ts:181:23)
+@acme/nextjs:dev:     at async (../../packages/api/src/trpc.ts:91:17)
+@acme/nextjs:dev:   89 |     
+@acme/nextjs:dev:   90 |     // Wrap any other errors
+@acme/nextjs:dev: > 91 |     throw new ExerciseFilterError(
+@acme/nextjs:dev:      |          ^
+@acme/nextjs:dev:   92 |       'Failed to filter exercises from input',
+@acme/nextjs:dev:   93 |       error
+@acme/nextjs:dev:   94 |     ); {
+@acme/nextjs:dev:   [cause]: Error: No exercises available
+@acme/nextjs:dev:       at filterExercises (../../packages/ai/src/filtering/filterExercises.ts:49:10)
+@acme/nextjs:dev:       at async filterExercisesFromInput (../../packages/ai/src/filterExercisesFromInput.ts:61:30)
+@acme/nextjs:dev:       at async (../../packages/api/src/router/exercise.ts:181:23)
+@acme/nextjs:dev:       at async (../../packages/api/src/trpc.ts:91:17)
+@acme/nextjs:dev:     47 |   
+@acme/nextjs:dev:     48 |   if (!exercises || exercises.length === 0) {
+@acme/nextjs:dev:   > 49 |     throw new Error('No exercises available');
+@acme/nextjs:dev:        |          ^
+@acme/nextjs:dev:     50 |   }
+@acme/nextjs:dev:     51 |   
+@acme/nextjs:dev:     52 |   // Use provided context or create default
+@acme/nextjs:dev: }
+@acme/nextjs:dev: [TRPC] exercise.filter took 618ms to execute
+@acme/nextjs:dev: >>> tRPC Error on 'exercise.filter' Error [TRPCError]: Failed to filter exercises
+@acme/nextjs:dev:     at <unknown> (../../packages/api/src/router/exercise.ts:209:14)
+@acme/nextjs:dev:     at async (../../packages/api/src/trpc.ts:91:17)
+@acme/nextjs:dev:   207 |       } catch (error) {
+@acme/nextjs:dev:   208 |         console.error('❌ Exercise filtering failed:', error);
+@acme/nextjs:dev: > 209 |         throw new Error('Failed to filter exercises');
+@acme/nextjs:dev:       |              ^
+@acme/nextjs:dev:   210 |       }
+@acme/nextjs:dev:   211 |     }),
+@acme/nextjs:dev:   212 | {
+@acme/nextjs:dev:   code: 'INTERNAL_SERVER_ERROR',
+@acme/nextjs:dev:   [cause]: Error: Failed to filter exercises
+@acme/nextjs:dev:       at <unknown> (../../packages/api/src/router/exercise.ts:209:14)
+@acme/nextjs:dev:       at async (../../packages/api/src/trpc.ts:91:17)
+@acme/nextjs:dev:     207 |       } catch (error) {
+@acme/nextjs:dev:     208 |         console.error('❌ Exercise filtering failed:', error);
+@acme/nextjs:dev:   > 209 |         throw new Error('Failed to filter exercises');
+@acme/nextjs:dev:         |              ^
+@acme/nextjs:dev:     210 |       }
+@acme/nextjs:dev:     211 |     }),
+@acme/nextjs:dev:     212 |
+@acme/nextjs:dev: }
+@acme/nextjs:dev:  GET /api/trpc/exercise.filter?batch=1&input=%7B%220%22%3A%7B%22json%22%3A%7B%22clientName%22%3A%22Web%20User%22%2C%22strengthCapacity%22%3A%22very_low%22%2C%22skillCapacity%22%3A%22very_low%22%2C%22includeExercises%22%3A%5B%5D%2C%22avoidExercises%22%3A%5B%5D%2C%22avoidJoints%22%3A%5B%5D%2C%22intensity%22%3A%22medium%22%2C%22muscleTarget%22%3A%5B%5D%2C%22muscleLessen%22%3A%5B%5D%2C%22businessId%22%3A%22d33b41e2-f700-4a08-9489-cb6e3daa7f20%22%2C%22userInput%22%3A%22%22%7D%7D%7D 200 in 684ms

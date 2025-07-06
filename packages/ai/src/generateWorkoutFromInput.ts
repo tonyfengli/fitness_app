@@ -34,7 +34,7 @@ export async function generateWorkoutFromInput(input: string): Promise<WorkoutRo
       userInput: trimmedInput,
       programmedRoutine: "",
       exercises: [],
-    });
+    } as any);
     
     // Validate the result
     if (!result.programmedRoutine || result.programmedRoutine.length === 0) {
@@ -45,7 +45,7 @@ export async function generateWorkoutFromInput(input: string): Promise<WorkoutRo
       throw new WorkoutGenerationError('No exercises selected for workout');
     }
     
-    return result;
+    return result as WorkoutRoutineStateType;
   } catch (error) {
     // Re-throw WorkoutGenerationError as-is
     if (error instanceof WorkoutGenerationError) {

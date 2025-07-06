@@ -25,7 +25,11 @@
     "ui-add": "turbo run ui-add",
     "seed:exercises": "curl -f http://localhost:3000/api/seed-all-exercises || echo 'Make sure server is running with: pnpm dev:next'",
     "android": "expo run:android",
-    "ios": "expo run:ios"
+    "ios": "expo run:ios",
+    "dev:clean": "pnpm clean:dev && pnpm dev",
+    "clean:dev": "pkill -f 'next dev' || true && pkill -f 'turbo watch' || true && rm -rf apps/nextjs/.next",
+    "dev:restart": "pnpm clean:dev && sleep 2 && pnpm dev",
+    "kill:port": "lsof -ti:3000 | xargs kill -9 || true"
   },
   "devDependencies": {
     "@acme/prettier-config": "workspace:*",
@@ -34,5 +38,8 @@
     "turbo": "^2.5.4",
     "typescript": "catalog:"
   },
-  "prettier": "@acme/prettier-config"
+  "prettier": "@acme/prettier-config",
+  "dependencies": {
+    "tiktoken": "^1.0.21"
+  }
 }
