@@ -144,6 +144,8 @@ export const exerciseRouter = {
       muscleTarget: z.array(z.string()).default([]),
       muscleLessen: z.array(z.string()).default([]),
       
+      // Template selection
+      isFullBody: z.boolean().default(false),
       
       // Business context
       businessId: z.string().uuid().optional(),
@@ -170,6 +172,7 @@ export const exerciseRouter = {
           muscleLessen: input?.muscleLessen || [],
           primaryGoal: input?.primaryGoal,
           intensity: input?.intensity,
+          isFullBody: input?.isFullBody || false,
           businessId: input?.businessId,
           userInput: input?.userInput
         };
@@ -183,7 +186,7 @@ export const exerciseRouter = {
             strength_capacity: safeInput.strengthCapacity === "all" ? "very_high" : safeInput.strengthCapacity,
             skill_capacity: safeInput.skillCapacity === "all" ? "high" : safeInput.skillCapacity,
             primary_goal: safeInput.primaryGoal,
-            intensity: safeInput.intensity,
+            // Don't set intensity on ClientContext - it's handled separately in scoring
             muscle_target: safeInput.muscleTarget,
             muscle_lessen: safeInput.muscleLessen,
             exercise_requests: {
@@ -195,6 +198,16 @@ export const exerciseRouter = {
           },
           userInput: safeInput.userInput,
           exercises: allExercises, // Pass exercises directly
+          intensity: safeInput.intensity, // Pass intensity separately for scoring
+          routineTemplate: {
+            routine_goal: safeInput.isFullBody ? "mixed_focus" : "mixed_focus", // Both use mixed_focus for now
+            muscle_target: safeInput.muscleTarget,
+            routine_intensity: safeInput.intensity === "low" ? "low_local" : 
+                             safeInput.intensity === "high" ? "high_systemic" : 
+                             "moderate_local",
+            // Add a custom field to indicate full body
+            isFullBody: safeInput.isFullBody
+          } as any,
         });
         
         // Return filtered exercises

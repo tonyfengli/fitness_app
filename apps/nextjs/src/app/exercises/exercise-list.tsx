@@ -99,6 +99,9 @@ export default function ExerciseList() {
   const [muscleTarget, setMuscleTarget] = useState<string[]>([]);
   const [muscleLessen, setMuscleLessen] = useState<string[]>([]);
   
+  // Full body workout state
+  const [isFullBody, setIsFullBody] = useState(false);
+  
   
   // State to track whether we're showing filtered results
   const [showFiltered, setShowFiltered] = useState(false);
@@ -111,10 +114,11 @@ export default function ExerciseList() {
     avoidJoints: string[];
     muscleTarget: string[];
     muscleLessen: string[];
+    isFullBody: boolean;
   } | null>(null);
 
   // Query for filtered exercises (only runs when filterCriteria is set)
-  const { data: filteredExercises, isLoading: isFiltering, error: filterError } = useQuery({
+  const { data: filteredExercises, isLoading: isFiltering, error: filterError } = useQuery<any[]>({
     ...trpc.exercise.filter.queryOptions({
       clientName: "Web User",
       strengthCapacity: (filterCriteria?.strength || "moderate") as "very_low" | "low" | "moderate" | "high" | "very_high" | "all",
@@ -125,6 +129,7 @@ export default function ExerciseList() {
       intensity: filterCriteria?.intensity as "low" | "medium" | "high" | undefined,
       muscleTarget: filterCriteria?.muscleTarget || [],
       muscleLessen: filterCriteria?.muscleLessen || [],
+      isFullBody: filterCriteria?.isFullBody || false,
       businessId: businessId || undefined,
       userInput: "", // No user input for now
     }),
@@ -140,7 +145,7 @@ export default function ExerciseList() {
     console.error('Filter error details:', {
       message: filterError.message,
       data: filterError.data,
-      cause: filterError.cause
+      cause: (filterError as any).cause
     });
   }
 
@@ -342,6 +347,20 @@ export default function ExerciseList() {
                 </select>
               </div>
             </div>
+            
+            {/* Full Body Checkbox */}
+            <div className="mb-4">
+              <label className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  checked={isFullBody}
+                  onChange={(e) => setIsFullBody(e.target.checked)}
+                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                />
+                <span className="text-sm font-medium text-gray-700">Full Body Workout</span>
+              </label>
+              <p className="text-xs text-gray-500 ml-6 mt-1">Use full body template for exercise organization</p>
+            </div>
           </div>
         </div>
         
@@ -376,6 +395,7 @@ export default function ExerciseList() {
                 avoidJoints: avoidJoints,
                 muscleTarget: muscleTarget,
                 muscleLessen: muscleLessen,
+                isFullBody: isFullBody,
               };
               
               setFilterCriteria(criteria);
@@ -401,6 +421,7 @@ export default function ExerciseList() {
                 setMuscleTarget([]);
                 setMuscleLessen([]);
                 setIntensityFilter("medium");
+                setIsFullBody(false);
               }}
               className="px-6 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors"
             >
@@ -430,6 +451,9 @@ export default function ExerciseList() {
             <tr>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b">
                 Exercise Name
+              </th>
+              <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b">
+                Movement Pattern
               </th>
               <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b">
                 Final Score
@@ -517,6 +541,11 @@ export default function ExerciseList() {
                     </div>
                   </td>
                   <td className="px-4 py-3 text-center">
+                    <span className="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded">
+                      {exercise.movementPattern || '-'}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-center">
                     {hasScore ? (
                       <span className="text-lg font-semibold text-blue-600">
                         {scoredExercise.score.toFixed(1)}
@@ -599,12 +628,26 @@ export default function ExerciseList() {
               <div className="space-y-2">
                 {filteredExercises
                   .filter(ex => ex.functionTags?.includes('primary_strength'))
-                  .map((exercise, idx) => (
-                    <div key={exercise.id} className="text-sm">
-                      <span className="font-medium">{exercise.name}</span>
-                      <span className="text-blue-600 ml-2">({exercise.score.toFixed(1)})</span>
-                    </div>
-                  ))}
+                  .sort((a, b) => b.score - a.score)
+                  .map((exercise, idx) => {
+                    // Use block-specific isTop6 flag if available (full body mode), otherwise use index
+                    const isTop6 = 'isTop6BlockA' in exercise ? exercise.isTop6BlockA : idx < 6;
+                    
+                    return (
+                      <div 
+                        key={exercise.id} 
+                        className={`text-sm p-2 rounded ${
+                          isTop6 
+                            ? 'bg-blue-200 border border-blue-400' 
+                            : ''
+                        }`}
+                      >
+                        <span className="font-medium">{exercise.name}</span>
+                        <span className="text-blue-600 ml-2">({exercise.score.toFixed(1)})</span>
+                        {isTop6 && <span className="ml-2 text-xs font-bold text-blue-700">TOP 6</span>}
+                      </div>
+                    );
+                  })}
                 {filteredExercises.filter(ex => ex.functionTags?.includes('primary_strength')).length === 0 && (
                   <p className="text-sm text-gray-500 italic">No exercises found</p>
                 )}
@@ -617,12 +660,31 @@ export default function ExerciseList() {
               <div className="space-y-2">
                 {filteredExercises
                   .filter(ex => ex.functionTags?.includes('secondary_strength'))
-                  .map((exercise, idx) => (
-                    <div key={exercise.id} className="text-sm">
-                      <span className="font-medium">{exercise.name}</span>
-                      <span className="text-green-600 ml-2">({exercise.score.toFixed(1)})</span>
-                    </div>
-                  ))}
+                  .sort((a, b) => b.score - a.score)
+                  .map((exercise, idx) => {
+                    // Use block-specific isTop6 flag if available (full body mode), otherwise use index
+                    const isTop6 = 'isTop6BlockB' in exercise ? exercise.isTop6BlockB : idx < 6;
+                    
+                    return (
+                      <div 
+                        key={exercise.id} 
+                        className={`text-sm p-2 rounded ${
+                          isTop6 
+                            ? 'bg-green-200 border border-green-400' 
+                            : ''
+                        }`}
+                      >
+                        <span className="font-medium">{exercise.name}</span>
+                        <span className="text-green-600 ml-2">
+                          {(exercise as any).blockBPenalty > 0 
+                            ? `(${exercise.score.toFixed(1)} → ${(exercise.score - (exercise as any).blockBPenalty).toFixed(1)})`
+                            : `(${exercise.score.toFixed(1)})`
+                          }
+                        </span>
+                        {isTop6 && <span className="ml-2 text-xs font-bold text-green-700">TOP 6</span>}
+                      </div>
+                    );
+                  })}
                 {filteredExercises.filter(ex => ex.functionTags?.includes('secondary_strength')).length === 0 && (
                   <p className="text-sm text-gray-500 italic">No exercises found</p>
                 )}
@@ -635,10 +697,24 @@ export default function ExerciseList() {
               <div className="space-y-2">
                 {filteredExercises
                   .filter(ex => ex.functionTags?.includes('accessory'))
+                  .sort((a, b) => b.score - a.score)
                   .map((exercise, idx) => (
-                    <div key={exercise.id} className="text-sm">
+                    <div 
+                      key={exercise.id} 
+                      className={`text-sm p-2 rounded ${
+                        exercise.isTop6BlockC 
+                          ? 'bg-purple-200 border border-purple-400' 
+                          : ''
+                      }`}
+                    >
                       <span className="font-medium">{exercise.name}</span>
-                      <span className="text-purple-600 ml-2">({exercise.score.toFixed(1)})</span>
+                      <span className="text-purple-600 ml-2">
+                        {exercise.blockCPenalty > 0 
+                          ? `(${exercise.score.toFixed(1)} → ${(exercise.score - exercise.blockCPenalty).toFixed(1)})`
+                          : `(${exercise.score.toFixed(1)})`
+                        }
+                      </span>
+                      {exercise.isTop6BlockC && <span className="ml-2 text-xs font-bold text-purple-700">TOP 6</span>}
                     </div>
                   ))}
                 {filteredExercises.filter(ex => ex.functionTags?.includes('accessory')).length === 0 && (
@@ -653,10 +729,19 @@ export default function ExerciseList() {
               <div className="space-y-2">
                 {filteredExercises
                   .filter(ex => ex.functionTags?.includes('core'))
+                  .sort((a, b) => b.score - a.score)
                   .map((exercise, idx) => (
-                    <div key={exercise.id} className="text-sm">
+                    <div 
+                      key={exercise.id} 
+                      className={`text-sm p-2 rounded ${
+                        idx < 6 
+                          ? 'bg-orange-200 border border-orange-400' 
+                          : ''
+                      }`}
+                    >
                       <span className="font-medium">{exercise.name}</span>
                       <span className="text-orange-600 ml-2">({exercise.score.toFixed(1)})</span>
+                      {idx < 6 && <span className="ml-2 text-xs font-bold text-orange-700">TOP 6</span>}
                     </div>
                   ))}
                 {filteredExercises.filter(ex => ex.functionTags?.includes('core')).length === 0 && (
@@ -671,10 +756,19 @@ export default function ExerciseList() {
               <div className="space-y-2">
                 {filteredExercises
                   .filter(ex => ex.functionTags?.includes('capacity'))
+                  .sort((a, b) => b.score - a.score)
                   .map((exercise, idx) => (
-                    <div key={exercise.id} className="text-sm">
+                    <div 
+                      key={exercise.id} 
+                      className={`text-sm p-2 rounded ${
+                        idx < 6 
+                          ? 'bg-red-200 border border-red-400' 
+                          : ''
+                      }`}
+                    >
                       <span className="font-medium">{exercise.name}</span>
                       <span className="text-red-600 ml-2">({exercise.score.toFixed(1)})</span>
+                      {idx < 6 && <span className="ml-2 text-xs font-bold text-red-700">TOP 6</span>}
                     </div>
                   ))}
                 {filteredExercises.filter(ex => ex.functionTags?.includes('capacity')).length === 0 && (
@@ -685,6 +779,7 @@ export default function ExerciseList() {
           </div>
         </div>
       )}
+
 
       {/* Copy JSON button */}
       {showFiltered && filteredExercises && (
