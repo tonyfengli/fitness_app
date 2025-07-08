@@ -15,7 +15,6 @@ const STRENGTH_OPTIONS = [
 ];
 
 const SKILL_OPTIONS = [
-  { value: "all", label: "All Skill Levels" },
   { value: "very_low", label: "Very Low Only" },
   { value: "low", label: "Low & Below" },
   { value: "moderate", label: "Moderate & Below" },
@@ -84,7 +83,7 @@ export default function ExerciseList() {
 
   // Filter states
   const [strengthFilter, setStrengthFilter] = useState("all");
-  const [skillFilter, setSkillFilter] = useState("all");
+  const [skillFilter, setSkillFilter] = useState("moderate");
   const [intensityFilter, setIntensityFilter] = useState("medium");
   
   // Exercise inclusion/exclusion states
@@ -148,6 +147,66 @@ export default function ExerciseList() {
       cause: (filterError as any).cause
     });
   }
+
+  // Function to calculate TOP 6 for Block D with constraints
+  const getBlockDTop6 = (exercises: any[]) => {
+    const blockDExercises = exercises
+      .filter(ex => ex.functionTags?.includes('core') || ex.functionTags?.includes('capacity'))
+      .sort((a, b) => b.score - a.score);
+    
+    if (blockDExercises.length === 0) return new Set<string>();
+    
+    const selected: any[] = [];
+    let coreCount = 0;
+    let capacityCount = 0;
+    
+    const isCore = (ex: any) => ex.functionTags?.includes('core');
+    const isCapacity = (ex: any) => ex.functionTags?.includes('capacity');
+    
+    // Check if minimum constraints are met
+    const constraintsMet = () => coreCount >= 3 && capacityCount >= 3;
+    
+    // Calculate priority for constraint satisfaction
+    const getConstraintPriority = (exercise: any) => {
+      if (constraintsMet()) return 0;
+      
+      let priority = 0;
+      if (coreCount < 3 && isCore(exercise)) priority += 3;
+      if (capacityCount < 3 && isCapacity(exercise)) priority += 3;
+      
+      return priority;
+    };
+    
+    // Selection algorithm: Prioritize constraints until met, then go by score
+    for (const candidate of blockDExercises) {
+      if (selected.length >= 6) break;
+      
+      const priority = getConstraintPriority(candidate);
+      
+      // Select if it helps meet constraints
+      if (priority > 0) {
+        selected.push(candidate);
+        if (isCore(candidate)) coreCount++;
+        if (isCapacity(candidate)) capacityCount++;
+      }
+    }
+    
+    // After constraints are met (or attempted), fill remaining slots with highest scoring exercises
+    if (selected.length < 6) {
+      const remaining = blockDExercises.filter(ex => !selected.includes(ex));
+      const slotsToFill = 6 - selected.length;
+      const highestScoring = remaining.slice(0, slotsToFill);
+      
+      for (const candidate of highestScoring) {
+        selected.push(candidate);
+        if (isCore(candidate)) coreCount++;
+        if (isCapacity(candidate)) capacityCount++;
+      }
+    }
+    
+    // Return a set of selected exercise IDs
+    return new Set(selected.map(ex => ex.id));
+  };
 
   if (exercises.length === 0) {
     return (
@@ -723,55 +782,32 @@ export default function ExerciseList() {
               </div>
             </div>
 
-            {/* Block D - Core */}
+            {/* Block D - Core & Capacity */}
             <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
-              <h3 className="text-lg font-semibold text-orange-800 mb-3">Block D - Core</h3>
+              <h3 className="text-lg font-semibold text-orange-800 mb-3">Block D - Core & Capacity</h3>
               <div className="space-y-2">
-                {filteredExercises
-                  .filter(ex => ex.functionTags?.includes('core'))
-                  .sort((a, b) => b.score - a.score)
-                  .map((exercise, idx) => (
+                {(() => {
+                  const blockDTop6 = getBlockDTop6(filteredExercises);
+                  const blockDExercises = filteredExercises
+                    .filter(ex => ex.functionTags?.includes('core') || ex.functionTags?.includes('capacity'))
+                    .sort((a, b) => b.score - a.score);
+                  
+                  return blockDExercises.map((exercise) => (
                     <div 
                       key={exercise.id} 
                       className={`text-sm p-2 rounded ${
-                        idx < 6 
+                        blockDTop6.has(exercise.id) 
                           ? 'bg-orange-200 border border-orange-400' 
                           : ''
                       }`}
                     >
                       <span className="font-medium">{exercise.name}</span>
                       <span className="text-orange-600 ml-2">({exercise.score.toFixed(1)})</span>
-                      {idx < 6 && <span className="ml-2 text-xs font-bold text-orange-700">TOP 6</span>}
+                      {blockDTop6.has(exercise.id) && <span className="ml-2 text-xs font-bold text-orange-700">TOP 6</span>}
                     </div>
-                  ))}
-                {filteredExercises.filter(ex => ex.functionTags?.includes('core')).length === 0 && (
-                  <p className="text-sm text-gray-500 italic">No exercises found</p>
-                )}
-              </div>
-            </div>
-
-            {/* Block E - Capacity */}
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-              <h3 className="text-lg font-semibold text-red-800 mb-3">Block E - Capacity</h3>
-              <div className="space-y-2">
-                {filteredExercises
-                  .filter(ex => ex.functionTags?.includes('capacity'))
-                  .sort((a, b) => b.score - a.score)
-                  .map((exercise, idx) => (
-                    <div 
-                      key={exercise.id} 
-                      className={`text-sm p-2 rounded ${
-                        idx < 6 
-                          ? 'bg-red-200 border border-red-400' 
-                          : ''
-                      }`}
-                    >
-                      <span className="font-medium">{exercise.name}</span>
-                      <span className="text-red-600 ml-2">({exercise.score.toFixed(1)})</span>
-                      {idx < 6 && <span className="ml-2 text-xs font-bold text-red-700">TOP 6</span>}
-                    </div>
-                  ))}
-                {filteredExercises.filter(ex => ex.functionTags?.includes('capacity')).length === 0 && (
+                  ));
+                })()}
+                {filteredExercises.filter(ex => ex.functionTags?.includes('core') || ex.functionTags?.includes('capacity')).length === 0 && (
                   <p className="text-sm text-gray-500 italic">No exercises found</p>
                 )}
               </div>

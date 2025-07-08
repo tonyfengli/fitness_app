@@ -9,6 +9,7 @@ export interface ScoreBreakdown {
   muscleTargetBonus: number;
   muscleLessenPenalty: number;
   intensityAdjustment: number;
+  foundationalBonus: number;
   total: number;
 }
 
@@ -28,4 +29,6 @@ export interface ScoringCriteria {
   muscleTarget: string[];
   muscleLessen: string[];
   intensity?: string; // 'low', 'medium', 'high'
+  skillLevel?: string; // 'very_low', 'low', 'moderate', 'high', 'very_high'
+  strengthLevel?: string; // 'very_low', 'low', 'moderate', 'high', 'very_high'
 }

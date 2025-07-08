@@ -57,6 +57,8 @@ export async function filterExercisesFromInput(options: FilterExercisesOptions):
         muscleTarget: clientContext.muscle_target || [],
         muscleLessen: clientContext.muscle_lessen || [],
         intensity: intensity,
+        skillLevel: clientContext.skill_capacity,
+        strengthLevel: clientContext.strength_capacity,
       };
     }
     
@@ -69,14 +71,18 @@ export async function filterExercisesFromInput(options: FilterExercisesOptions):
       scoringCriteria,
     });
     
-    // Apply template handler to mark TOP 6 selections if full body mode is enabled
+    // Apply template handler to mark TOP 6 selections
     let organizedExercises = filteredExercises;
     
-    if (routineTemplate && (routineTemplate as any).isFullBody) {
-      console.log('🏋️ Using FullBodyRoutineTemplateHandler to select TOP 6 with constraints');
+    // Always use template handler for organizing exercises into blocks
+    if (routineTemplate) {
+      const isFullBody = (routineTemplate as any).isFullBody;
+      const templateId = isFullBody ? 'full_body' : 'routine';
+      
+      console.log(`🏋️ Using ${isFullBody ? 'FullBodyRoutineTemplateHandler' : 'RoutineTemplateHandler'} to select TOP 6 with constraints`);
       console.log(`📊 Total exercises: ${filteredExercises.length}`);
       
-      const templateHandler = getTemplateHandler('full_body');
+      const templateHandler = getTemplateHandler(templateId);
       const organized = templateHandler.organize(filteredExercises as ScoredExercise[]);
       
       // Create sets of IDs for TOP 6 selections in Block A, B, and C

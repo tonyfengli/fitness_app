@@ -16,6 +16,9 @@ const SCORING_CONFIG = {
   MUSCLE_LESSEN_PRIMARY: -3.0,   // Max penalty for primary muscle match
   MUSCLE_LESSEN_SECONDARY: -1.5, // Max penalty for secondary muscle match
   
+  // Phase 2 scoring factors - foundational movement
+  FOUNDATIONAL_MOVEMENT_BONUS: 0.5, // Boost for exercises with foundational movement tag
+  
   // Phase 2 scoring factors - intensity preferences
   INTENSITY_SCORING: {
     low: {
@@ -131,6 +134,67 @@ function calculateIntensityAdjustment(exercise: Exercise, intensityPreference?: 
 }
 
 /**
+ * Calculate foundational movement bonus
+ * Exercises with "foundational" movement tag get a 0.5 bonus
+ * Lower body foundational exercises get an additional 0.25 bonus (0.75 total)
+ * Skill-matched foundational exercises get an additional 0.25 bonus
+ * Moderate/high skill levels penalize low complexity exercises by -1.0 (unless strength is low/very_low)
+ */
+function calculateFoundationalBonus(exercise: Exercise, skillLevel?: string, strengthLevel?: string): number {
+  if (!exercise.movementTags || !Array.isArray(exercise.movementTags)) {
+    return 0;
+  }
+  
+  // Check if exercise has the "foundational" movement tag
+  const hasFoundationalTag = exercise.movementTags.includes("foundational");
+  
+  if (!hasFoundationalTag) {
+    return 0;
+  }
+  
+  // Define lower body muscles based on the database enum
+  const lowerBodyMuscles = ['glutes', 'quads', 'hamstrings', 'calves', 'adductors', 'abductors'];
+  
+  // Check if this is a lower body exercise
+  const isLowerBody = lowerBodyMuscles.includes(exercise.primaryMuscle);
+  
+  // Calculate skill-based bonus/penalty
+  let skillBonus = 0;
+  if (skillLevel) {
+    const exerciseComplexity = exercise.complexityLevel;
+    
+    // For low/very_low skill levels: boost low/very_low complexity exercises
+    if ((skillLevel === 'low' || skillLevel === 'very_low') && 
+        (exerciseComplexity === 'low' || exerciseComplexity === 'very_low')) {
+      skillBonus = 0.25;
+    }
+    // For moderate skill level: boost only moderate complexity exercises
+    else if (skillLevel === 'moderate' && exerciseComplexity === 'moderate') {
+      skillBonus = 0.25;
+    }
+    // For high skill level: boost both moderate and high complexity exercises
+    else if (skillLevel === 'high' && 
+             (exerciseComplexity === 'moderate' || exerciseComplexity === 'high')) {
+      skillBonus = 0.25;
+    }
+    
+    // For moderate/high skill levels: penalize low/very_low complexity exercises
+    // UNLESS the user has low/very_low strength (they need simpler exercises)
+    if ((skillLevel === 'moderate' || skillLevel === 'high') &&
+        (exerciseComplexity === 'low' || exerciseComplexity === 'very_low') &&
+        strengthLevel !== 'low' && strengthLevel !== 'very_low') {
+      skillBonus = -1.0;
+    }
+  }
+  
+  // Base foundational bonus + additional bonuses
+  const baseBonus = SCORING_CONFIG.FOUNDATIONAL_MOVEMENT_BONUS;
+  const lowerBodyBonus = isLowerBody ? 0.25 : 0;
+  
+  return baseBonus + lowerBodyBonus + skillBonus;
+}
+
+/**
  * Check if exercise is in the include list
  */
 function isIncludedExercise(exercise: Exercise, includeExercises: string[]): boolean {
@@ -151,8 +215,9 @@ function scoreExercise(
   const muscleTargetBonus = calculateMuscleTargetBonus(exercise, criteria.muscleTarget);
   const muscleLessenPenalty = calculateMuscleLessenPenalty(exercise, criteria.muscleLessen);
   const intensityAdjustment = calculateIntensityAdjustment(exercise, criteria.intensity);
+  const foundationalBonus = calculateFoundationalBonus(exercise, criteria.skillLevel, criteria.strengthLevel);
   
-  const total = base + includeExerciseBoost + muscleTargetBonus + muscleLessenPenalty + intensityAdjustment;
+  const total = base + includeExerciseBoost + muscleTargetBonus + muscleLessenPenalty + intensityAdjustment + foundationalBonus;
   
   const scoredExercise: ScoredExercise = {
     ...exercise,
@@ -166,6 +231,7 @@ function scoreExercise(
       muscleTargetBonus,
       muscleLessenPenalty,
       intensityAdjustment,
+      foundationalBonus,
       total: scoredExercise.score,
     };
   }

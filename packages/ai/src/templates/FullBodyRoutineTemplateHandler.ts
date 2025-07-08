@@ -34,9 +34,8 @@ export class FullBodyRoutineTemplateHandler implements TemplateHandler {
       blockB,
       blockC,
       
-      // No constraints for Block D, E - just return by tag and score
-      blockD: this.getExercisesByTag(exercises, 'core'),
-      blockE: this.getExercisesByTag(exercises, 'capacity'),
+      // Block D: Combined core and capacity exercises sorted by score
+      blockD: this.getCombinedCoreAndCapacity(exercises),
     };
   }
   
@@ -48,6 +47,11 @@ export class FullBodyRoutineTemplateHandler implements TemplateHandler {
     
     // Sort by score (highest first)
     return filtered.sort((a, b) => b.score - a.score);
+  }
+  
+  private getCombinedCoreAndCapacity(exercises: ScoredExercise[]): ScoredExercise[] {
+    // Use constraint-based selection for Block D
+    return this.getTop6WithFunctionTagConstraints(exercises);
   }
   
   private getTop6WithConstraints(exercises: ScoredExercise[], functionTag: string, penalizeIds?: Set<string>): ScoredExercise[] {
@@ -215,6 +219,99 @@ export class FullBodyRoutineTemplateHandler implements TemplateHandler {
     console.log(`📌 Final selection for ${functionTag}: ${selected.length} exercises`);
     selected.forEach((ex, idx) => {
       console.log(`   ${idx + 1}. ${ex.name} (${ex.score})`);
+    });
+    
+    return selected;
+  }
+  
+  private getTop6WithFunctionTagConstraints(exercises: ScoredExercise[]): ScoredExercise[] {
+    // Filter exercises that have either 'core' or 'capacity' function tags
+    const candidates = exercises.filter(exercise => 
+      exercise.functionTags && 
+      (exercise.functionTags.includes('core') || exercise.functionTags.includes('capacity'))
+    );
+    
+    // Sort by score (highest first)
+    const sortedCandidates = [...candidates].sort((a, b) => b.score - a.score);
+    
+    if (sortedCandidates.length === 0) return [];
+    
+    let selected: ScoredExercise[] = [];
+    
+    // Track what we've satisfied
+    let coreCount = 0;
+    let capacityCount = 0;
+    
+    // Helper functions
+    const isCore = (ex: ScoredExercise) => ex.functionTags?.includes('core');
+    const isCapacity = (ex: ScoredExercise) => ex.functionTags?.includes('capacity');
+    
+    // Check if minimum constraints are met
+    const constraintsMet = () => {
+      return coreCount >= 3 && capacityCount >= 3;
+    };
+    
+    // Calculate priority for constraint satisfaction
+    const getConstraintPriority = (exercise: ScoredExercise) => {
+      // If all constraints are met, no priority needed
+      if (constraintsMet()) return 0;
+      
+      let priority = 0;
+      
+      // High priority for function tags we need more of
+      if (coreCount < 3 && isCore(exercise)) priority += 3;
+      if (capacityCount < 3 && isCapacity(exercise)) priority += 3;
+      
+      return priority;
+    };
+    
+    // Selection algorithm: Prioritize constraints until met, then go by score
+    for (const candidate of sortedCandidates) {
+      if (selected.length >= 6) break;
+      
+      const priority = getConstraintPriority(candidate);
+      
+      // Select if it helps meet constraints
+      if (priority > 0) {
+        selected.push(candidate);
+        
+        // Update tracking
+        if (isCore(candidate)) coreCount++;
+        if (isCapacity(candidate)) capacityCount++;
+        
+        console.log(`✅ Selected for Block D: ${candidate.name} - Score: ${candidate.score}, Reason: constraint priority: ${priority}, Tags: ${candidate.functionTags?.join(', ')}`);
+      }
+    }
+    
+    // After constraints are met (or attempted), fill remaining slots with highest scoring exercises
+    if (selected.length < 6) {
+      // Get exercises not yet selected
+      const remaining = sortedCandidates.filter(ex => !selected.includes(ex));
+      
+      // Take the highest scoring ones to fill up to 6
+      const slotsToFill = 6 - selected.length;
+      const highestScoring = remaining.slice(0, slotsToFill);
+      
+      for (const candidate of highestScoring) {
+        selected.push(candidate);
+        
+        // Update tracking
+        if (isCore(candidate)) coreCount++;
+        if (isCapacity(candidate)) capacityCount++;
+        
+        console.log(`✅ Selected for Block D: ${candidate.name} - Score: ${candidate.score}, Reason: high score (constraints ${constraintsMet() ? 'met' : 'not fully met'}), Tags: ${candidate.functionTags?.join(', ')}`);
+      }
+    }
+    
+    // Log constraint satisfaction
+    console.log(`📊 Block D constraints check:
+      - Core (min 3): ${coreCount} ${coreCount >= 3 ? '✅' : '❌'}
+      - Capacity (min 3): ${capacityCount} ${capacityCount >= 3 ? '✅' : '❌'}
+    `);
+    
+    console.log(`📌 Final selection for Block D: ${selected.length} exercises`);
+    selected.forEach((ex, idx) => {
+      console.log(`   ${idx + 1}. ${ex.name} (${ex.score}) - ${ex.functionTags?.join(', ')}`);
     });
     
     return selected;
