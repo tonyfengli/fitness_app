@@ -148,7 +148,7 @@ export default function ExerciseList() {
     });
   }
 
-  // Function to calculate TOP 6 for Block D with constraints
+  // Function to calculate TOP selections for Block D with constraints
   const getBlockDTop6 = (exercises: any[]) => {
     const blockDExercises = exercises
       .filter(ex => ex.functionTags?.includes('core') || ex.functionTags?.includes('capacity'))
@@ -164,15 +164,15 @@ export default function ExerciseList() {
     const isCapacity = (ex: any) => ex.functionTags?.includes('capacity');
     
     // Check if minimum constraints are met
-    const constraintsMet = () => coreCount >= 3 && capacityCount >= 3;
+    const constraintsMet = () => coreCount >= 1 && capacityCount >= 2;
     
     // Calculate priority for constraint satisfaction
     const getConstraintPriority = (exercise: any) => {
       if (constraintsMet()) return 0;
       
       let priority = 0;
-      if (coreCount < 3 && isCore(exercise)) priority += 3;
-      if (capacityCount < 3 && isCapacity(exercise)) priority += 3;
+      if (coreCount < 1 && isCore(exercise)) priority += 3;
+      if (capacityCount < 2 && isCapacity(exercise)) priority += 3;
       
       return priority;
     };
@@ -703,7 +703,7 @@ export default function ExerciseList() {
                       >
                         <span className="font-medium">{exercise.name}</span>
                         <span className="text-blue-600 ml-2">({exercise.score.toFixed(1)})</span>
-                        {isTop6 && <span className="ml-2 text-xs font-bold text-blue-700">TOP 6</span>}
+                        {isTop6 && <span className="ml-2 text-xs font-bold text-blue-700">TOP 5</span>}
                       </div>
                     );
                   })}
@@ -740,7 +740,7 @@ export default function ExerciseList() {
                             : `(${exercise.score.toFixed(1)})`
                           }
                         </span>
-                        {isTop6 && <span className="ml-2 text-xs font-bold text-green-700">TOP 6</span>}
+                        {isTop6 && <span className="ml-2 text-xs font-bold text-green-700">TOP 8</span>}
                       </div>
                     );
                   })}
@@ -773,7 +773,7 @@ export default function ExerciseList() {
                           : `(${exercise.score.toFixed(1)})`
                         }
                       </span>
-                      {exercise.isTop6BlockC && <span className="ml-2 text-xs font-bold text-purple-700">TOP 6</span>}
+                      {exercise.isTop6BlockC && <span className="ml-2 text-xs font-bold text-purple-700">TOP 8</span>}
                     </div>
                   ))}
                 {filteredExercises.filter(ex => ex.functionTags?.includes('accessory')).length === 0 && (
@@ -787,25 +787,27 @@ export default function ExerciseList() {
               <h3 className="text-lg font-semibold text-orange-800 mb-3">Block D - Core & Capacity</h3>
               <div className="space-y-2">
                 {(() => {
-                  const blockDTop6 = getBlockDTop6(filteredExercises);
                   const blockDExercises = filteredExercises
                     .filter(ex => ex.functionTags?.includes('core') || ex.functionTags?.includes('capacity'))
                     .sort((a, b) => b.score - a.score);
                   
-                  return blockDExercises.map((exercise) => (
-                    <div 
-                      key={exercise.id} 
-                      className={`text-sm p-2 rounded ${
-                        blockDTop6.has(exercise.id) 
-                          ? 'bg-orange-200 border border-orange-400' 
-                          : ''
-                      }`}
-                    >
-                      <span className="font-medium">{exercise.name}</span>
-                      <span className="text-orange-600 ml-2">({exercise.score.toFixed(1)})</span>
-                      {blockDTop6.has(exercise.id) && <span className="ml-2 text-xs font-bold text-orange-700">TOP 6</span>}
-                    </div>
-                  ));
+                  return blockDExercises.map((exercise) => {
+                    const isTop6 = exercise.isTop6BlockD || false;
+                    return (
+                      <div 
+                        key={exercise.id} 
+                        className={`text-sm p-2 rounded ${
+                          isTop6 
+                            ? 'bg-orange-200 border border-orange-400' 
+                            : ''
+                        }`}
+                      >
+                        <span className="font-medium">{exercise.name}</span>
+                        <span className="text-orange-600 ml-2">({exercise.score.toFixed(1)})</span>
+                        {isTop6 && <span className="ml-2 text-xs font-bold text-orange-700">TOP 6</span>}
+                      </div>
+                    );
+                  });
                 })()}
                 {filteredExercises.filter(ex => ex.functionTags?.includes('core') || ex.functionTags?.includes('capacity')).length === 0 && (
                   <p className="text-sm text-gray-500 italic">No exercises found</p>
@@ -822,7 +824,43 @@ export default function ExerciseList() {
         <div className="flex justify-center mt-6">
           <button
             onClick={() => {
-              navigator.clipboard.writeText(JSON.stringify(filteredExercises, null, 2));
+              // Helper function to clean exercise data
+              const cleanExercise = (exercise: any) => {
+                const { isTop6Selected, isTop6BlockA, isTop6BlockB, isTop6BlockC, isTop6BlockD, blockBPenalty, blockCPenalty, ...cleanedExercise } = exercise;
+                return cleanedExercise;
+              };
+
+              // Get exercises for each block (only TOP selections)
+              const blockA = filteredExercises
+                .filter(ex => ex.functionTags?.includes('primary_strength') && ex.isTop6BlockA)
+                .map(cleanExercise);
+              
+              const blockB = filteredExercises
+                .filter(ex => ex.functionTags?.includes('secondary_strength') && ex.isTop6BlockB)
+                .map(cleanExercise);
+              
+              const blockC = filteredExercises
+                .filter(ex => ex.functionTags?.includes('accessory') && ex.isTop6BlockC)
+                .map(cleanExercise);
+              
+              const blockD = filteredExercises
+                .filter(ex => (ex.functionTags?.includes('core') || ex.functionTags?.includes('capacity')) && ex.isTop6BlockD)
+                .map(cleanExercise);
+
+              // Format the output
+              const formattedOutput = `Block A:
+${JSON.stringify(blockA, null, 2)}
+
+Block B:
+${JSON.stringify(blockB, null, 2)}
+
+Block C:
+${JSON.stringify(blockC, null, 2)}
+
+Block D:
+${JSON.stringify(blockD, null, 2)}`;
+
+              navigator.clipboard.writeText(formattedOutput);
             }}
             className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-colors"
           >

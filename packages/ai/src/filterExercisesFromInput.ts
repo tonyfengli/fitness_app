@@ -85,10 +85,11 @@ export async function filterExercisesFromInput(options: FilterExercisesOptions):
       const templateHandler = getTemplateHandler(templateId);
       const organized = templateHandler.organize(filteredExercises as ScoredExercise[]);
       
-      // Create sets of IDs for TOP 6 selections in Block A, B, and C
+      // Create sets of IDs for TOP 6 selections in Block A, B, C, and D
       const top6BlockA = new Set(organized.blockA.map(ex => ex.id));
       const top6BlockB = new Set(organized.blockB.map(ex => ex.id));
       const top6BlockC = new Set(organized.blockC.map(ex => ex.id));
+      const top6BlockD = new Set(organized.blockD.map(ex => ex.id));
       
       // Mark exercises that are selected as TOP 6
       organizedExercises = filteredExercises.map(exercise => {
@@ -98,14 +99,16 @@ export async function filterExercisesFromInput(options: FilterExercisesOptions):
         const isTop6BlockA = tags.includes('primary_strength') && top6BlockA.has(exercise.id);
         const isTop6BlockB = tags.includes('secondary_strength') && top6BlockB.has(exercise.id);
         const isTop6BlockC = tags.includes('accessory') && top6BlockC.has(exercise.id);
+        const isTop6BlockD = (tags.includes('core') || tags.includes('capacity')) && top6BlockD.has(exercise.id);
         
         // Add block-specific flags to indicate TOP 6 selection
         return {
           ...exercise,
-          isTop6Selected: isTop6BlockA || isTop6BlockB || isTop6BlockC, // Keep for backward compatibility
+          isTop6Selected: isTop6BlockA || isTop6BlockB || isTop6BlockC || isTop6BlockD, // Keep for backward compatibility
           isTop6BlockA,
           isTop6BlockB,
           isTop6BlockC,
+          isTop6BlockD,
           // Add penalty info for Block B display
           blockBPenalty: isTop6BlockA ? 2.0 : 0,
           // Add penalty info for Block C display
@@ -117,15 +120,18 @@ export async function filterExercisesFromInput(options: FilterExercisesOptions):
       console.log(`   - Block A (primary_strength): ${organized.blockA.length} exercises selected`);
       console.log(`   - Block B (secondary_strength): ${organized.blockB.length} exercises selected`);
       console.log(`   - Block C (accessory): ${organized.blockC.length} exercises selected`);
+      console.log(`   - Block D (core & capacity): ${organized.blockD.length} exercises selected`);
       
       // Debug: Count how many exercises are marked as TOP 6 for each block
       const blockACount = organizedExercises.filter(ex => (ex as any).isTop6BlockA).length;
       const blockBCount = organizedExercises.filter(ex => (ex as any).isTop6BlockB).length;
       const blockCCount = organizedExercises.filter(ex => (ex as any).isTop6BlockC).length;
+      const blockDCount = organizedExercises.filter(ex => (ex as any).isTop6BlockD).length;
       console.log(`📊 TOP 6 flags set:`);
       console.log(`   - isTop6BlockA: ${blockACount} exercises marked`);
       console.log(`   - isTop6BlockB: ${blockBCount} exercises marked`);
       console.log(`   - isTop6BlockC: ${blockCCount} exercises marked`);
+      console.log(`   - isTop6BlockD: ${blockDCount} exercises marked`);
     }
     
     // Return in the expected WorkoutRoutineStateType format
