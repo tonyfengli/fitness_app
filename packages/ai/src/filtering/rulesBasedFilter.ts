@@ -35,21 +35,7 @@ export async function applyRulesBasedFilter(
   // Extract filter criteria from client context
   const filterCriteria = extractFilterCriteriaFromContext(clientContext);
   
-  console.log('🔍 Client context:', {
-    name: clientContext.name,
-    strength_capacity: clientContext.strength_capacity,
-    skill_capacity: clientContext.skill_capacity,
-    intensity: clientContext.intensity,
-  });
-  
-  console.log('🔍 Filter criteria:', {
-    strength: filterCriteria.strength,
-    skill: filterCriteria.skill,
-    include: clientContext.exercise_requests?.include || [],
-    avoid: clientContext.exercise_requests?.avoid || [],
-    avoidJoints: clientContext.avoid_joints || [],
-  });
-  
+
   // Apply client context filtering (strength, skill, exercise requests, and joint restrictions)
   const filteredExercises = applyAllFilters(exercises, {
     strength: filterCriteria.strength as StrengthLevel,
@@ -58,8 +44,6 @@ export async function applyRulesBasedFilter(
     avoid: clientContext.exercise_requests?.avoid || [],
     avoidJoints: clientContext.avoid_joints || [],
   });
-  
-  console.log(`📊 Filtered ${filteredExercises.length} exercises from ${exercises.length} total`);
-  
+    
   return filteredExercises;
 }

@@ -1,47 +1,40 @@
 import type { Exercise } from "../types";
 
-export type StrengthLevel = "very_low" | "low" | "moderate" | "high" | "very_high" | "all";
-export type SkillLevel = "very_low" | "low" | "moderate" | "high" | "all";
-export type IntensityLevel = "low_local" | "moderate_local" | "high_local" | "moderate_systemic" | "high_systemic" | "metabolic" | "all";
+export type StrengthLevel = "very_low" | "low" | "moderate" | "high";
+export type SkillLevel = "very_low" | "low" | "moderate" | "high";
+export type IntensityLevel = "low_local" | "moderate_local" | "high_local" | "moderate_systemic" | "high_systemic" | "metabolic";
 
 /**
- * Get allowed strength levels based on cascading logic
- * @param selectedLevel - The user-selected strength level
- * @returns Array of strength levels that should be included
+ * Generic function to get allowed levels based on cascading logic
+ * Higher levels include all lower levels
+ * @param selectedLevel - The user-selected level
+ * @param levelType - Type of level (for future extensibility)
+ * @returns Array of levels that should be included
  */
-function getAllowedStrengthLevels(selectedLevel: StrengthLevel): string[] {
-  switch (selectedLevel) {
-    case "very_low":
-      return ["very_low"];
-    case "low":
-      return ["very_low", "low"];
-    case "moderate":
-      return ["very_low", "low", "moderate"];
-    case "high":
-      return ["very_low", "low", "moderate", "high"]; // Full range
-    case "very_high":
-      return ["very_low", "low", "moderate", "high", "very_high"]; // Full range + very_high
-    case "all":
-      return ["very_low", "low", "moderate", "high", "very_high"];
-    default:
-      return [];
+function getAllowedCascadingLevels(selectedLevel: string, levelType: 'strength' | 'skill' = 'strength'): string[] {
+  const levels = ["very_low", "low", "moderate", "high"];
+  const selectedIndex = levels.indexOf(selectedLevel);
+  
+  if (selectedIndex === -1) {
+    return [];
   }
+  
+  // Return all levels up to and including the selected level
+  return levels.slice(0, selectedIndex + 1);
 }
 
 /**
  * Filter exercises by strength level requirement (inclusive/cascading)
  * Higher levels include all lower levels
  * @param exercises - Array of exercises to filter
- * @param strengthLevel - Desired strength level or "all"
+ * @param strengthLevel - Desired strength level
  * @returns Filtered array of exercises
  */
 export function filterByStrength(
   exercises: Exercise[],
   strengthLevel: StrengthLevel
 ): Exercise[] {
-  if (strengthLevel === "all") {
-    return exercises;
-  }
+  // No need for special case anymore - high includes all levels
   
   const allowedLevels = getAllowedStrengthLevels(strengthLevel);
   return exercises.filter(exercise => 
@@ -49,42 +42,25 @@ export function filterByStrength(
   );
 }
 
-/**
- * Get allowed skill levels based on cascading logic
- * @param selectedLevel - The user-selected skill level
- * @returns Array of skill levels that should be included
- */
-function getAllowedSkillLevels(selectedLevel: SkillLevel): string[] {
-  switch (selectedLevel) {
-    case "very_low":
-      return ["very_low"];
-    case "low":
-      return ["very_low", "low"];
-    case "moderate":
-      return ["very_low", "low", "moderate"];
-    case "high":
-      return ["very_low", "low", "moderate", "high"]; // Full range
-    case "all":
-      return ["very_low", "low", "moderate", "high"];
-    default:
-      return [];
-  }
-}
+// For backward compatibility, create aliases
+const getAllowedStrengthLevels = (selectedLevel: StrengthLevel) => 
+  getAllowedCascadingLevels(selectedLevel, 'strength');
+
+const getAllowedSkillLevels = (selectedLevel: SkillLevel) => 
+  getAllowedCascadingLevels(selectedLevel, 'skill');
 
 /**
  * Filter exercises by skill/complexity level requirement (inclusive/cascading)
  * Higher levels include all lower levels
  * @param exercises - Array of exercises to filter
- * @param skillLevel - Desired skill level or "all" (maps to complexityLevel in DB)
+ * @param skillLevel - Desired skill level (maps to complexityLevel in DB)
  * @returns Filtered array of exercises
  */
 export function filterBySkill(
   exercises: Exercise[],
   skillLevel: SkillLevel
 ): Exercise[] {
-  if (skillLevel === "all") {
-    return exercises;
-  }
+  // No need for special case anymore - high includes all levels
   
   const allowedLevels = getAllowedSkillLevels(skillLevel);
   return exercises.filter(exercise => 
@@ -102,9 +78,7 @@ export function filterByIntensity(
   exercises: Exercise[],
   intensityLevel: IntensityLevel
 ): Exercise[] {
-  if (intensityLevel === "all") {
-    return exercises;
-  }
+  // No special case needed - filter by exact match
   
   return exercises.filter(exercise => exercise.fatigueProfile === intensityLevel);
 }

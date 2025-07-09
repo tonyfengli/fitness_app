@@ -10,10 +10,10 @@ export interface ExerciseRequests {
 
 export interface ClientContext {
   name: string;
-  strength_capacity: "very_low" | "low" | "moderate" | "high" | "very_high";
+  strength_capacity: "very_low" | "low" | "moderate" | "high";
   skill_capacity: "very_low" | "low" | "moderate" | "high";
   primary_goal?: "mobility" | "strength" | "general_fitness" | "hypertrophy" | "burn_fat";
-  intensity?: "low_local" | "moderate_local" | "high_local" | "moderate_systemic" | "high_systemic" | "metabolic" | "all";
+  intensity?: "low_local" | "moderate_local" | "high_local" | "moderate_systemic" | "high_systemic" | "metabolic";
   muscle_target?: string[]; // Array of muscles to target more in programming
   muscle_lessen?: string[]; // Array of muscles to work less in programming
   exercise_requests?: ExerciseRequests;

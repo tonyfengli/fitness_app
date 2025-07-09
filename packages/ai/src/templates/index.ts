@@ -13,7 +13,7 @@ export function getTemplateHandler(templateId: string): TemplateHandler {
   console.log(`🏭 Getting template handler for: ${templateId}`);
   
   switch (templateId) {
-    case 'routine':
+    case 'workout':
     case 'default':
       return new WorkoutTemplateHandler();
     

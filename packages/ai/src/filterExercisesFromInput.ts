@@ -77,7 +77,7 @@ export async function filterExercisesFromInput(options: FilterExercisesOptions):
     // Always use template handler for organizing exercises into blocks
     if (workoutTemplate) {
       const isFullBody = (workoutTemplate as any).isFullBody;
-      const templateId = isFullBody ? 'full_body' : 'routine';
+      const templateId = isFullBody ? 'full_body' : 'workout';
       
       console.log(`🏋️ Using ${isFullBody ? 'FullBodyWorkoutTemplateHandler' : 'WorkoutTemplateHandler'} to select TOP 6 with constraints`);
       console.log(`📊 Total exercises: ${filteredExercises.length}`);

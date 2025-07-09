@@ -28,7 +28,7 @@ export interface ScoringCriteria {
   includeExercises?: string[]; // Exercise names from Phase 1 include list
   muscleTarget: string[];
   muscleLessen: string[];
-  intensity?: string; // 'low', 'medium', 'high'
-  skillLevel?: string; // 'very_low', 'low', 'moderate', 'high', 'very_high'
-  strengthLevel?: string; // 'very_low', 'low', 'moderate', 'high', 'very_high'
+  intensity?: string; // 'low', 'moderate', 'high'
+  skillLevel?: string; // 'very_low', 'low', 'moderate', 'high'
+  strengthLevel?: string; // 'very_low', 'low', 'moderate', 'high'
 }
