@@ -42,7 +42,9 @@ export async function interpretExercisesNode(
       // Emphasize requested exercises if they're provided
       emphasizeRequestedExercises: clientContext?.includeExercises?.length > 0,
       // Don't include examples by default (keeps prompt shorter)
-      includeExamples: false
+      includeExamples: false,
+      // Pass workout structure if provided
+      workoutStructure: clientContext?.workoutStructure
     });
     
     const systemPrompt = promptBuilder.build();

@@ -7,6 +7,7 @@ import {
   EXAMPLES_SECTION,
   INSTRUCTIONS_SECTION
 } from './sections';
+import { generateStructureConstraints, generateOutputFormat } from './sections/dynamicStructure';
 import type { PromptConfig } from './types';
 
 export class WorkoutPromptBuilder {
@@ -35,18 +36,30 @@ export class WorkoutPromptBuilder {
     // Add context section
     sections.push(this.config.customSections?.context ?? CONTEXT_SECTION);
     
-    // Add constraints section with potential modifications
-    let constraintsSection = this.config.customSections?.constraints ?? CONSTRAINTS_SECTION;
-    if (this.config.strictExerciseLimit) {
-      constraintsSection = constraintsSection.replace(
-        'IMPORTANT: Maximum 8 exercises TOTAL across ALL blocks (no more than 8)',
-        'CRITICAL REQUIREMENT: You MUST use EXACTLY 8 exercises TOTAL across ALL blocks (not fewer, not more)'
-      );
+    // Add constraints section - use dynamic structure if provided
+    if (this.config.workoutStructure) {
+      // Generate constraints from the workout structure
+      const baseConstraints = CONSTRAINTS_SECTION.split('\n\n')[0]; // Keep the set distribution part
+      const structureConstraints = generateStructureConstraints(this.config.workoutStructure);
+      sections.push(`${baseConstraints}\n\n${structureConstraints}`);
+    } else {
+      // Use default constraints with potential modifications
+      let constraintsSection = this.config.customSections?.constraints ?? CONSTRAINTS_SECTION;
+      if (this.config.strictExerciseLimit) {
+        constraintsSection = constraintsSection.replace(
+          'IMPORTANT: Maximum 8 exercises TOTAL across ALL blocks (no more than 8)',
+          'CRITICAL REQUIREMENT: You MUST use EXACTLY 8 exercises TOTAL across ALL blocks (not fewer, not more)'
+        );
+      }
+      sections.push(constraintsSection);
     }
-    sections.push(constraintsSection);
     
-    // Add output format section
-    sections.push(this.config.customSections?.outputFormat ?? OUTPUT_FORMAT_SECTION);
+    // Add output format section - use dynamic format if structure provided
+    if (this.config.workoutStructure) {
+      sections.push(generateOutputFormat(this.config.workoutStructure));
+    } else {
+      sections.push(this.config.customSections?.outputFormat ?? OUTPUT_FORMAT_SECTION);
+    }
     
     // Add examples section if configured
     if (this.config.includeExamples) {
