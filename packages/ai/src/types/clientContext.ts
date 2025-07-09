@@ -28,7 +28,7 @@ export function createDefaultClientContext(
   strengthCapacity: ClientContext["strength_capacity"] = "moderate",
   skillCapacity: ClientContext["skill_capacity"] = "moderate",
   primaryGoal: ClientContext["primary_goal"] = "general_fitness",
-  intensity: ClientContext["intensity"] = "all",
+  intensity: ClientContext["intensity"] = "moderate_local",
   muscleTarget: string[] = [],
   muscleLessen: string[] = [],
   exerciseRequests: ExerciseRequests = { include: [], avoid: [] },

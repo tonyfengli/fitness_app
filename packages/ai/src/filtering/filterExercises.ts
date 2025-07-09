@@ -1,6 +1,6 @@
 import type { Exercise, ClientContext } from "../types";
 import type { ScoredExercise, ScoringCriteria } from "../types/scoredExercise";
-import { applyRulesBasedFilter } from "./rulesBasedFilter";
+import { applyClientFilters } from "./applyClientFilters";
 import { scoreAndSortExercises } from "./scoreExercises";
 import { fetchAllExercises, fetchExercisesByBusiness } from "../utils/fetchExercises";
 import { createDefaultClientContext } from "../types/clientContext";
@@ -15,7 +15,7 @@ export interface DirectFilterOptions {
 
 /**
  * Main function to filter exercises
- * Applies rules-based filtering and optionally scoring/sorting
+ * Applies client-based filtering and optionally scoring/sorting
  * 
  * @param options - Filtering and scoring options
  * @returns Filtered exercises (scored and sorted if scoring is enabled)
@@ -52,8 +52,8 @@ export async function filterExercises(
   // Use provided context or create default
   const finalClientContext = clientContext || createDefaultClientContext();
   
-  // Apply rules-based filtering only
-  const filteredExercises = await applyRulesBasedFilter(exercises, finalClientContext);
+  // Apply client-based filtering only
+  const filteredExercises = applyClientFilters(exercises, finalClientContext);
   
   // Apply scoring if requested
   if (includeScoring && scoringCriteria) {

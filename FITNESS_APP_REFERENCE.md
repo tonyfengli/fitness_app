@@ -268,7 +268,7 @@ packages/ai/
 │   │   └── routineTemplate.ts      # Routine template structure
 │   ├── nodes/                      # Graph processing nodes
 │   │   ├── generateWorkoutNode.ts  # Workout generation logic
-│   │   ├── rulesBasedFilterNode.ts # Deterministic exercise filtering
+│   │   ├── applyClientFiltersNode.ts # Deterministic exercise filtering
 │   │   └── llmPreferenceNode.ts    # AI-based preference scoring
 │   └── utils/                      # Utility functions
 │       ├── fetchExercises.ts       # Database queries
@@ -285,12 +285,12 @@ packages/ai/
 
 **Workout Generation Workflow:**
 ```
-START → rulesBasedFilterNode → llmPreferenceNode → END
+START → applyClientFiltersNode → llmPreferenceNode → END
 ```
 
 **Exercise Filtering Workflow:**
 ```
-START → rulesBasedFilterNode → llmPreferenceNode → END
+START → applyClientFiltersNode → llmPreferenceNode → END
 ```
 
 #### Type Definitions

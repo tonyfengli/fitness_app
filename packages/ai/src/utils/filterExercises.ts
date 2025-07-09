@@ -8,10 +8,9 @@ export type IntensityLevel = "low_local" | "moderate_local" | "high_local" | "mo
  * Generic function to get allowed levels based on cascading logic
  * Higher levels include all lower levels
  * @param selectedLevel - The user-selected level
- * @param levelType - Type of level (for future extensibility)
  * @returns Array of levels that should be included
  */
-function getAllowedCascadingLevels(selectedLevel: string, levelType: 'strength' | 'skill' = 'strength'): string[] {
+function getAllowedCascadingLevels(selectedLevel: string): string[] {
   const levels = ["very_low", "low", "moderate", "high"];
   const selectedIndex = levels.indexOf(selectedLevel);
   
@@ -44,10 +43,29 @@ export function filterByStrength(
 
 // For backward compatibility, create aliases
 const getAllowedStrengthLevels = (selectedLevel: StrengthLevel) => 
-  getAllowedCascadingLevels(selectedLevel, 'strength');
+  getAllowedCascadingLevels(selectedLevel);
 
 const getAllowedSkillLevels = (selectedLevel: SkillLevel) => 
-  getAllowedCascadingLevels(selectedLevel, 'skill');
+  getAllowedCascadingLevels(selectedLevel);
+
+/**
+ * Map user-friendly intensity values to database fatigue profile values
+ * Intensity represents different types of fatigue, not progressive levels
+ * @param intensity - User-selected intensity (low, moderate, high)
+ * @returns Database fatigue profile value
+ */
+export function mapUserIntensityToFatigueProfile(intensity: "low" | "moderate" | "high"): IntensityLevel {
+  switch (intensity) {
+    case "low":
+      return "low_local"; // Low localized muscle fatigue
+    case "moderate":
+      return "moderate_local"; // Moderate localized muscle fatigue
+    case "high":
+      return "high_systemic"; // High whole-body systemic fatigue
+    default:
+      return "moderate_local";
+  }
+}
 
 /**
  * Filter exercises by skill/complexity level requirement (inclusive/cascading)
@@ -70,8 +88,13 @@ export function filterBySkill(
 
 /**
  * Filter exercises by intensity/fatigue profile
+ * Note: Unlike strength/skill, intensity does NOT use cascading logic
+ * because intensity levels represent different types of fatigue, not progressive levels:
+ * - low_local/moderate_local/high_local = localized muscle fatigue
+ * - moderate_systemic/high_systemic = whole-body systemic fatigue
+ * - metabolic = metabolic conditioning fatigue
  * @param exercises - Array of exercises to filter
- * @param intensityLevel - Desired intensity level or "all" (maps to fatigueProfile in DB)
+ * @param intensityLevel - Desired intensity level (maps to fatigueProfile in DB)
  * @returns Filtered array of exercises
  */
 export function filterByIntensity(
@@ -200,7 +223,7 @@ export function filterByAvoidJoints(
   
   return exercises.filter(exercise => {
     // Check if exercise loads any of the joints to avoid
-    const exerciseJoints = exercise.loadedJoints || [];
+    const exerciseJoints = exercise.loadedJoints ?? [];
     return !exerciseJoints.some(joint => avoidJoints.includes(joint));
   });
 }

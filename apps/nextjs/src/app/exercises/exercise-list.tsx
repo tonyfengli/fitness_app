@@ -844,7 +844,9 @@ export default function ExerciseList() {
                         }`}
                       >
                         <span className="font-medium">{exercise.name}</span>
-                        <span className="text-blue-600 ml-2">({exercise.score.toFixed(1)})</span>
+                        {exercise.score !== undefined && (
+                          <span className="text-blue-600 ml-2">({exercise.score.toFixed(1)})</span>
+                        )}
                         {isTop6 && <span className="ml-2 text-xs font-bold text-blue-700">TOP 5</span>}
                       </div>
                     );
@@ -876,12 +878,14 @@ export default function ExerciseList() {
                         }`}
                       >
                         <span className="font-medium">{exercise.name}</span>
-                        <span className="text-green-600 ml-2">
-                          {(exercise as any).blockBPenalty > 0 
-                            ? `(${exercise.score.toFixed(1)} → ${(exercise.score - (exercise as any).blockBPenalty).toFixed(1)})`
-                            : `(${exercise.score.toFixed(1)})`
-                          }
-                        </span>
+                        {exercise.score !== undefined && (
+                          <span className="text-green-600 ml-2">
+                            {(exercise as any).blockBPenalty > 0 
+                              ? `(${exercise.score.toFixed(1)} → ${(exercise.score - (exercise as any).blockBPenalty).toFixed(1)})`
+                              : `(${exercise.score.toFixed(1)})`
+                            }
+                          </span>
+                        )}
                         {isTop6 && <span className="ml-2 text-xs font-bold text-green-700">TOP 8</span>}
                       </div>
                     );
@@ -909,12 +913,14 @@ export default function ExerciseList() {
                       }`}
                     >
                       <span className="font-medium">{exercise.name}</span>
-                      <span className="text-purple-600 ml-2">
-                        {exercise.blockCPenalty > 0 
-                          ? `(${exercise.score.toFixed(1)} → ${(exercise.score - exercise.blockCPenalty).toFixed(1)})`
-                          : `(${exercise.score.toFixed(1)})`
-                        }
-                      </span>
+                      {exercise.score !== undefined && (
+                        <span className="text-purple-600 ml-2">
+                          {exercise.blockCPenalty > 0 
+                            ? `(${exercise.score.toFixed(1)} → ${(exercise.score - exercise.blockCPenalty).toFixed(1)})`
+                            : `(${exercise.score.toFixed(1)})`
+                          }
+                        </span>
+                      )}
                       {exercise.isTop6BlockC && <span className="ml-2 text-xs font-bold text-purple-700">TOP 8</span>}
                     </div>
                   ))}
@@ -945,7 +951,9 @@ export default function ExerciseList() {
                         }`}
                       >
                         <span className="font-medium">{exercise.name}</span>
-                        <span className="text-orange-600 ml-2">({exercise.score.toFixed(1)})</span>
+                        {exercise.score !== undefined && (
+                          <span className="text-orange-600 ml-2">({exercise.score.toFixed(1)})</span>
+                        )}
                         {isTop6 && <span className="ml-2 text-xs font-bold text-orange-700">TOP 6</span>}
                       </div>
                     );

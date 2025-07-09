@@ -10,18 +10,18 @@ export class ExerciseFilterError extends Error {
 }
 
 /**
- * Apply rules-based filtering to exercises based on client context
+ * Apply client-based filtering to exercises based on client context
  * This is a direct function call, not a LangGraph node
  * 
  * @param exercises - Array of exercises to filter
  * @param clientContext - Client context with fitness profile and preferences
  * @returns Filtered exercises array
  */
-export async function applyRulesBasedFilter(
+export function applyClientFilters(
   exercises: Exercise[],
   clientContext: ClientContext
-): Promise<Exercise[]> {
-  console.log('📐 Applying rules-based filter');
+): Exercise[] {
+  console.log('📐 Applying client filters');
   
   if (!exercises || exercises.length === 0) {
     throw new ExerciseFilterError('No exercises available to filter');

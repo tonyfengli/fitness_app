@@ -3,7 +3,7 @@ import { z } from "zod/v4";
 
 import { desc, eq, ilike, and, inArray } from "@acme/db";
 import { exercises } from "@acme/db/schema";
-import { filterExercisesFromInput } from "@acme/ai";
+import { filterExercisesFromInput, mapUserIntensityToFatigueProfile } from "@acme/ai";
 
 import { protectedProcedure, publicProcedure } from "../trpc";
 
@@ -202,9 +202,7 @@ export const exerciseRouter = {
           workoutTemplate: {
             workout_goal: safeInput.isFullBody ? "mixed_focus" : "mixed_focus", // Both use mixed_focus for now
             muscle_target: safeInput.muscleTarget,
-            workout_intensity: safeInput.intensity === "low" ? "low_local" : 
-                             safeInput.intensity === "high" ? "high_systemic" : 
-                             "moderate_local",
+            workout_intensity: safeInput.intensity ? mapUserIntensityToFatigueProfile(safeInput.intensity) : "moderate_local",
             // Add a custom field to indicate full body
             isFullBody: safeInput.isFullBody
           } as any,

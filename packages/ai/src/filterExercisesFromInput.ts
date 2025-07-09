@@ -1,7 +1,7 @@
 import { filterExercises } from "./filtering/filterExercises";
 import type { WorkoutSessionStateType, ClientContext, WorkoutTemplate } from "./types";
 import type { ScoredExercise, ScoringCriteria } from "./types/scoredExercise";
-import { ExerciseFilterError } from "./filtering/rulesBasedFilter";
+import { ExerciseFilterError } from "./filtering/applyClientFilters";
 import { getTemplateHandler } from "./templates";
 
 export interface FilterExercisesOptions {
@@ -43,9 +43,9 @@ export async function filterExercisesFromInput(options: FilterExercisesOptions):
     // Check if we have any scoring criteria (Phase 1 or Phase 2)
     // Scoring should be enabled if ANY criteria are provided
     const hasScoringCriteria = clientContext && (
-      (clientContext.exercise_requests?.include && clientContext.exercise_requests.include.length > 0) ||
-      (clientContext.muscle_target && clientContext.muscle_target.length > 0) ||
-      (clientContext.muscle_lessen && clientContext.muscle_lessen.length > 0) ||
+      (clientContext.exercise_requests?.include && clientContext.exercise_requests.include.length > 0) ??
+      (clientContext.muscle_target && clientContext.muscle_target.length > 0) ??
+      (clientContext.muscle_lessen && clientContext.muscle_lessen.length > 0) ??
       intensity // Enable scoring if intensity is selected (even if medium)
     );
     
@@ -53,9 +53,9 @@ export async function filterExercisesFromInput(options: FilterExercisesOptions):
     let scoringCriteria: ScoringCriteria | undefined;
     if (hasScoringCriteria) {
       scoringCriteria = {
-        includeExercises: clientContext.exercise_requests?.include || [],
-        muscleTarget: clientContext.muscle_target || [],
-        muscleLessen: clientContext.muscle_lessen || [],
+        includeExercises: clientContext.exercise_requests?.include ?? [],
+        muscleTarget: clientContext.muscle_target ?? [],
+        muscleLessen: clientContext.muscle_lessen ?? [],
         intensity: intensity,
         skillLevel: clientContext.skill_capacity,
         strengthLevel: clientContext.strength_capacity,
@@ -93,7 +93,7 @@ export async function filterExercisesFromInput(options: FilterExercisesOptions):
       
       // Mark exercises that are selected as TOP 6
       organizedExercises = filteredExercises.map(exercise => {
-        const tags = exercise.functionTags || [];
+        const tags = exercise.functionTags ?? [];
         
         // Check if this exercise is selected as TOP 6 for specific blocks
         const isTop6BlockA = tags.includes('primary_strength') && top6BlockA.has(exercise.id);
@@ -141,7 +141,7 @@ export async function filterExercisesFromInput(options: FilterExercisesOptions):
       exercises: [], // Original exercises not needed in response
       clientContext: clientContext!,
       filteredExercises: organizedExercises,
-      workoutTemplate: workoutTemplate || {
+      workoutTemplate: workoutTemplate ?? {
         workout_goal: "mixed_focus",
         muscle_target: [],
         workout_intensity: "moderate_local"
