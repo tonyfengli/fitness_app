@@ -9,7 +9,7 @@ export interface FilterExercisesOptions {
   clientContext?: ClientContext;
   workoutTemplate?: WorkoutTemplate;
   exercises?: any[]; // Pass exercises directly from API
-  intensity?: "low" | "medium" | "high"; // Pass intensity separately for scoring
+  intensity?: "low" | "moderate" | "high"; // Pass intensity separately for scoring
 }
 
 /**

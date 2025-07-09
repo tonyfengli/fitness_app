@@ -6,12 +6,10 @@ import { useTRPC } from "~/trpc/react";
 import { useBusinessId } from "~/hooks/useBusinessContext";
 
 const STRENGTH_OPTIONS = [
-  { value: "all", label: "All Strength Levels" },
   { value: "very_low", label: "Very Low Only" },
   { value: "low", label: "Low & Below" },
   { value: "moderate", label: "Moderate & Below" },
-  { value: "high", label: "High & Below (All)" },
-  { value: "very_high", label: "Very High & Below (All)" },
+  { value: "high", label: "High & Below" },
 ];
 
 const SKILL_OPTIONS = [
@@ -23,7 +21,7 @@ const SKILL_OPTIONS = [
 
 const INTENSITY_OPTIONS = [
   { value: "low", label: "Low" },
-  { value: "medium", label: "Medium" },
+  { value: "moderate", label: "Moderate" },
   { value: "high", label: "High" },
 ];
 
@@ -82,9 +80,9 @@ export default function ExerciseList() {
   );
 
   // Filter states
-  const [strengthFilter, setStrengthFilter] = useState("all");
+  const [strengthFilter, setStrengthFilter] = useState("moderate");
   const [skillFilter, setSkillFilter] = useState("moderate");
-  const [intensityFilter, setIntensityFilter] = useState("medium");
+  const [intensityFilter, setIntensityFilter] = useState("moderate");
   
   // Exercise inclusion/exclusion states
   const [includeExercises, setIncludeExercises] = useState<string[]>([]);
@@ -699,7 +697,7 @@ export default function ExerciseList() {
               // Calculate intensity adjustment if scoring is active
               const intensityPreference = showFiltered && filterCriteria?.intensity;
               let intensityAdjustment = 0;
-              if (intensityPreference && intensityPreference !== 'medium' && exercise.fatigueProfile) {
+              if (intensityPreference && intensityPreference !== 'moderate' && exercise.fatigueProfile) {
                 const intensityScoring = {
                   low: {
                     low_local: 1.5,

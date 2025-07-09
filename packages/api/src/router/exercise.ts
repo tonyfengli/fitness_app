@@ -128,8 +128,8 @@ export const exerciseRouter = {
     .input(z.object({
       // Client fitness profile
       clientName: z.string().default("Default Client"),
-      strengthCapacity: z.enum(["very_low", "low", "moderate", "high", "very_high", "all"]).default("moderate"),
-      skillCapacity: z.enum(["very_low", "low", "moderate", "high", "all"]).default("moderate"),
+      strengthCapacity: z.enum(["very_low", "low", "moderate", "high"]).default("moderate"),
+      skillCapacity: z.enum(["very_low", "low", "moderate", "high"]).default("moderate"),
       
       // Exercise inclusion/exclusion
       includeExercises: z.array(z.string()).default([]),
@@ -140,7 +140,7 @@ export const exerciseRouter = {
       
       // Phase 2 Client fields
       primaryGoal: z.enum(["mobility", "strength", "general_fitness", "hypertrophy", "burn_fat"]).optional(),
-      intensity: z.enum(["low", "medium", "high"]).optional(),
+      intensity: z.enum(["low", "moderate", "high"]).optional(),
       muscleTarget: z.array(z.string()).default([]),
       muscleLessen: z.array(z.string()).default([]),
       
@@ -183,8 +183,8 @@ export const exerciseRouter = {
         const result = await filterExercisesFromInput({
           clientContext: {
             name: safeInput.clientName,
-            strength_capacity: safeInput.strengthCapacity === "all" ? "very_high" : safeInput.strengthCapacity,
-            skill_capacity: safeInput.skillCapacity === "all" ? "high" : safeInput.skillCapacity,
+            strength_capacity: safeInput.strengthCapacity,
+            skill_capacity: safeInput.skillCapacity,
             primary_goal: safeInput.primaryGoal,
             // Don't set intensity on ClientContext - it's handled separately in scoring
             muscle_target: safeInput.muscleTarget,
