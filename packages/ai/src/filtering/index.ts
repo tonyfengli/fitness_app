@@ -6,3 +6,4 @@
 export * from "./applyClientFilters";
 export * from "./filterExercises";
 export * from "./scoreExercises";
+export * from "./scoringConfig";

@@ -102,6 +102,13 @@ export default function ExerciseList() {
   // Session goal state
   const [sessionGoal, setSessionGoal] = useState<'strength' | 'stability'>('strength');
   
+  // Filter timing state
+  const [filterTiming, setFilterTiming] = useState<{
+    database?: number;
+    filtering?: number;
+    total?: number;
+  } | null>(null);
+  
   // State to toggle table visibility
   const [showTable, setShowTable] = useState(false);
   const [llmInterpretation, setLlmInterpretation] = useState<{
@@ -153,6 +160,8 @@ export default function ExerciseList() {
     }),
     enabled: filterCriteria !== null,
   });
+  
+  // For now, timing is only in console logs
 
   // Display exercises (either all or filtered)
   const displayedExercises = showFiltered && filteredExercises ? filteredExercises : exercises;
@@ -611,6 +620,9 @@ export default function ExerciseList() {
           {showFiltered ? (
             <>
               <span className="font-medium text-green-600">Filtering Applied:</span> Showing {displayedExercises?.length || 0} filtered exercises
+              <span className="ml-2 text-xs text-gray-500">
+                (Check console for timing details)
+              </span>
               {displayedExercises && displayedExercises.length > 0 && (displayedExercises[0] as any).score !== undefined && (
                 <span className="ml-2 text-blue-600 font-medium">(Scored & Sorted)</span>
               )}

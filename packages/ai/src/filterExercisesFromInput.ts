@@ -37,6 +37,7 @@ export interface FilterExercisesOptions {
  */
 export async function filterExercisesFromInput(options: FilterExercisesOptions): Promise<WorkoutSessionStateType> {
   try {
+    const startTime = performance.now();
     console.log('🚀 filterExercisesFromInput called');
     const { userInput = "", clientContext, workoutTemplate, exercises, intensity } = options;
     
@@ -63,6 +64,7 @@ export async function filterExercisesFromInput(options: FilterExercisesOptions):
     }
     
     // Use the new direct filtering function with optional scoring
+    const filterStartTime = performance.now();
     const filteredExercises = await filterExercises({
       exercises: exercises, // Use exercises passed from API
       businessId: clientContext?.business_id,
@@ -70,12 +72,15 @@ export async function filterExercisesFromInput(options: FilterExercisesOptions):
       includeScoring: !!hasScoringCriteria,
       scoringCriteria,
     });
+    const filterEndTime = performance.now();
+    console.log(`⏱️ Filtering took: ${(filterEndTime - filterStartTime).toFixed(2)}ms`);
     
     // Apply template handler to mark TOP 6 selections
     let organizedExercises = filteredExercises;
     
     // Always use template handler for organizing exercises into blocks
     if (workoutTemplate) {
+      const templateStartTime = performance.now();
       const isFullBody = (workoutTemplate as any).isFullBody;
       const templateId = isFullBody ? 'full_body' : 'workout';
       
@@ -132,7 +137,13 @@ export async function filterExercisesFromInput(options: FilterExercisesOptions):
       console.log(`   - isTop6BlockB: ${blockBCount} exercises marked`);
       console.log(`   - isTop6BlockC: ${blockCCount} exercises marked`);
       console.log(`   - isTop6BlockD: ${blockDCount} exercises marked`);
+      
+      const templateEndTime = performance.now();
+      console.log(`⏱️ Template organization took: ${(templateEndTime - templateStartTime).toFixed(2)}ms`);
     }
+    
+    const totalTime = performance.now() - startTime;
+    console.log(`⏱️ TOTAL filterExercisesFromInput time: ${totalTime.toFixed(2)}ms`);
     
     // Return in the expected WorkoutSessionStateType format
     return {

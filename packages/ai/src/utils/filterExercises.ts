@@ -48,24 +48,6 @@ const getAllowedStrengthLevels = (selectedLevel: StrengthLevel) =>
 const getAllowedSkillLevels = (selectedLevel: SkillLevel) => 
   getAllowedCascadingLevels(selectedLevel);
 
-/**
- * Map user-friendly intensity values to database fatigue profile values
- * Intensity represents different types of fatigue, not progressive levels
- * @param intensity - User-selected intensity (low, moderate, high)
- * @returns Database fatigue profile value
- */
-export function mapUserIntensityToFatigueProfile(intensity: "low" | "moderate" | "high"): IntensityLevel {
-  switch (intensity) {
-    case "low":
-      return "low_local"; // Low localized muscle fatigue
-    case "moderate":
-      return "moderate_local"; // Moderate localized muscle fatigue
-    case "high":
-      return "high_systemic"; // High whole-body systemic fatigue
-    default:
-      return "moderate_local";
-  }
-}
 
 /**
  * Filter exercises by skill/complexity level requirement (inclusive/cascading)

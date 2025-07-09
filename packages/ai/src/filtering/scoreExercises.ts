@@ -1,55 +1,7 @@
 import type { Exercise } from "../types";
 import type { ScoredExercise, ScoringCriteria, ScoreBreakdown } from "../types/scoredExercise";
+import { SCORING_CONFIG } from "./scoringConfig";
 
-/**
- * Scoring configuration constants
- */
-const SCORING_CONFIG = {
-  BASE_SCORE: 5.0,
-  
-  // Phase 1 scoring factors - exercise inclusion
-  INCLUDE_EXERCISE_PRIORITY: 1.0, // Add 1 point above highest score
-  
-  // Phase 2 scoring factors - muscle target/lessen
-  MUSCLE_TARGET_PRIMARY: 3.0,    // Max boost for primary muscle match
-  MUSCLE_TARGET_SECONDARY: 1.5,  // Max boost for secondary muscle match
-  MUSCLE_LESSEN_PRIMARY: -3.0,   // Max penalty for primary muscle match
-  MUSCLE_LESSEN_SECONDARY: -1.5, // Max penalty for secondary muscle match
-  
-  // Phase 2 scoring factors - foundational movement
-  FOUNDATIONAL_MOVEMENT_BONUS: 0.5, // Boost for exercises with foundational movement tag
-  
-  // Phase 2 scoring factors - intensity preferences
-  INTENSITY_SCORING: {
-    low: {
-      // On Low Intensity Days (client wants to take it easy)
-      low_local: 1.5,
-      moderate_local: 0.75,
-      high_local: -1.5,
-      moderate_systemic: -0.75,
-      high_systemic: -1.5,
-      metabolic: -1.5,
-    },
-    medium: {
-      // On Moderate Intensity Days (default - no adjustments)
-      low_local: 0,
-      moderate_local: 0,
-      high_local: 0,
-      moderate_systemic: 0,
-      high_systemic: 0,
-      metabolic: 0,
-    },
-    high: {
-      // On High Intensity Days (client wants to go hard)
-      low_local: -1.5,
-      moderate_local: -0.75,
-      high_local: 1.5,
-      moderate_systemic: 0.75,
-      high_systemic: 1.5,
-      metabolic: 1.5,
-    },
-  },
-} as const;
 
 /**
  * Calculate the base score for an exercise
@@ -253,6 +205,7 @@ export async function scoreAndSortExercises(
   criteria: ScoringCriteria,
   includeBreakdown: boolean = false
 ): Promise<ScoredExercise[]> {
+  const startTime = performance.now();
   console.log('🎯 Scoring exercises with criteria:', {
     includeExercisesCount: criteria.includeExercises?.length || 0,
     muscleTargetCount: criteria.muscleTarget.length,
@@ -303,6 +256,9 @@ export async function scoreAndSortExercises(
       maxBeforeBoost: maxScore,
     });
   }
+  
+  const totalTime = performance.now() - startTime;
+  console.log(`⏱️ TOTAL scoring time: ${totalTime.toFixed(2)}ms for ${exercises.length} exercises`);
   
   return finalScoredExercises;
 }

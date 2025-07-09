@@ -3,7 +3,7 @@ import { z } from "zod/v4";
 
 import { desc, eq, ilike, and, inArray } from "@acme/db";
 import { exercises } from "@acme/db/schema";
-import { filterExercisesFromInput, mapUserIntensityToFatigueProfile } from "@acme/ai";
+import { filterExercisesFromInput } from "@acme/ai";
 
 import { protectedProcedure, publicProcedure } from "../trpc";
 
@@ -155,6 +155,7 @@ export const exerciseRouter = {
     }).optional())
     .query(async ({ ctx, input }) => {
       try {
+        const apiStartTime = Date.now();
         console.log('🔍 exercise.filter API called');
         console.log('🔍 Input received:', input);
         // Keep intensity as-is for scoring system
@@ -178,8 +179,12 @@ export const exerciseRouter = {
         };
 
         // Fetch exercises from the database first
+        const dbStartTime = Date.now();
         const allExercises = await ctx.db.query.exercises.findMany();
+        const dbEndTime = Date.now();
+        console.log(`⏱️ Database fetch took: ${dbEndTime - dbStartTime}ms for ${allExercises.length} exercises`);
         
+        const filterStartTime = Date.now();
         const result = await filterExercisesFromInput({
           clientContext: {
             name: safeInput.clientName,
@@ -202,18 +207,34 @@ export const exerciseRouter = {
           workoutTemplate: {
             workout_goal: safeInput.isFullBody ? "mixed_focus" : "mixed_focus", // Both use mixed_focus for now
             muscle_target: safeInput.muscleTarget,
-            workout_intensity: safeInput.intensity ? mapUserIntensityToFatigueProfile(safeInput.intensity) : "moderate_local",
             // Add a custom field to indicate full body
             isFullBody: safeInput.isFullBody
           } as any,
         });
         
+        const filterEndTime = Date.now();
+        
         // Return filtered exercises
         const filteredExercises = result.filteredExercises || [];
+        const apiEndTime = Date.now();
+        
         console.log('🎯 API returning exercises:', {
-          total: filteredExercises.length
+          total: filteredExercises.length,
+          timings: {
+            database: `${dbEndTime - dbStartTime}ms`,
+            filtering: `${filterEndTime - filterStartTime}ms`,
+            totalAPI: `${apiEndTime - apiStartTime}ms`
+          }
         });
         
+        // Log timing to console for now (frontend can see in network tab)
+        console.log('=== PERFORMANCE TIMING ===');
+        console.log(`Database Query: ${dbEndTime - dbStartTime}ms`);
+        console.log(`Filtering & Scoring: ${filterEndTime - filterStartTime}ms`);
+        console.log(`Total API Time: ${apiEndTime - apiStartTime}ms`);
+        console.log('========================');
+        
+        // Return filtered exercises as before
         return filteredExercises;
       } catch (error) {
         console.error('❌ Exercise filtering failed:', error);

@@ -23,6 +23,7 @@ export interface DirectFilterOptions {
 export async function filterExercises(
   options: DirectFilterOptions
 ): Promise<Exercise[] | ScoredExercise[]> {
+  const startTime = performance.now();
   console.log('🚀 filterExercises called');
   
   const { 
@@ -53,14 +54,25 @@ export async function filterExercises(
   const finalClientContext = clientContext || createDefaultClientContext();
   
   // Apply client-based filtering only
+  const phase1StartTime = performance.now();
   const filteredExercises = applyClientFilters(exercises, finalClientContext);
+  const phase1EndTime = performance.now();
+  console.log(`⏱️ Phase 1 (client filters) took: ${(phase1EndTime - phase1StartTime).toFixed(2)}ms, filtered to ${filteredExercises.length} exercises`);
   
   // Apply scoring if requested
   if (includeScoring && scoringCriteria) {
     console.log('🎯 Applying scoring to filtered exercises');
+    const scoringStartTime = performance.now();
     const scoredExercises = await scoreAndSortExercises(filteredExercises, scoringCriteria);
+    const scoringEndTime = performance.now();
+    console.log(`⏱️ Phase 2 (scoring) took: ${(scoringEndTime - scoringStartTime).toFixed(2)}ms`);
+    
+    const totalTime = performance.now() - startTime;
+    console.log(`⏱️ TOTAL filterExercises time: ${totalTime.toFixed(2)}ms`);
     return scoredExercises;
   }
   
+  const totalTime = performance.now() - startTime;
+  console.log(`⏱️ TOTAL filterExercises time: ${totalTime.toFixed(2)}ms (Phase 1 only)`);
   return filteredExercises;
 }
