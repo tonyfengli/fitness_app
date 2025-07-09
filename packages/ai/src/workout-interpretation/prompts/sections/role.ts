@@ -1,0 +1,1 @@
+export const ROLE_SECTION = `You are a workout programmer. Given the TOP exercises for each block, create a workout routine.`;

@@ -2,6 +2,7 @@ import { ChatOpenAI } from "@langchain/openai";
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import type { WorkoutInterpretationStateType, ExercisesByBlock, TopExercise } from "./types";
 import { determineTotalSetCount } from "./setCountLogic";
+import { WorkoutPromptBuilder } from "./prompts/workoutInterpretationPrompt";
 
 // Initialize the LLM - using gpt-4o for speed and cost efficiency
 const llm = new ChatOpenAI({
@@ -34,67 +35,17 @@ export async function interpretExercisesNode(
       intensity: clientContext?.intensity
     });
     
-    // Build the system prompt
-    const systemPrompt = `You are a workout programmer. Given the TOP exercises for each block, create a workout routine.
-
-## Rules
-Your goal is to design a personalized, cohesive workout that:
-- Aligns with the client's session goal and preferred intensity.
-- Reflects the client's strength and skill levels throughout the programming (exercise order, volume, complexity).
-- Includes any requested exercises, force it in
-- Maintains balanced movement patterns, variety in fatigue profiles and modalities, and a logical flow between blocks.
-
-## Context
-You are provided with pre-filtered TOP exercises for each training block. Each exercise has been scored and selected based on the client's requirements.
-
-Exercise data includes:
-- name: Exercise name
-- score: Selection priority (higher = better match)
-- tags: Function tags indicating exercise type and movement pattern
-- primaryMuscle: Main muscle group targeted
-- equipment: Required equipment
-
-Client context may include:
-- sessionGoal: Training focus (strength or stability)
-- strengthLevel: Client's strength capacity
-- skillLevel: Client's technical ability
-- intensity: Desired session intensity
-- includeExercises: Specific exercises requested
-- muscleTarget: Muscles to emphasize
-- muscleLessen: Muscles to avoid/reduce load
-
-## Constraints
-Distribute the provided totalSetRange across all blocks in a way that aligns with the client's session goal and preferred intensity.
-
-Decide how many sets to assign per block based on:
-- The block's role (e.g., primary strength vs accessory work).
-- The relative intensity of each exercise (higher intensity = fewer sets).
-- The total number of sets must remain within the provided range (never exceed or fall short).
-- Do not assign fewer sets than the minimum per block if it results in falling below the total set range.
-
-Exercise selection constraints:
-- Block A: Select exactly 1 exercise with 3-4 sets
-- IMPORTANT: Maximum 8 exercises TOTAL across ALL blocks (no more than 8)
-- This means you have 7 exercises remaining to distribute across blocks B, C, and D
-- Count carefully: Block A (1) + Block B + Block C + Block D must equal 8 or fewer exercises
-
-## Output Format
-Return a JSON object with this structure:
-{
-  "blockA": [{"exercise": "exercise name", "sets": number}],
-  "blockB": [{"exercise": "exercise name", "sets": number}],
-  "blockC": [{"exercise": "exercise name", "sets": number}],
-  "blockD": [{"exercise": "exercise name", "sets": number}],
-  "reasoning": "Your explanation for why you selected each exercise AND state the total set range provided"
-}
-
-## Examples
-[Empty - to be filled later]
-
-Select exercises for each block and assign sets. In your reasoning, include:
-1. Why you selected each exercise
-2. How you distributed the total sets across blocks
-3. Confirm the total adds up to a number within the provided range`;
+    // Build the system prompt - can be customized based on client context
+    const promptBuilder = new WorkoutPromptBuilder({
+      // Enable strict exercise limit if client has specific requirements
+      strictExerciseLimit: clientContext?.strictExerciseCount === true,
+      // Emphasize requested exercises if they're provided
+      emphasizeRequestedExercises: clientContext?.includeExercises?.length > 0,
+      // Don't include examples by default (keeps prompt shorter)
+      includeExamples: false
+    });
+    
+    const systemPrompt = promptBuilder.build();
 
     // Build the user message
     const userMessage = `Here are the TOP exercises selected for each block:

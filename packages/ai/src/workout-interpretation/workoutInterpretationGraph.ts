@@ -1,5 +1,5 @@
 import { StateGraph, START, END } from "@langchain/langgraph";
-import { WorkoutInterpretationState, WorkoutInterpretationStateType } from "./types";
+import { WorkoutInterpretationState, WorkoutInterpretationStateType, ExercisesByBlock } from "./types";
 import { interpretExercisesNode } from "./interpretExercisesNode";
 
 /**
@@ -43,7 +43,7 @@ export const workoutInterpretationGraph = createWorkoutInterpretationGraph();
  * This is what the frontend will call
  */
 export async function interpretWorkout(
-  exercises: Record<string, any[]>,
+  exercises: ExercisesByBlock,
   clientContext?: Record<string, any>
 ) {
   try {
