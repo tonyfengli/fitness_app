@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useSuspenseQuery, useQuery } from "@tanstack/react-query";
 import { useTRPC } from "~/trpc/react";
 import { useBusinessId } from "~/hooks/useBusinessContext";
@@ -101,6 +101,27 @@ export default function ExerciseList() {
   // Full body workout state
   const [isFullBody, setIsFullBody] = useState(false);
   
+  // Session goal state
+  const [sessionGoal, setSessionGoal] = useState<'strength' | 'stability'>('strength');
+  
+  // State to toggle table visibility
+  const [showTable, setShowTable] = useState(false);
+  const [llmInterpretation, setLlmInterpretation] = useState<{
+    blockA?: string[];
+    blockB?: string[];
+    blockC?: string[];
+    blockD?: string[];
+    reasoning?: string;
+    error?: string;
+    processingTime?: number; // Time in seconds
+    rawResponse?: string; // Add raw LLM response for debugging
+  } | null>(null);
+  const [setRange, setSetRange] = useState<{
+    minSets: number;
+    maxSets: number;
+    reasoning: string;
+  } | null>(null);
+  const [isInterpreting, setIsInterpreting] = useState(false);
   
   // State to track whether we're showing filtered results
   const [showFiltered, setShowFiltered] = useState(false);
@@ -147,6 +168,106 @@ export default function ExerciseList() {
       cause: (filterError as any).cause
     });
   }
+
+
+  // Automatically call LLM interpretation when filtered exercises are ready
+  useEffect(() => {
+    if (!showFiltered || !filteredExercises || filteredExercises.length === 0 || isInterpreting) {
+      return;
+    }
+
+    const interpretWorkout = async () => {
+      const startTime = Date.now();
+      setIsInterpreting(true);
+      setLlmInterpretation(null);
+      
+      try {
+        // Get TOP exercises for each block
+        const blockA = filteredExercises.filter((ex: any) => ex.functionTags?.includes('primary_strength') && ex.isTop6BlockA);
+        const blockB = filteredExercises.filter((ex: any) => ex.functionTags?.includes('secondary_strength') && ex.isTop6BlockB);
+        const blockC = filteredExercises.filter((ex: any) => ex.functionTags?.includes('accessory') && ex.isTop6BlockC);
+        const blockD = filteredExercises.filter((ex: any) => (ex.functionTags?.includes('core') || ex.functionTags?.includes('capacity')) && ex.isTop6BlockD);
+        
+        // Prepare exercises object for LLM
+        const exercises = {
+          blockA: blockA.map((ex: any) => ({
+            id: ex.id,
+            name: ex.name,
+            score: ex.score,
+            tags: ex.functionTags || [],
+            primaryMuscle: ex.primaryMuscle,
+            equipment: ex.equipment
+          })),
+          blockB: blockB.map((ex: any) => ({
+            id: ex.id,
+            name: ex.name,
+            score: ex.score,
+            tags: ex.functionTags || [],
+            primaryMuscle: ex.primaryMuscle,
+            equipment: ex.equipment
+          })),
+          blockC: blockC.map((ex: any) => ({
+            id: ex.id,
+            name: ex.name,
+            score: ex.score,
+            tags: ex.functionTags || [],
+            primaryMuscle: ex.primaryMuscle,
+            equipment: ex.equipment
+          })),
+          blockD: blockD.map((ex: any) => ({
+            id: ex.id,
+            name: ex.name,
+            score: ex.score,
+            tags: ex.functionTags || [],
+            primaryMuscle: ex.primaryMuscle,
+            equipment: ex.equipment
+          }))
+        };
+        
+        // Build client context with only non-empty values
+        const clientContext: Record<string, any> = {};
+        
+        // Only add values that are not default/empty
+        if (sessionGoal) clientContext.sessionGoal = sessionGoal;
+        if (strengthFilter !== 'all') clientContext.strengthLevel = strengthFilter;
+        if (skillFilter) clientContext.skillLevel = skillFilter;
+        if (intensityFilter) clientContext.intensity = intensityFilter;
+        if (includeExercises.length > 0) clientContext.includeExercises = includeExercises;
+        if (muscleTarget.length > 0) clientContext.muscleTarget = muscleTarget;
+        if (muscleLessen.length > 0) clientContext.muscleLessen = muscleLessen;
+        
+        // Call the API route
+        const response = await fetch('/api/interpret-workout', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ exercises, clientContext }),
+        });
+        
+        const result = await response.json();
+        const processingTime = (Date.now() - startTime) / 1000; // Convert to seconds
+        
+        if (!response.ok || result.error) {
+          setLlmInterpretation({ error: result.error || 'Failed to interpret workout', processingTime });
+        } else {
+          setLlmInterpretation({ ...result.structuredOutput, processingTime });
+          // Set the set range from the API response
+          if (result.setRange) {
+            setSetRange(result.setRange);
+          }
+        }
+      } catch (error) {
+        console.error('Error interpreting workout:', error);
+        const processingTime = (Date.now() - startTime) / 1000;
+        setLlmInterpretation({ error: 'Failed to interpret workout', processingTime });
+      } finally {
+        setIsInterpreting(false);
+      }
+    };
+
+    interpretWorkout();
+  }, [showFiltered, filteredExercises, sessionGoal, strengthFilter, skillFilter, intensityFilter, includeExercises, muscleTarget, muscleLessen]);
 
   // Function to calculate TOP selections for Block D with constraints
   const getBlockDTop6 = (exercises: any[]) => {
@@ -231,6 +352,22 @@ export default function ExerciseList() {
           <div className="mb-4">
             <h4 className="text-md font-medium text-gray-700 mb-2">Phase 1</h4>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-4">
+          {/* Session Goal Dropdown */}
+          <div>
+            <label htmlFor="sessionGoal" className="block text-sm font-medium text-gray-700 mb-1">
+              Session Goal
+            </label>
+            <select
+              id="sessionGoal"
+              value={sessionGoal}
+              onChange={(e) => setSessionGoal(e.target.value as 'strength' | 'stability')}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="strength">Strength</option>
+              <option value="stability">Stability</option>
+            </select>
+          </div>
+          
           <div>
             <label htmlFor="strength" className="block text-sm font-medium text-gray-700 mb-1">
               Strength Level
@@ -467,45 +604,51 @@ export default function ExerciseList() {
             {isFiltering ? 'Filtering...' : 'Filter Workouts'}
           </button>
           
-          {showFiltered && (
-            <button
-              onClick={() => {
-                setShowFiltered(false);
-                setFilterCriteria(null);
-                setStrengthFilter("all");
-                setSkillFilter("all");
-                setIncludeExercises([]);
-                setAvoidExercises([]);
-                setAvoidJoints([]);
-                setMuscleTarget([]);
-                setMuscleLessen([]);
-                setIntensityFilter("medium");
-                setIsFullBody(false);
-              }}
-              className="px-6 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors"
-            >
-              Show All
-            </button>
-          )}
         </div>
       </div>
 
 
-      <p className="text-sm text-gray-600">
-        {showFiltered ? (
-          <>
-            <span className="font-medium text-green-600">Filtering Applied:</span> Showing {displayedExercises?.length || 0} filtered exercises
-            {displayedExercises && displayedExercises.length > 0 && (displayedExercises[0] as any).score !== undefined && (
-              <span className="ml-2 text-blue-600 font-medium">(Scored & Sorted)</span>
-            )}
-          </>
-        ) : (
-          `Showing ${displayedExercises?.length || 0} exercises (unfiltered)`
+      <div className="space-y-2">
+        <p className="text-sm text-gray-600">
+          {showFiltered ? (
+            <>
+              <span className="font-medium text-green-600">Filtering Applied:</span> Showing {displayedExercises?.length || 0} filtered exercises
+              {displayedExercises && displayedExercises.length > 0 && (displayedExercises[0] as any).score !== undefined && (
+                <span className="ml-2 text-blue-600 font-medium">(Scored & Sorted)</span>
+              )}
+            </>
+          ) : (
+            `Showing ${displayedExercises?.length || 0} exercises (unfiltered)`
+          )}
+        </p>
+        
+        {/* Set Range Display */}
+        {setRange && showFiltered && (
+          <div className="bg-indigo-50 border border-indigo-200 rounded-md px-4 py-2">
+            <p className="text-sm font-medium text-indigo-900">
+              Session Volume: {setRange.minSets}-{setRange.maxSets} total sets
+            </p>
+            <p className="text-xs text-indigo-700 mt-1">
+              {setRange.reasoning}
+            </p>
+          </div>
         )}
-      </p>
+      </div>
 
-      <div className="overflow-x-auto max-h-96 overflow-y-auto border rounded-lg">
-        <table className="w-full bg-white border-gray-200 shadow">
+      {/* Toggle Table Button */}
+      <div className="flex justify-center my-4">
+        <button
+          onClick={() => setShowTable(!showTable)}
+          className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors"
+        >
+          {showTable ? 'Hide Table' : 'Show Table'}
+        </button>
+      </div>
+
+      {/* Table - conditionally rendered */}
+      {showTable && (
+        <div className="overflow-x-auto max-h-96 overflow-y-auto border rounded-lg">
+          <table className="w-full bg-white border-gray-200 shadow">
           <thead className="bg-gray-50">
             <tr>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b">
@@ -673,17 +816,18 @@ export default function ExerciseList() {
             })}
           </tbody>
         </table>
-      </div>
+        </div>
+      )}
 
       {/* Exercise Blocks Section */}
       {showFiltered && filteredExercises && (
         <div className="mt-8 space-y-6">
           <h2 className="text-xl font-bold text-gray-800 text-center">Exercise Blocks by Function Tags</h2>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {/* Block A - Primary Strength */}
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <h3 className="text-lg font-semibold text-blue-800 mb-3">Block A - Primary Strength</h3>
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+              <h3 className="text-base font-semibold text-blue-800 mb-2">Block A - Primary Strength</h3>
               <div className="space-y-2">
                 {filteredExercises
                   .filter(ex => ex.functionTags?.includes('primary_strength'))
@@ -714,8 +858,8 @@ export default function ExerciseList() {
             </div>
 
             {/* Block B - Secondary Strength */}
-            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-              <h3 className="text-lg font-semibold text-green-800 mb-3">Block B - Secondary Strength</h3>
+            <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+              <h3 className="text-base font-semibold text-green-800 mb-2">Block B - Secondary Strength</h3>
               <div className="space-y-2">
                 {filteredExercises
                   .filter(ex => ex.functionTags?.includes('secondary_strength'))
@@ -751,8 +895,8 @@ export default function ExerciseList() {
             </div>
 
             {/* Block C - Accessory */}
-            <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
-              <h3 className="text-lg font-semibold text-purple-800 mb-3">Block C - Accessory</h3>
+            <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
+              <h3 className="text-base font-semibold text-purple-800 mb-2">Block C - Accessory</h3>
               <div className="space-y-2">
                 {filteredExercises
                   .filter(ex => ex.functionTags?.includes('accessory'))
@@ -783,8 +927,8 @@ export default function ExerciseList() {
             </div>
 
             {/* Block D - Core & Capacity */}
-            <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
-              <h3 className="text-lg font-semibold text-orange-800 mb-3">Block D - Core & Capacity</h3>
+            <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
+              <h3 className="text-base font-semibold text-orange-800 mb-2">Block D - Core & Capacity</h3>
               <div className="space-y-2">
                 {(() => {
                   const blockDExercises = filteredExercises
@@ -819,11 +963,12 @@ export default function ExerciseList() {
       )}
 
 
-      {/* Copy JSON button */}
+      {/* Copy JSON button and LLM Interpretation */}
       {showFiltered && filteredExercises && (
-        <div className="flex justify-center mt-6">
-          <button
-            onClick={() => {
+        <div className="mt-6">
+          <div className="flex justify-center gap-4">
+            <button
+              onClick={() => {
               // Helper function to clean exercise data
               const cleanExercise = (exercise: any) => {
                 const { isTop6Selected, isTop6BlockA, isTop6BlockB, isTop6BlockC, isTop6BlockD, blockBPenalty, blockCPenalty, ...cleanedExercise } = exercise;
@@ -866,7 +1011,95 @@ ${JSON.stringify(blockD, null, 2)}`;
           >
             Copy JSON
           </button>
+
         </div>
+
+        {/* LLM Results Display */}
+        {(llmInterpretation || isInterpreting) && (
+          <div className="mt-6 mx-auto max-w-4xl p-6 bg-gray-50 rounded-lg border border-gray-200">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold">LLM Workout Interpretation</h3>
+              {llmInterpretation?.processingTime && (
+                <span className="text-sm text-gray-600">
+                  Processing time: {llmInterpretation.processingTime.toFixed(2)}s
+                </span>
+              )}
+            </div>
+            
+            {isInterpreting ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="text-gray-600">Processing workout interpretation...</div>
+              </div>
+            ) : llmInterpretation?.error ? (
+              <div className="text-red-600">Error: {llmInterpretation.error}</div>
+            ) : llmInterpretation ? (
+              <>
+                {/* Workout Table */}
+                <div className="overflow-x-auto mb-4">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Block
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Exercise
+                        </th>
+                        <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Sets
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {['blockA', 'blockB', 'blockC', 'blockD'].map((block) => {
+                        const exercises = llmInterpretation[block as keyof typeof llmInterpretation] as any[];
+                        return exercises?.map((item, idx) => (
+                          <tr key={`${block}-${idx}`} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                              {idx === 0 ? block.replace('block', 'Block ').toUpperCase() : ''}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                              {typeof item === 'string' ? item : item.exercise}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">
+                              {typeof item === 'string' ? '-' : item.sets}
+                            </td>
+                          </tr>
+                        ));
+                      }).flat()}
+                    </tbody>
+                    <tfoot className="bg-gray-100">
+                      <tr>
+                        <td colSpan={2} className="px-6 py-3 text-left text-sm font-medium text-gray-900">
+                          Total Sets
+                        </td>
+                        <td className="px-6 py-3 text-center text-sm font-medium text-gray-900">
+                          {['blockA', 'blockB', 'blockC', 'blockD'].reduce((total, block) => {
+                            const exercises = llmInterpretation[block as keyof typeof llmInterpretation] as any[];
+                            return total + (exercises?.reduce((blockTotal, item) => 
+                              blockTotal + (typeof item === 'object' ? item.sets : 0), 0) || 0);
+                          }, 0)}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+                
+                {llmInterpretation.reasoning && (
+                  <div className="mt-4 p-4 bg-blue-50 rounded border border-blue-200">
+                    <h4 className="font-medium text-gray-700 mb-2">Exercise Selection Reasoning</h4>
+                    <div className="text-sm text-gray-600 space-y-1">
+                      {llmInterpretation.reasoning.split('\n').map((line, idx) => (
+                        <div key={idx}>{line}</div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : null}
+          </div>
+        )}
+      </div>
       )}
     </div>
   );

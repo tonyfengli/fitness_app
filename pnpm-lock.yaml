@@ -203,6 +203,9 @@ importers:
 
   apps/nextjs:
     dependencies:
+      '@acme/ai':
+        specifier: workspace:*
+        version: link:../../packages/ai
       '@acme/api':
         specifier: workspace:*
         version: link:../../packages/api
