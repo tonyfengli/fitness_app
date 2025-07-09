@@ -1,4 +1,4 @@
 export * from "./exercise";
-export * from "./workoutRoutine";
+export * from "./workoutSession";
 export * from "./clientContext";
-export * from "./routineTemplate";
+export * from "./workoutTemplate";

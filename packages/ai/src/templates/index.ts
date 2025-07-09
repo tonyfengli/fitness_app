@@ -1,8 +1,8 @@
-import { RoutineTemplateHandler } from "./RoutineTemplateHandler";
+import { WorkoutTemplateHandler } from "./WorkoutTemplateHandler";
 import type { TemplateHandler } from "./types";
 
 export * from "./types";
-export { RoutineTemplateHandler };
+export { WorkoutTemplateHandler };
 
 /**
  * Factory function to get the appropriate template handler
@@ -15,13 +15,13 @@ export function getTemplateHandler(templateId: string): TemplateHandler {
   switch (templateId) {
     case 'routine':
     case 'default':
-      return new RoutineTemplateHandler();
+      return new WorkoutTemplateHandler();
     
     case 'full_body':
     case 'fullbody':
       // Import directly to avoid caching issues
-      const { FullBodyRoutineTemplateHandler } = require('./FullBodyRoutineTemplateHandler');
-      return new FullBodyRoutineTemplateHandler();
+      const { FullBodyWorkoutTemplateHandler } = require('./FullBodyWorkoutTemplateHandler');
+      return new FullBodyWorkoutTemplateHandler();
     
     // Future template handlers can be added here
     // case 'strength_focus':
@@ -30,7 +30,7 @@ export function getTemplateHandler(templateId: string): TemplateHandler {
     //   return new HypertrophyTemplateHandler();
     
     default:
-      console.log(`⚠️  Unknown template ID: ${templateId}, falling back to routine template`);
-      return new RoutineTemplateHandler();
+      console.log(`⚠️  Unknown template ID: ${templateId}, falling back to workout template`);
+      return new WorkoutTemplateHandler();
   }
 }

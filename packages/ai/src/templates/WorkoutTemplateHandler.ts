@@ -7,13 +7,9 @@ const SQUAT_HINGE_PATTERNS = ['squat', 'hinge'];
 const PUSH_PATTERNS = ['horizontal_push', 'vertical_push'];
 const PULL_PATTERNS = ['horizontal_pull', 'vertical_pull'];
 
-// Muscle group categories
-const LOWER_BODY_MUSCLES = ['glutes', 'quads', 'hamstrings', 'calves', 'adductors', 'abductors'];
-const UPPER_BODY_MUSCLES = ['chest', 'lats', 'biceps', 'triceps', 'delts', 'shoulders', 'traps', 'upper_back'];
-
-export class FullBodyRoutineTemplateHandler implements TemplateHandler {
+export class WorkoutTemplateHandler implements TemplateHandler {
   organize(exercises: ScoredExercise[]): OrganizedExercises {
-    console.log('🏗️ FullBodyRoutineTemplateHandler organizing exercises into blocks');
+    console.log('🏗️ WorkoutTemplateHandler organizing exercises into blocks');
     
     // Get Block A selections first
     const blockA = this.getTop6WithConstraints(exercises, 'primary_strength');
@@ -65,7 +61,8 @@ export class FullBodyRoutineTemplateHandler implements TemplateHandler {
     const adjustedCandidates = candidates.map(exercise => {
       if (penalizeIds && penalizeIds.has(exercise.id)) {
         // Apply -2.0 penalty for exercises already selected
-        const previousBlock = functionTag === 'secondary_strength' ? 'Block A' : 'Block B';
+        const previousBlock = functionTag === 'secondary_strength' ? 'Block A' : 
+                            functionTag === 'accessory' ? 'Block B' : 'previous block';
         console.log(`📉 Applying -2.0 penalty to ${exercise.name} for ${functionTag} (already selected in ${previousBlock})`);
         return {
           ...exercise,
@@ -81,15 +78,13 @@ export class FullBodyRoutineTemplateHandler implements TemplateHandler {
     
     if (sortedCandidates.length === 0) return [];
     
-    const selected: ScoredExercise[] = [];
+    let selected: ScoredExercise[] = [];
     
-    // Track what we've satisfied
+    // Track what we've satisfied (only movement patterns, no body part constraints)
     let hasSquatHinge = false;
     let hasPush = false;
     let hasPull = false;
     let hasLunge = false; // Add lunge tracking for Block B
-    let lowerBodyCount = 0;
-    let upperBodyCount = 0;
     
     // Helper functions
     const satisfiesSquatHinge = (ex: ScoredExercise) => 
@@ -100,17 +95,12 @@ export class FullBodyRoutineTemplateHandler implements TemplateHandler {
       ex.movementPattern && PULL_PATTERNS.includes(ex.movementPattern);
     const satisfiesLunge = (ex: ScoredExercise) => 
       ex.movementPattern === 'lunge';
-    const isLowerBody = (ex: ScoredExercise) => 
-      LOWER_BODY_MUSCLES.includes(ex.primaryMuscle);
-    const isUpperBody = (ex: ScoredExercise) => 
-      UPPER_BODY_MUSCLES.includes(ex.primaryMuscle);
     
     // Check if all minimum constraints are met
     const allConstraintsMet = () => {
       const lungeRequired = functionTag === 'secondary_strength';
-      return hasSquatHinge && hasPush && hasPull && (!lungeRequired || hasLunge) && lowerBodyCount >= 2 && upperBodyCount >= 2;
+      return hasSquatHinge && hasPush && hasPull && (!lungeRequired || hasLunge);
     };
-    
     
     // For Block A, use original deterministic selection
     if (functionTag === 'primary_strength') {
@@ -119,36 +109,38 @@ export class FullBodyRoutineTemplateHandler implements TemplateHandler {
         if (selected.length >= 5) break;
         
         // Check if it helps meet constraints
-        const needsSquatHinge = !hasSquatHinge && satisfiesSquatHinge(candidate);
-        const needsPush = !hasPush && satisfiesPush(candidate);
-        const needsPull = !hasPull && satisfiesPull(candidate);
-        const needsLowerBody = lowerBodyCount < 2 && isLowerBody(candidate);
-        const needsUpperBody = upperBodyCount < 2 && isUpperBody(candidate);
-        
-        if (needsSquatHinge || needsPush || needsPull || needsLowerBody || needsUpperBody) {
-          selected.push(candidate);
+        if (!allConstraintsMet()) {
+          const satisfiesNeeded = 
+            (!hasSquatHinge && satisfiesSquatHinge(candidate)) ||
+            (!hasPush && satisfiesPush(candidate)) ||
+            (!hasPull && satisfiesPull(candidate));
           
-          // Update tracking
-          if (satisfiesSquatHinge(candidate)) hasSquatHinge = true;
-          if (satisfiesPush(candidate)) hasPush = true;
-          if (satisfiesPull(candidate)) hasPull = true;
-          if (isLowerBody(candidate)) lowerBodyCount++;
-          else if (isUpperBody(candidate)) upperBodyCount++;
-          
-          const originalScore = 'originalScore' in candidate ? (candidate as any).originalScore : null;
-          const scoreInfo = originalScore
-            ? `Score: ${candidate.score} (original: ${originalScore}, -2.0 penalty)`
-            : `Score: ${candidate.score}`;
-          
-          const constraints = [];
-          if (needsSquatHinge) constraints.push('squat/hinge');
-          if (needsPush) constraints.push('push');
-          if (needsPull) constraints.push('pull');
-          if (needsLowerBody) constraints.push('lower body');
-          if (needsUpperBody) constraints.push('upper body');
-          
-          console.log(`✅ Selected for ${functionTag}: ${candidate.name} - ${scoreInfo}, Reason: constraint satisfaction [${constraints.join(', ')}], Pattern: ${candidate.movementPattern}, Muscle: ${candidate.primaryMuscle}`);
+          if (satisfiesNeeded) {
+            selected.push(candidate);
+            
+            // Update tracking
+            if (satisfiesSquatHinge(candidate)) hasSquatHinge = true;
+            if (satisfiesPush(candidate)) hasPush = true;
+            if (satisfiesPull(candidate)) hasPull = true;
+            
+            const scoreInfo = (candidate as any).originalScore 
+              ? `Score: ${candidate.score} (original: ${(candidate as any).originalScore}, -2.0 penalty)`
+              : `Score: ${candidate.score}`;
+            console.log(`✅ Selected for ${functionTag}: ${candidate.name} - ${scoreInfo}, Reason: constraint satisfaction, Pattern: ${candidate.movementPattern}`);
+            continue;
+          }
         }
+      }
+      
+      // Fill remaining slots with highest scoring
+      const remaining = sortedCandidates.filter(ex => !selected.includes(ex));
+      const slotsToFill = 5 - selected.length;
+      
+      for (let i = 0; i < slotsToFill && i < remaining.length; i++) {
+        const exercise = remaining[i];
+        if (!exercise) continue;
+        selected.push(exercise);
+        console.log(`✅ Selected for ${functionTag}: ${exercise.name} - Score: ${exercise.score}, Reason: high score`);
       }
     } else {
       // New selection logic for Blocks B and C with randomness
@@ -164,9 +156,7 @@ export class FullBodyRoutineTemplateHandler implements TemplateHandler {
           return (!hasSquatHinge && satisfiesSquatHinge(ex)) ||
                  (!hasPush && satisfiesPush(ex)) ||
                  (!hasPull && satisfiesPull(ex)) ||
-                 (lungeRequired && !hasLunge && satisfiesLunge(ex)) ||
-                 (lowerBodyCount < 2 && isLowerBody(ex)) ||
-                 (upperBodyCount < 2 && isUpperBody(ex));
+                 (lungeRequired && !hasLunge && satisfiesLunge(ex));
         });
         
         if (constraintCandidates.length === 0) break;
@@ -186,12 +176,9 @@ export class FullBodyRoutineTemplateHandler implements TemplateHandler {
         if (satisfiesPush(selectedExercise)) hasPush = true;
         if (satisfiesPull(selectedExercise)) hasPull = true;
         if (satisfiesLunge(selectedExercise)) hasLunge = true;
-        if (isLowerBody(selectedExercise)) lowerBodyCount++;
-        else if (isUpperBody(selectedExercise)) upperBodyCount++;
         
-        const originalScore = 'originalScore' in selectedExercise ? (selectedExercise as any).originalScore : null;
-        const scoreInfo = originalScore
-          ? `Score: ${selectedExercise.score} (original: ${originalScore}, -2.0 penalty)`
+        const scoreInfo = (selectedExercise as any).originalScore 
+          ? `Score: ${selectedExercise.score} (original: ${(selectedExercise as any).originalScore}, -2.0 penalty)`
           : `Score: ${selectedExercise.score}`;
         
         const constraints = [];
@@ -199,92 +186,51 @@ export class FullBodyRoutineTemplateHandler implements TemplateHandler {
         if (satisfiesPush(selectedExercise)) constraints.push('push');
         if (satisfiesPull(selectedExercise)) constraints.push('pull');
         if (satisfiesLunge(selectedExercise)) constraints.push('lunge');
-        if (isLowerBody(selectedExercise)) constraints.push('lower body');
-        if (isUpperBody(selectedExercise)) constraints.push('upper body');
         
-        console.log(`✅ Selected for ${functionTag}: ${selectedExercise.name} - ${scoreInfo}, Reason: constraint satisfaction [${constraints.join(', ')}], Pattern: ${selectedExercise.movementPattern}, Muscle: ${selectedExercise.primaryMuscle}`);
+        console.log(`✅ Selected for ${functionTag}: ${selectedExercise.name} - ${scoreInfo}, Reason: constraint satisfaction [${constraints.join(', ')}], Pattern: ${selectedExercise.movementPattern}`);
       }
-    }
-    
-    // After constraints are met for Block A, fill with highest scoring
-    if (functionTag === 'primary_strength' && selected.length < 5) {
-      const remaining = sortedCandidates.filter(ex => !selected.includes(ex));
-      const slotsToFill = 5 - selected.length;
       
-      for (let i = 0; i < slotsToFill && i < remaining.length; i++) {
-        const candidate = remaining[i];
-        if (!candidate) continue;
-        
-        selected.push(candidate);
-        
-        // Update tracking
-        if (satisfiesSquatHinge(candidate)) hasSquatHinge = true;
-        if (satisfiesPush(candidate)) hasPush = true;
-        if (satisfiesPull(candidate)) hasPull = true;
-        if (isLowerBody(candidate)) lowerBodyCount++;
-        else if (isUpperBody(candidate)) upperBodyCount++;
-        
-        const originalScore = 'originalScore' in candidate ? (candidate as any).originalScore : null;
-        const scoreInfo = originalScore
-          ? `Score: ${candidate.score} (original: ${originalScore}, -2.0 penalty)`
-          : `Score: ${candidate.score}`;
-        console.log(`✅ Selected for ${functionTag}: ${candidate.name} - ${scoreInfo}, Reason: high score, Pattern: ${candidate.movementPattern}, Muscle: ${candidate.primaryMuscle}`);
-      }
-    }
-    
-    // Phase 2: Fill remaining slots with weighted random selection for Blocks B and C
-    if (functionTag !== 'primary_strength') {
-      const maxSlots = functionTag === 'secondary_strength' || functionTag === 'accessory' ? 8 : 6;
+      // Phase 2: Fill remaining slots with weighted random selection
       if (selected.length < maxSlots) {
         const remaining = sortedCandidates.filter(ex => !selected.includes(ex));
         const slotsToFill = maxSlots - selected.length;
         
-        const randomSelected = weightedRandomSelect(remaining, slotsToFill);
+        // Use linear weighting instead of quadratic for more variety
+        const randomSelected = weightedRandomSelect(remaining, slotsToFill, (score) => score);
         
         for (const exercise of randomSelected) {
           selected.push(exercise);
           
-          // Update tracking
-          if (satisfiesSquatHinge(exercise)) hasSquatHinge = true;
-          if (satisfiesPush(exercise)) hasPush = true;
-          if (satisfiesPull(exercise)) hasPull = true;
-          if (satisfiesLunge(exercise)) hasLunge = true;
-          if (isLowerBody(exercise)) lowerBodyCount++;
-          else if (isUpperBody(exercise)) upperBodyCount++;
-          
-          const originalScore = 'originalScore' in exercise ? (exercise as any).originalScore : null;
-          const scoreInfo = originalScore
-            ? `Score: ${exercise.score} (original: ${originalScore}, -2.0 penalty)`
+          const scoreInfo = (exercise as any).originalScore 
+            ? `Score: ${exercise.score} (original: ${(exercise as any).originalScore}, -2.0 penalty)`
             : `Score: ${exercise.score}`;
-          console.log(`✅ Selected for ${functionTag}: ${exercise.name} - ${scoreInfo}, Reason: weighted random selection, Pattern: ${exercise.movementPattern}, Muscle: ${exercise.primaryMuscle}`);
+          console.log(`✅ Selected for ${functionTag}: ${exercise.name} - ${scoreInfo}, Reason: weighted random selection, Pattern: ${exercise.movementPattern}`);
         }
       }
     }
     
-    // Log constraint satisfaction
+    // Log constraint satisfaction (only movement patterns, no body part requirements)
     const lungeRequired = functionTag === 'secondary_strength';
     console.log(`📊 ${functionTag} constraints check:
       - Squat/Hinge: ${hasSquatHinge ? '✅' : '❌'}
       - Push: ${hasPush ? '✅' : '❌'}
       - Pull: ${hasPull ? '✅' : '❌'}${lungeRequired ? `\n      - Lunge: ${hasLunge ? '✅' : '❌'}` : ''}
-      - Lower Body (${lowerBodyCount}/2): ${lowerBodyCount >= 2 ? '✅' : '❌'}
-      - Upper Body (${upperBodyCount}/2): ${upperBodyCount >= 2 ? '✅' : '❌'}
     `);
     
     // Safety check - ensure we never return more than max
     const maxForBlock = functionTag === 'primary_strength' ? 5 : 
                        (functionTag === 'secondary_strength' || functionTag === 'accessory') ? 8 : 6;
-    const finalSelected = selected.length > maxForBlock ? selected.slice(0, maxForBlock) : selected;
     if (selected.length > maxForBlock) {
       console.warn(`⚠️ WARNING: Selected ${selected.length} exercises for ${functionTag}, limiting to ${maxForBlock}`);
+      selected = selected.slice(0, maxForBlock);
     }
     
-    console.log(`📌 Final selection for ${functionTag}: ${finalSelected.length} exercises`);
-    finalSelected.forEach((ex, idx) => {
+    console.log(`📌 Final selection for ${functionTag}: ${selected.length} exercises`);
+    selected.forEach((ex, idx) => {
       console.log(`   ${idx + 1}. ${ex.name} (${ex.score})`);
     });
     
-    return finalSelected;
+    return selected;
   }
   
   private getTop6WithFunctionTagConstraints(exercises: ScoredExercise[]): ScoredExercise[] {
@@ -299,7 +245,7 @@ export class FullBodyRoutineTemplateHandler implements TemplateHandler {
     
     if (sortedCandidates.length === 0) return [];
     
-    const selected: ScoredExercise[] = [];
+    let selected: ScoredExercise[] = [];
     
     // Track what we've satisfied
     let coreCount = 0;
@@ -314,16 +260,14 @@ export class FullBodyRoutineTemplateHandler implements TemplateHandler {
       return coreCount >= 1 && capacityCount >= 2;
     };
     
-    
     // Phase 1: Constraint satisfaction with randomness for tied highest scores
     while (!constraintsMet() && selected.length < 6) {
       // Find exercises that can satisfy unmet constraints
       const constraintCandidates = sortedCandidates.filter(ex => {
         if (selected.includes(ex)) return false;
         
-        const needsCore = coreCount < 1 && isCore(ex);
-        const needsCapacity = capacityCount < 2 && isCapacity(ex);
-        return needsCore || needsCapacity;
+        return (coreCount < 1 && isCore(ex)) ||
+               (capacityCount < 2 && isCapacity(ex));
       });
       
       if (constraintCandidates.length === 0) break;
@@ -354,7 +298,8 @@ export class FullBodyRoutineTemplateHandler implements TemplateHandler {
       const remaining = sortedCandidates.filter(ex => !selected.includes(ex));
       const slotsToFill = 6 - selected.length;
       
-      const randomSelected = weightedRandomSelect(remaining, slotsToFill);
+      // Use linear weighting instead of quadratic for more variety
+      const randomSelected = weightedRandomSelect(remaining, slotsToFill, (score) => score);
       
       for (const exercise of randomSelected) {
         selected.push(exercise);

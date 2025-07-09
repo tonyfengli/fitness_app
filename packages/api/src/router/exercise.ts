@@ -199,10 +199,10 @@ export const exerciseRouter = {
           userInput: safeInput.userInput,
           exercises: allExercises, // Pass exercises directly
           intensity: safeInput.intensity, // Pass intensity separately for scoring
-          routineTemplate: {
-            routine_goal: safeInput.isFullBody ? "mixed_focus" : "mixed_focus", // Both use mixed_focus for now
+          workoutTemplate: {
+            workout_goal: safeInput.isFullBody ? "mixed_focus" : "mixed_focus", // Both use mixed_focus for now
             muscle_target: safeInput.muscleTarget,
-            routine_intensity: safeInput.intensity === "low" ? "low_local" : 
+            workout_intensity: safeInput.intensity === "low" ? "low_local" : 
                              safeInput.intensity === "high" ? "high_systemic" : 
                              "moderate_local",
             // Add a custom field to indicate full body

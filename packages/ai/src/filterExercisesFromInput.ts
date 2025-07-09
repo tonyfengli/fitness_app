@@ -1,5 +1,5 @@
 import { filterExercises } from "./filtering/filterExercises";
-import type { WorkoutRoutineStateType, ClientContext, RoutineTemplate } from "./types";
+import type { WorkoutSessionStateType, ClientContext, WorkoutTemplate } from "./types";
 import type { ScoredExercise, ScoringCriteria } from "./types/scoredExercise";
 import { ExerciseFilterError } from "./filtering/rulesBasedFilter";
 import { getTemplateHandler } from "./templates";
@@ -7,7 +7,7 @@ import { getTemplateHandler } from "./templates";
 export interface FilterExercisesOptions {
   userInput?: string;
   clientContext?: ClientContext;
-  routineTemplate?: RoutineTemplate;
+  workoutTemplate?: WorkoutTemplate;
   exercises?: any[]; // Pass exercises directly from API
   intensity?: "low" | "medium" | "high"; // Pass intensity separately for scoring
 }
@@ -17,7 +17,7 @@ export interface FilterExercisesOptions {
  * This is the main API-ready function for exercise filtering
  * 
  * @param options - Object containing client context, user input, or legacy filter criteria
- * @returns Promise<WorkoutRoutineStateType> - The filtered exercises
+ * @returns Promise<WorkoutSessionStateType> - The filtered exercises
  * @throws {ExerciseFilterError} If filtering fails
  * 
  * @example
@@ -35,10 +35,10 @@ export interface FilterExercisesOptions {
  * console.log(result.filteredExercises); // Array of filtered exercises
  * ```
  */
-export async function filterExercisesFromInput(options: FilterExercisesOptions): Promise<WorkoutRoutineStateType> {
+export async function filterExercisesFromInput(options: FilterExercisesOptions): Promise<WorkoutSessionStateType> {
   try {
     console.log('🚀 filterExercisesFromInput called');
-    const { userInput = "", clientContext, routineTemplate, exercises, intensity } = options;
+    const { userInput = "", clientContext, workoutTemplate, exercises, intensity } = options;
     
     // Check if we have any scoring criteria (Phase 1 or Phase 2)
     // Scoring should be enabled if ANY criteria are provided
@@ -75,11 +75,11 @@ export async function filterExercisesFromInput(options: FilterExercisesOptions):
     let organizedExercises = filteredExercises;
     
     // Always use template handler for organizing exercises into blocks
-    if (routineTemplate) {
-      const isFullBody = (routineTemplate as any).isFullBody;
+    if (workoutTemplate) {
+      const isFullBody = (workoutTemplate as any).isFullBody;
       const templateId = isFullBody ? 'full_body' : 'routine';
       
-      console.log(`🏋️ Using ${isFullBody ? 'FullBodyRoutineTemplateHandler' : 'RoutineTemplateHandler'} to select TOP 6 with constraints`);
+      console.log(`🏋️ Using ${isFullBody ? 'FullBodyWorkoutTemplateHandler' : 'WorkoutTemplateHandler'} to select TOP 6 with constraints`);
       console.log(`📊 Total exercises: ${filteredExercises.length}`);
       
       const templateHandler = getTemplateHandler(templateId);
@@ -134,17 +134,17 @@ export async function filterExercisesFromInput(options: FilterExercisesOptions):
       console.log(`   - isTop6BlockD: ${blockDCount} exercises marked`);
     }
     
-    // Return in the expected WorkoutRoutineStateType format
+    // Return in the expected WorkoutSessionStateType format
     return {
       userInput: userInput.trim(),
       programmedRoutine: "",
       exercises: [], // Original exercises not needed in response
       clientContext: clientContext!,
       filteredExercises: organizedExercises,
-      routineTemplate: routineTemplate || {
-        routine_goal: "mixed_focus",
+      workoutTemplate: workoutTemplate || {
+        workout_goal: "mixed_focus",
         muscle_target: [],
-        routine_intensity: "moderate_local"
+        workout_intensity: "moderate_local"
       }
     };
   } catch (error) {
