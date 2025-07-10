@@ -15,13 +15,12 @@ export function getTemplateHandler(templateId: string): TemplateHandler {
   switch (templateId) {
     case 'workout':
     case 'default':
-      return new WorkoutTemplateHandler();
+      return new WorkoutTemplateHandler(false);
     
     case 'full_body':
     case 'fullbody':
-      // Import directly to avoid caching issues
-      const { FullBodyWorkoutTemplateHandler } = require('./FullBodyWorkoutTemplateHandler');
-      return new FullBodyWorkoutTemplateHandler();
+      // Now both use the same handler with isFullBody=true
+      return new WorkoutTemplateHandler(true);
     
     // Future template handlers can be added here
     // case 'strength_focus':
@@ -31,6 +30,6 @@ export function getTemplateHandler(templateId: string): TemplateHandler {
     
     default:
       console.log(`⚠️  Unknown template ID: ${templateId}, falling back to workout template`);
-      return new WorkoutTemplateHandler();
+      return new WorkoutTemplateHandler(false);
   }
 }

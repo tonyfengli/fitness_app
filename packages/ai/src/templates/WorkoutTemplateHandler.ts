@@ -1,214 +1,111 @@
 import type { ScoredExercise } from "../types/scoredExercise";
-import type { OrganizedExercises } from "./types";
-import { randomSelect, weightedRandomSelect } from "../utils/exerciseSelection";
-import { BaseTemplateHandler, SQUAT_HINGE_PATTERNS, PUSH_PATTERNS, PULL_PATTERNS } from "./BaseTemplateHandler";
+import type { TemplateHandler, OrganizedExercises } from "./types";
+import type { PenalizedExercise, BlockConfig, MuscleConstraints } from "./types/blockConfig";
+import { BLOCK_CONFIGS } from "./types/blockConfig";
+import { DeterministicSelection, RandomizedSelection } from "./strategies/SelectionStrategy";
+import type { SelectionStrategy } from "./strategies/SelectionStrategy";
 
-export class WorkoutTemplateHandler extends BaseTemplateHandler {
+export class WorkoutTemplateHandler implements TemplateHandler {
+  private isFullBody: boolean;
+  private deterministic = new DeterministicSelection();
+  private randomized = new RandomizedSelection();
+
+  constructor(isFullBody = false) {
+    this.isFullBody = isFullBody;
+  }
+
   organize(exercises: ScoredExercise[]): OrganizedExercises {
     console.log('🏗️ WorkoutTemplateHandler organizing exercises into blocks');
     
-    // Get Block A selections first
-    const blockA = this.getTop6WithConstraints(exercises, 'primary_strength');
+    // Add muscle constraints to blocks if full body mode
+    const configs = this.getBlockConfigs();
     
-    // Create a set of Block A exercise IDs for quick lookup
+    // Get Block A selections
+    const blockA = this.selectExercisesForBlock(exercises, configs.A, new Set());
+    
+    // Get Block B selections with penalties for Block A exercises
     const blockAIds = new Set(blockA.map(ex => ex.id));
+    const blockB = this.selectExercisesForBlock(exercises, configs.B, blockAIds);
     
-    // Get Block B selections with penalty for exercises already in Block A
-    const blockB = this.getTop6WithConstraints(exercises, 'secondary_strength', blockAIds);
-    
-    // Create a set of Block B exercise IDs for quick lookup
+    // Get Block C selections with penalties for Block B exercises
     const blockBIds = new Set(blockB.map(ex => ex.id));
+    const blockC = this.selectExercisesForBlock(exercises, configs.C, blockBIds);
     
-    // Get Block C selections with penalty for exercises already in Block B
-    const blockC = this.getTop6WithConstraints(exercises, 'accessory', blockBIds);
+    // Get Block D selections (no penalties)
+    const blockD = this.selectExercisesForBlock(exercises, configs.D, new Set());
+    
+    this.logFinalSummary(blockA.length, blockB.length, blockC.length, blockD.length);
+    
+    return { blockA, blockB, blockC, blockD };
+  }
+  
+  private getBlockConfigs() {
+    // Add muscle constraints if in full body mode
+    if (!this.isFullBody) {
+      return BLOCK_CONFIGS;
+    }
+    
+    // Create configs with muscle constraints for full body
+    const muscleConstraints: MuscleConstraints = {
+      minLowerBody: 2,
+      minUpperBody: 2,
+    };
     
     return {
-      blockA,
-      blockB,
-      blockC,
-      
-      // Block D: Combined core and capacity exercises sorted by score
-      blockD: this.getCombinedCoreAndCapacity(exercises),
+      A: {
+        ...BLOCK_CONFIGS.A,
+        constraints: {
+          ...BLOCK_CONFIGS.A.constraints,
+          muscles: muscleConstraints,
+        },
+      },
+      B: {
+        ...BLOCK_CONFIGS.B,
+        constraints: {
+          ...BLOCK_CONFIGS.B.constraints,
+          muscles: muscleConstraints,
+        },
+      },
+      C: {
+        ...BLOCK_CONFIGS.C,
+        constraints: {
+          ...BLOCK_CONFIGS.C.constraints,
+          muscles: muscleConstraints,
+        },
+      },
+      D: BLOCK_CONFIGS.D, // Block D doesn't use muscle constraints
     };
   }
   
-  
-  
-  private getTop6WithConstraints(exercises: ScoredExercise[], functionTag: string, penalizeIds?: Set<string>): ScoredExercise[] {
-    // Filter exercises that have the specified function tag
-    const candidates = exercises.filter(exercise => 
-      exercise.functionTags && exercise.functionTags.includes(functionTag)
-    );
+  private selectExercisesForBlock(
+    exercises: ScoredExercise[],
+    config: BlockConfig,
+    previousSelections: Set<string>
+  ): ScoredExercise[] {
+    // Prepare candidates
+    const candidates = this.prepareCandidates(exercises, config, previousSelections);
     
-    // Apply penalty to exercises already selected in previous blocks
-    const adjustedCandidates = candidates.map(exercise => {
-      if (penalizeIds && penalizeIds.has(exercise.id)) {
-        // Apply -2.0 penalty for exercises already selected
-        const previousBlock = functionTag === 'secondary_strength' ? 'Block A' : 
-                            functionTag === 'accessory' ? 'Block B' : 'previous block';
-        console.log(`📉 Applying -2.0 penalty to ${exercise.name} for ${functionTag} (already selected in ${previousBlock})`);
-        return {
-          ...exercise,
-          score: Math.max(0, exercise.score - 2.0), // Ensure score doesn't go negative
-          originalScore: exercise.score, // Keep track of original score for logging
-        };
-      }
-      return exercise;
-    });
-    
-    // Sort by adjusted score (highest first)
-    const sortedCandidates = [...adjustedCandidates].sort((a, b) => b.score - a.score);
-    
-    if (sortedCandidates.length === 0) return [];
-    
-    let selected: ScoredExercise[] = [];
-    
-    // Track what we've satisfied (only movement patterns, no body part constraints)
-    let hasSquatHinge = false;
-    let hasPush = false;
-    let hasPull = false;
-    let hasLunge = false; // Add lunge tracking for Block B
-    
-    // Helper functions
-    const satisfiesSquatHinge = (ex: ScoredExercise) => 
-      ex.movementPattern && SQUAT_HINGE_PATTERNS.includes(ex.movementPattern);
-    const satisfiesPush = (ex: ScoredExercise) => 
-      ex.movementPattern && PUSH_PATTERNS.includes(ex.movementPattern);
-    const satisfiesPull = (ex: ScoredExercise) => 
-      ex.movementPattern && PULL_PATTERNS.includes(ex.movementPattern);
-    const satisfiesLunge = (ex: ScoredExercise) => 
-      ex.movementPattern === 'lunge';
-    
-    // Check if all minimum constraints are met
-    const allConstraintsMet = () => {
-      const lungeRequired = functionTag === 'secondary_strength';
-      return hasSquatHinge && hasPush && hasPull && (!lungeRequired || hasLunge);
-    };
-    
-    // For Block A, use original deterministic selection
-    if (functionTag === 'primary_strength') {
-      // Original logic for Block A - no randomness
-      for (const candidate of sortedCandidates) {
-        if (selected.length >= 5) break;
-        
-        // Check if it helps meet constraints
-        if (!allConstraintsMet()) {
-          const satisfiesNeeded = 
-            (!hasSquatHinge && satisfiesSquatHinge(candidate)) ||
-            (!hasPush && satisfiesPush(candidate)) ||
-            (!hasPull && satisfiesPull(candidate));
-          
-          if (satisfiesNeeded) {
-            selected.push(candidate);
-            
-            // Update tracking
-            if (satisfiesSquatHinge(candidate)) hasSquatHinge = true;
-            if (satisfiesPush(candidate)) hasPush = true;
-            if (satisfiesPull(candidate)) hasPull = true;
-            
-            const scoreInfo = (candidate as any).originalScore 
-              ? `Score: ${candidate.score} (original: ${(candidate as any).originalScore}, -2.0 penalty)`
-              : `Score: ${candidate.score}`;
-            console.log(`✅ Selected for ${functionTag}: ${candidate.name} - ${scoreInfo}, Reason: constraint satisfaction, Pattern: ${candidate.movementPattern}`);
-            continue;
-          }
-        }
-      }
-      
-      // Fill remaining slots with highest scoring
-      const remaining = sortedCandidates.filter(ex => !selected.includes(ex));
-      const slotsToFill = 5 - selected.length;
-      
-      for (let i = 0; i < slotsToFill && i < remaining.length; i++) {
-        const exercise = remaining[i];
-        if (!exercise) continue;
-        selected.push(exercise);
-        console.log(`✅ Selected for ${functionTag}: ${exercise.name} - Score: ${exercise.score}, Reason: high score`);
-      }
-    } else {
-      // New selection logic for Blocks B and C with randomness
-      const lungeRequired = functionTag === 'secondary_strength';
-      const maxSlots = functionTag === 'secondary_strength' || functionTag === 'accessory' ? 8 : 6;
-      
-      // Phase 1: Constraint satisfaction with randomness for tied highest scores
-      while (!allConstraintsMet() && selected.length < maxSlots) {
-        // Find exercises that can satisfy unmet constraints
-        const constraintCandidates = sortedCandidates.filter(ex => {
-          if (selected.includes(ex)) return false;
-          
-          return (!hasSquatHinge && satisfiesSquatHinge(ex)) ||
-                 (!hasPush && satisfiesPush(ex)) ||
-                 (!hasPull && satisfiesPull(ex)) ||
-                 (lungeRequired && !hasLunge && satisfiesLunge(ex));
-        });
-        
-        if (constraintCandidates.length === 0) break;
-        
-        // Find the highest score among constraint candidates
-        const highestScore = constraintCandidates[0]?.score ?? 0;
-        const topTiedCandidates = constraintCandidates.filter(ex => ex.score === highestScore);
-        
-        // Randomly select from tied highest scorers
-        const selectedExercise = randomSelect(topTiedCandidates);
-        if (!selectedExercise) break;
-        
-        selected.push(selectedExercise);
-        
-        // Update tracking
-        if (satisfiesSquatHinge(selectedExercise)) hasSquatHinge = true;
-        if (satisfiesPush(selectedExercise)) hasPush = true;
-        if (satisfiesPull(selectedExercise)) hasPull = true;
-        if (satisfiesLunge(selectedExercise)) hasLunge = true;
-        
-        const scoreInfo = (selectedExercise as any).originalScore 
-          ? `Score: ${selectedExercise.score} (original: ${(selectedExercise as any).originalScore}, -2.0 penalty)`
-          : `Score: ${selectedExercise.score}`;
-        
-        const constraints = [];
-        if (satisfiesSquatHinge(selectedExercise)) constraints.push('squat/hinge');
-        if (satisfiesPush(selectedExercise)) constraints.push('push');
-        if (satisfiesPull(selectedExercise)) constraints.push('pull');
-        if (satisfiesLunge(selectedExercise)) constraints.push('lunge');
-        
-        console.log(`✅ Selected for ${functionTag}: ${selectedExercise.name} - ${scoreInfo}, Reason: constraint satisfaction [${constraints.join(', ')}], Pattern: ${selectedExercise.movementPattern}`);
-      }
-      
-      // Phase 2: Fill remaining slots with weighted random selection
-      if (selected.length < maxSlots) {
-        const remaining = sortedCandidates.filter(ex => !selected.includes(ex));
-        const slotsToFill = maxSlots - selected.length;
-        
-        // Use linear weighting instead of quadratic for more variety
-        const randomSelected = weightedRandomSelect(remaining, slotsToFill, (score) => score);
-        
-        for (const exercise of randomSelected) {
-          selected.push(exercise);
-          
-          const scoreInfo = (exercise as any).originalScore 
-            ? `Score: ${exercise.score} (original: ${(exercise as any).originalScore}, -2.0 penalty)`
-            : `Score: ${exercise.score}`;
-          console.log(`✅ Selected for ${functionTag}: ${exercise.name} - ${scoreInfo}, Reason: weighted random selection, Pattern: ${exercise.movementPattern}`);
-        }
-      }
+    if (candidates.length === 0) {
+      console.log(`⚠️ No candidates found for ${config.name}`);
+      return [];
     }
     
-    // Log constraint satisfaction (only movement patterns, no body part requirements)
-    const lungeRequired = functionTag === 'secondary_strength';
-    console.log(`📊 ${functionTag} constraints check:
-      - Squat/Hinge: ${hasSquatHinge ? '✅' : '❌'}
-      - Push: ${hasPush ? '✅' : '❌'}
-      - Pull: ${hasPull ? '✅' : '❌'}${lungeRequired ? `\n      - Lunge: ${hasLunge ? '✅' : '❌'}` : ''}
-    `);
+    // Select strategy
+    const strategy = this.getSelectionStrategy(config);
     
-    // Safety check - ensure we never return more than max
-    const maxForBlock = functionTag === 'primary_strength' ? 5 : 
-                       (functionTag === 'secondary_strength' || functionTag === 'accessory') ? 8 : 6;
-    if (selected.length > maxForBlock) {
-      console.warn(`⚠️ WARNING: Selected ${selected.length} exercises for ${functionTag}, limiting to ${maxForBlock}`);
-      selected = selected.slice(0, maxForBlock);
+    // Apply strategy
+    const selected = strategy.select(candidates, config, this.isFullBody);
+    
+    // Safety check
+    if (selected.length > config.maxExercises) {
+      console.warn(
+        `⚠️ WARNING: Selected ${selected.length} exercises for ${config.name}, ` +
+        `limiting to ${config.maxExercises}`
+      );
+      return selected.slice(0, config.maxExercises);
     }
     
-    console.log(`📌 Final selection for ${functionTag}: ${selected.length} exercises`);
+    console.log(`📌 Final selection for ${config.name}: ${selected.length} exercises`);
     selected.forEach((ex, idx) => {
       console.log(`   ${idx + 1}. ${ex.name} (${ex.score})`);
     });
@@ -216,4 +113,70 @@ export class WorkoutTemplateHandler extends BaseTemplateHandler {
     return selected;
   }
   
+  private prepareCandidates(
+    exercises: ScoredExercise[],
+    config: BlockConfig,
+    previousSelections: Set<string>
+  ): PenalizedExercise[] {
+    // Filter by function tag(s)
+    let candidates: PenalizedExercise[];
+    
+    if (config.functionTag === 'core_capacity') {
+      // Special handling for Block D
+      candidates = exercises.filter(exercise => 
+        exercise.functionTags && 
+        (exercise.functionTags.includes('core') || exercise.functionTags.includes('capacity'))
+      );
+    } else {
+      // Regular function tag filtering
+      candidates = exercises.filter(exercise => 
+        exercise.functionTags?.includes(config.functionTag)
+      );
+    }
+    
+    // Apply penalties for previously selected exercises
+    if (config.penaltyForReuse > 0 && previousSelections.size > 0) {
+      candidates = candidates.map(exercise => {
+        if (previousSelections.has(exercise.id)) {
+          console.log(
+            `📉 Applying -${config.penaltyForReuse} penalty to ${exercise.name} ` +
+            `for ${config.name} (already selected in previous block)`
+          );
+          
+          return {
+            ...exercise,
+            score: Math.max(0, exercise.score - config.penaltyForReuse),
+            originalScore: exercise.score,
+            appliedPenalty: config.penaltyForReuse,
+          };
+        }
+        return exercise;
+      });
+    }
+    
+    return candidates;
+  }
+  
+  private getSelectionStrategy(config: BlockConfig): SelectionStrategy {
+    return config.selectionStrategy === 'deterministic' 
+      ? this.deterministic 
+      : this.randomized;
+  }
+  
+  private logFinalSummary(
+    blockACount: number,
+    blockBCount: number,
+    blockCCount: number,
+    blockDCount: number
+  ): void {
+    console.log(`
+🎯 Workout Template Summary:
+   Block A (Primary Strength): ${blockACount} exercises
+   Block B (Secondary Strength): ${blockBCount} exercises
+   Block C (Accessory): ${blockCCount} exercises
+   Block D (Core & Capacity): ${blockDCount} exercises
+   Total: ${blockACount + blockBCount + blockCCount + blockDCount} exercises
+   Mode: ${this.isFullBody ? 'Full Body' : 'Regular'}
+    `);
+  }
 }
