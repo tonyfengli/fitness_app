@@ -1,6 +1,6 @@
 import type { PenalizedExercise, BlockConfig } from "../types/blockConfig";
 import { ConstraintTracker } from "../utils/ConstraintTracker";
-import { randomSelect, weightedRandomSelect } from "../../utils/exerciseSelection";
+import { randomSelect, weightedRandomSelect } from "../../../utils/exerciseSelection";
 
 export interface SelectionStrategy {
   select(

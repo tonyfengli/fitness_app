@@ -3,10 +3,14 @@ export * from "./nodes";
 export * from "./utils";
 export * from "./types";
 export * from "./types/scoredExercise";
-export * from "./filterExercisesFromInput";
 
-// Direct filtering functions (no LangGraph)
-export * from "./filtering";
+// API functions
+export * from "./api/filterExercisesFromInput";
+
+// Core functionality
+export * from "./core/filtering";
+export * from "./core/scoring";
+export * from "./core/templates";
 
 // SMS interpretation graph
 export * from "./sms/smsInterpretationGraph";

@@ -1,6 +1,7 @@
-import type { Exercise, ClientContext } from "../types";
-import { applyAllFilters, type StrengthLevel, type SkillLevel } from "../utils/filterExercises";
-import { extractFilterCriteriaFromContext } from "../types/clientContext";
+import type { Exercise, ClientContext } from "../../types";
+import { applyAllFilters } from "./filterFunctions";
+import type { StrengthLevel, SkillLevel } from "./types";
+import { extractFilterCriteriaFromContext } from "../../types/clientContext";
 
 export class ExerciseFilterError extends Error {
   constructor(message: string, public cause?: unknown) {

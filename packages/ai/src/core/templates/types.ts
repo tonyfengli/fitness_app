@@ -1,4 +1,4 @@
-import type { ScoredExercise } from "../types/scoredExercise";
+import type { ScoredExercise } from "../../types/scoredExercise";
 
 export interface OrganizedExercises {
   blockA: ScoredExercise[]; // Primary Strength

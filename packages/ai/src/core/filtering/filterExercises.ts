@@ -1,9 +1,9 @@
-import type { Exercise, ClientContext } from "../types";
-import type { ScoredExercise, ScoringCriteria } from "../types/scoredExercise";
+import type { Exercise, ClientContext } from "../../types";
+import type { ScoredExercise, ScoringCriteria } from "../../types/scoredExercise";
 import { applyClientFilters } from "./applyClientFilters";
-import { scoreAndSortExercises } from "./scoreExercises";
-import { fetchAllExercises, fetchExercisesByBusiness } from "../utils/fetchExercises";
-import { createDefaultClientContext } from "../types/clientContext";
+import { scoreAndSortExercises } from "../scoring/scoreExercises";
+import { fetchAllExercises, fetchExercisesByBusiness } from "../../utils/fetchExercises";
+import { createDefaultClientContext } from "../../types/clientContext";
 
 export interface DirectFilterOptions {
   exercises?: Exercise[]; // Optional: provide exercises directly

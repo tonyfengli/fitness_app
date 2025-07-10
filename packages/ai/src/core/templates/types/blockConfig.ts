@@ -1,4 +1,4 @@
-import type { ScoredExercise } from "../../types/scoredExercise";
+import type { ScoredExercise } from "../../../types/scoredExercise";
 
 // Movement pattern categories
 export const MOVEMENT_PATTERNS = {

@@ -14,8 +14,10 @@ export const SCORING_CONFIG = {
   MUSCLE_LESSEN_PRIMARY: -3.0,
   MUSCLE_LESSEN_SECONDARY: -1.5,
   
-  // Foundational bonus
+  // Foundational bonus and penalties
   FOUNDATIONAL_MOVEMENT_BONUS: 0.5,
+  FOUNDATIONAL_HIGH_COMPLEXITY_PENALTY: -2.0,
+  FOUNDATIONAL_MODERATE_COMPLEXITY_PENALTY: -1.0,
 
   // Intensity scoring - kept nested due to complexity
   INTENSITY_SCORING: {

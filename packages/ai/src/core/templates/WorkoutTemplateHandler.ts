@@ -1,4 +1,4 @@
-import type { ScoredExercise } from "../types/scoredExercise";
+import type { ScoredExercise } from "../../types/scoredExercise";
 import type { TemplateHandler, OrganizedExercises } from "./types";
 import type { PenalizedExercise, BlockConfig, MuscleConstraints } from "./types/blockConfig";
 import { BLOCK_CONFIGS } from "./types/blockConfig";
