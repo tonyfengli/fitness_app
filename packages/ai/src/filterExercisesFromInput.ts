@@ -41,18 +41,12 @@ export async function filterExercisesFromInput(options: FilterExercisesOptions):
     console.log('🚀 filterExercisesFromInput called');
     const { userInput = "", clientContext, workoutTemplate, exercises, intensity } = options;
     
-    // Check if we have any scoring criteria (Phase 1 or Phase 2)
-    // Scoring should be enabled if ANY criteria are provided
-    const hasScoringCriteria = clientContext && (
-      (clientContext.exercise_requests?.include && clientContext.exercise_requests.include.length > 0) ??
-      (clientContext.muscle_target && clientContext.muscle_target.length > 0) ??
-      (clientContext.muscle_lessen && clientContext.muscle_lessen.length > 0) ??
-      intensity // Enable scoring if intensity is selected (even if medium)
-    );
+    // Always enable scoring when filtering - this provides base scores and proper organization
+    const hasScoringCriteria = true;
     
-    // Build scoring criteria if we have any scoring data
+    // Build scoring criteria - always include base scoring even with no specific criteria
     let scoringCriteria: ScoringCriteria | undefined;
-    if (hasScoringCriteria) {
+    if (hasScoringCriteria && clientContext) {
       scoringCriteria = {
         includeExercises: clientContext.exercise_requests?.include ?? [],
         muscleTarget: clientContext.muscle_target ?? [],

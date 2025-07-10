@@ -103,11 +103,9 @@ export default function ExerciseList() {
   const [sessionGoal, setSessionGoal] = useState<'strength' | 'stability'>('strength');
   
   // Filter timing state
-  const [filterTiming, setFilterTiming] = useState<{
-    database?: number;
-    filtering?: number;
-    total?: number;
-  } | null>(null);
+  const [filterTiming, setFilterTiming] = useState<number | null>(null);
+  const [filterStartTime, setFilterStartTime] = useState<number | null>(null);
+  const [currentElapsed, setCurrentElapsed] = useState<number>(0);
   
   // State to toggle table visibility
   const [showTable, setShowTable] = useState(false);
@@ -161,7 +159,30 @@ export default function ExerciseList() {
     enabled: filterCriteria !== null,
   });
   
-  // For now, timing is only in console logs
+  // Track filter timing
+  useEffect(() => {
+    if (isFiltering && !filterStartTime) {
+      setFilterStartTime(Date.now());
+      setCurrentElapsed(0);
+    } else if (!isFiltering && filterStartTime && filteredExercises) {
+      const endTime = Date.now();
+      const duration = endTime - filterStartTime;
+      setFilterTiming(duration);
+      setFilterStartTime(null);
+      setCurrentElapsed(0);
+    }
+  }, [isFiltering, filterStartTime, filteredExercises]);
+
+  // Update elapsed time while filtering
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (isFiltering && filterStartTime) {
+      interval = setInterval(() => {
+        setCurrentElapsed(Date.now() - filterStartTime);
+      }, 100);
+    }
+    return () => clearInterval(interval);
+  }, [isFiltering, filterStartTime]);
 
   // Display exercises (either all or filtered)
   const displayedExercises = showFiltered && filteredExercises ? filteredExercises : exercises;
@@ -258,7 +279,11 @@ export default function ExerciseList() {
         if (!response.ok || result.error) {
           setLlmInterpretation({ error: result.error || 'Failed to interpret workout', processingTime });
         } else {
-          setLlmInterpretation({ ...result.structuredOutput, processingTime });
+          setLlmInterpretation({ 
+            ...result.structuredOutput, 
+            processingTime,
+            timing: result.timing // Include timing breakdown from backend
+          });
           // Set the set range from the API response
           if (result.setRange) {
             setSetRange(result.setRange);
@@ -608,7 +633,7 @@ export default function ExerciseList() {
             disabled={isFiltering}
             className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {isFiltering ? 'Filtering...' : 'Filter Workouts'}
+            {isFiltering ? `Filtering... ${(currentElapsed / 1000).toFixed(1)}s` : 'Filter Workouts'}
           </button>
           
         </div>
@@ -620,9 +645,11 @@ export default function ExerciseList() {
           {showFiltered ? (
             <>
               <span className="font-medium text-green-600">Filtering Applied:</span> Showing {displayedExercises?.length || 0} filtered exercises
-              <span className="ml-2 text-xs text-gray-500">
-                (Check console for timing details)
-              </span>
+              {filterTiming && (
+                <span className="ml-2 text-xs text-gray-500">
+                  ({(filterTiming / 1000).toFixed(2)}s)
+                </span>
+              )}
               {displayedExercises && displayedExercises.length > 0 && (displayedExercises[0] as any).score !== undefined && (
                 <span className="ml-2 text-blue-600 font-medium">(Scored & Sorted)</span>
               )}
@@ -1037,11 +1064,25 @@ ${JSON.stringify(blockD, null, 2)}`;
           <div className="mt-6 mx-auto max-w-4xl p-6 bg-gray-50 rounded-lg border border-gray-200">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold">LLM Workout Interpretation</h3>
-              {llmInterpretation?.processingTime && (
-                <span className="text-sm text-gray-600">
-                  Processing time: {llmInterpretation.processingTime.toFixed(2)}s
-                </span>
-              )}
+              <div className="text-right">
+                {llmInterpretation?.processingTime && (
+                  <div className="text-sm text-gray-600">
+                    Total time: {llmInterpretation.processingTime.toFixed(2)}s
+                  </div>
+                )}
+                {llmInterpretation?.timing && (
+                  <details className="text-xs text-gray-500 mt-1">
+                    <summary className="cursor-pointer hover:text-gray-700">Show timing breakdown</summary>
+                    <div className="mt-2 space-y-1 text-left">
+                      <div>Exercise formatting: {(llmInterpretation.timing.exerciseFormatting || 0).toFixed(0)}ms</div>
+                      <div>Set calculation: {(llmInterpretation.timing.setCountCalculation || 0).toFixed(0)}ms</div>
+                      <div>Prompt building: {(llmInterpretation.timing.promptBuilding || 0).toFixed(0)}ms</div>
+                      <div className="font-semibold">LLM API call: {((llmInterpretation.timing.llmApiCall || 0) / 1000).toFixed(2)}s</div>
+                      <div>Response parsing: {(llmInterpretation.timing.responseParsing || 0).toFixed(0)}ms</div>
+                    </div>
+                  </details>
+                )}
+              </div>
             </div>
             
             {isInterpreting ? (

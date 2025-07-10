@@ -17,6 +17,9 @@ export async function interpretExercisesNode(
   state: WorkoutInterpretationStateType
 ): Promise<Partial<WorkoutInterpretationStateType>> {
   try {
+    const startTime = performance.now();
+    const timing: any = {};
+    
     const { exercises, clientContext } = state;
     
     // Validate input
@@ -27,15 +30,20 @@ export async function interpretExercisesNode(
     }
 
     // Format exercises for the prompt
+    const formatStartTime = performance.now();
     const formattedExercises = formatExercisesForPrompt(exercises);
+    timing.exerciseFormatting = performance.now() - formatStartTime;
     
     // Calculate set count based on client context
+    const setCountStartTime = performance.now();
     const setCount = determineTotalSetCount({
       strengthLevel: clientContext?.strengthLevel,
       intensity: clientContext?.intensity
     });
+    timing.setCountCalculation = performance.now() - setCountStartTime;
     
     // Build the system prompt - can be customized based on client context
+    const promptBuildStartTime = performance.now();
     const promptBuilder = new WorkoutPromptBuilder({
       // Enable strict exercise limit if client has specific requirements
       strictExerciseLimit: clientContext?.strictExerciseCount === true,
@@ -62,16 +70,21 @@ Total Set Range: ${setCount.minSets}-${setCount.maxSets} sets
 ${setCount.reasoning}
 
 Please interpret these exercises according to the system instructions.`;
+    timing.promptBuilding = performance.now() - promptBuildStartTime;
 
     // Call the LLM
+    console.log('🤖 Calling LLM for workout interpretation...');
+    const llmStartTime = performance.now();
     const response = await llm.invoke([
       new SystemMessage(systemPrompt),
       new HumanMessage(userMessage),
     ]);
+    timing.llmApiCall = performance.now() - llmStartTime;
 
     const interpretation = response.content.toString();
 
     // Parse JSON response
+    const parseStartTime = performance.now();
     let structuredOutput;
     try {
       // Extract JSON from the response (in case LLM adds extra text)
@@ -85,10 +98,23 @@ Please interpret these exercises according to the system instructions.`;
       console.error("Error parsing LLM response as JSON:", parseError);
       structuredOutput = { error: "Failed to parse response as JSON", raw: interpretation };
     }
+    timing.responseParsing = performance.now() - parseStartTime;
+    
+    timing.total = performance.now() - startTime;
+    
+    // Log detailed timing breakdown
+    console.log('⏱️ LLM Interpretation Timing Breakdown:');
+    console.log(`   - Exercise formatting: ${timing.exerciseFormatting.toFixed(2)}ms`);
+    console.log(`   - Set count calculation: ${timing.setCountCalculation.toFixed(2)}ms`);
+    console.log(`   - Prompt building: ${timing.promptBuilding.toFixed(2)}ms`);
+    console.log(`   - LLM API call: ${timing.llmApiCall.toFixed(2)}ms (${(timing.llmApiCall/1000).toFixed(2)}s)`);
+    console.log(`   - Response parsing: ${timing.responseParsing.toFixed(2)}ms`);
+    console.log(`   - TOTAL: ${timing.total.toFixed(2)}ms (${(timing.total/1000).toFixed(2)}s)`);
 
     return {
       interpretation,
       structuredOutput,
+      timing, // Include timing in the response
     };
   } catch (error) {
     console.error("Error in interpretExercisesNode:", error);

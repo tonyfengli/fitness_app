@@ -33,6 +33,7 @@ export async function POST(request: NextRequest) {
       structuredOutput: result.structuredOutput,
       setRange, // Include set range in response
       rawResponse: result.interpretation, // Include raw LLM response for debugging
+      timing: result.timing, // Include timing breakdown
     });
   } catch (error) {
     console.error('Error in workout interpretation:', error);

@@ -42,6 +42,12 @@ export const WorkoutInterpretationState = Annotation.Root({
     reducer: (x, y) => ({ ...x, ...y }),
   }),
   
+  // Timing information
+  timing: Annotation<Record<string, number>>({
+    default: () => ({}),
+    reducer: (x, y) => ({ ...x, ...y }),
+  }),
+  
   // Error handling
   error: Annotation<string | null>({
     default: () => null,
