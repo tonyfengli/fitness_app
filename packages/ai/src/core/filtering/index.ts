@@ -24,7 +24,6 @@ export { applyClientFilters, ExerciseFilterError } from "./applyClientFilters";
 export {
   filterByStrength,
   filterBySkill,
-  filterByIntensity,
   filterByInclude,
   filterByExclude,
   filterByAvoidJoints,

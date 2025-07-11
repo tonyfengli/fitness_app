@@ -13,7 +13,6 @@ export type IntensityLevel = "low_local" | "moderate_local" | "high_local" |
 export interface FilterCriteria {
   strength: StrengthLevel;
   skill: SkillLevel;
-  intensity?: IntensityLevel;
   include?: string[];
   avoid?: string[];
   avoidJoints?: string[];

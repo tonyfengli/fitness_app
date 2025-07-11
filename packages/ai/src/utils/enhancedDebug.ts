@@ -132,32 +132,8 @@ export class ConstraintAnalysisTracker {
   }
 }
 
-// Helper class to track score breakdowns
-export class ScoreBreakdownTracker {
-  private breakdowns: EnhancedFilterDebugData['scoreBreakdowns'] = {};
-
-  addBreakdown(
-    exercise: ScoredExercise,
-    baseScore: number,
-    bonuses: { reason: string; value: number }[],
-    penalties: { reason: string; value: number }[]
-  ): void {
-    const totalBonus = bonuses.reduce((sum, b) => sum + b.value, 0);
-    const totalPenalty = penalties.reduce((sum, p) => sum + p.value, 0);
-    
-    this.breakdowns[exercise.id] = {
-      name: exercise.name,
-      baseScore,
-      bonuses,
-      penalties,
-      finalScore: baseScore + totalBonus - totalPenalty
-    };
-  }
-
-  getBreakdowns(): EnhancedFilterDebugData['scoreBreakdowns'] {
-    return this.breakdowns;
-  }
-}
+// Score breakdown tracking removed - enhanced scoring no longer supported
+// To track score breakdowns, add this functionality to the regular scoring system
 
 // Real-time debug logger (Enhancement #8)
 export class DebugLogger {
@@ -271,5 +247,5 @@ export function readWorkoutGenerationHistory(): WorkoutGenerationLog[] {
 // Create a singleton instance for easy access
 export const exclusionTracker = new ExclusionTracker();
 export const constraintTracker = new ConstraintAnalysisTracker();
-export const scoreTracker = new ScoreBreakdownTracker();
+// scoreTracker removed - enhanced scoring no longer supported
 export const debugLogger = new DebugLogger();

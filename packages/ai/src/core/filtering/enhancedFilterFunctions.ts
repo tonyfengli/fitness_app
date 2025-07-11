@@ -3,7 +3,7 @@
  */
 
 import type { Exercise } from "../../types";
-import type { StrengthLevel, SkillLevel, IntensityLevel, FilterCriteria } from "./types";
+import type { StrengthLevel, SkillLevel, FilterCriteria } from "./types";
 import { CASCADING_LEVELS } from "./types";
 import { exclusionTracker, debugLogger } from "../../utils/enhancedDebug";
 import type { ScoredExercise } from "../../types/scoredExercise";
@@ -87,36 +87,6 @@ export function filterBySkillEnhanced(
   return filtered;
 }
 
-/**
- * Enhanced filter by intensity with exclusion tracking
- */
-export function filterByIntensityEnhanced(
-  exercises: ScoredExercise[],
-  intensityLevel: IntensityLevel
-): ScoredExercise[] {
-  const startTime = performance.now();
-  
-  debugLogger.log('filtering', `Filtering by intensity: ${intensityLevel}`, {
-    inputCount: exercises.length
-  });
-  
-  const filtered = exercises.filter(exercise => {
-    const matches = exercise.fatigueProfile === intensityLevel;
-    if (!matches) {
-      exclusionTracker.addExclusion(exercise, `intensity_mismatch:${exercise.fatigueProfile}_not_${intensityLevel}`);
-    }
-    return matches;
-  });
-  
-  const duration = performance.now() - startTime;
-  debugLogger.log('filtering', `Intensity filtering complete`, {
-    excluded: exercises.length - filtered.length,
-    remaining: filtered.length
-  }, exercises.length - filtered.length);
-  debugLogger.logPerformance(debugLogger.getLogs().length, duration);
-  
-  return filtered;
-}
 
 /**
  * Enhanced filter by joint restrictions with exclusion tracking
@@ -240,11 +210,6 @@ export function applyAllFiltersEnhanced(
   let standardFiltered = remainingExercises;
   standardFiltered = filterByStrengthEnhanced(standardFiltered, filters.strength);
   standardFiltered = filterBySkillEnhanced(standardFiltered, filters.skill);
-  
-  // Only apply intensity filtering if provided
-  if (filters.intensity) {
-    standardFiltered = filterByIntensityEnhanced(standardFiltered, filters.intensity);
-  }
   
   // Apply joint filtering to both included and remaining exercises
   if (filters.avoidJoints && filters.avoidJoints.length > 0) {

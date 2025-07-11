@@ -597,10 +597,10 @@ When `debug: true` is passed to the filter endpoint, additional detailed trackin
    - Logs every exercise attempt with constraint matching details
    - Shows why exercises were selected or rejected for constraint satisfaction
 
-3. **Score Breakdowns** (`ScoreBreakdownTracker`)
-   - Detailed breakdown of how each exercise's score was calculated
-   - Shows base score, all bonuses (with reasons), all penalties (with reasons)
-   - Final score calculation transparency
+3. **Score Breakdowns** (Removed)
+   - Enhanced scoring system has been removed
+   - Score breakdowns are no longer tracked in debug mode
+   - Consider adding this functionality to regular scoring if needed
 
 4. **Real-time Debug Logging** (`DebugLogger`)
    - Step-by-step logging of the entire pipeline
@@ -624,7 +624,7 @@ When working with Claude Code, you can ask:
 - "What filters do I have selected?"
 - "Why was exercise X excluded?"
 - "Show me the constraint analysis for block B"
-- "What's the score breakdown for exercise Y?"
+- "What's the score for exercise Y?" (Note: detailed breakdowns no longer available)
 - "Read the enhanced debug data"
 
 #### Implementation

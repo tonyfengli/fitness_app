@@ -1,10 +1,10 @@
 {
-  "timestamp": "2025-07-11T19:48:20.216Z",
+  "timestamp": "2025-07-11T21:25:25.982Z",
   "filters": {
     "clientName": "Web User",
-    "strengthCapacity": "moderate",
-    "skillCapacity": "moderate",
-    "intensity": "moderate",
+    "strengthCapacity": "low",
+    "skillCapacity": "low",
+    "intensity": "low",
     "muscleTarget": [],
     "muscleLessen": [],
     "avoidJoints": [],
@@ -13,34 +13,34 @@
     "isFullBody": false
   },
   "results": {
-    "totalExercises": 117,
+    "totalExercises": 47,
     "blockA": {
       "count": 5,
       "exercises": [
         {
-          "id": "49bc7005-5179-4d96-be77-ac790cf00759",
-          "name": "Landmine T Bar Row",
-          "score": 5
+          "id": "e922ce7d-d596-4f62-9d0b-78f624ae4102",
+          "name": "Lat Pulldown",
+          "score": 5.75
         },
         {
-          "id": "57c24380-6ee2-4242-84b5-0cf299ae8369",
-          "name": "Landmine Shoulder Press",
-          "score": 5
-        },
-        {
-          "id": "cdd9c4a6-4048-4ee2-9292-aa36e7a2a9ae",
-          "name": "Barbell Glute Bridge on Bench",
-          "score": 5
-        },
-        {
-          "id": "4faeab78-16bd-4d71-b935-226bc691531d",
-          "name": "Hollow Body Dumbbell Press",
-          "score": 5
+          "id": "68b71b3b-3b30-48f0-acd1-73441bff8bea",
+          "name": "Dumbbell Shoulder Press",
+          "score": 5.75
         },
         {
           "id": "b10fc80a-3bc6-4d31-8a1d-d653d55dccc3",
           "name": "Dumbbell Bridge Chest Press",
-          "score": 5
+          "score": 4.25
+        },
+        {
+          "id": "8050aa27-29fd-43f8-a647-8828e484d28b",
+          "name": "Incline Dumbbell Press",
+          "score": 4.25
+        },
+        {
+          "id": "144e1124-e7d7-4594-8c75-f9522081060e",
+          "name": "Kettlebell Deadlift",
+          "score": 4.25
         }
       ]
     },
@@ -48,19 +48,19 @@
       "count": 8,
       "exercises": [
         {
-          "id": "dc085fdb-b6c4-4942-9eb5-3dbf04d7161e",
-          "name": "TRX Mid Row",
-          "score": 5
+          "id": "53141345-2351-436a-9b1c-21bc273ba554",
+          "name": "Spanish Lunge",
+          "score": 6.5
         },
         {
-          "id": "f3887428-47ba-4d81-8916-acc4c7c05fa9",
-          "name": "Offset Lateral Lunge",
-          "score": 5
+          "id": "5a75f68d-4d30-4211-a98c-a74c71f70f8d",
+          "name": "Glute Bridge Thrust with Dumbbell",
+          "score": 5.75
         },
         {
-          "id": "aaa30b49-9d13-43c0-ac73-0ec76160fd3b",
-          "name": "Upside-Down Kettlebell Press (single arm)",
-          "score": 5
+          "id": "e922ce7d-d596-4f62-9d0b-78f624ae4102",
+          "name": "Lat Pulldown",
+          "score": 5.75
         }
       ]
     },
@@ -68,19 +68,19 @@
       "count": 8,
       "exercises": [
         {
-          "id": "aa66d8b3-907a-42ec-ac9b-bbaa347a88b8",
-          "name": "Y/W Raises",
-          "score": 5
+          "id": "617f0ccf-e9ec-494a-9608-1a3402a57cab",
+          "name": "Band Pull-Apart",
+          "score": 6.5
         },
         {
-          "id": "ebfd61ba-7bbc-470d-8b9b-c5bc66da2430",
-          "name": "Dumbbell Pullover",
-          "score": 5
+          "id": "4e40b3f0-cf13-4998-8ec0-61a9b5dd5239",
+          "name": "Banded Prone Overhead Press",
+          "score": 6.5
         },
         {
-          "id": "02a4b661-036e-4446-91b1-635d495cecdc",
-          "name": "Face Pulls",
-          "score": 5
+          "id": "5a75f68d-4d30-4211-a98c-a74c71f70f8d",
+          "name": "Glute Bridge Thrust with Dumbbell",
+          "score": 5.75
         }
       ]
     },
@@ -88,24 +88,24 @@
       "count": 6,
       "exercises": [
         {
-          "id": "fb5bf2ce-611c-4a2f-ae16-8d21d28280c1",
-          "name": "Side Plank Hip Raise",
-          "score": 5
+          "id": "9ec47c63-1d15-42d4-9885-a95701610f87",
+          "name": "Dead Bug",
+          "score": 6.5
         },
         {
-          "id": "dd47414b-bca2-4fa8-a200-c159632e31d6",
-          "name": "Box Pike Walkout",
-          "score": 5
-        },
-        {
-          "id": "9d50d2f2-0eda-48c4-9f7d-7a1fcff879b1",
-          "name": "Dumbbell Thruster",
-          "score": 5
+          "id": "c4755d77-e9a6-4dd8-971f-b41a326c0cfa",
+          "name": "Russian Twist",
+          "score": 5.75
         },
         {
           "id": "53febb99-c0d1-4fb6-90e8-856dc4a7827b",
           "name": "Hanging Knee Raise",
-          "score": 5
+          "score": 5.75
+        },
+        {
+          "id": "5d821105-e33e-4956-9b6f-e47966952e8b",
+          "name": "Single-Arm Kettlebell Suitcase Carry",
+          "score": 5.75
         }
       ]
     }

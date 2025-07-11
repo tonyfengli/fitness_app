@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { filterExercisesFromInput } from '../../../src/api/filterExercisesFromInput';
-import { setupMocks, testContexts, getExercisesByBlock } from './test-helpers';
+import { setupMocks, testContexts, getExercisesByBlock, testExercises, createTestExerciseWithOverrides } from './test-helpers';
 import { createTestWorkoutTemplate } from '../../../src/types/testHelpers';
 import { getExerciseDataHelper } from '../../helpers/exerciseDataHelper';
 
@@ -314,6 +314,189 @@ describe('Muscle Targeting & Scoring Scenarios (Phase 2 Focus)', () => {
       
       // At least 1 of the top 5 should target chest or triceps (with 'legs' and 'back' penalized)
       expect(topTargetsMuscles.length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  describe('Fatigue Profile Edge Cases', () => {
+    it('should handle exercises with missing fatigue profiles', async () => {
+      const helper = getExerciseDataHelper();
+      const allExercises = helper.getAllExercises();
+      
+      // Create exercises with missing/invalid fatigue profiles
+      const exercisesWithMissingProfiles = [
+        ...allExercises.slice(0, 5),
+        createTestExerciseWithOverrides(allExercises[5], { 
+          id: 'missing1', 
+          name: 'Missing Profile Exercise',
+          fatigueProfile: undefined as any 
+        }),
+        createTestExerciseWithOverrides(allExercises[6], { 
+          id: 'missing2', 
+          name: 'Null Profile Exercise',
+          fatigueProfile: null as any 
+        }),
+        createTestExerciseWithOverrides(allExercises[7], { 
+          id: 'invalid1', 
+          name: 'Invalid Profile Exercise',
+          fatigueProfile: 'invalid_profile' as any 
+        })
+      ];
+      
+      const result = await filterExercisesFromInput({
+        exercises: exercisesWithMissingProfiles,
+        clientContext: testContexts.default(),
+        intensity: 'high', // This should trigger fatigue profile scoring
+        workoutTemplate: createTestWorkoutTemplate(false)
+      });
+      
+      // Should not crash and should include exercises with missing profiles
+      expect(result.filteredExercises.length).toBeGreaterThan(0);
+      
+      // Exercises with missing/invalid profiles should get base score (no intensity adjustment)
+      const missingProfileExercises = result.filteredExercises.filter(ex => 
+        ex.name.includes('Missing') || ex.name.includes('Null') || ex.name.includes('Invalid')
+      );
+      
+      missingProfileExercises.forEach(ex => {
+        expect(ex.score).toBe(5); // Base score with no adjustments
+      });
+    });
+
+    it('should handle all exercises missing fatigue profiles', async () => {
+      // Create exercises without fatigue profiles
+      const exercisesWithoutProfiles = testExercises.map(ex => 
+        createTestExerciseWithOverrides({ ...ex, fatigueProfile: undefined as any })
+      );
+      
+      const result = await filterExercisesFromInput({
+        exercises: exercisesWithoutProfiles,
+        clientContext: testContexts.default(),
+        // Don't pass intensity when testing exercises without fatigue profiles
+        workoutTemplate: createTestWorkoutTemplate(false)
+      });
+      
+      // Should work normally with base scoring
+      expect(result.filteredExercises.length).toBeGreaterThan(0);
+      
+      // All should have base score since no intensity adjustments possible
+      result.filteredExercises.forEach(ex => {
+        expect(ex.score).toBe(5);
+      });
+    });
+  });
+
+  describe('Malformed Scoring Criteria', () => {
+    it('should handle invalid intensity values', async () => {
+      const result = await filterExercisesFromInput({
+        clientContext: testContexts.default(),
+        intensity: 'invalid_intensity' as any,
+        workoutTemplate: createTestWorkoutTemplate(false)
+      });
+      
+      // Should not crash - invalid intensity should be ignored
+      expect(result.filteredExercises.length).toBeGreaterThan(0);
+      
+      // Scores should be base (5) or adjusted by muscle targeting only
+      result.filteredExercises.forEach(ex => {
+        expect(ex.score).toBeGreaterThanOrEqual(0);
+        expect(ex.score).toBeLessThanOrEqual(8); // Max without intensity adjustments
+      });
+    });
+
+    it('should handle null/undefined muscle arrays gracefully', async () => {
+      const result = await filterExercisesFromInput({
+        clientContext: {
+          ...testContexts.default(),
+          muscle_target: null as any,
+          muscle_lessen: undefined as any
+        },
+        workoutTemplate: createTestWorkoutTemplate(false)
+      });
+      
+      // Should work with base scoring
+      expect(result.filteredExercises.length).toBeGreaterThan(0);
+      result.filteredExercises.forEach(ex => {
+        expect(ex.score).toBe(5); // Base score only
+      });
+    });
+
+    it('should handle exercises with null/undefined muscle arrays', async () => {
+      const exercisesWithBadMuscles = [
+        createTestExerciseWithOverrides(testExercises[0], {
+          id: 'bad1',
+          secondaryMuscles: null as any
+        }),
+        createTestExerciseWithOverrides(testExercises[1], {
+          id: 'bad2',
+          secondaryMuscles: undefined as any
+        }),
+        createTestExerciseWithOverrides(testExercises[2], {
+          id: 'bad3',
+          secondaryMuscles: 'not_an_array' as any
+        }),
+        ...testExercises.slice(3, 10)
+      ];
+      
+      const result = await filterExercisesFromInput({
+        exercises: exercisesWithBadMuscles,
+        clientContext: testContexts.withMuscleTargets(['chest', 'triceps']),
+        workoutTemplate: createTestWorkoutTemplate(false)
+      });
+      
+      // Should not crash
+      expect(result.filteredExercises.length).toBeGreaterThan(0);
+      
+      // Exercises with bad secondary muscles should still get primary muscle bonus if applicable
+      const badExercises = result.filteredExercises.filter(ex => 
+        ex.id === 'bad1' || ex.id === 'bad2' || ex.id === 'bad3'
+      );
+      
+      badExercises.forEach(ex => {
+        if (ex.primaryMuscle === 'chest' || ex.primaryMuscle === 'triceps') {
+          expect(ex.score).toBe(8); // Base (5) + primary bonus (3)
+        } else {
+          expect(ex.score).toBe(5); // Base only
+        }
+      });
+    });
+
+    it('should handle extreme scoring scenarios without overflow', async () => {
+      // Create a scenario that could cause score overflow if not handled properly
+      const result = await filterExercisesFromInput({
+        clientContext: {
+          ...testContexts.default(),
+          muscle_target: ['chest', 'triceps', 'shoulders', 'back', 'legs'],
+          muscle_lessen: ['core', 'calves', 'forearms'],
+          exercise_requests: {
+            include: ['Barbell Bench Press', 'Squats', 'Deadlifts'],
+            avoid: []
+          }
+        },
+        intensity: 'high',
+        workoutTemplate: createTestWorkoutTemplate(false)
+      });
+      
+      // All scores should be reasonable
+      result.filteredExercises.forEach(ex => {
+        expect(ex.score).toBeGreaterThanOrEqual(0);
+        expect(ex.score).toBeLessThanOrEqual(20); // Reasonable upper bound
+        expect(Number.isFinite(ex.score)).toBe(true);
+      });
+      
+      // Included exercises should still be highest
+      const includedNames = ['Barbell Bench Press', 'Squats', 'Deadlifts'];
+      const includedExercises = result.filteredExercises.filter(ex => 
+        includedNames.includes(ex.name)
+      );
+      const maxNonIncludedScore = Math.max(
+        ...result.filteredExercises
+          .filter(ex => !includedNames.includes(ex.name))
+          .map(ex => ex.score)
+      );
+      
+      includedExercises.forEach(ex => {
+        expect(ex.score).toBeGreaterThan(maxNonIncludedScore);
+      });
     });
   });
 });

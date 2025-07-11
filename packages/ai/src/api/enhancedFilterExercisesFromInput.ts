@@ -7,11 +7,9 @@ import type { FilterCriteria } from "../core/filtering/types";
 import { applyTemplateOrganization } from "../utils/templateOrganization";
 import { addPresentationFlagsAuto } from "../formatting/exerciseFlags";
 import { applyAllFiltersEnhanced } from "../core/filtering/enhancedFilterFunctions";
-import { enhancedApplyScoring } from "../core/scoring/enhancedScoring";
 import { 
   exclusionTracker, 
   constraintTracker, 
-  scoreTracker, 
   debugLogger,
   saveEnhancedDebugData,
   saveWorkoutGenerationLog
@@ -93,11 +91,11 @@ export async function enhancedFilterExercisesFromInput(
     });
     const filterEndTime = performance.now();
     
-    // Step 3: Enhanced scoring with breakdown tracking
+    // Step 3: Regular scoring (enhanced scoring removed)
     const scoreStartTime = performance.now();
-    const scoredExercises = enableDebug && scoringCriteria
-      ? enhancedApplyScoring(filteredExercises, scoringCriteria, true)
-      : filteredExercises.map(ex => ({ ...ex, score: 5.0 }) as ScoredExercise);
+    // For now, just use default scoring when in debug mode
+    // In the future, could add score breakdown tracking to regular scoring
+    const scoredExercises = filteredExercises.map(ex => ({ ...ex, score: 5.0 }) as ScoredExercise);
     const scoreEndTime = performance.now();
     
     // Step 4: Apply template organization
@@ -181,7 +179,7 @@ export async function enhancedFilterExercisesFromInput(
         ...standardDebugData,
         exclusionReasons: exclusionTracker.getExclusions(),
         constraintAnalysis: constraintTracker.getAnalysis(),
-        scoreBreakdowns: scoreTracker.getBreakdowns(),
+        scoreBreakdowns: {}, // Enhanced scoring removed - no breakdown tracking
         debugLog: debugLogger.getLogs()
       };
       
@@ -190,7 +188,6 @@ export async function enhancedFilterExercisesFromInput(
       console.log('🔍 Enhanced Debug Summary:');
       console.log(`  - Exercises excluded: ${Object.keys(exclusionTracker.getExclusions()).length}`);
       console.log(`  - Constraints tracked: ${Object.keys(constraintTracker.getAnalysis()).length} blocks`);
-      console.log(`  - Score breakdowns: ${Object.keys(scoreTracker.getBreakdowns()).length} exercises`);
       console.log(`  - Debug log entries: ${debugLogger.getLogs().length}`);
     }
     

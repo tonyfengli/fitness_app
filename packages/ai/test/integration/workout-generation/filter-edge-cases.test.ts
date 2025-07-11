@@ -12,10 +12,10 @@ describe('Filter Edge Cases & Validation', () => {
     it('should apply cascading inclusion for skill levels (higher includes lower)', async () => {
       // Create exercises with different skill levels
       const skillTestExercises: Exercise[] = [
-        createTestExerciseWithOverrides(testExercises[0], { id: 's1', name: 'Very Low Skill', complexityLevel: 'very_low' }),
-        createTestExerciseWithOverrides(testExercises[1], { id: 's2', name: 'Low Skill', complexityLevel: 'low' }),
-        createTestExerciseWithOverrides(testExercises[2], { id: 's3', name: 'Moderate Skill', complexityLevel: 'moderate' }),
-        createTestExerciseWithOverrides(testExercises[3], { id: 's4', name: 'High Skill', complexityLevel: 'high' }),
+        createTestExerciseWithOverrides({ ...testExercises[0], id: 's1', name: 'Very Low Skill', complexityLevel: 'very_low' }),
+        createTestExerciseWithOverrides({ ...testExercises[1], id: 's2', name: 'Low Skill', complexityLevel: 'low' }),
+        createTestExerciseWithOverrides({ ...testExercises[2], id: 's3', name: 'Moderate Skill', complexityLevel: 'moderate' }),
+        createTestExerciseWithOverrides({ ...testExercises[3], id: 's4', name: 'High Skill', complexityLevel: 'high' }),
       ];
       
       // Test with moderate skill user
@@ -39,10 +39,10 @@ describe('Filter Edge Cases & Validation', () => {
     it('should handle skill cascading independently from strength cascading', async () => {
       // Create exercises with mixed strength/skill levels
       const mixedExercises: Exercise[] = [
-        createTestExerciseWithOverrides(testExercises[0], { id: 'm1', name: 'High Strength Low Skill', strengthLevel: 'high', complexityLevel: 'low' }),
-        createTestExerciseWithOverrides(testExercises[1], { id: 'm2', name: 'Low Strength High Skill', strengthLevel: 'low', complexityLevel: 'high' }),
-        createTestExerciseWithOverrides(testExercises[2], { id: 'm3', name: 'High Strength High Skill', strengthLevel: 'high', complexityLevel: 'high' }),
-        createTestExerciseWithOverrides(testExercises[3], { id: 'm4', name: 'Low Strength Low Skill', strengthLevel: 'low', complexityLevel: 'low' }),
+        createTestExerciseWithOverrides({ ...testExercises[0], id: 'm1', name: 'High Strength Low Skill', strengthLevel: 'high', complexityLevel: 'low' }),
+        createTestExerciseWithOverrides({ ...testExercises[1], id: 'm2', name: 'Low Strength High Skill', strengthLevel: 'low', complexityLevel: 'high' }),
+        createTestExerciseWithOverrides({ ...testExercises[2], id: 'm3', name: 'High Strength High Skill', strengthLevel: 'high', complexityLevel: 'high' }),
+        createTestExerciseWithOverrides({ ...testExercises[3], id: 'm4', name: 'Low Strength Low Skill', strengthLevel: 'low', complexityLevel: 'low' }),
       ];
       
       const result = await filterExercisesFromInput({
@@ -66,9 +66,9 @@ describe('Filter Edge Cases & Validation', () => {
   describe('Exercise Field Validation', () => {
     it('should handle exercises with null/undefined strength level', async () => {
       const invalidExercises: Exercise[] = [
-        createTestExerciseWithOverrides(testExercises[0], { id: 'null1', strengthLevel: null as any }),
-        createTestExerciseWithOverrides(testExercises[1], { id: 'undef1', strengthLevel: undefined as any }),
-        createTestExerciseWithOverrides(testExercises[2], { id: 'valid1', strengthLevel: 'moderate' })
+        createTestExerciseWithOverrides({ ...testExercises[0], id: 'null1', strengthLevel: null as any }),
+        createTestExerciseWithOverrides({ ...testExercises[1], id: 'undef1', strengthLevel: undefined as any }),
+        createTestExerciseWithOverrides({ ...testExercises[2], id: 'valid1', strengthLevel: 'moderate' })
       ];
       
       const result = await filterExercisesFromInput({
@@ -83,9 +83,9 @@ describe('Filter Edge Cases & Validation', () => {
 
     it('should handle exercises with null/undefined skill level', async () => {
       const invalidExercises: Exercise[] = [
-        createTestExerciseWithOverrides(testExercises[0], { id: 'null2', complexityLevel: null as any }),
-        createTestExerciseWithOverrides(testExercises[1], { id: 'undef2', complexityLevel: undefined as any }),
-        createTestExerciseWithOverrides(testExercises[2], { id: 'valid2', complexityLevel: 'moderate' })
+        createTestExerciseWithOverrides({ ...testExercises[0], id: 'null2', complexityLevel: null as any }),
+        createTestExerciseWithOverrides({ ...testExercises[1], id: 'undef2', complexityLevel: undefined as any }),
+        createTestExerciseWithOverrides({ ...testExercises[2], id: 'valid2', complexityLevel: 'moderate' })
       ];
       
       const result = await filterExercisesFromInput({
@@ -100,10 +100,10 @@ describe('Filter Edge Cases & Validation', () => {
 
     it('should handle exercises with empty or null loadedJoints when joint restrictions exist', async () => {
       const jointTestExercises: Exercise[] = [
-        createTestExerciseWithOverrides(testExercises[0], { id: 'j1', loadedJoints: null as any }),
-        createTestExerciseWithOverrides(testExercises[1], { id: 'j2', loadedJoints: undefined as any }),
-        createTestExerciseWithOverrides(testExercises[2], { id: 'j3', loadedJoints: [] }), // Empty array
-        createTestExerciseWithOverrides(testExercises[3], { id: 'j4', loadedJoints: ['shoulders'] })
+        createTestExerciseWithOverrides({ ...testExercises[0], id: 'j1', loadedJoints: null as any }),
+        createTestExerciseWithOverrides({ ...testExercises[1], id: 'j2', loadedJoints: undefined as any }),
+        createTestExerciseWithOverrides({ ...testExercises[2], id: 'j3', loadedJoints: [] }), // Empty array
+        createTestExerciseWithOverrides({ ...testExercises[3], id: 'j4', loadedJoints: ['shoulders'] })
       ];
       
       const result = await filterExercisesFromInput({
@@ -160,7 +160,8 @@ describe('Filter Edge Cases & Validation', () => {
       // Set up diverse exercise pool
       const complexTestExercises: Exercise[] = [
         // Exercise that matches everything
-        createTestExerciseWithOverrides(testExercises[0], {
+        createTestExerciseWithOverrides({
+          ...testExercises[0],
           id: 'perfect',
           name: 'Perfect Exercise',
           strengthLevel: 'low',
@@ -169,7 +170,8 @@ describe('Filter Edge Cases & Validation', () => {
           loadedJoints: ['shoulders'] // Not knees
         }),
         // Exercise excluded by strength
-        createTestExerciseWithOverrides(testExercises[1], {
+        createTestExerciseWithOverrides({
+          ...testExercises[1],
           id: 'tooStrong',
           name: 'Too Strong',
           strengthLevel: 'high',
@@ -177,7 +179,8 @@ describe('Filter Edge Cases & Validation', () => {
           loadedJoints: ['shoulders']
         }),
         // Exercise excluded by joints
-        createTestExerciseWithOverrides(testExercises[2], {
+        createTestExerciseWithOverrides({
+          ...testExercises[2],
           id: 'badJoints',
           name: 'Bad Joints',
           strengthLevel: 'low',
@@ -185,7 +188,8 @@ describe('Filter Edge Cases & Validation', () => {
           loadedJoints: ['knees']
         }),
         // Exercise in avoid list
-        createTestExerciseWithOverrides(testExercises[3], {
+        createTestExerciseWithOverrides({
+          ...testExercises[3],
           id: 'avoided',
           name: 'Avoided Exercise',
           strengthLevel: 'low',
@@ -216,13 +220,15 @@ describe('Filter Edge Cases & Validation', () => {
 
     it('should respect filter priority order with conflicting rules', async () => {
       const priorityExercises: Exercise[] = [
-        createTestExerciseWithOverrides(testExercises[0], {
+        createTestExerciseWithOverrides({
+          ...testExercises[0],
           id: 'included_but_joints',
           name: 'Included But Bad Joints',
           strengthLevel: 'high', // Above user level
           loadedJoints: ['knees'] // Restricted joint
         }),
-        createTestExerciseWithOverrides(testExercises[1], {
+        createTestExerciseWithOverrides({
+          ...testExercises[1],
           id: 'included_and_avoided',
           name: 'Both Included and Avoided',
           strengthLevel: 'moderate'
@@ -257,9 +263,9 @@ describe('Filter Edge Cases & Validation', () => {
 
     it('should handle case sensitivity in exercise names', async () => {
       const caseExercises: Exercise[] = [
-        createTestExerciseWithOverrides(testExercises[0], { id: 'case1', name: 'Barbell Squat' }),
-        createTestExerciseWithOverrides(testExercises[1], { id: 'case2', name: 'barbell squat' }),
-        createTestExerciseWithOverrides(testExercises[2], { id: 'case3', name: 'BARBELL SQUAT' })
+        createTestExerciseWithOverrides({ ...testExercises[0], id: 'case1', name: 'Barbell Squat' }),
+        createTestExerciseWithOverrides({ ...testExercises[1], id: 'case2', name: 'barbell squat' }),
+        createTestExerciseWithOverrides({ ...testExercises[2], id: 'case3', name: 'BARBELL SQUAT' })
       ];
       
       const result = await filterExercisesFromInput({

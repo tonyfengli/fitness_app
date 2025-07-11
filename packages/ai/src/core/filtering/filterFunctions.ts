@@ -4,7 +4,7 @@
  */
 
 import type { Exercise } from "../../types";
-import type { StrengthLevel, SkillLevel, IntensityLevel, FilterCriteria } from "./types";
+import type { StrengthLevel, SkillLevel, FilterCriteria } from "./types";
 import { CASCADING_LEVELS } from "./types";
 
 /**
@@ -54,17 +54,6 @@ export function filterBySkill(
   });
 }
 
-/**
- * Filter exercises by intensity/fatigue profile
- * Note: Intensity does NOT use cascading logic because intensity levels 
- * represent different types of fatigue, not progressive levels
- */
-export function filterByIntensity(
-  exercises: Exercise[],
-  intensityLevel: IntensityLevel
-): Exercise[] {
-  return exercises.filter(exercise => exercise.fatigueProfile === intensityLevel);
-}
 
 /**
  * Filter exercises to include only those in the include list
@@ -161,11 +150,6 @@ export function applyAllFilters(
   let standardFiltered = remainingExercises;
   standardFiltered = filterByStrength(standardFiltered, filters.strength);
   standardFiltered = filterBySkill(standardFiltered, filters.skill);
-  
-  // Only apply intensity filtering if provided
-  if (filters.intensity) {
-    standardFiltered = filterByIntensity(standardFiltered, filters.intensity);
-  }
   
   // Apply joint filtering to both included and remaining exercises
   if (filters.avoidJoints && filters.avoidJoints.length > 0) {

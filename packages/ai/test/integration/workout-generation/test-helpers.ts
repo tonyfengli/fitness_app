@@ -31,7 +31,7 @@ export const testExercises: Exercise[] = getTestExercisesLazy();
 /**
  * Helper to create a test exercise with overrides, ensuring all required fields
  */
-export function createTestExerciseWithOverrides(baseExercise: Exercise | undefined, overrides: Partial<Exercise>): Exercise {
+export function createTestExerciseWithOverrides(overrides: Partial<Exercise>): Exercise {
   const defaultExercise: Exercise = {
     id: 'default-id',
     name: 'Default Exercise',
@@ -51,7 +51,6 @@ export function createTestExerciseWithOverrides(baseExercise: Exercise | undefin
   
   return {
     ...defaultExercise,
-    ...(baseExercise || {}),
     ...overrides
   } as Exercise;
 }
@@ -143,6 +142,21 @@ export const testContexts = {
     strength_capacity: 'moderate',
     skill_capacity: 'moderate',
     exercise_requests: { include, avoid }
+  }),
+  
+  // Alias for withExerciseRequests
+  withRequests: (include: string[], avoid: string[] = []): ClientContext => ({
+    name: 'Specific User',
+    strength_capacity: 'moderate',
+    skill_capacity: 'moderate',
+    exercise_requests: { include, avoid }
+  }),
+  
+  // User with specific strength level
+  withStrength: (strength: 'very_low' | 'low' | 'moderate' | 'high'): ClientContext => ({
+    name: 'Strength User',
+    strength_capacity: strength,
+    skill_capacity: 'moderate'
   })
 };
 
@@ -150,14 +164,25 @@ export const testContexts = {
  * Standard test setup that configures mocks
  */
 export function setupMocks(
-  exercises?: Exercise[],
+  llmOrExercises?: MockLLM | Exercise[],
   llmResponse?: any
 ) {
-  // Use provided exercises or get test exercises from helper
-  const exerciseData = exercises || getTestExercisesLazy();
+  let llm: MockLLM;
+  let exercises: Exercise[];
+  
+  // Handle overloaded parameters
+  if (llmOrExercises && 'invoke' in llmOrExercises) {
+    // First param is MockLLM
+    llm = llmOrExercises;
+    exercises = getTestExercisesLazy();
+  } else {
+    // First param is exercises array (or undefined)
+    exercises = (llmOrExercises as Exercise[]) || getTestExercisesLazy();
+    llm = createMockLLM(llmResponse);
+  }
+  
   const logger = new TestLogger();
-  const llm = createMockLLM(llmResponse);
-  const repository = createMockRepository(exerciseData);
+  const repository = createMockRepository(exercises);
   
   setServices({
     logger,
