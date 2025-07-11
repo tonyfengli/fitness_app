@@ -4,7 +4,7 @@ import type { ScoredExercise } from "../types/scoredExercise";
 import { ExerciseFilterError } from "../core/filtering/applyClientFilters";
 import { buildScoringCriteria } from "../utils/scoringCriteria";
 import { applyTemplateOrganization } from "../utils/templateOrganization";
-import { addPresentationFlags } from "../formatting/exerciseFlags";
+import { addPresentationFlagsAuto } from "../formatting/exerciseFlags";
 
 export interface FilterExercisesOptions {
   userInput?: string;
@@ -66,7 +66,7 @@ export async function filterExercisesFromInput(options: FilterExercisesOptions):
     );
     
     // Step 4: Add presentation flags for UI
-    const exercisesWithFlags = addPresentationFlags(
+    const exercisesWithFlags = addPresentationFlagsAuto(
       filteredExercises as ScoredExercise[],
       templateResult?.organizedExercises ?? null
     );

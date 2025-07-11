@@ -414,8 +414,9 @@ A comprehensive debugging system tracks exercise transformations through all pha
   - Constraint satisfaction details
   - Final exercise assignments
 - **exerciseFlags**: 
-  - UI flag assignments (isTop6BlockA, etc.)
+  - UI flag assignments (isSelectedBlockA, etc.)
   - Block membership tracking
+  - Dynamic selectedBlocks array for flexible templates
 
 ##### Phase 5 (LLM Interpretation)
 - Input exercise blocks

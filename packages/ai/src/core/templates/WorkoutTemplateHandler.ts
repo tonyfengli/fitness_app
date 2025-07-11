@@ -5,85 +5,22 @@ import { BLOCK_CONFIGS } from "./types/blockConfig";
 import { DeterministicSelection, RandomizedSelection } from "./strategies/SelectionStrategy";
 import type { SelectionStrategy } from "./strategies/SelectionStrategy";
 import { BlockDebugger, logBlock, logBlockTransformation } from "../../utils/blockDebugger";
+import type { DynamicOrganizedExercises, WorkoutTemplate, DynamicBlockDefinition } from "./types/dynamicBlockTypes";
+import { BlockAdapter } from "./adapters/BlockAdapter";
+import { getDefaultWorkoutTemplate, FULL_BODY_TEMPLATE } from "./config/defaultTemplates";
+import { selectWorkoutTemplate, type TemplateSelectionCriteria } from "./config/templateSelector";
 
 export class WorkoutTemplateHandler implements TemplateHandler {
   private isFullBody: boolean;
+  private templateCriteria: TemplateSelectionCriteria;
   private deterministic = new DeterministicSelection();
   private randomized = new RandomizedSelection();
 
-  constructor(isFullBody = false) {
+  constructor(isFullBody = false, templateCriteria?: TemplateSelectionCriteria) {
     this.isFullBody = isFullBody;
+    this.templateCriteria = templateCriteria || { isFullBody };
   }
 
-  organize(exercises: ScoredExercise[]): OrganizedExercises {
-    console.log('🏗️ WorkoutTemplateHandler organizing exercises into blocks');
-    
-    // Log input state
-    logBlock('WorkoutTemplateHandler.organize - Input', {
-      totalExercises: exercises.length,
-      isFullBody: this.isFullBody,
-      exercisesByFunctionTag: this.groupExercisesByFunctionTag(exercises)
-    });
-    
-    // Add muscle constraints to blocks if full body mode
-    const configs = this.getBlockConfigs();
-    logBlock('Block Configurations', {
-      blockA: { name: configs.A.name, maxExercises: configs.A.maxExercises },
-      blockB: { name: configs.B.name, maxExercises: configs.B.maxExercises },
-      blockC: { name: configs.C.name, maxExercises: configs.C.maxExercises },
-      blockD: { name: configs.D.name, maxExercises: configs.D.maxExercises }
-    });
-    
-    // Get Block A selections
-    const blockA = this.selectExercisesForBlock(exercises, configs.A, new Set());
-    logBlockTransformation('Block A Selection', 
-      { candidateCount: exercises.filter(e => e.functionTags?.includes('primary_strength')).length },
-      { selectedCount: blockA.length, exercises: blockA.map(e => ({ name: e.name, score: e.score })) }
-    );
-    
-    // Get Block B selections with penalties for Block A exercises
-    const blockAIds = new Set(blockA.map(ex => ex.id));
-    const blockB = this.selectExercisesForBlock(exercises, configs.B, blockAIds);
-    logBlockTransformation('Block B Selection',
-      { candidateCount: exercises.filter(e => e.functionTags?.includes('secondary_strength')).length, penalizedFromBlockA: blockAIds.size },
-      { selectedCount: blockB.length, exercises: blockB.map(e => ({ name: e.name, score: e.score })) }
-    );
-    
-    // Get Block C selections with penalties for Block B exercises
-    const blockBIds = new Set(blockB.map(ex => ex.id));
-    const blockC = this.selectExercisesForBlock(exercises, configs.C, blockBIds);
-    logBlockTransformation('Block C Selection',
-      { candidateCount: exercises.filter(e => e.functionTags?.includes('accessory')).length, penalizedFromBlockB: blockBIds.size },
-      { selectedCount: blockC.length, exercises: blockC.map(e => ({ name: e.name, score: e.score })) }
-    );
-    
-    // Get Block D selections (no penalties)
-    const blockD = this.selectExercisesForBlock(exercises, configs.D, new Set());
-    logBlockTransformation('Block D Selection',
-      { candidateCount: exercises.filter(e => e.functionTags?.includes('core') || e.functionTags?.includes('capacity')).length },
-      { selectedCount: blockD.length, exercises: blockD.map(e => ({ name: e.name, score: e.score })) }
-    );
-    
-    this.logFinalSummary(blockA.length, blockB.length, blockC.length, blockD.length);
-    
-    const result = { blockA, blockB, blockC, blockD };
-    
-    // Validate final structure
-    const validation = BlockDebugger.validateBlockStructure(result, ['blockA', 'blockB', 'blockC', 'blockD']);
-    if (!validation.valid) {
-      console.error('❌ Block structure validation failed:', validation.issues);
-    }
-    
-    logBlock('WorkoutTemplateHandler.organize - Final Output', {
-      blockA: blockA.length,
-      blockB: blockB.length,
-      blockC: blockC.length,
-      blockD: blockD.length,
-      totalExercises: blockA.length + blockB.length + blockC.length + blockD.length
-    });
-    
-    return result;
-  }
   
   private getBlockConfigs() {
     // Add muscle constraints if in full body mode
@@ -141,12 +78,12 @@ export class WorkoutTemplateHandler implements TemplateHandler {
     
     logBlock(`Candidates Prepared - ${config.name}`, {
       candidatesCount: candidates.length,
-      penaltiesApplied: candidates.filter(c => 'appliedPenalty' in c && c.appliedPenalty > 0).length,
+      penaltiesApplied: candidates.filter(c => 'appliedPenalty' in c && (c as any).appliedPenalty > 0).length,
       topCandidates: candidates.slice(0, 5).map(c => ({ 
         name: c.name, 
         score: c.score,
-        originalScore: 'originalScore' in c ? c.originalScore : c.score,
-        penalty: 'appliedPenalty' in c ? c.appliedPenalty : 0
+        originalScore: 'originalScore' in c ? (c as any).originalScore : c.score,
+        penalty: 'appliedPenalty' in c ? (c as any).appliedPenalty : 0
       }))
     });
     
@@ -273,5 +210,175 @@ export class WorkoutTemplateHandler implements TemplateHandler {
     });
     
     return groups;
+  }
+
+  /**
+   * New dynamic organization method - uses flexible block system internally
+   */
+  private organizeDynamic(exercises: ScoredExercise[]): DynamicOrganizedExercises {
+    logBlock('WorkoutTemplateHandler.organizeDynamic - Start', {
+      totalExercises: exercises.length,
+      isFullBody: this.isFullBody
+    });
+
+    // Select appropriate template using criteria
+    const template = selectWorkoutTemplate(this.templateCriteria);
+    
+    logBlock('Template Selected', {
+      templateId: template.id,
+      templateName: template.name,
+      blockCount: template.blocks.length
+    });
+
+    // Process blocks according to template
+    const blocks: Record<string, ScoredExercise[]> = {};
+    const previousSelections = new Set<string>();
+
+    for (const blockDef of template.blocks) {
+      logBlock(`Processing Block ${blockDef.id}`, {
+        blockName: blockDef.name,
+        functionTags: blockDef.functionTags,
+        maxExercises: blockDef.maxExercises
+      });
+
+      // Filter exercises by function tags
+      const candidates = this.getCandidatesForBlock(exercises, blockDef, previousSelections);
+      
+      // Select strategy
+      const strategy = blockDef.selectionStrategy === 'deterministic' 
+        ? this.deterministic 
+        : this.randomized;
+
+      // Convert to old BlockConfig format for compatibility with existing strategies
+      const blockConfig: BlockConfig = {
+        name: blockDef.name,
+        functionTag: blockDef.functionTags[0] || '', // Use first tag for now
+        maxExercises: blockDef.maxExercises,
+        constraints: blockDef.constraints || {
+          movements: {
+            requireSquatHinge: false,
+            requirePush: false,
+            requirePull: false,
+            requireLunge: false
+          }
+        },
+        selectionStrategy: blockDef.selectionStrategy,
+        penaltyForReuse: blockDef.penaltyForReuse || 0
+      };
+
+      // Apply strategy
+      const selected = strategy.select(candidates, blockConfig, this.isFullBody);
+      blocks[blockDef.id] = selected;
+
+      // Update previous selections for penalty application
+      if (blockDef.penaltyForReuse && blockDef.penaltyForReuse > 0) {
+        selected.forEach(ex => previousSelections.add(ex.id));
+      }
+
+      logBlock(`Block ${blockDef.id} Complete`, {
+        candidatesCount: candidates.length,
+        selectedCount: selected.length,
+        exercises: selected.map(e => ({ name: e.name, score: e.score }))
+      });
+    }
+
+    // Create dynamic result
+    const result: DynamicOrganizedExercises = {
+      blocks,
+      metadata: {
+        template,
+        timestamp: new Date().toISOString(),
+        totalExercises: Object.values(blocks).reduce((sum, block) => sum + block.length, 0)
+      }
+    };
+
+    logBlock('WorkoutTemplateHandler.organizeDynamic - Complete', {
+      totalBlocks: Object.keys(blocks).length,
+      totalExercises: result.metadata.totalExercises,
+      blockSummary: Object.entries(blocks).map(([id, exercises]) => ({
+        blockId: id,
+        count: exercises.length
+      }))
+    });
+
+    return result;
+  }
+
+  /**
+   * Get candidates for a dynamic block
+   */
+  private getCandidatesForBlock(
+    exercises: ScoredExercise[],
+    blockDef: DynamicBlockDefinition,
+    previousSelections: Set<string>
+  ): PenalizedExercise[] {
+    // Filter by function tags
+    let candidates = exercises.filter(exercise => {
+      if (!exercise.functionTags) return false;
+      
+      // Check if exercise has any of the required function tags
+      return blockDef.functionTags.some(tag => 
+        exercise.functionTags!.includes(tag)
+      );
+    });
+
+    // Apply penalties for previously selected exercises
+    if (blockDef.penaltyForReuse && blockDef.penaltyForReuse > 0 && previousSelections.size > 0) {
+      candidates = candidates.map(exercise => {
+        if (previousSelections.has(exercise.id)) {
+          logBlock(`Applying penalty to ${exercise.name}`, {
+            blockId: blockDef.id,
+            penalty: blockDef.penaltyForReuse,
+            originalScore: exercise.score
+          });
+          
+          return {
+            ...exercise,
+            score: Math.max(0, exercise.score - blockDef.penaltyForReuse!),
+            originalScore: exercise.score,
+            appliedPenalty: blockDef.penaltyForReuse!
+          };
+        }
+        return exercise;
+      });
+    }
+
+    return candidates;
+  }
+
+  /**
+   * Public organize method - now uses dynamic system internally
+   * but returns legacy format for backward compatibility
+   */
+  organize(exercises: ScoredExercise[]): OrganizedExercises {
+    console.log('🏗️ WorkoutTemplateHandler organizing exercises into blocks');
+    
+    // Log input state
+    logBlock('WorkoutTemplateHandler.organize - Input', {
+      totalExercises: exercises.length,
+      isFullBody: this.isFullBody,
+      exercisesByFunctionTag: this.groupExercisesByFunctionTag(exercises)
+    });
+
+    // Use new dynamic system internally
+    const dynamicResult = this.organizeDynamic(exercises);
+    
+    // Convert to legacy format for backward compatibility
+    const legacyResult = BlockAdapter.toLegacyFormat(dynamicResult);
+    
+    // Validate final structure
+    const validation = BlockDebugger.validateBlockStructure(legacyResult, ['blockA', 'blockB', 'blockC', 'blockD']);
+    if (!validation.valid) {
+      console.error('❌ Block structure validation failed:', validation.issues);
+    }
+
+    this.logFinalSummary(
+      legacyResult.blockA.length,
+      legacyResult.blockB.length,
+      legacyResult.blockC.length,
+      legacyResult.blockD.length
+    );
+
+    return legacyResult;
   }
 }

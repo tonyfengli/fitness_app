@@ -5,6 +5,7 @@ import { useSuspenseQuery, useQuery } from "@tanstack/react-query";
 import { useTRPC } from "~/trpc/react";
 import { useBusinessId } from "~/hooks/useBusinessContext";
 import { BlockDebugClient } from "~/utils/blockDebugClient";
+import { extractBlockInfo, getBlockColorClasses } from "~/utils/blockHelpers";
 
 const STRENGTH_OPTIONS = [
   { value: "very_low", label: "Very Low Only" },
@@ -127,6 +128,13 @@ export default function ExerciseList() {
     error?: string;
     processingTime?: number; // Time in seconds
     rawResponse?: string; // Add raw LLM response for debugging
+    timing?: {
+      exerciseFormatting?: number;
+      setCountCalculation?: number;
+      promptBuilding?: number;
+      llmApiCall?: number;
+      responseParsing?: number;
+    };
   } | null>(null);
   const [setRange, setSetRange] = useState<{
     minSets: number;
@@ -150,7 +158,7 @@ export default function ExerciseList() {
   } | null>(null);
 
   // Query for filtered exercises (only runs when filterCriteria is set)
-  const { data: filteredExercises, isLoading: isFiltering, error: filterError } = useQuery<any[]>({
+  const { data: filteredExercises, isLoading: isFiltering, error: filterError } = useQuery({
     ...trpc.exercise.filter.queryOptions({
       clientName: "Web User",
       strengthCapacity: (filterCriteria?.strength || "moderate") as "very_low" | "low" | "moderate" | "high" | "very_high" | "all",
@@ -194,7 +202,7 @@ export default function ExerciseList() {
   }, [isFiltering, filterStartTime]);
 
   // Display exercises (either all or filtered)
-  const displayedExercises = showFiltered && filteredExercises ? filteredExercises : exercises;
+  const displayedExercises = showFiltered && filteredExercises ? filteredExercises : exercises as any[];
 
   // Log filtering errors
   if (filterError) {
@@ -219,47 +227,32 @@ export default function ExerciseList() {
       setLlmInterpretation(null);
       
       try {
-        // Get TOP exercises for each block
-        const blockA = filteredExercises.filter((ex: any) => ex.functionTags?.includes('primary_strength') && ex.isTop6BlockA);
-        const blockB = filteredExercises.filter((ex: any) => ex.functionTags?.includes('secondary_strength') && ex.isTop6BlockB);
-        const blockC = filteredExercises.filter((ex: any) => ex.functionTags?.includes('accessory') && ex.isTop6BlockC);
-        const blockD = filteredExercises.filter((ex: any) => (ex.functionTags?.includes('core') || ex.functionTags?.includes('capacity')) && ex.isTop6BlockD);
+        // Get blocks dynamically
+        const blocks = extractBlockInfo(filteredExercises);
         
-        // Prepare exercises object for LLM
-        const exercises = {
-          blockA: blockA.map((ex: any) => ({
-            id: ex.id,
-            name: ex.name,
-            score: ex.score,
-            tags: ex.functionTags || [],
-            primaryMuscle: ex.primaryMuscle,
-            equipment: ex.equipment
-          })),
-          blockB: blockB.map((ex: any) => ({
-            id: ex.id,
-            name: ex.name,
-            score: ex.score,
-            tags: ex.functionTags || [],
-            primaryMuscle: ex.primaryMuscle,
-            equipment: ex.equipment
-          })),
-          blockC: blockC.map((ex: any) => ({
-            id: ex.id,
-            name: ex.name,
-            score: ex.score,
-            tags: ex.functionTags || [],
-            primaryMuscle: ex.primaryMuscle,
-            equipment: ex.equipment
-          })),
-          blockD: blockD.map((ex: any) => ({
-            id: ex.id,
-            name: ex.name,
-            score: ex.score,
-            tags: ex.functionTags || [],
-            primaryMuscle: ex.primaryMuscle,
-            equipment: ex.equipment
-          }))
-        };
+        // Prepare exercises object for LLM - maintain legacy format for now
+        const exercises: any = {};
+        
+        blocks.forEach(block => {
+          // Only get top exercises based on maxCount
+          const topExercises = block.exercises
+            .sort((a, b) => b.score - a.score)
+            .slice(0, block.maxCount)
+            .map((ex: any) => ({
+              id: ex.id,
+              name: ex.name,
+              score: ex.score,
+              tags: ex.functionTags || [],
+              primaryMuscle: ex.primaryMuscle,
+              equipment: ex.equipment
+            }));
+          
+          // Map to legacy block names for backward compatibility
+          if (block.id === 'A') exercises.blockA = topExercises;
+          else if (block.id === 'B') exercises.blockB = topExercises;
+          else if (block.id === 'C') exercises.blockC = topExercises;
+          else if (block.id === 'D') exercises.blockD = topExercises;
+        });
         
         // Build client context with only non-empty values
         const clientContext: Record<string, any> = {};
@@ -310,8 +303,8 @@ export default function ExerciseList() {
     interpretWorkout();
   }, [showFiltered, filteredExercises, sessionGoal, strengthFilter, skillFilter, intensityFilter, includeExercises, muscleTarget, muscleLessen]);
 
-  // Function to calculate TOP selections for Block D with constraints
-  const getBlockDTop6 = (exercises: any[]) => {
+  // Function to calculate selected exercises for Block D with constraints
+  const getBlockDSelected = (exercises: any[]) => {
     const blockDExercises = exercises
       .filter(ex => ex.functionTags?.includes('core') || ex.functionTags?.includes('capacity'))
       .sort((a, b) => b.score - a.score);
@@ -871,147 +864,50 @@ export default function ExerciseList() {
           <h2 className="text-xl font-bold text-gray-800 text-center">Exercise Blocks by Function Tags</h2>
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {/* Block A - Primary Strength */}
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-              <h3 className="text-base font-semibold text-blue-800 mb-2">Block A - Primary Strength</h3>
-              <div className="space-y-2">
-                {filteredExercises
-                  .filter(ex => ex.functionTags?.includes('primary_strength'))
-                  .sort((a, b) => b.score - a.score)
-                  .map((exercise, idx) => {
-                    // Use block-specific isTop6 flag if available (full body mode), otherwise use index
-                    const isTop6 = 'isTop6BlockA' in exercise ? exercise.isTop6BlockA : idx < 6;
-                    
-                    return (
-                      <div 
-                        key={exercise.id} 
-                        className={`text-sm p-2 rounded ${
-                          isTop6 
-                            ? 'bg-blue-200 border border-blue-400' 
-                            : ''
-                        }`}
-                      >
-                        <span className="font-medium">{exercise.name}</span>
-                        {exercise.score !== undefined && (
-                          <span className="text-blue-600 ml-2">({exercise.score.toFixed(1)})</span>
-                        )}
-                        {isTop6 && <span className="ml-2 text-xs font-bold text-blue-700">TOP 5</span>}
-                      </div>
-                    );
-                  })}
-                {filteredExercises.filter(ex => ex.functionTags?.includes('primary_strength')).length === 0 && (
-                  <p className="text-sm text-gray-500 italic">No exercises found</p>
-                )}
-              </div>
-            </div>
-
-            {/* Block B - Secondary Strength */}
-            <div className="bg-green-50 border border-green-200 rounded-lg p-3">
-              <h3 className="text-base font-semibold text-green-800 mb-2">Block B - Secondary Strength</h3>
-              <div className="space-y-2">
-                {filteredExercises
-                  .filter(ex => ex.functionTags?.includes('secondary_strength'))
-                  .sort((a, b) => b.score - a.score)
-                  .map((exercise, idx) => {
-                    // Use block-specific isTop6 flag if available (full body mode), otherwise use index
-                    const isTop6 = 'isTop6BlockB' in exercise ? exercise.isTop6BlockB : idx < 6;
-                    
-                    return (
-                      <div 
-                        key={exercise.id} 
-                        className={`text-sm p-2 rounded ${
-                          isTop6 
-                            ? 'bg-green-200 border border-green-400' 
-                            : ''
-                        }`}
-                      >
-                        <span className="font-medium">{exercise.name}</span>
-                        {exercise.score !== undefined && (
-                          <span className="text-green-600 ml-2">
-                            {(exercise as any).blockBPenalty > 0 
-                              ? `(${exercise.score.toFixed(1)} → ${(exercise.score - (exercise as any).blockBPenalty).toFixed(1)})`
-                              : `(${exercise.score.toFixed(1)})`
-                            }
-                          </span>
-                        )}
-                        {isTop6 && <span className="ml-2 text-xs font-bold text-green-700">TOP 8</span>}
-                      </div>
-                    );
-                  })}
-                {filteredExercises.filter(ex => ex.functionTags?.includes('secondary_strength')).length === 0 && (
-                  <p className="text-sm text-gray-500 italic">No exercises found</p>
-                )}
-              </div>
-            </div>
-
-            {/* Block C - Accessory */}
-            <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
-              <h3 className="text-base font-semibold text-purple-800 mb-2">Block C - Accessory</h3>
-              <div className="space-y-2">
-                {filteredExercises
-                  .filter(ex => ex.functionTags?.includes('accessory'))
-                  .sort((a, b) => b.score - a.score)
-                  .map((exercise, idx) => (
-                    <div 
-                      key={exercise.id} 
-                      className={`text-sm p-2 rounded ${
-                        exercise.isTop6BlockC 
-                          ? 'bg-purple-200 border border-purple-400' 
-                          : ''
-                      }`}
-                    >
-                      <span className="font-medium">{exercise.name}</span>
-                      {exercise.score !== undefined && (
-                        <span className="text-purple-600 ml-2">
-                          {exercise.blockCPenalty > 0 
-                            ? `(${exercise.score.toFixed(1)} → ${(exercise.score - exercise.blockCPenalty).toFixed(1)})`
-                            : `(${exercise.score.toFixed(1)})`
-                          }
-                        </span>
-                      )}
-                      {exercise.isTop6BlockC && <span className="ml-2 text-xs font-bold text-purple-700">TOP 8</span>}
-                    </div>
-                  ))}
-                {filteredExercises.filter(ex => ex.functionTags?.includes('accessory')).length === 0 && (
-                  <p className="text-sm text-gray-500 italic">No exercises found</p>
-                )}
-              </div>
-            </div>
-
-            {/* Block D - Core & Capacity */}
-            <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
-              <h3 className="text-base font-semibold text-orange-800 mb-2">Block D - Core & Capacity</h3>
-              <div className="space-y-2">
-                {(() => {
-                  const blockDExercises = filteredExercises
-                    .filter(ex => ex.functionTags?.includes('core') || ex.functionTags?.includes('capacity'))
-                    .sort((a, b) => b.score - a.score);
-                  
-                  return blockDExercises.map((exercise) => {
-                    const isTop6 = exercise.isTop6BlockD || false;
-                    return (
-                      <div 
-                        key={exercise.id} 
-                        className={`text-sm p-2 rounded ${
-                          isTop6 
-                            ? 'bg-orange-200 border border-orange-400' 
-                            : ''
-                        }`}
-                      >
-                        <span className="font-medium">{exercise.name}</span>
-                        {exercise.score !== undefined && (
-                          <span className="text-orange-600 ml-2">({exercise.score.toFixed(1)})</span>
-                        )}
-                        {isTop6 && <span className="ml-2 text-xs font-bold text-orange-700">TOP 6</span>}
-                      </div>
-                    );
-                  });
-                })()}
-                {filteredExercises.filter(ex => ex.functionTags?.includes('core') || ex.functionTags?.includes('capacity')).length === 0 && (
-                  <p className="text-sm text-gray-500 italic">No exercises found</p>
-                )}
-              </div>
-            </div>
+            {/* Dynamic Blocks */}
+            {extractBlockInfo(filteredExercises).map(block => {
+              const colors = getBlockColorClasses(block.color);
+              
+              return (
+                <div key={block.id} className={`${colors.container} border rounded-lg p-3`}>
+                  <h3 className={`text-base font-semibold ${colors.header} mb-2`}>{block.name}</h3>
+                  <div className="space-y-2">
+                    {block.exercises
+                      .sort((a, b) => b.score - a.score)
+                      .map((exercise, idx) => {
+                        // Check if exercise is selected for this block
+                        // First try dynamic selectedBlocks array, fallback to legacy flags
+                        const isSelected = exercise.selectedBlocks?.includes(block.id) ||
+                          (block.id === 'A' ? exercise.isSelectedBlockA :
+                           block.id === 'B' ? exercise.isSelectedBlockB :
+                           block.id === 'C' ? exercise.isSelectedBlockC :
+                           block.id === 'D' ? exercise.isSelectedBlockD :
+                           false);
+                        
+                        return (
+                          <div 
+                            key={exercise.id} 
+                            className={`text-sm p-2 rounded ${
+                              isSelected 
+                                ? colors.selected + ' border' 
+                                : ''
+                            }`}
+                          >
+                            <span className="font-medium">{exercise.name}</span>
+                            {exercise.score !== undefined && (
+                              <span className={colors.score + ' ml-2'}>({exercise.score.toFixed(1)})</span>
+                            )}
+                            {isSelected && <span className={`ml-2 text-xs font-bold ${colors.label}`}>SELECTED</span>}
+                          </div>
+                        );
+                      })}
+                    {block.exercises.length === 0 && (
+                      <p className="text-sm text-gray-500 italic">No exercises found</p>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
@@ -1025,39 +921,27 @@ export default function ExerciseList() {
               onClick={() => {
               // Helper function to clean exercise data
               const cleanExercise = (exercise: any) => {
-                const { isTop6Selected, isTop6BlockA, isTop6BlockB, isTop6BlockC, isTop6BlockD, blockBPenalty, blockCPenalty, ...cleanedExercise } = exercise;
+                const { isSelected, isSelectedBlockA, isSelectedBlockB, isSelectedBlockC, isSelectedBlockD, blockBPenalty, blockCPenalty, selectedBlocks, blockPenalties, ...cleanedExercise } = exercise;
                 return cleanedExercise;
               };
 
-              // Get exercises for each block (only TOP selections)
-              const blockA = filteredExercises
-                .filter(ex => ex.functionTags?.includes('primary_strength') && ex.isTop6BlockA)
-                .map(cleanExercise);
-              
-              const blockB = filteredExercises
-                .filter(ex => ex.functionTags?.includes('secondary_strength') && ex.isTop6BlockB)
-                .map(cleanExercise);
-              
-              const blockC = filteredExercises
-                .filter(ex => ex.functionTags?.includes('accessory') && ex.isTop6BlockC)
-                .map(cleanExercise);
-              
-              const blockD = filteredExercises
-                .filter(ex => (ex.functionTags?.includes('core') || ex.functionTags?.includes('capacity')) && ex.isTop6BlockD)
-                .map(cleanExercise);
+              // Get blocks dynamically
+              const blocks = extractBlockInfo(filteredExercises);
+              const blockData: Record<string, any[]> = {};
+
+              blocks.forEach(block => {
+                // Only get top exercises based on maxCount
+                const topExercises = block.exercises
+                  .sort((a, b) => b.score - a.score)
+                  .slice(0, block.maxCount)
+                  .map(cleanExercise);
+                blockData[block.name] = topExercises;
+              });
 
               // Format the output
-              const formattedOutput = `Block A:
-${JSON.stringify(blockA, null, 2)}
-
-Block B:
-${JSON.stringify(blockB, null, 2)}
-
-Block C:
-${JSON.stringify(blockC, null, 2)}
-
-Block D:
-${JSON.stringify(blockD, null, 2)}`;
+              const formattedOutput = Object.entries(blockData)
+                .map(([name, exercises]) => `${name}:\n${JSON.stringify(exercises, null, 2)}`)
+                .join('\n\n');
 
               navigator.clipboard.writeText(formattedOutput);
             }}

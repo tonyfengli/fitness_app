@@ -24,13 +24,13 @@ export function applyTemplateOrganization(
   const isFullBody = (workoutTemplate as any).isFullBody;
   const templateId = isFullBody ? 'full_body' : 'workout';
   
-  console.log(`🏋️ Using ${isFullBody ? 'FullBodyWorkoutTemplateHandler' : 'WorkoutTemplateHandler'} to select TOP 6 with constraints`);
+  console.log(`🏋️ Using ${isFullBody ? 'FullBodyWorkoutTemplateHandler' : 'WorkoutTemplateHandler'} to select exercises with constraints`);
   console.log(`📊 Total exercises: ${exercises.length}`);
   
   const templateHandler = getTemplateHandler(templateId);
   const organized = templateHandler.organize(exercises);
   
-  console.log(`📊 TOP 6 selections:`);
+  console.log(`📊 Exercise selections:`);
   console.log(`   - Block A (primary_strength): ${organized.blockA.length} exercises selected`);
   console.log(`   - Block B (secondary_strength): ${organized.blockB.length} exercises selected`);
   console.log(`   - Block C (accessory): ${organized.blockC.length} exercises selected`);

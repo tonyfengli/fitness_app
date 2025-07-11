@@ -1,19 +1,99 @@
 import type { ScoredExercise } from "../types/scoredExercise";
 import type { OrganizedExercises } from "../core/templates/types";
+import type { DynamicOrganizedExercises } from "../core/templates/types/dynamicBlockTypes";
 import { BlockDebugger, logBlock, logBlockTransformation } from "../utils/blockDebugger";
 
 export interface ExerciseWithUIFlags extends ScoredExercise {
-  isTop6Selected: boolean;
-  isTop6BlockA: boolean;
-  isTop6BlockB: boolean;
-  isTop6BlockC: boolean;
-  isTop6BlockD: boolean;
+  isSelected: boolean;
+  isSelectedBlockA: boolean;
+  isSelectedBlockB: boolean;
+  isSelectedBlockC: boolean;
+  isSelectedBlockD: boolean;
   blockBPenalty: number;
   blockCPenalty: number;
+  // Dynamic block support
+  selectedBlocks: string[];
+  blockPenalties: Record<string, number>;
 }
 
 /**
- * Add presentation-specific flags to exercises for UI display
+ * Add presentation-specific flags to exercises for UI display (dynamic version)
+ * Supports any block structure, not just A/B/C/D
+ */
+export function addPresentationFlagsDynamic(
+  exercises: ScoredExercise[],
+  organizedExercises: DynamicOrganizedExercises | null
+): ExerciseWithUIFlags[] {
+  logBlock('addPresentationFlagsDynamic - Start', {
+    totalExercises: exercises.length,
+    hasOrganizedExercises: !!organizedExercises,
+    blockCount: organizedExercises ? Object.keys(organizedExercises).length : 0
+  });
+  
+  if (!organizedExercises) {
+    // Return exercises with empty dynamic flags
+    return exercises.map(exercise => ({
+      ...exercise,
+      isSelected: false,
+      isSelectedBlockA: false,
+      isSelectedBlockB: false,
+      isSelectedBlockC: false,
+      isSelectedBlockD: false,
+      blockBPenalty: 0,
+      blockCPenalty: 0,
+      selectedBlocks: [],
+      blockPenalties: {}
+    }));
+  }
+
+  // Create a map of exercise ID to selected blocks
+  const exerciseToBlocks = new Map<string, string[]>();
+  const blockPenaltyMap = new Map<string, Map<string, number>>();
+  
+  // Process each block
+  Object.entries(organizedExercises).forEach(([blockId, blockExercises]) => {
+    blockExercises.forEach((exercise: ScoredExercise, index: number) => {
+      const currentBlocks = exerciseToBlocks.get(exercise.id) || [];
+      currentBlocks.push(blockId);
+      exerciseToBlocks.set(exercise.id, currentBlocks);
+      
+      // Calculate penalties (if exercise appears in multiple blocks)
+      if (currentBlocks.length > 1) {
+        const penalties = blockPenaltyMap.get(exercise.id) || new Map();
+        penalties.set(blockId, 2.0);
+        blockPenaltyMap.set(exercise.id, penalties);
+      }
+    });
+  });
+  
+  // Mark exercises with flags
+  return exercises.map(exercise => {
+    const selectedBlocks = exerciseToBlocks.get(exercise.id) || [];
+    const penalties = blockPenaltyMap.get(exercise.id) || new Map();
+    
+    // For backward compatibility, set legacy flags
+    const isSelectedBlockA = selectedBlocks.includes('A');
+    const isSelectedBlockB = selectedBlocks.includes('B');
+    const isSelectedBlockC = selectedBlocks.includes('C');
+    const isSelectedBlockD = selectedBlocks.includes('D');
+    
+    return {
+      ...exercise,
+      isSelected: selectedBlocks.length > 0,
+      isSelectedBlockA,
+      isSelectedBlockB,
+      isSelectedBlockC,
+      isSelectedBlockD,
+      blockBPenalty: isSelectedBlockA ? 2.0 : 0,
+      blockCPenalty: isSelectedBlockB ? 2.0 : 0,
+      selectedBlocks,
+      blockPenalties: Object.fromEntries(penalties)
+    };
+  });
+}
+
+/**
+ * Add presentation-specific flags to exercises for UI display (legacy version)
  * This keeps UI concerns separate from business logic
  */
 export function addPresentationFlags(
@@ -40,71 +120,75 @@ export function addPresentationFlags(
     // If no template organization, return exercises without UI flags
     return exercises.map(exercise => ({
       ...exercise,
-      isTop6Selected: false,
-      isTop6BlockA: false,
-      isTop6BlockB: false,
-      isTop6BlockC: false,
-      isTop6BlockD: false,
+      isSelected: false,
+      isSelectedBlockA: false,
+      isSelectedBlockB: false,
+      isSelectedBlockC: false,
+      isSelectedBlockD: false,
       blockBPenalty: 0,
-      blockCPenalty: 0
+      blockCPenalty: 0,
+      selectedBlocks: [],
+      blockPenalties: {}
     }));
   }
 
-  // Create sets of IDs for TOP 6 selections in each block
-  const top6BlockA = new Set(organizedExercises.blockA.map(ex => ex.id));
-  const top6BlockB = new Set(organizedExercises.blockB.map(ex => ex.id));
-  const top6BlockC = new Set(organizedExercises.blockC.map(ex => ex.id));
-  const top6BlockD = new Set(organizedExercises.blockD.map(ex => ex.id));
+  // Create sets of IDs for selected exercises in each block
+  const selectedBlockA = new Set(organizedExercises.blockA.map(ex => ex.id));
+  const selectedBlockB = new Set(organizedExercises.blockB.map(ex => ex.id));
+  const selectedBlockC = new Set(organizedExercises.blockC.map(ex => ex.id));
+  const selectedBlockD = new Set(organizedExercises.blockD.map(ex => ex.id));
   
   logBlock('Block ID Sets Created', {
-    blockA: { count: top6BlockA.size, ids: Array.from(top6BlockA).slice(0, 3).concat(top6BlockA.size > 3 ? ['...'] : []) },
-    blockB: { count: top6BlockB.size, ids: Array.from(top6BlockB).slice(0, 3).concat(top6BlockB.size > 3 ? ['...'] : []) },
-    blockC: { count: top6BlockC.size, ids: Array.from(top6BlockC).slice(0, 3).concat(top6BlockC.size > 3 ? ['...'] : []) },
-    blockD: { count: top6BlockD.size, ids: Array.from(top6BlockD).slice(0, 3).concat(top6BlockD.size > 3 ? ['...'] : []) }
+    blockA: { count: selectedBlockA.size, ids: Array.from(selectedBlockA).slice(0, 3).concat(selectedBlockA.size > 3 ? ['...'] : []) },
+    blockB: { count: selectedBlockB.size, ids: Array.from(selectedBlockB).slice(0, 3).concat(selectedBlockB.size > 3 ? ['...'] : []) },
+    blockC: { count: selectedBlockC.size, ids: Array.from(selectedBlockC).slice(0, 3).concat(selectedBlockC.size > 3 ? ['...'] : []) },
+    blockD: { count: selectedBlockD.size, ids: Array.from(selectedBlockD).slice(0, 3).concat(selectedBlockD.size > 3 ? ['...'] : []) }
   });
   
   // Mark exercises with UI-specific flags
   const exercisesWithFlags = exercises.map(exercise => {
     const tags = exercise.functionTags ?? [];
     
-    // Check if this exercise is selected as TOP 6 for specific blocks
-    const isTop6BlockA = tags.includes('primary_strength') && top6BlockA.has(exercise.id);
-    const isTop6BlockB = tags.includes('secondary_strength') && top6BlockB.has(exercise.id);
-    const isTop6BlockC = tags.includes('accessory') && top6BlockC.has(exercise.id);
-    const isTop6BlockD = (tags.includes('core') || tags.includes('capacity')) && top6BlockD.has(exercise.id);
+    // Check if this exercise is selected for specific blocks
+    const isSelectedBlockA = tags.includes('primary_strength') && selectedBlockA.has(exercise.id);
+    const isSelectedBlockB = tags.includes('secondary_strength') && selectedBlockB.has(exercise.id);
+    const isSelectedBlockC = tags.includes('accessory') && selectedBlockC.has(exercise.id);
+    const isSelectedBlockD = (tags.includes('core') || tags.includes('capacity')) && selectedBlockD.has(exercise.id);
     
-    if (isTop6BlockA || isTop6BlockB || isTop6BlockC || isTop6BlockD) {
+    if (isSelectedBlockA || isSelectedBlockB || isSelectedBlockC || isSelectedBlockD) {
       logBlock('Exercise Flagged', {
         name: exercise.name,
         id: exercise.id,
         functionTags: tags,
-        flags: { isTop6BlockA, isTop6BlockB, isTop6BlockC, isTop6BlockD }
+        flags: { isSelectedBlockA, isSelectedBlockB, isSelectedBlockC, isSelectedBlockD }
       });
     }
     
     return {
       ...exercise,
-      isTop6Selected: isTop6BlockA || isTop6BlockB || isTop6BlockC || isTop6BlockD,
-      isTop6BlockA,
-      isTop6BlockB,
-      isTop6BlockC,
-      isTop6BlockD,
-      blockBPenalty: isTop6BlockA ? 2.0 : 0,
-      blockCPenalty: isTop6BlockB ? 2.0 : 0
+      isSelected: isSelectedBlockA || isSelectedBlockB || isSelectedBlockC || isSelectedBlockD,
+      isSelectedBlockA,
+      isSelectedBlockB,
+      isSelectedBlockC,
+      isSelectedBlockD,
+      blockBPenalty: isSelectedBlockA ? 2.0 : 0,
+      blockCPenalty: isSelectedBlockB ? 2.0 : 0,
+      selectedBlocks: [],
+      blockPenalties: {}
     };
   });
 
   // Debug logging
-  const blockACount = exercisesWithFlags.filter(ex => ex.isTop6BlockA).length;
-  const blockBCount = exercisesWithFlags.filter(ex => ex.isTop6BlockB).length;
-  const blockCCount = exercisesWithFlags.filter(ex => ex.isTop6BlockC).length;
-  const blockDCount = exercisesWithFlags.filter(ex => ex.isTop6BlockD).length;
+  const blockACount = exercisesWithFlags.filter(ex => ex.isSelectedBlockA).length;
+  const blockBCount = exercisesWithFlags.filter(ex => ex.isSelectedBlockB).length;
+  const blockCCount = exercisesWithFlags.filter(ex => ex.isSelectedBlockC).length;
+  const blockDCount = exercisesWithFlags.filter(ex => ex.isSelectedBlockD).length;
   
-  console.log(`📊 TOP 6 flags set:`);
-  console.log(`   - isTop6BlockA: ${blockACount} exercises marked`);
-  console.log(`   - isTop6BlockB: ${blockBCount} exercises marked`);
-  console.log(`   - isTop6BlockC: ${blockCCount} exercises marked`);
-  console.log(`   - isTop6BlockD: ${blockDCount} exercises marked`);
+  console.log(`📊 Selected flags set:`);
+  console.log(`   - isSelectedBlockA: ${blockACount} exercises marked`);
+  console.log(`   - isSelectedBlockB: ${blockBCount} exercises marked`);
+  console.log(`   - isSelectedBlockC: ${blockCCount} exercises marked`);
+  console.log(`   - isSelectedBlockD: ${blockDCount} exercises marked`);
   
   logBlockTransformation('addPresentationFlags - Complete',
     {
@@ -123,10 +207,26 @@ export function addPresentationFlags(
         blockB: blockBCount,
         blockC: blockCCount,
         blockD: blockDCount,
-        anyBlock: exercisesWithFlags.filter(ex => ex.isTop6Selected).length
+        anyBlock: exercisesWithFlags.filter(ex => ex.isSelected).length
       }
     }
   );
   
   return exercisesWithFlags;
+}
+
+/**
+ * Smart wrapper that handles both legacy and dynamic organized exercises
+ */
+export function addPresentationFlagsAuto(
+  exercises: ScoredExercise[],
+  organizedExercises: OrganizedExercises | DynamicOrganizedExercises | null
+): ExerciseWithUIFlags[] {
+  // Check if it's legacy format (has blockA, blockB, etc.)
+  if (organizedExercises && 'blockA' in organizedExercises) {
+    return addPresentationFlags(exercises, organizedExercises as OrganizedExercises);
+  }
+  
+  // Otherwise treat as dynamic format
+  return addPresentationFlagsDynamic(exercises, organizedExercises as DynamicOrganizedExercises);
 }

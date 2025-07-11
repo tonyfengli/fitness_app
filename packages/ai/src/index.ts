@@ -12,9 +12,16 @@ export * from "./api/debugBlockSystem";
 export * from "./core/filtering";
 export * from "./core/scoring";
 export * from "./core/templates";
+export { 
+  type DynamicBlockDefinition,
+  type DynamicOrganizedExercises
+} from "./core/templates/types/dynamicBlockTypes";
 
 // SMS interpretation graph
 export * from "./sms/smsInterpretationGraph";
 
 // Workout interpretation graph
 export * from "./workout-interpretation";
+
+// Formatting utilities
+export * from "./formatting/exerciseFlags";
