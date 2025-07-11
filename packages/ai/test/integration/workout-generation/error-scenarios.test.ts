@@ -219,8 +219,8 @@ describe('Error Scenarios (Phase 5)', () => {
       
       const result = await runPipelineWithErrors(testContexts.default());
       
-      expect(result.interpretResult.error).toBeDefined();
-      expect(result.interpretResult.error).toContain('ECONNRESET');
+      expect(result.interpretResult?.error).toBeDefined();
+      expect(result.interpretResult?.error).toContain('ECONNRESET');
     });
 
     it('should handle rate limiting', async () => {
@@ -228,8 +228,8 @@ describe('Error Scenarios (Phase 5)', () => {
       
       const result = await runPipelineWithErrors(testContexts.default());
       
-      expect(result.interpretResult.error).toBeDefined();
-      expect(result.interpretResult.error).toContain('Rate limit exceeded');
+      expect(result.interpretResult?.error).toBeDefined();
+      expect(result.interpretResult?.error).toContain('Rate limit exceeded');
     });
 
     it('should handle invalid API key', async () => {
@@ -237,8 +237,8 @@ describe('Error Scenarios (Phase 5)', () => {
       
       const result = await runPipelineWithErrors(testContexts.default());
       
-      expect(result.interpretResult.error).toBeDefined();
-      expect(result.interpretResult.error).toContain('Invalid API key');
+      expect(result.interpretResult?.error).toBeDefined();
+      expect(result.interpretResult?.error).toContain('Invalid API key');
     });
 
     it('should handle service unavailability', async () => {
@@ -246,8 +246,8 @@ describe('Error Scenarios (Phase 5)', () => {
       
       const result = await runPipelineWithErrors(testContexts.default());
       
-      expect(result.interpretResult.error).toBeDefined();
-      expect(result.interpretResult.error).toContain('Service temporarily unavailable');
+      expect(result.interpretResult?.error).toBeDefined();
+      expect(result.interpretResult?.error).toContain('Service temporarily unavailable');
     });
 
     it('should handle context length errors', async () => {
@@ -255,8 +255,8 @@ describe('Error Scenarios (Phase 5)', () => {
       
       const result = await runPipelineWithErrors(testContexts.default());
       
-      expect(result.interpretResult.error).toBeDefined();
-      expect(result.interpretResult.error).toContain('context length');
+      expect(result.interpretResult?.error).toBeDefined();
+      expect(result.interpretResult?.error).toContain('context length');
     });
   });
 
@@ -340,7 +340,7 @@ describe('Error Scenarios (Phase 5)', () => {
       const result = await runPipelineWithErrors(testContexts.default());
 
       expect(result.interpretation).toContain('🦵');
-      expect(result.structuredOutput.blocks.A[0].name).toContain('Bulgarian Split Squat');
+      expect(result.structuredOutput?.blocks.A[0].name).toContain('Bulgarian Split Squat');
     });
   });
 
@@ -378,7 +378,7 @@ describe('Error Scenarios (Phase 5)', () => {
       const exercises = [
         createTestExerciseWithOverrides({
           name: 'Normal Exercise',
-          metadata: circular
+          equipment: [circular] // Use a valid field that accepts arrays
         })
       ];
 
@@ -416,12 +416,12 @@ describe('Error Scenarios (Phase 5)', () => {
         createTestExerciseWithOverrides({
           name: 'Exercise 1',
           functionTags: ['primary_strength'],
-          score: NaN // Invalid score
+          primaryMuscle: '' // Invalid empty muscle
         }),
         createTestExerciseWithOverrides({
           name: 'Exercise 2',
           functionTags: ['primary_strength'],
-          score: Infinity // Invalid score
+          strengthLevel: 'invalid_level' // Invalid strength level
         })
       ];
 
@@ -539,9 +539,9 @@ describe('Error Scenarios (Phase 5)', () => {
       const result = await runPipelineWithErrors(
         {
           ...testContexts.default(),
-          exerciseRequests: {
-            includeExercises: ['bench"press', 'squat\'s'],
-            avoidExercises: ['deadlift<>']
+          exercise_requests: {
+            include: ['bench"press', 'squat\'s'],
+            avoid: ['deadlift<>']
           }
         },
         { exercises: specialExercises, skipInterpretation: true }

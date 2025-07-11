@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { filterExercisesFromInput } from '../../../src/api/filterExercisesFromInput';
 import { interpretExercisesNode, setInterpretationLLM, resetInterpretationLLM } from '../../../src/workout-interpretation/interpretExercisesNode';
 import { setupMocks, testContexts, getExercisesByBlock } from './test-helpers';
@@ -80,7 +80,7 @@ describe('Set Count Determination Integration (Phase 3)', () => {
       const filterResult = await filterExercisesFromInput({
         clientContext: {
           ...testContexts.default(),
-          strengthLevel,
+          strength_capacity: strengthLevel as any,
           intensity
         },
         workoutTemplate: createTestWorkoutTemplate(false)
@@ -101,9 +101,13 @@ describe('Set Count Determination Integration (Phase 3)', () => {
       const state: WorkoutInterpretationStateType = {
         exercises: organizedExercises,
         clientContext: {
-          strengthLevel,
+          strength_capacity: strengthLevel as any,
           intensity
-        }
+        },
+        interpretation: '',
+        structuredOutput: {},
+        timing: {},
+        error: null
       };
 
       const interpretResult = await interpretExercisesNode(state);
@@ -202,7 +206,11 @@ describe('Set Count Determination Integration (Phase 3)', () => {
 
       const state: WorkoutInterpretationStateType = {
         exercises: organizedExercises,
-        clientContext: {} // Empty context
+        clientContext: {}, // Empty context
+        interpretation: '',
+        structuredOutput: {},
+        timing: {},
+        error: null
       };
 
       const interpretResult = await interpretExercisesNode(state);
@@ -232,7 +240,11 @@ describe('Set Count Determination Integration (Phase 3)', () => {
         exercises: organizedExercises,
         clientContext: {
           intensity: 'high'
-        }
+        },
+        interpretation: '',
+        structuredOutput: {},
+        timing: {},
+        error: null
       };
 
       const interpretResult = await interpretExercisesNode(state);
@@ -246,7 +258,7 @@ describe('Set Count Determination Integration (Phase 3)', () => {
       const filterResult = await filterExercisesFromInput({
         clientContext: {
           ...testContexts.default(),
-          strengthLevel: 'low' // Only strength, no intensity
+          strength_capacity: 'low' // Only strength, no intensity
         },
         workoutTemplate: createTestWorkoutTemplate(false)
       });
@@ -262,8 +274,12 @@ describe('Set Count Determination Integration (Phase 3)', () => {
       const state: WorkoutInterpretationStateType = {
         exercises: organizedExercises,
         clientContext: {
-          strengthLevel: 'low'
-        }
+          strength_capacity: 'low'
+        },
+        interpretation: '',
+        structuredOutput: {},
+        timing: {},
+        error: null
       };
 
       const interpretResult = await interpretExercisesNode(state);
@@ -292,9 +308,13 @@ describe('Set Count Determination Integration (Phase 3)', () => {
       const state: WorkoutInterpretationStateType = {
         exercises: organizedExercises,
         clientContext: {
-          strengthLevel: 'invalid_strength' as any,
+          strength_capacity: 'invalid_strength' as any,
           intensity: 'low'
-        }
+        },
+        interpretation: '',
+        structuredOutput: {},
+        timing: {},
+        error: null
       };
 
       const interpretResult = await interpretExercisesNode(state);
@@ -321,9 +341,13 @@ describe('Set Count Determination Integration (Phase 3)', () => {
       const state: WorkoutInterpretationStateType = {
         exercises: organizedExercises,
         clientContext: {
-          strengthLevel: 'high',
+          strength_capacity: 'high',
           intensity: 'invalid_intensity' as any
-        }
+        },
+        interpretation: '',
+        structuredOutput: {},
+        timing: {},
+        error: null
       };
 
       const interpretResult = await interpretExercisesNode(state);
@@ -350,9 +374,13 @@ describe('Set Count Determination Integration (Phase 3)', () => {
       const state: WorkoutInterpretationStateType = {
         exercises: organizedExercises,
         clientContext: {
-          strengthLevel: null as any,
+          strength_capacity: null as any,
           intensity: undefined as any
-        }
+        },
+        interpretation: '',
+        structuredOutput: {},
+        timing: {},
+        error: null
       };
 
       const interpretResult = await interpretExercisesNode(state);
@@ -368,7 +396,7 @@ describe('Set Count Determination Integration (Phase 3)', () => {
       const filterResult = await filterExercisesFromInput({
         clientContext: {
           ...testContexts.default(),
-          strengthLevel: 'very_low',
+          strength_capacity: 'very_low',
           intensity: 'low'
         },
         workoutTemplate: createTestWorkoutTemplate(false)
@@ -385,9 +413,13 @@ describe('Set Count Determination Integration (Phase 3)', () => {
       const state: WorkoutInterpretationStateType = {
         exercises: organizedExercises,
         clientContext: {
-          strengthLevel: 'very_low',
+          strength_capacity: 'very_low',
           intensity: 'low'
-        }
+        },
+        interpretation: '',
+        structuredOutput: {},
+        timing: {},
+        error: null
       };
 
       const interpretResult = await interpretExercisesNode(state);
@@ -404,7 +436,7 @@ describe('Set Count Determination Integration (Phase 3)', () => {
       const filterResult = await filterExercisesFromInput({
         clientContext: {
           ...testContexts.default(),
-          strengthLevel: 'high',
+          strength_capacity: 'high',
           intensity: 'high'
         },
         workoutTemplate: createTestWorkoutTemplate(false)
@@ -421,9 +453,13 @@ describe('Set Count Determination Integration (Phase 3)', () => {
       const state: WorkoutInterpretationStateType = {
         exercises: organizedExercises,
         clientContext: {
-          strengthLevel: 'high',
+          strength_capacity: 'high',
           intensity: 'high'
-        }
+        },
+        interpretation: '',
+        structuredOutput: {},
+        timing: {},
+        error: null
       };
 
       const interpretResult = await interpretExercisesNode(state);
@@ -440,7 +476,11 @@ describe('Set Count Determination Integration (Phase 3)', () => {
   describe('Full Pipeline Integration', () => {
     it('should generate workouts with appropriate set counts for different user profiles', async () => {
       // Test a few key user profiles
-      const profiles = [
+      const profiles: Array<{
+        strength: 'very_low' | 'low' | 'moderate' | 'high';
+        intensity: 'low' | 'moderate' | 'high';
+        expectedSets: string;
+      }> = [
         { strength: 'very_low', intensity: 'low', expectedSets: '14-16' },
         { strength: 'moderate', intensity: 'moderate', expectedSets: '19-22' },
         { strength: 'high', intensity: 'high', expectedSets: '25-27' }
@@ -450,8 +490,8 @@ describe('Set Count Determination Integration (Phase 3)', () => {
         const filterResult = await filterExercisesFromInput({
           clientContext: {
             ...testContexts.default(),
-            strengthLevel: profile.strength,
-            intensity: profile.intensity as 'low' | 'moderate' | 'high'
+            strength_capacity: profile.strength,
+            intensity: profile.intensity
           },
           workoutTemplate: createTestWorkoutTemplate(false)
         });
@@ -467,9 +507,13 @@ describe('Set Count Determination Integration (Phase 3)', () => {
         const state: WorkoutInterpretationStateType = {
           exercises: organizedExercises,
           clientContext: {
-            strengthLevel: profile.strength,
-            intensity: profile.intensity as 'low' | 'moderate' | 'high'
-          }
+            strength_capacity: profile.strength,
+            intensity: profile.intensity
+          },
+          interpretation: '',
+          structuredOutput: {},
+          timing: {},
+          error: null
         };
 
         const interpretResult = await interpretExercisesNode(state);
@@ -495,9 +539,9 @@ describe('Set Count Determination Integration (Phase 3)', () => {
       const filterResult = await filterExercisesFromInput({
         clientContext: {
           ...testContexts.withMuscleTargets(['chest', 'triceps']),
-          strengthLevel: 'low',
+          strength_capacity: 'low',
           intensity: 'high',
-          avoidJoints: ['knees']
+          avoid_joints: ['knees']
         },
         workoutTemplate: createTestWorkoutTemplate(false)
       });
@@ -513,11 +557,15 @@ describe('Set Count Determination Integration (Phase 3)', () => {
       const state: WorkoutInterpretationStateType = {
         exercises: organizedExercises,
         clientContext: {
-          strengthLevel: 'low',
+          strength_capacity: 'low',
           intensity: 'high',
           muscle_target: ['chest', 'triceps'],
-          avoidJoints: ['knees']
-        }
+          avoid_joints: ['knees']
+        },
+        interpretation: '',
+        structuredOutput: {},
+        timing: {},
+        error: null
       };
 
       const interpretResult = await interpretExercisesNode(state);

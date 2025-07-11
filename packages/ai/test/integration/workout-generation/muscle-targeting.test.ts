@@ -325,17 +325,20 @@ describe('Muscle Targeting & Scoring Scenarios (Phase 2 Focus)', () => {
       // Create exercises with missing/invalid fatigue profiles
       const exercisesWithMissingProfiles = [
         ...allExercises.slice(0, 5),
-        createTestExerciseWithOverrides(allExercises[5], { 
+        createTestExerciseWithOverrides({ 
+          ...allExercises[5],
           id: 'missing1', 
           name: 'Missing Profile Exercise',
           fatigueProfile: undefined as any 
         }),
-        createTestExerciseWithOverrides(allExercises[6], { 
+        createTestExerciseWithOverrides({ 
+          ...allExercises[6],
           id: 'missing2', 
           name: 'Null Profile Exercise',
           fatigueProfile: null as any 
         }),
-        createTestExerciseWithOverrides(allExercises[7], { 
+        createTestExerciseWithOverrides({ 
+          ...allExercises[7],
           id: 'invalid1', 
           name: 'Invalid Profile Exercise',
           fatigueProfile: 'invalid_profile' as any 
@@ -422,15 +425,18 @@ describe('Muscle Targeting & Scoring Scenarios (Phase 2 Focus)', () => {
 
     it('should handle exercises with null/undefined muscle arrays', async () => {
       const exercisesWithBadMuscles = [
-        createTestExerciseWithOverrides(testExercises[0], {
+        createTestExerciseWithOverrides({
+          ...testExercises[0],
           id: 'bad1',
           secondaryMuscles: null as any
         }),
-        createTestExerciseWithOverrides(testExercises[1], {
+        createTestExerciseWithOverrides({
+          ...testExercises[1],
           id: 'bad2',
           secondaryMuscles: undefined as any
         }),
-        createTestExerciseWithOverrides(testExercises[2], {
+        createTestExerciseWithOverrides({
+          ...testExercises[2],
           id: 'bad3',
           secondaryMuscles: 'not_an_array' as any
         }),

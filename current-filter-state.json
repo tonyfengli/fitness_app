@@ -1,10 +1,10 @@
 {
-  "timestamp": "2025-07-11T21:25:25.982Z",
+  "timestamp": "2025-07-11T23:45:24.315Z",
   "filters": {
     "clientName": "Web User",
     "strengthCapacity": "low",
     "skillCapacity": "low",
-    "intensity": "low",
+    "intensity": "high",
     "muscleTarget": [],
     "muscleLessen": [],
     "avoidJoints": [],
@@ -18,28 +18,28 @@
       "count": 5,
       "exercises": [
         {
-          "id": "e922ce7d-d596-4f62-9d0b-78f624ae4102",
-          "name": "Lat Pulldown",
-          "score": 5.75
-        },
-        {
-          "id": "68b71b3b-3b30-48f0-acd1-73441bff8bea",
-          "name": "Dumbbell Shoulder Press",
-          "score": 5.75
+          "id": "dabd605d-42d5-4c18-bbf8-856eb175a78c",
+          "name": "Goblet Pause Squat (3 Seconds)",
+          "score": 6.5
         },
         {
           "id": "b10fc80a-3bc6-4d31-8a1d-d653d55dccc3",
           "name": "Dumbbell Bridge Chest Press",
-          "score": 4.25
+          "score": 5.75
         },
         {
           "id": "8050aa27-29fd-43f8-a647-8828e484d28b",
           "name": "Incline Dumbbell Press",
-          "score": 4.25
+          "score": 5.75
         },
         {
           "id": "144e1124-e7d7-4594-8c75-f9522081060e",
           "name": "Kettlebell Deadlift",
+          "score": 5.75
+        },
+        {
+          "id": "e922ce7d-d596-4f62-9d0b-78f624ae4102",
+          "name": "Lat Pulldown",
           "score": 4.25
         }
       ]
@@ -48,18 +48,18 @@
       "count": 8,
       "exercises": [
         {
-          "id": "53141345-2351-436a-9b1c-21bc273ba554",
-          "name": "Spanish Lunge",
+          "id": "7ed3976c-c9f3-4672-966c-424778e1cd8c",
+          "name": "Goblet Squat Pulse",
           "score": 6.5
         },
         {
-          "id": "5a75f68d-4d30-4211-a98c-a74c71f70f8d",
-          "name": "Glute Bridge Thrust with Dumbbell",
+          "id": "8050aa27-29fd-43f8-a647-8828e484d28b",
+          "name": "Incline Dumbbell Press",
           "score": 5.75
         },
         {
-          "id": "e922ce7d-d596-4f62-9d0b-78f624ae4102",
-          "name": "Lat Pulldown",
+          "id": "2443e54e-6ab2-4779-aa8b-b892dfc635cf",
+          "name": "Farmer's Carry",
           "score": 5.75
         }
       ]
@@ -68,19 +68,19 @@
       "count": 8,
       "exercises": [
         {
-          "id": "617f0ccf-e9ec-494a-9608-1a3402a57cab",
-          "name": "Band Pull-Apart",
+          "id": "a5d09b5a-d62f-477b-8b71-216f35a20291",
+          "name": "Wall Squat Hold",
           "score": 6.5
         },
         {
-          "id": "4e40b3f0-cf13-4998-8ec0-61a9b5dd5239",
-          "name": "Banded Prone Overhead Press",
-          "score": 6.5
+          "id": "840aedec-f2a7-47cb-935c-9ffc43cedde6",
+          "name": "Quadruped Fire Hydrant (Peeing Dog)",
+          "score": 4.25
         },
         {
-          "id": "5a75f68d-4d30-4211-a98c-a74c71f70f8d",
-          "name": "Glute Bridge Thrust with Dumbbell",
-          "score": 5.75
+          "id": "7daaffc6-8b01-4c9d-88cb-484e8d671d0b",
+          "name": "Dumbbell Overhead Tricep Extension",
+          "score": 4.25
         }
       ]
     },
@@ -88,24 +88,24 @@
       "count": 6,
       "exercises": [
         {
-          "id": "9ec47c63-1d15-42d4-9885-a95701610f87",
-          "name": "Dead Bug",
+          "id": "9d50d2f2-0eda-48c4-9f7d-7a1fcff879b1",
+          "name": "Dumbbell Thruster",
           "score": 6.5
         },
         {
-          "id": "c4755d77-e9a6-4dd8-971f-b41a326c0cfa",
-          "name": "Russian Twist",
-          "score": 5.75
+          "id": "71aee1c7-b87e-48fb-a28f-7a5c251b0808",
+          "name": "Plank Jack",
+          "score": 6.5
         },
         {
-          "id": "53febb99-c0d1-4fb6-90e8-856dc4a7827b",
-          "name": "Hanging Knee Raise",
-          "score": 5.75
+          "id": "d1767911-0405-4c19-a20c-d4dcf5af6e33",
+          "name": "Plank Up-Down (Elbow to Hand)",
+          "score": 4.25
         },
         {
-          "id": "5d821105-e33e-4956-9b6f-e47966952e8b",
-          "name": "Single-Arm Kettlebell Suitcase Carry",
-          "score": 5.75
+          "id": "620165b8-278c-48cd-a8a1-9f9aa1f37e80",
+          "name": "Flutter Kicks",
+          "score": 4.25
         }
       ]
     }

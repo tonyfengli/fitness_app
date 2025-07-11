@@ -40,7 +40,6 @@ function buildFilterCriteria(clientContext: ClientContext | undefined): FilterCr
   return {
     strength: clientContext.strength_capacity || 'moderate',
     skill: clientContext.skill_capacity || 'moderate',
-    intensity: undefined, // This will be set separately
     include: clientContext.exercise_requests?.include,
     avoid: clientContext.exercise_requests?.avoid,
     avoidJoints: clientContext.avoid_joints

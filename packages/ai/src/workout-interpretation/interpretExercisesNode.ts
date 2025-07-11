@@ -68,7 +68,7 @@ export async function interpretExercisesNode(
     // Calculate set count based on client context
     const setCountStartTime = performance.now();
     const setCount = determineTotalSetCount({
-      strengthLevel: clientContext?.strengthLevel,
+      strengthLevel: clientContext?.strength_capacity || clientContext?.strengthLevel,
       intensity: clientContext?.intensity
     });
     timing.setCountCalculation = performance.now() - setCountStartTime;

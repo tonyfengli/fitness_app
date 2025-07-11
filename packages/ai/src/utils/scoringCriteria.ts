@@ -2,12 +2,12 @@ import type { ClientContext } from "../types";
 import type { ScoringCriteria } from "../types/scoredExercise";
 
 /**
- * Build scoring criteria from client context and intensity
+ * Build scoring criteria from client context
  * Extracted from filterExercisesFromInput for better separation of concerns
  */
 export function buildScoringCriteria(
   clientContext: ClientContext | undefined,
-  intensity?: "low" | "moderate" | "high"
+  intensityOverride?: "low" | "moderate" | "high"
 ): ScoringCriteria | undefined {
   if (!clientContext) {
     return undefined;
@@ -17,7 +17,7 @@ export function buildScoringCriteria(
     includeExercises: clientContext.exercise_requests?.include ?? [],
     muscleTarget: clientContext.muscle_target ?? [],
     muscleLessen: clientContext.muscle_lessen ?? [],
-    intensity: intensity,
+    intensity: intensityOverride ?? clientContext.intensity, // Use override if provided, otherwise use client's intensity
     skillLevel: clientContext.skill_capacity,
     strengthLevel: clientContext.strength_capacity,
   };

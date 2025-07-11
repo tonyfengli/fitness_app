@@ -74,7 +74,7 @@ class WorkoutGeneratorMockLLM extends MockLLM {
         // Match exercise patterns like "1. Exercise Name (details)" or "- Exercise Name"
         const exerciseMatch = line.match(/(?:\d+\.\s+|[-*]\s+)(.+?)(?:\s+\(|$)/);
         if (exerciseMatch) {
-          exercises.push(exerciseMatch[1].trim());
+          exercises.push(exerciseMatch[1]!.trim());
         }
       }
       return exercises;
@@ -256,11 +256,8 @@ describe('LLM Workout Generation (Phase 5)', () => {
     it('should include client context in LLM prompt', async () => {
       const result = await runFullPipeline({
         ...testContexts.default(),
-        clientInfo: {
-          age: 45,
-          conditions: ['lower_back_pain', 'knee_pain'],
-          fitnessLevel: 'beginner'
-        }
+        // Client context properties are used in the prompt
+        avoid_joints: ['knees', 'lower_back']
       });
 
       // The mock LLM should have received this context
@@ -336,8 +333,8 @@ describe('LLM Workout Generation (Phase 5)', () => {
       const result = await runFullPipeline(testContexts.default());
       
       // The graph should return an error state, not throw
-      expect(result.interpretResult.error).toBeDefined();
-      expect(result.interpretResult.error).toContain('timeout');
+      expect(result.interpretResult?.error).toBeDefined();
+      expect(result.interpretResult?.error).toContain('timeout');
     });
 
     it('should handle malformed LLM responses', async () => {

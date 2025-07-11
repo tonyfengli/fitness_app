@@ -309,34 +309,39 @@ describe('Template Organization & Block Selection (Phase 4)', () => {
 
     it('should use randomized weighted selection for Blocks B/C/D', async () => {
       // This is harder to test definitively due to randomness
-      // We can verify that high-scoring exercises appear more frequently
+      // We can verify that exercises with muscle targeting score higher and appear more
       const helper = getExerciseDataHelper();
       const exercises = helper.getAllExercises();
       
-      // Give some exercises much higher scores
-      const modifiedExercises = exercises.map((ex, idx) => ({
-        ...ex,
-        score: idx < 10 ? 10.0 : 5.0
-      }));
+      // Create context with muscle targeting to boost scores
+      const contextWithMuscleTarget = {
+        ...testContexts.default(),
+        muscle_target: ['chest', 'lats'] // This will boost exercises targeting these muscles
+      };
       
       const result = await filterExercisesFromInput({
-        exercises: modifiedExercises,
-        clientContext: testContexts.default(),
+        exercises,
+        clientContext: contextWithMuscleTarget,
         workoutTemplate: createTestWorkoutTemplate(false)
       });
       
       const blocks = getExercisesByBlock(result.filteredExercises);
       
-      // High-scoring exercises should appear in blocks B/C/D
-      const highScoringIds = modifiedExercises.slice(0, 10).map(ex => ex.id);
+      // Find exercises that target chest or lats (they should have higher scores)
+      const targetedExercises = result.filteredExercises.filter(ex => 
+        ex.primaryMuscle === 'chest' || ex.primaryMuscle === 'lats' ||
+        (ex.secondaryMuscles && (ex.secondaryMuscles.includes('chest') || ex.secondaryMuscles.includes('lats')))
+      );
+      
+      // At least some targeted exercises should appear in blocks B/C/D
       const selectedIds = [
         ...blocks.blockB.map(ex => ex.id),
         ...blocks.blockC.map(ex => ex.id),
         ...blocks.blockD.map(ex => ex.id)
       ];
       
-      const highScoringSelected = selectedIds.filter(id => highScoringIds.includes(id));
-      expect(highScoringSelected.length).toBeGreaterThan(0);
+      const targetedSelected = targetedExercises.filter(ex => selectedIds.includes(ex.id));
+      expect(targetedSelected.length).toBeGreaterThan(0);
     });
 
     it('should fill remaining slots based on score after constraints', async () => {
@@ -394,7 +399,7 @@ describe('Template Organization & Block Selection (Phase 4)', () => {
           if (blocks.includes('blockA') && blocks.includes('blockB')) {
             // Exercise in both A and B - B version should have penalty
             const exerciseInB = allExercises.find(ex => 
-              ex.id === exerciseId && ex.isSelectedBlockB
+              ex.id === exerciseId && (ex as any).isSelectedBlockB
             );
             // Note: The penalty is applied during selection, not visible in output
             expect(exerciseInB).toBeDefined();
