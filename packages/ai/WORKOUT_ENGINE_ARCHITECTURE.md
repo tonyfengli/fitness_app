@@ -1,5 +1,42 @@
 # Workout Creation Engine - Technical Architecture
 
+## 🚀 Session Initialization Protocol
+
+**IMPORTANT: If you're reading this at the start of a session, follow these steps:**
+
+### 1. Read This Document Completely
+Read through this entire architecture document to understand how all components work together before making any changes.
+
+### 2. Run Tests
+```bash
+cd /Users/tonyli/Desktop/fitness_app/packages/ai
+npm test
+```
+Ensure all tests pass. If any fail, investigate and fix before proceeding.
+
+### 3. Check Terminal for Issues
+Look for any red ✗ marks or error indicators in the terminal output. Common issues to check:
+- TypeScript errors (red squiggly lines)
+- ESLint warnings
+- Failed test assertions
+- Missing dependencies
+
+### 4. Light Architecture Audit
+Perform a quick consistency check between this document and the codebase. Focus on:
+- **Major discrepancies only** - Don't report minor details
+- **Structural changes** - New phases, removed components, renamed modules
+- **Critical paths** - Changes to main entry points or core workflows
+
+**Audit Checklist:**
+- [ ] Verify the 5-phase pipeline structure still exists as documented
+- [ ] Check if main entry point is still `api/filterExercisesFromInput.ts`
+- [ ] Confirm core modules match documented paths (filtering/, scoring/, templates/)
+- [ ] Verify any new major features are reflected in the architecture
+
+**Note**: Only report findings if there are significant structural changes that would impact understanding of the system. Minor implementation details and small refactors don't need to be reported.
+
+---
+
 ## Table of Contents
 1. [System Overview](#system-overview)
 2. [Phase 1: Exercise Filtering](#phase-1-exercise-filtering)
@@ -86,7 +123,7 @@ Applies hard constraints to the exercise database, reducing the pool to only val
 - LLM will work with whatever exercises pass through
 
 ### Output
-Filtered exercise array meeting all hard constraints
+Filtered exercise array (`Exercise[]`) meeting all hard constraints
 
 ---
 
@@ -144,8 +181,26 @@ Assigns preference scores to filtered exercises based on client goals and workou
 - Final scores clamped to minimum of 0
 - No negative scores allowed
 
+### ScoredExercise Type
+```typescript
+interface ScoredExercise extends Exercise {
+  score: number;
+  scoreBreakdown?: {
+    base: number;
+    includeExerciseBoost: number;
+    muscleTargetBonus: number;
+    muscleLessenPenalty: number;
+    intensityAdjustment: number;
+    total: number;
+  };
+}
+```
+
 ### Output
-- Scored exercise array sorted by score (highest first)
+- Scored exercise array (`ScoredExercise[]`) sorted by score (highest first)
+- Each exercise includes:
+  - `score`: number - The calculated preference score
+  - `scoreBreakdown`: Optional breakdown of scoring components
 - This order directly influences template selection in Phase 4
 
 ---
@@ -201,7 +256,7 @@ Calculates total workout volume based on client capacity and intensity level. Ca
 Organizes scored exercises into workout blocks with movement pattern constraints and selection strategies.
 
 ### Input
-- Scored exercises from Phase 2
+- Scored exercises from Phase 2 (`ScoredExercise[]`)
 - Workout template (optional) - identified by `isFullBody` flag
   - `isFullBody: true` → uses 'full_body' template ID
   - `isFullBody: false` → uses 'workout' template ID
@@ -389,10 +444,35 @@ Complete workout program ready for client use
 ### Primary Entry Point
 `api/filterExercisesFromInput.ts`
 
+### Request Interface
+```typescript
+interface FilterExercisesOptions {
+  userInput?: string;
+  clientContext?: ClientContext;
+  workoutTemplate?: FilterWorkoutTemplate; // Extends WorkoutTemplate with isFullBody
+  exercises?: any[]; // Optional: Pass exercises directly to avoid DB queries
+  intensity?: "low" | "moderate" | "high"; // For scoring, separate from client context
+}
+```
+
+Note: `FilterWorkoutTemplate` extends the standard `WorkoutTemplate` with an optional `isFullBody: boolean` property used for template selection.
+
+### Response Structure
+```typescript
+{
+  userInput: string;
+  programmedRoutine: string;
+  exercises: []; // Always empty in response
+  clientContext: ClientContext;
+  filteredExercises: ScoredExercise[]; // Includes scores and presentation flags
+  workoutTemplate: WorkoutTemplate;
+}
+```
+
 ### Request Flow
 1. Receives client context and preferences
 2. Orchestrates 5-phase pipeline
-3. Returns structured workout data
+3. Returns structured workout data with scored exercises
 
 ### Error Handling
 - Business validation errors
@@ -405,17 +485,22 @@ Complete workout program ready for client use
 
 ### Sequential Pipeline
 ```
-Client Request
+Client Request (FilterExercisesOptions)
     ↓
 Phase 1: Filtering (Hard Constraints)
+    → Output: Exercise[]
     ↓
 Phase 2: Scoring (Preferences)
+    → Output: ScoredExercise[]
     ↓
 Phase 3: Set Count Determination
+    → Output: {minSets, maxSets, reasoning}
     ↓
 Phase 4: Template Organization
+    → Output: OrganizedExercises (blocks A/B/C/D)
     ↓
 Phase 5: LLM Generation
+    → Output: Complete workout program
     ↓
 Structured Workout Response
 ```
