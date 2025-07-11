@@ -1,0 +1,115 @@
+{
+  "timestamp": "2025-07-11T06:15:19.202Z",
+  "filters": {
+    "clientName": "Web User",
+    "strengthCapacity": "low",
+    "skillCapacity": "low",
+    "intensity": "moderate",
+    "muscleTarget": [
+      "calves"
+    ],
+    "muscleLessen": [],
+    "avoidJoints": [],
+    "includeExercises": [],
+    "avoidExercises": [],
+    "isFullBody": false
+  },
+  "results": {
+    "totalExercises": 47,
+    "blockA": {
+      "count": 5,
+      "exercises": [
+        {
+          "id": "b10fc80a-3bc6-4d31-8a1d-d653d55dccc3",
+          "name": "Dumbbell Bridge Chest Press",
+          "score": 5
+        },
+        {
+          "id": "8050aa27-29fd-43f8-a647-8828e484d28b",
+          "name": "Incline Dumbbell Press",
+          "score": 5
+        },
+        {
+          "id": "144e1124-e7d7-4594-8c75-f9522081060e",
+          "name": "Kettlebell Deadlift",
+          "score": 5
+        },
+        {
+          "id": "e922ce7d-d596-4f62-9d0b-78f624ae4102",
+          "name": "Lat Pulldown",
+          "score": 5
+        },
+        {
+          "id": "dabd605d-42d5-4c18-bbf8-856eb175a78c",
+          "name": "Goblet Pause Squat (3 Seconds)",
+          "score": 5
+        }
+      ]
+    },
+    "blockB": {
+      "count": 8,
+      "exercises": [
+        {
+          "id": "8a08ffdd-2998-4795-8030-ccd357613f7b",
+          "name": "Elevated Push-Ups",
+          "score": 5
+        },
+        {
+          "id": "53141345-2351-436a-9b1c-21bc273ba554",
+          "name": "Spanish Lunge",
+          "score": 5
+        },
+        {
+          "id": "8050aa27-29fd-43f8-a647-8828e484d28b",
+          "name": "Incline Dumbbell Press",
+          "score": 5
+        }
+      ]
+    },
+    "blockC": {
+      "count": 8,
+      "exercises": [
+        {
+          "id": "5a75f68d-4d30-4211-a98c-a74c71f70f8d",
+          "name": "Glute Bridge Thrust with Dumbbell",
+          "score": 5
+        },
+        {
+          "id": "4e40b3f0-cf13-4998-8ec0-61a9b5dd5239",
+          "name": "Banded Prone Overhead Press",
+          "score": 5
+        },
+        {
+          "id": "80c543b0-16fe-4821-9d04-0aadfe1b0082",
+          "name": "Incline Bicep Curl",
+          "score": 5
+        }
+      ]
+    },
+    "blockD": {
+      "count": 6,
+      "exercises": [
+        {
+          "id": "e824764c-7860-4254-a2c5-9eca52db2e5d",
+          "name": "Medicine Ball Slam",
+          "score": 5
+        },
+        {
+          "id": "c4755d77-e9a6-4dd8-971f-b41a326c0cfa",
+          "name": "Russian Twist",
+          "score": 5
+        },
+        {
+          "id": "620165b8-278c-48cd-a8a1-9f9aa1f37e80",
+          "name": "Flutter Kicks",
+          "score": 5
+        },
+        {
+          "id": "53febb99-c0d1-4fb6-90e8-856dc4a7827b",
+          "name": "Hanging Knee Raise",
+          "score": 5
+        }
+      ]
+    }
+  }
+}

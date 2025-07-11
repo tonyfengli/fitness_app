@@ -209,24 +209,46 @@ Organizes scored exercises into workout blocks with movement pattern constraints
 
 ### Core Components
 - **Handler**: `core/templates/WorkoutTemplateHandler.ts`
-- **Config**: `core/templates/types/blockConfig.ts`
+- **Types**: 
+  - `core/templates/types/blockConfig.ts` - Legacy block configuration
+  - `core/templates/types/dynamicBlockTypes.ts` - Dynamic block definitions
+- **Templates**: `core/templates/config/defaultTemplates.ts` - Predefined workout templates
 - **Strategies**: `core/templates/strategies/SelectionStrategy.ts`
-- **Utilities**: `core/templates/strategies/ConstraintTracker.ts` - Tracks constraint satisfaction during selection
+- **Utilities**: 
+  - `core/templates/strategies/ConstraintTracker.ts` - Tracks constraint satisfaction
+  - `core/templates/adapters/BlockAdapter.ts` - Format conversion between internal dynamic and external fixed structure
 
 ### Block Structure
 
-#### 4.1 Block Definitions
+#### 4.1 Block Structure
+The system uses a fixed 4-block structure with dynamic configuration support:
+
+**Current Block Definitions**
 - **Block A**: Primary Strength (5 exercises max)
-- **Block B**: Secondary Strength (8 exercises max)
+- **Block B**: Secondary Strength (8 exercises max) 
 - **Block C**: Accessory (8 exercises max)
 - **Block D**: Core & Capacity (6 exercises max)
 
+**Internal Dynamic System**
+The WorkoutTemplateHandler internally uses a dynamic block system for flexibility:
+- Blocks are configured with:
+  - `id`: Unique identifier
+  - `name`: Display name
+  - `functionTags`: Exercise categories to include
+  - `maxExercises`: Maximum exercises in block
+  - `constraints`: Movement pattern requirements (optional)
+  - `selectionStrategy`: 'deterministic' or 'randomized'
+  - `penaltyForReuse`: Score reduction when reusing exercises
+- The dynamic system is converted back to the fixed blockA/B/C/D format for consistency
+
 #### 4.2 Exercise Pre-filtering
-Before selection begins, exercises are filtered by each block's function tag:
-- Block A: Only exercises tagged 'primary_strength'
-- Block B: Only exercises tagged 'secondary_strength'
-- Block C: Only exercises tagged 'accessory'
-- Block D: Only exercises tagged 'core_capacity'
+Before selection begins, exercises are filtered by each block's function tags:
+- Each block only considers exercises matching its `functionTags` array
+- For standard template:
+  - Block A: Only exercises tagged 'primary_strength'
+  - Block B: Only exercises tagged 'secondary_strength'
+  - Block C: Only exercises tagged 'accessory'
+  - Block D: Only exercises tagged 'core' or 'capacity'
 
 #### 4.3 Two-Phase Selection Process
 Each block uses a two-phase approach within its selection strategy:
@@ -282,14 +304,43 @@ When enabled, applied to blocks A, B, and C only (not Block D):
 - Checked during constraint satisfaction phase
 - Block D (Core & Capacity) excluded from muscle constraints
 
+#### 4.7 Template Configuration
+The system supports multiple workout templates:
+
+**Available Templates**:
+1. **Standard Workout** (`id: 'workout'`)
+   - 4 blocks: Primary, Secondary, Accessory, Core/Capacity
+   - Traditional structure with specific movement patterns per block
+
+2. **Full Body** (`id: 'full_body'`)
+   - Same as standard but with muscle group constraints
+   - Minimum 2 upper/lower body exercises per block
+
+3. **Circuit Training** (`id: 'circuit_training'`)
+   - 6 rounds, 1 exercise per round
+   - Placeholder for future implementation
+
+**Template Selection**:
+- Based on `isFullBody` flag in input
+- Templates defined in `core/templates/config/defaultTemplates.ts`
+- Easily extensible for new workout styles
+
+#### 4.8 Block Format Conversion
+The system uses `BlockAdapter` to convert between formats:
+- **Module**: `core/templates/adapters/BlockAdapter.ts`
+- `toLegacyFormat()`: Converts internal dynamic blocks to fixed blockA/B/C/D structure
+- `toDynamicFormat()`: Converts blockA/B/C/D to dynamic format when needed
+- This allows the internal system to be flexible while maintaining a consistent external interface
+
 ### Output
-- Organized exercise blocks with selections per block:
-  - Block A: Up to 5 exercises
-  - Block B: Up to 8 exercises
-  - Block C: Up to 8 exercises
-  - Block D: Up to 6 exercises
+The system outputs exercises in the fixed blockA/B/C/D format:
+- **Block A**: Up to 5 primary strength exercises
+- **Block B**: Up to 8 secondary strength exercises
+- **Block C**: Up to 8 accessory exercises
+- **Block D**: Up to 6 core/capacity exercises
 - Exercises appear in selection order (constraint-satisfying first, then score-based)
 - When penalties applied, includes both original and penalized scores
+- The internal dynamic system allows for future flexibility without changing the API
 
 **[Placeholder: Block Selection Workflow Diagram - showing constraint satisfaction and selection strategies]**
 
@@ -435,3 +486,36 @@ This debugging system is essential for:
 - Tracking down why specific exercises are selected/rejected
 - Verifying template constraints are met
 - Performance profiling of each phase
+
+### 3. Filter State Persistence
+
+#### Overview
+The system automatically saves filter state to a file that can be read by Claude Code for debugging and support.
+
+#### How It Works
+1. Every time the `exercise.filter` endpoint is called, the current filter state and results are saved to `/Users/tonyli/Desktop/fitness_app/current-filter-state.json`
+2. This file contains:
+   - Current filter selections (intensity, muscle targets, capacity levels, etc.)
+   - Filtered exercise results organized by block
+   - Top exercises in each block with their scores
+   - Timestamp of when the filter was applied
+
+#### Usage with Claude Code
+When working with Claude Code, you can ask to see your current filter state:
+- "What filters do I have selected?"
+- "Check my current filter state"
+- "What exercises are showing?"
+- "Read the filter debug file"
+
+Claude will read the file and report:
+- Your current filter settings
+- Number of exercises in each block
+- Top-scoring exercises
+- Any issues with the filtering
+
+#### Implementation
+- **Module**: `utils/debugToFile.ts`
+- **Integration**: `api/src/router/exercise.ts` (filter endpoint)
+- **File Location**: `/Users/tonyli/Desktop/fitness_app/current-filter-state.json`
+
+This feature enables real-time debugging support without needing to manually copy/paste filter states.

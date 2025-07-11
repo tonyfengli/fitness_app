@@ -3,7 +3,7 @@ import { z } from "zod/v4";
 
 import { desc, eq, ilike, and, inArray } from "@acme/db";
 import { exercises } from "@acme/db/schema";
-import { filterExercisesFromInput } from "@acme/ai";
+import { filterExercisesFromInput, saveFilterDebugData } from "@acme/ai";
 
 import { protectedProcedure, publicProcedure } from "../trpc";
 
@@ -233,6 +233,68 @@ export const exerciseRouter = {
         console.log(`Filtering & Scoring: ${filterEndTime - filterStartTime}ms`);
         console.log(`Total API Time: ${apiEndTime - apiStartTime}ms`);
         console.log('========================');
+        
+        // Save debug data for Claude to read
+        try {
+          const blockA = filteredExercises.filter((ex: any) => ex.isSelectedBlockA);
+          const blockB = filteredExercises.filter((ex: any) => ex.isSelectedBlockB);
+          const blockC = filteredExercises.filter((ex: any) => ex.isSelectedBlockC);
+          const blockD = filteredExercises.filter((ex: any) => ex.isSelectedBlockD);
+          
+          saveFilterDebugData({
+            timestamp: new Date().toISOString(),
+            filters: {
+              clientName: safeInput.clientName,
+              strengthCapacity: safeInput.strengthCapacity,
+              skillCapacity: safeInput.skillCapacity,
+              intensity: safeInput.intensity || 'moderate',
+              muscleTarget: safeInput.muscleTarget,
+              muscleLessen: safeInput.muscleLessen,
+              avoidJoints: safeInput.avoidJoints,
+              includeExercises: safeInput.includeExercises,
+              avoidExercises: safeInput.avoidExercises,
+              sessionGoal: safeInput.primaryGoal,
+              isFullBody: safeInput.isFullBody
+            },
+            results: {
+              totalExercises: filteredExercises.length,
+              blockA: {
+                count: blockA.length,
+                exercises: blockA.slice(0, 5).map((ex: any) => ({
+                  id: ex.id,
+                  name: ex.name,
+                  score: ex.score || 0
+                }))
+              },
+              blockB: {
+                count: blockB.length,
+                exercises: blockB.slice(0, 3).map((ex: any) => ({
+                  id: ex.id,
+                  name: ex.name,
+                  score: ex.score || 0
+                }))
+              },
+              blockC: {
+                count: blockC.length,
+                exercises: blockC.slice(0, 3).map((ex: any) => ({
+                  id: ex.id,
+                  name: ex.name,
+                  score: ex.score || 0
+                }))
+              },
+              blockD: {
+                count: blockD.length,
+                exercises: blockD.slice(0, 4).map((ex: any) => ({
+                  id: ex.id,
+                  name: ex.name,
+                  score: ex.score || 0
+                }))
+              }
+            }
+          });
+        } catch (debugError) {
+          console.error('Failed to save debug data:', debugError);
+        }
         
         // Return filtered exercises as before
         return filteredExercises;
