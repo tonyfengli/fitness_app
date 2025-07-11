@@ -2,6 +2,7 @@ import { db } from "@acme/db/client";
 import { eq } from "@acme/db";
 import { BusinessExercise, exercises } from "@acme/db/schema";
 import type { Exercise } from "../types";
+import type { ExerciseRepository } from "../repositories/exerciseRepository";
 
 export class ExerciseFetchError extends Error {
   constructor(message: string, public cause?: unknown) {
@@ -10,66 +11,63 @@ export class ExerciseFetchError extends Error {
   }
 }
 
+// Default implementation using the real database
+class PrismaExerciseRepository implements ExerciseRepository {
+  async findAll(): Promise<Exercise[]> {
+    try {
+      const exerciseList = await db.query.exercises.findMany();
+      return exerciseList as Exercise[];
+    } catch (error) {
+      throw new ExerciseFetchError('Failed to fetch exercises from database', error);
+    }
+  }
+
+  async findByBusiness(businessId: string): Promise<Exercise[]> {
+    try {
+      const businessExercises = await db.query.BusinessExercise.findMany({
+        where: eq(BusinessExercise.businessId, businessId),
+        with: {
+          exercise: true
+        }
+      });
+      
+      return businessExercises.map((be: any) => be.exercise) as Exercise[];
+    } catch (error) {
+      throw new ExerciseFetchError(`Failed to fetch exercises for business ${businessId}`, error);
+    }
+  }
+}
+
+// Global repository instance (can be overridden for testing)
+let repository: ExerciseRepository = new PrismaExerciseRepository();
+
+export function setExerciseRepository(repo: ExerciseRepository): void {
+  repository = repo;
+}
+
+export function getExerciseRepository(): ExerciseRepository {
+  return repository;
+}
+
 /**
  * Fetches all exercises from the database
  * @returns Promise<Exercise[]> - All exercises with complete data
  * @throws {ExerciseFetchError} If database query fails
  */
 export async function fetchAllExercises(): Promise<Exercise[]> {
-  try {
-    const exerciseList = await db.query.exercises.findMany();
-    
-    if (!exerciseList || !Array.isArray(exerciseList)) {
-      throw new ExerciseFetchError('Invalid response from database');
-    }
-    
-    return exerciseList as Exercise[];
-  } catch (error) {
-    throw new ExerciseFetchError(
-      'Failed to fetch exercises from database',
-      error
-    );
-  }
+  return repository.findAll();
 }
 
 /**
- * Fetches exercises that belong to a specific business
- * @param businessId - UUID of the business
- * @returns Promise<Exercise[]> - Exercises available to this business
+ * Fetches exercises for a specific business from the database
+ * @param businessId - The ID of the business
+ * @returns Promise<Exercise[]> - Exercises specific to the business
  * @throws {ExerciseFetchError} If database query fails
  */
 export async function fetchExercisesByBusiness(businessId: string): Promise<Exercise[]> {
-  try {
-    const businessExercises = await db
-      .select({
-        id: exercises.id,
-        name: exercises.name,
-        primaryMuscle: exercises.primaryMuscle,
-        secondaryMuscles: exercises.secondaryMuscles,
-        loadedJoints: exercises.loadedJoints,
-        movementPattern: exercises.movementPattern,
-        modality: exercises.modality,
-        movementTags: exercises.movementTags,
-        functionTags: exercises.functionTags,
-        fatigueProfile: exercises.fatigueProfile,
-        complexityLevel: exercises.complexityLevel,
-        equipment: exercises.equipment,
-        strengthLevel: exercises.strengthLevel,
-        createdAt: exercises.createdAt,
-      })
-      .from(BusinessExercise)
-      .innerJoin(exercises, eq(BusinessExercise.exerciseId, exercises.id))
-      .where(eq(BusinessExercise.businessId, businessId));
-    
-    if (!businessExercises || !Array.isArray(businessExercises)) {
-      throw new ExerciseFetchError('Invalid response from database');
-    }
-    
-    return businessExercises as Exercise[];
-  } catch (error) {
-    throw new ExerciseFetchError(
-      `Failed to fetch exercises for business ${businessId}`,
-      error
-    );
+  if (!businessId) {
+    throw new ExerciseFetchError('Business ID is required');
   }
+  
+  return repository.findByBusiness(businessId);
 }

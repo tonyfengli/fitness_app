@@ -18,7 +18,13 @@
     "format": "prettier --check . --ignore-path ../../.gitignore",
     "typecheck": "tsc --noEmit --emitDeclarationOnly false",
     "generate": "tsx src/run-workout-generator.ts",
-    "generate-workout": "pnpm generate"
+    "generate-workout": "pnpm generate",
+    "test": "NODE_ENV=test vitest",
+    "test:ui": "NODE_ENV=test vitest --ui",
+    "test:coverage": "NODE_ENV=test vitest run --coverage",
+    "test:integration": "NODE_ENV=test vitest run test/integration",
+    "test:unit": "NODE_ENV=test vitest run test/unit",
+    "test:watch": "NODE_ENV=test vitest --watch"
   },
   "dependencies": {
     "@acme/db": "workspace:*",
@@ -32,10 +38,14 @@
     "@acme/eslint-config": "workspace:*",
     "@acme/prettier-config": "workspace:*",
     "@acme/tsconfig": "workspace:*",
+    "@testing-library/jest-dom": "^6.6.3",
+    "@vitest/ui": "^3.2.4",
     "eslint": "catalog:",
     "prettier": "catalog:",
     "tsx": "^4.19.2",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "vitest": "^3.2.4",
+    "vitest-mock-extended": "^3.1.0"
   },
   "prettier": "@acme/prettier-config"
 }

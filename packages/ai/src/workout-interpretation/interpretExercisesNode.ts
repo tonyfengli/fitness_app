@@ -3,12 +3,19 @@ import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import type { WorkoutInterpretationStateType, ExercisesByBlock, TopExercise } from "./types";
 import { determineTotalSetCount } from "./setCountLogic";
 import { WorkoutPromptBuilder } from "./prompts/workoutInterpretationPrompt";
+import type { LLMProvider } from "../config/llm";
+import { createLLM } from "../config/llm";
 
-// Initialize the LLM - using gpt-4o for speed and cost efficiency
-const llm = new ChatOpenAI({
-  modelName: "gpt-4o",
-  temperature: 0.3, // Lower temperature for more consistent JSON output
-});
+// Global LLM instance that can be overridden for testing
+let globalLLM: LLMProvider | undefined;
+
+export function setInterpretationLLM(llm: LLMProvider): void {
+  globalLLM = llm;
+}
+
+export function resetInterpretationLLM(): void {
+  globalLLM = undefined;
+}
 
 /**
  * Single node that interprets the TOP exercises using LLM
@@ -16,6 +23,7 @@ const llm = new ChatOpenAI({
 export async function interpretExercisesNode(
   state: WorkoutInterpretationStateType
 ): Promise<Partial<WorkoutInterpretationStateType>> {
+  const llm = globalLLM || createLLM();
   try {
     const startTime = performance.now();
     const timing: any = {};
