@@ -105,7 +105,7 @@ Assigns preference scores to filtered exercises based on client goals and workou
 
 ### Two-Pass Scoring Process
 1. **Pass 1**: Calculate base scores for all exercises
-2. **Pass 2**: Boost included exercises to (highest_score + 1.0)
+2. **Pass 2**: Re-score included exercises with boost to guarantee (highest_score + 1.0)
 
 ### Scoring System
 

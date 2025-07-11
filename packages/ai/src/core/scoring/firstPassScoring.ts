@@ -103,7 +103,6 @@ export function scoreExercise(
       muscleTargetBonus,
       muscleLessenPenalty,
       intensityAdjustment,
-      foundationalBonus: 0, // Will be added in second pass
       total: scoredExercise.score,
     };
   }

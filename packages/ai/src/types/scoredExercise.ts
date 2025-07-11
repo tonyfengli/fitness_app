@@ -9,7 +9,6 @@ export interface ScoreBreakdown {
   muscleTargetBonus: number;
   muscleLessenPenalty: number;
   intensityAdjustment: number;
-  foundationalBonus: number;
   total: number;
 }
 
