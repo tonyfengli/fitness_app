@@ -4,6 +4,7 @@ import type { PenalizedExercise, BlockConfig, MuscleConstraints } from "./types/
 import { BLOCK_CONFIGS } from "./types/blockConfig";
 import { DeterministicSelection, RandomizedSelection } from "./strategies/SelectionStrategy";
 import type { SelectionStrategy } from "./strategies/SelectionStrategy";
+import { BlockDebugger, logBlock, logBlockTransformation } from "../../utils/blockDebugger";
 
 export class WorkoutTemplateHandler implements TemplateHandler {
   private isFullBody: boolean;
@@ -17,26 +18,71 @@ export class WorkoutTemplateHandler implements TemplateHandler {
   organize(exercises: ScoredExercise[]): OrganizedExercises {
     console.log('🏗️ WorkoutTemplateHandler organizing exercises into blocks');
     
+    // Log input state
+    logBlock('WorkoutTemplateHandler.organize - Input', {
+      totalExercises: exercises.length,
+      isFullBody: this.isFullBody,
+      exercisesByFunctionTag: this.groupExercisesByFunctionTag(exercises)
+    });
+    
     // Add muscle constraints to blocks if full body mode
     const configs = this.getBlockConfigs();
+    logBlock('Block Configurations', {
+      blockA: { name: configs.A.name, maxExercises: configs.A.maxExercises },
+      blockB: { name: configs.B.name, maxExercises: configs.B.maxExercises },
+      blockC: { name: configs.C.name, maxExercises: configs.C.maxExercises },
+      blockD: { name: configs.D.name, maxExercises: configs.D.maxExercises }
+    });
     
     // Get Block A selections
     const blockA = this.selectExercisesForBlock(exercises, configs.A, new Set());
+    logBlockTransformation('Block A Selection', 
+      { candidateCount: exercises.filter(e => e.functionTags?.includes('primary_strength')).length },
+      { selectedCount: blockA.length, exercises: blockA.map(e => ({ name: e.name, score: e.score })) }
+    );
     
     // Get Block B selections with penalties for Block A exercises
     const blockAIds = new Set(blockA.map(ex => ex.id));
     const blockB = this.selectExercisesForBlock(exercises, configs.B, blockAIds);
+    logBlockTransformation('Block B Selection',
+      { candidateCount: exercises.filter(e => e.functionTags?.includes('secondary_strength')).length, penalizedFromBlockA: blockAIds.size },
+      { selectedCount: blockB.length, exercises: blockB.map(e => ({ name: e.name, score: e.score })) }
+    );
     
     // Get Block C selections with penalties for Block B exercises
     const blockBIds = new Set(blockB.map(ex => ex.id));
     const blockC = this.selectExercisesForBlock(exercises, configs.C, blockBIds);
+    logBlockTransformation('Block C Selection',
+      { candidateCount: exercises.filter(e => e.functionTags?.includes('accessory')).length, penalizedFromBlockB: blockBIds.size },
+      { selectedCount: blockC.length, exercises: blockC.map(e => ({ name: e.name, score: e.score })) }
+    );
     
     // Get Block D selections (no penalties)
     const blockD = this.selectExercisesForBlock(exercises, configs.D, new Set());
+    logBlockTransformation('Block D Selection',
+      { candidateCount: exercises.filter(e => e.functionTags?.includes('core') || e.functionTags?.includes('capacity')).length },
+      { selectedCount: blockD.length, exercises: blockD.map(e => ({ name: e.name, score: e.score })) }
+    );
     
     this.logFinalSummary(blockA.length, blockB.length, blockC.length, blockD.length);
     
-    return { blockA, blockB, blockC, blockD };
+    const result = { blockA, blockB, blockC, blockD };
+    
+    // Validate final structure
+    const validation = BlockDebugger.validateBlockStructure(result, ['blockA', 'blockB', 'blockC', 'blockD']);
+    if (!validation.valid) {
+      console.error('❌ Block structure validation failed:', validation.issues);
+    }
+    
+    logBlock('WorkoutTemplateHandler.organize - Final Output', {
+      blockA: blockA.length,
+      blockB: blockB.length,
+      blockC: blockC.length,
+      blockD: blockD.length,
+      totalExercises: blockA.length + blockB.length + blockC.length + blockD.length
+    });
+    
+    return result;
   }
   
   private getBlockConfigs() {
@@ -82,19 +128,48 @@ export class WorkoutTemplateHandler implements TemplateHandler {
     config: BlockConfig,
     previousSelections: Set<string>
   ): ScoredExercise[] {
+    logBlock(`selectExercisesForBlock - ${config.name} Start`, {
+      blockName: config.name,
+      functionTag: config.functionTag,
+      maxExercises: config.maxExercises,
+      previousSelectionsCount: previousSelections.size,
+      totalExercisesProvided: exercises.length
+    });
+    
     // Prepare candidates
     const candidates = this.prepareCandidates(exercises, config, previousSelections);
     
+    logBlock(`Candidates Prepared - ${config.name}`, {
+      candidatesCount: candidates.length,
+      penaltiesApplied: candidates.filter(c => 'appliedPenalty' in c && c.appliedPenalty > 0).length,
+      topCandidates: candidates.slice(0, 5).map(c => ({ 
+        name: c.name, 
+        score: c.score,
+        originalScore: 'originalScore' in c ? c.originalScore : c.score,
+        penalty: 'appliedPenalty' in c ? c.appliedPenalty : 0
+      }))
+    });
+    
     if (candidates.length === 0) {
       console.log(`⚠️ No candidates found for ${config.name}`);
+      logBlock(`No Candidates - ${config.name}`, { reason: 'No exercises with required function tags' });
       return [];
     }
     
     // Select strategy
     const strategy = this.getSelectionStrategy(config);
+    logBlock(`Strategy Selected - ${config.name}`, {
+      strategyType: config.selectionStrategy,
+      constraints: config.constraints
+    });
     
     // Apply strategy
     const selected = strategy.select(candidates, config, this.isFullBody);
+    
+    logBlockTransformation(`Strategy Application - ${config.name}`,
+      { candidatesIn: candidates.length, strategy: config.selectionStrategy },
+      { selectedOut: selected.length, exercises: selected.map(e => ({ name: e.name, score: e.score })) }
+    );
     
     // Safety check
     if (selected.length > config.maxExercises) {
@@ -102,7 +177,13 @@ export class WorkoutTemplateHandler implements TemplateHandler {
         `⚠️ WARNING: Selected ${selected.length} exercises for ${config.name}, ` +
         `limiting to ${config.maxExercises}`
       );
-      return selected.slice(0, config.maxExercises);
+      const limited = selected.slice(0, config.maxExercises);
+      logBlock(`Safety Limit Applied - ${config.name}`, {
+        selectedCount: selected.length,
+        limitedTo: config.maxExercises,
+        removed: selected.slice(config.maxExercises).map(e => e.name)
+      });
+      return limited;
     }
     
     console.log(`📌 Final selection for ${config.name}: ${selected.length} exercises`);
@@ -178,5 +259,19 @@ export class WorkoutTemplateHandler implements TemplateHandler {
    Total: ${blockACount + blockBCount + blockCCount + blockDCount} exercises
    Mode: ${this.isFullBody ? 'Full Body' : 'Regular'}
     `);
+  }
+  
+  private groupExercisesByFunctionTag(exercises: ScoredExercise[]): Record<string, number> {
+    const groups: Record<string, number> = {};
+    
+    exercises.forEach(exercise => {
+      if (exercise.functionTags) {
+        exercise.functionTags.forEach(tag => {
+          groups[tag] = (groups[tag] || 0) + 1;
+        });
+      }
+    });
+    
+    return groups;
   }
 }

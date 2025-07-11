@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useSuspenseQuery, useQuery } from "@tanstack/react-query";
 import { useTRPC } from "~/trpc/react";
 import { useBusinessId } from "~/hooks/useBusinessContext";
+import { BlockDebugClient } from "~/utils/blockDebugClient";
 
 const STRENGTH_OPTIONS = [
   { value: "very_low", label: "Very Low Only" },
@@ -71,6 +72,14 @@ const MUSCLE_OPTIONS = [
 export default function ExerciseList() {
   const trpc = useTRPC();
   const businessId = useBusinessId();
+  
+  // Make debug client available globally in development
+  useEffect(() => {
+    if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+      (window as any).blockDebug = BlockDebugClient;
+      console.log('🔍 Block Debug Client available as window.blockDebug');
+    }
+  }, []);
   
   const { data: exercises } = useSuspenseQuery(
     trpc.exercise.all.queryOptions({

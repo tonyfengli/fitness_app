@@ -5,6 +5,7 @@ import { determineTotalSetCount } from "./setCountLogic";
 import { WorkoutPromptBuilder } from "./prompts/workoutInterpretationPrompt";
 import type { LLMProvider } from "../config/llm";
 import { createLLM } from "../config/llm";
+import { BlockDebugger, logBlock, logBlockTransformation } from "../utils/blockDebugger";
 
 // Global LLM instance that can be overridden for testing
 let globalLLM: LLMProvider | undefined;
@@ -24,6 +25,13 @@ export async function interpretExercisesNode(
   state: WorkoutInterpretationStateType
 ): Promise<Partial<WorkoutInterpretationStateType>> {
   const llm = globalLLM || createLLM();
+  
+  logBlock('interpretExercisesNode - Start', {
+    hasExercises: !!state.exercises,
+    exerciseBlocks: state.exercises ? Object.keys(state.exercises) : [],
+    clientContext: state.clientContext
+  });
+  
   try {
     const startTime = performance.now();
     const timing: any = {};
@@ -32,10 +40,25 @@ export async function interpretExercisesNode(
     
     // Validate input
     if (!exercises || Object.keys(exercises).length === 0) {
+      logBlock('interpretExercisesNode - No Exercises', {
+        error: 'No exercises provided for interpretation'
+      });
       return {
         error: "No exercises provided for interpretation",
       };
     }
+    
+    logBlock('interpretExercisesNode - Input Exercises', {
+      blockA: exercises.blockA?.length || 0,
+      blockB: exercises.blockB?.length || 0,
+      blockC: exercises.blockC?.length || 0,
+      blockD: exercises.blockD?.length || 0,
+      totalExercises: 
+        (exercises.blockA?.length || 0) + 
+        (exercises.blockB?.length || 0) + 
+        (exercises.blockC?.length || 0) + 
+        (exercises.blockD?.length || 0)
+    });
 
     // Format exercises for the prompt
     const formatStartTime = performance.now();
@@ -82,6 +105,13 @@ Please interpret these exercises according to the system instructions.`;
 
     // Call the LLM
     console.log('🤖 Calling LLM for workout interpretation...');
+    
+    logBlock('LLM Call - Request', {
+      systemPromptLength: systemPrompt.length,
+      userMessageLength: userMessage.length,
+      setRange: { min: setCount.minSets, max: setCount.maxSets }
+    });
+    
     const llmStartTime = performance.now();
     const response = await llm.invoke([
       new SystemMessage(systemPrompt),
@@ -90,6 +120,12 @@ Please interpret these exercises according to the system instructions.`;
     timing.llmApiCall = performance.now() - llmStartTime;
 
     const interpretation = response.content.toString();
+    
+    logBlock('LLM Call - Response', {
+      responseLength: interpretation.length,
+      responseTime: timing.llmApiCall,
+      hasJSON: interpretation.includes('{') && interpretation.includes('}')
+    });
 
     // Parse JSON response
     const parseStartTime = performance.now();
@@ -119,6 +155,22 @@ Please interpret these exercises according to the system instructions.`;
     console.log(`   - Response parsing: ${timing.responseParsing.toFixed(2)}ms`);
     console.log(`   - TOTAL: ${timing.total.toFixed(2)}ms (${(timing.total/1000).toFixed(2)}s)`);
 
+    logBlockTransformation('interpretExercisesNode - Complete',
+      {
+        inputExercises: {
+          blockA: exercises.blockA?.length || 0,
+          blockB: exercises.blockB?.length || 0,
+          blockC: exercises.blockC?.length || 0,
+          blockD: exercises.blockD?.length || 0
+        }
+      },
+      {
+        outputStructure: structuredOutput ? Object.keys(structuredOutput) : [],
+        hasError: !!structuredOutput?.error,
+        timing: timing
+      }
+    );
+
     return {
       interpretation,
       structuredOutput,
@@ -126,6 +178,12 @@ Please interpret these exercises according to the system instructions.`;
     };
   } catch (error) {
     console.error("Error in interpretExercisesNode:", error);
+    
+    logBlock('interpretExercisesNode - Error', {
+      error: error instanceof Error ? error.message : "Unknown error occurred",
+      errorType: error?.constructor?.name
+    });
+    
     return {
       error: error instanceof Error ? error.message : "Unknown error occurred",
     };
@@ -138,10 +196,13 @@ Please interpret these exercises according to the system instructions.`;
 function formatExercisesForPrompt(exercises: ExercisesByBlock): string {
   const blocks = ["blockA", "blockB", "blockC", "blockD"];
   let formatted = "";
+  
+  const blockSummary: Record<string, number> = {};
 
   for (const block of blocks) {
     const blockKey = block as keyof ExercisesByBlock;
     if (exercises[blockKey] && exercises[blockKey].length > 0) {
+      blockSummary[block] = exercises[blockKey].length;
       formatted += `\n${block.toUpperCase()}:\n`;
       exercises[blockKey].forEach((ex: TopExercise, idx: number) => {
         formatted += `${idx + 1}. ${ex.name} (Score: ${ex.score})\n`;
@@ -154,6 +215,12 @@ function formatExercisesForPrompt(exercises: ExercisesByBlock): string {
       });
     }
   }
+  
+  logBlock('formatExercisesForPrompt', {
+    blockSummary,
+    totalExercises: Object.values(blockSummary).reduce((sum, count) => sum + count, 0),
+    formattedLength: formatted.length
+  });
 
   return formatted.trim();
 }

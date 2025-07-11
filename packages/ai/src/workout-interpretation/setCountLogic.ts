@@ -4,7 +4,7 @@
 
 export interface SetCountFactors {
   strengthLevel?: string;
-  intensity?: 'low' | 'medium' | 'high';
+  intensity?: 'low' | 'moderate' | 'high';
 }
 
 /**
@@ -21,33 +21,33 @@ export function determineTotalSetCount(factors: SetCountFactors): {
     // Very low strength
     very_low: {
       low: [14, 16],
-      medium: [16, 18],
+      moderate: [16, 18],
       high: [18, 20]
     },
     // Low strength
     low: {
       low: [16, 18],
-      medium: [18, 20],
+      moderate: [18, 20],
       high: [20, 22]
     },
     // Moderate strength (default)
     moderate: {
       low: [17, 19],
-      medium: [19, 22],
+      moderate: [19, 22],
       high: [22, 25]
     },
     // High strength
     high: {
       low: [18, 20],
-      medium: [22, 25],
+      moderate: [22, 25],
       high: [25, 27]  // capped at 27
     }
   };
 
   // Get ranges from matrix
   const strength = factors.strengthLevel || 'moderate';
-  const intensity = factors.intensity || 'medium';
-  const [minSets, maxSets] = setRangeMatrix[strength]?.[intensity] || [19, 22]; // Default to moderate/medium
+  const intensity = factors.intensity || 'moderate';
+  const [minSets, maxSets] = setRangeMatrix[strength]?.[intensity] || [19, 22]; // Default to moderate/moderate
 
   // Generate reasoning
   const reasoning = generateSetCountReasoning(factors, minSets, maxSets);

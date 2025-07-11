@@ -102,6 +102,9 @@ Assigns preference scores to filtered exercises based on client goals and workou
 ### Core Components
 - **Module**: `core/scoring/scoreExercises.ts`
 - **Config**: `core/scoring/scoringConfig.ts`
+- **Utilities**: `core/scoring/scoreAnalysis.ts` - Score distribution analysis
+- **First Pass**: `core/scoring/firstPassScoring.ts`
+- **Second Pass**: `core/scoring/secondPassScoring.ts`
 
 ### Two-Pass Scoring Process
 1. **Pass 1**: Calculate base scores for all exercises
@@ -208,6 +211,7 @@ Organizes scored exercises into workout blocks with movement pattern constraints
 - **Handler**: `core/templates/WorkoutTemplateHandler.ts`
 - **Config**: `core/templates/types/blockConfig.ts`
 - **Strategies**: `core/templates/strategies/SelectionStrategy.ts`
+- **Utilities**: `core/templates/strategies/ConstraintTracker.ts` - Tracks constraint satisfaction during selection
 
 ### Block Structure
 
@@ -304,7 +308,8 @@ Transforms organized exercise blocks into a structured workout program with sets
 ### Core Components
 - **Node**: `workout-interpretation/interpretExercisesNode.ts`
 - **Graph**: `workout-interpretation/workoutInterpretationGraph.ts`
-- **Prompts**: `workout-interpretation/prompts/workoutPromptBuilder.ts`
+- **Prompts**: `workout-interpretation/prompts/promptBuilder.ts`
+- **Prompt Sections**: `workout-interpretation/prompts/sections/` - Modular prompt components
 
 ### Prompt Building
 
@@ -367,3 +372,65 @@ Structured Workout Response
 ```
 
 **[Placeholder: End-to-End Data Flow Diagram - showing data transformation at each phase]**
+
+---
+
+## Debugging & Development Tools
+
+### Block System Debugger
+A comprehensive debugging system tracks exercise transformations through all phases.
+
+#### Components
+- **BlockDebugger**: Core utility at `utils/blockDebugger.ts`
+- **Debug API**: REST endpoint at `/api/debug/blocks`
+- **Client Helper**: Browser utility at `utils/blockDebugClient.ts`
+
+#### How to Use
+
+1. **Enable debugging** (enabled by default in development)
+2. **Run a workout filter** through the UI
+3. **In browser console**, access debug data:
+   ```javascript
+   // View formatted logs showing exercise flow
+   await blockDebug.logToConsole()
+   
+   // Download detailed report
+   await blockDebug.downloadReport()
+   
+   // Clear logs before new test
+   await blockDebug.clearLogs()
+   ```
+
+#### What Gets Logged
+
+##### Phase 1 & 2 (Filtering/Scoring)
+- Exercise counts by function tag
+- Filtered results
+
+##### Phase 4 (Template Organization)
+- **WorkoutTemplateHandler**: 
+  - Input exercises and configuration
+  - Block selections with penalties
+  - Constraint satisfaction details
+  - Final exercise assignments
+- **exerciseFlags**: 
+  - UI flag assignments (isTop6BlockA, etc.)
+  - Block membership tracking
+
+##### Phase 5 (LLM Interpretation)
+- Input exercise blocks
+- LLM request/response details
+- Timing breakdowns
+
+#### Debug Data Structure
+Each log entry contains:
+- `timestamp`: When the transformation occurred
+- `stage`: Which component/phase logged it
+- `data`: The actual data being transformed
+- Input/output states for transformations
+
+This debugging system is essential for:
+- Understanding block assignment logic
+- Tracking down why specific exercises are selected/rejected
+- Verifying template constraints are met
+- Performance profiling of each phase
