@@ -84,12 +84,12 @@ export class EnhancedConstraintTracker extends ConstraintTracker {
   }
 
   private isUpperBodyExercise(exercise: ScoredExercise): boolean {
-    const upperBodyMuscles = ['chest', 'back', 'shoulders', 'biceps', 'triceps', 'lats'];
+    const upperBodyMuscles = ['chest', 'back', 'shoulders', 'biceps', 'triceps', 'lats', 'delts', 'upper_back', 'upper_chest', 'traps', 'forearms'];
     return upperBodyMuscles.includes(exercise.primaryMuscle);
   }
 
   private isLowerBodyExercise(exercise: ScoredExercise): boolean {
-    const lowerBodyMuscles = ['quads', 'hamstrings', 'glutes', 'calves'];
+    const lowerBodyMuscles = ['quads', 'hamstrings', 'glutes', 'calves', 'abductors', 'adductors', 'hip_flexors'];
     return lowerBodyMuscles.includes(exercise.primaryMuscle);
   }
 

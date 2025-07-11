@@ -9,8 +9,8 @@ export const MOVEMENT_PATTERNS = {
 
 // Muscle group categories
 export const MUSCLE_GROUPS = {
-  LOWER_BODY: ['glutes', 'quads', 'hamstrings', 'calves', 'adductors', 'abductors'] as const,
-  UPPER_BODY: ['chest', 'lats', 'biceps', 'triceps', 'delts', 'shoulders', 'traps', 'upper_back'] as const,
+  LOWER_BODY: ['glutes', 'quads', 'hamstrings', 'calves', 'adductors', 'abductors', 'hip_flexors'] as const,
+  UPPER_BODY: ['chest', 'lats', 'biceps', 'triceps', 'delts', 'shoulders', 'traps', 'upper_back', 'back', 'upper_chest', 'forearms'] as const,
 } as const;
 
 export interface MovementConstraints {
