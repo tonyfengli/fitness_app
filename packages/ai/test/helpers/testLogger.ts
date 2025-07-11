@@ -4,7 +4,7 @@ import type { Logger } from '../../src/utils/logger';
  * Silent logger for tests - captures logs without outputting
  */
 export class TestLogger implements Logger {
-  public logs: Array<{ level: string; message: string; data?: any }> = [];
+  public logs: { level: string; message: string; data?: any }[] = [];
   
   log(message: string, data?: any): void {
     this.logs.push({ level: 'log', message, data });
@@ -30,7 +30,7 @@ export class TestLogger implements Logger {
     return this.logs.some(log => log.message.includes(message));
   }
   
-  getLogsOfLevel(level: string): Array<{ message: string; data?: any }> {
+  getLogsOfLevel(level: string): { message: string; data?: any }[] {
     return this.logs
       .filter(log => log.level === level)
       .map(({ message, data }) => ({ message, data }));

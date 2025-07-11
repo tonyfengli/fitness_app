@@ -24,7 +24,9 @@
     "test:coverage": "NODE_ENV=test vitest run --coverage",
     "test:integration": "NODE_ENV=test vitest run test/integration",
     "test:unit": "NODE_ENV=test vitest run test/unit",
-    "test:watch": "NODE_ENV=test vitest --watch"
+    "test:watch": "NODE_ENV=test vitest --watch",
+    "debug-to-test": "tsx src/utils/debugToTestCLI.ts",
+    "export-exercises": "tsx scripts/export-exercises.ts"
   },
   "dependencies": {
     "@acme/db": "workspace:*",

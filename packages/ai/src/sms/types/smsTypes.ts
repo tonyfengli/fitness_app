@@ -1,5 +1,5 @@
 import { Annotation } from "@langchain/langgraph";
-import { BaseMessage } from "@langchain/core/messages";
+import type { BaseMessage } from "@langchain/core/messages";
 
 // Define state using the annotation API
 export const SMSState = Annotation.Root({

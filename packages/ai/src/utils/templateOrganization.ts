@@ -1,4 +1,5 @@
-import type { WorkoutTemplate } from "../types";
+import type { WorkoutTemplate, FilterWorkoutTemplate } from "../types";
+import { hasFullBodyFlag } from "../types/filterTypes";
 import type { ScoredExercise } from "../types/scoredExercise";
 import { getTemplateHandler } from "../core/templates";
 import type { OrganizedExercises } from "../core/templates/types";
@@ -15,13 +16,13 @@ export interface TemplateOrganizationResult {
  */
 export function applyTemplateOrganization(
   exercises: ScoredExercise[],
-  workoutTemplate: WorkoutTemplate | undefined
+  workoutTemplate: WorkoutTemplate | FilterWorkoutTemplate | undefined
 ): TemplateOrganizationResult | null {
   if (!workoutTemplate) {
     return null;
   }
 
-  const isFullBody = (workoutTemplate as any).isFullBody;
+  const isFullBody = hasFullBodyFlag(workoutTemplate) ? workoutTemplate.isFullBody ?? false : false;
   const templateId = isFullBody ? 'full_body' : 'workout';
   
   console.log(`🏋️ Using ${isFullBody ? 'FullBodyWorkoutTemplateHandler' : 'WorkoutTemplateHandler'} to select exercises with constraints`);

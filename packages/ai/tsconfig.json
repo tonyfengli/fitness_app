@@ -4,6 +4,6 @@
     "tsBuildInfoFile": ".cache/tsbuildinfo.json",
     "outDir": "dist"
   },
-  "include": ["src"],
-  "exclude": ["node_modules", "dist"]
+  "include": ["src", "test", "scripts"],
+  "exclude": ["node_modules", "dist", "src/utils/testGeneratorClient.ts"]
 }

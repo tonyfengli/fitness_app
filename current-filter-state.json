@@ -1,5 +1,5 @@
 {
-  "timestamp": "2025-07-11T16:05:12.847Z",
+  "timestamp": "2025-07-11T19:48:20.216Z",
   "filters": {
     "clientName": "Web User",
     "strengthCapacity": "moderate",
@@ -48,18 +48,18 @@
       "count": 8,
       "exercises": [
         {
-          "id": "3d44886e-896b-4059-a4db-506923ea3b58",
-          "name": "Batwing Chest-Supported Row",
+          "id": "dc085fdb-b6c4-4942-9eb5-3dbf04d7161e",
+          "name": "TRX Mid Row",
           "score": 5
         },
         {
-          "id": "11611e20-e723-4cfe-9276-7ab4eb73f829",
-          "name": "Landmine Reverse Lunge",
+          "id": "f3887428-47ba-4d81-8916-acc4c7c05fa9",
+          "name": "Offset Lateral Lunge",
           "score": 5
         },
         {
-          "id": "7ed3976c-c9f3-4672-966c-424778e1cd8c",
-          "name": "Goblet Squat Pulse",
+          "id": "aaa30b49-9d13-43c0-ac73-0ec76160fd3b",
+          "name": "Upside-Down Kettlebell Press (single arm)",
           "score": 5
         }
       ]
@@ -68,18 +68,18 @@
       "count": 8,
       "exercises": [
         {
+          "id": "aa66d8b3-907a-42ec-ac9b-bbaa347a88b8",
+          "name": "Y/W Raises",
+          "score": 5
+        },
+        {
+          "id": "ebfd61ba-7bbc-470d-8b9b-c5bc66da2430",
+          "name": "Dumbbell Pullover",
+          "score": 5
+        },
+        {
           "id": "02a4b661-036e-4446-91b1-635d495cecdc",
           "name": "Face Pulls",
-          "score": 5
-        },
-        {
-          "id": "141589ed-ffb0-48eb-aab5-02cd568e287e",
-          "name": "Bodyweight Triceps Extension",
-          "score": 5
-        },
-        {
-          "id": "8442a047-e5a7-49d7-a40e-fce4812b40ce",
-          "name": "Single-Leg Glute Bridge with Band",
           "score": 5
         }
       ]
@@ -88,23 +88,23 @@
       "count": 6,
       "exercises": [
         {
-          "id": "904c2b74-944f-49af-8324-22b1b1ea7b9a",
-          "name": "Jump Squat",
+          "id": "fb5bf2ce-611c-4a2f-ae16-8d21d28280c1",
+          "name": "Side Plank Hip Raise",
           "score": 5
         },
         {
-          "id": "050e52d0-5f3a-491c-b424-24c5dad31a62",
-          "name": "Farmer's Carry Step-Up",
+          "id": "dd47414b-bca2-4fa8-a200-c159632e31d6",
+          "name": "Box Pike Walkout",
           "score": 5
         },
         {
-          "id": "c9916c21-2e2f-44d0-9aa3-d94b5e35c65c",
-          "name": "BOSU Bird Dog",
+          "id": "9d50d2f2-0eda-48c4-9f7d-7a1fcff879b1",
+          "name": "Dumbbell Thruster",
           "score": 5
         },
         {
-          "id": "5eaede2f-c9d5-41ef-8942-9d74a95ded1e",
-          "name": "Twisting Pistons",
+          "id": "53febb99-c0d1-4fb6-90e8-856dc4a7827b",
+          "name": "Hanging Knee Raise",
           "score": 5
         }
       ]

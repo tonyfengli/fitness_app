@@ -157,7 +157,7 @@ export class BlockDebugger {
       report.push(`Found ${violations.length} constraint violation(s):`);
       
       violations.forEach((v, idx) => {
-        const data = v.data as any;
+        const data = v.data;
         report.push(`\n${idx + 1}. ${data.severity === 'error' ? '❌' : '⚠️'} ${v.stage}`);
         report.push(`   Constraint: ${data.constraint}`);
         report.push(`   Expected: ${JSON.stringify(data.expected)}`);

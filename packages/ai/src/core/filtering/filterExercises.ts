@@ -51,7 +51,8 @@ export async function filterExercises(
   }
   
   if (!exercises || exercises.length === 0) {
-    throw new Error('No exercises available');
+    console.log('⚠️ No exercises available to filter');
+    return [];
   }
   
   // Use provided context or create default

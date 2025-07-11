@@ -20,10 +20,10 @@ export interface FilterDebugData {
   };
   results: {
     totalExercises: number;
-    blockA: { count: number; exercises: Array<{ id: string; name: string; score: number }> };
-    blockB: { count: number; exercises: Array<{ id: string; name: string; score: number }> };
-    blockC: { count: number; exercises: Array<{ id: string; name: string; score: number }> };
-    blockD: { count: number; exercises: Array<{ id: string; name: string; score: number }> };
+    blockA: { count: number; exercises: { id: string; name: string; score: number }[] };
+    blockB: { count: number; exercises: { id: string; name: string; score: number }[] };
+    blockC: { count: number; exercises: { id: string; name: string; score: number }[] };
+    blockD: { count: number; exercises: { id: string; name: string; score: number }[] };
   };
 }
 

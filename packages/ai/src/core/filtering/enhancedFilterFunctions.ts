@@ -203,7 +203,7 @@ export function filterByExcludeEnhanced(
 export function applyAllFiltersEnhanced(
   exercises: ScoredExercise[],
   filters: FilterCriteria,
-  enableDebug: boolean = false
+  enableDebug = false
 ): ScoredExercise[] {
   if (enableDebug) {
     debugLogger.enable();

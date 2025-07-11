@@ -1,5 +1,6 @@
 import { StateGraph, START, END } from "@langchain/langgraph";
-import { WorkoutInterpretationState, WorkoutInterpretationStateType, ExercisesByBlock } from "./types";
+import type { WorkoutInterpretationStateType, ExercisesByBlock } from "./types";
+import { WorkoutInterpretationState } from "./types";
 import { interpretExercisesNode } from "./interpretExercisesNode";
 
 /**
@@ -52,7 +53,7 @@ export async function interpretWorkout(
       clientContext: clientContext || {},
     });
     
-    return result as WorkoutInterpretationStateType;
+    return result;
   } catch (error) {
     console.error("Error interpreting workout:", error);
     return {

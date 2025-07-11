@@ -8,7 +8,8 @@ import { BlockDebugger, logBlock, logBlockTransformation } from "../../utils/blo
 import type { DynamicOrganizedExercises, WorkoutTemplate, DynamicBlockDefinition } from "./types/dynamicBlockTypes";
 import { BlockAdapter } from "./adapters/BlockAdapter";
 import { getDefaultWorkoutTemplate, FULL_BODY_TEMPLATE } from "./config/defaultTemplates";
-import { selectWorkoutTemplate, type TemplateSelectionCriteria } from "./config/templateSelector";
+import { selectWorkoutTemplate  } from "./config/templateSelector";
+import type {TemplateSelectionCriteria} from "./config/templateSelector";
 
 export class WorkoutTemplateHandler implements TemplateHandler {
   private isFullBody: boolean;

@@ -3,7 +3,6 @@ import { setServices } from '../../src/services/container';
 import { MockLLM } from '../helpers/mockLLM';
 import { MockExerciseRepository } from '../helpers/mockExerciseRepository';
 import { TestLogger } from '../helpers/testLogger';
-import { createTestExercise } from '../helpers/testData';
 
 describe('Integration Test Example', () => {
   let mockLLM: MockLLM;
@@ -23,8 +22,38 @@ describe('Integration Test Example', () => {
     });
     mockRepo = new MockExerciseRepository({
       exercises: [
-        createTestExercise({ name: 'Squat', strengthLevel: 'high' }),
-        createTestExercise({ name: 'Press', strengthLevel: 'moderate' }),
+        { 
+          id: '1', 
+          name: 'Squat', 
+          strengthLevel: 'high',
+          complexityLevel: 'moderate',
+          primaryMuscle: 'quads',
+          secondaryMuscles: ['glutes'],
+          loadedJoints: ['knees', 'hips'],
+          movementPattern: 'squat',
+          modality: 'strength',
+          movementTags: null,
+          functionTags: ['primary_strength'],
+          fatigueProfile: 'high_systemic',
+          equipment: ['barbell'],
+          createdAt: new Date()
+        },
+        {
+          id: '2',
+          name: 'Press', 
+          strengthLevel: 'moderate',
+          complexityLevel: 'moderate', 
+          primaryMuscle: 'shoulders',
+          secondaryMuscles: ['triceps'],
+          loadedJoints: ['shoulders', 'elbows'],
+          movementPattern: 'vertical_push',
+          modality: 'strength',
+          movementTags: null,
+          functionTags: ['primary_strength'],
+          fatigueProfile: 'moderate_local',
+          equipment: ['barbell'],
+          createdAt: new Date()
+        }
       ]
     });
     

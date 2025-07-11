@@ -259,12 +259,12 @@ export default function ExerciseList() {
         
         // Only add values that are not default/empty
         if (sessionGoal) clientContext.sessionGoal = sessionGoal;
-        if (strengthFilter !== 'all') clientContext.strengthLevel = strengthFilter;
-        if (skillFilter) clientContext.skillLevel = skillFilter;
+        if (strengthFilter !== 'all') clientContext.strength_capacity = strengthFilter;
+        if (skillFilter) clientContext.skill_capacity = skillFilter;
         if (intensityFilter) clientContext.intensity = intensityFilter;
-        if (includeExercises.length > 0) clientContext.includeExercises = includeExercises;
-        if (muscleTarget.length > 0) clientContext.muscleTarget = muscleTarget;
-        if (muscleLessen.length > 0) clientContext.muscleLessen = muscleLessen;
+        if (includeExercises.length > 0) clientContext.exercise_requests = { include: includeExercises, avoid: [] };
+        if (muscleTarget.length > 0) clientContext.muscle_target = muscleTarget;
+        if (muscleLessen.length > 0) clientContext.muscle_lessen = muscleLessen;
         
         // Call the API route
         const response = await fetch('/api/interpret-workout', {

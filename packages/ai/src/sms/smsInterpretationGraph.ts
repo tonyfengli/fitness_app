@@ -1,5 +1,6 @@
 import { StateGraph, START, END } from "@langchain/langgraph";
-import { SMSState, SMSStateType } from "./types/smsTypes";
+import type { SMSStateType } from "./types/smsTypes";
+import { SMSState } from "./types/smsTypes";
 import { parseIntentNode, extractContextNode, buildQueryNode } from "./nodes";
 
 /**
@@ -66,5 +67,5 @@ export async function interpretSMS(rawMessage: string) {
     messages: [],
   });
   
-  return result as SMSStateType;
+  return result;
 }

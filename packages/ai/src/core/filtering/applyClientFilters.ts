@@ -25,7 +25,8 @@ export function applyClientFilters(
   console.log('📐 Applying client filters');
   
   if (!exercises || exercises.length === 0) {
-    throw new ExerciseFilterError('No exercises available to filter');
+    console.log('⚠️ No exercises available to filter');
+    return [];
   }
   
   // If no client context provided, return all exercises

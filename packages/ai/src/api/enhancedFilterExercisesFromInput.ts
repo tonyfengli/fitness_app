@@ -14,10 +14,11 @@ import {
   scoreTracker, 
   debugLogger,
   saveEnhancedDebugData,
-  saveWorkoutGenerationLog,
-  type EnhancedFilterDebugData,
-  type WorkoutGenerationLog
+  saveWorkoutGenerationLog
+  
+  
 } from "../utils/enhancedDebug";
+import type {EnhancedFilterDebugData, WorkoutGenerationLog} from "../utils/enhancedDebug";
 import { saveFilterDebugData } from "../utils/debugToFile";
 import { v4 as uuidv4 } from "uuid";
 

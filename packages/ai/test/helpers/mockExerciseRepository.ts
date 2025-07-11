@@ -1,6 +1,5 @@
 import type { Exercise } from '../../src/types';
 import type { ExerciseRepository } from '../../src/repositories/exerciseRepository';
-import { mockExerciseDatabase } from './testData';
 
 export interface MockRepositoryOptions {
   exercises?: Exercise[];
@@ -16,7 +15,7 @@ export class MockExerciseRepository implements ExerciseRepository {
   private options: MockRepositoryOptions;
   public calls: {
     findAll: number;
-    findByBusiness: Array<{ businessId: string }>;
+    findByBusiness: { businessId: string }[];
   } = {
     findAll: 0,
     findByBusiness: [],
@@ -24,7 +23,7 @@ export class MockExerciseRepository implements ExerciseRepository {
   
   constructor(options: MockRepositoryOptions = {}) {
     this.options = options;
-    this.exercises = options.exercises || mockExerciseDatabase;
+    this.exercises = options.exercises || [];
   }
   
   async findAll(): Promise<Exercise[]> {

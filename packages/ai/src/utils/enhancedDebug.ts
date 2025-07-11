@@ -9,38 +9,32 @@ const WORKOUT_HISTORY_FILE = '/Users/tonyli/Desktop/fitness_app/workout-generati
 // Enhancement #1: Enhanced Filter State Tracking
 export interface EnhancedFilterDebugData extends FilterDebugData {
   // Track why exercises were excluded
-  exclusionReasons: {
-    [exerciseId: string]: {
+  exclusionReasons: Record<string, {
       name: string;
       reasons: string[];
-    };
-  };
+    }>;
   
   // Track constraint satisfaction progress
-  constraintAnalysis: {
-    [blockId: string]: {
+  constraintAnalysis: Record<string, {
       required: string[];
       satisfied: string[];
       unsatisfied: string[];
-      attemptedExercises: Array<{
+      attemptedExercises: {
         name: string;
         constraint: string;
         selected: boolean;
         reason?: string;
-      }>;
-    };
-  };
+      }[];
+    }>;
   
   // Score breakdown for each exercise
-  scoreBreakdowns: {
-    [exerciseId: string]: {
+  scoreBreakdowns: Record<string, {
       name: string;
       baseScore: number;
-      bonuses: Array<{ reason: string; value: number }>;
-      penalties: Array<{ reason: string; value: number }>;
+      bonuses: { reason: string; value: number }[];
+      penalties: { reason: string; value: number }[];
       finalScore: number;
-    };
-  };
+    }>;
 
   // Debug mode logs (Enhancement #8)
   debugLog?: DebugLogEntry[];
@@ -145,8 +139,8 @@ export class ScoreBreakdownTracker {
   addBreakdown(
     exercise: ScoredExercise,
     baseScore: number,
-    bonuses: Array<{ reason: string; value: number }>,
-    penalties: Array<{ reason: string; value: number }>
+    bonuses: { reason: string; value: number }[],
+    penalties: { reason: string; value: number }[]
   ): void {
     const totalBonus = bonuses.reduce((sum, b) => sum + b.value, 0);
     const totalPenalty = penalties.reduce((sum, p) => sum + p.value, 0);

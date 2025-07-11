@@ -34,9 +34,7 @@ export interface WorkoutTemplate {
  * Dynamic exercise organization structure
  */
 export interface DynamicOrganizedExercises {
-  blocks: {
-    [blockId: string]: ScoredExercise[];
-  };
+  blocks: Record<string, ScoredExercise[]>;
   metadata: {
     template: WorkoutTemplate;
     timestamp: string;

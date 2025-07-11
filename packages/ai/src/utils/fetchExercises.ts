@@ -3,6 +3,7 @@ import { eq } from "@acme/db";
 import { BusinessExercise, exercises } from "@acme/db/schema";
 import type { Exercise } from "../types";
 import type { ExerciseRepository } from "../repositories/exerciseRepository";
+import { getServices } from "../services/container";
 
 export class ExerciseFetchError extends Error {
   constructor(message: string, public cause?: unknown) {
@@ -55,6 +56,11 @@ export function getExerciseRepository(): ExerciseRepository {
  * @throws {ExerciseFetchError} If database query fails
  */
 export async function fetchAllExercises(): Promise<Exercise[]> {
+  // Check if a repository is available in the service container (for testing)
+  const services = getServices();
+  if (services.exerciseRepository) {
+    return services.exerciseRepository.findAll();
+  }
   return repository.findAll();
 }
 
@@ -69,5 +75,10 @@ export async function fetchExercisesByBusiness(businessId: string): Promise<Exer
     throw new ExerciseFetchError('Business ID is required');
   }
   
+  // Check if a repository is available in the service container (for testing)
+  const services = getServices();
+  if (services.exerciseRepository) {
+    return services.exerciseRepository.findByBusiness(businessId);
+  }
   return repository.findByBusiness(businessId);
 }

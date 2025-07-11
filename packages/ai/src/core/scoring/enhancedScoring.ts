@@ -25,7 +25,7 @@ const FUNCTION_TAG_SCORING: Record<string, Record<string, number>> = {};
 export function enhancedApplyScoring(
   exercises: Exercise[],
   criteria: ScoringCriteria,
-  enableDebug: boolean = false
+  enableDebug = false
 ): ScoredExercise[] {
   if (enableDebug) {
     debugLogger.log('scoring', 'Starting enhanced scoring', {
@@ -42,9 +42,9 @@ export function enhancedApplyScoring(
   const startTime = performance.now();
   
   const scoredExercises = exercises.map(exercise => {
-    const bonuses: Array<{ reason: string; value: number }> = [];
-    const penalties: Array<{ reason: string; value: number }> = [];
-    let baseScore = SCORING_CONFIG.BASE_SCORE;
+    const bonuses: { reason: string; value: number }[] = [];
+    const penalties: { reason: string; value: number }[] = [];
+    const baseScore = SCORING_CONFIG.BASE_SCORE;
     
     // Calculate muscle targeting bonus
     if (criteria.muscleTarget && criteria.muscleTarget.length > 0) {
@@ -169,8 +169,8 @@ export function enhancedApplyScoring(
  */
 export function getTopExercisesWithBreakdown(
   exercises: ScoredExercise[], 
-  count: number = 10
-): Array<ScoredExercise & { breakdown?: any }> {
+  count = 10
+): (ScoredExercise & { breakdown?: any })[] {
   const sorted = [...exercises].sort((a, b) => b.score - a.score);
   const top = sorted.slice(0, count);
   

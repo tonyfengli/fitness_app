@@ -1,5 +1,5 @@
 import { filterExercises } from "../core/filtering/filterExercises";
-import type { WorkoutSessionStateType, ClientContext, WorkoutTemplate } from "../types";
+import type { WorkoutSessionStateType, ClientContext, FilterWorkoutTemplate } from "../types";
 import type { ScoredExercise } from "../types/scoredExercise";
 import { ExerciseFilterError } from "../core/filtering/applyClientFilters";
 import { buildScoringCriteria } from "../utils/scoringCriteria";
@@ -9,7 +9,7 @@ import { addPresentationFlagsAuto } from "../formatting/exerciseFlags";
 export interface FilterExercisesOptions {
   userInput?: string;
   clientContext?: ClientContext;
-  workoutTemplate?: WorkoutTemplate;
+  workoutTemplate?: FilterWorkoutTemplate;
   exercises?: any[]; // Pass exercises directly from API
   intensity?: "low" | "moderate" | "high"; // Pass intensity separately for scoring
 }

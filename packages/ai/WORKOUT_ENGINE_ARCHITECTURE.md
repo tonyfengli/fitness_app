@@ -382,8 +382,6 @@ Transforms organized exercise blocks into a structured workout program with sets
 ### Output
 Complete workout program ready for client use
 
-**[Placeholder: LangGraph Workflow Diagram - showing nodes, states, and prompt assembly]**
-
 ---
 
 ## API Interface
@@ -421,8 +419,6 @@ Phase 5: LLM Generation
     ↓
 Structured Workout Response
 ```
-
-**[Placeholder: End-to-End Data Flow Diagram - showing data transformation at each phase]**
 
 ---
 
@@ -487,35 +483,150 @@ This debugging system is essential for:
 - Verifying template constraints are met
 - Performance profiling of each phase
 
-### 3. Filter State Persistence
+### 3. Filter State Persistence & Enhanced Debugging
 
 #### Overview
-The system automatically saves filter state to a file that can be read by Claude Code for debugging and support.
+The system provides multiple levels of debugging data persistence for comprehensive analysis and support.
 
-#### How It Works
-1. Every time the `exercise.filter` endpoint is called, the current filter state and results are saved to `/Users/tonyli/Desktop/fitness_app/current-filter-state.json`
+#### Basic Filter State Persistence
+1. Every time the `exercise.filter` endpoint is called, the current filter state and results are saved to:
+   - **File**: `current-filter-state.json`
+   - **Location**: `/Users/tonyli/Desktop/fitness_app/` (project root directory, NOT in packages/ai)
 2. This file contains:
    - Current filter selections (intensity, muscle targets, capacity levels, etc.)
    - Filtered exercise results organized by block
    - Top exercises in each block with their scores
    - Timestamp of when the filter was applied
 
-#### Usage with Claude Code
-When working with Claude Code, you can ask to see your current filter state:
-- "What filters do I have selected?"
-- "Check my current filter state"
-- "What exercises are showing?"
-- "Read the filter debug file"
+#### Enhanced Debug Mode
+When `debug: true` is passed to the filter endpoint, additional detailed tracking is enabled:
 
-Claude will read the file and report:
-- Your current filter settings
-- Number of exercises in each block
-- Top-scoring exercises
-- Any issues with the filtering
+1. **Exclusion Tracking** (`ExclusionTracker`)
+   - Tracks WHY each exercise was excluded from results
+   - Records all reasons for exclusion (strength level, skill level, joint restrictions, etc.)
+   - Helps identify overly restrictive filters
+
+2. **Constraint Analysis** (`ConstraintAnalysisTracker`)
+   - Tracks constraint satisfaction progress for each block
+   - Records which constraints are required, satisfied, and unsatisfied
+   - Logs every exercise attempt with constraint matching details
+   - Shows why exercises were selected or rejected for constraint satisfaction
+
+3. **Score Breakdowns** (`ScoreBreakdownTracker`)
+   - Detailed breakdown of how each exercise's score was calculated
+   - Shows base score, all bonuses (with reasons), all penalties (with reasons)
+   - Final score calculation transparency
+
+4. **Real-time Debug Logging** (`DebugLogger`)
+   - Step-by-step logging of the entire pipeline
+   - Performance metrics for each phase
+   - Exercise counts affected at each step
+   - Organized by phase: filtering, scoring, organizing, constraint_check, selection
+
+5. **Workout Generation History**
+   - Persists to `/Users/tonyli/Desktop/fitness_app/workout-generation-history.json`
+   - Tracks all generated workouts with session IDs
+   - Includes filter parameters, results, and timing
+   - Space for user feedback (rating, swaps, completion rate)
+
+#### File Locations (All in project root, NOT packages/ai)
+- **Basic State**: `/Users/tonyli/Desktop/fitness_app/current-filter-state.json`
+- **Enhanced Debug**: `/Users/tonyli/Desktop/fitness_app/enhanced-debug-state.json`
+- **Workout History**: `/Users/tonyli/Desktop/fitness_app/workout-generation-history.json`
+
+#### Usage with Claude Code
+When working with Claude Code, you can ask:
+- "What filters do I have selected?"
+- "Why was exercise X excluded?"
+- "Show me the constraint analysis for block B"
+- "What's the score breakdown for exercise Y?"
+- "Read the enhanced debug data"
 
 #### Implementation
-- **Module**: `utils/debugToFile.ts`
+- **Basic Module**: `utils/debugToFile.ts`
+- **Enhanced Module**: `utils/enhancedDebug.ts`
 - **Integration**: `api/src/router/exercise.ts` (filter endpoint)
-- **File Location**: `/Users/tonyli/Desktop/fitness_app/current-filter-state.json`
+- **Enhanced Integration**: `api/enhancedFilterExercisesFromInput.ts`
 
-This feature enables real-time debugging support without needing to manually copy/paste filter states.
+This comprehensive debugging system enables:
+- Real-time debugging without console access
+- Historical analysis of workout generation patterns
+- Detailed troubleshooting of filter/scoring issues
+- Performance profiling of each pipeline phase
+
+### 4. Debug-to-Test Workflow
+
+#### Overview
+Convert interesting debug states into integration tests on-demand. This system helps capture edge cases and bugs as they occur, then convert them into regression tests when needed.
+
+#### How It Works
+
+##### Step 1: Capture During Development
+When you encounter an issue or interesting scenario:
+
+**From Browser Console:**
+```javascript
+// After clicking filter and seeing the issue
+saveScenario('joint_bug', 'Squats showing despite knee restriction')
+// ✅ Scenario saved!
+```
+
+**From Terminal:**
+```bash
+# Save current debug state with a name
+npm run debug-to-test save muscle_conflict "Chest target conflicts with tricep lessen"
+```
+
+##### Step 2: Review Saved Scenarios
+```bash
+# List all saved scenarios
+npm run debug-to-test list
+
+# Output:
+# 📁 Saved scenarios (3):
+# 1. joint_bug - Squats showing despite knee restriction
+#    ID: scenario_1234567890
+#    Saved: 1/11/2025, 10:30 AM
+# 
+# 2. muscle_conflict - Chest target conflicts with tricep lessen
+#    ID: scenario_1234567891
+#    Saved: 1/11/2025, 11:45 AM
+```
+
+##### Step 3: Generate Test When Ready
+```bash
+# Generate test code from a saved scenario
+npm run debug-to-test generate joint_bug
+
+# Outputs test code to copy into your test file:
+# it('Squats showing despite knee restriction', async () => {
+#   const debugData = { /* captured state */ };
+#   // ... generated test code
+# });
+```
+
+##### Step 4: Customize and Add to Test Suite
+1. Copy generated test code
+2. Add to appropriate test file (e.g., `restrictive-filters.test.ts`)
+3. Add specific assertions for the issue
+4. Run tests to ensure they catch the bug
+
+#### What Gets Saved
+- Complete filter state from `current-filter-state.json`
+- Enhanced debug data (if available) with exclusion reasons and score breakdowns
+- Your description and optional notes
+- Timestamp and unique ID
+
+#### File Locations
+- **Saved scenarios**: `/Users/tonyli/Desktop/fitness_app/saved-test-scenarios/`
+- **Test helper**: `utils/debugToTest.ts`
+- **Browser helper**: `apps/nextjs/src/utils/testHelper.ts`
+
+#### Benefits
+- **On-demand**: Nothing automatic - you control when to save and convert
+- **Named scenarios**: Easy to find and remember edge cases
+- **Test generation**: Creates test skeleton with captured data
+- **Edge case library**: Build up a collection of real-world scenarios
+- **Regression prevention**: Turn bugs into permanent test guards
+
+This workflow bridges the gap between debugging and testing, making it easy to convert real issues into integration tests without manual data copying.

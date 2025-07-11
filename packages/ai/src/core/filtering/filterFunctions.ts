@@ -31,9 +31,11 @@ export function filterByStrength(
   strengthLevel: StrengthLevel
 ): Exercise[] {
   const allowedLevels = getAllowedCascadingLevels(strengthLevel);
-  return exercises.filter(exercise => 
-    allowedLevels.includes(exercise.strengthLevel)
-  );
+  return exercises.filter(exercise => {
+    // Skip exercises with null/undefined strength level
+    if (!exercise.strengthLevel) return false;
+    return allowedLevels.includes(exercise.strengthLevel);
+  });
 }
 
 /**
@@ -45,9 +47,11 @@ export function filterBySkill(
   skillLevel: SkillLevel
 ): Exercise[] {
   const allowedLevels = getAllowedCascadingLevels(skillLevel);
-  return exercises.filter(exercise => 
-    allowedLevels.includes(exercise.complexityLevel)
-  );
+  return exercises.filter(exercise => {
+    // Skip exercises with null/undefined complexity level
+    if (!exercise.complexityLevel) return false;
+    return allowedLevels.includes(exercise.complexityLevel);
+  });
 }
 
 /**
@@ -112,6 +116,19 @@ export function filterByAvoidJoints(
 }
 
 /**
+ * Validate that an exercise has all required fields
+ */
+function isValidExercise(exercise: Exercise): boolean {
+  return !!(
+    exercise.id &&
+    exercise.name &&
+    exercise.primaryMuscle &&
+    exercise.strengthLevel &&
+    exercise.complexityLevel
+  );
+}
+
+/**
  * Apply all filters to an exercise array with proper priority:
  * 1. Include filters take highest priority (override strength/skill restrictions)
  * 2. Standard filters (strength/skill/intensity) apply to remaining exercises
@@ -122,18 +139,20 @@ export function applyAllFilters(
   exercises: Exercise[],
   filters: FilterCriteria
 ): Exercise[] {
+  // First, filter out invalid exercises
+  const validExercises = exercises.filter(isValidExercise);
   // Step 1: Handle include filters first - these override strength/skill restrictions
   let includedExercises: Exercise[] = [];
-  let remainingExercises = exercises;
+  let remainingExercises = validExercises;
   
   if (filters.include && filters.include.length > 0) {
     // Get explicitly included exercises (regardless of strength/skill)
-    includedExercises = exercises.filter(exercise => 
+    includedExercises = validExercises.filter(exercise => 
       filters.include?.includes(exercise.name) ?? false
     );
     
     // Remove included exercises from remaining pool to avoid duplicates
-    remainingExercises = exercises.filter(exercise => 
+    remainingExercises = validExercises.filter(exercise => 
       !(filters.include?.includes(exercise.name) ?? false)
     );
   }

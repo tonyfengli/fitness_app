@@ -19,7 +19,7 @@ export function performSecondPassScoring(
   firstPassResults: ScoredExercise[],
   criteria: ScoringCriteria,
   maxScore: number,
-  includeBreakdown: boolean = false
+  includeBreakdown = false
 ): ScoredExercise[] {
   console.log('🎯 Second pass: Boosting included exercises');
   

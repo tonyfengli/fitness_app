@@ -16,7 +16,7 @@ import { analyzeScoreDistribution, logScoringPerformance } from "./scoreAnalysis
 export async function scoreAndSortExercises(
   exercises: Exercise[],
   criteria: ScoringCriteria,
-  includeBreakdown: boolean = false
+  includeBreakdown = false
 ): Promise<ScoredExercise[]> {
   const startTime = performance.now();
   console.log('🎯 Scoring exercises with criteria:', {

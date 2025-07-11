@@ -224,9 +224,9 @@ export function addPresentationFlagsAuto(
 ): ExerciseWithUIFlags[] {
   // Check if it's legacy format (has blockA, blockB, etc.)
   if (organizedExercises && 'blockA' in organizedExercises) {
-    return addPresentationFlags(exercises, organizedExercises as OrganizedExercises);
+    return addPresentationFlags(exercises, organizedExercises);
   }
   
   // Otherwise treat as dynamic format
-  return addPresentationFlagsDynamic(exercises, organizedExercises as DynamicOrganizedExercises);
+  return addPresentationFlagsDynamic(exercises, organizedExercises);
 }

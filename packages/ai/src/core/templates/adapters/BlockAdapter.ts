@@ -20,10 +20,10 @@ export class BlockAdapter {
     });
 
     const legacy: OrganizedExercises = {
-      blockA: dynamic.blocks['A'] || [],
-      blockB: dynamic.blocks['B'] || [],
-      blockC: dynamic.blocks['C'] || [],
-      blockD: dynamic.blocks['D'] || []
+      blockA: dynamic.blocks.A || [],
+      blockB: dynamic.blocks.B || [],
+      blockC: dynamic.blocks.C || [],
+      blockD: dynamic.blocks.D || []
     };
 
     logBlockTransformation('BlockAdapter.toLegacyFormat',

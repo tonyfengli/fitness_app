@@ -12,7 +12,7 @@ export interface MockLLMOptions {
  */
 export class MockLLM implements LLMProvider {
   private options: MockLLMOptions;
-  public calls: Array<{ messages: any[]; response: any }> = [];
+  public calls: { messages: any[]; response: any }[] = [];
   
   constructor(options: MockLLMOptions = {}) {
     this.options = options;

@@ -17,7 +17,7 @@ export class EnhancedConstraintTracker extends ConstraintTracker {
   private myUpperBodyCount = 0;
   private myLowerBodyCount = 0;
 
-  constructor(blockId: string, enableDebug: boolean = false) {
+  constructor(blockId: string, enableDebug = false) {
     super();
     this.blockId = blockId;
     this.enableDebug = enableDebug;
@@ -303,7 +303,7 @@ export class EnhancedConstraintTracker extends ConstraintTracker {
       details: {
         movement: {
           required: movementRequired,
-          satisfied: movementSatisfied as string[],
+          satisfied: movementSatisfied,
           missing: movementMissing
         },
         muscle: {
