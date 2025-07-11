@@ -30,4 +30,5 @@ export interface ScoringCriteria {
   intensity?: string; // 'low', 'moderate', 'high'
   skillLevel?: string; // 'very_low', 'low', 'moderate', 'high'
   strengthLevel?: string; // 'very_low', 'low', 'moderate', 'high'
+  primaryGoal?: string; // 'strength', 'muscle_building', 'endurance', etc.
 }

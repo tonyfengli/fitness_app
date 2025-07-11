@@ -11,6 +11,8 @@ export interface DirectFilterOptions {
   clientContext?: ClientContext;
   includeScoring?: boolean; // Whether to apply scoring and sorting
   scoringCriteria?: ScoringCriteria; // Scoring criteria for Phase 2
+  enhancedMode?: boolean; // Enable enhanced debug mode
+  customFilterFunction?: (exercises: Exercise[], criteria: ClientContext) => Exercise[]; // Custom filter function
 }
 
 /**
@@ -31,7 +33,9 @@ export async function filterExercises(
     businessId, 
     clientContext,
     includeScoring = false,
-    scoringCriteria 
+    scoringCriteria,
+    enhancedMode = false,
+    customFilterFunction
   } = options;
   
   // Get exercises: either provided, business-specific, or all
@@ -55,7 +59,9 @@ export async function filterExercises(
   
   // Apply client-based filtering only
   const phase1StartTime = performance.now();
-  const filteredExercises = applyClientFilters(exercises, finalClientContext);
+  const filteredExercises = customFilterFunction 
+    ? customFilterFunction(exercises, finalClientContext)
+    : applyClientFilters(exercises, finalClientContext);
   const phase1EndTime = performance.now();
   console.log(`⏱️ Phase 1 (client filters) took: ${(phase1EndTime - phase1StartTime).toFixed(2)}ms, filtered to ${filteredExercises.length} exercises`);
   

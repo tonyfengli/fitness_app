@@ -3,7 +3,7 @@ import { z } from "zod/v4";
 
 import { desc, eq, ilike, and, inArray } from "@acme/db";
 import { exercises } from "@acme/db/schema";
-import { filterExercisesFromInput, saveFilterDebugData } from "@acme/ai";
+import { filterExercisesFromInput, saveFilterDebugData, enhancedFilterExercisesFromInput } from "@acme/ai";
 
 import { protectedProcedure, publicProcedure } from "../trpc";
 
@@ -152,6 +152,9 @@ export const exerciseRouter = {
       
       // Optional user input for future LLM processing
       userInput: z.string().optional(),
+      
+      // Enable enhanced debug mode
+      debug: z.boolean().optional(),
     }).optional())
     .query(async ({ ctx, input }) => {
       try {
@@ -185,7 +188,13 @@ export const exerciseRouter = {
         console.log(`⏱️ Database fetch took: ${dbEndTime - dbStartTime}ms for ${allExercises.length} exercises`);
         
         const filterStartTime = Date.now();
-        const result = await filterExercisesFromInput({
+        
+        // Use enhanced version if debug mode is enabled
+        const filterFunction = input?.debug 
+          ? enhancedFilterExercisesFromInput 
+          : filterExercisesFromInput;
+        
+        const result = await filterFunction({
           clientContext: {
             name: safeInput.clientName,
             strength_capacity: safeInput.strengthCapacity,
@@ -204,6 +213,7 @@ export const exerciseRouter = {
           userInput: safeInput.userInput,
           exercises: allExercises, // Pass exercises directly
           intensity: safeInput.intensity, // Pass intensity separately for scoring
+          enableDebug: input?.debug || false, // Pass debug flag
           workoutTemplate: {
             workout_goal: safeInput.isFullBody ? "mixed_focus" : "mixed_focus", // Both use mixed_focus for now
             muscle_target: safeInput.muscleTarget,

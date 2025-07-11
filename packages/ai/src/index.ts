@@ -7,6 +7,7 @@ export * from "./types/scoredExercise";
 // API functions
 export * from "./api/filterExercisesFromInput";
 export * from "./api/debugBlockSystem";
+export * from "./api/enhancedFilterExercisesFromInput";
 
 // Core functionality
 export * from "./core/filtering";

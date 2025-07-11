@@ -1,13 +1,11 @@
 {
-  "timestamp": "2025-07-11T06:15:19.202Z",
+  "timestamp": "2025-07-11T16:05:12.847Z",
   "filters": {
     "clientName": "Web User",
-    "strengthCapacity": "low",
-    "skillCapacity": "low",
+    "strengthCapacity": "moderate",
+    "skillCapacity": "moderate",
     "intensity": "moderate",
-    "muscleTarget": [
-      "calves"
-    ],
+    "muscleTarget": [],
     "muscleLessen": [],
     "avoidJoints": [],
     "includeExercises": [],
@@ -15,33 +13,33 @@
     "isFullBody": false
   },
   "results": {
-    "totalExercises": 47,
+    "totalExercises": 117,
     "blockA": {
       "count": 5,
       "exercises": [
         {
+          "id": "49bc7005-5179-4d96-be77-ac790cf00759",
+          "name": "Landmine T Bar Row",
+          "score": 5
+        },
+        {
+          "id": "57c24380-6ee2-4242-84b5-0cf299ae8369",
+          "name": "Landmine Shoulder Press",
+          "score": 5
+        },
+        {
+          "id": "cdd9c4a6-4048-4ee2-9292-aa36e7a2a9ae",
+          "name": "Barbell Glute Bridge on Bench",
+          "score": 5
+        },
+        {
+          "id": "4faeab78-16bd-4d71-b935-226bc691531d",
+          "name": "Hollow Body Dumbbell Press",
+          "score": 5
+        },
+        {
           "id": "b10fc80a-3bc6-4d31-8a1d-d653d55dccc3",
           "name": "Dumbbell Bridge Chest Press",
-          "score": 5
-        },
-        {
-          "id": "8050aa27-29fd-43f8-a647-8828e484d28b",
-          "name": "Incline Dumbbell Press",
-          "score": 5
-        },
-        {
-          "id": "144e1124-e7d7-4594-8c75-f9522081060e",
-          "name": "Kettlebell Deadlift",
-          "score": 5
-        },
-        {
-          "id": "e922ce7d-d596-4f62-9d0b-78f624ae4102",
-          "name": "Lat Pulldown",
-          "score": 5
-        },
-        {
-          "id": "dabd605d-42d5-4c18-bbf8-856eb175a78c",
-          "name": "Goblet Pause Squat (3 Seconds)",
           "score": 5
         }
       ]
@@ -50,18 +48,18 @@
       "count": 8,
       "exercises": [
         {
-          "id": "8a08ffdd-2998-4795-8030-ccd357613f7b",
-          "name": "Elevated Push-Ups",
+          "id": "3d44886e-896b-4059-a4db-506923ea3b58",
+          "name": "Batwing Chest-Supported Row",
           "score": 5
         },
         {
-          "id": "53141345-2351-436a-9b1c-21bc273ba554",
-          "name": "Spanish Lunge",
+          "id": "11611e20-e723-4cfe-9276-7ab4eb73f829",
+          "name": "Landmine Reverse Lunge",
           "score": 5
         },
         {
-          "id": "8050aa27-29fd-43f8-a647-8828e484d28b",
-          "name": "Incline Dumbbell Press",
+          "id": "7ed3976c-c9f3-4672-966c-424778e1cd8c",
+          "name": "Goblet Squat Pulse",
           "score": 5
         }
       ]
@@ -70,18 +68,18 @@
       "count": 8,
       "exercises": [
         {
-          "id": "5a75f68d-4d30-4211-a98c-a74c71f70f8d",
-          "name": "Glute Bridge Thrust with Dumbbell",
+          "id": "02a4b661-036e-4446-91b1-635d495cecdc",
+          "name": "Face Pulls",
           "score": 5
         },
         {
-          "id": "4e40b3f0-cf13-4998-8ec0-61a9b5dd5239",
-          "name": "Banded Prone Overhead Press",
+          "id": "141589ed-ffb0-48eb-aab5-02cd568e287e",
+          "name": "Bodyweight Triceps Extension",
           "score": 5
         },
         {
-          "id": "80c543b0-16fe-4821-9d04-0aadfe1b0082",
-          "name": "Incline Bicep Curl",
+          "id": "8442a047-e5a7-49d7-a40e-fce4812b40ce",
+          "name": "Single-Leg Glute Bridge with Band",
           "score": 5
         }
       ]
@@ -90,23 +88,23 @@
       "count": 6,
       "exercises": [
         {
-          "id": "e824764c-7860-4254-a2c5-9eca52db2e5d",
-          "name": "Medicine Ball Slam",
+          "id": "904c2b74-944f-49af-8324-22b1b1ea7b9a",
+          "name": "Jump Squat",
           "score": 5
         },
         {
-          "id": "c4755d77-e9a6-4dd8-971f-b41a326c0cfa",
-          "name": "Russian Twist",
+          "id": "050e52d0-5f3a-491c-b424-24c5dad31a62",
+          "name": "Farmer's Carry Step-Up",
           "score": 5
         },
         {
-          "id": "620165b8-278c-48cd-a8a1-9f9aa1f37e80",
-          "name": "Flutter Kicks",
+          "id": "c9916c21-2e2f-44d0-9aa3-d94b5e35c65c",
+          "name": "BOSU Bird Dog",
           "score": 5
         },
         {
-          "id": "53febb99-c0d1-4fb6-90e8-856dc4a7827b",
-          "name": "Hanging Knee Raise",
+          "id": "5eaede2f-c9d5-41ef-8942-9d74a95ded1e",
+          "name": "Twisting Pistons",
           "score": 5
         }
       ]
