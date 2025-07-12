@@ -110,12 +110,9 @@ function MobileAuth() {
         onPress={() =>
           session
             ? authClient.signOut()
-            : authClient.signIn.social({
-                provider: "discord",
-                callbackURL: "/",
-              })
+            : console.log("Email/password login not implemented in mobile yet")
         }
-        title={session ? "Sign Out" : "Sign In With Discord"}
+        title={session ? "Sign Out" : "Sign In"}
         color={"#5B65E9"}
       />
     </>

@@ -3,21 +3,23 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { authClient } from "~/auth/client";
 import { useTRPC } from "~/trpc/react";
 
 export default function SignupPage() {
   const router = useRouter();
   const trpc = useTRPC();
+  const queryClient = useQueryClient();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
   const [formData, setFormData] = useState({
-    username: "",
     email: "",
     password: "",
     name: "",
+    phone: "",
+    role: "client",
     businessId: "",
   });
 
@@ -26,10 +28,6 @@ export default function SignupPage() {
     trpc.business.all.queryOptions()
   );
   
-  // Mutation to update user's business
-  const updateUserBusiness = useMutation(
-    trpc.auth.updateUserBusiness.mutationOptions()
-  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,12 +35,14 @@ export default function SignupPage() {
     setError(null);
 
     try {
-      // First sign up with email/password (username will be set via update)
+      // Sign up with email/password
       const result = await authClient.signUp.email({
         email: formData.email,
         password: formData.password,
         name: formData.name,
-        // We'll set username after signup
+        phone: formData.phone,
+        role: formData.role,
+        businessId: formData.businessId,
       });
 
       if (result.error) {
@@ -58,17 +58,20 @@ export default function SignupPage() {
           setError("Account created but failed to sign in. Please try logging in.");
           router.push("/login");
         } else {
-          // Update the user's business association if businessId is provided
-          if (formData.businessId) {
-            try {
-              await updateUserBusiness.mutateAsync({ businessId: formData.businessId });
-            } catch (err) {
-              console.error("Failed to update business association:", err);
-              // Continue anyway - user is created and signed in
-            }
-          }
+          // Invalidate auth cache to force refetch
+          await queryClient.invalidateQueries({ queryKey: ["auth-session"] });
           
-          router.push("/");
+          // Get fresh session data
+          const session = await authClient.getSession();
+          
+          // Redirect based on user role
+          if (session?.user?.role === "trainer") {
+            router.push("/trainer-dashboard");
+          } else if (session?.user?.role === "client") {
+            router.push("/client-dashboard");
+          } else {
+            router.push("/");
+          }
           router.refresh();
         }
       }
@@ -126,27 +129,8 @@ export default function SignupPage() {
             </div>
 
             <div>
-              <label htmlFor="username" className="block text-sm font-medium text-gray-700">
-                Username
-              </label>
-              <input
-                id="username"
-                name="username"
-                type="text"
-                autoComplete="username"
-                required
-                className="mt-1 block w-full rounded-md border-0 px-3 py-2 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-blue-600 sm:text-sm sm:leading-6"
-                placeholder="johndoe"
-                value={formData.username}
-                onChange={(e) =>
-                  setFormData({ ...formData, username: e.target.value })
-                }
-              />
-            </div>
-
-            <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                Email Address
+                Email
               </label>
               <input
                 id="email"
@@ -159,6 +143,24 @@ export default function SignupPage() {
                 value={formData.email}
                 onChange={(e) =>
                   setFormData({ ...formData, email: e.target.value })
+                }
+              />
+            </div>
+
+            <div>
+              <label htmlFor="phone" className="block text-sm font-medium text-gray-700">
+                Phone Number
+              </label>
+              <input
+                id="phone"
+                name="phone"
+                type="tel"
+                autoComplete="tel"
+                className="mt-1 block w-full rounded-md border-0 px-3 py-2 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-blue-600 sm:text-sm sm:leading-6"
+                placeholder="(555) 123-4567"
+                value={formData.phone}
+                onChange={(e) =>
+                  setFormData({ ...formData, phone: e.target.value })
                 }
               />
             </div>
@@ -180,6 +182,25 @@ export default function SignupPage() {
                   setFormData({ ...formData, password: e.target.value })
                 }
               />
+            </div>
+
+            <div>
+              <label htmlFor="role" className="block text-sm font-medium text-gray-700">
+                Role
+              </label>
+              <select
+                id="role"
+                name="role"
+                required
+                className="mt-1 block w-full rounded-md border-0 px-3 py-2 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-blue-600 sm:text-sm sm:leading-6"
+                value={formData.role}
+                onChange={(e) =>
+                  setFormData({ ...formData, role: e.target.value })
+                }
+              >
+                <option value="client">Client</option>
+                <option value="trainer">Trainer</option>
+              </select>
             </div>
 
             <div>

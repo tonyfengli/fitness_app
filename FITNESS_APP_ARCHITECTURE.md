@@ -194,9 +194,8 @@ POSTGRES_URL="postgres://postgres.[project-ref]:[password]@[region].pooler.supab
 # Authentication
 AUTH_SECRET="your-secret-key"
 
-# Discord OAuth
-AUTH_DISCORD_ID="your-discord-client-id"
-AUTH_DISCORD_SECRET="your-discord-client-secret"
+# AI/LLM Integration
+OPENAI_API_KEY="your-openai-api-key"
 
 # Optional: For OAuth proxy
 AUTH_REDIRECT_PROXY_URL="http://localhost:3000"
@@ -223,7 +222,7 @@ Implementing a username/password authentication system with business association
 1. Create database migrations for:
    - Remove email, emailVerified, image from users table
    - Add phone, username, role, businessId to users table
-   - Create client_profiles table (skeleton only)
+   - Create user_profile table (skeleton only)
 2. Create data migration to preserve exercises and BusinessExercise relationships
 3. Run migrations
 4. **Test: Verify schema and exercise data intact**
@@ -248,16 +247,32 @@ Implementing a username/password authentication system with business association
 17. Update auth showcase component
 18. **Test: Complete auth flow**
 
+#### Phase 4.5: Role-Based Routing & Navigation
+19. Create role-based dashboard routing:
+    - Rename `/exercises` to `/trainer-dashboard` (keep existing functionality)
+    - Create `/client-dashboard` (placeholder welcome page)
+    - Redirect after login based on user role
+20. Implement role-based navigation:
+    - Trainers see: "Trainer Dashboard" (exercise management)
+    - Clients see: "My Workouts" (placeholder for now)
+    - Both see: Logout option
+21. Add access control:
+    - Clients accessing `/trainer-dashboard` → redirect to unauthorized
+    - Trainers have full access to all pages
+    - Create protected route wrapper component
+22. Create `useAuth` hook for checking auth state and user role
+23. **Test: Role-based routing and access control**
+
 #### Phase 5: Integration & Cleanup
-19. Remove Discord OAuth elements
-20. Update environment variables
-21. **Test: End-to-end workout creation with auth**
-22. **Test: Mobile app authentication**
+24. Remove Discord OAuth elements
+25. Update environment variables
+26. **Test: End-to-end workout creation with auth**
+27. **Test: Mobile app authentication**
 
 ### Migration Notes
 - Exercise data and BusinessExercise relationships must be preserved
 - Existing user data can be discarded
-- Client profiles table will be expanded later with workout-specific fields
+- User profile table will be expanded later with workout-specific fields
 
 ### Future Considerations
 - Multi-business support (user_businesses join table ready)

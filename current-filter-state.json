@@ -1,10 +1,10 @@
 {
-  "timestamp": "2025-07-11T23:45:24.315Z",
+  "timestamp": "2025-07-12T20:51:11.987Z",
   "filters": {
     "clientName": "Web User",
-    "strengthCapacity": "low",
-    "skillCapacity": "low",
-    "intensity": "high",
+    "strengthCapacity": "moderate",
+    "skillCapacity": "moderate",
+    "intensity": "moderate",
     "muscleTarget": [],
     "muscleLessen": [],
     "avoidJoints": [],
@@ -13,34 +13,34 @@
     "isFullBody": false
   },
   "results": {
-    "totalExercises": 47,
+    "totalExercises": 117,
     "blockA": {
       "count": 5,
       "exercises": [
         {
-          "id": "dabd605d-42d5-4c18-bbf8-856eb175a78c",
-          "name": "Goblet Pause Squat (3 Seconds)",
-          "score": 6.5
+          "id": "49bc7005-5179-4d96-be77-ac790cf00759",
+          "name": "Landmine T Bar Row",
+          "score": 5
+        },
+        {
+          "id": "57c24380-6ee2-4242-84b5-0cf299ae8369",
+          "name": "Landmine Shoulder Press",
+          "score": 5
+        },
+        {
+          "id": "cdd9c4a6-4048-4ee2-9292-aa36e7a2a9ae",
+          "name": "Barbell Glute Bridge on Bench",
+          "score": 5
+        },
+        {
+          "id": "4faeab78-16bd-4d71-b935-226bc691531d",
+          "name": "Hollow Body Dumbbell Press",
+          "score": 5
         },
         {
           "id": "b10fc80a-3bc6-4d31-8a1d-d653d55dccc3",
           "name": "Dumbbell Bridge Chest Press",
-          "score": 5.75
-        },
-        {
-          "id": "8050aa27-29fd-43f8-a647-8828e484d28b",
-          "name": "Incline Dumbbell Press",
-          "score": 5.75
-        },
-        {
-          "id": "144e1124-e7d7-4594-8c75-f9522081060e",
-          "name": "Kettlebell Deadlift",
-          "score": 5.75
-        },
-        {
-          "id": "e922ce7d-d596-4f62-9d0b-78f624ae4102",
-          "name": "Lat Pulldown",
-          "score": 4.25
+          "score": 5
         }
       ]
     },
@@ -48,19 +48,19 @@
       "count": 8,
       "exercises": [
         {
-          "id": "7ed3976c-c9f3-4672-966c-424778e1cd8c",
-          "name": "Goblet Squat Pulse",
-          "score": 6.5
+          "id": "ca004a9f-5bb3-4749-acb8-55872fc58be2",
+          "name": "Lunge with Biceps Curl",
+          "score": 5
         },
         {
-          "id": "8050aa27-29fd-43f8-a647-8828e484d28b",
-          "name": "Incline Dumbbell Press",
-          "score": 5.75
+          "id": "3d44886e-896b-4059-a4db-506923ea3b58",
+          "name": "Batwing Chest-Supported Row",
+          "score": 5
         },
         {
-          "id": "2443e54e-6ab2-4779-aa8b-b892dfc635cf",
-          "name": "Farmer's Carry",
-          "score": 5.75
+          "id": "a5d09b5a-d62f-477b-8b71-216f35a20291",
+          "name": "Wall Squat Hold",
+          "score": 5
         }
       ]
     },
@@ -68,19 +68,19 @@
       "count": 8,
       "exercises": [
         {
-          "id": "a5d09b5a-d62f-477b-8b71-216f35a20291",
-          "name": "Wall Squat Hold",
-          "score": 6.5
+          "id": "aa66d8b3-907a-42ec-ac9b-bbaa347a88b8",
+          "name": "Y/W Raises",
+          "score": 5
         },
         {
-          "id": "840aedec-f2a7-47cb-935c-9ffc43cedde6",
-          "name": "Quadruped Fire Hydrant (Peeing Dog)",
-          "score": 4.25
+          "id": "ed8cddc4-0a55-440a-8ee6-2f5f6024adbf",
+          "name": "Dumbbell Bent-Over Reverse Fly",
+          "score": 5
         },
         {
-          "id": "7daaffc6-8b01-4c9d-88cb-484e8d671d0b",
-          "name": "Dumbbell Overhead Tricep Extension",
-          "score": 4.25
+          "id": "8442a047-e5a7-49d7-a40e-fce4812b40ce",
+          "name": "Single-Leg Glute Bridge with Band",
+          "score": 5
         }
       ]
     },
@@ -88,24 +88,24 @@
       "count": 6,
       "exercises": [
         {
-          "id": "9d50d2f2-0eda-48c4-9f7d-7a1fcff879b1",
-          "name": "Dumbbell Thruster",
-          "score": 6.5
+          "id": "fb5bf2ce-611c-4a2f-ae16-8d21d28280c1",
+          "name": "Side Plank Hip Raise",
+          "score": 5
         },
         {
-          "id": "71aee1c7-b87e-48fb-a28f-7a5c251b0808",
-          "name": "Plank Jack",
-          "score": 6.5
+          "id": "c9916c21-2e2f-44d0-9aa3-d94b5e35c65c",
+          "name": "BOSU Bird Dog",
+          "score": 5
         },
         {
-          "id": "d1767911-0405-4c19-a20c-d4dcf5af6e33",
-          "name": "Plank Up-Down (Elbow to Hand)",
-          "score": 4.25
+          "id": "5eaede2f-c9d5-41ef-8942-9d74a95ded1e",
+          "name": "Twisting Pistons",
+          "score": 5
         },
         {
-          "id": "620165b8-278c-48cd-a8a1-9f9aa1f37e80",
-          "name": "Flutter Kicks",
-          "score": 4.25
+          "id": "77a15368-7d0a-4abb-ae11-cee40c73889d",
+          "name": "Banded Suitcase Marches",
+          "score": 5
         }
       ]
     }

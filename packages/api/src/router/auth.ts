@@ -13,6 +13,18 @@ export const authRouter = {
   getSecretMessage: protectedProcedure.query(() => {
     return "you can see this secret message!";
   }),
+  getUserRole: protectedProcedure.query(({ ctx }) => {
+    if (!ctx.session?.user) {
+      return null;
+    }
+    return {
+      role: ctx.session.user.role || 'client',
+      businessId: ctx.session.user.businessId,
+    };
+  }),
+  isTrainer: protectedProcedure.query(({ ctx }) => {
+    return ctx.session?.user?.role === 'trainer';
+  }),
   getServerTime: publicProcedure.query(async ({ ctx }) => {
     try {
       // Simple connectivity test - try to query the existing Post table

@@ -60,8 +60,8 @@ export const CreateBusinessExerciseSchema = createInsertSchema(BusinessExercise,
   createdAt: true,
 });
 
-// Client Profile table for workout-specific data
-export const ClientProfile = pgTable("client_profile", (t) => ({
+// User Profile table for workout-specific data
+export const UserProfile = pgTable("user_profile", (t) => ({
   id: t.uuid().notNull().primaryKey().defaultRandom(),
   userId: t.text().notNull().references(() => user.id, { onDelete: "cascade" }),
   businessId: t.uuid().notNull().references(() => Business.id, { onDelete: "cascade" }),
@@ -72,7 +72,7 @@ export const ClientProfile = pgTable("client_profile", (t) => ({
     .$onUpdateFn(() => sql`now()`),
 }));
 
-export const CreateClientProfileSchema = createInsertSchema(ClientProfile, {
+export const CreateUserProfileSchema = createInsertSchema(UserProfile, {
   userId: z.string(),
   businessId: z.string().uuid(),
 }).omit({

@@ -124,7 +124,7 @@ export const exerciseRouter = {
       });
     }),
 
-  filter: publicProcedure
+  filter: protectedProcedure
     .input(z.object({
       // Client fitness profile
       clientName: z.string().default("Default Client"),
@@ -147,8 +147,7 @@ export const exerciseRouter = {
       // Template selection
       isFullBody: z.boolean().default(false),
       
-      // Business context
-      businessId: z.string().uuid().optional(),
+      // Business context - removed, will use from session
       
       // Optional user input for future LLM processing
       userInput: z.string().optional(),
@@ -161,6 +160,14 @@ export const exerciseRouter = {
         const apiStartTime = Date.now();
         console.log('🔍 exercise.filter API called');
         console.log('🔍 Input received:', input);
+        console.log('🔍 User session:', ctx.session?.user);
+        
+        // Get businessId from session
+        const businessId = ctx.session?.user?.businessId;
+        if (!businessId) {
+          throw new Error('User must be associated with a business');
+        }
+        
         // Keep intensity as-is for scoring system
         // The scoring system expects "low", "medium", "high" not fatigue profile values
 
@@ -177,7 +184,7 @@ export const exerciseRouter = {
           primaryGoal: input?.primaryGoal,
           intensity: input?.intensity,
           isFullBody: input?.isFullBody || false,
-          businessId: input?.businessId,
+          businessId: businessId as string, // Use from session
           userInput: input?.userInput
         };
 

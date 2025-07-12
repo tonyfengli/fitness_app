@@ -1,10 +1,22 @@
 import { Suspense } from "react";
+import { redirect } from "next/navigation";
+import { getSession } from "~/auth/server";
 import ExerciseList from "./exercise-list";
 
-export default function ExercisesPage() {
+export default async function TrainerDashboard() {
+  const session = await getSession();
+
+  if (!session) {
+    redirect("/login");
+  }
+
+  if (session.user.role === "client") {
+    redirect("/client-dashboard");
+  }
+
   return (
     <div className="container mx-auto py-8">
-      <h1 className="text-3xl font-bold mb-6">Exercise Library</h1>
+      <h1 className="text-3xl font-bold mb-6">Trainer Dashboard - Exercise Library</h1>
       
       <Suspense
         fallback={

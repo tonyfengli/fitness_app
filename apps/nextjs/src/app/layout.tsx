@@ -6,6 +6,8 @@ import { ThemeProvider, ThemeToggle } from "@acme/ui/theme";
 import { Toaster } from "@acme/ui/toast";
 
 import { TRPCReactProvider } from "~/trpc/react";
+import { Navigation } from "./_components/navigation";
+import { DebugInitializer } from "./_components/debug-initializer";
 
 import "~/app/globals.css";
 
@@ -59,7 +61,11 @@ export default function RootLayout(props: { children: React.ReactNode }) {
         )}
       >
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-          <TRPCReactProvider>{props.children}</TRPCReactProvider>
+          <TRPCReactProvider>
+            <DebugInitializer />
+            <Navigation />
+            {props.children}
+          </TRPCReactProvider>
           <div className="absolute bottom-4 right-4">
             <ThemeToggle />
           </div>

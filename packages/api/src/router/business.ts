@@ -3,7 +3,7 @@ import { z } from "zod";
 import { eq } from "@acme/db";
 import { Business, CreateBusinessSchema } from "@acme/db/schema";
 
-import { createTRPCRouter, publicProcedure } from "../trpc";
+import { createTRPCRouter, publicProcedure, protectedProcedure } from "../trpc";
 
 export const businessRouter = createTRPCRouter({
   all: publicProcedure.query(async ({ ctx }) => {
@@ -22,9 +22,13 @@ export const businessRouter = createTRPCRouter({
       return result[0];
     }),
 
-  create: publicProcedure
+  create: protectedProcedure
     .input(CreateBusinessSchema)
     .mutation(({ ctx, input }) => {
+      // Only trainers or admins should be able to create businesses
+      if (ctx.session?.user?.role !== 'trainer') {
+        throw new Error('Only trainers can create businesses');
+      }
       return ctx.db.insert(Business).values(input).returning();
     }),
 });

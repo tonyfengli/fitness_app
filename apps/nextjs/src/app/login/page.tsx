@@ -3,10 +3,12 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { useQueryClient } from "@tanstack/react-query";
 import { authClient } from "~/auth/client";
 
 export default function LoginPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
@@ -29,7 +31,20 @@ export default function LoginPage() {
       if (result.error) {
         setError(result.error.message ?? "Invalid credentials");
       } else {
-        router.push("/");
+        // Invalidate the session query to force a refetch
+        queryClient.invalidateQueries({ queryKey: ["auth-session"] });
+        
+        // Redirect based on user role
+        const session = await authClient.getSession();
+        const userRole = session?.data?.session?.user?.role;
+        
+        if (userRole === "trainer") {
+          router.push("/trainer-dashboard");
+        } else if (userRole === "client") {
+          router.push("/client-dashboard");
+        } else {
+          router.push("/");
+        }
         router.refresh();
       }
     } catch (err) {
@@ -67,20 +82,20 @@ export default function LoginPage() {
           
           <div className="-space-y-px rounded-md shadow-sm">
             <div>
-              <label htmlFor="username" className="sr-only">
-                Username
+              <label htmlFor="email" className="sr-only">
+                Email
               </label>
               <input
-                id="username"
-                name="username"
-                type="text"
-                autoComplete="username"
+                id="email"
+                name="email"
+                type="email"
+                autoComplete="email"
                 required
                 className="relative block w-full rounded-t-md border-0 px-3 py-2 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:z-10 focus:ring-2 focus:ring-inset focus:ring-blue-600 sm:text-sm sm:leading-6"
-                placeholder="Username"
-                value={formData.username}
+                placeholder="Email"
+                value={formData.email}
                 onChange={(e) =>
-                  setFormData({ ...formData, username: e.target.value })
+                  setFormData({ ...formData, email: e.target.value })
                 }
               />
             </div>

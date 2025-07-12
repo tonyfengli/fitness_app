@@ -4,7 +4,8 @@ import { Business } from "./schema";
 export const user = pgTable("user", (t) => ({
   id: t.text().primaryKey(),
   name: t.text().notNull(),
-  username: t.text().notNull().unique(),
+  email: t.text().notNull().unique(),
+  emailVerified: t.boolean().notNull().default(false),
   password: t.text(), // Better Auth will handle this
   phone: t.text(),
   role: t.text().notNull().default('client'), // 'client' or 'trainer'
