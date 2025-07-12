@@ -33,7 +33,6 @@
     "@langchain/core": "^0.3.26",
     "@langchain/langgraph": "^0.3.6",
     "@langchain/openai": "^0.5.16",
-    "@types/uuid": "^10.0.0",
     "dotenv": "^16.4.7",
     "uuid": "^11.1.0",
     "zod": "catalog:"
@@ -43,6 +42,7 @@
     "@acme/prettier-config": "workspace:*",
     "@acme/tsconfig": "workspace:*",
     "@testing-library/jest-dom": "^6.6.3",
+    "@types/uuid": "^10.0.0",
     "@vitest/ui": "^3.2.4",
     "eslint": "catalog:",
     "prettier": "catalog:",

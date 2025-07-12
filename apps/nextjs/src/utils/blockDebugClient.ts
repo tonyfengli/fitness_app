@@ -93,4 +93,5 @@ export class BlockDebugClient {
 // Make available globally in development
 if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
   (window as any).blockDebug = BlockDebugClient;
+  console.log('🔧 Block debug available (disabled by default). Enable with: blockDebug.enable()');
 }

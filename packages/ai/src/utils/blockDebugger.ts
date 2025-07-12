@@ -4,7 +4,7 @@
  */
 
 export class BlockDebugger {
-  private static enabled = true;
+  private static enabled = false; // Disabled by default for performance
   private static logs: any[] = [];
 
   static enable() {

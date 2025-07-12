@@ -38,7 +38,7 @@ class NoOpDebugClient {
 class RealDebugClient {
   private static logs: DebugLog[] = [];
   private static maxLogs = 100;
-  private static enabled = true;
+  private static enabled = false; // Disabled by default for performance
   private static authStateHistory: AuthState[] = [];
 
   static log(component: string, event: string, data: any) {

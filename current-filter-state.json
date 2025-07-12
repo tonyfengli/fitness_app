@@ -1,5 +1,5 @@
 {
-  "timestamp": "2025-07-12T20:51:11.987Z",
+  "timestamp": "2025-07-12T21:06:36.450Z",
   "filters": {
     "clientName": "Web User",
     "strengthCapacity": "moderate",
@@ -48,18 +48,18 @@
       "count": 8,
       "exercises": [
         {
-          "id": "ca004a9f-5bb3-4749-acb8-55872fc58be2",
-          "name": "Lunge with Biceps Curl",
+          "id": "dce44ce1-9f79-4c98-80ba-d4cc6d2bb9a6",
+          "name": "Lateral Step-Up with Goblet Hold",
           "score": 5
         },
         {
-          "id": "3d44886e-896b-4059-a4db-506923ea3b58",
-          "name": "Batwing Chest-Supported Row",
+          "id": "1f0a2bb1-fcfa-4a87-9a21-6333d060c2ca",
+          "name": "Hollow Body One-Arm Press",
           "score": 5
         },
         {
-          "id": "a5d09b5a-d62f-477b-8b71-216f35a20291",
-          "name": "Wall Squat Hold",
+          "id": "8a08ffdd-2998-4795-8030-ccd357613f7b",
+          "name": "Elevated Push-Ups",
           "score": 5
         }
       ]
@@ -68,18 +68,18 @@
       "count": 8,
       "exercises": [
         {
-          "id": "aa66d8b3-907a-42ec-ac9b-bbaa347a88b8",
-          "name": "Y/W Raises",
+          "id": "5a75f68d-4d30-4211-a98c-a74c71f70f8d",
+          "name": "Glute Bridge Thrust with Dumbbell",
           "score": 5
         },
         {
-          "id": "ed8cddc4-0a55-440a-8ee6-2f5f6024adbf",
-          "name": "Dumbbell Bent-Over Reverse Fly",
+          "id": "02a4b661-036e-4446-91b1-635d495cecdc",
+          "name": "Face Pulls",
           "score": 5
         },
         {
-          "id": "8442a047-e5a7-49d7-a40e-fce4812b40ce",
-          "name": "Single-Leg Glute Bridge with Band",
+          "id": "4e40b3f0-cf13-4998-8ec0-61a9b5dd5239",
+          "name": "Banded Prone Overhead Press",
           "score": 5
         }
       ]
@@ -88,23 +88,23 @@
       "count": 6,
       "exercises": [
         {
-          "id": "fb5bf2ce-611c-4a2f-ae16-8d21d28280c1",
-          "name": "Side Plank Hip Raise",
+          "id": "904c2b74-944f-49af-8324-22b1b1ea7b9a",
+          "name": "Jump Squat",
           "score": 5
         },
         {
-          "id": "c9916c21-2e2f-44d0-9aa3-d94b5e35c65c",
-          "name": "BOSU Bird Dog",
+          "id": "0975bd35-a1fd-4ea7-acc4-dd9c05d4a982",
+          "name": "Bosu Plank Jack",
           "score": 5
         },
         {
-          "id": "5eaede2f-c9d5-41ef-8942-9d74a95ded1e",
-          "name": "Twisting Pistons",
+          "id": "c0e353d1-5ffe-4340-ac6f-2ee03af6c2fc",
+          "name": "Bear Crawl (Forward and Back)",
           "score": 5
         },
         {
-          "id": "77a15368-7d0a-4abb-ae11-cee40c73889d",
-          "name": "Banded Suitcase Marches",
+          "id": "9d50d2f2-0eda-48c4-9f7d-7a1fcff879b1",
+          "name": "Dumbbell Thruster",
           "score": 5
         }
       ]

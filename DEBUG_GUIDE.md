@@ -9,6 +9,16 @@ This guide covers all debugging tools in the fitness app, including both fronten
 4. [Architecture Overview](#architecture-overview)
 
 ---
+## To Enable Debugging
+  1. Frontend Debug Client:
+    - Disabled by default
+    - Enable with: window.frontendDebug.setEnabled(true)
+    - No more automatic logging slowing down auth flows
+  2. Block Debug System:
+    - Disabled by default
+    - Enable with: await blockDebug.enable()
+
+
 
 ## Bug Reporting Protocol
 
@@ -36,7 +46,12 @@ I'm following the debug protocol from DEBUG_GUIDE.md. Here's my bug report:
 ## Frontend Debug Tools
 
 ### Quick Start
-The frontend debug tools are automatically available in development mode. Open your browser console to see available commands.
+The frontend debug tools are automatically available in development mode but **disabled by default for performance**. 
+
+To enable debugging:
+```javascript
+window.frontendDebug.setEnabled(true)
+```
 
 ### Available Commands
 
@@ -121,7 +136,10 @@ A comprehensive debugging system tracks exercise transformations through all pha
 
 #### How to Use
 
-1. **Enable debugging** (enabled by default in development)
+1. **Enable debugging** (disabled by default for performance):
+   ```javascript
+   await blockDebug.enable()
+   ```
 2. **Run a workout filter** through the UI
 3. **In browser console**, access debug data:
    ```javascript

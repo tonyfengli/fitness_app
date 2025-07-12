@@ -22,6 +22,7 @@ export default function SignupPage() {
     role: "client",
     businessId: "",
   });
+  const [isRedirecting, setIsRedirecting] = useState(false);
 
   // Fetch businesses
   const { data: businesses, isLoading: businessesLoading } = useQuery(
@@ -58,6 +59,9 @@ export default function SignupPage() {
           setError("Account created but failed to sign in. Please try logging in.");
           router.push("/login");
         } else {
+          // Set redirecting state
+          setIsRedirecting(true);
+          
           // Invalidate auth cache to force refetch
           await queryClient.invalidateQueries({ queryKey: ["auth-session"] });
           
@@ -85,6 +89,14 @@ export default function SignupPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-12 sm:px-6 lg:px-8">
+      {isRedirecting && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-white bg-opacity-75">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+            <p className="mt-4 text-gray-600">Setting up your account...</p>
+          </div>
+        </div>
+      )}
       <div className="w-full max-w-md space-y-8">
         <div>
           <h2 className="mt-6 text-center text-3xl font-bold tracking-tight text-gray-900">

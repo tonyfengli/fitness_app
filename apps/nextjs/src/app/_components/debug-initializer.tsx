@@ -12,10 +12,11 @@ export function DebugInitializer() {
       (window as any).FrontendDebugClient = 
         import("~/utils/frontendDebugClient").then(m => m.FrontendDebugClient);
       
-      console.log("🛠️ Debug tools initialized. Available commands:");
+      console.log("🛠️ Debug tools initialized (disabled by default for performance)");
+      console.log("Commands:");
+      console.log("  • window.frontendDebug.setEnabled(true) - Enable debug logging");
       console.log("  • debugAuth() - Full auth debugging report");
       console.log("  • enableAutoCapture() - Auto-capture navigation events");
-      console.log("  • FrontendDebugClient - Access to debug client");
     }
   }, []);
 

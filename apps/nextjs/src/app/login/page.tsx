@@ -16,6 +16,7 @@ export default function LoginPage() {
     email: "",
     password: "",
   });
+  const [isRedirecting, setIsRedirecting] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,12 +32,20 @@ export default function LoginPage() {
       if (result.error) {
         setError(result.error.message ?? "Invalid credentials");
       } else {
-        // Invalidate the session query to force a refetch
-        queryClient.invalidateQueries({ queryKey: ["auth-session"] });
+        // Set redirecting state to show loading UI
+        setIsRedirecting(true);
         
-        // Redirect based on user role
-        const session = await authClient.getSession();
-        const userRole = session?.data?.session?.user?.role;
+        // Invalidate the session query to force a refetch
+        await queryClient.invalidateQueries({ queryKey: ["auth-session"] });
+        
+        // Get fresh session data from API
+        const response = await fetch('/api/auth/get-session', {
+          credentials: 'include',
+          cache: 'no-store'
+        });
+        const sessionData = await response.json();
+        
+        const userRole = sessionData?.user?.role;
         
         if (userRole === "trainer") {
           router.push("/trainer-dashboard");
@@ -57,6 +66,14 @@ export default function LoginPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-12 sm:px-6 lg:px-8">
+      {isRedirecting && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-white bg-opacity-75">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+            <p className="mt-4 text-gray-600">Redirecting to your dashboard...</p>
+          </div>
+        </div>
+      )}
       <div className="w-full max-w-md space-y-8">
         <div>
           <h2 className="mt-6 text-center text-3xl font-bold tracking-tight text-gray-900">
