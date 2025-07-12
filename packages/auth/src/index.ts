@@ -2,7 +2,7 @@ import type { BetterAuthOptions } from "better-auth";
 import { expo } from "@better-auth/expo";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { oAuthProxy } from "better-auth/plugins";
+import { oAuthProxy, username } from "better-auth/plugins";
 
 import { db } from "@acme/db/client";
 
@@ -20,6 +20,9 @@ export function initAuth(options: {
     }),
     baseURL: options.baseUrl,
     secret: options.secret,
+    emailAndPassword: {
+      enabled: true,
+    },
     plugins: [
       oAuthProxy({
         /**
@@ -29,6 +32,7 @@ export function initAuth(options: {
         productionURL: options.productionUrl,
       }),
       expo(),
+      username(),
     ],
     socialProviders: {
       discord: {

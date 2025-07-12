@@ -1,4 +1,8 @@
 import type { TRPCRouterRecord } from "@trpc/server";
+import { z } from "zod";
+
+import { eq } from "@acme/db";
+import { user } from "@acme/db/schema";
 
 import { protectedProcedure, publicProcedure } from "../trpc";
 
@@ -54,4 +58,18 @@ export const authRouter = {
       };
     }
   }),
+  updateUserBusiness: protectedProcedure
+    .input(z.object({ businessId: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      if (!ctx.session?.user?.id) {
+        throw new Error("No user ID in session");
+      }
+
+      await ctx.db
+        .update(user)
+        .set({ businessId: input.businessId })
+        .where(eq(user.id, ctx.session.user.id));
+
+      return { success: true };
+    }),
 } satisfies TRPCRouterRecord;

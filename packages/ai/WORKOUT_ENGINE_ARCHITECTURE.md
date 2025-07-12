@@ -715,3 +715,62 @@ npm run debug-to-test generate joint_bug
 - **Regression prevention**: Turn bugs into permanent test guards
 
 This workflow bridges the gap between debugging and testing, making it easy to convert real issues into integration tests without manual data copying.
+
+---
+
+## Testing Architecture
+
+### Overview
+The workout engine has comprehensive test coverage across all 5 phases of the pipeline, ensuring reliability and correctness of the workout generation process.
+
+### Test Organization
+Tests are organized by pipeline phase and testing scope:
+
+#### Integration Tests (`test/integration/workout-generation/`)
+- **restrictive-filters.test.ts** - Phase 1: Exercise filtering edge cases and safety
+- **muscle-targeting.test.ts** - Phase 2: Exercise scoring and targeting logic  
+- **set-count-determination.test.ts** - Phase 3: Set count matrix coverage
+- **template-organization.test.ts** - Phase 4: Block organization and constraints
+- **llm-generation.test.ts** - Phase 5: LLM integration and response handling
+- **error-scenarios.test.ts** - Error handling across all phases
+- **presentation-flags.test.ts** - UI flag generation
+- **basic-scenarios.test.ts** - Happy path scenarios
+- **filter-edge-cases.test.ts** - Cascading logic and validation
+
+#### Unit Tests (`test/unit/`)
+- **setCountLogic.test.ts** - Set count determination logic
+
+### Key Test Scenarios
+
+#### Safety-Critical Tests
+- Joint restriction overrides (must exclude even if included)
+- Score clamping (no negative scores)
+- Empty result handling
+
+#### Edge Case Coverage
+- Mismatched strength/skill levels
+- Missing or malformed data
+- Extreme scoring scenarios
+- Insufficient exercises for constraints
+
+#### Integration Testing
+- Full pipeline execution
+- Phase interaction verification
+- Client context preservation across phases
+
+### Running Tests
+```bash
+# Run all tests
+npm test
+
+# Run specific test file
+npm test restrictive-filters.test.ts
+
+# Run with coverage
+npm test -- --coverage
+```
+
+### Test Helpers
+- **test-helpers.ts** - Common test utilities and contexts
+- **exerciseDataHelper.ts** - Exercise data generation
+- **mockLLM.ts** - LLM mocking for Phase 5 tests

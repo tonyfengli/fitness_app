@@ -1,4 +1,5 @@
 import { pgTable } from "drizzle-orm/pg-core";
+import { Business } from "./schema";
 
 export const user = pgTable("user", (t) => ({
   id: t.text().primaryKey(),
@@ -8,6 +9,8 @@ export const user = pgTable("user", (t) => ({
   image: t.text(),
   createdAt: t.timestamp().notNull(),
   updatedAt: t.timestamp().notNull(),
+  businessId: t.uuid().references(() => Business.id),
+  username: t.text().unique(),
 }));
 
 export const session = pgTable("session", (t) => ({
