@@ -3,6 +3,8 @@ import { pgTable } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
+import { user } from "./auth-schema";
+
 export const Post = pgTable("post", (t) => ({
   id: t.uuid().notNull().primaryKey().defaultRandom(),
   title: t.varchar({ length: 256 }).notNull(),
@@ -56,4 +58,25 @@ export const CreateBusinessExerciseSchema = createInsertSchema(BusinessExercise,
 }).omit({
   id: true,
   createdAt: true,
+});
+
+// Client Profile table for workout-specific data
+export const ClientProfile = pgTable("client_profile", (t) => ({
+  id: t.uuid().notNull().primaryKey().defaultRandom(),
+  userId: t.text().notNull().references(() => user.id, { onDelete: "cascade" }),
+  businessId: t.uuid().notNull().references(() => Business.id, { onDelete: "cascade" }),
+  // Skeleton for now - will add workout fields later
+  createdAt: t.timestamp().defaultNow().notNull(),
+  updatedAt: t
+    .timestamp({ mode: "date", withTimezone: true })
+    .$onUpdateFn(() => sql`now()`),
+}));
+
+export const CreateClientProfileSchema = createInsertSchema(ClientProfile, {
+  userId: z.string(),
+  businessId: z.string().uuid(),
+}).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
 });

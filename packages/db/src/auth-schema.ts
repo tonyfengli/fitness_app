@@ -4,13 +4,13 @@ import { Business } from "./schema";
 export const user = pgTable("user", (t) => ({
   id: t.text().primaryKey(),
   name: t.text().notNull(),
-  email: t.text().notNull().unique(),
-  emailVerified: t.boolean().notNull(),
-  image: t.text(),
+  username: t.text().notNull().unique(),
+  password: t.text(), // Better Auth will handle this
+  phone: t.text(),
+  role: t.text().notNull().default('client'), // 'client' or 'trainer'
+  businessId: t.uuid().notNull().references(() => Business.id),
   createdAt: t.timestamp().notNull(),
   updatedAt: t.timestamp().notNull(),
-  businessId: t.uuid().references(() => Business.id),
-  username: t.text().unique(),
 }));
 
 export const session = pgTable("session", (t) => ({

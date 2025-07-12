@@ -1,0 +1,6 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entry": "0004_auth_update.sql",
+  "breakpoints": true
+}
