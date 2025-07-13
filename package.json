@@ -30,24 +30,24 @@
     "clean:dev": "pkill -f 'next dev' || true && pkill -f 'turbo watch' || true && rm -rf apps/nextjs/.next",
     "dev:restart": "pnpm clean:dev && sleep 2 && pnpm dev",
     "kill:port": "lsof -ti:3000 | xargs kill -9 || true",
-    "test:e2e": "playwright test",
-    "test:e2e:ui": "playwright test --ui",
-    "test:e2e:headed": "playwright test --headed",
-    "test:all": "./scripts/test-all.sh",
-    "test:all:parallel": "./scripts/test-all.sh --parallel",
-    "test:all:sequential": "./scripts/test-all.sh --sequential",
-    "test:unit": "cd packages/ai && pnpm test"
+    "test": "turbo run test",
+    "test:verbose": "node test-all.js",
+    "test:ui": "vitest --ui",
+    "test:quiet": "vitest run --reporter=dot",
+    "test:watch": "turbo run test:watch",
+    "test:coverage": "turbo run test:coverage",
+    "test:all": "vitest run",
+    "test:api": "cd packages/api && pnpm test",
+    "test:ai": "cd packages/ai && pnpm test"
   },
   "devDependencies": {
     "@acme/prettier-config": "workspace:*",
-    "@playwright/test": "^1.54.1",
     "@turbo/gen": "^2.5.4",
     "prettier": "catalog:",
+    "tiktoken": "^1.0.21",
+    "tsx": "^4.20.3",
     "turbo": "^2.5.4",
     "typescript": "catalog:"
   },
-  "prettier": "@acme/prettier-config",
-  "dependencies": {
-    "tiktoken": "^1.0.21"
-  }
+  "prettier": "@acme/prettier-config"
 }

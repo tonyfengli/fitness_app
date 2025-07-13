@@ -43,6 +43,19 @@
     "ui-add": {
       "cache": false,
       "interactive": true
+    },
+    "test": {
+      "cache": false,
+      "outputs": ["coverage/**"],
+      "dependsOn": []
+    },
+    "test:watch": {
+      "cache": false,
+      "persistent": true
+    },
+    "test:coverage": {
+      "cache": false,
+      "outputs": ["coverage/**"]
     }
   },
   "globalEnv": [

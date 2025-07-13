@@ -1,7 +1,7 @@
 {
-  "timestamp": "2025-07-12T21:06:36.450Z",
+  "timestamp": "2025-07-13T03:26:22.857Z",
   "filters": {
-    "clientName": "Web User",
+    "clientName": "Mobile User",
     "strengthCapacity": "moderate",
     "skillCapacity": "moderate",
     "intensity": "moderate",
@@ -13,101 +13,22 @@
     "isFullBody": false
   },
   "results": {
-    "totalExercises": 117,
+    "totalExercises": 0,
     "blockA": {
-      "count": 5,
-      "exercises": [
-        {
-          "id": "49bc7005-5179-4d96-be77-ac790cf00759",
-          "name": "Landmine T Bar Row",
-          "score": 5
-        },
-        {
-          "id": "57c24380-6ee2-4242-84b5-0cf299ae8369",
-          "name": "Landmine Shoulder Press",
-          "score": 5
-        },
-        {
-          "id": "cdd9c4a6-4048-4ee2-9292-aa36e7a2a9ae",
-          "name": "Barbell Glute Bridge on Bench",
-          "score": 5
-        },
-        {
-          "id": "4faeab78-16bd-4d71-b935-226bc691531d",
-          "name": "Hollow Body Dumbbell Press",
-          "score": 5
-        },
-        {
-          "id": "b10fc80a-3bc6-4d31-8a1d-d653d55dccc3",
-          "name": "Dumbbell Bridge Chest Press",
-          "score": 5
-        }
-      ]
+      "count": 0,
+      "exercises": []
     },
     "blockB": {
-      "count": 8,
-      "exercises": [
-        {
-          "id": "dce44ce1-9f79-4c98-80ba-d4cc6d2bb9a6",
-          "name": "Lateral Step-Up with Goblet Hold",
-          "score": 5
-        },
-        {
-          "id": "1f0a2bb1-fcfa-4a87-9a21-6333d060c2ca",
-          "name": "Hollow Body One-Arm Press",
-          "score": 5
-        },
-        {
-          "id": "8a08ffdd-2998-4795-8030-ccd357613f7b",
-          "name": "Elevated Push-Ups",
-          "score": 5
-        }
-      ]
+      "count": 0,
+      "exercises": []
     },
     "blockC": {
-      "count": 8,
-      "exercises": [
-        {
-          "id": "5a75f68d-4d30-4211-a98c-a74c71f70f8d",
-          "name": "Glute Bridge Thrust with Dumbbell",
-          "score": 5
-        },
-        {
-          "id": "02a4b661-036e-4446-91b1-635d495cecdc",
-          "name": "Face Pulls",
-          "score": 5
-        },
-        {
-          "id": "4e40b3f0-cf13-4998-8ec0-61a9b5dd5239",
-          "name": "Banded Prone Overhead Press",
-          "score": 5
-        }
-      ]
+      "count": 0,
+      "exercises": []
     },
     "blockD": {
-      "count": 6,
-      "exercises": [
-        {
-          "id": "904c2b74-944f-49af-8324-22b1b1ea7b9a",
-          "name": "Jump Squat",
-          "score": 5
-        },
-        {
-          "id": "0975bd35-a1fd-4ea7-acc4-dd9c05d4a982",
-          "name": "Bosu Plank Jack",
-          "score": 5
-        },
-        {
-          "id": "c0e353d1-5ffe-4340-ac6f-2ee03af6c2fc",
-          "name": "Bear Crawl (Forward and Back)",
-          "score": 5
-        },
-        {
-          "id": "9d50d2f2-0eda-48c4-9f7d-7a1fcff879b1",
-          "name": "Dumbbell Thruster",
-          "score": 5
-        }
-      ]
+      "count": 0,
+      "exercises": []
     }
   }
 }

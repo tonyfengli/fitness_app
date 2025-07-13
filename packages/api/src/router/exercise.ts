@@ -6,6 +6,7 @@ import { exercises } from "@acme/db/schema";
 import { filterExercisesFromInput, saveFilterDebugData, enhancedFilterExercisesFromInput } from "@acme/ai";
 
 import { protectedProcedure, publicProcedure } from "../trpc";
+import type { SessionUser } from "../types/auth";
 
 const CreateExerciseSchema = z.object({
   name: z.string().min(1).max(255),
@@ -65,7 +66,7 @@ export const exerciseRouter = {
     }).optional())
     .query(async ({ ctx, input }) => {
       const { limit = 20, offset = 0 } = input ?? {};
-      console.log(`📊 exercise.all called with limit: ${limit}, offset: ${offset}`);
+      // console.log(`📊 exercise.all called with limit: ${limit}, offset: ${offset}`);
       
       const startTime = Date.now();
       const result = await ctx.db.query.exercises.findMany({
@@ -75,7 +76,7 @@ export const exerciseRouter = {
       });
       const duration = Date.now() - startTime;
       
-      console.log(`✅ exercise.all completed: ${result.length} exercises in ${duration}ms`);
+      // console.log(`✅ exercise.all completed: ${result.length} exercises in ${duration}ms`);
       return result;
     }),
 
@@ -158,12 +159,13 @@ export const exerciseRouter = {
     .query(async ({ ctx, input }) => {
       try {
         const apiStartTime = Date.now();
-        console.log('🔍 exercise.filter API called');
-        console.log('🔍 Input received:', input);
-        console.log('🔍 User session:', ctx.session?.user);
+        // console.log('🔍 exercise.filter API called');
+        // console.log('🔍 Input received:', input);
+        // console.log('🔍 User session:', ctx.session?.user);
         
         // Get businessId from session
-        const businessId = ctx.session?.user?.businessId;
+        const user = ctx.session?.user as SessionUser;
+        const businessId = user?.businessId;
         if (!businessId) {
           throw new Error('User must be associated with a business');
         }
@@ -192,7 +194,7 @@ export const exerciseRouter = {
         const dbStartTime = Date.now();
         const allExercises = await ctx.db.query.exercises.findMany();
         const dbEndTime = Date.now();
-        console.log(`⏱️ Database fetch took: ${dbEndTime - dbStartTime}ms for ${allExercises.length} exercises`);
+        // console.log(`⏱️ Database fetch took: ${dbEndTime - dbStartTime}ms for ${allExercises.length} exercises`);
         
         const filterStartTime = Date.now();
         
@@ -235,21 +237,21 @@ export const exerciseRouter = {
         const filteredExercises = result.filteredExercises || [];
         const apiEndTime = Date.now();
         
-        console.log('🎯 API returning exercises:', {
-          total: filteredExercises.length,
-          timings: {
-            database: `${dbEndTime - dbStartTime}ms`,
-            filtering: `${filterEndTime - filterStartTime}ms`,
-            totalAPI: `${apiEndTime - apiStartTime}ms`
-          }
-        });
+        // console.log('🎯 API returning exercises:', {
+        //   total: filteredExercises.length,
+        //   timings: {
+        //     database: `${dbEndTime - dbStartTime}ms`,
+        //     filtering: `${filterEndTime - filterStartTime}ms`,
+        //     totalAPI: `${apiEndTime - apiStartTime}ms`
+        //   }
+        // });
         
         // Log timing to console for now (frontend can see in network tab)
-        console.log('=== PERFORMANCE TIMING ===');
-        console.log(`Database Query: ${dbEndTime - dbStartTime}ms`);
-        console.log(`Filtering & Scoring: ${filterEndTime - filterStartTime}ms`);
-        console.log(`Total API Time: ${apiEndTime - apiStartTime}ms`);
-        console.log('========================');
+        // console.log('=== PERFORMANCE TIMING ===');
+        // console.log(`Database Query: ${dbEndTime - dbStartTime}ms`);
+        // console.log(`Filtering & Scoring: ${filterEndTime - filterStartTime}ms`);
+        // console.log(`Total API Time: ${apiEndTime - apiStartTime}ms`);
+        // console.log('========================');
         
         // Save debug data for Claude to read
         try {

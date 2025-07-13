@@ -30,7 +30,12 @@ export default function LoginPage() {
       });
 
       if (result.error) {
-        setError(result.error.message ?? "Invalid credentials");
+        // Check if we're offline
+        if (!navigator.onLine) {
+          setError("Connection failed. Please check your internet connection.");
+        } else {
+          setError(result.error.message ?? "Invalid email or password");
+        }
       } else {
         // Set redirecting state to show loading UI
         setIsRedirecting(true);
@@ -57,7 +62,12 @@ export default function LoginPage() {
         router.refresh();
       }
     } catch (err) {
-      setError("An unexpected error occurred");
+      // Simple network vs other error detection
+      if (err instanceof TypeError && err.message.includes('fetch')) {
+        setError("Connection failed. Please check your internet connection.");
+      } else {
+        setError("An unexpected error occurred. Please try again.");
+      }
       console.error(err);
     } finally {
       setIsLoading(false);

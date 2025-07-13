@@ -5,6 +5,7 @@ import { eq } from "@acme/db";
 import { user } from "@acme/db/schema";
 
 import { protectedProcedure, publicProcedure } from "../trpc";
+import type { SessionUser } from "../types/auth";
 
 export const authRouter = {
   getSession: publicProcedure.query(({ ctx }) => {
@@ -17,13 +18,15 @@ export const authRouter = {
     if (!ctx.session?.user) {
       return null;
     }
+    const user = ctx.session.user as SessionUser;
     return {
-      role: ctx.session.user.role || 'client',
-      businessId: ctx.session.user.businessId,
+      role: user.role || 'client',
+      businessId: user.businessId,
     };
   }),
   isTrainer: protectedProcedure.query(({ ctx }) => {
-    return ctx.session?.user?.role === 'trainer';
+    const user = ctx.session?.user as SessionUser;
+    return user?.role === 'trainer';
   }),
   getServerTime: publicProcedure.query(async ({ ctx }) => {
     try {

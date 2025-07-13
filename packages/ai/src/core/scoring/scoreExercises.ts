@@ -19,13 +19,13 @@ export async function scoreAndSortExercises(
   includeBreakdown = false
 ): Promise<ScoredExercise[]> {
   const startTime = performance.now();
-  console.log('🎯 Scoring exercises with criteria:', {
-    includeExercisesCount: criteria.includeExercises?.length || 0,
-    muscleTargetCount: criteria.muscleTarget.length,
-    muscleLessenCount: criteria.muscleLessen.length,
-    intensity: criteria.intensity,
-    exerciseCount: exercises.length,
-  });
+  // console.log('🎯 Scoring exercises with criteria:', {
+  //   includeExercisesCount: criteria.includeExercises?.length || 0,
+  //   muscleTargetCount: criteria.muscleTarget.length,
+  //   muscleLessenCount: criteria.muscleLessen.length,
+  //   intensity: criteria.intensity,
+  //   exerciseCount: exercises.length,
+  // });
   
   // PASS 1: Score all exercises normally (without include boost)
   const { scoredExercises: firstPassResults, maxScore } = performFirstPassScoring(

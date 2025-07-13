@@ -1,4 +1,4 @@
--- Migration: Switch from username to email and rename client_profile to user_profile
+befo-- Migration: Switch from username to email and rename client_profile to user_profile
 
 -- Step 1: Add email column if it doesn't exist
 ALTER TABLE "user" ADD COLUMN IF NOT EXISTS "email" text;

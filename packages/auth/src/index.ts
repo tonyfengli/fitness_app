@@ -48,9 +48,7 @@ export function initAuth(options: {
       cookieCache: {
         enabled: true,
         maxAge: 60 * 5, // Cache for 5 minutes
-      },
-      cookieName: "better-auth.session",
-      fetchUser: true, // Ensure full user data is fetched with session
+      }
     },
     advanced: {
       cookiePrefix: "better-auth",
@@ -61,7 +59,9 @@ export function initAuth(options: {
         },
       },
       useSecureCookies: options.baseUrl.startsWith("https"),
-      crossSubDomainCookies: false,
+      crossSubDomainCookies: {
+        enabled: false,
+      },
     },
     trustedOrigins: ["expo://"],
   } satisfies BetterAuthOptions;

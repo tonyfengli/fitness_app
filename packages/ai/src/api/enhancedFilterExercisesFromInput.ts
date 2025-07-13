@@ -56,7 +56,7 @@ export async function enhancedFilterExercisesFromInput(
   const sessionStartTime = performance.now();
   
   try {
-    console.log('🚀 Enhanced filterExercisesFromInput called');
+    // console.log('🚀 Enhanced filterExercisesFromInput called');
     const { 
       userInput = "", 
       clientContext, 
@@ -184,10 +184,10 @@ export async function enhancedFilterExercisesFromInput(
       
       saveEnhancedDebugData(enhancedDebugData);
       
-      console.log('🔍 Enhanced Debug Summary:');
-      console.log(`  - Exercises excluded: ${Object.keys(exclusionTracker.getExclusions()).length}`);
-      console.log(`  - Constraints tracked: ${Object.keys(constraintTracker.getAnalysis()).length} blocks`);
-      console.log(`  - Debug log entries: ${debugLogger.getLogs().length}`);
+      // console.log('🔍 Enhanced Debug Summary:');
+      // console.log(`  - Exercises excluded: ${Object.keys(exclusionTracker.getExclusions()).length}`);
+      // console.log(`  - Constraints tracked: ${Object.keys(constraintTracker.getAnalysis()).length} blocks`);
+      // console.log(`  - Debug log entries: ${debugLogger.getLogs().length}`);
     }
     
     // Save workout generation history
@@ -211,11 +211,11 @@ export async function enhancedFilterExercisesFromInput(
     
     saveWorkoutGenerationLog(workoutLog);
     
-    console.log(`⏱️ TOTAL enhanced filterExercisesFromInput time: ${totalTime.toFixed(2)}ms`);
-    console.log(`  - Filtering: ${(filterEndTime - filterStartTime).toFixed(2)}ms`);
-    console.log(`  - Scoring: ${(scoreEndTime - scoreStartTime).toFixed(2)}ms`);
-    console.log(`  - Template: ${(templateEndTime - templateStartTime).toFixed(2)}ms`);
-    console.log(`  - Flags: ${(flagEndTime - flagStartTime).toFixed(2)}ms`);
+    // console.log(`⏱️ TOTAL enhanced filterExercisesFromInput time: ${totalTime.toFixed(2)}ms`);
+    // console.log(`  - Filtering: ${(filterEndTime - filterStartTime).toFixed(2)}ms`);
+    // console.log(`  - Scoring: ${(scoreEndTime - scoreStartTime).toFixed(2)}ms`);
+    // console.log(`  - Template: ${(templateEndTime - templateStartTime).toFixed(2)}ms`);
+    // console.log(`  - Flags: ${(flagEndTime - flagStartTime).toFixed(2)}ms`);
     
     // Return in the expected WorkoutSessionStateType format
     return {

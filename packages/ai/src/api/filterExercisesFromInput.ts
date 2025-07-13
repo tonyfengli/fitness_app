@@ -34,13 +34,13 @@ export interface FilterExercisesOptions {
  *   },
  *   userInput: "I want to work out today"
  * });
- * console.log(result.filteredExercises); // Array of filtered exercises
+ * // console.log(result.filteredExercises); // Array of filtered exercises
  * ```
  */
 export async function filterExercisesFromInput(options: FilterExercisesOptions): Promise<WorkoutSessionStateType> {
   try {
     const startTime = performance.now();
-    console.log('🚀 filterExercisesFromInput called');
+    // console.log('🚀 filterExercisesFromInput called');
     const { userInput = "", clientContext, workoutTemplate, exercises, intensity } = options;
     
     // Step 1: Build scoring criteria
@@ -56,7 +56,7 @@ export async function filterExercisesFromInput(options: FilterExercisesOptions):
       scoringCriteria,
     });
     const filterEndTime = performance.now();
-    console.log(`⏱️ Filtering took: ${(filterEndTime - filterStartTime).toFixed(2)}ms`);
+    // console.log(`⏱️ Filtering took: ${(filterEndTime - filterStartTime).toFixed(2)}ms`);
     
     // Step 3: Apply template organization if provided
     const templateStartTime = performance.now();
@@ -73,11 +73,11 @@ export async function filterExercisesFromInput(options: FilterExercisesOptions):
     
     if (templateResult) {
       const templateEndTime = performance.now();
-      console.log(`⏱️ Template organization took: ${(templateEndTime - templateStartTime).toFixed(2)}ms`);
+      // console.log(`⏱️ Template organization took: ${(templateEndTime - templateStartTime).toFixed(2)}ms`);
     }
     
     const totalTime = performance.now() - startTime;
-    console.log(`⏱️ TOTAL filterExercisesFromInput time: ${totalTime.toFixed(2)}ms`);
+    // console.log(`⏱️ TOTAL filterExercisesFromInput time: ${totalTime.toFixed(2)}ms`);
     
     // Return in the expected WorkoutSessionStateType format
     return {
