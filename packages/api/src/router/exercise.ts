@@ -2,7 +2,7 @@ import type { TRPCRouterRecord } from "@trpc/server";
 import { z } from "zod/v4";
 
 import { desc, eq, ilike, and, inArray } from "@acme/db";
-import { exercises } from "@acme/db/schema";
+import { exercises, BusinessExercise } from "@acme/db/schema";
 import { filterExercisesFromInput, saveFilterDebugData, enhancedFilterExercisesFromInput } from "@acme/ai";
 
 import { protectedProcedure, publicProcedure } from "../trpc";
@@ -69,15 +69,39 @@ export const exerciseRouter = {
       // console.log(`📊 exercise.all called with limit: ${limit}, offset: ${offset}`);
       
       const startTime = Date.now();
-      const result = await ctx.db.query.exercises.findMany({
-        orderBy: desc(exercises.createdAt),
-        limit,
-        offset,
-      });
-      const duration = Date.now() - startTime;
       
-      // console.log(`✅ exercise.all completed: ${result.length} exercises in ${duration}ms`);
-      return result;
+      // If user is authenticated and has a business, filter by business
+      const user = ctx.session?.user as SessionUser | undefined;
+      const businessId = user?.businessId;
+      
+      if (businessId) {
+        // Get exercises that belong to this business
+        const businessExercises = await ctx.db
+          .select({
+            exercise: exercises,
+          })
+          .from(exercises)
+          .innerJoin(BusinessExercise, eq(exercises.id, BusinessExercise.exerciseId))
+          .where(eq(BusinessExercise.businessId, businessId))
+          .orderBy(desc(exercises.createdAt))
+          .limit(limit)
+          .offset(offset);
+        
+        const result = businessExercises.map(be => be.exercise);
+        const duration = Date.now() - startTime;
+        // console.log(`✅ exercise.all completed: ${result.length} business-filtered exercises in ${duration}ms`);
+        return result;
+      } else {
+        // No business context - return all exercises (for public/demo access)
+        const result = await ctx.db.query.exercises.findMany({
+          orderBy: desc(exercises.createdAt),
+          limit,
+          offset,
+        });
+        const duration = Date.now() - startTime;
+        // console.log(`✅ exercise.all completed: ${result.length} exercises (unfiltered) in ${duration}ms`);
+        return result;
+      }
     }),
 
   byId: publicProcedure
@@ -97,7 +121,7 @@ export const exerciseRouter = {
       equipment: z.array(z.string()).optional(),
       limit: z.number().min(1).max(100).default(20),
     }))
-    .query(({ ctx, input }) => {
+    .query(async ({ ctx, input }) => {
       const conditions = [];
 
       if (input.query) {
@@ -118,11 +142,34 @@ export const exerciseRouter = {
 
       const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
-      return ctx.db.query.exercises.findMany({
-        where: whereClause,
-        orderBy: desc(exercises.createdAt),
-        limit: input.limit,
-      });
+      // If user has a business, filter by business
+      const user = ctx.session?.user as SessionUser | undefined;
+      const businessId = user?.businessId;
+      
+      if (businessId) {
+        // Get exercises that belong to this business AND match search criteria
+        const results = await ctx.db
+          .select({
+            exercise: exercises,
+          })
+          .from(exercises)
+          .innerJoin(BusinessExercise, eq(exercises.id, BusinessExercise.exerciseId))
+          .where(and(
+            eq(BusinessExercise.businessId, businessId),
+            whereClause
+          ))
+          .orderBy(desc(exercises.createdAt))
+          .limit(input.limit);
+        
+        return results.map(r => r.exercise);
+      } else {
+        // No business context - search all exercises
+        return ctx.db.query.exercises.findMany({
+          where: whereClause,
+          orderBy: desc(exercises.createdAt),
+          limit: input.limit,
+        });
+      }
     }),
 
   filter: protectedProcedure
@@ -190,11 +237,19 @@ export const exerciseRouter = {
           userInput: input?.userInput
         };
 
-        // Fetch exercises from the database first
+        // Fetch exercises from the database first - filtered by business
         const dbStartTime = Date.now();
-        const allExercises = await ctx.db.query.exercises.findMany();
+        const businessExercises = await ctx.db
+          .select({
+            exercise: exercises,
+          })
+          .from(exercises)
+          .innerJoin(BusinessExercise, eq(exercises.id, BusinessExercise.exerciseId))
+          .where(eq(BusinessExercise.businessId, businessId));
+        
+        const allExercises = businessExercises.map(be => be.exercise);
         const dbEndTime = Date.now();
-        // console.log(`⏱️ Database fetch took: ${dbEndTime - dbStartTime}ms for ${allExercises.length} exercises`);
+        // console.log(`⏱️ Database fetch took: ${dbEndTime - dbStartTime}ms for ${allExercises.length} business-filtered exercises`);
         
         const filterStartTime = Date.now();
         

@@ -52,9 +52,33 @@ vi.mock('@acme/db/schema', () => ({
     parse: vi.fn((data) => data),
   },
   Business: {},
+  BusinessExercise: {},
   Post: {},
   CreatePostSchema: {
     parse: vi.fn((data) => data),
+  },
+  // Training session schemas
+  TrainingSession: {},
+  UserTrainingSession: {},
+  Workout: {},
+  WorkoutExercise: {},
+  CreateTrainingSessionSchema: {
+    parse: vi.fn((data) => data),
+    extend: vi.fn(() => ({
+      parse: vi.fn((data) => data),
+    })),
+  },
+  CreateWorkoutSchema: {
+    parse: vi.fn((data) => data),
+    extend: vi.fn(() => ({
+      parse: vi.fn((data) => data),
+    })),
+  },
+  AddExercisesToWorkoutSchema: {
+    parse: vi.fn((data) => data),
+    extend: vi.fn(() => ({
+      parse: vi.fn((data) => data),
+    })),
   },
 }));
 
@@ -96,10 +120,7 @@ describe('Exercise Router CRUD Tests', () => {
   describe('all', () => {
     it('should return paginated exercises', async () => {
       const ctx = createMockContext();
-      // Ensure exercises query is set up
-      if (!ctx.db.query.exercises) {
-        ctx.db.query.exercises = { findMany: vi.fn(), findFirst: vi.fn() };
-      }
+      // For unauthenticated users, the code uses the old query pattern
       ctx.db.query.exercises.findMany.mockResolvedValue([mockExercise]);
       caller = createCaller(ctx);
 
@@ -119,10 +140,7 @@ describe('Exercise Router CRUD Tests', () => {
 
     it('should use default pagination values', async () => {
       const ctx = createMockContext();
-      // Ensure exercises query is set up
-      if (!ctx.db.query.exercises) {
-        ctx.db.query.exercises = { findMany: vi.fn(), findFirst: vi.fn() };
-      }
+      // For unauthenticated users, the code uses the old query pattern
       ctx.db.query.exercises.findMany.mockResolvedValue([]);
       caller = createCaller(ctx);
 
@@ -134,16 +152,33 @@ describe('Exercise Router CRUD Tests', () => {
         offset: 0,
       });
     });
+    
+    it('should filter by business for authenticated users', async () => {
+      const ctx = createAuthenticatedContext('trainer', 'business-123');
+      // For authenticated users with businessId, use the new select pattern
+      ctx.db.selectMockChain.then.mockImplementation((resolve) => 
+        resolve([{ exercise: mockExercise }])
+      );
+      caller = createCaller(ctx);
+
+      const result = await caller.exercise.all({ limit: 10, offset: 0 });
+
+      expect(result).toHaveLength(1);
+      expect(result[0]).toMatchObject({
+        name: 'Barbell Squat',
+        primaryMuscle: 'quads',
+      });
+      expect(ctx.db.select).toHaveBeenCalled();
+      expect(ctx.db.selectMockChain.innerJoin).toHaveBeenCalled();
+      expect(ctx.db.selectMockChain.where).toHaveBeenCalled();
+    });
 
   });
 
   describe('byId', () => {
     it('should return specific exercise by ID', async () => {
       const ctx = createMockContext();
-      // Ensure exercises query is set up
-      if (!ctx.db.query.exercises) {
-        ctx.db.query.exercises = { findMany: vi.fn(), findFirst: vi.fn() };
-      }
+      // byId still uses the old query pattern
       ctx.db.query.exercises.findFirst.mockResolvedValue(mockExercise);
       caller = createCaller(ctx);
 
@@ -157,10 +192,7 @@ describe('Exercise Router CRUD Tests', () => {
 
     it('should return undefined for non-existent exercise', async () => {
       const ctx = createMockContext();
-      // Ensure exercises query is set up
-      if (!ctx.db.query.exercises) {
-        ctx.db.query.exercises = { findMany: vi.fn(), findFirst: vi.fn() };
-      }
+      // byId still uses the old query pattern
       ctx.db.query.exercises.findFirst.mockResolvedValue(undefined);
       caller = createCaller(ctx);
 
@@ -173,10 +205,7 @@ describe('Exercise Router CRUD Tests', () => {
   describe('search', () => {
     it('should search exercises by name', async () => {
       const ctx = createMockContext();
-      // Ensure exercises query is set up
-      if (!ctx.db.query.exercises) {
-        ctx.db.query.exercises = { findMany: vi.fn(), findFirst: vi.fn() };
-      }
+      // For unauthenticated users, the code uses the old query pattern
       ctx.db.query.exercises.findMany.mockResolvedValue([mockExercise]);
       caller = createCaller(ctx);
 
@@ -221,7 +250,10 @@ describe('Exercise Router CRUD Tests', () => {
   describe('filter', () => {
     it('should filter exercises based on client profile', async () => {
       const ctx = createAuthenticatedContext('trainer', '123e4567-e89b-12d3-a456-426614174002');
-      ctx.db.query.exercises.findMany.mockResolvedValue([mockExercise]);
+      // Use the new select pattern for authenticated users
+      ctx.db.selectMockChain.then.mockImplementation((resolve) => 
+        resolve([{ exercise: mockExercise }])
+      );
       
       vi.mocked(filterExercisesFromInput).mockResolvedValue({
         userInput: '',
@@ -271,7 +303,10 @@ describe('Exercise Router CRUD Tests', () => {
 
     it('should use businessId from session', async () => {
       const ctx = createAuthenticatedContext('client', '123e4567-e89b-12d3-a456-426614174007');
-      ctx.db.query.exercises.findMany.mockResolvedValue([]);
+      // Use the new select pattern for authenticated users
+      ctx.db.selectMockChain.then.mockImplementation((resolve) => 
+        resolve([])
+      );
       vi.mocked(filterExercisesFromInput).mockResolvedValue({
         userInput: '',
         programmedRoutine: '',
@@ -304,7 +339,10 @@ describe('Exercise Router CRUD Tests', () => {
 
     it('should use enhanced filter in debug mode', async () => {
       const ctx = createAuthenticatedContext('trainer', '123e4567-e89b-12d3-a456-426614174002');
-      ctx.db.query.exercises.findMany.mockResolvedValue([mockExercise]);
+      // Use the new select pattern for authenticated users
+      ctx.db.selectMockChain.then.mockImplementation((resolve) => 
+        resolve([{ exercise: mockExercise }])
+      );
       
       vi.mocked(enhancedFilterExercisesFromInput).mockResolvedValue({
         userInput: '',
@@ -334,7 +372,10 @@ describe('Exercise Router CRUD Tests', () => {
 
     it('should handle filter errors gracefully', async () => {
       const ctx = createAuthenticatedContext('trainer', '123e4567-e89b-12d3-a456-426614174002');
-      ctx.db.query.exercises.findMany.mockRejectedValue(new Error('Database error'));
+      // Mock the select chain to throw an error during database query
+      ctx.db.select = vi.fn().mockImplementation(() => {
+        throw new Error('Database error');
+      });
       caller = createCaller(ctx);
 
       await expect(caller.exercise.filter()).rejects.toThrow('Failed to filter exercises');

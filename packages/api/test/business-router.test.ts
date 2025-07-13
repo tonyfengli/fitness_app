@@ -23,12 +23,36 @@ vi.mock('@acme/db/client', () => ({
 
 vi.mock('@acme/db/schema', () => ({
   Business: {},
+  BusinessExercise: {},
   CreateBusinessSchema: {
     parse: vi.fn((data) => data),
   },
   Post: {},
   CreatePostSchema: {
     parse: vi.fn((data) => data),
+  },
+  // Training session schemas
+  TrainingSession: {},
+  UserTrainingSession: {},
+  Workout: {},
+  WorkoutExercise: {},
+  CreateTrainingSessionSchema: {
+    parse: vi.fn((data) => data),
+    extend: vi.fn(() => ({
+      parse: vi.fn((data) => data),
+    })),
+  },
+  CreateWorkoutSchema: {
+    parse: vi.fn((data) => data),
+    extend: vi.fn(() => ({
+      parse: vi.fn((data) => data),
+    })),
+  },
+  AddExercisesToWorkoutSchema: {
+    parse: vi.fn((data) => data),
+    extend: vi.fn(() => ({
+      parse: vi.fn((data) => data),
+    })),
   },
 }));
 

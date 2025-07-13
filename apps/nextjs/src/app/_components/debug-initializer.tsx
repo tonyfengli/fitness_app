@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { debugAuth, enableAutoCapture } from "~/utils/debugCommands";
+import { isDebugEnabled } from "~/utils/debugConfig";
 
 export function DebugInitializer() {
   useEffect(() => {
@@ -12,11 +13,14 @@ export function DebugInitializer() {
       (window as any).FrontendDebugClient = 
         import("~/utils/frontendDebugClient").then(m => m.FrontendDebugClient);
       
-      console.log("🛠️ Debug tools initialized (disabled by default for performance)");
-      console.log("Commands:");
-      console.log("  • window.frontendDebug.setEnabled(true) - Enable debug logging");
-      console.log("  • debugAuth() - Full auth debugging report");
-      console.log("  • enableAutoCapture() - Auto-capture navigation events");
+      // Only show console messages if explicitly enabled
+      if (isDebugEnabled()) {
+        console.log("🛠️ Debug tools initialized (disabled by default for performance)");
+        console.log("Commands:");
+        console.log("  • window.frontendDebug.setEnabled(true) - Enable debug logging");
+        console.log("  • debugAuth() - Full auth debugging report");
+        console.log("  • enableAutoCapture() - Auto-capture navigation events");
+      }
     }
   }, []);
 

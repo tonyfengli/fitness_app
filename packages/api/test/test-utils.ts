@@ -37,12 +37,37 @@ export const mockSession = (overrides?: Partial<Session>): Session => ({
   ...overrides,
 });
 
+// Helper to create chainable select mock for business-filtered queries
+export const createSelectMock = (returnData: any[] = []) => {
+  const mockChain = {
+    select: vi.fn().mockReturnThis(),
+    from: vi.fn().mockReturnThis(),
+    innerJoin: vi.fn().mockReturnThis(),
+    leftJoin: vi.fn().mockReturnThis(),
+    where: vi.fn().mockReturnThis(),
+    orderBy: vi.fn().mockReturnThis(),
+    limit: vi.fn().mockReturnThis(),
+    offset: vi.fn().mockReturnThis(),
+    groupBy: vi.fn().mockReturnThis(),
+    having: vi.fn().mockReturnThis(),
+    then: vi.fn((resolve) => resolve(returnData)),
+  };
+
+  // Make the select function return the chain
+  const selectFn = vi.fn(() => mockChain);
+  
+  return { selectFn, mockChain };
+};
+
 export const createMockContext = (
   user?: Partial<User>,
   session?: Partial<Session>
 ): any => {
   const mockUser = user ? { id: 'test-user-id', ...user } as User : null;
   const mockSession = session ? { id: 'test-session-id', userId: mockUser?.id || 'test-user-id', ...session } as Session : null;
+  
+  // Create the select mock
+  const { selectFn, mockChain } = createSelectMock([]);
 
   return {
     session: mockSession ? { ...mockSession, user: mockUser } : null,
@@ -76,6 +101,9 @@ export const createMockContext = (
       user: {
         findMany: vi.fn(),
       },
+      // New select pattern for business filtering
+      select: selectFn,
+      selectMockChain: mockChain, // Expose for test configuration
     } as any,
     insert: vi.fn(() => ({
       values: vi.fn(() => ({
@@ -89,14 +117,6 @@ export const createMockContext = (
     })),
     delete: vi.fn(() => ({
       where: vi.fn(() => Promise.resolve()),
-    })),
-    select: vi.fn(() => ({
-      from: vi.fn(() => ({
-        orderBy: vi.fn(() => Promise.resolve([])),
-        where: vi.fn(() => ({
-          limit: vi.fn(() => Promise.resolve([])),
-        })),
-      })),
     })),
   };
 };

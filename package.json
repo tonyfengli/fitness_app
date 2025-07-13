@@ -36,7 +36,7 @@
     "test:quiet": "vitest run --reporter=dot",
     "test:watch": "turbo run test:watch",
     "test:coverage": "turbo run test:coverage",
-    "test:all": "vitest run",
+    "test:all": "node test-and-save.js",
     "test:api": "cd packages/api && pnpm test",
     "test:ai": "cd packages/ai && pnpm test"
   },

@@ -50,3 +50,6 @@ dist/
 
 # turbo
 .turbo
+
+# test output
+test-failures.json

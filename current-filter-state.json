@@ -1,5 +1,5 @@
 {
-  "timestamp": "2025-07-13T04:07:04.385Z",
+  "timestamp": "2025-07-13T15:58:39.255Z",
   "filters": {
     "clientName": "Web User",
     "strengthCapacity": "moderate",
@@ -48,18 +48,18 @@
       "count": 8,
       "exercises": [
         {
-          "id": "49bc7005-5179-4d96-be77-ac790cf00759",
-          "name": "Landmine T Bar Row",
+          "id": "050e52d0-5f3a-491c-b424-24c5dad31a62",
+          "name": "Farmer's Carry Step-Up",
           "score": 5
         },
         {
-          "id": "e3cd89af-a339-49ec-b5eb-5438d1227a0f",
-          "name": "Suitcase Kettlebell Lunge",
+          "id": "1e2240ed-388b-463b-96aa-2ca72ddb9cd7",
+          "name": "Side Plank Reverse Fly",
           "score": 5
         },
         {
-          "id": "8a08ffdd-2998-4795-8030-ccd357613f7b",
-          "name": "Elevated Push-Ups",
+          "id": "7ed3976c-c9f3-4672-966c-424778e1cd8c",
+          "name": "Goblet Squat Pulse",
           "score": 5
         }
       ]
@@ -73,13 +73,13 @@
           "score": 5
         },
         {
-          "id": "1503a525-aa1c-483b-a121-183d00397919",
-          "name": "Lateral Shoulder Raise",
+          "id": "5a75f68d-4d30-4211-a98c-a74c71f70f8d",
+          "name": "Glute Bridge Thrust with Dumbbell",
           "score": 5
         },
         {
-          "id": "141589ed-ffb0-48eb-aab5-02cd568e287e",
-          "name": "Bodyweight Triceps Extension",
+          "id": "1503a525-aa1c-483b-a121-183d00397919",
+          "name": "Lateral Shoulder Raise",
           "score": 5
         }
       ]
@@ -88,23 +88,23 @@
       "count": 6,
       "exercises": [
         {
-          "id": "e824764c-7860-4254-a2c5-9eca52db2e5d",
-          "name": "Medicine Ball Slam",
-          "score": 5
-        },
-        {
           "id": "fb5bf2ce-611c-4a2f-ae16-8d21d28280c1",
           "name": "Side Plank Hip Raise",
           "score": 5
         },
         {
-          "id": "dd47414b-bca2-4fa8-a200-c159632e31d6",
-          "name": "Box Pike Walkout",
+          "id": "0975bd35-a1fd-4ea7-acc4-dd9c05d4a982",
+          "name": "Bosu Plank Jack",
           "score": 5
         },
         {
-          "id": "71aee1c7-b87e-48fb-a28f-7a5c251b0808",
-          "name": "Plank Jack",
+          "id": "7a6a7db5-8e05-4e60-9292-8004dac927db",
+          "name": "In-and-Out Squat Jumps",
+          "score": 5
+        },
+        {
+          "id": "620165b8-278c-48cd-a8a1-9f9aa1f37e80",
+          "name": "Flutter Kicks",
           "score": 5
         }
       ]

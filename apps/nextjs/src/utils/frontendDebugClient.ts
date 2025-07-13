@@ -3,6 +3,8 @@
  * Zero-overhead in production through compile-time optimization
  */
 
+import { isDebugEnabled } from './debugConfig';
+
 interface DebugLog {
   timestamp: string;
   component: string;
@@ -185,6 +187,9 @@ export const FrontendDebugClient = process.env.NODE_ENV === 'production'
 // Only expose to window in development
 if (typeof window !== 'undefined' && process.env.NODE_ENV !== 'production') {
   (window as any).frontendDebug = FrontendDebugClient;
-  console.log('🔍 Frontend Debug Client available as window.frontendDebug');
-  console.log('Commands: printLogs(), getReport(), downloadReport(), clear()');
+  // Only show console messages if explicitly enabled
+  if (isDebugEnabled()) {
+    console.log('🔍 Frontend Debug Client available as window.frontendDebug');
+    console.log('Commands: printLogs(), getReport(), downloadReport(), clear()');
+  }
 }

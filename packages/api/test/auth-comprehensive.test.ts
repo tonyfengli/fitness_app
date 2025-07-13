@@ -225,4 +225,87 @@ describe('Comprehensive Auth Router Tests', () => {
     });
   });
 
+  describe('getClientsByBusiness', () => {
+    it('should return clients for trainers in the same business', async () => {
+      const businessId = '123e4567-e89b-12d3-a456-426614174002';
+      const ctx = createAuthenticatedContext('trainer', businessId);
+      
+      // Mock database response with clients
+      const mockClients = [
+        {
+          id: 'client-1',
+          name: 'John Doe',
+          email: 'john@example.com',
+          phone: '+1234567890',
+          role: 'client',
+          businessId,
+          createdAt: new Date(),
+        },
+        {
+          id: 'client-2',
+          name: 'Jane Smith',
+          email: 'jane@example.com',
+          phone: null,
+          role: 'client',
+          businessId,
+          createdAt: new Date(),
+        },
+      ];
+      
+      ctx.db.query.user.findMany.mockResolvedValue(mockClients);
+      caller = createCaller(ctx);
+
+      const result = await caller.auth.getClientsByBusiness();
+
+      expect(result).toHaveLength(2);
+      expect(result[0]).toMatchObject({
+        id: 'client-1',
+        name: 'John Doe',
+        email: 'john@example.com',
+      });
+      expect(result[1]).toMatchObject({
+        id: 'client-2',
+        name: 'Jane Smith',
+        email: 'jane@example.com',
+      });
+    });
+
+    it('should throw error if user is not a trainer', async () => {
+      const ctx = createAuthenticatedContext('client', '123e4567-e89b-12d3-a456-426614174002');
+      caller = createCaller(ctx);
+
+      await expect(
+        caller.auth.getClientsByBusiness()
+      ).rejects.toThrow('Only trainers can view all clients');
+    });
+
+    it('should throw error if trainer has no businessId', async () => {
+      const ctx = createAuthenticatedContext('trainer', null);
+      caller = createCaller(ctx);
+
+      await expect(
+        caller.auth.getClientsByBusiness()
+      ).rejects.toThrow('Trainer must be associated with a business');
+    });
+
+    it('should throw error for unauthenticated users', async () => {
+      const ctx = createMockContext();
+      caller = createCaller(ctx);
+
+      await expect(
+        caller.auth.getClientsByBusiness()
+      ).rejects.toThrow(TRPCError);
+    });
+
+    it('should return empty array if no clients in business', async () => {
+      const ctx = createAuthenticatedContext('trainer', '123e4567-e89b-12d3-a456-426614174002');
+      ctx.db.query.user.findMany.mockResolvedValue([]);
+      caller = createCaller(ctx);
+
+      const result = await caller.auth.getClientsByBusiness();
+      
+      expect(result).toEqual([]);
+    });
+  });
+
 });

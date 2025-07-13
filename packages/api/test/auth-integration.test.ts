@@ -88,9 +88,10 @@ describe('Auth Integration Tests', () => {
     it('should allow both roles to view exercises', async () => {
       // Trainer access
       const trainerCtx = createAuthenticatedContext('trainer');
-      trainerCtx.db.query.exercises.findMany.mockResolvedValue([
-        { id: '1', name: 'Exercise 1' },
-      ]);
+      // Mock the new select pattern response
+      trainerCtx.db.selectMockChain.then.mockImplementation((resolve) => 
+        resolve([{ exercise: { id: '1', name: 'Exercise 1' } }])
+      );
       const trainerCaller = createCaller(trainerCtx);
       
       const trainerExercises = await trainerCaller.exercise.all();
@@ -98,9 +99,10 @@ describe('Auth Integration Tests', () => {
 
       // Client access
       const clientCtx = createAuthenticatedContext('client');
-      clientCtx.db.query.exercises.findMany.mockResolvedValue([
-        { id: '1', name: 'Exercise 1' },
-      ]);
+      // Mock the new select pattern response
+      clientCtx.db.selectMockChain.then.mockImplementation((resolve) => 
+        resolve([{ exercise: { id: '1', name: 'Exercise 1' } }])
+      );
       const clientCaller = createCaller(clientCtx);
       
       const clientExercises = await clientCaller.exercise.all();

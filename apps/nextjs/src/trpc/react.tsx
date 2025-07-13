@@ -12,6 +12,7 @@ import { createTRPCContext } from "@trpc/tanstack-react-query";
 import SuperJSON from "superjson";
 
 import type { AppRouter } from "@acme/api";
+import { isDebugEnabled } from "~/utils/debugConfig";
 
 import { env } from "~/env";
 import { createQueryClient } from "./query-client";
@@ -36,9 +37,11 @@ export function TRPCReactProvider(props: { children: React.ReactNode }) {
     createTRPCClient<AppRouter>({
       links: [
         loggerLink({
-          enabled: (op) =>
-            env.NODE_ENV === "development" ||
-            (op.direction === "down" && op.result instanceof Error),
+          enabled: (op) => {
+            // Only log in development if debug is enabled, or always log errors
+            return (env.NODE_ENV === "development" && isDebugEnabled()) ||
+              (op.direction === "down" && op.result instanceof Error);
+          },
         }),
         httpBatchStreamLink({
           transformer: SuperJSON,

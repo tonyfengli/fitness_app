@@ -268,3 +268,86 @@ AUTH_REDIRECT_PROXY_URL="http://localhost:3000"
 ### Migration Notes
 - Exercise data and BusinessExercise relationships must be preserved when implementing business scoping
 - Current implementation allows all businesses to see all exercises (security issue)
+
+---
+
+## Workout Tracking System (Implemented)
+
+### Overview
+A comprehensive workout tracking system that allows clients to view their training history and trainers to manage/log workouts. The system tracks training sessions (scheduled appointments), participant registration, and actual workout data with exercises performed.
+
+### Database Schema (Implemented)
+
+#### Training Session
+- Scheduled appointments created by trainers
+- Fields: `id`, `business_id`, `trainer_id`, `name`, `scheduled_at`, `duration_minutes`, `max_participants`
+
+#### User Training Session
+- Join table for users registered to attend sessions
+- Fields: `id`, `user_id`, `training_session_id`, `created_at`
+- Unique constraint on (user_id, training_session_id)
+
+#### Workout
+- Actual workout data completed during a session
+- Fields: `id`, `training_session_id`, `user_id`, `completed_at`, `notes`
+
+#### Workout Exercise
+- Exercises performed in a workout
+- Fields: `id`, `workout_id`, `exercise_id`, `order_index`, `sets_completed`
+
+### Business Exercise Integration (Implemented)
+- Exercises are filtered by business using the `business_exercise` join table
+- All exercise endpoints (`all`, `search`, `filter`) respect business boundaries
+- Trainers only see exercises available to their business
+
+### API Endpoints
+
+#### Training Session Management (`trainingSession` router)
+- **create** - Trainers create new training sessions
+- **list** - List all sessions with optional filters (trainer, date range)
+- **getById** - Get session details including participants
+- **addParticipant** - Register a user for a session
+- **removeParticipant** - Unregister a user from a session
+- **myPast** - Get user's past training sessions
+
+#### Workout Tracking (`workout` router)
+- **create** - Log a workout for a training session with exercises
+- **addExercises** - Add exercises to an existing workout
+- **myWorkouts** - Get user's workout history with exercise counts
+- **getById** - Get detailed workout including all exercises performed
+- **clientWorkouts** - Trainers view a specific client's workout history
+- **sessionWorkouts** - View all workouts for a specific training session
+
+### Access Control
+
+#### Client Permissions
+- View only their own workouts and training history
+- Register/unregister themselves from training sessions
+- Cannot see other users' workout data
+
+#### Trainer Permissions
+- Create and manage training sessions
+- View all workouts within their business
+- Log workouts for any client in their business
+- Add/remove participants from sessions
+
+### Security Features
+- All data is filtered by `businessId` to prevent cross-business access
+- Role-based permissions enforced at the API level
+- Validation ensures users can only access appropriate data
+- Transactions used for multi-table operations
+
+### Usage Example Flow
+1. Trainer creates a training session for "Monday Morning HIIT"
+2. Clients register for the session via `addParticipant`
+3. After the session, trainer logs each client's workout
+4. Trainer adds exercises performed with sets completed
+5. Clients can view their workout history via `myWorkouts`
+6. Trainers can analyze all workouts for the session
+
+### Future Enhancements
+- Add reps, weight, rest time tracking per set
+- Workout templates and programs
+- Progress tracking and analytics
+- Integration with AI workout generator for session planning
+- Mobile app integration for real-time workout logging

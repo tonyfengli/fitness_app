@@ -3,6 +3,7 @@
  */
 
 import { FrontendDebugClient } from './frontendDebugClient';
+import { isDebugEnabled } from './debugConfig';
 
 export const debugAuth = async () => {
   console.group('🔍 Auth Debug Report');
@@ -101,12 +102,64 @@ export const enableAutoCapture = () => {
   }, 100);
 };
 
+// Debug command to capture client dropdown data
+export const debugClients = async () => {
+  console.group('👥 Client Dropdown Debug');
+  
+  try {
+    // Find the dropdown element
+    const dropdown = document.querySelector('#client-select') as HTMLSelectElement;
+    if (!dropdown) {
+      console.log('❌ Client dropdown not found on page');
+      return null;
+    }
+    
+    // Get all options
+    const options = Array.from(dropdown.options);
+    const clients = options.slice(1).map(option => ({
+      id: option.value,
+      displayText: option.text,
+      selected: option.selected
+    }));
+    
+    console.log('📊 Client Dropdown Data:');
+    console.table(clients);
+    
+    // Save to a file for Claude Code to read
+    const debugData = {
+      timestamp: new Date().toISOString(),
+      currentPage: window.location.pathname,
+      clientsInDropdown: clients,
+      totalClients: clients.length,
+      selectedClient: clients.find(c => c.selected) || null
+    };
+    
+    // Save to localStorage for persistence
+    localStorage.setItem('debug-clients-data', JSON.stringify(debugData, null, 2));
+    
+    console.log('💾 Client data saved to localStorage as "debug-clients-data"');
+    console.log('To retrieve: JSON.parse(localStorage.getItem("debug-clients-data"))');
+    
+    return debugData;
+  } catch (error) {
+    console.error('Error capturing client data:', error);
+    return null;
+  }
+  
+  console.groupEnd();
+};
+
 // Make commands available globally
 if (typeof window !== 'undefined' && process.env.NODE_ENV !== 'production') {
   (window as any).debugAuth = debugAuth;
   (window as any).enableAutoCapture = enableAutoCapture;
+  (window as any).debugClients = debugClients;
   
-  console.log('🔧 Debug commands available:');
-  console.log('- debugAuth() - Full auth debugging report');
-  console.log('- enableAutoCapture() - Auto-capture navigation events');
+  // Only show console messages if explicitly enabled
+  if (isDebugEnabled()) {
+    console.log('🔧 Debug commands available:');
+    console.log('- debugAuth() - Full auth debugging report');
+    console.log('- enableAutoCapture() - Auto-capture navigation events');
+    console.log('- debugClients() - Capture client dropdown data');
+  }
 }

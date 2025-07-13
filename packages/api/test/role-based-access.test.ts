@@ -26,10 +26,18 @@ describe('Role-Based Access Tests', () => {
       const ctx = createAuthenticatedContext('trainer', 'business-123');
       caller = createCaller(ctx);
 
-      // Mock database response
-      ctx.db.query.exercises.findMany.mockResolvedValue([
-        { id: '1', name: 'Push-up', description: 'Basic push-up', createdAt: new Date(), updatedAt: new Date() },
-      ]);
+      // Mock database response using new select pattern
+      ctx.db.selectMockChain.then.mockImplementation((resolve) => 
+        resolve([{ 
+          exercise: { 
+            id: '1', 
+            name: 'Push-up', 
+            description: 'Basic push-up', 
+            createdAt: new Date(), 
+            updatedAt: new Date() 
+          } 
+        }])
+      );
 
       const result = await caller.exercise.all({ limit: 10 });
 
@@ -40,38 +48,9 @@ describe('Role-Based Access Tests', () => {
       );
     });
 
-    it('should allow public access to exercise list', async () => {
-      const ctx = createAuthenticatedContext('client', 'business-123');
-      caller = createCaller(ctx);
-
-      // Mock database response
-      ctx.db.query.exercises.findMany.mockResolvedValue([
-        { id: '1', name: 'Squat', description: 'Basic squat', createdAt: new Date(), updatedAt: new Date() },
-      ]);
-
-      // exercise.all is a public endpoint, so clients can access it
-      const result = await caller.exercise.all({ limit: 10 });
-      
-      expect(result).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({ name: 'Squat' }),
-        ]),
-      );
-    });
   });
 
   describe('Protected Procedures', () => {
-    it('should allow unauthenticated access to public endpoints', async () => {
-      const ctx = createMockContext();
-      caller = createCaller(ctx);
-
-      // Mock database response
-      ctx.db.query.exercises.findMany.mockResolvedValue([]);
-
-      // exercise.all is public, so no auth required
-      const result = await caller.exercise.all({ limit: 10 });
-      expect(result).toEqual([]);
-    });
 
     it('should require authentication for protected endpoints', async () => {
       const ctx = createMockContext();

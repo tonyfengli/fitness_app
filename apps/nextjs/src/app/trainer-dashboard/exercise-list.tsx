@@ -5,6 +5,7 @@ import { useSuspenseQuery, useQuery } from "@tanstack/react-query";
 import { useTRPC } from "~/trpc/react";
 import { useBusinessId } from "~/hooks/useBusinessContext";
 import { BlockDebugClient } from "~/utils/blockDebugClient";
+import { isDebugEnabled } from "~/utils/debugConfig";
 import { extractBlockInfo, getBlockColorClasses } from "~/utils/blockHelpers";
 
 const STRENGTH_OPTIONS = [
@@ -78,7 +79,13 @@ export default function ExerciseList() {
   useEffect(() => {
     if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
       (window as any).blockDebug = BlockDebugClient;
-      console.log('🔍 Block Debug Client available as window.blockDebug');
+      // Only show console messages if explicitly enabled via localStorage or URL param
+      const debugEnabled = 
+        localStorage.getItem('debug') === 'true' || 
+        window.location.search.includes('debug=true');
+      if (debugEnabled) {
+        console.log('🔍 Block Debug Client available as window.blockDebug');
+      }
     }
   }, []);
   

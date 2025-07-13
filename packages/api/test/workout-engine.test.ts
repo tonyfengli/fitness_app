@@ -82,9 +82,15 @@ describe('Workout Engine with Auth Tests', () => {
       const ctx = createAuthenticatedContext('trainer', 'business-123');
       caller = createCaller(ctx);
 
-      // Mock database response
-      ctx.db.query.exercises.findMany.mockResolvedValue(
-        mockExercises.map(be => be.exercise)
+      // Mock database response for the new select pattern
+      // The query returns objects with { exercise: {...} } structure
+      const businessExercisesData = mockExercises.map(be => ({ 
+        exercise: be.exercise 
+      }));
+      
+      // Configure the mock chain to return the data
+      ctx.db.selectMockChain.then.mockImplementation((resolve) => 
+        resolve(businessExercisesData)
       );
 
       // Mock AI filter response
@@ -100,8 +106,10 @@ describe('Workout Engine with Auth Tests', () => {
         skillCapacity: 'moderate',
       });
 
-      // Verify that exercises were fetched
-      expect(ctx.db.query.exercises.findMany).toHaveBeenCalled();
+      // Verify that the select chain was called
+      expect(ctx.db.select).toHaveBeenCalled();
+      expect(ctx.db.selectMockChain.from).toHaveBeenCalled();
+      expect(ctx.db.selectMockChain.innerJoin).toHaveBeenCalled();
 
       // Verify exercises were returned
       expect(result).toBeDefined();
@@ -112,8 +120,10 @@ describe('Workout Engine with Auth Tests', () => {
       const ctx = createAuthenticatedContext('trainer', 'business-456');
       caller = createCaller(ctx);
 
-      // Mock database response
-      ctx.db.query.exercises.findMany.mockResolvedValue([]);
+      // Mock database response - empty result
+      ctx.db.selectMockChain.then.mockImplementation((resolve) => 
+        resolve([])
+      );
 
       // Mock AI filter response
       const { filterExercisesFromInput } = await import('@acme/ai');
@@ -126,8 +136,9 @@ describe('Workout Engine with Auth Tests', () => {
         clientName: 'Test Client',
       });
 
-      // Verify exercises were fetched
-      expect(ctx.db.query.exercises.findMany).toHaveBeenCalled();
+      // Verify the select chain was called
+      expect(ctx.db.select).toHaveBeenCalled();
+      expect(ctx.db.selectMockChain.where).toHaveBeenCalled();
     });
 
     it('should handle users without businessId', async () => {
