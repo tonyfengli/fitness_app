@@ -21,8 +21,8 @@ export {
 // SMS interpretation graph
 export * from "./sms/smsInterpretationGraph";
 
-// Workout interpretation graph
-export * from "./workout-interpretation";
+// Workout generation graph
+export * from "./workout-generation";
 
 // Formatting utilities
 export * from "./formatting/exerciseFlags";

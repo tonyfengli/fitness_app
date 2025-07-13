@@ -48,6 +48,7 @@ describe('Filter Edge Cases & Validation', () => {
       const result = await filterExercisesFromInput({
         exercises: mixedExercises,
         clientContext: {
+          user_id: 'test-user-mixed',
           name: 'Mixed Capacity User',
           strength_capacity: 'high',  // Can do all strength levels
           skill_capacity: 'low'       // Limited to low skill
@@ -201,6 +202,7 @@ describe('Filter Edge Cases & Validation', () => {
       const result = await filterExercisesFromInput({
         exercises: complexTestExercises,
         clientContext: {
+          user_id: 'test-user-complex',
           name: 'Complex Filter User',
           strength_capacity: 'low',
           skill_capacity: 'low',

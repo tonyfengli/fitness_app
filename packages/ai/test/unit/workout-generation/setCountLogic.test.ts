@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { determineTotalSetCount } from '../../../src/workout-interpretation/setCountLogic';
+import { determineTotalSetCount } from '../../../src/workout-generation/setCountLogic';
 
 describe('Phase 3: Set Count Determination', () => {
   describe('Strength x Intensity Matrix Combinations', () => {

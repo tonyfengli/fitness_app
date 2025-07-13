@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { filterExercisesFromInput } from '../../../src/api/filterExercisesFromInput';
-import { interpretWorkout } from '../../../src/workout-interpretation/workoutInterpretationGraph';
+import { interpretWorkout } from '../../../src/workout-generation/workoutInterpretationGraph';
 import { setupMocks, testContexts, getExercisesByBlock, createTestExerciseWithOverrides } from './test-helpers';
 import { createTestWorkoutTemplate } from '../../../src/types/testHelpers';
 import { MockLLM } from '../../helpers/mockLLM';
-import { setInterpretationLLM, resetInterpretationLLM } from '../../../src/workout-interpretation/interpretExercisesNode';
+import { setInterpretationLLM, resetInterpretationLLM } from '../../../src/workout-generation/generateWorkoutFromExercises';
 import type { Exercise, ClientContext } from '../../../src/types';
 
 // Mock LLM that can simulate various error conditions

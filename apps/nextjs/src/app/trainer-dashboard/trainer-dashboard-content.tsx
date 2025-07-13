@@ -1,10 +1,24 @@
 "use client";
 
-import { Suspense } from "react";
+import { Suspense, useState } from "react";
 import ExerciseList from "./exercise-list";
 import ClientDropdown from "./client-dropdown";
 
+interface Client {
+  id: string;
+  email: string;
+  phone: string | null;
+  name: string;
+  profile?: {
+    strengthLevel: string;
+    skillLevel: string;
+    notes: string | null;
+  } | null;
+}
+
 export default function TrainerDashboardContent() {
+  const [selectedClient, setSelectedClient] = useState<Client | null>(null);
+
   return (
     <div className="container mx-auto py-8">
       <h1 className="text-3xl font-bold mb-6">Trainer Dashboard</h1>
@@ -18,15 +32,36 @@ export default function TrainerDashboardContent() {
         <div className="mt-4">
           <ClientDropdown 
             onClientSelect={(client) => {
+              setSelectedClient(client);
               if (client) {
                 console.log("Selected client:", client);
-                // This is where you can navigate to a client-specific view
-                // or filter the content below based on the selected client
               }
             }}
             className="max-w-md"
           />
         </div>
+        
+        {/* Display selected client's levels */}
+        {selectedClient && (
+          <div className="mt-4">
+            {selectedClient.profile ? (
+              <div className="p-3 bg-blue-50 rounded-md">
+                <p className="text-sm font-medium text-blue-900">
+                  {selectedClient.name || selectedClient.email} - 
+                  <span className="ml-2">Strength: {selectedClient.profile.strengthLevel}</span>
+                  <span className="ml-2">Skill: {selectedClient.profile.skillLevel}</span>
+                </p>
+              </div>
+            ) : (
+              <div className="p-3 bg-yellow-50 rounded-md">
+                <p className="text-sm font-medium text-yellow-800">
+                  ⚠️ {selectedClient.name || selectedClient.email} has no fitness profile set up. 
+                  Default values (moderate/moderate) will be used.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Exercise Library Section */}
@@ -41,7 +76,7 @@ export default function TrainerDashboardContent() {
             </div>
           }
         >
-          <ExerciseList />
+          <ExerciseList selectedClient={selectedClient} />
         </Suspense>
       </div>
     </div>

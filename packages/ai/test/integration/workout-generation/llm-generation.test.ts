@@ -1,11 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { filterExercisesFromInput } from '../../../src/api/filterExercisesFromInput';
-import { interpretWorkout } from '../../../src/workout-interpretation/workoutInterpretationGraph';
+import { interpretWorkout } from '../../../src/workout-generation/workoutInterpretationGraph';
 import { setupMocks, testContexts, getExercisesByBlock, createTestExerciseWithOverrides } from './test-helpers';
 import { createTestWorkoutTemplate } from '../../../src/types/testHelpers';
 import { getExerciseDataHelper } from '../../helpers/exerciseDataHelper';
 import { MockLLM } from '../../helpers/mockLLM';
-import { setInterpretationLLM, resetInterpretationLLM } from '../../../src/workout-interpretation/interpretExercisesNode';
+import { setInterpretationLLM, resetInterpretationLLM } from '../../../src/workout-generation/generateWorkoutFromExercises';
 import type { Exercise, ClientContext } from '../../../src/types';
 
 // Custom mock LLM that generates structured workout responses

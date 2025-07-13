@@ -9,6 +9,7 @@ export interface ExerciseRequests {
 }
 
 export interface ClientContext {
+  user_id: string; // Required user/client ID for workout association
   name: string;
   strength_capacity: "very_low" | "low" | "moderate" | "high";
   skill_capacity: "very_low" | "low" | "moderate" | "high";
@@ -19,12 +20,14 @@ export interface ClientContext {
   exercise_requests?: ExerciseRequests;
   avoid_joints?: string[]; // Array of joint names to avoid (for injuries/limitations)
   business_id?: string; // UUID of the business this client belongs to
+  templateType?: "standard" | "circuit" | "full_body"; // Workout template type
 }
 
 /**
  * Create a default client context with basic fitness profile
  */
 export function createDefaultClientContext(
+  userId: string,
   strengthCapacity: ClientContext["strength_capacity"] = "moderate",
   skillCapacity: ClientContext["skill_capacity"] = "moderate",
   primaryGoal: ClientContext["primary_goal"] = "general_fitness",
@@ -33,10 +36,13 @@ export function createDefaultClientContext(
   muscleLessen: string[] = [],
   exerciseRequests: ExerciseRequests = { include: [], avoid: [] },
   avoidJoints: string[] = [],
-  businessId?: string
+  businessId?: string,
+  name: string = "Default Client",
+  templateType: ClientContext["templateType"] = "standard"
 ): ClientContext {
   return {
-    name: "Default Client",
+    user_id: userId,
+    name: name,
     strength_capacity: strengthCapacity,
     skill_capacity: skillCapacity,
     primary_goal: primaryGoal,
@@ -45,7 +51,8 @@ export function createDefaultClientContext(
     muscle_lessen: muscleLessen,
     exercise_requests: exerciseRequests,
     avoid_joints: avoidJoints,
-    business_id: businessId
+    business_id: businessId,
+    templateType: templateType
   };
 }
 

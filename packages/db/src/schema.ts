@@ -139,6 +139,10 @@ export const Workout = pgTable("workout", (t) => ({
   userId: t.text().notNull().references(() => user.id),
   completedAt: t.timestamp().notNull(),
   notes: t.text(),
+  workoutType: t.text(), // "standard", "circuit", "full_body", etc.
+  totalPlannedSets: t.integer(), // Total sets the LLM planned
+  llmOutput: t.jsonb(), // Raw LLM response for reference
+  templateConfig: t.jsonb(), // Template-specific configuration
   createdAt: t.timestamp().defaultNow().notNull(),
   updatedAt: t
     .timestamp({ mode: "date", withTimezone: true })
@@ -150,6 +154,10 @@ export const CreateWorkoutSchema = createInsertSchema(Workout, {
   userId: z.string(),
   completedAt: z.date(),
   notes: z.string().optional(),
+  workoutType: z.string().optional(),
+  totalPlannedSets: z.number().int().positive().optional(),
+  llmOutput: z.any().optional(), // JSON type
+  templateConfig: z.any().optional(), // JSON type
 }).omit({
   id: true,
   createdAt: true,
@@ -163,6 +171,7 @@ export const WorkoutExercise = pgTable("workout_exercise", (t) => ({
   exerciseId: t.uuid().notNull().references(() => exercises.id),
   orderIndex: t.integer().notNull(),
   setsCompleted: t.integer().notNull(),
+  groupName: t.text(), // "Block A", "Round 1", etc.
   createdAt: t.timestamp().defaultNow().notNull(),
 }));
 
@@ -171,6 +180,7 @@ export const CreateWorkoutExerciseSchema = createInsertSchema(WorkoutExercise, {
   exerciseId: z.string().uuid(),
   orderIndex: z.number().int().min(1),
   setsCompleted: z.number().int().min(1),
+  groupName: z.string().optional(),
 }).omit({
   id: true,
   createdAt: true,

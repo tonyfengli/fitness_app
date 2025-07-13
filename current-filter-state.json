@@ -1,5 +1,5 @@
 {
-  "timestamp": "2025-07-13T15:58:39.255Z",
+  "timestamp": "2025-07-13T16:15:11.004Z",
   "filters": {
     "clientName": "Web User",
     "strengthCapacity": "moderate",
@@ -48,18 +48,18 @@
       "count": 8,
       "exercises": [
         {
-          "id": "050e52d0-5f3a-491c-b424-24c5dad31a62",
-          "name": "Farmer's Carry Step-Up",
+          "id": "49bc7005-5179-4d96-be77-ac790cf00759",
+          "name": "Landmine T Bar Row",
           "score": 5
         },
         {
-          "id": "1e2240ed-388b-463b-96aa-2ca72ddb9cd7",
-          "name": "Side Plank Reverse Fly",
+          "id": "dc085fdb-b6c4-4942-9eb5-3dbf04d7161e",
+          "name": "TRX Mid Row",
           "score": 5
         },
         {
-          "id": "7ed3976c-c9f3-4672-966c-424778e1cd8c",
-          "name": "Goblet Squat Pulse",
+          "id": "5a75f68d-4d30-4211-a98c-a74c71f70f8d",
+          "name": "Glute Bridge Thrust with Dumbbell",
           "score": 5
         }
       ]
@@ -68,18 +68,18 @@
       "count": 8,
       "exercises": [
         {
+          "id": "617f0ccf-e9ec-494a-9608-1a3402a57cab",
+          "name": "Band Pull-Apart",
+          "score": 5
+        },
+        {
           "id": "aa66d8b3-907a-42ec-ac9b-bbaa347a88b8",
           "name": "Y/W Raises",
           "score": 5
         },
         {
-          "id": "5a75f68d-4d30-4211-a98c-a74c71f70f8d",
-          "name": "Glute Bridge Thrust with Dumbbell",
-          "score": 5
-        },
-        {
-          "id": "1503a525-aa1c-483b-a121-183d00397919",
-          "name": "Lateral Shoulder Raise",
+          "id": "4e40b3f0-cf13-4998-8ec0-61a9b5dd5239",
+          "name": "Banded Prone Overhead Press",
           "score": 5
         }
       ]
@@ -88,23 +88,23 @@
       "count": 6,
       "exercises": [
         {
-          "id": "fb5bf2ce-611c-4a2f-ae16-8d21d28280c1",
-          "name": "Side Plank Hip Raise",
+          "id": "050e52d0-5f3a-491c-b424-24c5dad31a62",
+          "name": "Farmer's Carry Step-Up",
           "score": 5
         },
         {
-          "id": "0975bd35-a1fd-4ea7-acc4-dd9c05d4a982",
-          "name": "Bosu Plank Jack",
+          "id": "e3cd89af-a339-49ec-b5eb-5438d1227a0f",
+          "name": "Suitcase Kettlebell Lunge",
           "score": 5
         },
         {
-          "id": "7a6a7db5-8e05-4e60-9292-8004dac927db",
-          "name": "In-and-Out Squat Jumps",
+          "id": "c0e353d1-5ffe-4340-ac6f-2ee03af6c2fc",
+          "name": "Bear Crawl (Forward and Back)",
           "score": 5
         },
         {
-          "id": "620165b8-278c-48cd-a8a1-9f9aa1f37e80",
-          "name": "Flutter Kicks",
+          "id": "2c4c295b-24a1-4dc2-b67d-96951b66f516",
+          "name": "Plank with Weight Drag",
           "score": 5
         }
       ]

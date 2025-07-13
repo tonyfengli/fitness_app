@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { filterExercisesFromInput } from '../../../src/api/filterExercisesFromInput';
-import { interpretExercisesNode, setInterpretationLLM, resetInterpretationLLM } from '../../../src/workout-interpretation/interpretExercisesNode';
+import { generateWorkoutFromExercises, setInterpretationLLM, resetInterpretationLLM } from '../../../src/workout-generation/generateWorkoutFromExercises';
 import { setupMocks, testContexts, getExercisesByBlock } from './test-helpers';
 import { createTestWorkoutTemplate } from '../../../src/types/testHelpers';
-import type { WorkoutInterpretationStateType } from '../../../src/workout-interpretation/types';
+import type { WorkoutInterpretationStateType } from '../../../src/workout-generation/types';
 import { MockLLM } from '../../helpers/mockLLM';
 
 // Custom mock LLM that extracts set count from the prompt
@@ -110,7 +110,7 @@ describe('Set Count Determination Integration (Phase 3)', () => {
         error: null
       };
 
-      const interpretResult = await interpretExercisesNode(state);
+      const interpretResult = await generateWorkoutFromExercises(state);
 
       // Check that interpretation succeeded
       expect(interpretResult.error).toBeUndefined();
@@ -213,7 +213,7 @@ describe('Set Count Determination Integration (Phase 3)', () => {
         error: null
       };
 
-      const interpretResult = await interpretExercisesNode(state);
+      const interpretResult = await generateWorkoutFromExercises(state);
       
       const output = interpretResult.structuredOutput as any;
       expect(output.totalSets || output.summary).toContain('19-22');
@@ -247,7 +247,7 @@ describe('Set Count Determination Integration (Phase 3)', () => {
         error: null
       };
 
-      const interpretResult = await interpretExercisesNode(state);
+      const interpretResult = await generateWorkoutFromExercises(state);
       
       // moderate strength + high intensity = 22-25 sets
       const output = interpretResult.structuredOutput as any;
@@ -282,7 +282,7 @@ describe('Set Count Determination Integration (Phase 3)', () => {
         error: null
       };
 
-      const interpretResult = await interpretExercisesNode(state);
+      const interpretResult = await generateWorkoutFromExercises(state);
       
       // low strength + moderate intensity = 18-20 sets
       const output = interpretResult.structuredOutput as any;
@@ -317,7 +317,7 @@ describe('Set Count Determination Integration (Phase 3)', () => {
         error: null
       };
 
-      const interpretResult = await interpretExercisesNode(state);
+      const interpretResult = await generateWorkoutFromExercises(state);
       
       // Should fallback to moderate/moderate = 19-22 sets
       const output = interpretResult.structuredOutput as any;
@@ -350,7 +350,7 @@ describe('Set Count Determination Integration (Phase 3)', () => {
         error: null
       };
 
-      const interpretResult = await interpretExercisesNode(state);
+      const interpretResult = await generateWorkoutFromExercises(state);
       
       // Should fallback to moderate/moderate = 19-22 sets
       const output = interpretResult.structuredOutput as any;
@@ -383,7 +383,7 @@ describe('Set Count Determination Integration (Phase 3)', () => {
         error: null
       };
 
-      const interpretResult = await interpretExercisesNode(state);
+      const interpretResult = await generateWorkoutFromExercises(state);
       
       // Should use defaults: moderate/moderate = 19-22 sets
       const output = interpretResult.structuredOutput as any;
@@ -422,7 +422,7 @@ describe('Set Count Determination Integration (Phase 3)', () => {
         error: null
       };
 
-      const interpretResult = await interpretExercisesNode(state);
+      const interpretResult = await generateWorkoutFromExercises(state);
       const output = interpretResult.structuredOutput as any;
       
       // Should see the reasoning in the summary
@@ -462,7 +462,7 @@ describe('Set Count Determination Integration (Phase 3)', () => {
         error: null
       };
 
-      const interpretResult = await interpretExercisesNode(state);
+      const interpretResult = await generateWorkoutFromExercises(state);
       const output = interpretResult.structuredOutput as any;
       
       // Should see the reasoning in the summary
@@ -516,7 +516,7 @@ describe('Set Count Determination Integration (Phase 3)', () => {
           error: null
         };
 
-        const interpretResult = await interpretExercisesNode(state);
+        const interpretResult = await generateWorkoutFromExercises(state);
         
         // Verify the workout was generated with correct set count
         const output = interpretResult.structuredOutput as any;
@@ -568,7 +568,7 @@ describe('Set Count Determination Integration (Phase 3)', () => {
         error: null
       };
 
-      const interpretResult = await interpretExercisesNode(state);
+      const interpretResult = await generateWorkoutFromExercises(state);
       
       // Should have correct set count for low/high
       const output = interpretResult.structuredOutput as any;

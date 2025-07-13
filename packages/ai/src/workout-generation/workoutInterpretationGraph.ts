@@ -1,7 +1,7 @@
 import { StateGraph, START, END } from "@langchain/langgraph";
 import type { WorkoutInterpretationStateType, ExercisesByBlock } from "./types";
 import { WorkoutInterpretationState } from "./types";
-import { interpretExercisesNode } from "./interpretExercisesNode";
+import { generateWorkoutFromExercises } from "./generateWorkoutFromExercises";
 
 /**
  * Creates the workout interpretation graph
@@ -12,7 +12,7 @@ export function createWorkoutInterpretationGraph() {
   const workflow = new StateGraph(WorkoutInterpretationState);
 
   // Add the single interpretation node
-  workflow.addNode("interpretExercises", interpretExercisesNode);
+  workflow.addNode("interpretExercises", generateWorkoutFromExercises);
 
   // Define workflow edges
   workflow.addEdge(START, "interpretExercises" as any);

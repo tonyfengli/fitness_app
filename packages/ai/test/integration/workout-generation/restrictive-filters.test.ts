@@ -63,6 +63,7 @@ describe('Restrictive Filter Scenarios (Phase 1 Focus)', () => {
     it('should handle very_low strength with high skill mismatch', async () => {
       const result = await filterExercisesFromInput({
         clientContext: {
+          user_id: 'test-user-mismatched',
           name: 'Mismatched User',
           strength_capacity: 'very_low',
           skill_capacity: 'high' // Unusual combination
@@ -113,6 +114,7 @@ describe('Restrictive Filter Scenarios (Phase 1 Focus)', () => {
       // Create an impossible combination
       const result = await filterExercisesFromInput({
         clientContext: {
+          user_id: 'test-user-impossible',
           name: 'Impossible User',
           strength_capacity: 'very_low',
           skill_capacity: 'very_low',

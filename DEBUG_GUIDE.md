@@ -324,42 +324,6 @@ The debug systems are intentionally separate:
 
 ---
 
-## Test Failure Reporting
-
-### Automatic Test Failure Capture
-When running tests with `pnpm test:all`, any failed tests are automatically captured and saved to a JSON file for easy sharing and analysis.
-
-#### How It Works
-1. **Run tests**: `pnpm test:all`
-2. **Automatic capture**: If any tests fail, they're saved to `test-failures.json`
-3. **Easy sharing**: The file can be read by Claude Code without copy/paste
-
-#### What Gets Captured
-- Total number of failed tests
-- For each failure:
-  - Test file path
-  - Test name
-  - Timestamp
-  - Summary of test results
-
-#### Implementation
-- **Script**: `test-and-save.js` - Wrapper that runs vitest and captures failures
-- **Output**: `test-failures.json` - JSON file with structured failure data
-- **Ignored**: Added to `.gitignore` to prevent accidental commits
-
-#### Usage Example
-```bash
-# Run all tests and capture failures
-pnpm test:all
-
-# If tests fail, you'll see:
-# 📝 5 failed tests saved to test-failures.json
-
-# Claude Code can then read the file directly:
-# "Read test-failures.json to see what failed"
-```
-
-This system makes it easy to share test failures with Claude Code for debugging without manual copy/paste of terminal output.
 
 ---
 

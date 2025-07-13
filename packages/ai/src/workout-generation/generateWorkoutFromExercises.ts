@@ -6,6 +6,8 @@ import { WorkoutPromptBuilder } from "./prompts/workoutInterpretationPrompt";
 import type { LLMProvider } from "../config/llm";
 import { createLLM } from "../config/llm";
 import { BlockDebugger, logBlock, logBlockTransformation } from "../utils/blockDebugger";
+import { getWorkoutStructure } from "./templates/workoutTemplates";
+import type { WorkoutTemplateType } from "./templates/workoutTemplates";
 
 // Global LLM instance that can be overridden for testing
 let globalLLM: LLMProvider | undefined;
@@ -19,17 +21,19 @@ export function resetInterpretationLLM(): void {
 }
 
 /**
- * Single node that interprets the TOP exercises using LLM
+ * Generates a complete workout from the selected exercises using LLM
+ * Takes organized exercises and client context, returns structured workout plan
  */
-export async function interpretExercisesNode(
+export async function generateWorkoutFromExercises(
   state: WorkoutInterpretationStateType
 ): Promise<Partial<WorkoutInterpretationStateType>> {
   const llm = globalLLM || createLLM();
   
-  logBlock('interpretExercisesNode - Start', {
+  logBlock('generateWorkoutFromExercises - Start', {
     hasExercises: !!state.exercises,
     exerciseBlocks: state.exercises ? Object.keys(state.exercises) : [],
-    clientContext: state.clientContext
+    clientContext: state.clientContext,
+    templateType: state.clientContext?.templateType || 'standard'
   });
   
   try {
@@ -40,15 +44,15 @@ export async function interpretExercisesNode(
     
     // Validate input
     if (!exercises || Object.keys(exercises).length === 0) {
-      logBlock('interpretExercisesNode - No Exercises', {
-        error: 'No exercises provided for interpretation'
+      logBlock('generateWorkoutFromExercises - No Exercises', {
+        error: 'No exercises provided for workout generation'
       });
       return {
         error: "No exercises provided for interpretation",
       };
     }
     
-    logBlock('interpretExercisesNode - Input Exercises', {
+    logBlock('generateWorkoutFromExercises - Input Exercises', {
       blockA: exercises.blockA?.length || 0,
       blockB: exercises.blockB?.length || 0,
       blockC: exercises.blockC?.length || 0,
@@ -75,15 +79,29 @@ export async function interpretExercisesNode(
     
     // Build the system prompt - can be customized based on client context
     const promptBuildStartTime = performance.now();
+    
+    // Get the workout structure based on template type
+    const templateType = clientContext?.templateType || 'standard';
+    const workoutStructure = getWorkoutStructure(templateType as WorkoutTemplateType);
+    
+    logBlock('generateWorkoutFromExercises - Template Selection', {
+      templateType,
+      sections: workoutStructure.sections.map(s => ({
+        name: s.name,
+        exerciseCount: s.exerciseCount
+      })),
+      totalExerciseLimit: workoutStructure.totalExerciseLimit
+    });
+    
     const promptBuilder = new WorkoutPromptBuilder({
+      // Use the workout structure from the template
+      workoutStructure,
       // Enable strict exercise limit if client has specific requirements
       strictExerciseLimit: clientContext?.strictExerciseCount === true,
       // Emphasize requested exercises if they're provided
       emphasizeRequestedExercises: clientContext?.includeExercises?.length > 0,
       // Don't include examples by default (keeps prompt shorter)
-      includeExamples: false,
-      // Pass workout structure if provided
-      workoutStructure: clientContext?.workoutStructure
+      includeExamples: false
     });
     
     const systemPrompt = promptBuilder.build();
@@ -155,7 +173,7 @@ Please interpret these exercises according to the system instructions.`;
     console.log(`   - Response parsing: ${timing.responseParsing.toFixed(2)}ms`);
     console.log(`   - TOTAL: ${timing.total.toFixed(2)}ms (${(timing.total/1000).toFixed(2)}s)`);
 
-    logBlockTransformation('interpretExercisesNode - Complete',
+    logBlockTransformation('generateWorkoutFromExercises - Complete',
       {
         inputExercises: {
           blockA: exercises.blockA?.length || 0,
@@ -177,9 +195,9 @@ Please interpret these exercises according to the system instructions.`;
       timing, // Include timing in the response
     };
   } catch (error) {
-    console.error("Error in interpretExercisesNode:", error);
+    console.error("Error in generateWorkoutFromExercises:", error);
     
-    logBlock('interpretExercisesNode - Error', {
+    logBlock('generateWorkoutFromExercises - Error', {
       error: error instanceof Error ? error.message : "Unknown error occurred",
       errorType: error?.constructor?.name
     });
@@ -224,3 +242,6 @@ function formatExercisesForPrompt(exercises: ExercisesByBlock): string {
 
   return formatted.trim();
 }
+
+// Export alias for backward compatibility
+export const interpretExercisesNode = generateWorkoutFromExercises;

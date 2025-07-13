@@ -31,14 +31,13 @@
     "dev:restart": "pnpm clean:dev && sleep 2 && pnpm dev",
     "kill:port": "lsof -ti:3000 | xargs kill -9 || true",
     "test": "turbo run test",
-    "test:verbose": "node test-all.js",
     "test:ui": "vitest --ui",
     "test:quiet": "vitest run --reporter=dot",
     "test:watch": "turbo run test:watch",
     "test:coverage": "turbo run test:coverage",
-    "test:all": "node test-and-save.js",
-    "test:api": "cd packages/api && pnpm test",
-    "test:ai": "cd packages/ai && pnpm test"
+    "test:all": "turbo run test",
+    "test:api": "turbo run test --filter=@acme/api",
+    "test:ai": "turbo run test --filter=@acme/ai"
   },
   "devDependencies": {
     "@acme/prettier-config": "workspace:*",

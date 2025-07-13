@@ -71,7 +71,23 @@ const MUSCLE_OPTIONS = [
   { value: "tibialis_anterior", label: "Tibialis Anterior" },
 ];
 
-export default function ExerciseList() {
+interface Client {
+  id: string;
+  email: string;
+  phone: string | null;
+  name: string;
+  profile?: {
+    strengthLevel: string;
+    skillLevel: string;
+    notes: string | null;
+  } | null;
+}
+
+interface ExerciseListProps {
+  selectedClient: Client | null;
+}
+
+export default function ExerciseList({ selectedClient }: ExerciseListProps) {
   const trpc = useTRPC();
   const businessId = useBusinessId();
   
@@ -97,8 +113,9 @@ export default function ExerciseList() {
   );
 
   // Filter states
-  const [strengthFilter, setStrengthFilter] = useState("moderate");
-  const [skillFilter, setSkillFilter] = useState("moderate");
+  // Strength and skill come from selected client now
+  const strengthFilter = selectedClient?.profile?.strengthLevel || "moderate";
+  const skillFilter = selectedClient?.profile?.skillLevel || "moderate";
   const [intensityFilter, setIntensityFilter] = useState("moderate");
   
   // Exercise inclusion/exclusion states
@@ -167,7 +184,8 @@ export default function ExerciseList() {
   // Query for filtered exercises (only runs when filterCriteria is set)
   const { data: filteredExercises, isLoading: isFiltering, error: filterError } = useQuery({
     ...trpc.exercise.filter.queryOptions({
-      clientName: "Web User",
+      clientId: selectedClient?.id, // Pass the client's user ID
+      clientName: selectedClient?.name || selectedClient?.email || "Unknown Client",
       strengthCapacity: (filterCriteria?.strength || "moderate") as "very_low" | "low" | "moderate" | "high" | "very_high" | "all",
       skillCapacity: (filterCriteria?.skill || "moderate") as "very_low" | "low" | "moderate" | "high" | "all",
       includeExercises: filterCriteria?.include || [],
@@ -409,40 +427,23 @@ export default function ExerciseList() {
             </select>
           </div>
           
-          <div>
-            <label htmlFor="strength" className="block text-sm font-medium text-gray-700 mb-1">
-              Strength Level
-            </label>
-            <select
-              id="strength"
-              value={strengthFilter}
-              onChange={(e) => setStrengthFilter(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              {STRENGTH_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          
-          <div>
-            <label htmlFor="skill" className="block text-sm font-medium text-gray-700 mb-1">
-              Skill Level
-            </label>
-            <select
-              id="skill"
-              value={skillFilter}
-              onChange={(e) => setSkillFilter(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              {SKILL_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
+          {/* Client levels display - replacing manual dropdowns */}
+          <div className="col-span-2">
+            {selectedClient ? (
+              <div className="p-3 bg-gray-50 rounded-md">
+                <p className="text-sm font-medium text-gray-700">Client Levels:</p>
+                <p className="text-sm text-gray-600 mt-1">
+                  Strength: <span className="font-medium">{strengthFilter}</span> | 
+                  Skill: <span className="font-medium ml-1">{skillFilter}</span>
+                </p>
+              </div>
+            ) : (
+              <div className="p-3 bg-yellow-50 rounded-md">
+                <p className="text-sm text-yellow-800">
+                  Please select a client from the dropdown above to filter exercises.
+                </p>
+              </div>
+            )}
           </div>
           
           <div>
@@ -639,10 +640,11 @@ export default function ExerciseList() {
               setShowFiltered(true);
               
             }}
-            disabled={isFiltering}
+            disabled={isFiltering || !selectedClient}
             className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {isFiltering ? `Filtering... ${(currentElapsed / 1000).toFixed(1)}s` : 'Filter Workouts'}
+            {isFiltering ? `Filtering... ${(currentElapsed / 1000).toFixed(1)}s` : 
+             !selectedClient ? 'Select a Client First' : 'Filter Workouts'}
           </button>
           
         </div>

@@ -100,6 +100,7 @@ export function createMockLLM(customResponse?: any) {
 export const testContexts = {
   // Default moderate user
   default: (): ClientContext => ({
+    user_id: 'test-user-default',
     name: 'Test User',
     strength_capacity: 'moderate',
     skill_capacity: 'moderate'
@@ -107,6 +108,7 @@ export const testContexts = {
   
   // Beginner user
   beginner: (): ClientContext => ({
+    user_id: 'test-user-beginner',
     name: 'Beginner User',
     strength_capacity: 'very_low',
     skill_capacity: 'very_low'
@@ -114,6 +116,7 @@ export const testContexts = {
   
   // Advanced user
   advanced: (): ClientContext => ({
+    user_id: 'test-user-advanced',
     name: 'Advanced User',
     strength_capacity: 'high',
     skill_capacity: 'high'
@@ -121,6 +124,7 @@ export const testContexts = {
   
   // User with joint restrictions
   withJointRestrictions: (joints: string[]): ClientContext => ({
+    user_id: 'test-user-restricted',
     name: 'Restricted User',
     strength_capacity: 'moderate',
     skill_capacity: 'moderate',
@@ -129,6 +133,7 @@ export const testContexts = {
   
   // User with muscle targets
   withMuscleTargets: (target: string[], lessen: string[] = []): ClientContext => ({
+    user_id: 'test-user-targeted',
     name: 'Targeted User',
     strength_capacity: 'moderate',
     skill_capacity: 'moderate',
@@ -138,6 +143,7 @@ export const testContexts = {
   
   // User with exercise requests
   withExerciseRequests: (include: string[], avoid: string[] = []): ClientContext => ({
+    user_id: 'test-user-specific',
     name: 'Specific User',
     strength_capacity: 'moderate',
     skill_capacity: 'moderate',
@@ -146,6 +152,7 @@ export const testContexts = {
   
   // Alias for withExerciseRequests
   withRequests: (include: string[], avoid: string[] = []): ClientContext => ({
+    user_id: 'test-user-specific',
     name: 'Specific User',
     strength_capacity: 'moderate',
     skill_capacity: 'moderate',
@@ -154,6 +161,7 @@ export const testContexts = {
   
   // User with specific strength level
   withStrength: (strength: 'very_low' | 'low' | 'moderate' | 'high'): ClientContext => ({
+    user_id: 'test-user-strength',
     name: 'Strength User',
     strength_capacity: strength,
     skill_capacity: 'moderate'
@@ -213,6 +221,7 @@ export function createTestFromDebugData(debugData: any) {
   const { filters, results } = debugData;
   
   const clientContext: ClientContext = {
+    user_id: "test-user-123", // Default test user ID
     name: filters.clientName,
     strength_capacity: filters.strengthCapacity,
     skill_capacity: filters.skillCapacity,
