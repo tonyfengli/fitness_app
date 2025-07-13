@@ -77,49 +77,63 @@ fitness_app/
 └── package.json             # Root package.json
 ```
 
-## Authentication Flow
+## Authentication System (Implemented)
 
-### Web Application (Next.js)
+### Features
+- **Email/Password Authentication**: Users sign up and log in with email and password
+- **User Registration**: Collects email, password, phone number, role (trainer/client), and business association
+- **Session Management**: 30-day persistent sessions with secure HTTP-only cookies
+- **Role-Based Access**: Different dashboards and permissions for trainers vs clients
+- **Protected API Endpoints**: All sensitive routes require authentication via `protectedProcedure`
+- **Logout Functionality**: Sign out clears session and redirects to login
+
+### Authentication Flow
+
+#### Web Application (Next.js)
 ```mermaid
 sequenceDiagram
     participant User
     participant NextJS
     participant BetterAuth
-    participant Discord
     participant Database
 
-    User->>NextJS: Click "Sign in with Discord"
-    NextJS->>BetterAuth: Initiate OAuth flow
-    BetterAuth->>Discord: Redirect to Discord OAuth
-    Discord->>User: Login prompt
-    User->>Discord: Enter credentials
-    Discord->>BetterAuth: OAuth callback with code
-    BetterAuth->>Discord: Exchange code for tokens
-    Discord->>BetterAuth: Return user data
-    BetterAuth->>Database: Store/update user session
-    BetterAuth->>NextJS: Return authenticated session
-    NextJS->>User: Redirect to authenticated area
+    User->>NextJS: Enter email/password
+    NextJS->>BetterAuth: Submit credentials
+    BetterAuth->>Database: Validate user
+    Database->>BetterAuth: Return user data + role
+    BetterAuth->>Database: Create session
+    BetterAuth->>NextJS: Return session + cookies
+    NextJS->>User: Redirect based on role
+    Note over User,NextJS: Trainers → /exercises
+    Note over User,NextJS: Clients → /client-dashboard
 ```
 
-### Mobile Application (Expo)
+#### Logout Flow
 ```mermaid
 sequenceDiagram
     participant User
-    participant Expo
+    participant NextJS
     participant BetterAuth
-    participant Discord
     participant Database
 
-    User->>Expo: Tap "Sign in with Discord"
-    Expo->>BetterAuth: Initialize auth with Expo client
-    BetterAuth->>Discord: Open Discord OAuth (WebBrowser)
-    Discord->>User: Login in web view
-    User->>Discord: Enter credentials
-    Discord->>BetterAuth: OAuth callback
-    BetterAuth->>Database: Store session
-    BetterAuth->>Expo: Return tokens (stored in SecureStore)
-    Expo->>User: Show authenticated state
+    User->>NextJS: Click "Sign Out"
+    NextJS->>BetterAuth: Call signOut()
+    BetterAuth->>Database: Invalidate session
+    BetterAuth->>NextJS: Clear cookies
+    NextJS->>NextJS: Clear React Query cache
+    NextJS->>User: Redirect to /login
 ```
+
+### Database Schema
+- **User Table**: `id`, `email`, `password` (hashed), `phone`, `role` (trainer/client), `businessId`
+- **Session Table**: `id`, `userId`, `expiresAt`, `token`, `createdAt`, `updatedAt`
+- **Business Table**: `id`, `name`, `description`
+
+### Protected Routes
+- `/exercises` - Trainer dashboard (exercise management)
+- `/client-dashboard` - Client dashboard (placeholder for future workouts)
+- All API mutations require authentication
+- Middleware enforces role-based access control
 
 ## Data Flow Architecture
 
@@ -129,8 +143,10 @@ Frontend Request → tRPC Router → Procedure → Database → Response
 ```
 
 **tRPC Routers:**
-- `auth`: Session management (`getSession`)
+- `auth`: Session management (`getSession`, `getSecretMessage`, `getUserRole`, `isTrainer`, `updateUserBusiness`)
 - `post`: CRUD operations (`all`, `byId`, `create`, `delete`)
+- `exercise`: Exercise management (`all`, `byId`, `search`, `filter`, `create`, `update`, `delete`)
+- `business`: Business operations (`all`, `byId`, `create`)
 
 **Procedure Types:**
 - `publicProcedure`: Open to all users
@@ -203,79 +219,52 @@ AUTH_REDIRECT_PROXY_URL="http://localhost:3000"
 
 ---
 
-## TODO: Authentication System Implementation
+## TODO: Remaining Authentication Features
 
-### Overview
-Implementing a username/password authentication system with business association and role management, replacing the current Discord OAuth setup.
+### Completed ✅
+- **Email/Password Authentication**: Users can sign up and log in with email/password
+- **User Registration**: Signup flow with email, password, phone, role, and business selection
+- **Session Management**: 30-day persistent sessions with HTTP-only cookies
+- **Role-Based Access**: Different dashboards for trainers (/exercises) and clients (/client-dashboard)
+- **Protected API Endpoints**: All sensitive routes require authentication
+- **Logout Functionality**: Sign out clears session and redirects to login
+- **Business Association**: Users are linked to a single business
 
-### Requirements
-- **Users Table**: Username, password (bcrypt), phone, name, role, businessId
-- **Authentication**: Username/password login with Better Auth
-- **Sessions**: Persistent sessions (remember me)
-- **Roles**: Client and Trainer (no permissions yet)
-- **Business**: Single business per user (multi-business structure for future)
-- **Security**: Row Level Security by business (future phase)
+### Not Yet Implemented ❌
+- **Username Field**: Currently using email for login instead of username
+- **Discord OAuth**: Integration mentioned but not implemented
+- **Email Verification**: No email confirmation flow
+- **Password Reset**: No forgot password functionality
+- **User Profile Page**: No UI for users to update their information
+- **Row Level Security**: Database-level security by business not implemented
 
-### Implementation Sequence
+### Future Implementation Priorities
 
-#### Phase 1: Database Schema & Migration
-1. Create database migrations for:
-   - Remove email, emailVerified, image from users table
-   - Add phone, username, role, businessId to users table
-   - Create user_profile table (skeleton only)
-2. Create data migration to preserve exercises and BusinessExercise relationships
-3. Run migrations
-4. **Test: Verify schema and exercise data intact**
+#### Priority 1: Username Support
+- Add username field to user table
+- Update signup/login forms to use username instead of email
+- Ensure username uniqueness
 
-#### Phase 2: Better Auth Configuration
-5. Configure Better Auth for username/password
-6. Update Better Auth to handle phone number
-7. Configure session to include user role and businessId
-8. Ensure mobile compatibility
-9. **Test: Auth endpoints working**
+#### Priority 2: User Profile Management
+- Create profile page at `/profile` or `/settings`
+- Allow users to update: phone, password, business association
+- Add profile link to navigation
 
-#### Phase 3: API Layer Updates
-10. Update auth router for role management
-11. Update all routers to use protectedProcedure
-12. Update workout engine endpoints to use auth
-13. Update filterExercisesFromInput to get businessId from session
-14. **Test: Protected routes and workout engine with auth**
+#### Priority 3: Password Reset Flow
+- Implement forgot password functionality
+- Email-based reset token generation
+- Reset password page
 
-#### Phase 4: Frontend Auth Flow
-15. Update login page (username/password)
-16. Update signup page (username, phone, role, business)
-17. Update auth showcase component
-18. **Test: Complete auth flow**
+#### Priority 4: Business-Scoped Exercise Access
+- Implement actual filtering of exercises by business
+- Use BusinessExercise join table properly
+- Update exercise queries to filter by user's businessId
 
-#### Phase 4.5: Role-Based Routing & Navigation
-19. Create role-based dashboard routing:
-    - Rename `/exercises` to `/trainer-dashboard` (keep existing functionality)
-    - Create `/client-dashboard` (placeholder welcome page)
-    - Redirect after login based on user role
-20. Implement role-based navigation:
-    - Trainers see: "Trainer Dashboard" (exercise management)
-    - Clients see: "My Workouts" (placeholder for now)
-    - Both see: Logout option
-21. Add access control:
-    - Clients accessing `/trainer-dashboard` → redirect to unauthorized
-    - Trainers have full access to all pages
-    - Create protected route wrapper component
-22. Create `useAuth` hook for checking auth state and user role
-23. **Test: Role-based routing and access control**
-
-#### Phase 5: Integration & Cleanup
-24. Remove Discord OAuth elements
-25. Update environment variables
-26. **Test: End-to-end workout creation with auth**
-27. **Test: Mobile app authentication**
+#### Priority 5: Mobile App Authentication
+- Verify and fix mobile authentication flow
+- Ensure session persistence on mobile
+- Test with Expo SecureStore
 
 ### Migration Notes
-- Exercise data and BusinessExercise relationships must be preserved
-- Existing user data can be discarded
-- User profile table will be expanded later with workout-specific fields
-
-### Future Considerations
-- Multi-business support (user_businesses join table ready)
-- SMS authentication
-- Row Level Security
-- Client profile expansion for workout engine integration
+- Exercise data and BusinessExercise relationships must be preserved when implementing business scoping
+- Current implementation allows all businesses to see all exercises (security issue)
