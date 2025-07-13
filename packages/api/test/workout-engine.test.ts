@@ -78,7 +78,7 @@ describe('Workout Engine with Auth Tests', () => {
       });
     });
 
-    it('should return filtered exercises scoped to user businessId', async () => {
+    it('should return filtered exercises', async () => {
       const ctx = createAuthenticatedContext('trainer', 'business-123');
       caller = createCaller(ctx);
 

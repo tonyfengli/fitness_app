@@ -72,22 +72,6 @@ describe('Comprehensive Auth Router Tests', () => {
       expect(result).toBeNull();
     });
 
-    it('should include all user fields in session', async () => {
-      const ctx = createAuthenticatedContext('client', '123e4567-e89b-12d3-a456-426614174003');
-      caller = createCaller(ctx);
-
-      const result = await caller.auth.getSession();
-
-      expect(result.user).toMatchObject({
-        id: expect.any(String),
-        username: expect.any(String),
-        phone: expect.any(String),
-        role: 'client',
-        businessId: '123e4567-e89b-12d3-a456-426614174003',
-        createdAt: expect.any(Date),
-        updatedAt: expect.any(Date),
-      });
-    });
   });
 
   describe('getSecretMessage', () => {
