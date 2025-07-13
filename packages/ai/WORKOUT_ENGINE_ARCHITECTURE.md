@@ -62,7 +62,7 @@ Sequential pipeline with distinct phases, each building upon the previous phase'
 - `core/filtering/` - Exercise filtering logic
 - `core/scoring/` - Exercise scoring system
 - `core/templates/` - Template organization and block selection
-- `workout-interpretation/` - LLM integration
+- `workout-generation/` - LLM integration and workout generation
 
 ---
 
@@ -215,7 +215,7 @@ Calculates total workout volume based on client capacity and intensity level. Ca
 - Workout intensity: `'low' | 'moderate' | 'high'` (optional)
 
 ### Core Components
-- **Module**: `workout-interpretation/setCountLogic.ts`
+- **Module**: `workout-generation/setCountLogic.ts`
 - **Function**: `determineTotalSetCount()`
 
 ### Set Count Matrix
@@ -412,27 +412,51 @@ Transforms organized exercise blocks into a structured workout program with sets
 - Set count range from Phase 3
 
 ### Core Components
-- **Node**: `workout-interpretation/interpretExercisesNode.ts`
-- **Graph**: `workout-interpretation/workoutInterpretationGraph.ts`
-- **Prompts**: `workout-interpretation/prompts/promptBuilder.ts`
-- **Prompt Sections**: `workout-interpretation/prompts/sections/` - Modular prompt components
+- **Node**: `workout-generation/generateWorkoutFromExercises.ts`
+- **Graph**: `workout-generation/workoutInterpretationGraph.ts`
+- **Prompts**: `workout-generation/prompts/promptBuilder.ts`
+- **Templates**: `workout-generation/templates/workoutTemplates.ts`
+- **Prompt Sections**: `workout-generation/prompts/sections/` - Modular prompt components
 
-### Prompt Building
+### Template-Aware LLM Generation
 
-#### 5.1 Dynamic Configuration
+#### 5.1 Template Integration
+The LLM handler reads the `templateType` from ClientContext and adjusts prompt generation accordingly:
+- **Template Types**: `'standard' | 'circuit' | 'full_body'`
+- **Template Mapping**: Uses `getWorkoutStructure(templateType)` to retrieve appropriate structure
+- **Dynamic Prompts**: Each template generates different prompt sections and constraints
+
+#### 5.2 Workout Structure by Template
+- **Standard**: Uses blocks (A, B, C, D) with traditional sets/reps
+- **Circuit**: Uses rounds (1, 2, 3) with time-based intervals (45s work, 15s rest)
+- **Full Body**: Same as standard but with muscle balance requirements
+
+#### 5.3 Prompt Building Process
+1. Retrieves workout structure based on `templateType`
+2. `WorkoutPromptBuilder` uses structure to generate:
+   - Dynamic constraints (e.g., "Select 4-6 exercises" for circuits)
+   - Appropriate output format (blocks vs rounds)
+   - Template-specific guidance
+
+#### 5.4 Dynamic Configuration
 - Strict exercise limits toggle
-- Example inclusion toggle
+- Example inclusion toggle  
 - Emphasis on requested exercises
+- Template-specific constraints and formatting
 
-#### 5.2 Context Integration
+#### 5.5 Context Integration
 - Client limitations and preferences
-- Set count constraints
+- Set count constraints from Phase 3
 - Exercise rationale
+- Template requirements
 
-#### 5.3 Output Structure
-- Structured JSON with workout blocks
+#### 5.6 Output Structure
+- Structured JSON matching template format:
+  - Standard/Full Body: `{ blockA: [...], blockB: [...], ... }`
+  - Circuit: `{ round1: [...], round2: [...], ... }`
 - Sets and reps for each exercise
-- Progression recommendations
+- Rest periods and notes
+- Reasoning for exercise selection
 
 ### Output
 Complete workout program ready for client use
@@ -503,6 +527,20 @@ Phase 5: LLM Generation
     → Output: Complete workout program
     ↓
 Structured Workout Response
+```
+
+### Post-Generation Pipeline (New)
+```
+LLM Workout Output
+    ↓
+Workout Transformer (transformLLMOutputToDB)
+    → Validates exercises exist in database
+    → Maps exercise names to IDs
+    → Formats for database storage
+    ↓
+API Endpoint (saveWorkout)
+    → Saves to database with transaction safety
+    → Returns saved workout
 ```
 
 ---
@@ -732,13 +770,17 @@ Tests are organized by pipeline phase and testing scope:
 - **set-count-determination.test.ts** - Phase 3: Set count matrix coverage
 - **template-organization.test.ts** - Phase 4: Block organization and constraints
 - **llm-generation.test.ts** - Phase 5: LLM integration and response handling
+- **template-integration.test.ts** - Template-aware LLM prompt generation
+- **pipeline-integration.test.ts** - Complete pipeline from generation to database storage
 - **error-scenarios.test.ts** - Error handling across all phases
 - **presentation-flags.test.ts** - UI flag generation
 - **basic-scenarios.test.ts** - Happy path scenarios
 - **filter-edge-cases.test.ts** - Cascading logic and validation
 
 #### Unit Tests (`test/unit/`)
-- **setCountLogic.test.ts** - Set count determination logic
+- **workout-generation/setCountLogic.test.ts** - Set count determination logic
+- **transformers/workoutTransformer.test.ts** - LLM output to database transformation
+- **workoutTemplates.test.ts** - Template configuration and structure
 
 ### Key Test Scenarios
 

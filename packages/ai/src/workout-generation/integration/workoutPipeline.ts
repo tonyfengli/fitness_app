@@ -1,10 +1,13 @@
 import type { ClientContext } from "../../types/clientContext";
-import type { Exercise } from "@acme/db/schema";
+import type { exercises } from "@acme/db/schema";
+import type { InferSelectModel } from "drizzle-orm";
+
+type Exercise = InferSelectModel<typeof exercises>;
 import { generateWorkoutFromExercises } from "../generateWorkoutFromExercises";
 import { transformLLMOutputToDB, validateExerciseLookup } from "../transformers/workoutTransformer";
 import type { LLMWorkoutOutput, WorkoutDBFormat } from "../transformers/workoutTransformer";
 import type { ScoredExercise } from "../../types/scoredExercise";
-import type { WorkoutInterpretationStateType } from "../types";
+import type { WorkoutInterpretationStateType, ExercisesByBlock } from "../types";
 
 /**
  * Complete workout generation pipeline
@@ -46,9 +49,53 @@ export async function runWorkoutPipeline(
     const startTime = performance.now();
     
     // Step 1: Generate workout using LLM
+    // Convert ScoredExercise to TopExercise format
+    const topExercises: ExercisesByBlock = {
+      blockA: (input.exercises.blockA || []).map(ex => ({
+        id: ex.id,
+        name: ex.name,
+        score: ex.score,
+        tags: [...(ex.functionTags || []), ...(ex.movementTags || [])],
+        primaryMuscle: ex.primaryMuscle,
+        secondaryMuscles: ex.secondaryMuscles || undefined,
+        equipment: ex.equipment || undefined
+      })),
+      blockB: (input.exercises.blockB || []).map(ex => ({
+        id: ex.id,
+        name: ex.name,
+        score: ex.score,
+        tags: [...(ex.functionTags || []), ...(ex.movementTags || [])],
+        primaryMuscle: ex.primaryMuscle,
+        secondaryMuscles: ex.secondaryMuscles || undefined,
+        equipment: ex.equipment || undefined
+      })),
+      blockC: (input.exercises.blockC || []).map(ex => ({
+        id: ex.id,
+        name: ex.name,
+        score: ex.score,
+        tags: [...(ex.functionTags || []), ...(ex.movementTags || [])],
+        primaryMuscle: ex.primaryMuscle,
+        secondaryMuscles: ex.secondaryMuscles || undefined,
+        equipment: ex.equipment || undefined
+      })),
+      blockD: (input.exercises.blockD || []).map(ex => ({
+        id: ex.id,
+        name: ex.name,
+        score: ex.score,
+        tags: [...(ex.functionTags || []), ...(ex.movementTags || [])],
+        primaryMuscle: ex.primaryMuscle,
+        secondaryMuscles: ex.secondaryMuscles || undefined,
+        equipment: ex.equipment || undefined
+      }))
+    };
+    
     const state: WorkoutInterpretationStateType = {
-      exercises: input.exercises,
-      clientContext: input.clientContext
+      exercises: topExercises,
+      clientContext: input.clientContext,
+      interpretation: '',
+      structuredOutput: {},
+      timing: {},
+      error: null
     };
     
     console.log('🚀 Starting workout pipeline for:', input.clientContext.name);

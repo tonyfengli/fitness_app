@@ -351,3 +351,84 @@ A comprehensive workout tracking system that allows clients to view their traini
 - Progress tracking and analytics
 - Integration with AI workout generator for session planning
 - Mobile app integration for real-time workout logging
+
+---
+
+## AI Workout Generation & Storage (Implemented)
+
+### Overview
+An intelligent workout generation system that creates personalized workouts using AI, with seamless database storage and client association. The system combines exercise selection, AI-powered workout creation, and persistent storage in a single workflow.
+
+### Core Features
+
+#### One-Click Workout Generation
+- Trainers can generate complete workouts for clients with a single action
+- AI analyzes client profile (strength, skill, goals) and creates appropriate workouts
+- Immediate storage to database upon generation
+
+#### Template-Based Workout Types
+- **Standard**: Traditional strength training with blocks (A, B, C, D)
+- **Circuit**: Time-based rounds with work/rest intervals
+- **Full Body**: Balanced workouts with muscle group requirements
+
+#### Intelligent Exercise Matching
+- AI-generated exercise names are automatically matched to database exercises
+- Fuzzy matching handles variations in exercise naming
+- Invalid or unrecognized exercises are flagged with warnings but don't break the flow
+
+#### Client-Workout Association
+- Every workout is directly linked to a specific client via `user_id`
+- Enables comprehensive workout history tracking
+- Foundation for future progress analytics and reporting
+
+### Technical Architecture
+
+#### Database Schema
+**Workout Table Extensions:**
+- `workoutType`: Type of workout (standard/circuit/full_body)
+- `totalPlannedSets`: Total sets planned by AI
+- `llmOutput`: Complete AI response stored for reference
+- `templateConfig`: Template-specific configuration
+
+**WorkoutExercise Table Extensions:**
+- `groupName`: Flexible grouping ("Block A", "Round 1", etc.)
+
+#### Workflow Pipeline
+1. **Exercise Selection**: Filter and score exercises based on client profile
+2. **AI Generation**: LLM creates structured workout with sets/reps
+3. **Validation**: Exercise names validated against database
+4. **Transformation**: AI output converted to database format
+5. **Storage**: Atomic transaction saves workout and exercises
+
+### API Integration
+**saveWorkout Endpoint**
+- Accepts AI-generated workout output
+- Validates training session and client permissions
+- Automatically handles exercise lookups
+- Returns saved workout with all associations
+
+### Benefits for Trainers
+- **Efficiency**: Generate complete workouts in seconds
+- **Consistency**: AI follows training principles and client needs
+- **Flexibility**: Multiple workout templates for different training styles
+- **Traceability**: Original AI output preserved for reference
+- **Safety**: Business-scoped to prevent cross-contamination
+
+### Benefits for Clients
+- **Personalization**: Workouts tailored to individual capabilities
+- **Variety**: Different workout types prevent monotony
+- **Progress Tracking**: All workouts linked for historical analysis
+- **Professional Quality**: AI-generated workouts follow best practices
+
+### Integration Points
+- Connects with existing training session system
+- Respects business boundaries and permissions
+- Works with current exercise database
+- Compatible with future mobile app development
+
+### Future Enhancements
+- Real-time workout adjustments during sessions
+- Client feedback integration for AI learning
+- Advanced progress analytics
+- Workout sharing and templates
+- Group workout generation for classes

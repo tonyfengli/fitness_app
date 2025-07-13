@@ -1,9 +1,12 @@
-import type { Exercise } from "@acme/db/schema";
+import type { exercises } from "@acme/db/schema";
+import type { InferSelectModel } from "drizzle-orm";
+
+type Exercise = InferSelectModel<typeof exercises>;
 
 /**
  * LLM output format - what the LLM generates
  */
-export interface LLMWorkoutOutput {
+export type LLMWorkoutOutput = {
   [blockKey: string]: Array<{
     exercise: string;
     sets: number;
@@ -11,6 +14,7 @@ export interface LLMWorkoutOutput {
     rest?: string;
     notes?: string;
   }>;
+} & {
   reasoning?: string;
 }
 

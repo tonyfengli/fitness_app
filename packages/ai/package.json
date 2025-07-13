@@ -7,6 +7,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./src/index.ts"
+    },
+    "./workout-generation/*": {
+      "types": "./dist/workout-generation/*.d.ts",
+      "default": "./src/workout-generation/*.ts"
     }
   },
   "license": "MIT",

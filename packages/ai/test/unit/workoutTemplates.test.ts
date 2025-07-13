@@ -19,7 +19,9 @@ describe('Workout Templates', () => {
       expect(template.id).toBe('standard');
       expect(template.name).toBe('Standard Workout');
       expect(template.sections).toHaveLength(4);
-      expect(template.sections[0].name).toBe('Block A');
+      const firstSection = template.sections[0];
+      expect(firstSection).toBeDefined();
+      expect(firstSection?.name).toBe('Block A');
       expect(template.totalExerciseLimit).toBe(8);
     });
 
@@ -28,7 +30,9 @@ describe('Workout Templates', () => {
       expect(template.id).toBe('circuit');
       expect(template.name).toBe('Circuit Training');
       expect(template.sections).toHaveLength(3);
-      expect(template.sections[0].name).toBe('Round 1');
+      const firstSection = template.sections[0];
+      expect(firstSection).toBeDefined();
+      expect(firstSection?.name).toBe('Round 1');
       expect(template.totalExerciseLimit).toBe(6);
     });
 
@@ -60,9 +64,11 @@ describe('Workout Templates', () => {
     it('should preserve section structure', () => {
       const structure = getWorkoutStructure('circuit');
       expect(structure.sections).toHaveLength(3);
-      expect(structure.sections[0]).toHaveProperty('name');
-      expect(structure.sections[0]).toHaveProperty('exerciseCount');
-      expect(structure.sections[0]).toHaveProperty('setGuidance');
+      const firstSection = structure.sections[0];
+      expect(firstSection).toBeDefined();
+      expect(firstSection).toHaveProperty('name');
+      expect(firstSection).toHaveProperty('exerciseCount');
+      expect(firstSection).toHaveProperty('setGuidance');
     });
   });
 
@@ -78,14 +84,17 @@ describe('Workout Templates', () => {
         totalMax += section.exerciseCount.max;
       });
       
-      expect(totalMin).toBeLessThanOrEqual(template.totalExerciseLimit!);
+      expect(template.totalExerciseLimit).toBeDefined();
+      expect(totalMin).toBeLessThanOrEqual(template.totalExerciseLimit || 0);
       expect(totalMax).toBeGreaterThanOrEqual(totalMin);
     });
 
     it('should have same exercise count for all circuit rounds', () => {
       const template = WORKOUT_TEMPLATES.circuit;
-      const firstRoundMin = template.sections[0].exerciseCount.min;
-      const firstRoundMax = template.sections[0].exerciseCount.max;
+      const firstSection = template.sections[0];
+      expect(firstSection).toBeDefined();
+      const firstRoundMin = firstSection!.exerciseCount.min;
+      const firstRoundMax = firstSection!.exerciseCount.max;
       
       template.sections.forEach(section => {
         expect(section.exerciseCount.min).toBe(firstRoundMin);

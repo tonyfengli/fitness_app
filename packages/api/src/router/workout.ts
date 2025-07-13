@@ -20,7 +20,7 @@ import {
   transformLLMOutputToDB, 
   validateExerciseLookup,
   type LLMWorkoutOutput 
-} from "@acme/ai/workout-generation/transformers/workoutTransformer";
+} from "@acme/ai";
 
 export const workoutRouter = {
   // Create a workout for a training session
@@ -89,6 +89,10 @@ export const workoutRouter = {
             notes: input.notes,
           })
           .returning();
+          
+        if (!workout) {
+          throw new Error('Failed to create workout');
+        }
           
         // Create workout exercises if provided
         if (input.exercises && input.exercises.length > 0) {
@@ -456,6 +460,10 @@ export const workoutRouter = {
           })
           .returning();
           
+        if (!workout) {
+          throw new Error('Failed to create workout');
+        }
+        
         // Create workout exercises with groupName
         if (transformed.exercises.length > 0) {
           const exerciseData = transformed.exercises

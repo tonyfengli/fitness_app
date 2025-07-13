@@ -2,23 +2,156 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { runWorkoutPipeline, prepareWorkoutForAPI } from '../../../src/workout-generation/integration/workoutPipeline';
 import { setInterpretationLLM } from '../../../src/workout-generation/generateWorkoutFromExercises';
 import type { ClientContext } from '../../../src/types/clientContext';
-import type { Exercise } from '@acme/db/schema';
+import type { exercises } from '@acme/db/schema';
+import type { InferSelectModel } from 'drizzle-orm';
+
+type Exercise = InferSelectModel<typeof exercises>;
 import type { ScoredExercise } from '../../../src/types/scoredExercise';
+
+// Mock exercises database
+const mockExercises: Exercise[] = [
+    {
+      id: 'ex1',
+      name: 'Barbell Squat',
+      primaryMuscle: 'quads',
+      secondaryMuscles: ['glutes', 'hamstrings'],
+      loadedJoints: ['knees', 'hips'],
+      movementPattern: 'squat',
+      modality: 'strength',
+      movementTags: ['bilateral'],
+      functionTags: ['primary_strength'],
+      fatigueProfile: 'high_systemic',
+      complexityLevel: 'moderate',
+      equipment: ['barbell'],
+      strengthLevel: 'moderate',
+      createdAt: new Date()
+    },
+    {
+      id: 'ex2',
+      name: 'Bench Press',
+      primaryMuscle: 'chest',
+      secondaryMuscles: ['triceps', 'shoulders'],
+      loadedJoints: ['shoulders', 'elbows'],
+      movementPattern: 'horizontal_push',
+      modality: 'strength',
+      movementTags: ['bilateral'],
+      functionTags: ['primary_strength'],
+      fatigueProfile: 'moderate_local',
+      complexityLevel: 'moderate',
+      equipment: ['barbell', 'bench'],
+      strengthLevel: 'moderate',
+      createdAt: new Date()
+    },
+    {
+      id: 'ex3',
+      name: 'Romanian Deadlift',
+      primaryMuscle: 'hamstrings',
+      secondaryMuscles: ['glutes', 'lower_back'],
+      loadedJoints: ['hips', 'lower_back'],
+      movementPattern: 'hinge',
+      modality: 'strength',
+      movementTags: ['bilateral'],
+      functionTags: ['primary_strength'],
+      fatigueProfile: 'high_systemic',
+      complexityLevel: 'moderate',
+      equipment: ['barbell'],
+      strengthLevel: 'moderate',
+      createdAt: new Date()
+    },
+    {
+      id: 'ex4',
+      name: 'Pull-Ups',
+      primaryMuscle: 'lats',
+      secondaryMuscles: ['biceps', 'upper_back'],
+      loadedJoints: ['shoulders', 'elbows'],
+      movementPattern: 'vertical_pull',
+      modality: 'strength',
+      movementTags: ['bilateral'],
+      functionTags: ['primary_strength'],
+      fatigueProfile: 'moderate_local',
+      complexityLevel: 'high',
+      equipment: ['pull_up_bar'],
+      strengthLevel: 'high',
+      createdAt: new Date()
+    },
+    {
+      id: 'ex5',
+      name: 'Plank',
+      primaryMuscle: 'core',
+      secondaryMuscles: ['shoulders'],
+      loadedJoints: ['spine'],
+      movementPattern: 'core',
+      modality: 'core',
+      movementTags: ['isometric_control', 'core_stability'],
+      functionTags: ['core'],
+      fatigueProfile: 'low_local',
+      complexityLevel: 'low',
+      equipment: [],
+      strengthLevel: 'low',
+      createdAt: new Date()
+    },
+    {
+      id: 'ex6',
+      name: 'Jump Squats',
+      primaryMuscle: 'quads',
+      secondaryMuscles: ['glutes', 'calves'],
+      loadedJoints: ['knees', 'hips', 'ankles'],
+      movementPattern: 'squat',
+      modality: 'power',
+      movementTags: ['explosive', 'bilateral'],
+      functionTags: ['capacity'],
+      fatigueProfile: 'metabolic',
+      complexityLevel: 'moderate',
+      equipment: [],
+      strengthLevel: 'moderate',
+      createdAt: new Date()
+    },
+    {
+      id: 'ex7',
+      name: 'Push-Ups',
+      primaryMuscle: 'chest',
+      secondaryMuscles: ['triceps', 'shoulders'],
+      loadedJoints: ['shoulders', 'elbows'],
+      movementPattern: 'horizontal_push',
+      modality: 'strength',
+      movementTags: ['bilateral'],
+      functionTags: ['secondary_strength'],
+      fatigueProfile: 'low_local',
+      complexityLevel: 'low',
+      equipment: [],
+      strengthLevel: 'low',
+      createdAt: new Date()
+    },
+    {
+      id: 'ex8',
+      name: 'Mountain Climbers',
+      primaryMuscle: 'core',
+      secondaryMuscles: ['shoulders', 'quads'],
+      loadedJoints: ['spine', 'hips', 'shoulders'],
+      movementPattern: 'core',
+      modality: 'conditioning',
+      movementTags: ['core_stability'],
+      functionTags: ['capacity'],
+      fatigueProfile: 'metabolic',
+      complexityLevel: 'moderate',
+      equipment: [],
+      strengthLevel: 'low',
+      createdAt: new Date()
+    }
+  ];
+
+// Helper to create a scored exercise from a mock exercise
+function createScoredExercise(exerciseId: string, score: number): ScoredExercise {
+  const exercise = mockExercises.find((ex: Exercise) => ex.id === exerciseId);
+  if (!exercise) throw new Error(`Exercise ${exerciseId} not found`);
+  return {
+    ...exercise,
+    score
+  };
+}
 
 describe('Complete Workout Pipeline Integration', () => {
   let mockLLM: any;
-  
-  // Mock exercises database
-  const mockExercises: Exercise[] = [
-    { id: 'ex1', name: 'Barbell Squat', type: 'strength' },
-    { id: 'ex2', name: 'Bench Press', type: 'strength' },
-    { id: 'ex3', name: 'Romanian Deadlift', type: 'strength' },
-    { id: 'ex4', name: 'Pull-Ups', type: 'strength' },
-    { id: 'ex5', name: 'Plank', type: 'core' },
-    { id: 'ex6', name: 'Jump Squats', type: 'power' },
-    { id: 'ex7', name: 'Push-Ups', type: 'strength' },
-    { id: 'ex8', name: 'Mountain Climbers', type: 'cardio' }
-  ];
   
   const exerciseLookup = new Map(mockExercises.map(ex => [ex.id, ex]));
   
@@ -46,18 +179,18 @@ describe('Complete Workout Pipeline Integration', () => {
       // Setup selected exercises
       const selectedExercises = {
         blockA: [
-          { id: 'ex1', name: 'Barbell Squat', score: 9 }
+          createScoredExercise('ex1', 9)
         ],
         blockB: [
-          { id: 'ex2', name: 'Bench Press', score: 8 },
-          { id: 'ex3', name: 'Romanian Deadlift', score: 8 }
+          createScoredExercise('ex2', 8),
+          createScoredExercise('ex3', 8)
         ],
         blockC: [
-          { id: 'ex4', name: 'Pull-Ups', score: 7 },
-          { id: 'ex7', name: 'Push-Ups', score: 6 }
+          createScoredExercise('ex4', 7),
+          createScoredExercise('ex7', 6)
         ],
         blockD: [
-          { id: 'ex5', name: 'Plank', score: 7 }
+          createScoredExercise('ex5', 7)
         ]
       };
       
@@ -159,8 +292,8 @@ describe('Complete Workout Pipeline Integration', () => {
       
       // Should still transform known exercises
       expect(result.dbFormat?.exercises).toHaveLength(2);
-      expect(result.dbFormat?.exercises[0].exerciseId).toBe('unknown');
-      expect(result.dbFormat?.exercises[1].exerciseId).toBe('ex2');
+      expect(result.dbFormat?.exercises[0]?.exerciseId).toBe('unknown');
+      expect(result.dbFormat?.exercises[1]?.exerciseId).toBe('ex2');
     });
   });
   
@@ -177,10 +310,10 @@ describe('Complete Workout Pipeline Integration', () => {
       
       const selectedExercises = {
         blockA: [
-          { id: 'ex6', name: 'Jump Squats', score: 9 },
-          { id: 'ex7', name: 'Push-Ups', score: 8 },
-          { id: 'ex8', name: 'Mountain Climbers', score: 8 },
-          { id: 'ex5', name: 'Plank', score: 7 }
+          createScoredExercise('ex6', 9),
+          createScoredExercise('ex7', 8),
+          createScoredExercise('ex8', 8),
+          createScoredExercise('ex5', 7)
         ]
       };
       
@@ -211,7 +344,7 @@ describe('Complete Workout Pipeline Integration', () => {
       expect(result.dbFormat?.workout.name).toBe('HIIT Circuit');
       
       // Circuit should have Round naming
-      expect(result.dbFormat?.exercises[0].groupName).toBe('Round 1');
+      expect(result.dbFormat?.exercises[0]?.groupName).toBe('Round 1');
       expect(result.dbFormat?.exercises).toHaveLength(4);
       
       // Template config should be circuit-specific
@@ -241,7 +374,7 @@ describe('Complete Workout Pipeline Integration', () => {
       
       const pipelineResult = await runWorkoutPipeline({
         clientContext,
-        exercises: { blockA: [{ id: 'ex1', name: 'Barbell Squat', score: 9 }] },
+        exercises: { blockA: [createScoredExercise('ex1', 9)] },
         exerciseLookup
       });
       

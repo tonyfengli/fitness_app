@@ -4,16 +4,109 @@ import {
   validateExerciseLookup,
   type LLMWorkoutOutput 
 } from '../../../src/workout-generation/transformers/workoutTransformer';
-import type { Exercise } from '@acme/db/schema';
+import type { exercises } from '@acme/db/schema';
+import type { InferSelectModel } from 'drizzle-orm';
+
+type Exercise = InferSelectModel<typeof exercises>;
 
 // Mock exercises for testing
 const mockExercises: Exercise[] = [
-  { id: 'ex1', name: 'Barbell Squat', type: 'strength' },
-  { id: 'ex2', name: 'Bench Press', type: 'strength' },
-  { id: 'ex3', name: 'Romanian Deadlift', type: 'strength' },
-  { id: 'ex4', name: 'Pull-Ups', type: 'strength' },
-  { id: 'ex5', name: 'Plank', type: 'core' },
-  { id: 'ex6', name: 'Jump Squats', type: 'power' }
+  {
+    id: 'ex1',
+    name: 'Barbell Squat',
+    primaryMuscle: 'quads',
+    secondaryMuscles: ['glutes', 'hamstrings'],
+    loadedJoints: ['knees', 'hips'],
+    movementPattern: 'squat',
+    modality: 'strength',
+    movementTags: ['bilateral'],
+    functionTags: ['primary_strength'],
+    fatigueProfile: 'high_systemic',
+    complexityLevel: 'moderate',
+    equipment: ['barbell'],
+    strengthLevel: 'moderate',
+    createdAt: new Date()
+  },
+  {
+    id: 'ex2',
+    name: 'Bench Press',
+    primaryMuscle: 'chest',
+    secondaryMuscles: ['triceps', 'shoulders'],
+    loadedJoints: ['shoulders', 'elbows'],
+    movementPattern: 'horizontal_push',
+    modality: 'strength',
+    movementTags: ['bilateral'],
+    functionTags: ['primary_strength'],
+    fatigueProfile: 'moderate_local',
+    complexityLevel: 'moderate',
+    equipment: ['barbell', 'bench'],
+    strengthLevel: 'moderate',
+    createdAt: new Date()
+  },
+  {
+    id: 'ex3',
+    name: 'Romanian Deadlift',
+    primaryMuscle: 'hamstrings',
+    secondaryMuscles: ['glutes', 'lower_back'],
+    loadedJoints: ['hips', 'lower_back'],
+    movementPattern: 'hinge',
+    modality: 'strength',
+    movementTags: ['bilateral'],
+    functionTags: ['primary_strength'],
+    fatigueProfile: 'high_systemic',
+    complexityLevel: 'moderate',
+    equipment: ['barbell'],
+    strengthLevel: 'moderate',
+    createdAt: new Date()
+  },
+  {
+    id: 'ex4',
+    name: 'Pull-Ups',
+    primaryMuscle: 'lats',
+    secondaryMuscles: ['biceps', 'upper_back'],
+    loadedJoints: ['shoulders', 'elbows'],
+    movementPattern: 'vertical_pull',
+    modality: 'strength',
+    movementTags: ['bilateral'],
+    functionTags: ['primary_strength'],
+    fatigueProfile: 'moderate_local',
+    complexityLevel: 'high',
+    equipment: ['pull_up_bar'],
+    strengthLevel: 'high',
+    createdAt: new Date()
+  },
+  {
+    id: 'ex5',
+    name: 'Plank',
+    primaryMuscle: 'core',
+    secondaryMuscles: ['shoulders'],
+    loadedJoints: ['spine'],
+    movementPattern: 'core',
+    modality: 'core',
+    movementTags: ['isometric_control', 'core_stability'],
+    functionTags: ['core'],
+    fatigueProfile: 'low_local',
+    complexityLevel: 'low',
+    equipment: [],
+    strengthLevel: 'low',
+    createdAt: new Date()
+  },
+  {
+    id: 'ex6',
+    name: 'Jump Squats',
+    primaryMuscle: 'quads',
+    secondaryMuscles: ['glutes', 'calves'],
+    loadedJoints: ['knees', 'hips', 'ankles'],
+    movementPattern: 'squat',
+    modality: 'power',
+    movementTags: ['explosive', 'bilateral'],
+    functionTags: ['capacity'],
+    fatigueProfile: 'metabolic',
+    complexityLevel: 'moderate',
+    equipment: [],
+    strengthLevel: 'moderate',
+    createdAt: new Date()
+  }
 ];
 
 const exerciseLookup = new Map(mockExercises.map(ex => [ex.id, ex]));
@@ -34,9 +127,9 @@ describe('workoutTransformer', () => {
         ],
         blockD: [
           { exercise: 'Plank', sets: 3, reps: '30-60s', rest: '1 min' }
-        ],
-        reasoning: 'Balanced workout targeting all major muscle groups'
+        ]
       };
+      (llmOutput as any).reasoning = 'Balanced workout targeting all major muscle groups';
 
       const result = await transformLLMOutputToDB(
         llmOutput,
@@ -76,8 +169,18 @@ describe('workoutTransformer', () => {
           { exercise: 'Pull-Ups', sets: 1, reps: '45 seconds' },
           { exercise: 'Plank', sets: 1, reps: '45 seconds' }
         ],
-        round2: 'Same as Round 1',
-        round3: 'Same as Round 1'
+        round2: [
+          { exercise: 'Jump Squats', sets: 1, reps: '45 seconds' },
+          { exercise: 'Bench Press', sets: 1, reps: '45 seconds' },
+          { exercise: 'Pull-Ups', sets: 1, reps: '45 seconds' },
+          { exercise: 'Plank', sets: 1, reps: '45 seconds' }
+        ],
+        round3: [
+          { exercise: 'Jump Squats', sets: 1, reps: '45 seconds' },
+          { exercise: 'Bench Press', sets: 1, reps: '45 seconds' },
+          { exercise: 'Pull-Ups', sets: 1, reps: '45 seconds' },
+          { exercise: 'Plank', sets: 1, reps: '45 seconds' }
+        ]
       };
 
       const result = await transformLLMOutputToDB(
@@ -87,10 +190,10 @@ describe('workoutTransformer', () => {
       );
 
       expect(result.workout.workoutType).toBe('circuit');
-      expect(result.workout.totalPlannedSets).toBe(4); // Only counts actual exercise arrays
+      expect(result.workout.totalPlannedSets).toBe(12); // 4 exercises * 3 rounds
       expect(result.workout.name).toContain('Circuit Training');
 
-      expect(result.exercises).toHaveLength(4);
+      expect(result.exercises).toHaveLength(12);
       expect(result.exercises[0]).toMatchObject({
         exerciseId: 'ex6',
         exerciseName: 'Jump Squats',
@@ -112,8 +215,8 @@ describe('workoutTransformer', () => {
         'standard'
       );
 
-      expect(result.exercises[0].exerciseId).toBe('ex1');
-      expect(result.exercises[1].exerciseId).toBe('ex2');
+      expect(result.exercises[0]?.exerciseId).toBe('ex1');
+      expect(result.exercises[1]?.exerciseId).toBe('ex2');
     });
 
     it('should handle unknown exercises gracefully', async () => {

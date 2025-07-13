@@ -56,7 +56,7 @@ export async function filterExercises(
   }
   
   // Use provided context or create default
-  const finalClientContext = clientContext || createDefaultClientContext();
+  const finalClientContext = clientContext || createDefaultClientContext('default-user');
   
   // Apply client-based filtering only
   const phase1StartTime = performance.now();

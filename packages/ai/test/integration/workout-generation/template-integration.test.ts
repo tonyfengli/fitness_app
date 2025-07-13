@@ -71,21 +71,25 @@ describe('Template Integration with LLM Handler', () => {
     
     const state: WorkoutInterpretationStateType = {
       exercises: {
-        blockA: [{ name: 'Squat', score: 8 }],
+        blockA: [{ id: 'squat-1', name: 'Squat', score: 8, tags: [] }],
         blockB: [
-          { name: 'Romanian Deadlift', score: 7 },
-          { name: 'Bench Press', score: 7 }
+          { id: 'rdl-1', name: 'Romanian Deadlift', score: 7, tags: [] },
+          { id: 'bench-1', name: 'Bench Press', score: 7, tags: [] }
         ],
         blockC: [
-          { name: 'Lat Pulldown', score: 6 },
-          { name: 'Lateral Raise', score: 6 }
+          { id: 'lat-1', name: 'Lat Pulldown', score: 6, tags: [] },
+          { id: 'lateral-1', name: 'Lateral Raise', score: 6, tags: [] }
         ],
         blockD: [
-          { name: 'Plank', score: 5 },
-          { name: 'Dead Bug', score: 5 }
+          { id: 'plank-1', name: 'Plank', score: 5, tags: [] },
+          { id: 'deadbug-1', name: 'Dead Bug', score: 5, tags: [] }
         ]
       },
-      clientContext
+      clientContext,
+      interpretation: '',
+      structuredOutput: {},
+      timing: {},
+      error: null
     };
     
     const result = await generateWorkoutFromExercises(state);
@@ -126,13 +130,20 @@ describe('Template Integration with LLM Handler', () => {
     const state: WorkoutInterpretationStateType = {
       exercises: {
         blockA: [
-          { name: 'Jump Squats', score: 8 },
-          { name: 'Push-Ups', score: 8 },
-          { name: 'Mountain Climbers', score: 7 },
-          { name: 'Plank', score: 7 }
-        ]
+          { id: 'jump-squat-1', name: 'Jump Squats', score: 8, tags: [] },
+          { id: 'pushup-1', name: 'Push-Ups', score: 8, tags: [] },
+          { id: 'mountain-1', name: 'Mountain Climbers', score: 7, tags: [] },
+          { id: 'plank-2', name: 'Plank', score: 7, tags: [] }
+        ],
+        blockB: [],
+        blockC: [],
+        blockD: []
       },
-      clientContext
+      clientContext,
+      interpretation: '',
+      structuredOutput: {},
+      timing: {},
+      error: null
     };
     
     const result = await generateWorkoutFromExercises(state);
@@ -168,18 +179,22 @@ describe('Template Integration with LLM Handler', () => {
     
     const state: WorkoutInterpretationStateType = {
       exercises: {
-        blockA: [{ name: 'Deadlift', score: 9 }],
+        blockA: [{ id: 'deadlift-1', name: 'Deadlift', score: 9, tags: [] }],
         blockB: [
-          { name: 'Pull-Ups', score: 8 },
-          { name: 'Overhead Press', score: 8 }
+          { id: 'pullup-1', name: 'Pull-Ups', score: 8, tags: [] },
+          { id: 'ohp-1', name: 'Overhead Press', score: 8, tags: [] }
         ],
         blockC: [
-          { name: 'Leg Curls', score: 6 },
-          { name: 'Face Pulls', score: 6 }
+          { id: 'legcurl-1', name: 'Leg Curls', score: 6, tags: [] },
+          { id: 'facepull-1', name: 'Face Pulls', score: 6, tags: [] }
         ],
-        blockD: [{ name: 'Farmers Walk', score: 7 }]
+        blockD: [{ id: 'farmers-1', name: 'Farmers Walk', score: 7, tags: [] }]
       },
-      clientContext
+      clientContext,
+      interpretation: '',
+      structuredOutput: {},
+      timing: {},
+      error: null
     };
     
     const result = await generateWorkoutFromExercises(state);
@@ -214,9 +229,16 @@ describe('Template Integration with LLM Handler', () => {
     
     const state: WorkoutInterpretationStateType = {
       exercises: {
-        blockA: [{ name: 'Squat', score: 8 }]
+        blockA: [{ id: 'squat-2', name: 'Squat', score: 8, tags: [] }],
+        blockB: [],
+        blockC: [],
+        blockD: []
       },
-      clientContext
+      clientContext,
+      interpretation: '',
+      structuredOutput: {},
+      timing: {},
+      error: null
     };
     
     const result = await generateWorkoutFromExercises(state);

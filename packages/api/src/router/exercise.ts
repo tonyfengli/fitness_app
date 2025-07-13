@@ -237,7 +237,8 @@ export const exerciseRouter = {
           intensity: input?.intensity,
           isFullBody: input?.isFullBody || false,
           businessId: businessId as string, // Use from session
-          userInput: input?.userInput
+          userInput: input?.userInput,
+          debug: input?.debug || false
         };
 
         // Fetch exercises from the database first - filtered by business
@@ -263,7 +264,7 @@ export const exerciseRouter = {
         
         const result = await filterFunction({
           clientContext: {
-            user_id: safeInput.clientId || "unknown-client", // Use provided clientId or fallback
+            user_id: user?.id || "unknown-client", // Use user id from session
             name: safeInput.clientName,
             strength_capacity: safeInput.strengthCapacity,
             skill_capacity: safeInput.skillCapacity,
