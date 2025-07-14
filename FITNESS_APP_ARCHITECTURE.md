@@ -401,11 +401,20 @@ An intelligent workout generation system that creates personalized workouts usin
 5. **Storage**: Atomic transaction saves workout and exercises
 
 ### API Integration
+
+**generateIndividual Endpoint**
+- Creates workouts directly for clients without requiring a training session
+- Enforces business boundaries - trainers can only generate workouts for clients in their business
+- Accepts template type (standard/circuit/full_body) and AI-generated exercise structure
+- Marks workouts with context "individual" to distinguish from group session workouts
+- Currently allows both trainers and clients to generate workouts (no role restriction)
+
 **saveWorkout Endpoint**
-- Accepts AI-generated workout output
+- Accepts AI-generated workout output for training sessions
 - Validates training session and client permissions
 - Automatically handles exercise lookups
 - Returns saved workout with all associations
+- Marks workouts with context "group" for session-based workouts
 
 ### Benefits for Trainers
 - **Efficiency**: Generate complete workouts in seconds
