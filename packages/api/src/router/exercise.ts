@@ -1,4 +1,5 @@
 import type { TRPCRouterRecord } from "@trpc/server";
+import { TRPCError } from "@trpc/server";
 import { z } from "zod/v4";
 
 import { desc, eq, ilike, and, inArray } from "@acme/db";
@@ -217,7 +218,10 @@ export const exerciseRouter = {
         const user = ctx.session?.user as SessionUser;
         const businessId = user?.businessId;
         if (!businessId) {
-          throw new Error('User must be associated with a business');
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'User must be associated with a business'
+          });
         }
         
         // Keep intensity as-is for scoring system
@@ -381,7 +385,16 @@ export const exerciseRouter = {
         return filteredExercises;
       } catch (error) {
         console.error('❌ Exercise filtering failed:', error);
-        throw new Error('Failed to filter exercises');
+        // Re-throw TRPC errors as-is
+        if (error instanceof TRPCError) {
+          throw error;
+        }
+        // Wrap other errors
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to filter exercises',
+          cause: error
+        });
       }
     }),
 

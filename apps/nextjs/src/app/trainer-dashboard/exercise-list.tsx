@@ -7,6 +7,7 @@ import { useBusinessId } from "~/hooks/useBusinessContext";
 import { BlockDebugClient } from "~/utils/blockDebugClient";
 import { isDebugEnabled } from "~/utils/debugConfig";
 import { extractBlockInfo, getBlockColorClasses } from "~/utils/blockHelpers";
+import WorkoutGenerationModal from "./workout-generation-modal";
 
 const STRENGTH_OPTIONS = [
   { value: "very_low", label: "Very Low Only" },
@@ -143,6 +144,13 @@ export default function ExerciseList({ selectedClient }: ExerciseListProps) {
   
   // State to toggle table visibility
   const [showTable, setShowTable] = useState(false);
+  
+  // Workout generation modal state
+  const [showWorkoutModal, setShowWorkoutModal] = useState(false);
+  
+  // Template selection state
+  const [selectedTemplate, setSelectedTemplate] = useState<"standard" | "circuit" | "full_body">("standard");
+  
   const [llmInterpretation, setLlmInterpretation] = useState<{
     blockA?: string[];
     blockB?: string[];
@@ -306,6 +314,8 @@ export default function ExerciseList({ selectedClient }: ExerciseListProps) {
         if (!response.ok || result.error) {
           setLlmInterpretation({ error: result.error || 'Failed to interpret workout', processingTime });
         } else {
+          console.log('LLM Response:', result); // Debug log
+          console.log('Structured Output:', result.structuredOutput); // Debug log
           setLlmInterpretation({ 
             ...result.structuredOutput, 
             processingTime,
@@ -586,18 +596,22 @@ export default function ExerciseList({ selectedClient }: ExerciseListProps) {
               </div>
             </div>
             
-            {/* Full Body Checkbox */}
+            {/* Template Selection */}
             <div className="mb-4">
-              <label className="flex items-center space-x-2">
-                <input
-                  type="checkbox"
-                  checked={isFullBody}
-                  onChange={(e) => setIsFullBody(e.target.checked)}
-                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                />
-                <span className="text-sm font-medium text-gray-700">Full Body Workout</span>
+              <label htmlFor="template" className="block text-sm font-medium text-gray-700 mb-1">
+                Workout Template
               </label>
-              <p className="text-xs text-gray-500 ml-6 mt-1">Use full body template for exercise organization</p>
+              <select
+                id="template"
+                value={selectedTemplate}
+                onChange={(e) => setSelectedTemplate(e.target.value as "standard" | "circuit" | "full_body")}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="standard">Standard - Traditional strength training</option>
+                <option value="circuit">Circuit - High-intensity rounds</option>
+                <option value="full_body">Full Body - Balanced muscle groups</option>
+              </select>
+              <p className="text-xs text-gray-500 mt-1">Template affects how exercises are organized into blocks</p>
             </div>
           </div>
         </div>
@@ -633,7 +647,7 @@ export default function ExerciseList({ selectedClient }: ExerciseListProps) {
                 avoidJoints: avoidJoints,
                 muscleTarget: muscleTarget,
                 muscleLessen: muscleLessen,
-                isFullBody: isFullBody,
+                isFullBody: selectedTemplate === "full_body",
               };
               
               setFilterCriteria(criteria);
@@ -1013,7 +1027,9 @@ export default function ExerciseList({ selectedClient }: ExerciseListProps) {
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
                       {['blockA', 'blockB', 'blockC', 'blockD'].map((block) => {
-                        const exercises = llmInterpretation[block as keyof typeof llmInterpretation] as any[];
+                        // Try both camelCase and lowercase versions
+                        const exercises = llmInterpretation[block as keyof typeof llmInterpretation] as any[] || 
+                                        llmInterpretation[block.toLowerCase() as keyof typeof llmInterpretation] as any[];
                         return exercises?.map((item, idx) => (
                           <tr key={`${block}-${idx}`} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
@@ -1036,7 +1052,9 @@ export default function ExerciseList({ selectedClient }: ExerciseListProps) {
                         </td>
                         <td className="px-6 py-3 text-center text-sm font-medium text-gray-900">
                           {['blockA', 'blockB', 'blockC', 'blockD'].reduce((total, block) => {
-                            const exercises = llmInterpretation[block as keyof typeof llmInterpretation] as any[];
+                            // Try both camelCase and lowercase versions
+                            const exercises = llmInterpretation[block as keyof typeof llmInterpretation] as any[] || 
+                                            llmInterpretation[block.toLowerCase() as keyof typeof llmInterpretation] as any[];
                             return total + (exercises?.reduce((blockTotal, item) => 
                               blockTotal + (typeof item === 'object' ? item.sets : 0), 0) || 0);
                           }, 0)}
@@ -1056,12 +1074,39 @@ export default function ExerciseList({ selectedClient }: ExerciseListProps) {
                     </div>
                   </div>
                 )}
+                
+                {/* Generate Workout Button */}
+                <div className="mt-6 flex justify-center">
+                  <button
+                    onClick={() => setShowWorkoutModal(true)}
+                    disabled={!selectedClient}
+                    className="px-8 py-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-colors shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Generate Full Workout
+                  </button>
+                </div>
               </>
             ) : null}
           </div>
         )}
       </div>
       )}
+      
+      {/* Workout Generation Modal */}
+      <WorkoutGenerationModal
+        isOpen={showWorkoutModal}
+        onClose={() => setShowWorkoutModal(false)}
+        clientId={selectedClient?.id || ""}
+        clientName={selectedClient?.name || selectedClient?.email || "Client"}
+        exercises={llmInterpretation} // Pass the LLM interpretation
+        templateType={selectedTemplate}
+        onWorkoutGenerated={(workout) => {
+          console.log("Workout generated:", workout);
+          // Show success message (you could add a toast notification here)
+          alert(`Workout successfully generated for ${selectedClient?.name || selectedClient?.email}!`);
+          // TODO: Navigate to workout view or show workout details
+        }}
+      />
     </div>
   );
 }

@@ -149,7 +149,7 @@ describe('Workout Engine with Auth Tests', () => {
         caller.exercise.filter({
           clientName: 'Test Client',
         })
-      ).rejects.toThrow('Failed to filter exercises');
+      ).rejects.toThrow('User must be associated with a business');
     });
   });
 });

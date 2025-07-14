@@ -12,6 +12,8 @@ describe("Workout Schema with New Fields", () => {
     const workoutData = {
       trainingSessionId: "123e4567-e89b-12d3-a456-426614174000",
       userId: "test-user-id",
+      businessId: "123e4567-e89b-12d3-a456-426614174999",
+      createdByTrainerId: "trainer-user-id",
       completedAt: new Date(),
       notes: "Test workout",
       workoutType: "standard",
@@ -68,6 +70,8 @@ describe("Workout Schema with New Fields", () => {
     const minimalWorkout = {
       trainingSessionId: "123e4567-e89b-12d3-a456-426614174000",
       userId: "test-user-id",
+      businessId: "123e4567-e89b-12d3-a456-426614174999",
+      createdByTrainerId: "trainer-user-id",
       completedAt: new Date(),
     };
 
@@ -82,6 +86,8 @@ describe("Workout Schema with New Fields", () => {
     const circuitWorkout = {
       trainingSessionId: "123e4567-e89b-12d3-a456-426614174000",
       userId: "test-user-id",
+      businessId: "123e4567-e89b-12d3-a456-426614174999",
+      createdByTrainerId: "trainer-user-id",
       completedAt: new Date(),
       workoutType: "circuit",
       totalPlannedSets: 18,

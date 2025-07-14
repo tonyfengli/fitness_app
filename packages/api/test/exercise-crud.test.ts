@@ -334,7 +334,7 @@ describe('Exercise Router CRUD Tests', () => {
       const ctx = createAuthenticatedContext('trainer', null);
       caller = createCaller(ctx);
 
-      await expect(caller.exercise.filter()).rejects.toThrow('Failed to filter exercises');
+      await expect(caller.exercise.filter()).rejects.toThrow('User must be associated with a business');
     });
 
     it('should use enhanced filter in debug mode', async () => {
@@ -373,7 +373,7 @@ describe('Exercise Router CRUD Tests', () => {
     it('should handle filter errors gracefully', async () => {
       const ctx = createAuthenticatedContext('trainer', '123e4567-e89b-12d3-a456-426614174002');
       // Mock the select chain to throw an error during database query
-      ctx.db.select = vi.fn().mockImplementation(() => {
+      ctx.db.selectMockChain.from.mockImplementation(() => {
         throw new Error('Database error');
       });
       caller = createCaller(ctx);

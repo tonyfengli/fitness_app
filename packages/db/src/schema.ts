@@ -121,12 +121,16 @@ export const UserTrainingSession = pgTable("user_training_session", (t) => ({
   id: t.uuid().notNull().primaryKey().defaultRandom(),
   userId: t.text().notNull().references(() => user.id, { onDelete: "cascade" }),
   trainingSessionId: t.uuid().notNull().references(() => TrainingSession.id, { onDelete: "cascade" }),
+  status: t.text().notNull().default("registered"), // "registered", "checked_in", "completed", "no_show"
+  checkedInAt: t.timestamp(), // When the user checked in
   createdAt: t.timestamp().defaultNow().notNull(),
 }));
 
 export const CreateUserTrainingSessionSchema = createInsertSchema(UserTrainingSession, {
   userId: z.string(),
   trainingSessionId: z.string().uuid(),
+  status: z.enum(["registered", "checked_in", "completed", "no_show"]).default("registered"),
+  checkedInAt: z.date().optional(),
 }).omit({
   id: true,
   createdAt: true,
@@ -135,14 +139,17 @@ export const CreateUserTrainingSessionSchema = createInsertSchema(UserTrainingSe
 // Actual workout data for a session
 export const Workout = pgTable("workout", (t) => ({
   id: t.uuid().notNull().primaryKey().defaultRandom(),
-  trainingSessionId: t.uuid().notNull().references(() => TrainingSession.id, { onDelete: "cascade" }),
-  userId: t.text().notNull().references(() => user.id),
-  completedAt: t.timestamp().notNull(),
+  trainingSessionId: t.uuid().references(() => TrainingSession.id, { onDelete: "cascade" }), // Now optional
+  userId: t.text().notNull().references(() => user.id, { onDelete: "cascade" }),
+  completedAt: t.timestamp(), // Nullable - workouts aren't completed when created
   notes: t.text(),
   workoutType: t.text(), // "standard", "circuit", "full_body", etc.
   totalPlannedSets: t.integer(), // Total sets the LLM planned
   llmOutput: t.jsonb(), // Raw LLM response for reference
   templateConfig: t.jsonb(), // Template-specific configuration
+  context: t.text().notNull().default("individual"), // "group", "individual", "homework", "assessment"
+  businessId: t.uuid().notNull().references(() => Business.id, { onDelete: "cascade" }), // Direct business reference
+  createdByTrainerId: t.text().notNull().references(() => user.id), // Who created this workout
   createdAt: t.timestamp().defaultNow().notNull(),
   updatedAt: t
     .timestamp({ mode: "date", withTimezone: true })
@@ -150,7 +157,7 @@ export const Workout = pgTable("workout", (t) => ({
 }));
 
 export const CreateWorkoutSchema = createInsertSchema(Workout, {
-  trainingSessionId: z.string().uuid(),
+  trainingSessionId: z.string().uuid().optional(), // Now optional
   userId: z.string(),
   completedAt: z.date(),
   notes: z.string().optional(),
@@ -158,6 +165,9 @@ export const CreateWorkoutSchema = createInsertSchema(Workout, {
   totalPlannedSets: z.number().int().positive().optional(),
   llmOutput: z.any().optional(), // JSON type
   templateConfig: z.any().optional(), // JSON type
+  context: z.enum(["group", "individual", "homework", "assessment"]).default("individual"),
+  businessId: z.string().uuid(),
+  createdByTrainerId: z.string(),
 }).omit({
   id: true,
   createdAt: true,

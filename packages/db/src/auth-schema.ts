@@ -9,7 +9,7 @@ export const user = pgTable("user", (t) => ({
   password: t.text(), // Better Auth will handle this
   phone: t.text(),
   role: t.text().notNull().default('client'), // 'client' or 'trainer'
-  businessId: t.uuid().notNull().references(() => Business.id),
+  businessId: t.uuid().notNull().references(() => Business.id, { onDelete: "cascade" }),
   createdAt: t.timestamp().notNull(),
   updatedAt: t.timestamp().notNull(),
 }));

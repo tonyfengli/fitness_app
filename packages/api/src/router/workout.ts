@@ -1,5 +1,5 @@
 import type { TRPCRouterRecord } from "@trpc/server";
-import { z } from "zod/v4";
+import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 
 import { desc, eq, and, sql } from "@acme/db";
@@ -9,6 +9,7 @@ import {
   TrainingSession,
   UserTrainingSession,
   exercises,
+  BusinessExercise,
   CreateWorkoutSchema,
   CreateWorkoutExerciseSchema,
   user
@@ -25,7 +26,11 @@ import {
 export const workoutRouter = {
   // Create a workout for a training session
   create: protectedProcedure
-    .input(CreateWorkoutSchema.extend({
+    .input(z.object({
+      trainingSessionId: z.string().uuid(), // Required for this endpoint
+      userId: z.string().optional(),
+      completedAt: z.date(),
+      notes: z.string().optional(),
       exercises: z.array(z.object({
         exerciseId: z.string().uuid(),
         orderIndex: z.number().int().min(1),
@@ -39,7 +44,7 @@ export const workoutRouter = {
       const session = await ctx.db.query.TrainingSession.findFirst({
         where: and(
           eq(TrainingSession.id, input.trainingSessionId),
-          eq(TrainingSession.businessId, currentUser.businessId)
+          eq(TrainingSession.businessId, currentUser.businessId!)
         ),
       });
       
@@ -52,9 +57,10 @@ export const workoutRouter = {
       
       // Verify user is registered for this session (unless they're the trainer)
       if (currentUser.id !== session.trainerId) {
+        const targetUser = input.userId || currentUser.id;
         const registration = await ctx.db.query.UserTrainingSession.findFirst({
           where: and(
-            eq(UserTrainingSession.userId, input.userId || currentUser.id),
+            eq(UserTrainingSession.userId, targetUser),
             eq(UserTrainingSession.trainingSessionId, input.trainingSessionId)
           ),
         });
@@ -85,8 +91,11 @@ export const workoutRouter = {
           .values({
             trainingSessionId: input.trainingSessionId,
             userId: targetUserId,
+            businessId: currentUser.businessId!,
+            createdByTrainerId: currentUser.id,
             completedAt: input.completedAt,
             notes: input.notes,
+            context: "group", // Group context since it has a training session
           })
           .returning();
           
@@ -203,7 +212,7 @@ export const workoutRouter = {
         .leftJoin(WorkoutExercise, eq(WorkoutExercise.workoutId, Workout.id))
         .where(and(
           eq(Workout.userId, currentUser.id),
-          eq(TrainingSession.businessId, currentUser.businessId)
+          eq(TrainingSession.businessId, currentUser.businessId!)
         ))
         .groupBy(Workout.id, TrainingSession.id, TrainingSession.name, TrainingSession.scheduledAt, TrainingSession.trainerId)
         .orderBy(desc(Workout.completedAt))
@@ -325,7 +334,7 @@ export const workoutRouter = {
         .leftJoin(WorkoutExercise, eq(WorkoutExercise.workoutId, Workout.id))
         .where(and(
           eq(Workout.userId, input.clientId),
-          eq(TrainingSession.businessId, currentUser.businessId)
+          eq(TrainingSession.businessId, currentUser.businessId!)
         ))
         .groupBy(Workout.id, TrainingSession.id, TrainingSession.name, TrainingSession.scheduledAt)
         .orderBy(desc(Workout.completedAt))
@@ -347,7 +356,7 @@ export const workoutRouter = {
       const session = await ctx.db.query.TrainingSession.findFirst({
         where: and(
           eq(TrainingSession.id, input.sessionId),
-          eq(TrainingSession.businessId, currentUser.businessId)
+          eq(TrainingSession.businessId, currentUser.businessId!)
         ),
       });
       
@@ -401,7 +410,7 @@ export const workoutRouter = {
       const session = await ctx.db.query.TrainingSession.findFirst({
         where: and(
           eq(TrainingSession.id, input.trainingSessionId),
-          eq(TrainingSession.businessId, currentUser.businessId)
+          eq(TrainingSession.businessId, currentUser.businessId!)
         ),
       });
       
@@ -451,12 +460,15 @@ export const workoutRouter = {
           .values({
             trainingSessionId: input.trainingSessionId,
             userId: input.userId,
+            businessId: currentUser.businessId!,
+            createdByTrainerId: currentUser.id,
             completedAt: new Date(), // LLM-generated workouts are marked as completed
             notes: transformed.workout.description,
             workoutType: transformed.workout.workoutType,
             totalPlannedSets: transformed.workout.totalPlannedSets,
             llmOutput: transformed.workout.llmOutput,
             templateConfig: transformed.workout.templateConfig,
+            context: "group", // Has training session
           })
           .returning();
           
@@ -485,6 +497,141 @@ export const workoutRouter = {
           if (exerciseData.length > 0) {
             await tx.insert(WorkoutExercise).values(exerciseData);
           }
+        }
+        
+        return workout;
+      });
+      
+      return result;
+    }),
+
+  // Generate individual workout (no training session required)
+  generateIndividual: protectedProcedure
+    .input(z.object({
+      userId: z.string(), // Client user ID
+      templateType: z.enum(["standard", "circuit", "full_body"]),
+      exercises: z.record(z.any()), // LLM output object with blocks
+      workoutName: z.string().optional(),
+      workoutDescription: z.string().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const currentUser = ctx.session?.user as SessionUser;
+      
+      // Verify client belongs to same business
+      const client = await ctx.db.query.user.findFirst({
+        where: eq(user.id, input.userId),
+      });
+      
+      if (!client || client.businessId !== currentUser.businessId) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Client not found in your business',
+        });
+      }
+      
+      // Use the LLM output passed from frontend
+      const llmOutput = input.exercises;
+      
+      // Ensure the LLM output has the expected structure
+      if (!llmOutput || typeof llmOutput !== 'object') {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Invalid workout data provided',
+        });
+      }
+      
+      // Calculate total planned sets from LLM output
+      let totalSets = 0;
+      const blockKeys = Object.keys(llmOutput).filter(key => key.startsWith('block'));
+      for (const key of blockKeys) {
+        const exercises = llmOutput[key];
+        if (Array.isArray(exercises)) {
+          exercises.forEach(ex => {
+            totalSets += ex.sets || 0;
+          });
+        }
+      }
+      
+      // Get all business exercises for name matching
+      const businessExercises = await ctx.db
+        .select({
+          exercise: exercises,
+        })
+        .from(exercises)
+        .innerJoin(BusinessExercise, eq(exercises.id, BusinessExercise.exerciseId))
+        .where(eq(BusinessExercise.businessId, currentUser.businessId!));
+      
+      // Create name to exercise mapping (case-insensitive)
+      const exerciseByName = new Map<string, typeof exercises.$inferSelect>();
+      businessExercises.forEach(({ exercise }) => {
+        exerciseByName.set(exercise.name.toLowerCase(), exercise);
+        // Also try without parentheses for variations
+        const nameWithoutParens = exercise.name.replace(/\s*\([^)]*\)/g, '').trim();
+        exerciseByName.set(nameWithoutParens.toLowerCase(), exercise);
+      });
+      
+      // Save workout without training session
+      const result = await ctx.db.transaction(async (tx) => {
+        const [workout] = await tx
+          .insert(Workout)
+          .values({
+            userId: input.userId,
+            businessId: currentUser.businessId,
+            createdByTrainerId: currentUser.id,
+            // completedAt should be null for new workouts
+            notes: input.workoutDescription || `Individual workout for ${client.name || client.email}`,
+            workoutType: input.templateType,
+            totalPlannedSets: totalSets,
+            llmOutput: llmOutput as any, // Store the actual LLM output
+            templateConfig: {
+              blocks: blockKeys.map(k => k.replace('block', '').toUpperCase()),
+              format: "rep-based"
+            },
+            context: "individual",
+            // No trainingSessionId for individual workouts
+          })
+          .returning();
+          
+        if (!workout) {
+          throw new Error('Failed to create workout');
+        }
+        
+        // Create workout exercises from LLM output
+        const exerciseData: any[] = [];
+        let orderIndex = 1;
+        
+        // Process each block
+        for (const key of blockKeys) {
+          const blockExercises = llmOutput[key];
+          if (Array.isArray(blockExercises)) {
+            for (const ex of blockExercises) {
+              // Try to match exercise name to ID
+              const exerciseName = ex.exercise?.toLowerCase() || '';
+              const matchedExercise = exerciseByName.get(exerciseName);
+              
+              if (matchedExercise) {
+                exerciseData.push({
+                  workoutId: workout.id,
+                  exerciseId: matchedExercise.id,
+                  orderIndex: orderIndex++,
+                  setsCompleted: ex.sets || 3,
+                  groupName: `Block ${key.replace('block', '').toUpperCase()}`,
+                  notes: [
+                    ex.reps && `Reps: ${ex.reps}`,
+                    ex.rest && `Rest: ${ex.rest}`,
+                    ex.notes
+                  ].filter(Boolean).join(' | ') || undefined,
+                });
+              } else {
+                console.warn(`Could not find exercise match for: ${ex.exercise}`);
+              }
+            }
+          }
+        }
+        
+        // Insert workout exercises
+        if (exerciseData.length > 0) {
+          await tx.insert(WorkoutExercise).values(exerciseData);
         }
         
         return workout;
