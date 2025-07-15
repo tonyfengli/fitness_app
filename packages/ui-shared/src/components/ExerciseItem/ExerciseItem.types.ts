@@ -5,7 +5,9 @@ export interface ExerciseItemProps {
   variant?: 'default' | 'editable' | 'selectable';
   onRemove?: () => void;
   onAdd?: () => void;
+  onEdit?: () => void;
   onDragStart?: () => void;
   isDraggable?: boolean;
+  showEditButton?: boolean;
   className?: string;
 }

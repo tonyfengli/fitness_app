@@ -1,11 +1,7 @@
 import React from "react";
-import { Avatar, type AvatarProps } from "@acme/ui-shared";
-import { cn } from "@acme/ui-shared";
-
-export interface UserAvatarProps extends AvatarProps {
-  isOnline?: boolean;
-  showStatus?: boolean;
-}
+import { Avatar } from "../Avatar";
+import { cn } from "../../utils/cn";
+import type { UserAvatarProps } from "./UserAvatar.types";
 
 export function UserAvatar({ 
   isOnline,

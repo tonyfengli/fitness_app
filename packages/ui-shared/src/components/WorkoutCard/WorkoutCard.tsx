@@ -1,6 +1,7 @@
 import React from "react";
 import type { WorkoutCardProps } from "./WorkoutCard.types";
 import { cn } from "../../utils/cn";
+import { Icon } from "../Icon";
 
 export function WorkoutCard({
   title,
@@ -37,13 +38,13 @@ export function WorkoutCard({
         <div className="flex items-center gap-4 text-sm text-gray-600">
           {exerciseCount !== undefined && (
             <div className="flex items-center gap-1">
-              <span className="material-icons text-base">fitness_center</span>
+              <Icon name="fitness_center" size={16} />
               <span>{exerciseCount} exercises</span>
             </div>
           )}
           {duration && (
             <div className="flex items-center gap-1">
-              <span className="material-icons text-base">schedule</span>
+              <Icon name="schedule" size={16} />
               <span>{duration}</span>
             </div>
           )}

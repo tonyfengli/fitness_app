@@ -61,8 +61,21 @@ fitness_app/
 │   │   │   └── index.ts      # Exports
 │   │   ├── drizzle.config.ts # Drizzle configuration
 │   │   └── package.json
-│   ├── ui/                    # Shared UI components
-│   │   ├── src/              # shadcn/ui components
+│   ├── ui-shared/             # Platform-agnostic components
+│   │   ├── src/
+│   │   │   ├── components/   # Base components (Button, Avatar, Card)
+│   │   │   ├── context/      # State management (AppContext)
+│   │   │   ├── utils/        # Utilities including responsive hooks
+│   │   │   └── types/        # Shared TypeScript interfaces
+│   │   └── package.json
+│   ├── ui-desktop/            # Desktop-specific components
+│   │   ├── src/
+│   │   │   ├── layouts/      # Desktop layouts (SidebarLayout, GridLayout)
+│   │   │   └── components/   # Desktop components
+│   │   └── package.json
+│   ├── ui-mobile/             # Mobile components (web + native)
+│   │   ├── src/
+│   │   │   └── components/   # React Native components with NativeWind
 │   │   └── package.json
 │   └── validators/            # Shared Zod schemas
 │       ├── src/
@@ -76,6 +89,214 @@ fitness_app/
 ├── pnpm-workspace.yaml      # Workspace definition
 └── package.json             # Root package.json
 ```
+
+## Frontend Architecture
+
+### Overview
+The frontend architecture follows a modular, platform-adaptive approach that supports desktop web, mobile web, and native mobile experiences from a unified codebase. The architecture emphasizes component reusability, type safety, and progressive enhancement.
+
+### Core Principles
+
+1. **Platform Separation with Shared Logic**
+   - Clear boundaries between platform-specific and shared components
+   - Maximize code reuse while respecting platform conventions
+   - Single source of truth for business logic
+
+2. **Component-First Architecture**
+   - Self-contained components with clear responsibilities
+   - Composition over inheritance
+   - Props-driven interfaces for flexibility
+
+3. **Type Safety Throughout**
+   - End-to-end TypeScript from database to UI
+   - Shared type definitions across packages
+   - Compile-time validation of component contracts
+
+4. **Progressive Enhancement**
+   - Desktop-first with mobile optimization
+   - Feature detection over browser/device detection
+   - Graceful degradation for unsupported features
+
+### Package Architecture
+
+#### ui-shared
+Platform-agnostic components and utilities that form the foundation:
+- **Base Components**: Button, Avatar, Card, Input, Form elements
+- **Business Components**: ExerciseItem, WorkoutCard (base implementations)
+- **State Management**: AppContext with hooks for clients, workouts, UI state
+- **Utilities**: Responsive hooks, feature flags, common helpers
+- **Types**: Shared TypeScript interfaces for data models
+
+#### ui-desktop
+Desktop-optimized components leveraging full screen real estate:
+- **Layouts**: SidebarLayout, GridLayout for complex layouts
+- **Components**: ClientSidebar, WorkoutProgramCard, complex data tables
+- **Interactions**: Hover states, keyboard navigation, drag-and-drop
+- **Styling**: Standard HTML elements with Tailwind CSS
+
+#### ui-mobile
+Cross-platform mobile components using React Native Web:
+- **Native Components**: Using React Native primitives (View, Text, Pressable)
+- **Web Compatibility**: React Native Web for browser rendering
+- **Touch Optimized**: Larger tap targets, swipe gestures, haptic feedback
+- **Styling**: NativeWind for Tailwind CSS in React Native
+
+### Responsive System
+
+#### Device Detection Utilities
+```typescript
+// Comprehensive device and viewport detection
+useMediaQuery()    // CSS media query matching
+useDeviceType()    // Desktop/tablet/mobile detection
+usePlatform()      // Web/iOS/Android detection
+useResponsive()    // Combined responsive state
+```
+
+#### Conditional Rendering
+```typescript
+// ResponsiveView component for viewport-based rendering
+<ResponsiveView
+  desktop={<DesktopWorkoutCard />}
+  tablet={<TabletWorkoutCard />}
+  mobile={<MobileWorkoutCard />}
+/>
+```
+
+#### Feature Flags System
+- Runtime feature toggling without deployments
+- Component-level feature props for granular control
+- Environment-based flag configuration
+- A/B testing capability
+
+### State Management
+
+#### Context-Based Architecture
+Central AppContext provides:
+- **Client Management**: Active clients, selection, filtering
+- **Workout Data**: Programs, exercises, progress tracking
+- **UI State**: Sidebar visibility, loading states, user preferences
+- **Optimistic Updates**: Immediate UI feedback with background sync
+
+#### State Hooks
+```typescript
+useClients()   // Client CRUD operations
+useWorkouts()  // Workout management
+useUI()        // UI state and preferences
+```
+
+### Component Patterns
+
+#### Composition Strategy
+```typescript
+// Base component in ui-shared
+<ExerciseItem exercise={...} />
+
+// Desktop wrapper in ui-desktop
+<ExerciseRow>
+  <ExerciseItem {...props} />
+  <DesktopActions />
+</ExerciseRow>
+
+// Mobile wrapper in ui-mobile
+<ExerciseListItem>
+  <ExerciseItem {...props} />
+  <MobileActions />
+</ExerciseListItem>
+```
+
+#### Feature Props Pattern
+All major components accept feature flags for conditional functionality:
+```typescript
+<WorkoutProgramCard
+  showNotifications={isDesktop}
+  showFilters={hasPermission}
+  compactMode={isMobile}
+/>
+```
+
+### Styling Architecture
+
+#### Desktop (ui-desktop)
+- Standard HTML elements with Tailwind utility classes
+- CSS-in-JS for complex animations
+- Hover and focus states for accessibility
+- Grid and flexbox layouts
+
+#### Mobile (ui-mobile)
+- React Native StyleSheet for performance
+- NativeWind for Tailwind compatibility
+- Platform-specific styles via Platform.select()
+- Consistent with iOS/Android design guidelines
+
+### Build Configuration
+
+#### Next.js Integration
+```javascript
+// Transpile all UI packages
+transpilePackages: ["@acme/ui-shared", "@acme/ui-desktop", "@acme/ui-mobile"]
+
+// React Native Web webpack configuration
+webpack: (config) => {
+  config.resolve.alias = {
+    ...config.resolve.alias,
+    "react-native$": "react-native-web",
+  };
+  return config;
+}
+```
+
+#### TypeScript Configuration
+- Shared tsconfig for consistency
+- Path aliases for clean imports
+- Strict mode enabled
+- Composite projects for build optimization
+
+### Development Workflow
+
+1. **Component Development**
+   - Start with ui-shared for maximum reuse
+   - Extend in platform packages as needed
+   - Use Storybook for isolated development
+
+2. **Testing Strategy**
+   - Unit tests for business logic
+   - Component testing with React Testing Library
+   - E2E tests for critical user flows
+   - Visual regression testing
+
+3. **Code Organization**
+   ```
+   ComponentName/
+   ├── index.ts              # Exports
+   ├── ComponentName.tsx     # Implementation
+   ├── ComponentName.types.ts # TypeScript types
+   ├── ComponentName.test.tsx # Tests
+   └── styles.ts             # Styles (if needed)
+   ```
+
+### Performance Optimizations
+
+- **Code Splitting**: Route-based splitting with Next.js
+- **Lazy Loading**: Dynamic imports for heavy components
+- **Memoization**: React.memo for expensive renders
+- **Image Optimization**: Next/Image and lazy loading
+- **Bundle Size**: Tree shaking and dead code elimination
+
+### Accessibility
+
+- **ARIA Labels**: Semantic markup with proper roles
+- **Keyboard Navigation**: Full keyboard support
+- **Screen Readers**: Tested with NVDA/JAWS/VoiceOver
+- **Color Contrast**: WCAG AA compliance
+- **Focus Management**: Visible focus indicators
+
+### Future Considerations
+
+1. **Offline Support**: Service workers for PWA capabilities
+2. **Real-time Updates**: WebSocket integration for live data
+3. **Internationalization**: i18n support for multiple languages
+4. **Theme System**: Dark mode and custom themes
+5. **Animation System**: Framer Motion or React Native Reanimated
 
 ## Authentication System (Implemented)
 

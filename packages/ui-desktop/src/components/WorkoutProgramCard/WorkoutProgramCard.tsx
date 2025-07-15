@@ -1,6 +1,6 @@
 import React from "react";
 import type { WorkoutProgramCardProps } from "./WorkoutProgramCard.types";
-import { cn, Card, Button, ExerciseItem } from "@acme/ui-shared";
+import { cn, Card, Button, ExerciseItem, Icon } from "@acme/ui-shared";
 
 export function WorkoutProgramCard({
   title,
@@ -18,40 +18,23 @@ export function WorkoutProgramCard({
           <h3 className="text-xl font-semibold text-gray-800">{title}</h3>
           {week && <p className="text-sm text-gray-500 mt-1">{week}</p>}
         </div>
-        <button className="text-gray-400 hover:text-gray-600">
-          <span className="material-icons">more_vert</span>
+        <button 
+          className="text-gray-400 hover:text-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 rounded"
+          aria-label="More options"
+        >
+          <Icon name="more_vert" />
         </button>
       </div>
 
       <div className="space-y-2">
-        {exercises.map((exercise, index) => (
-          <div
+        {exercises.map((exercise) => (
+          <ExerciseItem
             key={exercise.id}
-            className={cn(
-              "flex items-center justify-between py-2",
-              index < exercises.length - 1 && "border-b border-gray-200"
-            )}
-          >
-            <div className="flex items-center">
-              <div className="bg-gray-100 p-3 rounded-full mr-4">
-                <span className="material-icons text-gray-600">fitness_center</span>
-              </div>
-              <div>
-                <p className="font-semibold text-gray-800">{exercise.name}</p>
-                <p className="text-sm text-gray-500">
-                  {exercise.sets} sets{exercise.reps ? ` × ${exercise.reps}` : ''}
-                </p>
-              </div>
-            </div>
-            {onEditExercise && showEditButton && (
-              <button
-                onClick={() => onEditExercise(exercise.id)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <span className="material-icons">edit</span>
-              </button>
-            )}
-          </div>
+            name={exercise.name}
+            sets={exercise.sets}
+            showEditButton={showEditButton}
+            onEdit={onEditExercise ? () => onEditExercise(exercise.id) : undefined}
+          />
         ))}
       </div>
     </Card>

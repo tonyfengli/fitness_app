@@ -18,7 +18,7 @@ export function MobileHeader({
         <View style={styles.leftSection}>
           {leftAction ? (
             <TouchableOpacity onPress={leftAction.onPress} style={styles.iconButton}>
-              <MaterialIcons name={leftAction.icon} size={24} color="#4B5563" />
+              <MaterialIcons name={leftAction.icon as any} size={24} color="#4B5563" />
             </TouchableOpacity>
           ) : (
             <View style={styles.titleContainer}>
@@ -31,7 +31,7 @@ export function MobileHeader({
         <View style={styles.rightSection}>
           {rightAction && (
             <TouchableOpacity onPress={rightAction.onPress} style={styles.iconButton}>
-              <MaterialIcons name={rightAction.icon} size={24} color="#4B5563" />
+              <MaterialIcons name={rightAction.icon as any} size={24} color="#4B5563" />
             </TouchableOpacity>
           )}
           {showNotifications && (

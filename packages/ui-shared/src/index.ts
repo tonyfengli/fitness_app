@@ -11,6 +11,10 @@ export * from "./components/Input";
 export * from "./components/Label";
 export * from "./components/Theme";
 export * from "./components/Toast";
+export * from "./components/Icon";
+export * from "./components/UserAvatar";
+export * from "./components/OnlineStatusBadge";
+export * from "./components/FeedbackSection";
 
 // Design System
 export * from "./styles";
@@ -29,3 +33,9 @@ export * from "./types";
 
 // Feature flags
 export * from "./utils/featureFlags";
+
+// State management
+export * from "./context";
+
+// Mock data
+export * from "./mocks";

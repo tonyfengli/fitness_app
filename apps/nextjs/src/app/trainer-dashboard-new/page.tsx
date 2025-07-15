@@ -4,11 +4,9 @@ import React, { useState } from "react";
 import { 
   SidebarLayout, 
   ClientSidebar, 
-  WorkoutProgramCard, 
-  FeedbackSection 
+  WorkoutProgramCard
 } from "@acme/ui-desktop";
-import { Button } from "@acme/ui-shared";
-import { mockClients, mockExercises } from "./mock-data";
+import { Button, mockClients, mockExercises, FeedbackSection } from "@acme/ui-shared";
 
 export default function TrainerDashboardNew() {
   const [selectedClientId, setSelectedClientId] = useState<string>("1");

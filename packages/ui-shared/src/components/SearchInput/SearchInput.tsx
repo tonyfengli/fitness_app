@@ -1,6 +1,7 @@
 import React from "react";
 import type { SearchInputProps } from "./SearchInput.types";
 import { cn } from "../../utils/cn";
+import { Icon } from "../Icon";
 
 export function SearchInput({ 
   placeholder = "Search...", 
@@ -9,9 +10,11 @@ export function SearchInput({
 }: SearchInputProps) {
   return (
     <div className="relative">
-      <span className="material-icons absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
-        search
-      </span>
+      <Icon 
+        name="search" 
+        className="absolute left-3 top-1/2 -translate-y-1/2" 
+        color="#9CA3AF"
+      />
       <input
         type="search"
         className={cn(

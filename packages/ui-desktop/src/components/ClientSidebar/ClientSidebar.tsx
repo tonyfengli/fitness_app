@@ -1,6 +1,6 @@
 import React from "react";
 import type { ClientSidebarProps } from "./ClientSidebar.types";
-import { cn, Avatar, Button } from "@acme/ui-shared";
+import { cn, Avatar, Button, Icon } from "@acme/ui-shared";
 
 export function ClientSidebar({
   clients,
@@ -10,38 +10,43 @@ export function ClientSidebar({
   className,
 }: ClientSidebarProps) {
   return (
-    <div className={cn("w-80 bg-white border-r border-gray-200 p-6 flex flex-col", className)}>
-
-
+    <nav 
+      className={cn("w-80 bg-white border-r border-gray-200 p-6 flex flex-col", className)}
+      aria-label="Client navigation"
+    >
       {/* Clients Header */}
       <h2 className="text-lg font-semibold mb-4">Clients</h2>
 
       {/* Client List */}
-      <div className="flex-grow">
+      <ul className="flex-grow" role="list">
         {clients.map((client) => (
-          <button
-            key={client.id}
-            onClick={() => onClientSelect?.(client)}
-            className={cn(
-              "flex items-center p-3 rounded-lg mb-2 w-full text-left transition-colors",
-              selectedClientId === client.id
-                ? "bg-indigo-100"
-                : "hover:bg-gray-100"
-            )}
-          >
-            <Avatar
-              src={client.avatar}
-              alt={client.name}
-              fallback={client.name.charAt(0)}
-              size="md"
-            />
-            <div className="ml-4">
-              <p className="font-semibold text-gray-900">{client.name}</p>
-              <p className="text-sm text-gray-600">{client.program}</p>
-            </div>
-          </button>
+          <li key={client.id} role="listitem">
+            <button
+              onClick={() => onClientSelect?.(client)}
+              className={cn(
+                "flex items-center p-3 rounded-lg mb-2 w-full text-left transition-colors",
+                "focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2",
+                selectedClientId === client.id
+                  ? "bg-indigo-100"
+                  : "hover:bg-gray-100"
+              )}
+              aria-selected={selectedClientId === client.id}
+              aria-label={`Select ${client.name}, ${client.program}`}
+            >
+              <Avatar
+                src={client.avatar}
+                alt={client.name}
+                fallback={client.name.charAt(0)}
+                size="md"
+              />
+              <div className="ml-4">
+                <p className="font-semibold text-gray-900">{client.name}</p>
+                <p className="text-sm text-gray-600">{client.program}</p>
+              </div>
+            </button>
+          </li>
         ))}
-      </div>
+      </ul>
 
       {/* Add New Client Button */}
       <div className="mt-auto">
@@ -49,11 +54,12 @@ export function ClientSidebar({
           onClick={onAddNewClient}
           className="w-full flex items-center justify-center"
           variant="primary"
+          aria-label="Add new client"
         >
-          <span className="material-icons text-[18px] mr-2">add</span>
+          <Icon name="add" size={18} className="mr-2" />
           <span>Add New Client</span>
         </Button>
       </div>
-    </div>
+    </nav>
   );
 }

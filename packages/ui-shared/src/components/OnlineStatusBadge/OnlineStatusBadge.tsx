@@ -1,12 +1,6 @@
 import React from "react";
-import { cn } from "@acme/ui-shared";
-
-export interface OnlineStatusBadgeProps {
-  status: 'online' | 'in-session' | 'offline';
-  size?: 'sm' | 'md' | 'lg';
-  showLabel?: boolean;
-  className?: string;
-}
+import { cn } from "../../utils/cn";
+import type { OnlineStatusBadgeProps } from "./OnlineStatusBadge.types";
 
 export function OnlineStatusBadge({ 
   status,

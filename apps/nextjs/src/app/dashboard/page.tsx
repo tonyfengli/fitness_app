@@ -4,30 +4,16 @@ import React, { useState } from "react";
 import { 
   ResponsiveView, 
   useResponsive,
-  Button
+  Button,
+  mockClients,
+  mockExercises,
+  FeedbackSection
 } from "@acme/ui-shared";
 import { 
   SidebarLayout, 
   ClientSidebar, 
-  WorkoutProgramCard, 
-  FeedbackSection 
+  WorkoutProgramCard
 } from "@acme/ui-desktop";
-
-const mockClients = [
-  {
-    id: "1",
-    name: "Olivia Carter",
-    program: "Strength Training",
-    avatar: "https://lh3.googleusercontent.com/aida-public/AB6AXuDAYqnypMZMNYILjjR7zatfqmJlOs5mnVXXU9fH56vNEIjZpGx5w5Dl4qWrKQ2epgFuJnFEr3NFbHWisRm2uYuwX4TC9QvaNfL6g8Iox8CeU9zCKukLfGw9Bkwozi-e5tTiHz_uszfNC5ZYBIFvO-2iLGNCRmVP0fjxpMbhHLIVzgo2-Jy5pCkcvi-xGz4yqkKdHPK_qUUeDkOk0VFW-FqR3cnX0K_CCZk6Qimm5cM4vmj6Ir2SuqmLpdklnY5MTgHdMlY9Ex4qn_n_",
-  },
-];
-
-const mockExercises = [
-  { id: "1", name: "Squats", sets: 3, reps: "10-12" },
-  { id: "2", name: "Pull-ups", sets: 3 },
-  { id: "3", name: "Overhead Press", sets: 3 },
-  { id: "4", name: "Barbell Rows", sets: 3 },
-];
 
 export default function Dashboard() {
   const { isDesktopView, isMobileView } = useResponsive();

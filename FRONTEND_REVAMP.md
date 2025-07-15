@@ -346,9 +346,7 @@ module.exports = {
 - Workout Overview (Test Page 2)
 - Session Lobby (Test Page 3)
 
-**Mobile Views:**
-- Edit Program (Test Page 5)
-- Add Exercise (Test Page 6)
+**Note**: Mobile views (Test Pages 5 and 6) have been removed from scope.
 
 **Checkpoint**: Review all implementations for consistency
 

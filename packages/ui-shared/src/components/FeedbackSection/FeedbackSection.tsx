@@ -1,6 +1,8 @@
 import React from "react";
 import type { FeedbackSectionProps } from "./FeedbackSection.types";
-import { cn, Card, Button } from "@acme/ui-shared";
+import { cn } from "../../utils/cn";
+import { Button } from "../Button";
+import { Icon } from "../Icon";
 
 export function FeedbackSection({
   feedback = [],
@@ -16,9 +18,10 @@ export function FeedbackSection({
         className="w-full flex justify-between items-center p-4 text-left hover:bg-gray-50 transition-colors border-t-[0.5px] border-gray-100"
       >
         <span className="font-medium text-gray-700">View Client Feedback</span>
-        <span className="material-icons text-gray-500">
-          {isExpanded ? 'expand_less' : 'expand_more'}
-        </span>
+        <Icon 
+          name={isExpanded ? 'expand_less' : 'expand_more'} 
+          color="#6B7280"
+        />
       </button>
       
       {isExpanded && (
@@ -45,7 +48,7 @@ export function FeedbackSection({
               size="sm"
               className="bg-indigo-100 text-indigo-700 hover:bg-indigo-200 flex items-center"
             >
-              <span className="material-icons text-[16px] mr-2">add_comment</span>
+              <Icon name="add_comment" size={16} className="mr-2" />
               <span>Add Note</span>
             </Button>
           )}
