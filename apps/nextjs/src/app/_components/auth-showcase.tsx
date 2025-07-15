@@ -2,7 +2,7 @@ import { headers } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { Button } from "@acme/ui/button";
+import { Button } from "@acme/ui-shared";
 
 import { auth, getSession } from "~/auth/server";
 

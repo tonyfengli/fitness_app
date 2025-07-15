@@ -1,9 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 
-import { cn } from "@acme/ui";
-import { ThemeProvider, ThemeToggle } from "@acme/ui/theme";
-import { Toaster } from "@acme/ui/toast";
+import { cn, ThemeProvider, ThemeToggle, Toaster } from "@acme/ui-shared";
 
 import { TRPCReactProvider } from "~/trpc/react";
 import { Navigation } from "./_components/navigation";
@@ -53,6 +51,12 @@ const geistMono = Geist_Mono({
 export default function RootLayout(props: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        <link
+          href="https://fonts.googleapis.com/icon?family=Material+Icons"
+          rel="stylesheet"
+        />
+      </head>
       <body
         className={cn(
           "min-h-screen bg-background font-sans text-foreground antialiased",
@@ -63,10 +67,14 @@ export default function RootLayout(props: { children: React.ReactNode }) {
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           <TRPCReactProvider>
             <DebugInitializer />
-            <Navigation />
-            {props.children}
+            <div className="flex flex-col h-screen">
+              <Navigation />
+              <div className="flex-1 overflow-y-auto">
+                {props.children}
+              </div>
+            </div>
           </TRPCReactProvider>
-          <div className="absolute bottom-4 right-4">
+          <div className="fixed bottom-4 right-4 z-50">
             <ThemeToggle />
           </div>
           <Toaster />

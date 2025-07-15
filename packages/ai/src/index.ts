@@ -26,3 +26,6 @@ export * from "./workout-generation";
 
 // Formatting utilities
 export * from "./formatting/exerciseFlags";
+
+// Utils for debugging
+export * from "./utils/debugToTest";

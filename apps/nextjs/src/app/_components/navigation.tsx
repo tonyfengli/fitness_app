@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { Button } from "@acme/ui/button";
+import { Button } from "@acme/ui-shared";
 import { authClient } from "~/auth/client";
 import { useAuth } from "~/hooks/use-auth";
 import { FrontendDebugClient } from "~/utils/frontendDebugClient";
@@ -57,38 +57,21 @@ export function Navigation() {
             Fitness App
           </Link>
           
-          {isAuthenticated && (
-            <>
-              {isTrainer && (
-                <Link 
-                  href="/trainer-dashboard" 
-                  className="text-sm font-medium text-muted-foreground hover:text-primary"
-                >
-                  Trainer Dashboard
-                </Link>
-              )}
-              {isClient && (
-                <Link 
-                  href="/client-dashboard" 
-                  className="text-sm font-medium text-muted-foreground hover:text-primary"
-                >
-                  My Workouts
-                </Link>
-              )}
-            </>
+          {isAuthenticated && isClient && (
+            <Link 
+              href="/client-dashboard" 
+              className="text-sm font-medium text-muted-foreground hover:text-primary"
+            >
+              My Workouts
+            </Link>
           )}
         </div>
 
         <div className="flex items-center space-x-4">
           {isAuthenticated ? (
-            <>
-              <span className="text-sm text-muted-foreground">
-                {user?.name} ({user?.role})
-              </span>
-              <Button onClick={handleSignOut} size="sm" variant="ghost">
-                Sign Out
-              </Button>
-            </>
+            <Button onClick={handleSignOut} size="sm" variant="ghost">
+              Sign Out
+            </Button>
           ) : null}
         </div>
       </div>
