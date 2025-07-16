@@ -340,9 +340,9 @@ sequenceDiagram
 
 ### Database Schema
 - **User Table**: `id`, `email`, `password` (hashed), `phone`, `role` (trainer/client), `businessId`
-- **UserProfile Table**: `id`, `userId`, `strengthLevel` (very_low/low/moderate/high), `skillLevel` (very_low/low/moderate/high), `notes`
-- **Session Table**: `id`, `userId`, `expiresAt`, `token`, `createdAt`, `updatedAt`
-- **Business Table**: `id`, `name`, `description`
+- **UserProfile Table**: `id`, `userId`, `businessId`, `strengthLevel` (very_low/low/moderate/high), `skillLevel` (very_low/low/moderate/high), `notes`
+- **Session Table**: `id`, `userId`, `expiresAt`, `token`, `ipAddress`, `userAgent`, `createdAt`, `updatedAt`
+- **Business Table**: `id`, `name`, `createdAt`, `updatedAt`
 
 ### Protected Routes
 - `/exercises` - Trainer dashboard (exercise management)
@@ -392,8 +392,7 @@ Frontend Request → tRPC Router → Procedure → Database → Response
 
 **tRPC Routers:**
 - `auth`: Session management (`getSession`, `getSecretMessage`, `getUserRole`, `isTrainer`, `updateUserBusiness`, `updateClientProfile`, `createUserAsTrainer`)
-- `post`: CRUD operations (`all`, `byId`, `create`, `delete`)
-- `exercise`: Exercise management (`all`, `byId`, `search`, `filter`, `create`, `update`, `delete`)
+- `exercise`: Exercise management (`all`, `byId`, `search`, `filter`, `create`, `update`, `delete`, `filterForWorkoutGeneration`)
 - `business`: Business operations (`all`, `byId`, `create`)
 - `trainingSession`: Session scheduling (`create`, `list`, `getById`, `addParticipant`, `removeParticipant`, `myPast`)
 - `workout`: Workout management (see Workout Tracking System section for full list)
@@ -411,23 +410,101 @@ tRPC Procedure → Drizzle Query Builder → PostgreSQL → Typed Response
 
 ## Architectural Patterns
 
-### Soft Delete Pattern (Implemented)
-The app uses soft deletes for data preservation and audit trails:
+### Soft Delete Pattern (Planned)
+The app is designed to support soft deletes for data preservation and audit trails:
 
-- **Implementation**: `deletedAt` timestamp field instead of physical deletion
-- **Applied To**: Workouts (users may want to restore or reference old workouts)
+- **Planned Implementation**: `deletedAt` timestamp field instead of physical deletion
+- **Target Tables**: Workouts (users may want to restore or reference old workouts)
 - **Benefits**: 
   - Data recovery possible
   - Historical analytics preserved
   - Audit trail maintained
-- **Query Pattern**: All queries filter out soft-deleted records by default
-- **Hard Delete**: Only performed by admin actions or data retention policies
+- **Current Status**: Currently uses hard deletes - soft delete implementation pending
+- **Future Pattern**: Queries will filter out soft-deleted records by default
 
 ### Business Boundary Enforcement
 - All queries automatically filtered by `businessId`
 - Cross-business data access prevented at API layer
 - Trainers can only see/modify data within their business
 - Clients restricted to their own data regardless of business
+
+---
+
+## Backend Service Architecture
+
+### Service Layer Pattern
+The API uses a service class pattern to separate business logic from tRPC procedures:
+
+#### Core Services
+- **WorkoutService**: Handles workout lifecycle, permissions, and complex operations
+- **ExerciseFilterService**: Complex filtering logic for AI-powered exercise selection
+- **LLMWorkoutService**: Manages AI-generated workout persistence and validation
+- **ExerciseService**: Exercise data access and business-scoped operations
+
+#### Service Features
+- Constructor-based dependency injection: `constructor(private db: Database)`
+- Consistent error handling with TRPCError
+- Transaction support for atomic operations
+- Performance monitoring and logging
+- Type-safe database operations
+
+#### Error Handling Patterns
+Services use standardized error handling:
+```typescript
+// Example from WorkoutService
+static readonly ERROR_MESSAGES = {
+  SESSION_NOT_FOUND: 'Training session not found',
+  NOT_REGISTERED: 'User is not registered for this session',
+  INVALID_CLIENT: 'Invalid client or client not in your business'
+};
+
+// Throwing errors with appropriate codes
+throw new TRPCError({
+  code: 'NOT_FOUND',
+  message: WorkoutService.ERROR_MESSAGES.SESSION_NOT_FOUND
+});
+```
+
+### Utility Layer
+
+#### Logger Utility (`packages/api/src/utils/logger.ts`)
+Environment-aware logging system:
+```typescript
+const logger = createLogger('ContextName');
+logger.info('Operation completed');
+logger.warn('Slow query detected', { duration: 1500 });
+```
+- Log levels: debug, info, warn, error
+- Controlled by `LOG_LEVEL` environment variable
+- Performance monitoring for slow operations
+- Context-based logging with timestamps
+
+#### Session Helpers (`packages/api/src/utils/session.ts`)
+Authentication and authorization utilities:
+- `getSessionUser(ctx)` - Basic authentication check
+- `getSessionUserWithBusiness(ctx)` - Ensures business context
+- `getTrainerUser(ctx)` - Validates trainer role
+- Throws appropriate TRPC errors (UNAUTHORIZED, FORBIDDEN)
+
+#### Query Helpers (`packages/api/src/utils/query-helpers.ts`)
+Performance optimizations for database queries:
+- `getWorkoutsWithExercisesOptimized` - Prevents N+1 queries
+- `withPerformanceMonitoring` - Wraps queries with timing
+- Logs slow queries (>1000ms)
+- Efficient batch operations
+
+### Middleware
+
+#### Timing Middleware
+Tracks procedure execution time:
+- Automatically applied to all procedures
+- Logs slow operations
+- Helps identify performance bottlenecks
+
+#### Request/Response Logging
+- Development mode: Detailed request/response logging
+- Production mode: Error-only logging
+- Configurable via environment variables
 
 ## Development Setup
 
@@ -487,6 +564,10 @@ OPENAI_API_KEY="your-openai-api-key"
 
 # Optional: For OAuth proxy
 AUTH_REDIRECT_PROXY_URL="http://localhost:3000"
+
+# Logging and Development
+LOG_LEVEL="error"  # Options: debug, info, warn, error (default: error)
+NODE_ENV="development"  # Used for dev-specific logging and debugging
 ```
 
 ---
@@ -537,6 +618,16 @@ A comprehensive workout tracking system that allows clients to view their traini
 - **getById** - Get detailed workout including all exercises performed
 - **clientWorkouts** - Trainers view a specific client's workout history
 - **sessionWorkouts** - View all workouts for a specific training session
+- **getClientWorkoutsWithExercises** - Get client's latest workouts with full exercise details (trainer dashboard)
+- **saveWorkout** - Save AI-generated workout to database
+- **generateIndividual** - Generate individual workout without training session
+- **deleteExercise** - Remove exercise from workout with reordering
+- **updateExerciseOrder** - Reorder exercises within same block
+- **deleteBlock** - Remove entire exercise block
+- **deleteWorkout** - Delete entire workout
+- **replaceExercise** - Swap one exercise for another
+- **addExercise** - Add new exercise to existing workout
+- **duplicateWorkout** - Copy workout for same or different client
 
 ### Access Control
 

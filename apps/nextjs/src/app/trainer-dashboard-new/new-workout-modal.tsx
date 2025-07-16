@@ -20,6 +20,11 @@ interface NewWorkoutModalProps {
   onClose: () => void;
   clientId: string;
   clientName: string;
+  clientProfile?: {
+    strengthLevel: string;
+    skillLevel: string;
+    notes?: string;
+  };
 }
 
 const STEPS = [
@@ -33,11 +38,15 @@ export default function NewWorkoutModal({
   onClose,
   clientId,
   clientName,
+  clientProfile,
 }: NewWorkoutModalProps) {
   const router = useRouter();
   const trpc = useTRPC();
   const filterMutation = useMutation(
     trpc.exercise.filterForWorkoutGeneration.mutationOptions()
+  );
+  const generateWorkoutMutation = useMutation(
+    trpc.workout.generateIndividual.mutationOptions()
   );
   
   const [currentStep, setCurrentStep] = useState(1);
@@ -56,6 +65,136 @@ export default function NewWorkoutModal({
   const [isLoading, setIsLoading] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showMore, setShowMore] = useState(false);
+
+  const handleGenerateWorkout = useCallback(async () => {
+    if (!filteredExercises) {
+      setError('No filtered exercises available. Please go back and try again.');
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      // Step 1: Build exercises object for LLM (maintaining legacy format)
+      const exercisesForLLM: any = {};
+      
+      if (filteredExercises.blocks) {
+        // Format Block A
+        if (filteredExercises.blocks.blockA) {
+          exercisesForLLM.blockA = filteredExercises.blocks.blockA.map((ex: any) => ({
+            id: ex.id,
+            name: ex.name,
+            score: ex.score || 0,
+            tags: ex.functionTags || [],
+            primaryMuscle: ex.primaryMuscle,
+            equipment: ex.equipment
+          }));
+        }
+        
+        // Format Block B
+        if (filteredExercises.blocks.blockB) {
+          exercisesForLLM.blockB = filteredExercises.blocks.blockB.map((ex: any) => ({
+            id: ex.id,
+            name: ex.name,
+            score: ex.score || 0,
+            tags: ex.functionTags || [],
+            primaryMuscle: ex.primaryMuscle,
+            equipment: ex.equipment
+          }));
+        }
+        
+        // Format Block C
+        if (filteredExercises.blocks.blockC) {
+          exercisesForLLM.blockC = filteredExercises.blocks.blockC.map((ex: any) => ({
+            id: ex.id,
+            name: ex.name,
+            score: ex.score || 0,
+            tags: ex.functionTags || [],
+            primaryMuscle: ex.primaryMuscle,
+            equipment: ex.equipment
+          }));
+        }
+        
+        // Format Block D
+        if (filteredExercises.blocks.blockD) {
+          exercisesForLLM.blockD = filteredExercises.blocks.blockD.map((ex: any) => ({
+            id: ex.id,
+            name: ex.name,
+            score: ex.score || 0,
+            tags: ex.functionTags || [],
+            primaryMuscle: ex.primaryMuscle,
+            equipment: ex.equipment
+          }));
+        }
+      }
+
+      // Step 2: Build client context (matching legacy format)
+      const clientContext: Record<string, any> = {
+        sessionGoal: workoutParams.sessionGoal,
+        strength_capacity: clientProfile?.strengthLevel || 'moderate',
+        skill_capacity: clientProfile?.skillLevel || 'moderate',
+        intensity: workoutParams.intensity,
+      };
+
+      // Only add non-empty arrays
+      if (workoutParams.includeExercises.length > 0) {
+        clientContext.exercise_requests = { 
+          include: workoutParams.includeExercises, 
+          avoid: workoutParams.avoidExercises 
+        };
+      } else if (workoutParams.avoidExercises.length > 0) {
+        clientContext.exercise_requests = { 
+          include: [], 
+          avoid: workoutParams.avoidExercises 
+        };
+      }
+      
+      if (workoutParams.muscleTarget.length > 0) {
+        clientContext.muscle_target = workoutParams.muscleTarget;
+      }
+      
+      if (workoutParams.muscleLessen.length > 0) {
+        clientContext.muscle_lessen = workoutParams.muscleLessen;
+      }
+
+      // Step 3: Call the interpret-workout API
+      const interpretResponse = await fetch('/api/interpret-workout', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ exercises: exercisesForLLM, clientContext }),
+      });
+
+      const interpretResult = await interpretResponse.json();
+
+      if (!interpretResponse.ok || interpretResult.error) {
+        throw new Error(interpretResult.error || 'Failed to interpret workout');
+      }
+
+      // Step 4: Generate the workout using the LLM interpretation
+      const workoutName = `${workoutParams.template.replace("_", " ").toUpperCase()} Workout - ${new Date().toLocaleDateString()}`;
+      const workoutDescription = `Individual ${workoutParams.template.replace("_", " ")} workout for ${clientName}`;
+
+      await generateWorkoutMutation.mutateAsync({
+        userId: clientId,
+        templateType: workoutParams.template as "standard" | "circuit" | "full_body",
+        exercises: interpretResult.structuredOutput,
+        workoutName,
+        workoutDescription,
+      });
+
+      // Success - close modal and refresh
+      onClose();
+      router.refresh();
+    } catch (error) {
+      console.error('Error generating workout:', error);
+      setError(error instanceof Error ? error.message : 'Failed to generate workout. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [filteredExercises, workoutParams, clientId, clientName, generateWorkoutMutation, onClose, router]);
 
   const handleNext = useCallback(async () => {
     if (currentStep === 1) {
@@ -107,10 +246,10 @@ export default function NewWorkoutModal({
         setIsLoading(false);
       }
     } else if (currentStep === 3) {
-      // Generate workout will be handled later
-      console.log('Generate workout with:', workoutParams, filteredExercises);
+      // Generate workout
+      await handleGenerateWorkout();
     }
-  }, [currentStep, workoutParams, filterMutation, clientId, filteredExercises]);
+  }, [currentStep, workoutParams, filterMutation, clientId, filteredExercises, handleGenerateWorkout]);
 
   const handleBack = useCallback(() => {
     if (currentStep > 1) {
@@ -243,7 +382,7 @@ export default function NewWorkoutModal({
               onClick={handleNext}
               disabled={isLoading}
             >
-              {isLoading ? 'Loading...' : nextButtonText}
+              {isLoading ? (currentStep === 3 ? 'Generating Workout...' : 'Loading...') : nextButtonText}
             </Button>
           </div>
         </div>

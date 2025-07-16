@@ -62,8 +62,22 @@ export class WorkoutService {
     return registration;
   }
 
+
   /**
-   * Verify that a workout exists and user has access to it
+   * Verify that a user can log workouts for another user
+   */
+  verifyWorkoutPermission(targetUserId: string, currentUser: SessionUser) {
+    if (targetUserId !== currentUser.id && currentUser.role !== 'trainer') {
+      throw new TRPCError({
+        code: 'FORBIDDEN',
+        message: 'You can only log your own workouts',
+      });
+    }
+  }
+
+  /**
+   * Verify that a user has access to a workout
+   * @returns The workout if access is granted
    */
   async verifyWorkoutAccess(workoutId: string, businessId: string) {
     const workout = await this.db.query.Workout.findFirst({
@@ -76,23 +90,11 @@ export class WorkoutService {
     if (!workout) {
       throw new TRPCError({
         code: 'NOT_FOUND',
-        message: 'Workout not found',
+        message: WorkoutService.ERRORS.WORKOUT_NOT_FOUND,
       });
     }
 
     return workout;
-  }
-
-  /**
-   * Verify that a user can log workouts for another user
-   */
-  verifyWorkoutPermission(targetUserId: string, currentUser: SessionUser) {
-    if (targetUserId !== currentUser.id && currentUser.role !== 'trainer') {
-      throw new TRPCError({
-        code: 'FORBIDDEN',
-        message: 'You can only log your own workouts',
-      });
-    }
   }
 
   /**

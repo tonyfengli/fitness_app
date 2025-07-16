@@ -287,11 +287,9 @@ describe('Workout Router - generateIndividual', () => {
       caller = createCaller(ctx);
       
       // Mock user lookup - client in different business
-      const clientInOtherBusiness = {
-        ...mockClient,
-        businessId: 'biz-456',
-      };
-      ctx.db.query.user.findFirst.mockResolvedValueOnce(clientInOtherBusiness);
+      // Since verifyClientInBusiness checks for matching businessId,
+      // it should return null when businessId doesn't match
+      ctx.db.query.user.findFirst.mockResolvedValueOnce(null);
       
       const input = {
         userId: 'client-in-other-business',

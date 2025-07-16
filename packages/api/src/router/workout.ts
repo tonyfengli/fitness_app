@@ -2,7 +2,7 @@ import type { TRPCRouterRecord } from "@trpc/server";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 
-import { desc, eq, and, sql } from "@acme/db";
+import { desc, eq, and, sql, inArray } from "@acme/db";
 import { 
   Workout,
   WorkoutExercise,
@@ -17,13 +17,13 @@ import {
 
 import { protectedProcedure } from "../trpc";
 import type { SessionUser } from "../types/auth";
-import { 
-  transformLLMOutputToDB, 
-  validateExerciseLookup,
-  type LLMWorkoutOutput 
-} from "@acme/ai";
+import { type LLMWorkoutOutput } from "@acme/ai";
 import { WorkoutService } from "../services/workout-service";
-import { requireBusinessContext, verifyClientInBusiness } from "../utils/validation";
+import { LLMWorkoutService } from "../services/llm-workout-service";
+import { ExerciseService } from "../services/exercise-service";
+import { requireBusinessContext, verifyClientInBusiness, requireTrainerRole } from "../utils/validation";
+import { getWorkoutsWithExercisesOptimized, withPerformanceMonitoring } from "../utils/query-helpers";
+import { getSessionUser, getSessionUserWithBusiness, getTrainerUser } from "../utils/session";
 
 export const workoutRouter = {
   // Create a workout for a training session
@@ -40,8 +40,8 @@ export const workoutRouter = {
       })).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
-      const currentUser = ctx.session?.user as SessionUser;
-      const businessId = requireBusinessContext(currentUser);
+      const currentUser = getSessionUserWithBusiness(ctx);
+      const businessId = currentUser.businessId;
       const workoutService = new WorkoutService(ctx.db);
       
       // Verify the training session
@@ -88,7 +88,7 @@ export const workoutRouter = {
       })),
     }))
     .mutation(async ({ ctx, input }) => {
-      const currentUser = ctx.session?.user as SessionUser;
+      const currentUser = getSessionUser(ctx);
       
       // Verify workout exists and user has access
       const workout = await ctx.db
@@ -126,17 +126,47 @@ export const workoutRouter = {
         });
       }
       
-      const results = await ctx.db
-        .insert(WorkoutExercise)
-        .values(
-          input.exercises.map(ex => ({
-            workoutId: input.workoutId,
-            exerciseId: ex.exerciseId,
-            orderIndex: ex.orderIndex,
-            setsCompleted: ex.setsCompleted,
-          }))
-        )
-        .returning();
+      // Additional check for trainers - ensure they can only modify workouts for their business
+      if (currentUser.role === 'trainer' && workoutData.trainingSession.businessId !== currentUser.businessId) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'You can only modify workouts within your business',
+        });
+      }
+      
+      // Use transaction for inserting multiple exercises
+      const results = await ctx.db.transaction(async (tx) => {
+        // Validate all exercises exist and belong to the business
+        const exerciseIds = input.exercises.map(ex => ex.exerciseId);
+        const validExercises = await tx
+          .select({ id: exercises.id })
+          .from(exercises)
+          .innerJoin(BusinessExercise, eq(exercises.id, BusinessExercise.exerciseId))
+          .where(and(
+            eq(BusinessExercise.businessId, currentUser.businessId),
+            inArray(exercises.id, exerciseIds)
+          ));
+        
+        if (validExercises.length !== exerciseIds.length) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'One or more exercises are invalid or not available for your business',
+          });
+        }
+        
+        // Insert all exercises
+        return await tx
+          .insert(WorkoutExercise)
+          .values(
+            input.exercises.map(ex => ({
+              workoutId: input.workoutId,
+              exerciseId: ex.exerciseId,
+              orderIndex: ex.orderIndex,
+              setsCompleted: ex.setsCompleted,
+            }))
+          )
+          .returning();
+      });
         
       return results;
     }),
@@ -148,7 +178,7 @@ export const workoutRouter = {
       offset: z.number().min(0).default(0),
     }))
     .query(async ({ ctx, input }) => {
-      const currentUser = ctx.session?.user as SessionUser;
+      const currentUser = getSessionUser(ctx);
       
       const workouts = await ctx.db
         .select({
@@ -166,7 +196,7 @@ export const workoutRouter = {
         .leftJoin(WorkoutExercise, eq(WorkoutExercise.workoutId, Workout.id))
         .where(and(
           eq(Workout.userId, currentUser.id),
-          eq(TrainingSession.businessId, currentUser.businessId!)
+          eq(TrainingSession.businessId, currentUser.businessId)
         ))
         .groupBy(Workout.id, TrainingSession.id, TrainingSession.name, TrainingSession.scheduledAt, TrainingSession.trainerId)
         .orderBy(desc(Workout.completedAt))
@@ -180,7 +210,7 @@ export const workoutRouter = {
   getById: protectedProcedure
     .input(z.object({ id: z.string().uuid() }))
     .query(async ({ ctx, input }) => {
-      const currentUser = ctx.session?.user as SessionUser;
+      const currentUser = getSessionUser(ctx);
       
       // Get workout (with optional session info)
       const workoutResult = await ctx.db
@@ -256,27 +286,14 @@ export const workoutRouter = {
       offset: z.number().min(0).default(0),
     }))
     .query(async ({ ctx, input }) => {
-      const currentUser = ctx.session?.user as SessionUser;
-      
-      // Only trainers can view other users' workouts
-      if (currentUser.role !== 'trainer') {
-        throw new TRPCError({
-          code: 'FORBIDDEN',
-          message: 'Only trainers can view client workouts',
-        });
-      }
+      const currentUser = getTrainerUser(ctx);
       
       // Verify client belongs to same business
-      const client = await ctx.db.query.user.findFirst({
-        where: eq(user.id, input.clientId),
-      });
-      
-      if (!client || client.businessId !== currentUser.businessId) {
-        throw new TRPCError({
-          code: 'NOT_FOUND',
-          message: 'Client not found in your business',
-        });
-      }
+      const client = await verifyClientInBusiness(
+        ctx.db,
+        input.clientId,
+        currentUser.businessId
+      );
       
       const workouts = await ctx.db
         .select({
@@ -293,7 +310,7 @@ export const workoutRouter = {
         .leftJoin(WorkoutExercise, eq(WorkoutExercise.workoutId, Workout.id))
         .where(and(
           eq(Workout.userId, input.clientId),
-          eq(TrainingSession.businessId, currentUser.businessId!)
+          eq(TrainingSession.businessId, currentUser.businessId)
         ))
         .groupBy(Workout.id, TrainingSession.id, TrainingSession.name, TrainingSession.scheduledAt)
         .orderBy(desc(Workout.completedAt))
@@ -309,13 +326,13 @@ export const workoutRouter = {
       sessionId: z.string().uuid(),
     }))
     .query(async ({ ctx, input }) => {
-      const currentUser = ctx.session?.user as SessionUser;
+      const currentUser = getSessionUser(ctx);
       
       // Verify session belongs to user's business
       const session = await ctx.db.query.TrainingSession.findFirst({
         where: and(
           eq(TrainingSession.id, input.sessionId),
-          eq(TrainingSession.businessId, currentUser.businessId!)
+          eq(TrainingSession.businessId, currentUser.businessId)
         ),
       });
       
@@ -363,12 +380,12 @@ export const workoutRouter = {
       workoutDescription: z.string().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
-      const currentUser = ctx.session?.user as SessionUser;
-      const businessId = requireBusinessContext(currentUser);
+      const currentUser = getSessionUserWithBusiness(ctx);
+      const businessId = currentUser.businessId;
       
       // Use WorkoutService for session validation
       const workoutService = new WorkoutService(ctx.db);
-      const session = await workoutService.verifyTrainingSession(
+      await workoutService.verifyTrainingSession(
         input.trainingSessionId,
         businessId
       );
@@ -380,74 +397,18 @@ export const workoutRouter = {
         businessId
       );
       
-      // Get all exercises for lookup
-      const allExercises = await ctx.db.query.exercises.findMany();
-      const exerciseLookup = new Map(allExercises.map(ex => [ex.id, ex]));
-      
-      // Validate exercises in LLM output
-      const validation = validateExerciseLookup(input.llmOutput as LLMWorkoutOutput, exerciseLookup);
-      if (!validation.valid) {
-        console.warn('Some exercises not found:', validation.warnings);
-      }
-      
-      // Transform LLM output to database format
-      const transformed = await transformLLMOutputToDB(
-        input.llmOutput as LLMWorkoutOutput,
-        exerciseLookup,
-        input.workoutType || 'standard',
-        input.workoutName,
-        input.workoutDescription || `Generated by AI for ${client.name}`
-      );
-      
-      // Use transaction to create workout and exercises atomically
-      const result = await ctx.db.transaction(async (tx) => {
-        // Create workout with transformed data
-        const [workout] = await tx
-          .insert(Workout)
-          .values({
-            trainingSessionId: input.trainingSessionId,
-            userId: input.userId,
-            businessId: currentUser.businessId!,
-            createdByTrainerId: currentUser.id,
-            completedAt: new Date(), // LLM-generated workouts are marked as completed
-            notes: transformed.workout.description,
-            workoutType: transformed.workout.workoutType,
-            totalPlannedSets: transformed.workout.totalPlannedSets,
-            llmOutput: transformed.workout.llmOutput,
-            templateConfig: transformed.workout.templateConfig,
-            context: "group", // Has training session
-          })
-          .returning();
-          
-        if (!workout) {
-          throw new Error('Failed to create workout');
-        }
-        
-        // Create workout exercises with groupName
-        if (transformed.exercises.length > 0) {
-          const exerciseData = transformed.exercises
-            .filter(ex => ex.exerciseId !== 'unknown') // Skip unknown exercises
-            .map(ex => ({
-              workoutId: workout.id,
-              exerciseId: ex.exerciseId,
-              orderIndex: ex.orderIndex,
-              setsCompleted: ex.sets,
-              groupName: ex.groupName,
-              // Store additional info in notes for now
-              notes: [
-                ex.reps && `Reps: ${ex.reps}`,
-                ex.restPeriod && `Rest: ${ex.restPeriod}`,
-                ex.notes
-              ].filter(Boolean).join(' | ') || undefined,
-            }));
-          
-          if (exerciseData.length > 0) {
-            await tx.insert(WorkoutExercise).values(exerciseData);
-          }
-        }
-        
-        return workout;
-      });
+      // Use LLMWorkoutService to save the workout
+      const llmWorkoutService = new LLMWorkoutService(ctx.db);
+      const result = await llmWorkoutService.saveWorkout({
+        trainingSessionId: input.trainingSessionId,
+        userId: input.userId,
+        businessId,
+        createdByTrainerId: currentUser.id,
+        llmOutput: input.llmOutput as LLMWorkoutOutput,
+        workoutType: input.workoutType,
+        workoutName: input.workoutName,
+        workoutDescription: input.workoutDescription,
+      }, client.name);
       
       return result;
     }),
@@ -459,88 +420,25 @@ export const workoutRouter = {
       limit: z.number().min(1).max(10).default(3),
     }))
     .query(async ({ ctx, input }) => {
-      const currentUser = ctx.session?.user as SessionUser;
+      const currentUser = getSessionUser(ctx);
       
       // Only trainers can view other users' workouts
-      if (currentUser.role !== 'trainer') {
-        throw new TRPCError({
-          code: 'FORBIDDEN',
-          message: 'Only trainers can view client workouts',
-        });
-      }
+      requireTrainerRole(currentUser);
       
       // Verify client belongs to same business
-      const client = await ctx.db.query.user.findFirst({
-        where: eq(user.id, input.clientId),
-      });
+      const client = await verifyClientInBusiness(
+        ctx.db,
+        input.clientId,
+        currentUser.businessId
+      );
       
-      if (!client || client.businessId !== currentUser.businessId) {
-        throw new TRPCError({
-          code: 'NOT_FOUND',
-          message: 'Client not found in your business',
-        });
-      }
-      
-      // Get latest workouts for the client
-      const workouts = await ctx.db
-        .select({
-          id: Workout.id,
-          createdAt: Workout.createdAt,
-          completedAt: Workout.completedAt,
-          notes: Workout.notes,
-          workoutType: Workout.workoutType,
-          context: Workout.context,
-          llmOutput: Workout.llmOutput,
-        })
-        .from(Workout)
-        .where(and(
-          eq(Workout.userId, input.clientId),
-          eq(Workout.businessId, currentUser.businessId!)
-        ))
-        .orderBy(desc(Workout.createdAt))
-        .limit(input.limit);
-      
-      // Get exercises for each workout
-      const workoutsWithExercises = await Promise.all(
-        workouts.map(async (workout) => {
-          const workoutExercises = await ctx.db
-            .select({
-              id: WorkoutExercise.id,
-              orderIndex: WorkoutExercise.orderIndex,
-              setsCompleted: WorkoutExercise.setsCompleted,
-              groupName: WorkoutExercise.groupName,
-              exercise: {
-                id: exercises.id,
-                name: exercises.name,
-                primaryMuscle: exercises.primaryMuscle,
-              },
-            })
-            .from(WorkoutExercise)
-            .innerJoin(exercises, eq(WorkoutExercise.exerciseId, exercises.id))
-            .where(eq(WorkoutExercise.workoutId, workout.id))
-            .orderBy(WorkoutExercise.orderIndex);
-          
-          // Group exercises by block
-          const exerciseBlocks = workoutExercises.reduce((acc, we) => {
-            const blockName = we.groupName || 'Block A';
-            if (!acc[blockName]) {
-              acc[blockName] = [];
-            }
-            acc[blockName].push({
-              id: we.exercise.id,
-              name: we.exercise.name,
-              sets: we.setsCompleted,
-            });
-            return acc;
-          }, {} as Record<string, Array<{ id: string; name: string; sets: number }>>);
-          
-          return {
-            ...workout,
-            exerciseBlocks: Object.entries(exerciseBlocks).map(([blockName, exercises]) => ({
-              blockName,
-              exercises,
-            })),
-          };
+      // Use optimized query with performance monitoring
+      const workoutsWithExercises = await withPerformanceMonitoring(
+        'getClientWorkoutsWithExercises',
+        () => getWorkoutsWithExercisesOptimized(ctx.db, {
+          userId: input.clientId,
+          businessId: currentUser.businessId,
+          limit: input.limit,
         })
       );
       
@@ -557,19 +455,14 @@ export const workoutRouter = {
       workoutDescription: z.string().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
-      const currentUser = ctx.session?.user as SessionUser;
+      const currentUser = getSessionUserWithBusiness(ctx);
       
       // Verify client belongs to same business
-      const client = await ctx.db.query.user.findFirst({
-        where: eq(user.id, input.userId),
-      });
-      
-      if (!client || client.businessId !== currentUser.businessId) {
-        throw new TRPCError({
-          code: 'NOT_FOUND',
-          message: 'Client not found in your business',
-        });
-      }
+      const client = await verifyClientInBusiness(
+        ctx.db,
+        input.userId,
+        currentUser.businessId
+      );
       
       // Use the LLM output passed from frontend
       const llmOutput = input.exercises;
@@ -594,23 +487,10 @@ export const workoutRouter = {
         }
       }
       
-      // Get all business exercises for name matching
-      const businessExercises = await ctx.db
-        .select({
-          exercise: exercises,
-        })
-        .from(exercises)
-        .innerJoin(BusinessExercise, eq(exercises.id, BusinessExercise.exerciseId))
-        .where(eq(BusinessExercise.businessId, currentUser.businessId!));
-      
-      // Create name to exercise mapping (case-insensitive)
-      const exerciseByName = new Map<string, typeof exercises.$inferSelect>();
-      businessExercises.forEach(({ exercise }) => {
-        exerciseByName.set(exercise.name.toLowerCase(), exercise);
-        // Also try without parentheses for variations
-        const nameWithoutParens = exercise.name.replace(/\s*\([^)]*\)/g, '').trim();
-        exerciseByName.set(nameWithoutParens.toLowerCase(), exercise);
-      });
+      // Use ExerciseService to get business exercises and create name mapping
+      const exerciseService = new ExerciseService(ctx.db);
+      const businessExercises = await exerciseService.getBusinessExercises(currentUser.businessId);
+      const exerciseByName = exerciseService.createExerciseNameMap(businessExercises);
       
       // Save workout without training session
       const result = await ctx.db.transaction(async (tx) => {
@@ -665,7 +545,10 @@ export const workoutRouter = {
                   ].filter(Boolean).join(' | ') || undefined,
                 });
               } else {
-                console.warn(`Could not find exercise match for: ${ex.exercise}`);
+                // Exercise not found - skip silently in production
+                if (process.env.NODE_ENV !== 'production') {
+                  console.warn(`Could not find exercise match for: ${ex.exercise}`);
+                }
               }
             }
           }
@@ -689,22 +572,14 @@ export const workoutRouter = {
       workoutExerciseId: z.string().uuid()
     }))
     .mutation(async ({ ctx, input }) => {
-      const currentUser = ctx.session?.user as SessionUser;
+      const currentUser = getSessionUser(ctx);
       
       // Verify workout exists and user has access
-      const workout = await ctx.db.query.Workout.findFirst({
-        where: and(
-          eq(Workout.id, input.workoutId),
-          eq(Workout.businessId, currentUser.businessId!)
-        ),
-      });
-      
-      if (!workout) {
-        throw new TRPCError({
-          code: 'NOT_FOUND',
-          message: 'Workout not found',
-        });
-      }
+      const workoutService = new WorkoutService(ctx.db);
+      const workout = await workoutService.verifyWorkoutAccess(
+        input.workoutId,
+        currentUser.businessId
+      );
       
       // Get all exercises for this workout to reorder
       const workoutExercises = await ctx.db.query.WorkoutExercise.findMany({
@@ -732,14 +607,27 @@ export const workoutRouter = {
           .filter(ex => ex.id !== input.workoutExerciseId && ex.groupName === exerciseToDelete.groupName)
           .sort((a, b) => a.orderIndex - b.orderIndex);
         
-        // Update orderIndex for exercises after the deleted one
+        // Batch update orderIndex for exercises after the deleted one
+        // Build a list of exercises that need updating
+        const updates: { id: string; newOrderIndex: number }[] = [];
         for (let i = 0; i < remainingExercises.length; i++) {
           const newOrderIndex = i + 1;
           if (remainingExercises[i].orderIndex !== newOrderIndex) {
-            await tx.update(WorkoutExercise)
-              .set({ orderIndex: newOrderIndex })
-              .where(eq(WorkoutExercise.id, remainingExercises[i].id));
+            updates.push({ id: remainingExercises[i].id, newOrderIndex });
           }
+        }
+        
+        // Perform batch update more efficiently by updating all at once
+        if (updates.length > 0) {
+          // For now, we'll do individual updates in the transaction
+          // A more complex SQL CASE statement could be used for true batch updates
+          await Promise.all(
+            updates.map(u => 
+              tx.update(WorkoutExercise)
+                .set({ orderIndex: u.newOrderIndex })
+                .where(eq(WorkoutExercise.id, u.id))
+            )
+          );
         }
       });
       
@@ -754,22 +642,14 @@ export const workoutRouter = {
       direction: z.enum(['up', 'down'])
     }))
     .mutation(async ({ ctx, input }) => {
-      const currentUser = ctx.session?.user as SessionUser;
+      const currentUser = getSessionUser(ctx);
       
       // Verify workout exists and user has access
-      const workout = await ctx.db.query.Workout.findFirst({
-        where: and(
-          eq(Workout.id, input.workoutId),
-          eq(Workout.businessId, currentUser.businessId!)
-        ),
-      });
-      
-      if (!workout) {
-        throw new TRPCError({
-          code: 'NOT_FOUND',
-          message: 'Workout not found',
-        });
-      }
+      const workoutService = new WorkoutService(ctx.db);
+      const workout = await workoutService.verifyWorkoutAccess(
+        input.workoutId,
+        currentUser.businessId
+      );
       
       // Get all exercises for this workout
       const workoutExercises = await ctx.db.query.WorkoutExercise.findMany({
@@ -828,22 +708,14 @@ export const workoutRouter = {
       groupName: z.string()
     }))
     .mutation(async ({ ctx, input }) => {
-      const currentUser = ctx.session?.user as SessionUser;
+      const currentUser = getSessionUser(ctx);
       
       // Verify workout exists and user has access
-      const workout = await ctx.db.query.Workout.findFirst({
-        where: and(
-          eq(Workout.id, input.workoutId),
-          eq(Workout.businessId, currentUser.businessId!)
-        ),
-      });
-      
-      if (!workout) {
-        throw new TRPCError({
-          code: 'NOT_FOUND',
-          message: 'Workout not found',
-        });
-      }
+      const workoutService = new WorkoutService(ctx.db);
+      const workout = await workoutService.verifyWorkoutAccess(
+        input.workoutId,
+        currentUser.businessId
+      );
       
       // Check if this is the only block
       const allExercises = await ctx.db.query.WorkoutExercise.findMany({
@@ -876,22 +748,14 @@ export const workoutRouter = {
       workoutId: z.string().uuid()
     }))
     .mutation(async ({ ctx, input }) => {
-      const currentUser = ctx.session?.user as SessionUser;
+      const currentUser = getSessionUser(ctx);
       
       // Verify workout exists and user has access
-      const workout = await ctx.db.query.Workout.findFirst({
-        where: and(
-          eq(Workout.id, input.workoutId),
-          eq(Workout.businessId, currentUser.businessId!)
-        ),
-      });
-      
-      if (!workout) {
-        throw new TRPCError({
-          code: 'NOT_FOUND',
-          message: 'Workout not found',
-        });
-      }
+      const workoutService = new WorkoutService(ctx.db);
+      const workout = await workoutService.verifyWorkoutAccess(
+        input.workoutId,
+        currentUser.businessId
+      );
       
       // Check if this is an assessment workout (which shouldn't be deleted)
       if (workout.context === 'assessment') {
@@ -916,13 +780,13 @@ export const workoutRouter = {
       newExerciseId: z.string().uuid()
     }))
     .mutation(async ({ ctx, input }) => {
-      const currentUser = ctx.session?.user as SessionUser;
+      const currentUser = getSessionUser(ctx);
       
       // Use WorkoutService for validation
       const workoutService = new WorkoutService(ctx.db);
       const workout = await workoutService.verifyWorkoutAccess(
         input.workoutId, 
-        currentUser.businessId!
+        currentUser.businessId
       );
       
       // Verify the workout exercise exists
@@ -949,7 +813,7 @@ export const workoutRouter = {
         .innerJoin(BusinessExercise, eq(exercises.id, BusinessExercise.exerciseId))
         .where(and(
           eq(exercises.id, input.newExerciseId),
-          eq(BusinessExercise.businessId, currentUser.businessId!)
+          eq(BusinessExercise.businessId, currentUser.businessId)
         ))
         .limit(1);
       
@@ -978,13 +842,13 @@ export const workoutRouter = {
       sets: z.number().int().min(1).default(3)
     }))
     .mutation(async ({ ctx, input }) => {
-      const currentUser = ctx.session?.user as SessionUser;
+      const currentUser = getSessionUser(ctx);
       
       // Use WorkoutService for validation
       const workoutService = new WorkoutService(ctx.db);
       const workout = await workoutService.verifyWorkoutAccess(
         input.workoutId,
-        currentUser.businessId!
+        currentUser.businessId
       );
       
       // Verify exercise exists and is available to the business
@@ -996,7 +860,7 @@ export const workoutRouter = {
         .innerJoin(BusinessExercise, eq(exercises.id, BusinessExercise.exerciseId))
         .where(and(
           eq(exercises.id, input.exerciseId),
-          eq(BusinessExercise.businessId, currentUser.businessId!)
+          eq(BusinessExercise.businessId, currentUser.businessId)
         ))
         .limit(1);
       
@@ -1074,13 +938,13 @@ export const workoutRouter = {
       notes: z.string().optional()
     }))
     .mutation(async ({ ctx, input }) => {
-      const currentUser = ctx.session?.user as SessionUser;
+      const currentUser = getSessionUser(ctx);
       
       // Get the workout to duplicate
       const originalWorkout = await ctx.db.query.Workout.findFirst({
         where: and(
           eq(Workout.id, input.workoutId),
-          eq(Workout.businessId, currentUser.businessId!)
+          eq(Workout.businessId, currentUser.businessId)
         ),
       });
       
@@ -1121,7 +985,7 @@ export const workoutRouter = {
           .values({
             trainingSessionId: originalWorkout.trainingSessionId,
             userId: targetUserId,
-            businessId: currentUser.businessId!,
+            businessId: currentUser.businessId,
             createdByTrainerId: currentUser.id,
             completedAt: null, // New workout starts uncompleted
             notes: input.notes || `Duplicated from workout on ${new Date().toLocaleDateString()}`,

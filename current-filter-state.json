@@ -1,17 +1,19 @@
 {
-  "timestamp": "2025-07-16T18:26:20.291Z",
+  "timestamp": "2025-07-16T23:48:28.254Z",
   "filters": {
-    "clientId": "JJKbFFANwTCRRUt0ZK3mtDyfHk4XmZmU",
-    "sessionGoal": "strength",
+    "clientName": "Curtis Yu",
+    "strengthCapacity": "moderate",
+    "skillCapacity": "moderate",
     "intensity": "moderate",
-    "template": "standard",
     "muscleTarget": [
       "glutes"
     ],
     "muscleLessen": [],
     "avoidJoints": [],
     "includeExercises": [],
-    "avoidExercises": []
+    "avoidExercises": [],
+    "sessionGoal": "strength",
+    "isFullBody": false
   },
   "results": {
     "totalExercises": 117,
@@ -49,19 +51,19 @@
       "count": 8,
       "exercises": [
         {
-          "id": "5a75f68d-4d30-4211-a98c-a74c71f70f8d",
-          "name": "Glute Bridge Thrust with Dumbbell",
-          "score": 8
-        },
-        {
           "id": "698adb88-ad38-4e98-9735-489f5b7d0c45",
           "name": "Curtsy Lunge",
           "score": 8
         },
         {
-          "id": "8442a047-e5a7-49d7-a40e-fce4812b40ce",
-          "name": "Single-Leg Glute Bridge with Band",
+          "id": "b16c277f-9a95-4d94-a039-88686bcf263d",
+          "name": "Kettlebell Swings",
           "score": 8
+        },
+        {
+          "id": "e3cd89af-a339-49ec-b5eb-5438d1227a0f",
+          "name": "Suitcase Kettlebell Lunge",
+          "score": 6.5
         }
       ]
     },
@@ -69,19 +71,19 @@
       "count": 8,
       "exercises": [
         {
-          "id": "5a75f68d-4d30-4211-a98c-a74c71f70f8d",
-          "name": "Glute Bridge Thrust with Dumbbell",
+          "id": "8442a047-e5a7-49d7-a40e-fce4812b40ce",
+          "name": "Single-Leg Glute Bridge with Band",
           "score": 8
         },
         {
-          "id": "df27f104-414a-4e16-a392-45a1b9254e58",
-          "name": "Monster Walk (Banded Lateral Walk)",
-          "score": 6.5
+          "id": "03b163dc-ac95-4ba7-938c-5de8b27f0972",
+          "name": "Glute Kickbacks",
+          "score": 8
         },
         {
-          "id": "a5d09b5a-d62f-477b-8b71-216f35a20291",
-          "name": "Wall Squat Hold",
-          "score": 6.5
+          "id": "617f0ccf-e9ec-494a-9608-1a3402a57cab",
+          "name": "Band Pull-Apart",
+          "score": 5
         }
       ]
     },
@@ -94,19 +96,19 @@
           "score": 8
         },
         {
-          "id": "e3cd89af-a339-49ec-b5eb-5438d1227a0f",
-          "name": "Suitcase Kettlebell Lunge",
+          "id": "71aee1c7-b87e-48fb-a28f-7a5c251b0808",
+          "name": "Plank Jack",
           "score": 6.5
         },
         {
-          "id": "620165b8-278c-48cd-a8a1-9f9aa1f37e80",
-          "name": "Flutter Kicks",
+          "id": "478e1c94-85af-4522-9490-e6d8907e1b1a",
+          "name": "Hollow Body Hold",
           "score": 6.5
         },
         {
-          "id": "ce18afb8-3b1f-4183-9cdc-833da34574b3",
-          "name": "Single-Leg Banded Kettlebell Suitcase Hold",
-          "score": 6.5
+          "id": "9ec47c63-1d15-42d4-9885-a95701610f87",
+          "name": "Dead Bug",
+          "score": 5
         }
       ]
     }

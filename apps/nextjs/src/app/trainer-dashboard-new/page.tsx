@@ -334,6 +334,7 @@ export default function TrainerDashboardNew() {
           onClose={() => setIsNewWorkoutModalOpen(false)}
           clientId={selectedClient.id}
           clientName={selectedClient.name}
+          clientProfile={clientsData?.find(c => c.id === selectedClient.id)?.profile}
         />
       )}
     </SidebarLayout>
