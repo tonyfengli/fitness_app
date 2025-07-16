@@ -6,7 +6,8 @@ export interface SelectionStrategy {
   select(
     candidates: PenalizedExercise[], 
     config: BlockConfig, 
-    isFullBody: boolean
+    isFullBody: boolean,
+    enableDebug?: boolean
   ): PenalizedExercise[];
 }
 
@@ -14,10 +15,25 @@ export class DeterministicSelection implements SelectionStrategy {
   select(
     candidates: PenalizedExercise[], 
     config: BlockConfig,
-    isFullBody: boolean
+    isFullBody: boolean,
+    enableDebug = false
   ): PenalizedExercise[] {
     const selected: PenalizedExercise[] = [];
-    const tracker = new ConstraintTracker();
+    
+    // Use enhanced tracker if debug mode is enabled
+    let tracker: ConstraintTracker;
+    if (enableDebug) {
+      const { EnhancedConstraintTracker } = require("./EnhancedConstraintTracker");
+      tracker = new EnhancedConstraintTracker(config.name, enableDebug);
+      if (config.constraints.movements) {
+        (tracker as any).setMovementConstraints(config.constraints.movements);
+      }
+      if (config.constraints.muscles) {
+        (tracker as any).setMuscleConstraints(config.constraints.muscles);
+      }
+    } else {
+      tracker = new ConstraintTracker();
+    }
     
     // Sort by score (highest first)
     const sortedCandidates = [...candidates].sort((a, b) => b.score - a.score);
@@ -34,7 +50,14 @@ export class DeterministicSelection implements SelectionStrategy {
       
       if (neededConstraints.length > 0) {
         selected.push(candidate);
-        const satisfiedConstraints = tracker.updateFromExercise(candidate);
+        
+        let satisfiedConstraints: string[];
+        if (enableDebug && 'addExercise' in tracker) {
+          (tracker as any).addExercise(candidate);
+          satisfiedConstraints = neededConstraints; // Enhanced tracker handles tracking internally
+        } else {
+          satisfiedConstraints = tracker.updateFromExercise(candidate);
+        }
         
         this.logSelection(candidate, config.name, 'constraint satisfaction', satisfiedConstraints);
       }
@@ -49,7 +72,12 @@ export class DeterministicSelection implements SelectionStrategy {
       if (!exercise) continue;
       
       selected.push(exercise);
-      tracker.updateFromExercise(exercise);
+      
+      if (enableDebug && 'addExercise' in tracker) {
+        (tracker as any).addExercise(exercise);
+      } else {
+        tracker.updateFromExercise(exercise);
+      }
       
       this.logSelection(exercise, config.name, 'high score');
     }
@@ -87,10 +115,25 @@ export class RandomizedSelection implements SelectionStrategy {
   select(
     candidates: PenalizedExercise[], 
     config: BlockConfig,
-    isFullBody: boolean
+    isFullBody: boolean,
+    enableDebug = false
   ): PenalizedExercise[] {
     const selected: PenalizedExercise[] = [];
-    const tracker = new ConstraintTracker();
+    
+    // Use enhanced tracker if debug mode is enabled
+    let tracker: ConstraintTracker;
+    if (enableDebug) {
+      const { EnhancedConstraintTracker } = require("./EnhancedConstraintTracker");
+      tracker = new EnhancedConstraintTracker(config.name, enableDebug);
+      if (config.constraints.movements) {
+        (tracker as any).setMovementConstraints(config.constraints.movements);
+      }
+      if (config.constraints.muscles) {
+        (tracker as any).setMuscleConstraints(config.constraints.muscles);
+      }
+    } else {
+      tracker = new ConstraintTracker();
+    }
     
     // Sort by score (highest first)
     const sortedCandidates = [...candidates].sort((a, b) => b.score - a.score);
@@ -116,7 +159,15 @@ export class RandomizedSelection implements SelectionStrategy {
       if (!selectedExercise) break;
       
       selected.push(selectedExercise);
-      const satisfiedConstraints = tracker.updateFromExercise(selectedExercise);
+      
+      let satisfiedConstraints: string[];
+      if (enableDebug && 'addExercise' in tracker) {
+        (tracker as any).addExercise(selectedExercise);
+        const neededConstraints = tracker.getNeededConstraints(selectedExercise, config.constraints, isFullBody);
+        satisfiedConstraints = neededConstraints;
+      } else {
+        satisfiedConstraints = tracker.updateFromExercise(selectedExercise);
+      }
       
       this.logSelection(selectedExercise, config.name, 'constraint satisfaction', satisfiedConstraints);
     }
@@ -131,7 +182,12 @@ export class RandomizedSelection implements SelectionStrategy {
       
       for (const exercise of randomSelected) {
         selected.push(exercise);
-        tracker.updateFromExercise(exercise);
+        
+        if (enableDebug && 'addExercise' in tracker) {
+          (tracker as any).addExercise(exercise);
+        } else {
+          tracker.updateFromExercise(exercise);
+        }
         
         this.logSelection(exercise, config.name, 'weighted random selection');
       }

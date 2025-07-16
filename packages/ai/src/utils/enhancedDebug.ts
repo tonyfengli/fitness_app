@@ -96,39 +96,112 @@ export class ExclusionTracker {
   getExclusions(): EnhancedFilterDebugData['exclusionReasons'] {
     return this.exclusions;
   }
+
+  clear(): void {
+    this.exclusions = {};
+  }
 }
 
-// Helper class to track constraint satisfaction
-export class ConstraintAnalysisTracker {
-  private analysis: EnhancedFilterDebugData['constraintAnalysis'] = {};
+// Helper class to track score breakdowns
+export class ScoreTracker {
+  private scoreBreakdowns: EnhancedFilterDebugData['scoreBreakdowns'] = {};
 
-  initBlock(blockId: string, requiredConstraints: string[]): void {
-    this.analysis[blockId] = {
-      required: requiredConstraints,
+  addScoreBreakdown(exercise: ScoredExercise, breakdown: any): void {
+    this.scoreBreakdowns[exercise.id] = {
+      name: exercise.name,
+      baseScore: breakdown.base || 5.0,
+      bonuses: [],
+      penalties: [],
+      finalScore: exercise.score
+    };
+
+    const scoreBreakdown = this.scoreBreakdowns[exercise.id];
+    if (!scoreBreakdown) return;
+
+    // Add muscle target bonus
+    if (breakdown.muscleTargetBonus > 0) {
+      scoreBreakdown.bonuses.push({
+        reason: 'Muscle Target Match',
+        value: breakdown.muscleTargetBonus
+      });
+    }
+
+    // Add muscle lessen penalty
+    if (breakdown.muscleLessenPenalty < 0) {
+      scoreBreakdown.penalties.push({
+        reason: 'Muscle De-emphasis',
+        value: breakdown.muscleLessenPenalty
+      });
+    }
+
+    // Add intensity adjustment
+    if (breakdown.intensityAdjustment !== 0) {
+      if (breakdown.intensityAdjustment > 0) {
+        scoreBreakdown.bonuses.push({
+          reason: 'Intensity Match',
+          value: breakdown.intensityAdjustment
+        });
+      } else {
+        scoreBreakdown.penalties.push({
+          reason: 'Intensity Mismatch',
+          value: breakdown.intensityAdjustment
+        });
+      }
+    }
+
+    // Add include boost
+    if (breakdown.includeExerciseBoost > 0) {
+      scoreBreakdown.bonuses.push({
+        reason: 'Included Exercise Boost',
+        value: breakdown.includeExerciseBoost
+      });
+    }
+  }
+
+  getScoreBreakdowns(): EnhancedFilterDebugData['scoreBreakdowns'] {
+    return this.scoreBreakdowns;
+  }
+
+  clear(): void {
+    this.scoreBreakdowns = {};
+  }
+}
+
+// Helper class to track constraint analysis
+export class ConstraintAnalysisTracker {
+  private constraints: EnhancedFilterDebugData['constraintAnalysis'] = {};
+
+  initBlock(blockName: string, required: string[]): void {
+    this.constraints[blockName] = {
+      required,
       satisfied: [],
-      unsatisfied: [...requiredConstraints],
+      unsatisfied: [...required],
       attemptedExercises: []
     };
   }
 
-  recordAttempt(blockId: string, exerciseName: string, constraint: string, selected: boolean, reason?: string): void {
-    if (!this.analysis[blockId]) return;
+  recordAttempt(blockName: string, exerciseName: string, constraint: string, selected: boolean, reason?: string): void {
+    if (!this.constraints[blockName]) return;
     
-    this.analysis[blockId].attemptedExercises.push({
+    this.constraints[blockName].attemptedExercises.push({
       name: exerciseName,
       constraint,
       selected,
       reason
     });
 
-    if (selected && this.analysis[blockId].unsatisfied.includes(constraint)) {
-      this.analysis[blockId].satisfied.push(constraint);
-      this.analysis[blockId].unsatisfied = this.analysis[blockId].unsatisfied.filter(c => c !== constraint);
+    if (selected && this.constraints[blockName].unsatisfied.includes(constraint)) {
+      this.constraints[blockName].satisfied.push(constraint);
+      this.constraints[blockName].unsatisfied = this.constraints[blockName].unsatisfied.filter(c => c !== constraint);
     }
   }
 
-  getAnalysis(): EnhancedFilterDebugData['constraintAnalysis'] {
-    return this.analysis;
+  getConstraintAnalysis(): EnhancedFilterDebugData['constraintAnalysis'] {
+    return this.constraints;
+  }
+
+  clear(): void {
+    this.constraints = {};
   }
 }
 
@@ -247,5 +320,5 @@ export function readWorkoutGenerationHistory(): WorkoutGenerationLog[] {
 // Create a singleton instance for easy access
 export const exclusionTracker = new ExclusionTracker();
 export const constraintTracker = new ConstraintAnalysisTracker();
-// scoreTracker removed - enhanced scoring no longer supported
+export const scoreTracker = new ScoreTracker();
 export const debugLogger = new DebugLogger();

@@ -74,8 +74,8 @@ export function Navigation() {
 
           <div className="flex items-center space-x-4">
             {isAuthenticated ? (
-              <Button onClick={handleSignOut} size="sm" variant="ghost">
-                Sign Out
+              <Button onClick={handleSignOut} size="lg" variant="ghost">
+                Log Out
               </Button>
             ) : null}
           </div>

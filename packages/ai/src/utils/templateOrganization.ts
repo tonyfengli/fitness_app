@@ -16,7 +16,8 @@ export interface TemplateOrganizationResult {
  */
 export function applyTemplateOrganization(
   exercises: ScoredExercise[],
-  workoutTemplate: WorkoutTemplate | FilterWorkoutTemplate | undefined
+  workoutTemplate: WorkoutTemplate | FilterWorkoutTemplate | undefined,
+  enableDebug = false
 ): TemplateOrganizationResult | null {
   if (!workoutTemplate) {
     return null;
@@ -28,7 +29,7 @@ export function applyTemplateOrganization(
   console.log(`🏋️ Using ${isFullBody ? 'FullBodyWorkoutTemplateHandler' : 'WorkoutTemplateHandler'} to select exercises with constraints`);
   console.log(`📊 Total exercises: ${exercises.length}`);
   
-  const templateHandler = getTemplateHandler(templateId);
+  const templateHandler = getTemplateHandler(templateId, undefined, enableDebug);
   const organized = templateHandler.organize(exercises);
   
   console.log(`📊 Exercise selections:`);

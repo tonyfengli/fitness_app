@@ -1,16 +1,17 @@
 {
-  "timestamp": "2025-07-13T16:15:11.004Z",
+  "timestamp": "2025-07-16T02:06:38.395Z",
   "filters": {
-    "clientName": "Web User",
-    "strengthCapacity": "moderate",
-    "skillCapacity": "moderate",
-    "intensity": "moderate",
-    "muscleTarget": [],
+    "clientId": "JJKbFFANwTCRRUt0ZK3mtDyfHk4XmZmU",
+    "sessionGoal": "strength",
+    "intensity": "low",
+    "template": "standard",
+    "muscleTarget": [
+      "glutes"
+    ],
     "muscleLessen": [],
     "avoidJoints": [],
     "includeExercises": [],
-    "avoidExercises": [],
-    "isFullBody": false
+    "avoidExercises": []
   },
   "results": {
     "totalExercises": 117,
@@ -18,29 +19,29 @@
       "count": 5,
       "exercises": [
         {
-          "id": "49bc7005-5179-4d96-be77-ac790cf00759",
-          "name": "Landmine T Bar Row",
-          "score": 5
+          "id": "cdd9c4a6-4048-4ee2-9292-aa36e7a2a9ae",
+          "name": "Barbell Glute Bridge on Bench",
+          "score": 8.75
         },
         {
           "id": "57c24380-6ee2-4242-84b5-0cf299ae8369",
           "name": "Landmine Shoulder Press",
-          "score": 5
-        },
-        {
-          "id": "cdd9c4a6-4048-4ee2-9292-aa36e7a2a9ae",
-          "name": "Barbell Glute Bridge on Bench",
-          "score": 5
+          "score": 5.75
         },
         {
           "id": "4faeab78-16bd-4d71-b935-226bc691531d",
           "name": "Hollow Body Dumbbell Press",
-          "score": 5
+          "score": 5.75
         },
         {
-          "id": "b10fc80a-3bc6-4d31-8a1d-d653d55dccc3",
-          "name": "Dumbbell Bridge Chest Press",
-          "score": 5
+          "id": "27bddaac-3ee7-4767-95a9-fbda6f40ff84",
+          "name": "Bent-Over Single Arm Kettlebell Row (Gorilla Row)",
+          "score": 5.75
+        },
+        {
+          "id": "cf620cdf-70a6-4999-adab-4993b9408c2b",
+          "name": "Australian Pull-Up",
+          "score": 5.75
         }
       ]
     },
@@ -48,19 +49,19 @@
       "count": 8,
       "exercises": [
         {
-          "id": "49bc7005-5179-4d96-be77-ac790cf00759",
-          "name": "Landmine T Bar Row",
-          "score": 5
-        },
-        {
-          "id": "dc085fdb-b6c4-4942-9eb5-3dbf04d7161e",
-          "name": "TRX Mid Row",
-          "score": 5
-        },
-        {
           "id": "5a75f68d-4d30-4211-a98c-a74c71f70f8d",
           "name": "Glute Bridge Thrust with Dumbbell",
-          "score": 5
+          "score": 8.75
+        },
+        {
+          "id": "8442a047-e5a7-49d7-a40e-fce4812b40ce",
+          "name": "Single-Leg Glute Bridge with Band",
+          "score": 8.75
+        },
+        {
+          "id": "53141345-2351-436a-9b1c-21bc273ba554",
+          "name": "Spanish Lunge",
+          "score": 8
         }
       ]
     },
@@ -68,19 +69,19 @@
       "count": 8,
       "exercises": [
         {
+          "id": "8442a047-e5a7-49d7-a40e-fce4812b40ce",
+          "name": "Single-Leg Glute Bridge with Band",
+          "score": 8.75
+        },
+        {
           "id": "617f0ccf-e9ec-494a-9608-1a3402a57cab",
           "name": "Band Pull-Apart",
-          "score": 5
+          "score": 6.5
         },
         {
           "id": "aa66d8b3-907a-42ec-ac9b-bbaa347a88b8",
           "name": "Y/W Raises",
-          "score": 5
-        },
-        {
-          "id": "4e40b3f0-cf13-4998-8ec0-61a9b5dd5239",
-          "name": "Banded Prone Overhead Press",
-          "score": 5
+          "score": 6.5
         }
       ]
     },
@@ -88,24 +89,24 @@
       "count": 6,
       "exercises": [
         {
-          "id": "050e52d0-5f3a-491c-b424-24c5dad31a62",
-          "name": "Farmer's Carry Step-Up",
-          "score": 5
+          "id": "ce18afb8-3b1f-4183-9cdc-833da34574b3",
+          "name": "Single-Leg Banded Kettlebell Suitcase Hold",
+          "score": 7.25
         },
         {
-          "id": "e3cd89af-a339-49ec-b5eb-5438d1227a0f",
-          "name": "Suitcase Kettlebell Lunge",
-          "score": 5
+          "id": "53febb99-c0d1-4fb6-90e8-856dc4a7827b",
+          "name": "Hanging Knee Raise",
+          "score": 7.25
         },
         {
-          "id": "c0e353d1-5ffe-4340-ac6f-2ee03af6c2fc",
-          "name": "Bear Crawl (Forward and Back)",
-          "score": 5
+          "id": "c9916c21-2e2f-44d0-9aa3-d94b5e35c65c",
+          "name": "BOSU Bird Dog",
+          "score": 7.25
         },
         {
-          "id": "2c4c295b-24a1-4dc2-b67d-96951b66f516",
-          "name": "Plank with Weight Drag",
-          "score": 5
+          "id": "b16c277f-9a95-4d94-a039-88686bcf263d",
+          "name": "Kettlebell Swings",
+          "score": 7.25
         }
       ]
     }

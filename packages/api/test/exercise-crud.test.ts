@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { TRPCError } from '@trpc/server';
-import { createCaller, createMockContext, createAuthenticatedContext } from './test-utils';
+import { createCaller, createMockContext, createAuthenticatedContext, createSelectMock } from './test-utils';
 
 // Mock the database
 vi.mock('@acme/db/client', () => ({
@@ -571,10 +571,20 @@ describe('Exercise Router CRUD Tests', () => {
     it('should filter exercises for workout generation with valid inputs', async () => {
       const ctx = createAuthenticatedContext('trainer', 'business-123');
       
-      // Mock client lookup
-      ctx.db.query.user = {
-        findFirst: vi.fn().mockResolvedValue(mockClient),
-      };
+      // Mock client lookup - use select pattern
+      const clientData = [{
+        ...mockClient,
+        role: 'client',
+        emailVerified: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }];
+      
+      // Mock the client lookup using select pattern
+      const clientSelectMock = createSelectMock(clientData);
+      ctx.db.select = vi.fn()
+        .mockImplementationOnce(() => clientSelectMock.mockChain) // First call for client lookup
+        .mockImplementationOnce(() => ctx.db.selectMockChain); // Second call for exercises
 
       // Mock business exercises - ensure select returns the mock chain
       const businessExercisesData = mockFilteredExercises.map(ex => ({ 
@@ -684,9 +694,20 @@ describe('Exercise Router CRUD Tests', () => {
     it('should handle different session goals correctly', async () => {
       const ctx = createAuthenticatedContext('trainer', 'business-123');
       
-      ctx.db.query.user = {
-        findFirst: vi.fn().mockResolvedValue(mockClient),
-      };
+      // Mock client lookup - use select pattern
+      const clientData = [{
+        ...mockClient,
+        role: 'client',
+        emailVerified: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }];
+      
+      // Mock the client lookup using select pattern
+      const clientSelectMock = createSelectMock(clientData);
+      ctx.db.select = vi.fn()
+        .mockImplementation(() => clientSelectMock.mockChain); // Always return client data
+      
       ctx.db.selectMockChain.then.mockImplementation((resolve) => 
         resolve([])
       );
@@ -733,9 +754,20 @@ describe('Exercise Router CRUD Tests', () => {
     it('should handle different templates correctly', async () => {
       const ctx = createAuthenticatedContext('trainer', 'business-123');
       
-      ctx.db.query.user = {
-        findFirst: vi.fn().mockResolvedValue(mockClient),
-      };
+      // Mock client lookup - use select pattern
+      const clientData = [{
+        ...mockClient,
+        role: 'client',
+        emailVerified: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }];
+      
+      // Mock the client lookup using select pattern
+      const clientSelectMock = createSelectMock(clientData);
+      ctx.db.select = vi.fn()
+        .mockImplementation(() => clientSelectMock.mockChain); // Always return client data
+      
       ctx.db.selectMockChain.then.mockImplementation((resolve) => 
         resolve([])
       );
@@ -788,9 +820,20 @@ describe('Exercise Router CRUD Tests', () => {
     it('should handle empty filter results gracefully', async () => {
       const ctx = createAuthenticatedContext('trainer', 'business-123');
       
-      ctx.db.query.user = {
-        findFirst: vi.fn().mockResolvedValue(mockClient),
-      };
+      // Mock client lookup - use select pattern
+      const clientData = [{
+        ...mockClient,
+        role: 'client',
+        emailVerified: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }];
+      
+      // Mock the client lookup using select pattern
+      const clientSelectMock = createSelectMock(clientData);
+      ctx.db.select = vi.fn()
+        .mockImplementation(() => clientSelectMock.mockChain); // Always return client data
+      
       ctx.db.selectMockChain.then.mockImplementation((resolve) => 
         resolve([])
       );
@@ -818,9 +861,20 @@ describe('Exercise Router CRUD Tests', () => {
     it('should handle filter errors gracefully', async () => {
       const ctx = createAuthenticatedContext('trainer', 'business-123');
       
-      ctx.db.query.user = {
-        findFirst: vi.fn().mockResolvedValue(mockClient),
-      };
+      // Mock client lookup - use select pattern
+      const clientData = [{
+        ...mockClient,
+        role: 'client',
+        emailVerified: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }];
+      
+      // Mock the client lookup using select pattern
+      const clientSelectMock = createSelectMock(clientData);
+      ctx.db.select = vi.fn()
+        .mockImplementation(() => clientSelectMock.mockChain); // Always return client data
+      
       ctx.db.selectMockChain.then.mockImplementation((resolve) => 
         resolve([])
       );
@@ -843,9 +897,20 @@ describe('Exercise Router CRUD Tests', () => {
     it('should include all exercise preference arrays in the filter call', async () => {
       const ctx = createAuthenticatedContext('trainer', 'business-123');
       
-      ctx.db.query.user = {
-        findFirst: vi.fn().mockResolvedValue(mockClient),
-      };
+      // Mock client lookup - use select pattern
+      const clientData = [{
+        ...mockClient,
+        role: 'client',
+        emailVerified: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }];
+      
+      // Mock the client lookup using select pattern
+      const clientSelectMock = createSelectMock(clientData);
+      ctx.db.select = vi.fn()
+        .mockImplementation(() => clientSelectMock.mockChain); // Always return client data
+      
       ctx.db.selectMockChain.then.mockImplementation((resolve) => 
         resolve([])
       );

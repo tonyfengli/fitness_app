@@ -16,10 +16,12 @@ export class WorkoutTemplateHandler implements TemplateHandler {
   private templateCriteria: TemplateSelectionCriteria;
   private deterministic = new DeterministicSelection();
   private randomized = new RandomizedSelection();
+  private enableDebug: boolean;
 
-  constructor(isFullBody = false, templateCriteria?: TemplateSelectionCriteria) {
+  constructor(isFullBody = false, templateCriteria?: TemplateSelectionCriteria, enableDebug = false) {
     this.isFullBody = isFullBody;
     this.templateCriteria = templateCriteria || { isFullBody };
+    this.enableDebug = enableDebug;
   }
 
   
@@ -102,7 +104,7 @@ export class WorkoutTemplateHandler implements TemplateHandler {
     });
     
     // Apply strategy
-    const selected = strategy.select(candidates, config, this.isFullBody);
+    const selected = strategy.select(candidates, config, this.isFullBody, this.enableDebug);
     
     logBlockTransformation(`Strategy Application - ${config.name}`,
       { candidatesIn: candidates.length, strategy: config.selectionStrategy },

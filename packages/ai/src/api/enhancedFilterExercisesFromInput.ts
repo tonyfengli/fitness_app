@@ -8,13 +8,15 @@ import { applyTemplateOrganization } from "../utils/templateOrganization";
 import { addPresentationFlagsAuto } from "../formatting/exerciseFlags";
 import { applyAllFiltersEnhanced } from "../core/filtering/enhancedFilterFunctions";
 import { 
+  ExclusionTracker,
+  ConstraintAnalysisTracker,
+  ScoreTracker,
   exclusionTracker, 
   constraintTracker, 
+  scoreTracker,
   debugLogger,
   saveEnhancedDebugData,
   saveWorkoutGenerationLog
-  
-  
 } from "../utils/enhancedDebug";
 import type {EnhancedFilterDebugData, WorkoutGenerationLog} from "../utils/enhancedDebug";
 import { saveFilterDebugData } from "../utils/debugToFile";
@@ -70,7 +72,10 @@ export async function enhancedFilterExercisesFromInput(
     if (enableDebug) {
       debugLogger.enable();
       debugLogger.clear();
-      // Note: We don't clear the trackers here as they accumulate data during the process
+      // Clear the singleton instances
+      exclusionTracker.clear();
+      constraintTracker.clear();
+      scoreTracker.clear();
     }
     
     // Step 1: Build scoring criteria
@@ -90,16 +95,40 @@ export async function enhancedFilterExercisesFromInput(
     });
     const filterEndTime = performance.now();
     
-    // Step 3: Regular scoring (enhanced scoring removed)
+    // Step 3: Import scoring function and apply scoring with tracking
     const scoreStartTime = performance.now();
-    // For now, just use default scoring when in debug mode
-    // In the future, could add score breakdown tracking to regular scoring
-    const scoredExercises = filteredExercises.map(ex => ({ ...ex, score: 5.0 }) as ScoredExercise);
+    const { scoreAndSortExercises } = await import("../core/scoring/scoreExercises");
+    const scoredExercises = await scoreAndSortExercises(filteredExercises, scoringCriteria || {
+      muscleTarget: [],
+      muscleLessen: [],
+      intensity: intensity || 'moderate',
+      includeExercises: []
+    });
+    
+    // If debug mode, track score breakdowns
+    if (enableDebug) {
+      for (const exercise of scoredExercises) {
+        const { scoreExercise } = await import("../core/scoring/firstPassScoring");
+        const scoredWithBreakdown = scoreExercise(exercise, scoringCriteria || {
+          muscleTarget: [],
+          muscleLessen: [],
+          intensity: intensity || 'moderate',
+          includeExercises: []
+        }, 0, true);
+        
+        if (scoredWithBreakdown.scoreBreakdown) {
+          const breakdown = scoredWithBreakdown.scoreBreakdown;
+          // Track in a score tracker (we'll create this)
+          scoreTracker.addScoreBreakdown(exercise, breakdown);
+        }
+      }
+    }
+    
     const scoreEndTime = performance.now();
     
-    // Step 4: Apply template organization
+    // Step 4: Apply template organization with enhanced constraint tracking
     const templateStartTime = performance.now();
-    const templateResult = applyTemplateOrganization(scoredExercises, workoutTemplate);
+    const templateResult = applyTemplateOrganization(scoredExercises, workoutTemplate, enableDebug);
     const templateEndTime = performance.now();
     
     // Step 5: Add presentation flags
@@ -177,8 +206,8 @@ export async function enhancedFilterExercisesFromInput(
       const enhancedDebugData: EnhancedFilterDebugData = {
         ...standardDebugData,
         exclusionReasons: exclusionTracker.getExclusions(),
-        constraintAnalysis: constraintTracker.getAnalysis(),
-        scoreBreakdowns: {}, // Enhanced scoring removed - no breakdown tracking
+        constraintAnalysis: constraintTracker.getConstraintAnalysis(),
+        scoreBreakdowns: scoreTracker.getScoreBreakdowns(),
         debugLog: debugLogger.getLogs()
       };
       

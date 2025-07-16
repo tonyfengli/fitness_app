@@ -63,7 +63,15 @@ export const createMockContext = (
   user?: Partial<User>,
   session?: Partial<Session>
 ): any => {
-  const mockUser = user ? { id: 'test-user-id', ...user } as User : null;
+  const mockUser = user ? { 
+    id: 'test-user-id', 
+    name: 'Test User',
+    email: 'test@example.com',
+    emailVerified: true,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    ...user 
+  } as User : null;
   const mockSession = session ? { id: 'test-session-id', userId: mockUser?.id || 'test-user-id', ...session } as Session : null;
   
   // Create the select mock
