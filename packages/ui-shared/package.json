@@ -13,7 +13,10 @@
   "scripts": {
     "clean": "rm -rf .turbo node_modules",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.0.1",
@@ -31,10 +34,16 @@
     "@acme/eslint-config": "workspace:*",
     "@acme/tailwind-config": "workspace:*",
     "@acme/tsconfig": "workspace:*",
+    "@testing-library/react": "^16.1.0",
+    "@testing-library/react-hooks": "^8.0.1",
     "@types/react": "catalog:react19",
+    "@vitejs/plugin-react": "^4.3.4",
     "eslint": "catalog:",
+    "jsdom": "^24.0.0",
+    "react-dom": "catalog:react19",
     "tailwindcss": "catalog:",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "vitest": "^3.2.4"
   },
   "peerDependencies": {
     "react": "catalog:react19",

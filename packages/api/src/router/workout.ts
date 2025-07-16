@@ -228,14 +228,14 @@ export const workoutRouter = {
     .query(async ({ ctx, input }) => {
       const currentUser = ctx.session?.user as SessionUser;
       
-      // Get workout with session info
+      // Get workout (with optional session info)
       const workoutResult = await ctx.db
         .select({
           workout: Workout,
           trainingSession: TrainingSession,
         })
         .from(Workout)
-        .innerJoin(TrainingSession, eq(Workout.trainingSessionId, TrainingSession.id))
+        .leftJoin(TrainingSession, eq(Workout.trainingSessionId, TrainingSession.id))
         .where(eq(Workout.id, input.id))
         .limit(1);
       
@@ -248,8 +248,8 @@ export const workoutRouter = {
         });
       }
       
-      // Check business scope
-      if (workout.trainingSession.businessId !== currentUser.businessId) {
+      // Check business scope - use workout's businessId directly
+      if (workout.workout.businessId !== currentUser.businessId) {
         throw new TRPCError({
           code: 'FORBIDDEN',
           message: 'Access denied',
@@ -264,17 +264,22 @@ export const workoutRouter = {
         });
       }
       
-      // Get exercises for this workout
+      // Get exercises for this workout with groupName
       const workoutExercises = await ctx.db
         .select({
           id: WorkoutExercise.id,
           orderIndex: WorkoutExercise.orderIndex,
           setsCompleted: WorkoutExercise.setsCompleted,
+          groupName: WorkoutExercise.groupName,
+          createdAt: WorkoutExercise.createdAt,
           exercise: {
             id: exercises.id,
             name: exercises.name,
             primaryMuscle: exercises.primaryMuscle,
+            secondaryMuscles: exercises.secondaryMuscles,
             movementPattern: exercises.movementPattern,
+            modality: exercises.modality,
+            equipment: exercises.equipment,
           },
         })
         .from(WorkoutExercise)
@@ -733,5 +738,500 @@ export const workoutRouter = {
       });
       
       return result;
+    }),
+
+  // Delete a specific exercise from a workout
+  deleteExercise: protectedProcedure
+    .input(z.object({
+      workoutId: z.string().uuid(),
+      workoutExerciseId: z.string().uuid()
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const currentUser = ctx.session?.user as SessionUser;
+      
+      // Verify workout exists and user has access
+      const workout = await ctx.db.query.Workout.findFirst({
+        where: and(
+          eq(Workout.id, input.workoutId),
+          eq(Workout.businessId, currentUser.businessId!)
+        ),
+      });
+      
+      if (!workout) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Workout not found',
+        });
+      }
+      
+      // Get all exercises for this workout to reorder
+      const workoutExercises = await ctx.db.query.WorkoutExercise.findMany({
+        where: eq(WorkoutExercise.workoutId, input.workoutId),
+        orderBy: [WorkoutExercise.orderIndex],
+      });
+      
+      // Find the exercise to delete
+      const exerciseToDelete = workoutExercises.find(ex => ex.id === input.workoutExerciseId);
+      if (!exerciseToDelete) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Exercise not found in workout',
+        });
+      }
+      
+      // Use transaction to delete and reorder
+      await ctx.db.transaction(async (tx) => {
+        // Delete the exercise
+        await tx.delete(WorkoutExercise)
+          .where(eq(WorkoutExercise.id, input.workoutExerciseId));
+        
+        // Reorder remaining exercises in the same group
+        const remainingExercises = workoutExercises
+          .filter(ex => ex.id !== input.workoutExerciseId && ex.groupName === exerciseToDelete.groupName)
+          .sort((a, b) => a.orderIndex - b.orderIndex);
+        
+        // Update orderIndex for exercises after the deleted one
+        for (let i = 0; i < remainingExercises.length; i++) {
+          const newOrderIndex = i + 1;
+          if (remainingExercises[i].orderIndex !== newOrderIndex) {
+            await tx.update(WorkoutExercise)
+              .set({ orderIndex: newOrderIndex })
+              .where(eq(WorkoutExercise.id, remainingExercises[i].id));
+          }
+        }
+      });
+      
+      return { success: true };
+    }),
+
+  // Update exercise order within the same block
+  updateExerciseOrder: protectedProcedure
+    .input(z.object({
+      workoutId: z.string().uuid(),
+      workoutExerciseId: z.string().uuid(),
+      direction: z.enum(['up', 'down'])
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const currentUser = ctx.session?.user as SessionUser;
+      
+      // Verify workout exists and user has access
+      const workout = await ctx.db.query.Workout.findFirst({
+        where: and(
+          eq(Workout.id, input.workoutId),
+          eq(Workout.businessId, currentUser.businessId!)
+        ),
+      });
+      
+      if (!workout) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Workout not found',
+        });
+      }
+      
+      // Get all exercises for this workout
+      const workoutExercises = await ctx.db.query.WorkoutExercise.findMany({
+        where: eq(WorkoutExercise.workoutId, input.workoutId),
+        orderBy: [WorkoutExercise.orderIndex],
+      });
+      
+      // Find the exercise to move
+      const exerciseIndex = workoutExercises.findIndex(ex => ex.id === input.workoutExerciseId);
+      if (exerciseIndex === -1) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Exercise not found in workout',
+        });
+      }
+      
+      const exercise = workoutExercises[exerciseIndex];
+      
+      // Find exercises in the same group
+      const groupExercises = workoutExercises
+        .filter(ex => ex.groupName === exercise.groupName)
+        .sort((a, b) => a.orderIndex - b.orderIndex);
+      
+      const currentGroupIndex = groupExercises.findIndex(ex => ex.id === input.workoutExerciseId);
+      const targetGroupIndex = input.direction === 'up' ? currentGroupIndex - 1 : currentGroupIndex + 1;
+      
+      // Check if move is valid
+      if (targetGroupIndex < 0 || targetGroupIndex >= groupExercises.length) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: `Cannot move exercise ${input.direction} - already at boundary`,
+        });
+      }
+      
+      // Swap the exercises
+      const targetExercise = groupExercises[targetGroupIndex];
+      
+      await ctx.db.transaction(async (tx) => {
+        // Swap orderIndex values
+        await tx.update(WorkoutExercise)
+          .set({ orderIndex: targetExercise.orderIndex })
+          .where(eq(WorkoutExercise.id, exercise.id));
+          
+        await tx.update(WorkoutExercise)
+          .set({ orderIndex: exercise.orderIndex })
+          .where(eq(WorkoutExercise.id, targetExercise.id));
+      });
+      
+      return { success: true };
+    }),
+
+  // Delete all exercises in a block/group
+  deleteBlock: protectedProcedure
+    .input(z.object({
+      workoutId: z.string().uuid(),
+      groupName: z.string()
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const currentUser = ctx.session?.user as SessionUser;
+      
+      // Verify workout exists and user has access
+      const workout = await ctx.db.query.Workout.findFirst({
+        where: and(
+          eq(Workout.id, input.workoutId),
+          eq(Workout.businessId, currentUser.businessId!)
+        ),
+      });
+      
+      if (!workout) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Workout not found',
+        });
+      }
+      
+      // Check if this is the only block
+      const allExercises = await ctx.db.query.WorkoutExercise.findMany({
+        where: eq(WorkoutExercise.workoutId, input.workoutId),
+      });
+      
+      const uniqueGroups = new Set(allExercises.map(ex => ex.groupName));
+      if (uniqueGroups.size <= 1) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Cannot delete the only remaining block',
+        });
+      }
+      
+      // Delete all exercises in the block
+      await ctx.db.delete(WorkoutExercise)
+        .where(
+          and(
+            eq(WorkoutExercise.workoutId, input.workoutId),
+            eq(WorkoutExercise.groupName, input.groupName)
+          )
+        );
+      
+      return { success: true };
+    }),
+
+  // Delete entire workout
+  deleteWorkout: protectedProcedure
+    .input(z.object({
+      workoutId: z.string().uuid()
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const currentUser = ctx.session?.user as SessionUser;
+      
+      // Verify workout exists and user has access
+      const workout = await ctx.db.query.Workout.findFirst({
+        where: and(
+          eq(Workout.id, input.workoutId),
+          eq(Workout.businessId, currentUser.businessId!)
+        ),
+      });
+      
+      if (!workout) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Workout not found',
+        });
+      }
+      
+      // Check if this is an assessment workout (which shouldn't be deleted)
+      if (workout.context === 'assessment') {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Assessment workouts cannot be deleted',
+        });
+      }
+      
+      // Delete workout (cascade will handle WorkoutExercise deletion)
+      await ctx.db.delete(Workout)
+        .where(eq(Workout.id, input.workoutId));
+      
+      return { success: true };
+    }),
+
+  // Replace an exercise with another one
+  replaceExercise: protectedProcedure
+    .input(z.object({
+      workoutId: z.string().uuid(),
+      workoutExerciseId: z.string().uuid(),
+      newExerciseId: z.string().uuid()
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const currentUser = ctx.session?.user as SessionUser;
+      
+      // Verify workout exists and user has access
+      const workout = await ctx.db.query.Workout.findFirst({
+        where: and(
+          eq(Workout.id, input.workoutId),
+          eq(Workout.businessId, currentUser.businessId!)
+        ),
+      });
+      
+      if (!workout) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Workout not found',
+        });
+      }
+      
+      // Verify the workout exercise exists
+      const workoutExercise = await ctx.db.query.WorkoutExercise.findFirst({
+        where: and(
+          eq(WorkoutExercise.id, input.workoutExerciseId),
+          eq(WorkoutExercise.workoutId, input.workoutId)
+        ),
+      });
+      
+      if (!workoutExercise) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Exercise not found in workout',
+        });
+      }
+      
+      // Verify new exercise exists and is available to the business
+      const newExercise = await ctx.db
+        .select({
+          exercise: exercises,
+        })
+        .from(exercises)
+        .innerJoin(BusinessExercise, eq(exercises.id, BusinessExercise.exerciseId))
+        .where(and(
+          eq(exercises.id, input.newExerciseId),
+          eq(BusinessExercise.businessId, currentUser.businessId!)
+        ))
+        .limit(1);
+      
+      if (!newExercise[0]) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'New exercise not found or not available for your business',
+        });
+      }
+      
+      // Update the exercise
+      await ctx.db.update(WorkoutExercise)
+        .set({ exerciseId: input.newExerciseId })
+        .where(eq(WorkoutExercise.id, input.workoutExerciseId));
+      
+      return { success: true };
+    }),
+
+  // Add a new exercise to an existing workout
+  addExercise: protectedProcedure
+    .input(z.object({
+      workoutId: z.string().uuid(),
+      exerciseId: z.string().uuid(),
+      groupName: z.string(),
+      position: z.enum(['beginning', 'end']).default('end'),
+      sets: z.number().int().min(1).default(3)
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const currentUser = ctx.session?.user as SessionUser;
+      
+      // Verify workout exists and user has access
+      const workout = await ctx.db.query.Workout.findFirst({
+        where: and(
+          eq(Workout.id, input.workoutId),
+          eq(Workout.businessId, currentUser.businessId!)
+        ),
+      });
+      
+      if (!workout) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Workout not found',
+        });
+      }
+      
+      // Verify exercise exists and is available to the business
+      const exercise = await ctx.db
+        .select({
+          exercise: exercises,
+        })
+        .from(exercises)
+        .innerJoin(BusinessExercise, eq(exercises.id, BusinessExercise.exerciseId))
+        .where(and(
+          eq(exercises.id, input.exerciseId),
+          eq(BusinessExercise.businessId, currentUser.businessId!)
+        ))
+        .limit(1);
+      
+      if (!exercise[0]) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Exercise not found or not available for your business',
+        });
+      }
+      
+      // Get existing exercises to determine orderIndex
+      const existingExercises = await ctx.db.query.WorkoutExercise.findMany({
+        where: eq(WorkoutExercise.workoutId, input.workoutId),
+        orderBy: [WorkoutExercise.orderIndex],
+      });
+      
+      // Find exercises in the target group
+      const groupExercises = existingExercises.filter(ex => ex.groupName === input.groupName);
+      
+      let newOrderIndex: number;
+      
+      if (input.position === 'beginning' && groupExercises.length > 0) {
+        // Insert at beginning of group
+        newOrderIndex = groupExercises[0].orderIndex;
+        
+        // Shift all exercises in workout with orderIndex >= newOrderIndex
+        await ctx.db.transaction(async (tx) => {
+          // Increment orderIndex for all exercises at or after the insertion point
+          await tx.update(WorkoutExercise)
+            .set({ orderIndex: sql`${WorkoutExercise.orderIndex} + 1` })
+            .where(and(
+              eq(WorkoutExercise.workoutId, input.workoutId),
+              sql`${WorkoutExercise.orderIndex} >= ${newOrderIndex}`
+            ));
+          
+          // Insert the new exercise
+          await tx.insert(WorkoutExercise)
+            .values({
+              workoutId: input.workoutId,
+              exerciseId: input.exerciseId,
+              orderIndex: newOrderIndex,
+              setsCompleted: input.sets,
+              groupName: input.groupName,
+            });
+        });
+      } else {
+        // Insert at end of group or as first exercise in new/empty group
+        if (groupExercises.length > 0) {
+          newOrderIndex = groupExercises[groupExercises.length - 1].orderIndex + 1;
+        } else if (existingExercises.length > 0) {
+          newOrderIndex = existingExercises[existingExercises.length - 1].orderIndex + 1;
+        } else {
+          newOrderIndex = 1;
+        }
+        
+        // Insert the new exercise
+        await ctx.db.insert(WorkoutExercise)
+          .values({
+            workoutId: input.workoutId,
+            exerciseId: input.exerciseId,
+            orderIndex: newOrderIndex,
+            setsCompleted: input.sets,
+            groupName: input.groupName,
+          });
+      }
+      
+      return { success: true };
+    }),
+
+  // Duplicate an existing workout
+  duplicateWorkout: protectedProcedure
+    .input(z.object({
+      workoutId: z.string().uuid(),
+      targetUserId: z.string().optional(), // If not provided, duplicate for same user
+      notes: z.string().optional()
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const currentUser = ctx.session?.user as SessionUser;
+      
+      // Get the workout to duplicate
+      const originalWorkout = await ctx.db.query.Workout.findFirst({
+        where: and(
+          eq(Workout.id, input.workoutId),
+          eq(Workout.businessId, currentUser.businessId!)
+        ),
+      });
+      
+      if (!originalWorkout) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Workout not found',
+        });
+      }
+      
+      // Determine target user
+      const targetUserId = input.targetUserId || originalWorkout.userId;
+      
+      // If targeting different user, verify they're in the same business
+      if (targetUserId !== originalWorkout.userId) {
+        const targetUser = await ctx.db.query.user.findFirst({
+          where: eq(user.id, targetUserId),
+        });
+        
+        if (!targetUser || targetUser.businessId !== currentUser.businessId) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Target user not found in your business',
+          });
+        }
+      }
+      
+      // Get all exercises from the original workout
+      const originalExercises = await ctx.db.query.WorkoutExercise.findMany({
+        where: eq(WorkoutExercise.workoutId, input.workoutId),
+        orderBy: [WorkoutExercise.orderIndex],
+      });
+      
+      // Create the duplicate workout
+      const result = await ctx.db.transaction(async (tx) => {
+        const [newWorkout] = await tx
+          .insert(Workout)
+          .values({
+            trainingSessionId: originalWorkout.trainingSessionId,
+            userId: targetUserId,
+            businessId: currentUser.businessId!,
+            createdByTrainerId: currentUser.id,
+            completedAt: null, // New workout starts uncompleted
+            notes: input.notes || `Duplicated from workout on ${new Date().toLocaleDateString()}`,
+            workoutType: originalWorkout.workoutType,
+            totalPlannedSets: originalWorkout.totalPlannedSets,
+            llmOutput: originalWorkout.llmOutput,
+            templateConfig: originalWorkout.templateConfig,
+            context: originalWorkout.context,
+          })
+          .returning();
+          
+        if (!newWorkout) {
+          throw new Error('Failed to create duplicate workout');
+        }
+        
+        // Duplicate all exercises
+        if (originalExercises.length > 0) {
+          await tx.insert(WorkoutExercise)
+            .values(
+              originalExercises.map(ex => ({
+                workoutId: newWorkout.id,
+                exerciseId: ex.exerciseId,
+                orderIndex: ex.orderIndex,
+                setsCompleted: ex.setsCompleted,
+                groupName: ex.groupName,
+                notes: ex.notes,
+              }))
+            );
+        }
+        
+        return newWorkout;
+      });
+      
+      return { 
+        success: true,
+        workoutId: result.id
+      };
     }),
 } satisfies TRPCRouterRecord;

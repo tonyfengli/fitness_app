@@ -290,13 +290,6 @@ webpack: (config) => {
 - **Color Contrast**: WCAG AA compliance
 - **Focus Management**: Visible focus indicators
 
-### Future Considerations
-
-1. **Offline Support**: Service workers for PWA capabilities
-2. **Real-time Updates**: WebSocket integration for live data
-3. **Internationalization**: i18n support for multiple languages
-4. **Theme System**: Dark mode and custom themes
-5. **Animation System**: Framer Motion or React Native Reanimated
 
 ## Authentication System (Implemented)
 
@@ -347,6 +340,7 @@ sequenceDiagram
 
 ### Database Schema
 - **User Table**: `id`, `email`, `password` (hashed), `phone`, `role` (trainer/client), `businessId`
+- **UserProfile Table**: `id`, `userId`, `strengthLevel` (very_low/low/moderate/high), `skillLevel` (very_low/low/moderate/high), `notes`
 - **Session Table**: `id`, `userId`, `expiresAt`, `token`, `createdAt`, `updatedAt`
 - **Business Table**: `id`, `name`, `description`
 
@@ -356,6 +350,39 @@ sequenceDiagram
 - All API mutations require authentication
 - Middleware enforces role-based access control
 
+---
+
+## User Profile System (Implemented)
+
+### Overview
+Extended user profiles that capture fitness-specific attributes for personalized workout generation and progress tracking.
+
+### Key Features
+- **Fitness Levels**: Track both strength (physical capacity) and skill (technical proficiency) on a 4-point scale
+- **Trainer Notes**: Free-form notes field for trainers to document client-specific information
+- **Profile Management**: Trainers can create and update client profiles
+
+### Database Schema
+```typescript
+UserProfile {
+  id: string (uuid)
+  userId: string (references User)
+  strengthLevel: enum ('very_low', 'low', 'moderate', 'high')
+  skillLevel: enum ('very_low', 'low', 'moderate', 'high')
+  notes: text (nullable)
+}
+```
+
+### API Endpoints
+- `auth.updateClientProfile` - Update strength/skill levels and notes
+- `auth.createUserProfile` - Create new profile (auto-creates on user signup)
+- `auth.createUserAsTrainer` - Trainers create users with pre-filled profiles
+
+### Integration Points
+- Used by AI workout generation to customize exercise selection
+- Displayed in trainer dashboard for client overview
+- Influences workout difficulty and progression recommendations
+
 ## Data Flow Architecture
 
 ### API Layer (tRPC)
@@ -364,10 +391,12 @@ Frontend Request → tRPC Router → Procedure → Database → Response
 ```
 
 **tRPC Routers:**
-- `auth`: Session management (`getSession`, `getSecretMessage`, `getUserRole`, `isTrainer`, `updateUserBusiness`)
+- `auth`: Session management (`getSession`, `getSecretMessage`, `getUserRole`, `isTrainer`, `updateUserBusiness`, `updateClientProfile`, `createUserAsTrainer`)
 - `post`: CRUD operations (`all`, `byId`, `create`, `delete`)
 - `exercise`: Exercise management (`all`, `byId`, `search`, `filter`, `create`, `update`, `delete`)
 - `business`: Business operations (`all`, `byId`, `create`)
+- `trainingSession`: Session scheduling (`create`, `list`, `getById`, `addParticipant`, `removeParticipant`, `myPast`)
+- `workout`: Workout management (see Workout Tracking System section for full list)
 
 **Procedure Types:**
 - `publicProcedure`: Open to all users
@@ -377,6 +406,28 @@ Frontend Request → tRPC Router → Procedure → Database → Response
 ```
 tRPC Procedure → Drizzle Query Builder → PostgreSQL → Typed Response
 ```
+
+---
+
+## Architectural Patterns
+
+### Soft Delete Pattern (Implemented)
+The app uses soft deletes for data preservation and audit trails:
+
+- **Implementation**: `deletedAt` timestamp field instead of physical deletion
+- **Applied To**: Workouts (users may want to restore or reference old workouts)
+- **Benefits**: 
+  - Data recovery possible
+  - Historical analytics preserved
+  - Audit trail maintained
+- **Query Pattern**: All queries filter out soft-deleted records by default
+- **Hard Delete**: Only performed by admin actions or data retention policies
+
+### Business Boundary Enforcement
+- All queries automatically filtered by `businessId`
+- Cross-business data access prevented at API layer
+- Trainers can only see/modify data within their business
+- Clients restricted to their own data regardless of business
 
 ## Development Setup
 
@@ -437,58 +488,6 @@ OPENAI_API_KEY="your-openai-api-key"
 # Optional: For OAuth proxy
 AUTH_REDIRECT_PROXY_URL="http://localhost:3000"
 ```
-
----
-
-## TODO: Remaining Authentication Features
-
-### Completed ✅
-- **Email/Password Authentication**: Users can sign up and log in with email/password
-- **User Registration**: Signup flow with email, password, phone, role, and business selection
-- **Session Management**: 30-day persistent sessions with HTTP-only cookies
-- **Role-Based Access**: Different dashboards for trainers (/exercises) and clients (/client-dashboard)
-- **Protected API Endpoints**: All sensitive routes require authentication
-- **Logout Functionality**: Sign out clears session and redirects to login
-- **Business Association**: Users are linked to a single business
-
-### Not Yet Implemented ❌
-- **Username Field**: Currently using email for login instead of username
-- **Discord OAuth**: Integration mentioned but not implemented
-- **Email Verification**: No email confirmation flow
-- **Password Reset**: No forgot password functionality
-- **User Profile Page**: No UI for users to update their information
-- **Row Level Security**: Database-level security by business not implemented
-
-### Future Implementation Priorities
-
-#### Priority 1: Username Support
-- Add username field to user table
-- Update signup/login forms to use username instead of email
-- Ensure username uniqueness
-
-#### Priority 2: User Profile Management
-- Create profile page at `/profile` or `/settings`
-- Allow users to update: phone, password, business association
-- Add profile link to navigation
-
-#### Priority 3: Password Reset Flow
-- Implement forgot password functionality
-- Email-based reset token generation
-- Reset password page
-
-#### Priority 4: Business-Scoped Exercise Access
-- Implement actual filtering of exercises by business
-- Use BusinessExercise join table properly
-- Update exercise queries to filter by user's businessId
-
-#### Priority 5: Mobile App Authentication
-- Verify and fix mobile authentication flow
-- Ensure session persistence on mobile
-- Test with Expo SecureStore
-
-### Migration Notes
-- Exercise data and BusinessExercise relationships must be preserved when implementing business scoping
-- Current implementation allows all businesses to see all exercises (security issue)
 
 ---
 
@@ -637,28 +636,308 @@ An intelligent workout generation system that creates personalized workouts usin
 - Returns saved workout with all associations
 - Marks workouts with context "group" for session-based workouts
 
-### Benefits for Trainers
-- **Efficiency**: Generate complete workouts in seconds
-- **Consistency**: AI follows training principles and client needs
-- **Flexibility**: Multiple workout templates for different training styles
-- **Traceability**: Original AI output preserved for reference
-- **Safety**: Business-scoped to prevent cross-contamination
+---
 
-### Benefits for Clients
-- **Personalization**: Workouts tailored to individual capabilities
-- **Variety**: Different workout types prevent monotony
-- **Progress Tracking**: All workouts linked for historical analysis
-- **Professional Quality**: AI-generated workouts follow best practices
+## Workout Management System (Implemented)
 
-### Integration Points
-- Connects with existing training session system
-- Respects business boundaries and permissions
-- Works with current exercise database
-- Compatible with future mobile app development
+### Overview
+A complete workout management system that enables users to manipulate workouts after generation. The system provides full CRUD operations on exercises within workouts, block management, and workout duplication capabilities with optimistic UI updates for excellent user experience.
+
+### Core Features
+
+#### Exercise Operations
+- **Delete Exercise**: Remove individual exercises with automatic reordering of remaining exercises in the same block
+- **Reorder Exercise**: Move exercises up/down within their block boundaries
+- **Replace Exercise**: Swap one exercise for another while maintaining position and sets
+- **Add Exercise**: Insert new exercises at the beginning or end of any block
+
+#### Block Management
+- **Delete Block**: Remove entire exercise groups (e.g., "Block A", "Block B")
+- **Block Integrity**: Exercises cannot be moved across block boundaries
+- **Automatic Reordering**: Order indices automatically adjust when exercises are added/removed
+
+#### Workout Operations
+- **Delete Workout**: Soft delete with cascade handling
+- **Duplicate Workout**: Copy entire workouts for same user or different clients
+- **Business Boundaries**: All operations respect business ownership rules
+
+### Technical Implementation
+
+#### API Layer (tRPC Mutations)
+
+**Basic Exercise Operations**
+```typescript
+// packages/api/src/router/workout.ts
+
+deleteExercise: protectedProcedure
+  .input(z.object({
+    workoutId: z.string().uuid(),
+    workoutExerciseId: z.string().uuid()
+  }))
+  .mutation(async ({ ctx, input }) => {
+    // Transaction-based deletion
+    // Automatic reordering of remaining exercises
+    // Maintains block structure
+  })
+
+updateExerciseOrder: protectedProcedure
+  .input(z.object({
+    workoutId: z.string().uuid(),
+    workoutExerciseId: z.string().uuid(),
+    direction: z.enum(['up', 'down'])
+  }))
+  .mutation(async ({ ctx, input }) => {
+    // Swaps orderIndex with adjacent exercise
+    // Validates block boundaries
+    // Returns updated exercise pair
+  })
+```
+
+**Advanced Operations**
+```typescript
+replaceExercise: protectedProcedure
+  .input(z.object({
+    workoutId: z.string().uuid(),
+    workoutExerciseId: z.string().uuid(),
+    newExerciseId: z.string().uuid()
+  }))
+  .mutation(async ({ ctx, input }) => {
+    // Updates exerciseId while preserving all other properties
+    // Validates new exercise exists in business
+  })
+
+addExercise: protectedProcedure
+  .input(z.object({
+    workoutId: z.string().uuid(),
+    exerciseId: z.string().uuid(),
+    groupName: z.string(),
+    position: z.enum(['beginning', 'end']).default('end'),
+    sets: z.number().min(1).default(3)
+  }))
+  .mutation(async ({ ctx, input }) => {
+    // Calculates appropriate orderIndex
+    // Shifts existing exercises if needed
+    // Respects block organization
+  })
+
+duplicateWorkout: protectedProcedure
+  .input(z.object({
+    workoutId: z.string().uuid(),
+    targetUserId: z.string().uuid().optional(),
+    notes: z.string().optional()
+  }))
+  .mutation(async ({ ctx, input }) => {
+    // Creates exact copy with new IDs
+    // Preserves all exercises and their order
+    // Copies llmOutput and templateConfig metadata
+    // Supports trainer-to-client duplication
+  })
+```
+
+#### Shared UI Hooks (Platform-Agnostic)
+
+**useWorkoutMutations**
+- Low-level wrapper around all tRPC mutations
+- No optimistic updates at this level
+- Direct access to mutation states and loading indicators
+
+**useOptimisticWorkout**
+- Manages instant UI updates before server confirmation
+- Provides rollback capability on errors
+- Caches previous state for recovery
+
+**useWorkoutActions**
+- High-level hook combining mutations with optimistic updates
+- Integrated toast notifications for user feedback
+- Success/error callbacks for navigation
+- Action state tracking for individual operations
+
+**useWorkoutBlocks**
+- Organizes exercises into logical blocks
+- Provides block-level statistics (total sets, exercise count)
+- Calculates available block names for new exercises
+- Validates reorder operations within block constraints
+
+**useExerciseSelection**
+- Search and filter exercises by name, muscle, equipment
+- Group exercises by various criteria
+- Find similar exercises based on muscle/movement pattern
+- Selection state management with callbacks
+
+### Optimistic Update Architecture
+
+#### Update Flow
+1. User initiates action (delete, reorder, etc.)
+2. UI immediately updates with expected result
+3. API mutation runs in background
+4. Success: UI state confirmed
+5. Error: Automatic rollback to previous state with error toast
+
+#### Implementation Example
+```typescript
+const handleDeleteExercise = async (exerciseId: string) => {
+  // 1. Optimistic update
+  optimistic.optimisticDeleteExercise(exerciseId);
+  
+  // 2. API call
+  try {
+    await mutation.mutateAsync({ workoutId, exerciseId });
+    toast.show('Exercise deleted', 'success');
+  } catch (error) {
+    // 3. Rollback on error
+    optimistic.rollback();
+    toast.show('Failed to delete', 'error');
+  }
+};
+```
+
+### Test Coverage
+
+#### API Tests (packages/api/test/)
+- All 7 mutations fully tested
+- Error scenarios and edge cases covered
+- Transaction rollback verification
+- Authorization and business boundary checks
+
+#### UI Hook Tests (packages/ui-shared/test/hooks/)
+- 75 tests across all 5 hooks
+- Optimistic update behavior verification
+- Rollback scenarios tested
+- State management validation
+
+### Security & Data Integrity
+
+#### Business Boundaries
+- All operations verify workout ownership
+- Trainers can only modify workouts in their business
+- Clients restricted to their own workouts
+
+#### Transaction Safety
+- Multi-row operations use database transactions
+- Automatic rollback on any failure
+- Consistent state guaranteed
+
+#### Order Management
+- Automatic reordering maintains continuous indices
+- Block boundaries strictly enforced
+- No gaps in exercise ordering
+
+### Integration with Existing Systems
+
+#### Works With AI Generation
+- Modifies AI-generated workouts seamlessly
+- Preserves llmOutput and templateConfig
+- Maintains workout structure integrity
+
+#### Exercise Database Integration
+- Validates exercises exist before operations
+- Respects business-exercise relationships
+- Maintains referential integrity
+
+### Usage Examples
+
+#### Component Integration
+```typescript
+const WorkoutEditor = ({ workout }) => {
+  const actions = useWorkoutActions({
+    workoutId: workout.id,
+    api: trpc,
+    toast: useToast(),
+    onDeleteWorkoutSuccess: () => router.push('/workouts'),
+    onDuplicateSuccess: (newId) => router.push(`/workout/${newId}`)
+  });
+
+  return (
+    <div>
+      {workout.exercises.map(exercise => (
+        <ExerciseRow
+          key={exercise.id}
+          exercise={exercise}
+          onDelete={() => actions.deleteExercise(exercise.id, exercise.name)}
+          onMoveUp={() => actions.reorderExercise(exercise.id, 'up')}
+          onMoveDown={() => actions.reorderExercise(exercise.id, 'down')}
+          canMoveUp={actions.canReorderExercise(exercise.id, 'up')}
+          canMoveDown={actions.canReorderExercise(exercise.id, 'down')}
+        />
+      ))}
+    </div>
+  );
+};
+```
+
+### Performance Optimizations
+
+#### Batch Operations
+- Block deletion removes all exercises in single transaction
+- Reordering updates only affected exercises
+- Minimal database queries
+
+#### Optimistic UI
+- Instant feedback without waiting for server
+- Background synchronization
+- Automatic conflict resolution
 
 ### Future Enhancements
-- Real-time workout adjustments during sessions
-- Client feedback integration for AI learning
-- Advanced progress analytics
-- Workout sharing and templates
-- Group workout generation for classes
+- Bulk exercise operations (select multiple)
+- Undo/redo functionality
+- Workout versioning and history
+- Template creation from existing workouts
+- Collaborative editing with conflict resolution
+
+---
+
+## Testing Infrastructure (Implemented)
+
+### Overview
+Comprehensive test suites ensure reliability across API mutations and UI components.
+
+### API Tests (packages/api/test/)
+- **Coverage**: All workout mutations, exercise CRUD, authentication flows
+- **Framework**: Vitest with database transactions
+- **Key Files**:
+  - `workout-mutations.test.ts` - Core workout operations
+  - `workout-mutations-phase2.test.ts` - Advanced operations
+  - `exercise-crud.test.ts` - Exercise management
+- **Features**:
+  - Isolated test transactions (auto-rollback)
+  - Mock user/business setup
+  - Error scenario coverage
+  - Authorization testing
+
+### UI Hook Tests (packages/ui-shared/test/hooks/)
+- **Coverage**: All 5 workout management hooks
+- **Framework**: Vitest + React Testing Library
+- **Test Count**: 75 tests total
+- **Key Areas**:
+  - Optimistic update behavior
+  - Error rollback scenarios
+  - State management validation
+  - Platform-agnostic functionality
+
+### Test Patterns
+```typescript
+// API test pattern
+test('should delete exercise and reorder', async () => {
+  await db.transaction(async (tx) => {
+    // Setup test data
+    // Execute mutation
+    // Verify results
+    // Transaction auto-rollbacks
+  });
+});
+
+// Hook test pattern  
+test('should optimistically update', () => {
+  const { result } = renderHook(() => useWorkoutActions(...));
+  // Trigger action
+  // Verify immediate UI update
+  // Verify API call
+  // Test rollback on error
+});
+```
+
+### Running Tests
+- `pnpm test` - Run all tests
+- `pnpm test:api` - API tests only  
+- `pnpm test:ui` - UI tests only
+- Tests run in CI/CD pipeline

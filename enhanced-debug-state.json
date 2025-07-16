@@ -1,5 +1,5 @@
 {
-  "timestamp": "2025-07-16T02:06:38.393Z",
+  "timestamp": "2025-07-16T17:42:01.899Z",
   "filters": {
     "clientName": "Curtis Yu",
     "strengthCapacity": "moderate",
@@ -51,11 +51,6 @@
       "count": 8,
       "exercises": [
         {
-          "id": "5a75f68d-4d30-4211-a98c-a74c71f70f8d",
-          "name": "Glute Bridge Thrust with Dumbbell",
-          "score": 8.75
-        },
-        {
           "id": "8442a047-e5a7-49d7-a40e-fce4812b40ce",
           "name": "Single-Leg Glute Bridge with Band",
           "score": 8.75
@@ -64,6 +59,11 @@
           "id": "53141345-2351-436a-9b1c-21bc273ba554",
           "name": "Spanish Lunge",
           "score": 8
+        },
+        {
+          "id": "d64ae36f-de53-492e-8e0e-71c9629f93ed",
+          "name": "Alternating Incline Dumbbell Chest Press",
+          "score": 5.75
         }
       ]
     },
@@ -71,8 +71,8 @@
       "count": 8,
       "exercises": [
         {
-          "id": "8442a047-e5a7-49d7-a40e-fce4812b40ce",
-          "name": "Single-Leg Glute Bridge with Band",
+          "id": "5a75f68d-4d30-4211-a98c-a74c71f70f8d",
+          "name": "Glute Bridge Thrust with Dumbbell",
           "score": 8.75
         },
         {
@@ -81,8 +81,8 @@
           "score": 6.5
         },
         {
-          "id": "aa66d8b3-907a-42ec-ac9b-bbaa347a88b8",
-          "name": "Y/W Raises",
+          "id": "4e40b3f0-cf13-4998-8ec0-61a9b5dd5239",
+          "name": "Banded Prone Overhead Press",
           "score": 6.5
         }
       ]
@@ -106,8 +106,8 @@
           "score": 7.25
         },
         {
-          "id": "b16c277f-9a95-4d94-a039-88686bcf263d",
-          "name": "Kettlebell Swings",
+          "id": "77a15368-7d0a-4abb-ae11-cee40c73889d",
+          "name": "Banded Suitcase Marches",
           "score": 7.25
         }
       ]
@@ -1782,7 +1782,7 @@
   "debugLog": [
     {
       "step": 1,
-      "timestamp": "2025-07-16T02:06:38.389Z",
+      "timestamp": "2025-07-16T17:42:01.895Z",
       "phase": "filtering",
       "action": "Starting enhanced filtering",
       "details": {
@@ -1799,7 +1799,7 @@
     },
     {
       "step": 2,
-      "timestamp": "2025-07-16T02:06:38.389Z",
+      "timestamp": "2025-07-16T17:42:01.895Z",
       "phase": "filtering",
       "action": "Filtering by strength: moderate",
       "details": {
@@ -1814,7 +1814,7 @@
     },
     {
       "step": 3,
-      "timestamp": "2025-07-16T02:06:38.389Z",
+      "timestamp": "2025-07-16T17:42:01.895Z",
       "phase": "filtering",
       "action": "Strength filtering complete",
       "details": {
@@ -1822,11 +1822,11 @@
         "remaining": 120
       },
       "exercisesAffected": 10,
-      "performanceMs": 0.08004200000141282
+      "performanceMs": 0.054310999999870546
     },
     {
       "step": 4,
-      "timestamp": "2025-07-16T02:06:38.389Z",
+      "timestamp": "2025-07-16T17:42:01.896Z",
       "phase": "filtering",
       "action": "Filtering by skill: moderate",
       "details": {
@@ -1841,7 +1841,7 @@
     },
     {
       "step": 5,
-      "timestamp": "2025-07-16T02:06:38.389Z",
+      "timestamp": "2025-07-16T17:42:01.896Z",
       "phase": "filtering",
       "action": "Skill filtering complete",
       "details": {
@@ -1849,11 +1849,11 @@
         "remaining": 117
       },
       "exercisesAffected": 3,
-      "performanceMs": 0.03803599999810103
+      "performanceMs": 0.03206599999975879
     },
     {
       "step": 6,
-      "timestamp": "2025-07-16T02:06:38.389Z",
+      "timestamp": "2025-07-16T17:42:01.896Z",
       "phase": "filtering",
       "action": "Combined included and filtered exercises",
       "details": {
@@ -1863,7 +1863,7 @@
     },
     {
       "step": 7,
-      "timestamp": "2025-07-16T02:06:38.389Z",
+      "timestamp": "2025-07-16T17:42:01.896Z",
       "phase": "filtering",
       "action": "Filtering complete",
       "details": {
