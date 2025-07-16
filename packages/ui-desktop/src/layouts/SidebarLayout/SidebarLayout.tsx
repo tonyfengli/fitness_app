@@ -9,17 +9,17 @@ export function SidebarLayout({
   className,
 }: SidebarLayoutProps) {
   return (
-    <div className={cn("flex h-full bg-gray-50", className)}>
+    <div className={cn("flex h-screen bg-gray-50 overflow-hidden", className)}>
       {/* Sidebar */}
       <aside className={cn(
-        "flex-shrink-0 bg-white border-r border-gray-200",
+        "flex-shrink-0 bg-white border-r border-gray-200 h-full overflow-y-auto",
         sidebarWidth
       )}>
         {sidebar}
       </aside>
       
       {/* Main content */}
-      <main className="flex-1">
+      <main className="flex-1 bg-gray-50 h-full overflow-hidden">
         {children}
       </main>
     </div>

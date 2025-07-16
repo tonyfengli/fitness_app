@@ -3,7 +3,7 @@ import { pgTable } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
-import { user } from "./auth-schema";
+import { user, account } from "./auth-schema";
 
 export const Post = pgTable("post", (t) => ({
   id: t.uuid().notNull().primaryKey().defaultRandom(),
@@ -198,3 +198,6 @@ export const CreateWorkoutExerciseSchema = createInsertSchema(WorkoutExercise, {
 
 // Export all relations from the relations file
 export * from "../drizzle/relations";
+
+// Re-export auth schema items
+export { user, account } from "./auth-schema";

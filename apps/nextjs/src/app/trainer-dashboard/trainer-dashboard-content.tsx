@@ -20,7 +20,7 @@ export default function TrainerDashboardContent() {
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
 
   return (
-    <div className="container mx-auto py-8">
+    <div className="container mx-auto py-8 h-screen overflow-y-auto">
       <h1 className="text-3xl font-bold mb-6">Trainer Dashboard</h1>
       
       {/* Client Selection Example */}

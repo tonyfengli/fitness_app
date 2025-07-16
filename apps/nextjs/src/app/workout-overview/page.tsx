@@ -1,16 +1,10 @@
 "use client";
 
 import React from "react";
-import { AppHeader, ClientWorkoutCard } from "@acme/ui-desktop";
+import { ClientWorkoutCard } from "@acme/ui-desktop";
 import { mockClientWorkouts } from "@acme/ui-shared";
 
 export default function WorkoutOverview() {
-  const navItems = [
-    { label: "Dashboard", href: "#" },
-    { label: "Workouts", href: "#", active: true },
-    { label: "Progress", href: "#" },
-    { label: "Community", href: "#" },
-  ];
 
   return (
     <div className="bg-gray-50 text-gray-800 min-h-screen">

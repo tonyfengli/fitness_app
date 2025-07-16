@@ -505,6 +505,101 @@ export const workoutRouter = {
       return result;
     }),
 
+  // Get client's latest workouts with exercises for trainer dashboard
+  getClientWorkoutsWithExercises: protectedProcedure
+    .input(z.object({
+      clientId: z.string(),
+      limit: z.number().min(1).max(10).default(3),
+    }))
+    .query(async ({ ctx, input }) => {
+      const currentUser = ctx.session?.user as SessionUser;
+      
+      // Only trainers can view other users' workouts
+      if (currentUser.role !== 'trainer') {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'Only trainers can view client workouts',
+        });
+      }
+      
+      // Verify client belongs to same business
+      const client = await ctx.db.query.user.findFirst({
+        where: eq(user.id, input.clientId),
+      });
+      
+      if (!client || client.businessId !== currentUser.businessId) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Client not found in your business',
+        });
+      }
+      
+      // Get latest workouts for the client
+      const workouts = await ctx.db
+        .select({
+          id: Workout.id,
+          createdAt: Workout.createdAt,
+          completedAt: Workout.completedAt,
+          notes: Workout.notes,
+          workoutType: Workout.workoutType,
+          context: Workout.context,
+          llmOutput: Workout.llmOutput,
+        })
+        .from(Workout)
+        .where(and(
+          eq(Workout.userId, input.clientId),
+          eq(Workout.businessId, currentUser.businessId!)
+        ))
+        .orderBy(desc(Workout.createdAt))
+        .limit(input.limit);
+      
+      // Get exercises for each workout
+      const workoutsWithExercises = await Promise.all(
+        workouts.map(async (workout) => {
+          const workoutExercises = await ctx.db
+            .select({
+              id: WorkoutExercise.id,
+              orderIndex: WorkoutExercise.orderIndex,
+              setsCompleted: WorkoutExercise.setsCompleted,
+              groupName: WorkoutExercise.groupName,
+              exercise: {
+                id: exercises.id,
+                name: exercises.name,
+                primaryMuscle: exercises.primaryMuscle,
+              },
+            })
+            .from(WorkoutExercise)
+            .innerJoin(exercises, eq(WorkoutExercise.exerciseId, exercises.id))
+            .where(eq(WorkoutExercise.workoutId, workout.id))
+            .orderBy(WorkoutExercise.orderIndex);
+          
+          // Group exercises by block
+          const exerciseBlocks = workoutExercises.reduce((acc, we) => {
+            const blockName = we.groupName || 'Block A';
+            if (!acc[blockName]) {
+              acc[blockName] = [];
+            }
+            acc[blockName].push({
+              id: we.exercise.id,
+              name: we.exercise.name,
+              sets: we.setsCompleted,
+            });
+            return acc;
+          }, {} as Record<string, Array<{ id: string; name: string; sets: number }>>);
+          
+          return {
+            ...workout,
+            exerciseBlocks: Object.entries(exerciseBlocks).map(([blockName, exercises]) => ({
+              blockName,
+              exercises,
+            })),
+          };
+        })
+      );
+      
+      return workoutsWithExercises;
+    }),
+
   // Generate individual workout (no training session required)
   generateIndividual: protectedProcedure
     .input(z.object({

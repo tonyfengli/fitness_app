@@ -37,13 +37,15 @@ export function Navigation() {
   if (isLoading) {
     return (
       <nav className="border-b">
-        <div className="container flex h-16 items-center justify-between">
-          <div className="flex items-center space-x-6">
+        <div className="flex h-16 items-center">
+          <div className="w-80 flex items-center justify-center">
             <Link href="/" className="text-xl font-bold">
               Fitness App
             </Link>
           </div>
-          <div className="h-9 w-20 animate-pulse rounded bg-gray-200" />
+          <div className="flex-1 px-8 flex justify-end">
+            <div className="h-9 w-20 animate-pulse rounded bg-gray-200" />
+          </div>
         </div>
       </nav>
     );
@@ -51,28 +53,32 @@ export function Navigation() {
 
   return (
     <nav className="border-b">
-      <div className="container flex h-16 items-center justify-between">
-        <div className="flex items-center space-x-6">
+      <div className="flex h-16 items-center">
+        <div className="w-80 flex items-center justify-center">
           <Link href="/" className="text-xl font-bold">
             Fitness App
           </Link>
-          
-          {isAuthenticated && isClient && (
-            <Link 
-              href="/client-dashboard" 
-              className="text-sm font-medium text-muted-foreground hover:text-primary"
-            >
-              My Workouts
-            </Link>
-          )}
         </div>
+        
+        <div className="flex-1 px-8 flex items-center justify-between">
+          <div className="flex items-center space-x-6">
+            {isAuthenticated && isClient && (
+              <Link 
+                href="/client-dashboard" 
+                className="text-sm font-medium text-muted-foreground hover:text-primary"
+              >
+                My Workouts
+              </Link>
+            )}
+          </div>
 
-        <div className="flex items-center space-x-4">
-          {isAuthenticated ? (
-            <Button onClick={handleSignOut} size="sm" variant="ghost">
-              Sign Out
-            </Button>
-          ) : null}
+          <div className="flex items-center space-x-4">
+            {isAuthenticated ? (
+              <Button onClick={handleSignOut} size="sm" variant="ghost">
+                Sign Out
+              </Button>
+            ) : null}
+          </div>
         </div>
       </div>
     </nav>

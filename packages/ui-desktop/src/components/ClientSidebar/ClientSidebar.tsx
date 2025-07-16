@@ -11,7 +11,7 @@ export function ClientSidebar({
 }: ClientSidebarProps) {
   return (
     <nav 
-      className={cn("w-80 bg-white border-r border-gray-200 p-6 flex flex-col", className)}
+      className={cn("w-80 bg-white p-6 flex flex-col", className)}
       aria-label="Client navigation"
     >
       {/* Clients Header */}

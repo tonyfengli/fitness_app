@@ -3,7 +3,7 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod/v4";
 
 import { desc, eq, ilike, and, inArray } from "@acme/db";
-import { exercises, BusinessExercise } from "@acme/db/schema";
+import { exercises, BusinessExercise, user } from "@acme/db/schema";
 import { filterExercisesFromInput, saveFilterDebugData, enhancedFilterExercisesFromInput } from "@acme/ai";
 
 import { protectedProcedure, publicProcedure } from "../trpc";
@@ -421,5 +421,214 @@ export const exerciseRouter = {
     .input(z.string().uuid())
     .mutation(({ ctx, input }) => {
       return ctx.db.delete(exercises).where(eq(exercises.id, input));
+    }),
+
+  // Filter exercises for workout generation modal
+  filterForWorkoutGeneration: protectedProcedure
+    .input(z.object({
+      clientId: z.string(),
+      sessionGoal: z.enum(["strength", "stability"]),
+      intensity: z.enum(["low", "moderate", "high"]),
+      template: z.enum(["standard", "circuit", "full_body"]),
+      includeExercises: z.array(z.string()),
+      avoidExercises: z.array(z.string()),
+      muscleTarget: z.array(z.string()),
+      muscleLessen: z.array(z.string()),
+      avoidJoints: z.array(z.string()),
+      debug: z.boolean().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const apiStartTime = Date.now();
+        
+        // Get user session and businessId
+        const sessionUser = ctx.session?.user as SessionUser;
+        const businessId = sessionUser?.businessId;
+        if (!businessId) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'User must be associated with a business'
+          });
+        }
+        
+        // Fetch client profile to get strength/skill capacity
+        const client = await ctx.db
+          .select()
+          .from(user)
+          .where(eq(user.id, input.clientId))
+          .limit(1)
+          .then(res => res[0]);
+        
+        if (!client || client.businessId !== businessId) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Client not found in your business',
+          });
+        }
+        
+        // Get client's strength and skill capacity from profile
+        // For now, default to moderate if not set
+        const clientProfile = {
+          strengthCapacity: "moderate" as const,
+          skillCapacity: "moderate" as const,
+          // TODO: Fetch from client profile when available
+        };
+        
+        // Map session goal to primary goal
+        const primaryGoal = input.sessionGoal === "strength" ? "strength" as const : "mobility" as const;
+        
+        // Build ClientContext object
+        const clientContext = {
+          user_id: input.clientId,
+          name: client.name || client.email || "Client",
+          strength_capacity: clientProfile.strengthCapacity,
+          skill_capacity: clientProfile.skillCapacity,
+          primary_goal: primaryGoal,
+          muscle_target: input.muscleTarget,
+          muscle_lessen: input.muscleLessen,
+          exercise_requests: {
+            include: input.includeExercises,
+            avoid: input.avoidExercises,
+          },
+          avoid_joints: input.avoidJoints,
+          business_id: businessId,
+          templateType: input.template,
+        };
+        
+        // Fetch exercises from the database - filtered by business
+        const dbStartTime = Date.now();
+        const businessExercises = await ctx.db
+          .select({
+            exercise: exercises,
+          })
+          .from(exercises)
+          .innerJoin(BusinessExercise, eq(exercises.id, BusinessExercise.exerciseId))
+          .where(eq(BusinessExercise.businessId, businessId));
+        
+        const allExercises = businessExercises.map(be => be.exercise);
+        const dbEndTime = Date.now();
+        
+        // Use enhanced version if debug mode is enabled
+        const filterStartTime = Date.now();
+        const filterFunction = input.debug 
+          ? enhancedFilterExercisesFromInput 
+          : filterExercisesFromInput;
+        
+        const result = await filterFunction({
+          clientContext: clientContext,
+          exercises: allExercises,
+          intensity: input.intensity,
+          enableDebug: input.debug || false,
+          workoutTemplate: {
+            workout_goal: input.template === "full_body" ? "mixed_focus" : "mixed_focus",
+            muscle_target: input.muscleTarget,
+            isFullBody: input.template === "full_body"
+          } as any,
+        });
+        
+        const filterEndTime = Date.now();
+        const apiEndTime = Date.now();
+        
+        // Log timing to console
+        console.log('=== WORKOUT GENERATION FILTER TIMING ===');
+        console.log(`Database Query: ${dbEndTime - dbStartTime}ms`);
+        console.log(`Filtering & Scoring: ${filterEndTime - filterStartTime}ms`);
+        console.log(`Total API Time: ${apiEndTime - apiStartTime}ms`);
+        console.log('Total exercises found:', result.filteredExercises?.length || 0);
+        console.log('==========================================');
+        
+        // Save debug data if debug mode is enabled
+        if (input.debug === true) {
+          try {
+            const blockA = result.filteredExercises?.filter((ex: any) => ex.isSelectedBlockA) || [];
+            const blockB = result.filteredExercises?.filter((ex: any) => ex.isSelectedBlockB) || [];
+            const blockC = result.filteredExercises?.filter((ex: any) => ex.isSelectedBlockC) || [];
+            const blockD = result.filteredExercises?.filter((ex: any) => ex.isSelectedBlockD) || [];
+            
+            console.log('Block A exercises:', blockA.length);
+            console.log('Block B exercises:', blockB.length);
+            console.log('Block C exercises:', blockC.length);
+            console.log('Block D exercises:', blockD.length);
+            
+            saveFilterDebugData({
+              timestamp: new Date().toISOString(),
+              filters: {
+                clientId: input.clientId,
+                sessionGoal: input.sessionGoal,
+                intensity: input.intensity,
+                template: input.template,
+                muscleTarget: input.muscleTarget,
+                muscleLessen: input.muscleLessen,
+                avoidJoints: input.avoidJoints,
+                includeExercises: input.includeExercises,
+                avoidExercises: input.avoidExercises,
+              },
+              results: {
+                totalExercises: result.filteredExercises?.length || 0,
+                blockA: {
+                  count: blockA.length,
+                  exercises: blockA.slice(0, 5).map((ex: any) => ({
+                    id: ex.id,
+                    name: ex.name,
+                    score: ex.score || 0
+                  }))
+                },
+                blockB: {
+                  count: blockB.length,
+                  exercises: blockB.slice(0, 3).map((ex: any) => ({
+                    id: ex.id,
+                    name: ex.name,
+                    score: ex.score || 0
+                  }))
+                },
+                blockC: {
+                  count: blockC.length,
+                  exercises: blockC.slice(0, 3).map((ex: any) => ({
+                    id: ex.id,
+                    name: ex.name,
+                    score: ex.score || 0
+                  }))
+                },
+                blockD: {
+                  count: blockD.length,
+                  exercises: blockD.slice(0, 4).map((ex: any) => ({
+                    id: ex.id,
+                    name: ex.name,
+                    score: ex.score || 0
+                  }))
+                }
+              }
+            });
+          } catch (debugError) {
+            console.error('Failed to save debug data:', debugError);
+          }
+        }
+        
+        // Return filtered exercises with block assignments
+        return {
+          exercises: result.filteredExercises || [],
+          blocks: {
+            blockA: result.filteredExercises?.filter((ex: any) => ex.isSelectedBlockA) || [],
+            blockB: result.filteredExercises?.filter((ex: any) => ex.isSelectedBlockB) || [],
+            blockC: result.filteredExercises?.filter((ex: any) => ex.isSelectedBlockC) || [],
+            blockD: result.filteredExercises?.filter((ex: any) => ex.isSelectedBlockD) || [],
+          },
+          timing: {
+            database: dbEndTime - dbStartTime,
+            filtering: filterEndTime - filterStartTime,
+            total: apiEndTime - apiStartTime,
+          }
+        };
+      } catch (error) {
+        console.error('❌ Exercise filtering for workout generation failed:', error);
+        if (error instanceof TRPCError) {
+          throw error;
+        }
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to filter exercises',
+          cause: error
+        });
+      }
     }),
 } satisfies TRPCRouterRecord;

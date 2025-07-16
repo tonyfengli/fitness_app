@@ -48,6 +48,12 @@ vi.mock('@acme/db/schema', () => ({
     movementPattern: 'exercises.movementPattern',
     modality: 'exercises.modality',
   },
+  user: {
+    id: 'user.id',
+    name: 'user.name',
+    email: 'user.email',
+    businessId: 'user.businessId',
+  },
   CreateBusinessSchema: {
     parse: vi.fn((data) => data),
   },
@@ -515,5 +521,369 @@ describe('Exercise Router CRUD Tests', () => {
       ).rejects.toThrow(TRPCError);
     });
 
+  });
+
+  describe('filterForWorkoutGeneration', () => {
+    beforeEach(() => {
+      vi.clearAllMocks();
+    });
+
+    const mockClient = {
+      id: 'client-123',
+      name: 'Test Client',
+      email: 'client@test.com',
+      businessId: 'business-123',
+    };
+
+    const mockFilterInput = {
+      clientId: 'client-123',
+      sessionGoal: 'strength' as const,
+      intensity: 'moderate' as const,
+      template: 'standard' as const,
+      includeExercises: ['Squat'],
+      avoidExercises: ['Deadlift'],
+      muscleTarget: ['glutes', 'quads'],
+      muscleLessen: ['lower_back'],
+      avoidJoints: ['knees'],
+    };
+
+    const mockFilteredExercises = [
+      {
+        ...mockExercise,
+        score: 5.0,
+        isSelectedBlockA: true,
+        isSelectedBlockB: false,
+        isSelectedBlockC: false,
+        isSelectedBlockD: false,
+      },
+      {
+        id: '234e4567-e89b-12d3-a456-426614174001',
+        name: 'Bench Press',
+        primaryMuscle: 'chest',
+        score: 3.0,
+        isSelectedBlockA: false,
+        isSelectedBlockB: true,
+        isSelectedBlockC: false,
+        isSelectedBlockD: false,
+      },
+    ];
+
+    it('should filter exercises for workout generation with valid inputs', async () => {
+      const ctx = createAuthenticatedContext('trainer', 'business-123');
+      
+      // Mock client lookup
+      ctx.db.query.user = {
+        findFirst: vi.fn().mockResolvedValue(mockClient),
+      };
+
+      // Mock business exercises - ensure select returns the mock chain
+      const businessExercisesData = mockFilteredExercises.map(ex => ({ 
+        exercise: ex 
+      }));
+      // Important: The then method should be called with a callback, not mockResolvedValue
+      ctx.db.selectMockChain.then.mockImplementation((resolve) => 
+        resolve(businessExercisesData)
+      );
+
+      // Mock AI filter response
+      vi.mocked(filterExercisesFromInput).mockResolvedValue({
+        filteredExercises: mockFilteredExercises,
+        userInput: '',
+        programmedRoutine: '',
+        exercises: [],
+        clientContext: {} as any,
+        workoutTemplate: {} as any,
+      });
+
+      caller = createCaller(ctx);
+      const result = await caller.exercise.filterForWorkoutGeneration(mockFilterInput);
+
+      expect(result).toBeDefined();
+      expect(result.exercises).toHaveLength(2);
+      expect(result.blocks).toBeDefined();
+      expect(result.blocks.blockA).toHaveLength(1);
+      expect(result.blocks.blockB).toHaveLength(1);
+      expect(result.blocks.blockC).toHaveLength(0);
+      expect(result.blocks.blockD).toHaveLength(0);
+      expect(result.timing).toHaveProperty('database');
+      expect(result.timing).toHaveProperty('filtering');
+      expect(result.timing).toHaveProperty('total');
+
+      // Verify filterExercisesFromInput was called with correct params
+      expect(filterExercisesFromInput).toHaveBeenCalledWith(
+        expect.objectContaining({
+          clientContext: expect.objectContaining({
+            user_id: 'client-123',
+            name: 'Test Client',
+            strength_capacity: 'moderate',
+            skill_capacity: 'moderate',
+            primary_goal: 'strength',
+            muscle_target: ['glutes', 'quads'],
+            muscle_lessen: ['lower_back'],
+            exercise_requests: {
+              include: ['Squat'],
+              avoid: ['Deadlift'],
+            },
+            avoid_joints: ['knees'],
+            business_id: 'business-123',
+            templateType: 'standard',
+          }),
+          intensity: 'moderate',
+          exercises: expect.any(Array),
+          workoutTemplate: expect.objectContaining({
+            workout_goal: 'mixed_focus',
+            muscle_target: ['glutes', 'quads'],
+            isFullBody: false,
+          }),
+        })
+      );
+    });
+
+    it('should reject requests without authentication', async () => {
+      const ctx = createMockContext();
+      caller = createCaller(ctx);
+
+      await expect(
+        caller.exercise.filterForWorkoutGeneration(mockFilterInput)
+      ).rejects.toThrow(TRPCError);
+    });
+
+    it('should reject if user has no businessId', async () => {
+      const ctx = createAuthenticatedContext('trainer', null);
+      caller = createCaller(ctx);
+
+      await expect(
+        caller.exercise.filterForWorkoutGeneration(mockFilterInput)
+      ).rejects.toMatchObject({
+        code: 'BAD_REQUEST',
+        message: 'User must be associated with a business',
+      });
+    });
+
+    it('should reject if client is not in the same business', async () => {
+      const ctx = createAuthenticatedContext('trainer', 'business-123');
+      
+      // Mock client with different business
+      ctx.db.query.user = {
+        findFirst: vi.fn().mockResolvedValue({
+          ...mockClient,
+          businessId: 'different-business',
+        }),
+      };
+
+      caller = createCaller(ctx);
+
+      await expect(
+        caller.exercise.filterForWorkoutGeneration(mockFilterInput)
+      ).rejects.toMatchObject({
+        code: 'NOT_FOUND',
+        message: 'Client not found in your business',
+      });
+    });
+
+    it('should handle different session goals correctly', async () => {
+      const ctx = createAuthenticatedContext('trainer', 'business-123');
+      
+      ctx.db.query.user = {
+        findFirst: vi.fn().mockResolvedValue(mockClient),
+      };
+      ctx.db.selectMockChain.then.mockImplementation((resolve) => 
+        resolve([])
+      );
+      vi.mocked(filterExercisesFromInput).mockResolvedValue({
+        filteredExercises: [],
+        userInput: '',
+        programmedRoutine: '',
+        exercises: [],
+        clientContext: {} as any,
+        workoutTemplate: {} as any,
+      });
+
+      caller = createCaller(ctx);
+
+      // Test strength goal
+      await caller.exercise.filterForWorkoutGeneration({
+        ...mockFilterInput,
+        sessionGoal: 'strength',
+      });
+
+      expect(filterExercisesFromInput).toHaveBeenCalledWith(
+        expect.objectContaining({
+          clientContext: expect.objectContaining({
+            primary_goal: 'strength',
+          }),
+        })
+      );
+
+      // Test stability goal
+      await caller.exercise.filterForWorkoutGeneration({
+        ...mockFilterInput,
+        sessionGoal: 'stability',
+      });
+
+      expect(filterExercisesFromInput).toHaveBeenCalledWith(
+        expect.objectContaining({
+          clientContext: expect.objectContaining({
+            primary_goal: 'mobility',
+          }),
+        })
+      );
+    });
+
+    it('should handle different templates correctly', async () => {
+      const ctx = createAuthenticatedContext('trainer', 'business-123');
+      
+      ctx.db.query.user = {
+        findFirst: vi.fn().mockResolvedValue(mockClient),
+      };
+      ctx.db.selectMockChain.then.mockImplementation((resolve) => 
+        resolve([])
+      );
+      vi.mocked(filterExercisesFromInput).mockResolvedValue({
+        filteredExercises: [],
+        userInput: '',
+        programmedRoutine: '',
+        exercises: [],
+        clientContext: {} as any,
+        workoutTemplate: {} as any,
+      });
+
+      caller = createCaller(ctx);
+
+      // Test full_body template
+      await caller.exercise.filterForWorkoutGeneration({
+        ...mockFilterInput,
+        template: 'full_body',
+      });
+
+      expect(filterExercisesFromInput).toHaveBeenCalledWith(
+        expect.objectContaining({
+          clientContext: expect.objectContaining({
+            templateType: 'full_body',
+          }),
+          workoutTemplate: expect.objectContaining({
+            isFullBody: true,
+          }),
+        })
+      );
+
+      // Test standard template
+      await caller.exercise.filterForWorkoutGeneration({
+        ...mockFilterInput,
+        template: 'standard',
+      });
+
+      expect(filterExercisesFromInput).toHaveBeenCalledWith(
+        expect.objectContaining({
+          clientContext: expect.objectContaining({
+            templateType: 'standard',
+          }),
+          workoutTemplate: expect.objectContaining({
+            isFullBody: false,
+          }),
+        })
+      );
+    });
+
+    it('should handle empty filter results gracefully', async () => {
+      const ctx = createAuthenticatedContext('trainer', 'business-123');
+      
+      ctx.db.query.user = {
+        findFirst: vi.fn().mockResolvedValue(mockClient),
+      };
+      ctx.db.selectMockChain.then.mockImplementation((resolve) => 
+        resolve([])
+      );
+      
+      // Mock empty filter response
+      vi.mocked(filterExercisesFromInput).mockResolvedValue({
+        filteredExercises: [],
+        userInput: '',
+        programmedRoutine: '',
+        exercises: [],
+        clientContext: {} as any,
+        workoutTemplate: {} as any,
+      });
+
+      caller = createCaller(ctx);
+      const result = await caller.exercise.filterForWorkoutGeneration(mockFilterInput);
+
+      expect(result.exercises).toHaveLength(0);
+      expect(result.blocks.blockA).toHaveLength(0);
+      expect(result.blocks.blockB).toHaveLength(0);
+      expect(result.blocks.blockC).toHaveLength(0);
+      expect(result.blocks.blockD).toHaveLength(0);
+    });
+
+    it('should handle filter errors gracefully', async () => {
+      const ctx = createAuthenticatedContext('trainer', 'business-123');
+      
+      ctx.db.query.user = {
+        findFirst: vi.fn().mockResolvedValue(mockClient),
+      };
+      ctx.db.selectMockChain.then.mockImplementation((resolve) => 
+        resolve([])
+      );
+      
+      // Mock filter error
+      vi.mocked(filterExercisesFromInput).mockRejectedValue(
+        new Error('Filtering failed')
+      );
+
+      caller = createCaller(ctx);
+
+      await expect(
+        caller.exercise.filterForWorkoutGeneration(mockFilterInput)
+      ).rejects.toMatchObject({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Failed to filter exercises',
+      });
+    });
+
+    it('should include all exercise preference arrays in the filter call', async () => {
+      const ctx = createAuthenticatedContext('trainer', 'business-123');
+      
+      ctx.db.query.user = {
+        findFirst: vi.fn().mockResolvedValue(mockClient),
+      };
+      ctx.db.selectMockChain.then.mockImplementation((resolve) => 
+        resolve([])
+      );
+      vi.mocked(filterExercisesFromInput).mockResolvedValue({
+        filteredExercises: [],
+        userInput: '',
+        programmedRoutine: '',
+        exercises: [],
+        clientContext: {} as any,
+        workoutTemplate: {} as any,
+      });
+
+      caller = createCaller(ctx);
+
+      const detailedInput = {
+        ...mockFilterInput,
+        includeExercises: ['Squat', 'Bench Press', 'Pull-up'],
+        avoidExercises: ['Deadlift', 'Overhead Press'],
+        muscleTarget: ['glutes', 'quads', 'chest'],
+        muscleLessen: ['lower_back', 'shoulders'],
+        avoidJoints: ['knees', 'shoulders', 'wrists'],
+      };
+
+      await caller.exercise.filterForWorkoutGeneration(detailedInput);
+
+      expect(filterExercisesFromInput).toHaveBeenCalledWith(
+        expect.objectContaining({
+          clientContext: expect.objectContaining({
+            muscle_target: ['glutes', 'quads', 'chest'],
+            muscle_lessen: ['lower_back', 'shoulders'],
+            exercise_requests: {
+              include: ['Squat', 'Bench Press', 'Pull-up'],
+              avoid: ['Deadlift', 'Overhead Press'],
+            },
+            avoid_joints: ['knees', 'shoulders', 'wrists'],
+          }),
+        })
+      );
+    });
   });
 });

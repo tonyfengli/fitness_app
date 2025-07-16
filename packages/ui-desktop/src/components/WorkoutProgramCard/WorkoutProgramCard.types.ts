@@ -7,10 +7,16 @@ export interface Exercise {
   reps?: string;
 }
 
+export interface ExerciseBlock {
+  blockName: string;
+  exercises: Exercise[];
+}
+
 export interface WorkoutProgramCardProps extends FeatureProps {
   title: string;
   week?: string;
-  exercises: Exercise[];
+  exercises?: Exercise[];
+  exerciseBlocks?: ExerciseBlock[];
   onAddExercise?: () => void;
   onEditExercise?: (exerciseId: string) => void;
   className?: string;

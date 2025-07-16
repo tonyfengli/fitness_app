@@ -15,25 +15,27 @@ export function FeedbackSection({
     <div className={cn(className)}>
       <button
         onClick={onToggle}
-        className="w-full flex justify-between items-center p-4 text-left hover:bg-gray-50 transition-colors border-t-[0.5px] border-gray-100"
+        className="w-full flex justify-between items-center p-6 text-left hover:bg-gray-50 transition-colors duration-200"
       >
-        <span className="font-medium text-gray-700">View Client Feedback</span>
+        <span className="text-lg font-semibold text-gray-700">View Client Feedback</span>
         <Icon 
           name={isExpanded ? 'expand_less' : 'expand_more'} 
-          color="#6B7280"
+          className="text-gray-400"
         />
       </button>
       
       {isExpanded && (
-        <div className="p-4 space-y-4">
+        <div className="px-6 pb-6 space-y-4">
           {feedback.length === 0 ? (
-            <p className="text-gray-500 text-sm">No feedback yet.</p>
+            <div className="p-4 bg-gray-50 rounded-xl">
+              <p className="text-gray-500">No feedback yet.</p>
+            </div>
           ) : (
             <div className="space-y-3">
               {feedback.map((item) => (
-                <div key={item.id} className="border-l-2 border-gray-100 pl-3">
+                <div key={item.id} className="p-4 bg-gray-50 rounded-xl">
                   <p className="text-gray-700">{item.text}</p>
-                  <p className="text-xs text-gray-500 mt-1">
+                  <p className="text-sm text-gray-500 mt-2">
                     {item.author && `${item.author} • `}{item.date}
                   </p>
                 </div>
