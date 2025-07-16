@@ -1,9 +1,9 @@
 {
-  "timestamp": "2025-07-16T17:42:01.901Z",
+  "timestamp": "2025-07-16T18:26:20.291Z",
   "filters": {
     "clientId": "JJKbFFANwTCRRUt0ZK3mtDyfHk4XmZmU",
     "sessionGoal": "strength",
-    "intensity": "low",
+    "intensity": "moderate",
     "template": "standard",
     "muscleTarget": [
       "glutes"
@@ -21,27 +21,27 @@
         {
           "id": "cdd9c4a6-4048-4ee2-9292-aa36e7a2a9ae",
           "name": "Barbell Glute Bridge on Bench",
-          "score": 8.75
+          "score": 8
+        },
+        {
+          "id": "144e1124-e7d7-4594-8c75-f9522081060e",
+          "name": "Kettlebell Deadlift",
+          "score": 6.5
+        },
+        {
+          "id": "dabd605d-42d5-4c18-bbf8-856eb175a78c",
+          "name": "Goblet Pause Squat (3 Seconds)",
+          "score": 6.5
+        },
+        {
+          "id": "49bc7005-5179-4d96-be77-ac790cf00759",
+          "name": "Landmine T Bar Row",
+          "score": 5
         },
         {
           "id": "57c24380-6ee2-4242-84b5-0cf299ae8369",
           "name": "Landmine Shoulder Press",
-          "score": 5.75
-        },
-        {
-          "id": "4faeab78-16bd-4d71-b935-226bc691531d",
-          "name": "Hollow Body Dumbbell Press",
-          "score": 5.75
-        },
-        {
-          "id": "27bddaac-3ee7-4767-95a9-fbda6f40ff84",
-          "name": "Bent-Over Single Arm Kettlebell Row (Gorilla Row)",
-          "score": 5.75
-        },
-        {
-          "id": "cf620cdf-70a6-4999-adab-4993b9408c2b",
-          "name": "Australian Pull-Up",
-          "score": 5.75
+          "score": 5
         }
       ]
     },
@@ -49,19 +49,19 @@
       "count": 8,
       "exercises": [
         {
-          "id": "8442a047-e5a7-49d7-a40e-fce4812b40ce",
-          "name": "Single-Leg Glute Bridge with Band",
-          "score": 8.75
-        },
-        {
-          "id": "53141345-2351-436a-9b1c-21bc273ba554",
-          "name": "Spanish Lunge",
+          "id": "5a75f68d-4d30-4211-a98c-a74c71f70f8d",
+          "name": "Glute Bridge Thrust with Dumbbell",
           "score": 8
         },
         {
-          "id": "d64ae36f-de53-492e-8e0e-71c9629f93ed",
-          "name": "Alternating Incline Dumbbell Chest Press",
-          "score": 5.75
+          "id": "698adb88-ad38-4e98-9735-489f5b7d0c45",
+          "name": "Curtsy Lunge",
+          "score": 8
+        },
+        {
+          "id": "8442a047-e5a7-49d7-a40e-fce4812b40ce",
+          "name": "Single-Leg Glute Bridge with Band",
+          "score": 8
         }
       ]
     },
@@ -71,16 +71,16 @@
         {
           "id": "5a75f68d-4d30-4211-a98c-a74c71f70f8d",
           "name": "Glute Bridge Thrust with Dumbbell",
-          "score": 8.75
+          "score": 8
         },
         {
-          "id": "617f0ccf-e9ec-494a-9608-1a3402a57cab",
-          "name": "Band Pull-Apart",
+          "id": "df27f104-414a-4e16-a392-45a1b9254e58",
+          "name": "Monster Walk (Banded Lateral Walk)",
           "score": 6.5
         },
         {
-          "id": "4e40b3f0-cf13-4998-8ec0-61a9b5dd5239",
-          "name": "Banded Prone Overhead Press",
+          "id": "a5d09b5a-d62f-477b-8b71-216f35a20291",
+          "name": "Wall Squat Hold",
           "score": 6.5
         }
       ]
@@ -89,24 +89,24 @@
       "count": 6,
       "exercises": [
         {
+          "id": "b16c277f-9a95-4d94-a039-88686bcf263d",
+          "name": "Kettlebell Swings",
+          "score": 8
+        },
+        {
+          "id": "e3cd89af-a339-49ec-b5eb-5438d1227a0f",
+          "name": "Suitcase Kettlebell Lunge",
+          "score": 6.5
+        },
+        {
+          "id": "620165b8-278c-48cd-a8a1-9f9aa1f37e80",
+          "name": "Flutter Kicks",
+          "score": 6.5
+        },
+        {
           "id": "ce18afb8-3b1f-4183-9cdc-833da34574b3",
           "name": "Single-Leg Banded Kettlebell Suitcase Hold",
-          "score": 7.25
-        },
-        {
-          "id": "53febb99-c0d1-4fb6-90e8-856dc4a7827b",
-          "name": "Hanging Knee Raise",
-          "score": 7.25
-        },
-        {
-          "id": "c9916c21-2e2f-44d0-9aa3-d94b5e35c65c",
-          "name": "BOSU Bird Dog",
-          "score": 7.25
-        },
-        {
-          "id": "77a15368-7d0a-4abb-ae11-cee40c73889d",
-          "name": "Banded Suitcase Marches",
-          "score": 7.25
+          "score": 6.5
         }
       ]
     }

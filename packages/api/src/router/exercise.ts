@@ -8,6 +8,7 @@ import { filterExercisesFromInput, saveFilterDebugData, enhancedFilterExercisesF
 
 import { protectedProcedure, publicProcedure } from "../trpc";
 import type { SessionUser } from "../types/auth";
+import { ExerciseService } from "../services/exercise-service";
 
 const CreateExerciseSchema = z.object({
   name: z.string().min(1).max(255),
@@ -214,15 +215,10 @@ export const exerciseRouter = {
         // console.log('🔍 Input received:', input);
         // console.log('🔍 User session:', ctx.session?.user);
         
-        // Get businessId from session
+        // Use ExerciseService for validation
         const user = ctx.session?.user as SessionUser;
-        const businessId = user?.businessId;
-        if (!businessId) {
-          throw new TRPCError({
-            code: 'BAD_REQUEST',
-            message: 'User must be associated with a business'
-          });
-        }
+        const exerciseService = new ExerciseService(ctx.db);
+        const businessId = exerciseService.verifyUserHasBusiness(user);
         
         // Keep intensity as-is for scoring system
         // The scoring system expects "low", "medium", "high" not fatigue profile values
@@ -441,15 +437,10 @@ export const exerciseRouter = {
       try {
         const apiStartTime = Date.now();
         
-        // Get user session and businessId
+        // Use ExerciseService for validation
         const sessionUser = ctx.session?.user as SessionUser;
-        const businessId = sessionUser?.businessId;
-        if (!businessId) {
-          throw new TRPCError({
-            code: 'BAD_REQUEST',
-            message: 'User must be associated with a business'
-          });
-        }
+        const exerciseService = new ExerciseService(ctx.db);
+        const businessId = exerciseService.verifyUserHasBusiness(sessionUser);
         
         // Fetch client profile to get strength/skill capacity
         const client = await ctx.db
@@ -471,7 +462,6 @@ export const exerciseRouter = {
         const clientProfile = {
           strengthCapacity: "moderate" as const,
           skillCapacity: "moderate" as const,
-          // TODO: Fetch from client profile when available
         };
         
         // Map session goal to primary goal

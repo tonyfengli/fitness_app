@@ -1,5 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import { eq, and, desc, isNull } from "@acme/db";
+import { eq, and, desc } from "@acme/db";
 import type { Database } from "@acme/db/client";
 import { 
   Workout,
@@ -69,8 +69,7 @@ export class WorkoutService {
     const workout = await this.db.query.Workout.findFirst({
       where: and(
         eq(Workout.id, workoutId),
-        eq(Workout.businessId, businessId),
-        isNull(Workout.deletedAt)
+        eq(Workout.businessId, businessId)
       ),
     });
 
@@ -189,6 +188,63 @@ export class WorkoutService {
    */
   isAssessmentWorkout(workout: { context: string }) {
     return workout.context === 'assessment';
+  }
+
+  /**
+   * Create a workout for a training session
+   */
+  async createWorkoutForSession(params: {
+    trainingSessionId: string;
+    userId: string;
+    businessId: string;
+    createdByTrainerId: string;
+    completedAt: Date;
+    notes?: string;
+    exercises?: Array<{
+      exerciseId: string;
+      orderIndex: number;
+      setsCompleted: number;
+    }>;
+  }) {
+    const { trainingSessionId, userId, businessId, createdByTrainerId, completedAt, notes, exercises } = params;
+
+    return await this.db.transaction(async (tx) => {
+      // Create workout
+      const [workout] = await tx
+        .insert(Workout)
+        .values({
+          trainingSessionId,
+          userId,
+          businessId,
+          createdByTrainerId,
+          completedAt,
+          notes,
+          context: "group", // Group context since it has a training session
+        })
+        .returning();
+        
+      if (!workout) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to create workout',
+        });
+      }
+      
+      // Create workout exercises if provided
+      if (exercises && exercises.length > 0) {
+        await tx.insert(WorkoutExercise).values(
+          exercises.map(ex => ({
+            workoutId: workout.id,
+            exerciseId: ex.exerciseId,
+            orderIndex: ex.orderIndex,
+            setsCompleted: ex.setsCompleted,
+            groupName: "Block A", // Default for now
+          }))
+        );
+      }
+      
+      return workout;
+    });
   }
 
   /**

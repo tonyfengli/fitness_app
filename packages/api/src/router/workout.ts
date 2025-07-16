@@ -22,6 +22,8 @@ import {
   validateExerciseLookup,
   type LLMWorkoutOutput 
 } from "@acme/ai";
+import { WorkoutService } from "../services/workout-service";
+import { requireBusinessContext, verifyClientInBusiness } from "../utils/validation";
 
 export const workoutRouter = {
   // Create a workout for a training session
@@ -39,88 +41,40 @@ export const workoutRouter = {
     }))
     .mutation(async ({ ctx, input }) => {
       const currentUser = ctx.session?.user as SessionUser;
+      const businessId = requireBusinessContext(currentUser);
+      const workoutService = new WorkoutService(ctx.db);
       
-      // Verify the training session exists and belongs to user's business
-      const session = await ctx.db.query.TrainingSession.findFirst({
-        where: and(
-          eq(TrainingSession.id, input.trainingSessionId),
-          eq(TrainingSession.businessId, currentUser.businessId!)
-        ),
-      });
-      
-      if (!session) {
-        throw new TRPCError({
-          code: 'NOT_FOUND',
-          message: 'Training session not found',
-        });
-      }
+      // Verify the training session
+      const session = await workoutService.verifyTrainingSession(
+        input.trainingSessionId,
+        businessId
+      );
       
       // Verify user is registered for this session (unless they're the trainer)
-      if (currentUser.id !== session.trainerId) {
-        const targetUser = input.userId || currentUser.id;
-        const registration = await ctx.db.query.UserTrainingSession.findFirst({
-          where: and(
-            eq(UserTrainingSession.userId, targetUser),
-            eq(UserTrainingSession.trainingSessionId, input.trainingSessionId)
-          ),
-        });
-        
-        if (!registration) {
-          throw new TRPCError({
-            code: 'FORBIDDEN',
-            message: 'User must be registered for the session to log a workout',
-          });
-        }
-      }
-      
-      // Trainers can log workouts for any user in their business
-      // Users can only log their own workouts
       const targetUserId = input.userId || currentUser.id;
-      if (targetUserId !== currentUser.id && currentUser.role !== 'trainer') {
-        throw new TRPCError({
-          code: 'FORBIDDEN',
-          message: 'You can only log your own workouts',
-        });
+      if (currentUser.id !== session.trainerId) {
+        await workoutService.verifyUserRegistration(
+          targetUserId,
+          input.trainingSessionId,
+          session.trainerId
+        );
       }
       
-      // Use transaction to create workout and exercises atomically
-      const result = await ctx.db.transaction(async (tx) => {
-        // Create workout
-        const [workout] = await tx
-          .insert(Workout)
-          .values({
-            trainingSessionId: input.trainingSessionId,
-            userId: targetUserId,
-            businessId: currentUser.businessId!,
-            createdByTrainerId: currentUser.id,
-            completedAt: input.completedAt,
-            notes: input.notes,
-            context: "group", // Group context since it has a training session
-          })
-          .returning();
-          
-        if (!workout) {
-          throw new Error('Failed to create workout');
-        }
-          
-        // Create workout exercises if provided
-        if (input.exercises && input.exercises.length > 0) {
-          await tx
-            .insert(WorkoutExercise)
-            .values(
-              input.exercises.map(ex => ({
-                workoutId: workout.id,
-                exerciseId: ex.exerciseId,
-                orderIndex: ex.orderIndex,
-                setsCompleted: ex.setsCompleted,
-              }))
-            );
-        }
-        
-        return workout;
+      // Verify permission to log workouts
+      workoutService.verifyWorkoutPermission(targetUserId, currentUser);
+      
+      // Create workout using service
+      const workout = await workoutService.createWorkoutForSession({
+        trainingSessionId: input.trainingSessionId,
+        userId: targetUserId,
+        businessId,
+        createdByTrainerId: currentUser.id,
+        completedAt: input.completedAt,
+        notes: input.notes,
+        exercises: input.exercises,
       });
       
-      return result;
+      return workout;
     }),
 
   // Add exercises to an existing workout
@@ -410,33 +364,21 @@ export const workoutRouter = {
     }))
     .mutation(async ({ ctx, input }) => {
       const currentUser = ctx.session?.user as SessionUser;
+      const businessId = requireBusinessContext(currentUser);
       
-      // Verify the training session exists and belongs to user's business
-      const session = await ctx.db.query.TrainingSession.findFirst({
-        where: and(
-          eq(TrainingSession.id, input.trainingSessionId),
-          eq(TrainingSession.businessId, currentUser.businessId!)
-        ),
-      });
+      // Use WorkoutService for session validation
+      const workoutService = new WorkoutService(ctx.db);
+      const session = await workoutService.verifyTrainingSession(
+        input.trainingSessionId,
+        businessId
+      );
       
-      if (!session) {
-        throw new TRPCError({
-          code: 'NOT_FOUND',
-          message: 'Training session not found',
-        });
-      }
-      
-      // Verify client belongs to same business
-      const client = await ctx.db.query.user.findFirst({
-        where: eq(user.id, input.userId),
-      });
-      
-      if (!client || client.businessId !== currentUser.businessId) {
-        throw new TRPCError({
-          code: 'NOT_FOUND',
-          message: 'Client not found in your business',
-        });
-      }
+      // Use validation utility for client verification
+      const client = await verifyClientInBusiness(
+        ctx.db,
+        input.userId,
+        businessId
+      );
       
       // Get all exercises for lookup
       const allExercises = await ctx.db.query.exercises.findMany();
@@ -976,20 +918,12 @@ export const workoutRouter = {
     .mutation(async ({ ctx, input }) => {
       const currentUser = ctx.session?.user as SessionUser;
       
-      // Verify workout exists and user has access
-      const workout = await ctx.db.query.Workout.findFirst({
-        where: and(
-          eq(Workout.id, input.workoutId),
-          eq(Workout.businessId, currentUser.businessId!)
-        ),
-      });
-      
-      if (!workout) {
-        throw new TRPCError({
-          code: 'NOT_FOUND',
-          message: 'Workout not found',
-        });
-      }
+      // Use WorkoutService for validation
+      const workoutService = new WorkoutService(ctx.db);
+      const workout = await workoutService.verifyWorkoutAccess(
+        input.workoutId, 
+        currentUser.businessId!
+      );
       
       // Verify the workout exercise exists
       const workoutExercise = await ctx.db.query.WorkoutExercise.findFirst({
@@ -1046,20 +980,12 @@ export const workoutRouter = {
     .mutation(async ({ ctx, input }) => {
       const currentUser = ctx.session?.user as SessionUser;
       
-      // Verify workout exists and user has access
-      const workout = await ctx.db.query.Workout.findFirst({
-        where: and(
-          eq(Workout.id, input.workoutId),
-          eq(Workout.businessId, currentUser.businessId!)
-        ),
-      });
-      
-      if (!workout) {
-        throw new TRPCError({
-          code: 'NOT_FOUND',
-          message: 'Workout not found',
-        });
-      }
+      // Use WorkoutService for validation
+      const workoutService = new WorkoutService(ctx.db);
+      const workout = await workoutService.verifyWorkoutAccess(
+        input.workoutId,
+        currentUser.businessId!
+      );
       
       // Verify exercise exists and is available to the business
       const exercise = await ctx.db
