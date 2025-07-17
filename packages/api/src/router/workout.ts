@@ -464,103 +464,21 @@ export const workoutRouter = {
         currentUser.businessId
       );
       
-      // Use the LLM output passed from frontend
-      const llmOutput = input.exercises;
+      // Use LLMWorkoutService to save the workout
+      const llmWorkoutService = new LLMWorkoutService(ctx.db);
       
-      // Ensure the LLM output has the expected structure
-      if (!llmOutput || typeof llmOutput !== 'object') {
-        throw new TRPCError({
-          code: 'BAD_REQUEST',
-          message: 'Invalid workout data provided',
-        });
-      }
-      
-      // Calculate total planned sets from LLM output
-      let totalSets = 0;
-      const blockKeys = Object.keys(llmOutput).filter(key => key.startsWith('block'));
-      for (const key of blockKeys) {
-        const exercises = llmOutput[key];
-        if (Array.isArray(exercises)) {
-          exercises.forEach(ex => {
-            totalSets += ex.sets || 0;
-          });
-        }
-      }
-      
-      // Use ExerciseService to get business exercises and create name mapping
-      const exerciseService = new ExerciseService(ctx.db);
-      const businessExercises = await exerciseService.getBusinessExercises(currentUser.businessId);
-      const exerciseByName = exerciseService.createExerciseNameMap(businessExercises);
-      
-      // Save workout without training session
-      const result = await ctx.db.transaction(async (tx) => {
-        const [workout] = await tx
-          .insert(Workout)
-          .values({
-            userId: input.userId,
-            businessId: currentUser.businessId,
-            createdByTrainerId: currentUser.id,
-            // completedAt should be null for new workouts
-            notes: input.workoutDescription || `Individual workout for ${client.name || client.email}`,
-            workoutType: input.templateType,
-            totalPlannedSets: totalSets,
-            llmOutput: llmOutput as any, // Store the actual LLM output
-            templateConfig: {
-              blocks: blockKeys.map(k => k.replace('block', '').toUpperCase()),
-              format: "rep-based"
-            },
-            context: "individual",
-            // No trainingSessionId for individual workouts
-          })
-          .returning();
-          
-        if (!workout) {
-          throw new Error('Failed to create workout');
-        }
-        
-        // Create workout exercises from LLM output
-        const exerciseData: any[] = [];
-        let orderIndex = 1;
-        
-        // Process each block
-        for (const key of blockKeys) {
-          const blockExercises = llmOutput[key];
-          if (Array.isArray(blockExercises)) {
-            for (const ex of blockExercises) {
-              // Try to match exercise name to ID
-              const exerciseName = ex.exercise?.toLowerCase() || '';
-              const matchedExercise = exerciseByName.get(exerciseName);
-              
-              if (matchedExercise) {
-                exerciseData.push({
-                  workoutId: workout.id,
-                  exerciseId: matchedExercise.id,
-                  orderIndex: orderIndex++,
-                  setsCompleted: ex.sets || 3,
-                  groupName: `Block ${key.replace('block', '').toUpperCase()}`,
-                  notes: [
-                    ex.reps && `Reps: ${ex.reps}`,
-                    ex.rest && `Rest: ${ex.rest}`,
-                    ex.notes
-                  ].filter(Boolean).join(' | ') || undefined,
-                });
-              } else {
-                // Exercise not found - skip silently in production
-                if (process.env.NODE_ENV !== 'production') {
-                  console.warn(`Could not find exercise match for: ${ex.exercise}`);
-                }
-              }
-            }
-          }
-        }
-        
-        // Insert workout exercises
-        if (exerciseData.length > 0) {
-          await tx.insert(WorkoutExercise).values(exerciseData);
-        }
-        
-        return workout;
-      });
+      // Use the new individual workout method
+      const result = await llmWorkoutService.saveIndividualWorkout({
+        userId: input.userId,
+        businessId: currentUser.businessId,
+        createdByTrainerId: currentUser.id,
+        llmOutput: input.exercises as LLMWorkoutOutput,
+        workoutType: input.templateType,
+        workoutName: input.workoutName,
+        workoutDescription: input.workoutDescription || `Individual workout for ${client.name || client.email}`,
+        templateType: input.templateType,
+        context: "individual",
+      }, client.name);
       
       return result;
     }),

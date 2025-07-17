@@ -47,7 +47,78 @@ export class LLMWorkoutService {
    */
   async createExerciseLookup(): Promise<Map<string, any>> {
     const allExercises = await this.db.query.exercises.findMany();
+    if (!allExercises) {
+      logger.warn('No exercises found in database');
+      return new Map();
+    }
     return new Map(allExercises.map(ex => [ex.id, ex]));
+  }
+
+  /**
+   * Save individual workout (no training session)
+   */
+  async saveIndividualWorkout(
+    input: Omit<SaveWorkoutInput, 'trainingSessionId'> & { 
+      templateType: string;
+      context?: string;
+    },
+    clientName?: string
+  ) {
+    // Create exercise lookup
+    const exerciseLookup = await this.createExerciseLookup();
+    
+    // Validate exercises in LLM output
+    this.validateLLMOutput(input.llmOutput, exerciseLookup);
+    
+    // Transform LLM output to database format
+    const transformed = await this.transformOutput(
+      input.llmOutput,
+      exerciseLookup,
+      input.templateType,
+      input.workoutName,
+      input.workoutDescription,
+      clientName
+    );
+    
+    // Use transaction to create workout and exercises atomically
+    const result = await this.db.transaction(async (tx) => {
+      // Create workout without training session
+      const [workout] = await tx
+        .insert(Workout)
+        .values({
+          userId: input.userId,
+          businessId: input.businessId,
+          createdByTrainerId: input.createdByTrainerId,
+          notes: transformed.workout.description,
+          workoutType: transformed.workout.workoutType,
+          totalPlannedSets: transformed.workout.totalPlannedSets,
+          llmOutput: transformed.workout.llmOutput,
+          templateConfig: transformed.workout.templateConfig,
+          context: input.context || "individual",
+          // No trainingSessionId for individual workouts
+        })
+        .returning();
+        
+      if (!workout) {
+        throw new Error('Failed to create workout');
+      }
+      
+      // Create workout exercises
+      if (transformed.exercises.length > 0) {
+        const exerciseData = this.createExerciseRecords(
+          workout.id, 
+          transformed.exercises
+        );
+        
+        if (exerciseData.length > 0) {
+          await tx.insert(WorkoutExercise).values(exerciseData);
+        }
+      }
+      
+      return workout;
+    });
+    
+    return result;
   }
 
   /**

@@ -66,12 +66,17 @@ export async function transformLLMOutputToDB(
 
     // Process each exercise in the block
     for (const exercise of blockExercises) {
+      // Skip exercises without a name
+      if (!exercise.exercise || exercise.exercise.trim() === '') {
+        continue;
+      }
+      
       const exerciseEntity = findExerciseByName(exercise.exercise, exerciseLookup);
       
       exercises.push({
         exerciseId: exerciseEntity?.id || 'unknown',
         exerciseName: exercise.exercise,
-        sets: exercise.sets,
+        sets: exercise.sets || 0,
         reps: exercise.reps,
         restPeriod: exercise.rest,
         notes: exercise.notes,
@@ -79,7 +84,7 @@ export async function transformLLMOutputToDB(
         groupName
       });
 
-      totalSets += exercise.sets;
+      totalSets += exercise.sets || 0;
     }
   }
 
@@ -204,6 +209,12 @@ export function validateExerciseLookup(
     if (!Array.isArray(blockExercises)) continue;
 
     for (const exercise of blockExercises) {
+      // Skip exercises without a name
+      if (!exercise.exercise || exercise.exercise.trim() === '') {
+        warnings.push(`Exercise in ${blockKey} has no name`);
+        continue;
+      }
+      
       const found = findExerciseByName(exercise.exercise, exerciseLookup);
       
       if (!found) {

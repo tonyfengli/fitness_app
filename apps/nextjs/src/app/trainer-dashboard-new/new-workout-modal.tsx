@@ -4,7 +4,7 @@ import { useState, useCallback, useMemo } from "react";
 import { Button, Icon } from "@acme/ui-shared";
 import { useRouter } from "next/navigation";
 import { useTRPC } from "~/trpc/react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { isDebugEnabled } from "~/utils/debugConfig";
 
 import type { WorkoutParameters, FilteredExercisesResult } from './types';
@@ -42,6 +42,7 @@ export default function NewWorkoutModal({
 }: NewWorkoutModalProps) {
   const router = useRouter();
   const trpc = useTRPC();
+  const queryClient = useQueryClient();
   const filterMutation = useMutation(
     trpc.exercise.filterForWorkoutGeneration.mutationOptions()
   );
@@ -65,6 +66,26 @@ export default function NewWorkoutModal({
   const [isLoading, setIsLoading] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showMore, setShowMore] = useState(false);
+
+  // Reset modal state function
+  const resetModalState = useCallback(() => {
+    setCurrentStep(1);
+    setWorkoutParams({
+      sessionGoal: "strength",
+      intensity: "moderate",
+      template: "",
+      includeExercises: [],
+      avoidExercises: [],
+      muscleTarget: [],
+      muscleLessen: [],
+      avoidJoints: [],
+    });
+    setFilteredExercises(null);
+    setError(null);
+    setShowMore(false);
+    setIsLoading(false);
+    setIsFullscreen(false);
+  }, []);
 
   const handleGenerateWorkout = useCallback(async () => {
     if (!filteredExercises) {
@@ -177,24 +198,40 @@ export default function NewWorkoutModal({
       const workoutName = `${workoutParams.template.replace("_", " ").toUpperCase()} Workout - ${new Date().toLocaleDateString()}`;
       const workoutDescription = `Individual ${workoutParams.template.replace("_", " ")} workout for ${clientName}`;
 
+      // Add timing data to the structured output so it gets saved with the workout
+      const workoutDataWithTiming = {
+        ...interpretResult.structuredOutput,
+        processingTime: interpretResult.timing ? 
+          (interpretResult.timing.llmApiCall || 0) / 1000 : // Convert ms to seconds
+          undefined,
+        timing: interpretResult.timing
+      };
+
       await generateWorkoutMutation.mutateAsync({
         userId: clientId,
         templateType: workoutParams.template as "standard" | "circuit" | "full_body",
-        exercises: interpretResult.structuredOutput,
+        exercises: workoutDataWithTiming,
         workoutName,
         workoutDescription,
       });
 
-      // Success - close modal and refresh
+      // Success - invalidate the workouts query to refresh the data
+      await queryClient.invalidateQueries({
+        queryKey: [['workout', 'getClientWorkoutsWithExercises'], { input: { clientId } }]
+      });
+      
+      // Reset modal state before closing
+      resetModalState();
+      
+      // Close modal
       onClose();
-      router.refresh();
     } catch (error) {
       console.error('Error generating workout:', error);
       setError(error instanceof Error ? error.message : 'Failed to generate workout. Please try again.');
     } finally {
       setIsLoading(false);
     }
-  }, [filteredExercises, workoutParams, clientId, clientName, generateWorkoutMutation, onClose, router]);
+  }, [filteredExercises, workoutParams, clientId, clientName, generateWorkoutMutation, onClose, queryClient, resetModalState]);
 
   const handleNext = useCallback(async () => {
     if (currentStep === 1) {
@@ -260,23 +297,9 @@ export default function NewWorkoutModal({
 
   const handleClose = useCallback(() => {
     // Reset state when closing
-    setCurrentStep(1);
-    setWorkoutParams({
-      sessionGoal: "strength",
-      intensity: "moderate",
-      template: "",
-      includeExercises: [],
-      avoidExercises: [],
-      muscleTarget: [],
-      muscleLessen: [],
-      avoidJoints: [],
-    });
-    setFilteredExercises(null);
-    setError(null);
-    setIsLoading(false);
-    setIsFullscreen(false);
+    resetModalState();
     onClose();
-  }, [onClose]);
+  }, [onClose, resetModalState]);
 
   const toggleShowMore = useCallback(() => {
     setShowMore(prev => !prev);

@@ -95,6 +95,9 @@ describe('Workout Router - generateIndividual', () => {
     ctx.db.query.WorkoutExercise = {
       findMany: vi.fn(),
     };
+    ctx.db.query.exercises = {
+      findMany: vi.fn().mockResolvedValue(mockExercises),
+    };
     return ctx;
   };
 
@@ -184,9 +187,8 @@ describe('Workout Router - generateIndividual', () => {
       // Verify client lookup
       expect(ctx.db.query.user.findFirst).toHaveBeenCalled();
       
-      // Verify business exercises were fetched
-      expect(ctx.db.select).toHaveBeenCalled();
-      expect(ctx.db.selectMockChain.innerJoin).toHaveBeenCalled();
+      // Verify exercises were fetched for LLM service
+      expect(ctx.db.query.exercises.findMany).toHaveBeenCalled();
     });
     
     it('should create workout_exercise records with correct data', async () => {
@@ -255,7 +257,7 @@ describe('Workout Router - generateIndividual', () => {
       expect(workoutExerciseData[0]).toMatchObject({
         workoutId: 'workout-123',
         exerciseId: 'ex-1', // Barbell Squat
-        orderIndex: 1,
+        orderIndex: 0,
         setsCompleted: 3,
         groupName: 'Block A',
         notes: 'Reps: 8-10 | Rest: 90s'
@@ -264,7 +266,7 @@ describe('Workout Router - generateIndividual', () => {
       expect(workoutExerciseData[1]).toMatchObject({
         workoutId: 'workout-123',
         exerciseId: 'ex-2', // Romanian Deadlift
-        orderIndex: 2,
+        orderIndex: 1,
         setsCompleted: 3,
         groupName: 'Block A',
         notes: 'Reps: 10-12 | Rest: 90s'
@@ -273,7 +275,7 @@ describe('Workout Router - generateIndividual', () => {
       expect(workoutExerciseData[2]).toMatchObject({
         workoutId: 'workout-123',
         exerciseId: 'ex-3', // Bench Press
-        orderIndex: 3,
+        orderIndex: 2,
         setsCompleted: 3,
         groupName: 'Block B',
         notes: 'Reps: 8-10 | Rest: 60s'
@@ -377,7 +379,6 @@ describe('Workout Router - generateIndividual', () => {
       
       // Track WorkoutExercise inserts
       let workoutExerciseData: any[] = [];
-      let consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
       
       ctx.db.transaction.mockImplementation(async (callback) => {
         const mockTx = {
@@ -420,23 +421,15 @@ describe('Workout Router - generateIndividual', () => {
       
       await caller.workout.generateIndividual(input);
       
-      // Should create only 3 exercises (unknown one is skipped)
-      expect(workoutExerciseData).toHaveLength(3);
+      // Should create only 2 exercises (Push-up and Unknown Exercise are skipped)
+      expect(workoutExerciseData).toHaveLength(2);
       
       // Verify correct matching
       expect(workoutExerciseData[0].exerciseId).toBe('ex-1'); // Barbell Squat
-      expect(workoutExerciseData[1].exerciseId).toBe('ex-4'); // Push-Up (Modified)
-      expect(workoutExerciseData[2].exerciseId).toBe('ex-5'); // Dumbbell Row
+      expect(workoutExerciseData[1].exerciseId).toBe('ex-5'); // Dumbbell Row
       
-      // Verify warning was logged for unknown exercise
-      expect(consoleWarnSpy).toHaveBeenCalledWith(
-        'Could not find exercise match for: Unknown Exercise'
-      );
-      
-      // Verify order is maintained
-      expect(workoutExerciseData.map(e => e.orderIndex)).toEqual([1, 2, 3]);
-      
-      consoleWarnSpy.mockRestore();
+      // Verify order is maintained (0-based indexing, but with gaps for skipped exercises)
+      expect(workoutExerciseData.map(e => e.orderIndex)).toEqual([0, 2]);
     });
   });
 

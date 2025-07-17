@@ -67,7 +67,14 @@ function WorkoutSection({
             onClick={onLlmOutputToggle}
             className="w-full flex justify-between items-center p-6 text-left hover:bg-gray-50 transition-colors duration-200"
           >
-            <span className="text-lg font-semibold text-gray-700">LLM Output</span>
+            <div className="flex items-center gap-4">
+              <span className="text-lg font-semibold text-gray-700">LLM Output</span>
+              {llmOutput?.processingTime && (
+                <span className="text-sm text-gray-500">
+                  Generated in {llmOutput.processingTime.toFixed(2)}s
+                </span>
+              )}
+            </div>
             <Icon 
               name={llmOutputExpanded ? "expand_less" : "expand_more"} 
               className="text-gray-400"
@@ -78,6 +85,24 @@ function WorkoutSection({
               <div className="p-4 bg-gray-50 rounded-xl">
                 {llmOutput ? (
                   <div className="space-y-4">
+                    {/* Show timing breakdown if available */}
+                    {llmOutput.timing && (
+                      <div className="mb-4">
+                        <details className="text-sm text-gray-600">
+                          <summary className="cursor-pointer hover:text-gray-800 font-medium">
+                            Show timing breakdown
+                          </summary>
+                          <div className="mt-2 space-y-1 text-sm">
+                            <div>Exercise formatting: {(llmOutput.timing.exerciseFormatting || 0).toFixed(0)}ms</div>
+                            <div>Set calculation: {(llmOutput.timing.setCountCalculation || 0).toFixed(0)}ms</div>
+                            <div>Prompt building: {(llmOutput.timing.promptBuilding || 0).toFixed(0)}ms</div>
+                            <div className="font-semibold">LLM API call: {((llmOutput.timing.llmApiCall || 0) / 1000).toFixed(2)}s</div>
+                            <div>Response parsing: {(llmOutput.timing.responseParsing || 0).toFixed(0)}ms</div>
+                          </div>
+                        </details>
+                      </div>
+                    )}
+                    
                     {/* Show reasoning if available */}
                     {llmOutput.reasoning && (
                       <div>
@@ -91,7 +116,7 @@ function WorkoutSection({
                       <h4 className="font-semibold text-gray-700 mb-2">Exercise Details</h4>
                       <div className="space-y-3">
                         {Object.entries(llmOutput).map(([key, value]) => {
-                          if (key === 'reasoning' || !Array.isArray(value)) return null;
+                          if (key === 'reasoning' || key === 'timing' || key === 'processingTime' || !Array.isArray(value)) return null;
                           
                           const blockName = key.replace('block', 'Block ').toUpperCase();
                           return (
