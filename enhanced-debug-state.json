@@ -1,5 +1,5 @@
 {
-  "timestamp": "2025-07-17T00:17:14.382Z",
+  "timestamp": "2025-07-17T00:31:47.941Z",
   "filters": {
     "clientName": "Curtis Yu",
     "strengthCapacity": "moderate",
@@ -51,13 +51,13 @@
       "count": 8,
       "exercises": [
         {
-          "id": "f3887428-47ba-4d81-8916-acc4c7c05fa9",
-          "name": "Offset Lateral Lunge",
+          "id": "8442a047-e5a7-49d7-a40e-fce4812b40ce",
+          "name": "Single-Leg Glute Bridge with Band",
           "score": 5
         },
         {
-          "id": "698adb88-ad38-4e98-9735-489f5b7d0c45",
-          "name": "Curtsy Lunge",
+          "id": "1f0a2bb1-fcfa-4a87-9a21-6333d060c2ca",
+          "name": "Hollow Body One-Arm Press",
           "score": 5
         },
         {
@@ -71,11 +71,6 @@
       "count": 8,
       "exercises": [
         {
-          "id": "617f0ccf-e9ec-494a-9608-1a3402a57cab",
-          "name": "Band Pull-Apart",
-          "score": 5
-        },
-        {
           "id": "aa66d8b3-907a-42ec-ac9b-bbaa347a88b8",
           "name": "Y/W Raises",
           "score": 5
@@ -83,6 +78,11 @@
         {
           "id": "ebfd61ba-7bbc-470d-8b9b-c5bc66da2430",
           "name": "Dumbbell Pullover",
+          "score": 5
+        },
+        {
+          "id": "1503a525-aa1c-483b-a121-183d00397919",
+          "name": "Lateral Shoulder Raise",
           "score": 5
         }
       ]
@@ -101,13 +101,13 @@
           "score": 5
         },
         {
-          "id": "dd47414b-bca2-4fa8-a200-c159632e31d6",
-          "name": "Box Pike Walkout",
+          "id": "9d50d2f2-0eda-48c4-9f7d-7a1fcff879b1",
+          "name": "Dumbbell Thruster",
           "score": 5
         },
         {
-          "id": "9d50d2f2-0eda-48c4-9f7d-7a1fcff879b1",
-          "name": "Dumbbell Thruster",
+          "id": "8596d22e-6349-45e6-83f1-835e3360771f",
+          "name": "Plank",
           "score": 5
         }
       ]
@@ -1018,7 +1018,7 @@
   "debugLog": [
     {
       "step": 1,
-      "timestamp": "2025-07-17T00:17:14.373Z",
+      "timestamp": "2025-07-17T00:31:47.931Z",
       "phase": "filtering",
       "action": "Starting enhanced filtering",
       "details": {
@@ -1037,7 +1037,7 @@
     },
     {
       "step": 2,
-      "timestamp": "2025-07-17T00:17:14.374Z",
+      "timestamp": "2025-07-17T00:31:47.931Z",
       "phase": "filtering",
       "action": "Filtering by strength: moderate",
       "details": {
@@ -1052,7 +1052,7 @@
     },
     {
       "step": 3,
-      "timestamp": "2025-07-17T00:17:14.374Z",
+      "timestamp": "2025-07-17T00:31:47.931Z",
       "phase": "filtering",
       "action": "Strength filtering complete",
       "details": {
@@ -1060,11 +1060,11 @@
         "remaining": 120
       },
       "exercisesAffected": 10,
-      "performanceMs": 0.2863130000041565
+      "performanceMs": 0.251897000009194
     },
     {
       "step": 4,
-      "timestamp": "2025-07-17T00:17:14.374Z",
+      "timestamp": "2025-07-17T00:31:47.931Z",
       "phase": "filtering",
       "action": "Filtering by skill: moderate",
       "details": {
@@ -1079,7 +1079,7 @@
     },
     {
       "step": 5,
-      "timestamp": "2025-07-17T00:17:14.374Z",
+      "timestamp": "2025-07-17T00:31:47.931Z",
       "phase": "filtering",
       "action": "Skill filtering complete",
       "details": {
@@ -1087,11 +1087,11 @@
         "remaining": 117
       },
       "exercisesAffected": 3,
-      "performanceMs": 0.09650499999406748
+      "performanceMs": 0.10595400002785027
     },
     {
       "step": 6,
-      "timestamp": "2025-07-17T00:17:14.374Z",
+      "timestamp": "2025-07-17T00:31:47.931Z",
       "phase": "filtering",
       "action": "Combined included and filtered exercises",
       "details": {
@@ -1101,7 +1101,7 @@
     },
     {
       "step": 7,
-      "timestamp": "2025-07-17T00:17:14.374Z",
+      "timestamp": "2025-07-17T00:31:47.931Z",
       "phase": "filtering",
       "action": "Filtering by exclude list",
       "details": {
@@ -1114,7 +1114,7 @@
     },
     {
       "step": 8,
-      "timestamp": "2025-07-17T00:17:14.374Z",
+      "timestamp": "2025-07-17T00:31:47.931Z",
       "phase": "filtering",
       "action": "Exclude filtering complete",
       "details": {
@@ -1122,11 +1122,11 @@
         "remaining": 117
       },
       "exercisesAffected": 0,
-      "performanceMs": 0.06695600000966806
+      "performanceMs": 0.0691410000436008
     },
     {
       "step": 9,
-      "timestamp": "2025-07-17T00:17:14.374Z",
+      "timestamp": "2025-07-17T00:31:47.932Z",
       "phase": "filtering",
       "action": "Filtering complete",
       "details": {

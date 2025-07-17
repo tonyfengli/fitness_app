@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { 
   SidebarLayout, 
   ClientSidebar, 
@@ -36,6 +36,10 @@ interface WorkoutSectionProps {
   llmOutputExpanded: boolean;
   onFeedbackToggle: () => void;
   onLlmOutputToggle: () => void;
+  onDeleteWorkout: (workoutId: string) => void;
+  onDeleteBlock: (workoutId: string, blockName: string) => void;
+  onDeleteExercise: (workoutId: string, exerciseId: string) => void;
+  isDeleting: boolean;
   llmOutput?: any;
 }
 
@@ -48,6 +52,10 @@ function WorkoutSection({
   llmOutputExpanded, 
   onFeedbackToggle, 
   onLlmOutputToggle,
+  onDeleteWorkout,
+  onDeleteBlock,
+  onDeleteExercise,
+  isDeleting,
   llmOutput 
 }: WorkoutSectionProps) {
   return (
@@ -59,6 +67,10 @@ function WorkoutSection({
           exerciseBlocks={exerciseBlocks}
           onAddExercise={() => console.log("Add exercise")}
           onEditExercise={(id) => console.log("Edit exercise", id)}
+          onDeleteExercise={(exerciseId, blockName) => onDeleteExercise(workoutId, exerciseId)}
+          onDeleteWorkout={() => onDeleteWorkout(workoutId)}
+          onDeleteBlock={(blockName) => onDeleteBlock(workoutId, blockName)}
+          isDeleting={isDeleting}
           className="rounded-2xl shadow-none"
         />
         {/* LLM Output Section */}
@@ -174,6 +186,7 @@ function WorkoutSection({
 export default function TrainerDashboardNew() {
   const [selectedClientId, setSelectedClientId] = useState<string>("");
   const [isNewWorkoutModalOpen, setIsNewWorkoutModalOpen] = useState(false);
+  const [deletingWorkoutId, setDeletingWorkoutId] = useState<string | null>(null);
   
   // Combined state for expanded sections
   interface ExpandedState {
@@ -199,6 +212,7 @@ export default function TrainerDashboardNew() {
   
   const trpc = useTRPC();
   const router = useRouter();
+  const queryClient = useQueryClient();
 
   // Fetch clients from the API
   const { data: clientsData, isLoading, error } = useQuery(
@@ -232,6 +246,84 @@ export default function TrainerDashboardNew() {
     }),
     enabled: !!selectedClientId, // Only fetch when a client is selected
   });
+
+  // Delete workout mutation
+  const deleteWorkoutMutation = useMutation(
+    trpc.workout.deleteWorkout.mutationOptions()
+  );
+  
+  // Delete block mutation
+  const deleteBlockMutation = useMutation(
+    trpc.workout.deleteBlock.mutationOptions()
+  );
+  
+  // Delete exercise mutation
+  const deleteExerciseMutation = useMutation(
+    trpc.workout.deleteExercise.mutationOptions()
+  );
+
+  const handleDeleteWorkout = async (workoutId: string) => {
+    if (!confirm('Are you sure you want to delete this workout? This action cannot be undone.')) {
+      return;
+    }
+
+    setDeletingWorkoutId(workoutId);
+    try {
+      await deleteWorkoutMutation.mutateAsync({ workoutId });
+      
+      // Refresh the workouts list
+      await queryClient.invalidateQueries({
+        queryKey: [['workout', 'getClientWorkoutsWithExercises'], { input: { clientId: selectedClientId } }]
+      });
+    } catch (error) {
+      console.error('Failed to delete workout:', error);
+      alert('Failed to delete workout. Please try again.');
+    } finally {
+      setDeletingWorkoutId(null);
+    }
+  };
+  
+  const handleDeleteBlock = async (workoutId: string, blockName: string) => {
+    if (!confirm(`Are you sure you want to delete ${blockName}? This will remove all exercises in this block.`)) {
+      return;
+    }
+
+    try {
+      await deleteBlockMutation.mutateAsync({ 
+        workoutId, 
+        groupName: blockName 
+      });
+      
+      // Refresh the workouts list
+      await queryClient.invalidateQueries({
+        queryKey: [['workout', 'getClientWorkoutsWithExercises'], { input: { clientId: selectedClientId } }]
+      });
+    } catch (error) {
+      console.error('Failed to delete block:', error);
+      alert('Failed to delete block. Please try again.');
+    }
+  };
+
+  const handleDeleteExercise = async (workoutId: string, exerciseId: string) => {
+    if (!confirm('Are you sure you want to delete this exercise?')) {
+      return;
+    }
+
+    try {
+      await deleteExerciseMutation.mutateAsync({ 
+        workoutId, 
+        workoutExerciseId: exerciseId // exerciseId is actually the workoutExerciseId based on our data structure
+      });
+      
+      // Refresh the workouts list
+      await queryClient.invalidateQueries({
+        queryKey: [['workout', 'getClientWorkoutsWithExercises'], { input: { clientId: selectedClientId } }]
+      });
+    } catch (error) {
+      console.error('Failed to delete exercise:', error);
+      alert('Failed to delete exercise. Please try again.');
+    }
+  };
 
   if (error) {
     return (
@@ -327,6 +419,10 @@ export default function TrainerDashboardNew() {
                           llmOutputExpanded={expandedState.llmOutput[workout.id] || false}
                           onFeedbackToggle={() => toggleExpanded('feedback', workout.id)}
                           onLlmOutputToggle={() => toggleExpanded('llmOutput', workout.id)}
+                          onDeleteWorkout={handleDeleteWorkout}
+                          onDeleteBlock={handleDeleteBlock}
+                          onDeleteExercise={handleDeleteExercise}
+                          isDeleting={deletingWorkoutId === workout.id}
                           llmOutput={workout.llmOutput}
                         />
                       );

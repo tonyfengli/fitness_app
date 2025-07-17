@@ -81,6 +81,7 @@ export async function getWorkoutsWithExercisesOptimized(
   const workoutIds = workouts.map(w => w.id);
   const allExercises = await db
     .select({
+      workoutExerciseId: WorkoutExercise.id,
       workoutId: WorkoutExercise.workoutId,
       orderIndex: WorkoutExercise.orderIndex,
       setsCompleted: WorkoutExercise.setsCompleted,
@@ -100,6 +101,7 @@ export async function getWorkoutsWithExercisesOptimized(
       acc[row.workoutId] = [];
     }
     acc[row.workoutId].push({
+      workoutExerciseId: row.workoutExerciseId,
       orderIndex: row.orderIndex,
       setsCompleted: row.setsCompleted,
       groupName: row.groupName,
@@ -111,6 +113,7 @@ export async function getWorkoutsWithExercisesOptimized(
     });
     return acc;
   }, {} as Record<string, Array<{
+    workoutExerciseId: string;
     orderIndex: number;
     setsCompleted: number;
     groupName: string | null;
@@ -125,26 +128,56 @@ export async function getWorkoutsWithExercisesOptimized(
   return workouts.map(workout => {
     const workoutExercises = exercisesByWorkout[workout.id] || [];
     
-    // Group exercises by block
+    // Initialize blocks based on workout type and llmOutput
+    const initialBlocks: Record<string, Array<{ id: string; exerciseId: string; name: string; sets: number }>> = {};
+    
+    // Determine expected blocks based on workout type or llmOutput
+    if (workout.llmOutput && typeof workout.llmOutput === 'object') {
+      // Extract block names from llmOutput (e.g., blockA, blockB, blockC, round1, round2, etc.)
+      Object.keys(workout.llmOutput).forEach(key => {
+        if (key.startsWith('block') || key.startsWith('round')) {
+          // Convert blockA -> Block A, round1 -> Round 1
+          const blockName = key.startsWith('block') 
+            ? `Block ${key.replace('block', '').toUpperCase()}`
+            : `Round ${key.replace('round', '')}`;
+          initialBlocks[blockName] = [];
+        }
+      });
+    } else if (workout.workoutType === 'circuit') {
+      // Default circuit blocks
+      initialBlocks['Round 1'] = [];
+      initialBlocks['Round 2'] = [];
+      initialBlocks['Round 3'] = [];
+    } else {
+      // Default standard/full_body blocks
+      initialBlocks['Block A'] = [];
+      initialBlocks['Block B'] = [];
+      initialBlocks['Block C'] = [];
+    }
+    
+    // Group actual exercises by block
     const exerciseBlocks = workoutExercises.reduce((acc, we) => {
       const blockName = we.groupName || 'Block A';
       if (!acc[blockName]) {
         acc[blockName] = [];
       }
       acc[blockName].push({
-        id: we.exercise.id,
+        id: we.workoutExerciseId, // Use workoutExerciseId as the primary ID for UI operations
+        exerciseId: we.exercise.id, // Keep the actual exercise ID for reference
         name: we.exercise.name,
         sets: we.setsCompleted,
       });
       return acc;
-    }, {} as Record<string, Array<{ id: string; name: string; sets: number }>>);
+    }, initialBlocks);
 
     return {
       ...workout,
-      exerciseBlocks: Object.entries(exerciseBlocks).map(([blockName, exercises]) => ({
-        blockName,
-        exercises,
-      })),
+      exerciseBlocks: Object.entries(exerciseBlocks)
+        .sort((a, b) => a[0].localeCompare(b[0])) // Sort blocks alphabetically
+        .map(([blockName, exercises]) => ({
+          blockName,
+          exercises,
+        })),
     };
   });
 }

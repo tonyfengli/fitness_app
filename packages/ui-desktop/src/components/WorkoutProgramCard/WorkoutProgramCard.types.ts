@@ -1,7 +1,8 @@
 import type { FeatureProps } from "@acme/ui-shared";
 
 export interface Exercise {
-  id: string;
+  id: string; // This is now the workoutExerciseId for deletion operations
+  exerciseId?: string; // The actual exercise ID (optional for backward compatibility)
   name: string;
   sets: number;
   reps?: string;
@@ -19,5 +20,9 @@ export interface WorkoutProgramCardProps extends FeatureProps {
   exerciseBlocks?: ExerciseBlock[];
   onAddExercise?: () => void;
   onEditExercise?: (exerciseId: string) => void;
+  onDeleteExercise?: (exerciseId: string, blockName: string) => void;
+  onDeleteWorkout?: () => void;
+  onDeleteBlock?: (blockName: string) => void;
+  isDeleting?: boolean;
   className?: string;
 }
