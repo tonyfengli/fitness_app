@@ -18,7 +18,7 @@ export interface WorkoutProgramCardProps extends FeatureProps {
   week?: string;
   exercises?: Exercise[];
   exerciseBlocks?: ExerciseBlock[];
-  onAddExercise?: () => void;
+  onAddExercise?: (blockName: string) => void;
   onEditExercise?: (exerciseId: string) => void;
   onDeleteExercise?: (exerciseId: string, blockName: string) => void;
   onDeleteWorkout?: () => void;

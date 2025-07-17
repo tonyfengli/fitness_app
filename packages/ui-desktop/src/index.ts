@@ -8,3 +8,4 @@ export * from "./components/UserStatusCard";
 export * from "./components/ClientWorkoutCard";
 export * from "./components/AppHeader";
 export * from "./components/PlayerListItem";
+export * from "./components/AddExerciseModal";

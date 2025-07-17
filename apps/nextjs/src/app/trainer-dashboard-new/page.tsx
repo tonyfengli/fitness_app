@@ -5,7 +5,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { 
   SidebarLayout, 
   ClientSidebar, 
-  WorkoutProgramCard
+  WorkoutProgramCard,
+  AddExerciseModal
 } from "@acme/ui-desktop";
 import { Button, FeedbackSection, Icon } from "@acme/ui-shared";
 import { useTRPC } from "~/trpc/react";
@@ -39,6 +40,7 @@ interface WorkoutSectionProps {
   onDeleteWorkout: (workoutId: string) => void;
   onDeleteBlock: (workoutId: string, blockName: string) => void;
   onDeleteExercise: (workoutId: string, exerciseId: string) => void;
+  onAddExercise: (workoutId: string, blockName: string) => void;
   isDeleting: boolean;
   llmOutput?: any;
 }
@@ -55,6 +57,7 @@ function WorkoutSection({
   onDeleteWorkout,
   onDeleteBlock,
   onDeleteExercise,
+  onAddExercise,
   isDeleting,
   llmOutput 
 }: WorkoutSectionProps) {
@@ -65,7 +68,7 @@ function WorkoutSection({
           title={date}
           week={week || DEFAULT_WORKOUT_WEEK}
           exerciseBlocks={exerciseBlocks}
-          onAddExercise={() => console.log("Add exercise")}
+          onAddExercise={(blockName) => onAddExercise(workoutId, blockName)}
           onEditExercise={(id) => console.log("Edit exercise", id)}
           onDeleteExercise={(exerciseId, blockName) => onDeleteExercise(workoutId, exerciseId)}
           onDeleteWorkout={() => onDeleteWorkout(workoutId)}
@@ -187,6 +190,15 @@ export default function TrainerDashboardNew() {
   const [selectedClientId, setSelectedClientId] = useState<string>("");
   const [isNewWorkoutModalOpen, setIsNewWorkoutModalOpen] = useState(false);
   const [deletingWorkoutId, setDeletingWorkoutId] = useState<string | null>(null);
+  const [addExerciseModal, setAddExerciseModal] = useState<{
+    isOpen: boolean;
+    workoutId: string;
+    blockName: string;
+  }>({
+    isOpen: false,
+    workoutId: "",
+    blockName: "",
+  });
   
   // Combined state for expanded sections
   interface ExpandedState {
@@ -261,6 +273,16 @@ export default function TrainerDashboardNew() {
   const deleteExerciseMutation = useMutation(
     trpc.workout.deleteExercise.mutationOptions()
   );
+  
+  // Add exercise mutation
+  const addExerciseMutation = useMutation(
+    trpc.workout.addExercise.mutationOptions()
+  );
+  
+  // Fetch available exercises for the business
+  const { data: availableExercises } = useQuery(
+    trpc.exercise.all.queryOptions({ limit: 1000 })
+  );
 
   const handleDeleteWorkout = async (workoutId: string) => {
     if (!confirm('Are you sure you want to delete this workout? This action cannot be undone.')) {
@@ -322,6 +344,41 @@ export default function TrainerDashboardNew() {
     } catch (error) {
       console.error('Failed to delete exercise:', error);
       alert('Failed to delete exercise. Please try again.');
+    }
+  };
+
+  const handleAddExercise = (workoutId: string, blockName: string) => {
+    setAddExerciseModal({
+      isOpen: true,
+      workoutId,
+      blockName,
+    });
+  };
+
+  const handleAddExerciseSubmit = async (exerciseId: string, sets: number) => {
+    try {
+      await addExerciseMutation.mutateAsync({
+        workoutId: addExerciseModal.workoutId,
+        exerciseId,
+        groupName: addExerciseModal.blockName,
+        position: 'end' as const,
+        sets,
+      });
+      
+      // Close modal
+      setAddExerciseModal({
+        isOpen: false,
+        workoutId: "",
+        blockName: "",
+      });
+      
+      // Refresh the workouts list
+      await queryClient.invalidateQueries({
+        queryKey: [['workout', 'getClientWorkoutsWithExercises'], { input: { clientId: selectedClientId } }]
+      });
+    } catch (error) {
+      console.error('Failed to add exercise:', error);
+      alert('Failed to add exercise. Please try again.');
     }
   };
 
@@ -422,6 +479,7 @@ export default function TrainerDashboardNew() {
                           onDeleteWorkout={handleDeleteWorkout}
                           onDeleteBlock={handleDeleteBlock}
                           onDeleteExercise={handleDeleteExercise}
+                          onAddExercise={handleAddExercise}
                           isDeleting={deletingWorkoutId === workout.id}
                           llmOutput={workout.llmOutput}
                         />
@@ -458,6 +516,15 @@ export default function TrainerDashboardNew() {
           clientProfile={clientsData?.find(c => c.id === selectedClient.id)?.profile}
         />
       )}
+      
+      {/* Add Exercise Modal */}
+      <AddExerciseModal
+        isOpen={addExerciseModal.isOpen}
+        onClose={() => setAddExerciseModal({ isOpen: false, workoutId: "", blockName: "" })}
+        onAdd={handleAddExerciseSubmit}
+        blockName={addExerciseModal.blockName}
+        exercises={availableExercises || []}
+      />
     </SidebarLayout>
   );
 }

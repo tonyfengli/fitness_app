@@ -320,17 +320,19 @@ export default function NewWorkoutModal({
     <>
       {/* Backdrop */}
       <div 
-        className="fixed inset-0 bg-black bg-opacity-50 z-40"
+        className="fixed inset-0 bg-black bg-opacity-50 z-50"
         onClick={handleClose}
-      />
-      
-      {/* Modal */}
-      <div className={`fixed inset-0 z-50 flex items-center justify-center ${isFullscreen ? '' : 'p-4'}`}>
-        <div className={`bg-white shadow-xl flex flex-col overflow-hidden transition-all duration-300 ${
-          isFullscreen 
-            ? 'w-full h-full rounded-none' 
-            : 'rounded-2xl max-w-2xl w-full h-[85vh]'
-        }`}>
+      >
+        {/* Modal */}
+        <div className={`flex items-center justify-center h-full ${isFullscreen ? '' : 'p-4'}`}>
+          <div 
+            className={`bg-white shadow-xl flex flex-col overflow-hidden transition-all duration-300 ${
+              isFullscreen 
+                ? 'w-full h-full rounded-none' 
+                : 'rounded-2xl max-w-2xl w-full h-[85vh]'
+            }`}
+            onClick={(e) => e.stopPropagation()}
+          >
           {/* Header */}
           <div className="px-8 py-6 border-b flex-shrink-0">
             <div className="flex items-center justify-between">
@@ -407,6 +409,7 @@ export default function NewWorkoutModal({
             >
               {isLoading ? (currentStep === 3 ? 'Generating Workout...' : 'Loading...') : nextButtonText}
             </Button>
+          </div>
           </div>
         </div>
       </div>

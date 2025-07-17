@@ -9,28 +9,28 @@ const BLOCK_COLORS = {
     bg: "bg-indigo-50", 
     hover: "hover:bg-indigo-50", 
     icon: "bg-indigo-100", 
-    iconText: "text-indigo-500" 
+    iconText: "text-indigo-600" 
   },
   "Block B": { 
     border: "border-green-200", 
     bg: "bg-green-50", 
     hover: "hover:bg-green-50", 
     icon: "bg-green-100", 
-    iconText: "text-green-500" 
+    iconText: "text-green-700" 
   },
   "Block C": { 
     border: "border-red-200", 
     bg: "bg-red-50", 
     hover: "hover:bg-red-50", 
     icon: "bg-red-100", 
-    iconText: "text-red-500" 
+    iconText: "text-red-600" 
   },
   "Block D": { 
     border: "border-yellow-200", 
     bg: "bg-yellow-50", 
     hover: "hover:bg-yellow-50", 
     icon: "bg-yellow-100", 
-    iconText: "text-yellow-500" 
+    iconText: "text-yellow-700" 
   },
   // Circuit rounds
   "Round 1": { 
@@ -38,21 +38,21 @@ const BLOCK_COLORS = {
     bg: "bg-purple-50", 
     hover: "hover:bg-purple-50", 
     icon: "bg-purple-100", 
-    iconText: "text-purple-500" 
+    iconText: "text-purple-600" 
   },
   "Round 2": { 
     border: "border-pink-200", 
     bg: "bg-pink-50", 
     hover: "hover:bg-pink-50", 
     icon: "bg-pink-100", 
-    iconText: "text-pink-500" 
+    iconText: "text-pink-600" 
   },
   "Round 3": { 
     border: "border-orange-200", 
     bg: "bg-orange-50", 
     hover: "hover:bg-orange-50", 
     icon: "bg-orange-100", 
-    iconText: "text-orange-500" 
+    iconText: "text-orange-600" 
   },
 } as const;
 
@@ -133,25 +133,25 @@ export function WorkoutProgramCard({
   }, [isMenuOpen, blockMenuOpen, exerciseMenuOpen]);
   return (
     <div className={cn("bg-white p-8 rounded-2xl shadow-lg", className)}>
-      <div className="flex justify-between items-start mb-8">
+      <div className="flex justify-between items-start mb-6">
         <div>
           <h3 className="text-2xl font-bold text-gray-900">{title}</h3>
-          {week && <p className="text-gray-500">{week}</p>}
+          {week && <p className="text-gray-500 mt-1">{week}</p>}
         </div>
         <div className="relative">
           <button
             ref={buttonRef}
             onClick={() => setIsMenuOpen(!isMenuOpen)}
-            className="text-gray-400 hover:text-gray-600 transition-colors duration-200 p-2 -m-2"
+            className="text-gray-400 hover:text-gray-600 transition-colors duration-200 p-1.5 -m-1.5"
             aria-label="More options"
           >
-            <Icon name="more_horiz" size={24} />
+            <Icon name="more_horiz" size={22} />
           </button>
           
           {isMenuOpen && (
             <div
               ref={menuRef}
-              className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50"
+              className="absolute right-0 mt-3 w-80 bg-white rounded-lg border-2 border-gray-200 shadow-[0_20px_50px_rgba(0,0,0,0.15)] py-3 z-50 overflow-hidden"
             >
               <button
                 onClick={() => {
@@ -159,9 +159,8 @@ export function WorkoutProgramCard({
                   setIsMenuOpen(false);
                 }}
                 disabled={isDeleting}
-                className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full text-left px-8 py-4 text-lg font-medium text-gray-600 hover:bg-gray-50 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <Icon name="delete" className="inline mr-2" size={16} />
                 {isDeleting ? 'Deleting...' : 'Delete Workout'}
               </button>
             </div>
@@ -169,7 +168,7 @@ export function WorkoutProgramCard({
         </div>
       </div>
 
-      <div className="space-y-8">
+      <div className="space-y-6">
         {exerciseBlocks ? (
           // Render exercises grouped by blocks
           exerciseBlocks.map((block, blockIndex) => {
@@ -177,9 +176,9 @@ export function WorkoutProgramCard({
             
             return (
               <div key={block.blockName}>
-                <div className={cn("mb-4 border-b pb-2", colors.border)}>
-                  <div className="flex items-center">
-                    <h4 className="text-xl font-semibold text-gray-800">
+                <div className={cn("mb-4 border-b pb-3", colors.border)}>
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-lg font-semibold text-gray-800">
                       {block.blockName}
                     </h4>
                     <div className="relative">
@@ -191,10 +190,10 @@ export function WorkoutProgramCard({
                           ...prev, 
                           [block.blockName]: !prev[block.blockName] 
                         }))}
-                        className="ml-2 text-gray-400 hover:text-gray-600 transition-colors duration-200 flex items-center"
+                        className="text-gray-400 hover:text-gray-600 transition-colors duration-200 p-1.5 -m-1.5"
                         aria-label={`More options for ${block.blockName}`}
                       >
-                        <Icon name="more_horiz" size={20} />
+                        <Icon name="more_horiz" size={22} />
                       </button>
                       
                       {blockMenuOpen[block.blockName] && (
@@ -202,16 +201,25 @@ export function WorkoutProgramCard({
                           ref={(el) => {
                             blockMenuRefs.current[block.blockName] = el;
                           }}
-                          className="absolute left-0 top-full mt-1 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50"
+                          className="absolute right-0 top-full mt-2 w-80 bg-white rounded-lg border-2 border-gray-200 shadow-[0_20px_50px_rgba(0,0,0,0.15)] py-3 z-50 overflow-hidden"
                         >
+                          <button
+                            onClick={() => {
+                              onAddExercise?.(block.blockName);
+                              setBlockMenuOpen(prev => ({ ...prev, [block.blockName]: false }));
+                            }}
+                            className="w-full text-left px-8 py-4 text-lg font-medium text-gray-600 hover:bg-gray-50 transition-all duration-200"
+                          >
+                            Add Exercise
+                          </button>
+                          <div className="h-px bg-gray-200 mx-4 my-2" />
                           <button
                             onClick={() => {
                               onDeleteBlock?.(block.blockName);
                               setBlockMenuOpen(prev => ({ ...prev, [block.blockName]: false }));
                             }}
-                            className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors duration-150"
+                            className="w-full text-left px-8 py-4 text-lg font-medium text-gray-600 hover:bg-gray-50 transition-all duration-200"
                           >
-                            <Icon name="delete" className="inline mr-2" size={16} />
                             Delete {block.blockName}
                           </button>
                         </div>
@@ -220,24 +228,24 @@ export function WorkoutProgramCard({
                   </div>
                 </div>
                 {block.exercises.length > 0 ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {block.exercises.map((exercise) => (
                       <div 
                         key={exercise.id}
                         className={cn(
-                          "bg-gray-50 p-5 rounded-xl flex items-center transition-colors duration-200",
+                          "bg-gray-50 p-4 rounded-xl flex items-center transition-colors duration-200 group",
                           colors.hover
                         )}
                       >
-                        <div className={cn("p-3 rounded-full mr-4", colors.icon)}>
-                          <Icon name="fitness_center" className={colors.iconText} />
+                        <div className={cn("w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0", colors.icon)}>
+                          <Icon name="fitness_center" size={20} className={colors.iconText} />
                         </div>
-                        <div className="flex-1">
-                          <p className="font-semibold text-gray-800">{exercise.name}</p>
-                          <p className="text-sm text-gray-500">{exercise.sets} sets</p>
+                        <div className="flex-1 ml-3">
+                          <p className="font-medium text-gray-800 leading-tight">{exercise.name}</p>
+                          <p className="text-sm text-gray-500 mt-0.5">{exercise.sets} sets</p>
                         </div>
                         {showEditButton && (
-                          <div className="relative ml-4">
+                          <div className="relative ml-2">
                             <button
                               ref={(el) => {
                                 exerciseButtonRefs.current[exercise.id] = el;
@@ -246,10 +254,10 @@ export function WorkoutProgramCard({
                                 ...prev, 
                                 [exercise.id]: !prev[exercise.id] 
                               }))}
-                              className="text-gray-400 hover:text-gray-600 transition-colors"
+                              className="text-gray-400 hover:text-gray-600 transition-colors p-1 -m-1 opacity-0 group-hover:opacity-100"
                               aria-label={`More options for ${exercise.name}`}
                             >
-                              <Icon name="more_horiz" size={20} />
+                              <Icon name="more_vert" size={18} />
                             </button>
                             
                             {exerciseMenuOpen[exercise.id] && (
@@ -257,16 +265,15 @@ export function WorkoutProgramCard({
                                 ref={(el) => {
                                   exerciseMenuRefs.current[exercise.id] = el;
                                 }}
-                                className="absolute right-0 top-full mt-1 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50"
+                                className="absolute left-0 top-full mt-2 w-80 bg-white rounded-lg border-2 border-gray-200 shadow-[0_20px_50px_rgba(0,0,0,0.15)] py-3 z-50 overflow-hidden"
                               >
                                 <button
                                   onClick={() => {
                                     onDeleteExercise?.(exercise.id, block.blockName);
                                     setExerciseMenuOpen(prev => ({ ...prev, [exercise.id]: false }));
                                   }}
-                                  className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors duration-150"
+                                  className="w-full text-left px-6 py-3.5 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-all duration-200"
                                 >
-                                  <Icon name="delete" className="inline mr-2" size={16} />
                                   Delete Exercise
                                 </button>
                               </div>
@@ -278,13 +285,14 @@ export function WorkoutProgramCard({
                   </div>
                 ) : (
                   <div className={cn(
-                    "py-3 px-4 rounded-lg border border-dashed text-center",
-                    colors.border
+                    "py-5 px-4 rounded-lg border border-dashed",
+                    colors.border,
+                    "bg-gray-50/50"
                   )}>
                     <div className="flex items-center justify-center gap-2">
                       <Icon 
                         name="fitness_center" 
-                        size={20} 
+                        size={18} 
                         className={cn("opacity-40", colors.iconText)} 
                       />
                       <p className="text-sm text-gray-500">No exercises in {block.blockName}</p>
