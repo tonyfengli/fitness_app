@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Twilio } from "twilio";
-// @ts-ignore - cross-package imports
-import { interpretSMS } from "../../../../../../../packages/ai/src/sms/smsInterpretationGraph";
-// @ts-ignore - cross-package imports
-import { processCheckIn } from "../../../../../../../packages/api/src/services/checkInService";
-// @ts-ignore - cross-package imports
-import { saveMessage } from "../../../../../../../packages/api/src/services/messageService";
-// @ts-ignore - cross-package imports
-import { createLogger } from "../../../../../../../packages/api/src/utils/logger";
+import { validateRequest } from "twilio";
+import { interpretSMS } from "@acme/ai";
+import { 
+  processCheckIn, 
+  saveMessage, 
+  getUserByPhone,
+  twilioClient,
+  createLogger 
+} from "@acme/api";
 
 // Twilio webhook payload type
 interface TwilioSMSPayload {
@@ -25,8 +25,62 @@ const logger = createLogger("SMSWebhook");
 
 export async function POST(request: NextRequest) {
   try {
+    // Get the Twilio signature from headers
+    const twilioSignature = request.headers.get("X-Twilio-Signature");
+    
+    if (!twilioSignature) {
+      logger.warn("Missing Twilio signature");
+      return new NextResponse("Unauthorized", { status: 401 });
+    }
+    
     // Parse form data (Twilio sends webhooks as application/x-www-form-urlencoded)
     const formData = await request.formData();
+    
+    // Convert FormData to object for validation
+    const params: Record<string, string> = {};
+    formData.forEach((value, key) => {
+      params[key] = value.toString();
+    });
+    
+    // Validate the webhook signature (skip in development if configured)
+    const skipValidation = process.env.SKIP_TWILIO_VALIDATION === "true" || process.env.NODE_ENV === "development";
+    
+    if (!skipValidation) {
+      // For production, use the actual webhook URL configured in Twilio
+      const webhookUrl = process.env.TWILIO_WEBHOOK_URL || `${request.nextUrl.protocol}//${request.nextUrl.host}${request.nextUrl.pathname}`;
+      const authToken = process.env.TWILIO_AUTH_TOKEN;
+      
+      if (!authToken) {
+        logger.error("Missing Twilio auth token");
+        return new NextResponse("Service unavailable", { status: 503 });
+      }
+      
+      logger.debug("Validating Twilio signature", {
+        webhookUrl,
+        signature: twilioSignature,
+        paramsCount: Object.keys(params).length
+      });
+      
+      const isValidSignature = validateRequest(
+        authToken,
+        twilioSignature,
+        webhookUrl,
+        params
+      );
+      
+      if (!isValidSignature) {
+        logger.warn("Invalid Twilio signature", { 
+          signature: twilioSignature,
+          url: webhookUrl,
+          host: request.nextUrl.host,
+          protocol: request.nextUrl.protocol,
+          pathname: request.nextUrl.pathname
+        });
+        return new NextResponse("Unauthorized", { status: 401 });
+      }
+    } else {
+      logger.debug("Skipping Twilio signature validation (development mode)");
+    }
     
     // Extract SMS data
     const payload: TwilioSMSPayload = {
@@ -46,11 +100,11 @@ export async function POST(request: NextRequest) {
       return new NextResponse("Bad Request: Missing required fields", { status: 400 });
     }
 
-    // Initialize Twilio client
-    const twilioClient = new Twilio(
-      process.env.TWILIO_ACCOUNT_SID!,
-      process.env.TWILIO_AUTH_TOKEN!
-    );
+    // Validate Twilio client is configured
+    if (!twilioClient) {
+      logger.error("Twilio client not configured");
+      return new NextResponse("Service unavailable", { status: 503 });
+    }
     
     logger.info("Incoming SMS", { 
       from: payload.From, 
@@ -102,7 +156,6 @@ export async function POST(request: NextRequest) {
     // Save inbound message if we have a user
     if (userId || interpretation.intent?.type === "check_in") {
       // For check-ins, we need to get user info even if check-in failed
-      const { getUserByPhone } = await import("../../../../../../../packages/api/src/services/userService");
       const userInfo = await getUserByPhone(payload.From);
       
       logger.info("Looking up user for message saving", { 
