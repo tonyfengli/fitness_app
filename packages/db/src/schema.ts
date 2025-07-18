@@ -7,6 +7,7 @@ import { user, account } from "./auth-schema";
 
 export * from "./auth-schema";
 export * from "./exercise";
+export * from "./schema/messages";
 import { exercises } from "./exercise";
 
 export const Business = pgTable("business", (t) => ({

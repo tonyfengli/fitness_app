@@ -3,6 +3,7 @@ import { businessRouter } from "./router/business";
 import { exerciseRouter } from "./router/exercise";
 import { trainingSessionRouter } from "./router/training-session";
 import { workoutRouter } from "./router/workout";
+import { messagesRouter } from "./routers/messages";
 import { createTRPCRouter } from "./trpc";
 
 export const appRouter = createTRPCRouter({
@@ -11,6 +12,7 @@ export const appRouter = createTRPCRouter({
   exercise: exerciseRouter,
   trainingSession: trainingSessionRouter,
   workout: workoutRouter,
+  messages: messagesRouter,
 });
 
 // export type definition of API

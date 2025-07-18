@@ -8,7 +8,7 @@ export const SMSState = Annotation.Root({
   
   // Parsed intent from the message
   intent: Annotation<{
-    type: "schedule" | "cancel" | "reschedule" | "inquiry" | "other";
+    type: "check_in" | "other";
     confidence: number;
   } | undefined>,
   

@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { Button } from "@acme/ui-shared";
+import { Button, cn } from "@acme/ui-shared";
 import { authClient } from "~/auth/client";
 import { useAuth } from "~/hooks/use-auth";
 import { FrontendDebugClient } from "~/utils/frontendDebugClient";
@@ -11,6 +11,7 @@ import { FrontendDebugClient } from "~/utils/frontendDebugClient";
 export function Navigation() {
   const { user, isAuthenticated, isTrainer, isClient, isLoading } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
   const queryClient = useQueryClient();
 
   // Log navigation renders
@@ -65,10 +66,41 @@ export function Navigation() {
             {isAuthenticated && isClient && (
               <Link 
                 href="/client-dashboard" 
-                className="text-sm font-medium text-muted-foreground hover:text-primary"
+                className={cn(
+                  "text-sm font-medium transition-colors",
+                  pathname === "/client-dashboard" 
+                    ? "text-primary" 
+                    : "text-muted-foreground hover:text-primary"
+                )}
               >
                 My Workouts
               </Link>
+            )}
+            {isAuthenticated && isTrainer && (
+              <>
+                <Link 
+                  href="/trainer-dashboard" 
+                  className={cn(
+                    "text-sm font-medium transition-colors",
+                    pathname === "/trainer-dashboard" 
+                      ? "text-primary" 
+                      : "text-muted-foreground hover:text-primary"
+                  )}
+                >
+                  Dashboard
+                </Link>
+                <Link 
+                  href="/messages" 
+                  className={cn(
+                    "text-sm font-medium transition-colors",
+                    pathname === "/messages" 
+                      ? "text-primary" 
+                      : "text-muted-foreground hover:text-primary"
+                  )}
+                >
+                  Messages
+                </Link>
+              </>
             )}
           </div>
 

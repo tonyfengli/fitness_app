@@ -1,4 +1,4 @@
-import { pgTable } from "drizzle-orm/pg-core";
+import { pgTable, index } from "drizzle-orm/pg-core";
 import { Business } from "./schema";
 
 export const user = pgTable("user", (t) => ({
@@ -12,6 +12,8 @@ export const user = pgTable("user", (t) => ({
   businessId: t.uuid().notNull().references(() => Business.id, { onDelete: "cascade" }),
   createdAt: t.timestamp().notNull(),
   updatedAt: t.timestamp().notNull(),
+}), (table) => ({
+  phoneIdx: index("user_phone_idx").on(table.phone),
 }));
 
 export const session = pgTable("session", (t) => ({
