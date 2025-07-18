@@ -1,11 +1,13 @@
 {
-  "timestamp": "2025-07-18T04:32:31.742Z",
+  "timestamp": "2025-07-18T05:47:24.131Z",
   "filters": {
-    "clientName": "Hilary Chan",
+    "clientName": "Curtis Yu",
     "strengthCapacity": "moderate",
     "skillCapacity": "moderate",
     "intensity": "moderate",
-    "muscleTarget": [],
+    "muscleTarget": [
+      "quads"
+    ],
     "muscleLessen": [],
     "avoidJoints": [],
     "includeExercises": [],
@@ -19,6 +21,21 @@
       "count": 5,
       "exercises": [
         {
+          "id": "dabd605d-42d5-4c18-bbf8-856eb175a78c",
+          "name": "Goblet Pause Squat (3 Seconds)",
+          "score": 8
+        },
+        {
+          "id": "9468e3e6-3912-47de-95be-b5218789b4d6",
+          "name": "Barbell Reverse Lunges",
+          "score": 8
+        },
+        {
+          "id": "bec554f5-b080-409d-ba41-b93a51a56836",
+          "name": "Barbell Back Squat",
+          "score": 8
+        },
+        {
           "id": "49bc7005-5179-4d96-be77-ac790cf00759",
           "name": "Landmine T Bar Row",
           "score": 5
@@ -27,21 +44,6 @@
           "id": "57c24380-6ee2-4242-84b5-0cf299ae8369",
           "name": "Landmine Shoulder Press",
           "score": 5
-        },
-        {
-          "id": "cdd9c4a6-4048-4ee2-9292-aa36e7a2a9ae",
-          "name": "Barbell Glute Bridge on Bench",
-          "score": 5
-        },
-        {
-          "id": "4faeab78-16bd-4d71-b935-226bc691531d",
-          "name": "Hollow Body Dumbbell Press",
-          "score": 5
-        },
-        {
-          "id": "b10fc80a-3bc6-4d31-8a1d-d653d55dccc3",
-          "name": "Dumbbell Bridge Chest Press",
-          "score": 5
         }
       ]
     },
@@ -49,19 +51,19 @@
       "count": 8,
       "exercises": [
         {
-          "id": "dc085fdb-b6c4-4942-9eb5-3dbf04d7161e",
-          "name": "TRX Mid Row",
-          "score": 5
+          "id": "dce44ce1-9f79-4c98-80ba-d4cc6d2bb9a6",
+          "name": "Lateral Step-Up with Goblet Hold",
+          "score": 8
         },
         {
           "id": "050e52d0-5f3a-491c-b424-24c5dad31a62",
           "name": "Farmer's Carry Step-Up",
-          "score": 5
+          "score": 8
         },
         {
-          "id": "11611e20-e723-4cfe-9276-7ab4eb73f829",
-          "name": "Landmine Reverse Lunge",
-          "score": 5
+          "id": "7ed3976c-c9f3-4672-966c-424778e1cd8c",
+          "name": "Goblet Squat Pulse",
+          "score": 8
         }
       ]
     },
@@ -69,18 +71,18 @@
       "count": 8,
       "exercises": [
         {
-          "id": "aa66d8b3-907a-42ec-ac9b-bbaa347a88b8",
-          "name": "Y/W Raises",
-          "score": 5
-        },
-        {
-          "id": "5a75f68d-4d30-4211-a98c-a74c71f70f8d",
-          "name": "Glute Bridge Thrust with Dumbbell",
-          "score": 5
+          "id": "a5d09b5a-d62f-477b-8b71-216f35a20291",
+          "name": "Wall Squat Hold",
+          "score": 8
         },
         {
           "id": "4e40b3f0-cf13-4998-8ec0-61a9b5dd5239",
           "name": "Banded Prone Overhead Press",
+          "score": 5
+        },
+        {
+          "id": "840aedec-f2a7-47cb-935c-9ffc43cedde6",
+          "name": "Quadruped Fire Hydrant (Peeing Dog)",
           "score": 5
         }
       ]
@@ -89,23 +91,23 @@
       "count": 6,
       "exercises": [
         {
+          "id": "904c2b74-944f-49af-8324-22b1b1ea7b9a",
+          "name": "Jump Squat",
+          "score": 8
+        },
+        {
           "id": "fb5bf2ce-611c-4a2f-ae16-8d21d28280c1",
           "name": "Side Plank Hip Raise",
-          "score": 5
+          "score": 8
         },
         {
-          "id": "0975bd35-a1fd-4ea7-acc4-dd9c05d4a982",
-          "name": "Bosu Plank Jack",
-          "score": 5
+          "id": "ed0ee454-b40b-403a-bc20-cff5647fa683",
+          "name": "Farmer's Carry Reverse Lunge",
+          "score": 8
         },
         {
-          "id": "dd47414b-bca2-4fa8-a200-c159632e31d6",
-          "name": "Box Pike Walkout",
-          "score": 5
-        },
-        {
-          "id": "8d628b77-b0bd-4104-b7d0-5e91802d785b",
-          "name": "Banded Side Plank Clamshell",
+          "id": "bfbd0203-524f-4e78-8b7d-df634ddcecc2",
+          "name": "Plank Reach",
           "score": 5
         }
       ]
@@ -193,6 +195,270 @@
   },
   "constraintAnalysis": {},
   "scoreBreakdowns": {
+    "ca004a9f-5bb3-4749-acb8-55872fc58be2": {
+      "name": "Lunge with Biceps Curl",
+      "baseScore": 5,
+      "bonuses": [
+        {
+          "reason": "Muscle Target Match",
+          "value": 3
+        }
+      ],
+      "penalties": [],
+      "finalScore": 8
+    },
+    "dce44ce1-9f79-4c98-80ba-d4cc6d2bb9a6": {
+      "name": "Lateral Step-Up with Goblet Hold",
+      "baseScore": 5,
+      "bonuses": [
+        {
+          "reason": "Muscle Target Match",
+          "value": 3
+        }
+      ],
+      "penalties": [],
+      "finalScore": 8
+    },
+    "904c2b74-944f-49af-8324-22b1b1ea7b9a": {
+      "name": "Jump Squat",
+      "baseScore": 5,
+      "bonuses": [
+        {
+          "reason": "Muscle Target Match",
+          "value": 3
+        }
+      ],
+      "penalties": [],
+      "finalScore": 8
+    },
+    "050e52d0-5f3a-491c-b424-24c5dad31a62": {
+      "name": "Farmer's Carry Step-Up",
+      "baseScore": 5,
+      "bonuses": [
+        {
+          "reason": "Muscle Target Match",
+          "value": 3
+        }
+      ],
+      "penalties": [],
+      "finalScore": 8
+    },
+    "f3887428-47ba-4d81-8916-acc4c7c05fa9": {
+      "name": "Offset Lateral Lunge",
+      "baseScore": 5,
+      "bonuses": [
+        {
+          "reason": "Muscle Target Match",
+          "value": 3
+        }
+      ],
+      "penalties": [],
+      "finalScore": 8
+    },
+    "11611e20-e723-4cfe-9276-7ab4eb73f829": {
+      "name": "Landmine Reverse Lunge",
+      "baseScore": 5,
+      "bonuses": [
+        {
+          "reason": "Muscle Target Match",
+          "value": 3
+        }
+      ],
+      "penalties": [],
+      "finalScore": 8
+    },
+    "fb5bf2ce-611c-4a2f-ae16-8d21d28280c1": {
+      "name": "Side Plank Hip Raise",
+      "baseScore": 5,
+      "bonuses": [
+        {
+          "reason": "Muscle Target Match",
+          "value": 3
+        }
+      ],
+      "penalties": [],
+      "finalScore": 8
+    },
+    "e3cd89af-a339-49ec-b5eb-5438d1227a0f": {
+      "name": "Suitcase Kettlebell Lunge",
+      "baseScore": 5,
+      "bonuses": [
+        {
+          "reason": "Muscle Target Match",
+          "value": 3
+        }
+      ],
+      "penalties": [],
+      "finalScore": 8
+    },
+    "7a6a7db5-8e05-4e60-9292-8004dac927db": {
+      "name": "In-and-Out Squat Jumps",
+      "baseScore": 5,
+      "bonuses": [
+        {
+          "reason": "Muscle Target Match",
+          "value": 3
+        }
+      ],
+      "penalties": [],
+      "finalScore": 8
+    },
+    "7ed3976c-c9f3-4672-966c-424778e1cd8c": {
+      "name": "Goblet Squat Pulse",
+      "baseScore": 5,
+      "bonuses": [
+        {
+          "reason": "Muscle Target Match",
+          "value": 3
+        }
+      ],
+      "penalties": [],
+      "finalScore": 8
+    },
+    "9d50d2f2-0eda-48c4-9f7d-7a1fcff879b1": {
+      "name": "Dumbbell Thruster",
+      "baseScore": 5,
+      "bonuses": [
+        {
+          "reason": "Muscle Target Match",
+          "value": 3
+        }
+      ],
+      "penalties": [],
+      "finalScore": 8
+    },
+    "a5d09b5a-d62f-477b-8b71-216f35a20291": {
+      "name": "Wall Squat Hold",
+      "baseScore": 5,
+      "bonuses": [
+        {
+          "reason": "Muscle Target Match",
+          "value": 3
+        }
+      ],
+      "penalties": [],
+      "finalScore": 8
+    },
+    "53141345-2351-436a-9b1c-21bc273ba554": {
+      "name": "Spanish Lunge",
+      "baseScore": 5,
+      "bonuses": [
+        {
+          "reason": "Muscle Target Match",
+          "value": 3
+        }
+      ],
+      "penalties": [],
+      "finalScore": 8
+    },
+    "f18f0a95-f622-495c-bdd4-eae6425acb0d": {
+      "name": "Lateral Lunge",
+      "baseScore": 5,
+      "bonuses": [
+        {
+          "reason": "Muscle Target Match",
+          "value": 3
+        }
+      ],
+      "penalties": [],
+      "finalScore": 8
+    },
+    "ed0ee454-b40b-403a-bc20-cff5647fa683": {
+      "name": "Farmer's Carry Reverse Lunge",
+      "baseScore": 5,
+      "bonuses": [
+        {
+          "reason": "Muscle Target Match",
+          "value": 3
+        }
+      ],
+      "penalties": [],
+      "finalScore": 8
+    },
+    "dabd605d-42d5-4c18-bbf8-856eb175a78c": {
+      "name": "Goblet Pause Squat (3 Seconds)",
+      "baseScore": 5,
+      "bonuses": [
+        {
+          "reason": "Muscle Target Match",
+          "value": 3
+        }
+      ],
+      "penalties": [],
+      "finalScore": 8
+    },
+    "9468e3e6-3912-47de-95be-b5218789b4d6": {
+      "name": "Barbell Reverse Lunges",
+      "baseScore": 5,
+      "bonuses": [
+        {
+          "reason": "Muscle Target Match",
+          "value": 3
+        }
+      ],
+      "penalties": [],
+      "finalScore": 8
+    },
+    "bec554f5-b080-409d-ba41-b93a51a56836": {
+      "name": "Barbell Back Squat",
+      "baseScore": 5,
+      "bonuses": [
+        {
+          "reason": "Muscle Target Match",
+          "value": 3
+        }
+      ],
+      "penalties": [],
+      "finalScore": 8
+    },
+    "6712600b-d4a2-4708-962e-fa6b1c3eb9cc": {
+      "name": "Goblet Squat",
+      "baseScore": 5,
+      "bonuses": [
+        {
+          "reason": "Muscle Target Match",
+          "value": 3
+        }
+      ],
+      "penalties": [],
+      "finalScore": 8
+    },
+    "ac8126a5-92ea-42b5-9955-6d0ae38dd70a": {
+      "name": "Bulgarian Split Squat",
+      "baseScore": 5,
+      "bonuses": [
+        {
+          "reason": "Muscle Target Match",
+          "value": 3
+        }
+      ],
+      "penalties": [],
+      "finalScore": 8
+    },
+    "698adb88-ad38-4e98-9735-489f5b7d0c45": {
+      "name": "Curtsy Lunge",
+      "baseScore": 5,
+      "bonuses": [
+        {
+          "reason": "Muscle Target Match",
+          "value": 1.5
+        }
+      ],
+      "penalties": [],
+      "finalScore": 6.5
+    },
+    "c0e353d1-5ffe-4340-ac6f-2ee03af6c2fc": {
+      "name": "Bear Crawl (Forward and Back)",
+      "baseScore": 5,
+      "bonuses": [
+        {
+          "reason": "Muscle Target Match",
+          "value": 1.5
+        }
+      ],
+      "penalties": [],
+      "finalScore": 6.5
+    },
     "49bc7005-5179-4d96-be77-ac790cf00759": {
       "name": "Landmine T Bar Row",
       "baseScore": 5,
@@ -221,20 +487,6 @@
       "penalties": [],
       "finalScore": 5
     },
-    "ca004a9f-5bb3-4749-acb8-55872fc58be2": {
-      "name": "Lunge with Biceps Curl",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [],
-      "finalScore": 5
-    },
-    "dce44ce1-9f79-4c98-80ba-d4cc6d2bb9a6": {
-      "name": "Lateral Step-Up with Goblet Hold",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [],
-      "finalScore": 5
-    },
     "5a75f68d-4d30-4211-a98c-a74c71f70f8d": {
       "name": "Glute Bridge Thrust with Dumbbell",
       "baseScore": 5,
@@ -242,22 +494,8 @@
       "penalties": [],
       "finalScore": 5
     },
-    "904c2b74-944f-49af-8324-22b1b1ea7b9a": {
-      "name": "Jump Squat",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [],
-      "finalScore": 5
-    },
     "3d44886e-896b-4059-a4db-506923ea3b58": {
       "name": "Batwing Chest-Supported Row",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [],
-      "finalScore": 5
-    },
-    "050e52d0-5f3a-491c-b424-24c5dad31a62": {
-      "name": "Farmer's Carry Step-Up",
       "baseScore": 5,
       "bonuses": [],
       "penalties": [],
@@ -340,13 +578,6 @@
       "penalties": [],
       "finalScore": 5
     },
-    "f3887428-47ba-4d81-8916-acc4c7c05fa9": {
-      "name": "Offset Lateral Lunge",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [],
-      "finalScore": 5
-    },
     "64ed80bf-f9b5-424c-99a2-c3aaadf3d210": {
       "name": "Single-Arm Cable Row",
       "baseScore": 5,
@@ -363,20 +594,6 @@
     },
     "df27f104-414a-4e16-a392-45a1b9254e58": {
       "name": "Monster Walk (Banded Lateral Walk)",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [],
-      "finalScore": 5
-    },
-    "698adb88-ad38-4e98-9735-489f5b7d0c45": {
-      "name": "Curtsy Lunge",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [],
-      "finalScore": 5
-    },
-    "11611e20-e723-4cfe-9276-7ab4eb73f829": {
-      "name": "Landmine Reverse Lunge",
       "baseScore": 5,
       "bonuses": [],
       "penalties": [],
@@ -424,22 +641,8 @@
       "penalties": [],
       "finalScore": 5
     },
-    "fb5bf2ce-611c-4a2f-ae16-8d21d28280c1": {
-      "name": "Side Plank Hip Raise",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [],
-      "finalScore": 5
-    },
     "80c543b0-16fe-4821-9d04-0aadfe1b0082": {
       "name": "Incline Bicep Curl",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [],
-      "finalScore": 5
-    },
-    "e3cd89af-a339-49ec-b5eb-5438d1227a0f": {
-      "name": "Suitcase Kettlebell Lunge",
       "baseScore": 5,
       "bonuses": [],
       "penalties": [],
@@ -480,29 +683,8 @@
       "penalties": [],
       "finalScore": 5
     },
-    "c0e353d1-5ffe-4340-ac6f-2ee03af6c2fc": {
-      "name": "Bear Crawl (Forward and Back)",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [],
-      "finalScore": 5
-    },
-    "7a6a7db5-8e05-4e60-9292-8004dac927db": {
-      "name": "In-and-Out Squat Jumps",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [],
-      "finalScore": 5
-    },
     "dd47414b-bca2-4fa8-a200-c159632e31d6": {
       "name": "Box Pike Walkout",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [],
-      "finalScore": 5
-    },
-    "7ed3976c-c9f3-4672-966c-424778e1cd8c": {
-      "name": "Goblet Squat Pulse",
       "baseScore": 5,
       "bonuses": [],
       "penalties": [],
@@ -517,13 +699,6 @@
     },
     "bdb4c362-96eb-4349-b908-8526dcb2db96": {
       "name": "Skull Crusher",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [],
-      "finalScore": 5
-    },
-    "9d50d2f2-0eda-48c4-9f7d-7a1fcff879b1": {
-      "name": "Dumbbell Thruster",
       "baseScore": 5,
       "bonuses": [],
       "penalties": [],
@@ -669,13 +844,6 @@
       "penalties": [],
       "finalScore": 5
     },
-    "a5d09b5a-d62f-477b-8b71-216f35a20291": {
-      "name": "Wall Squat Hold",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [],
-      "finalScore": 5
-    },
     "ce18afb8-3b1f-4183-9cdc-833da34574b3": {
       "name": "Single-Leg Banded Kettlebell Suitcase Hold",
       "baseScore": 5,
@@ -741,13 +909,6 @@
     },
     "b10fc80a-3bc6-4d31-8a1d-d653d55dccc3": {
       "name": "Dumbbell Bridge Chest Press",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [],
-      "finalScore": 5
-    },
-    "53141345-2351-436a-9b1c-21bc273ba554": {
-      "name": "Spanish Lunge",
       "baseScore": 5,
       "bonuses": [],
       "penalties": [],
@@ -830,13 +991,6 @@
       "penalties": [],
       "finalScore": 5
     },
-    "f18f0a95-f622-495c-bdd4-eae6425acb0d": {
-      "name": "Lateral Lunge",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [],
-      "finalScore": 5
-    },
     "0a8afe6e-e564-49c1-bb51-deb232049ba3": {
       "name": "Incline Barbell Bench Press",
       "baseScore": 5,
@@ -853,13 +1007,6 @@
     },
     "5d821105-e33e-4956-9b6f-e47966952e8b": {
       "name": "Single-Arm Kettlebell Suitcase Carry",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [],
-      "finalScore": 5
-    },
-    "ed0ee454-b40b-403a-bc20-cff5647fa683": {
-      "name": "Farmer's Carry Reverse Lunge",
       "baseScore": 5,
       "bonuses": [],
       "penalties": [],
@@ -914,13 +1061,6 @@
       "penalties": [],
       "finalScore": 5
     },
-    "dabd605d-42d5-4c18-bbf8-856eb175a78c": {
-      "name": "Goblet Pause Squat (3 Seconds)",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [],
-      "finalScore": 5
-    },
     "0ed8d787-caff-4e43-b04b-45dc9b93117d": {
       "name": "3-Point Dumbbell Row",
       "baseScore": 5,
@@ -942,29 +1082,8 @@
       "penalties": [],
       "finalScore": 5
     },
-    "9468e3e6-3912-47de-95be-b5218789b4d6": {
-      "name": "Barbell Reverse Lunges",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [],
-      "finalScore": 5
-    },
     "2d073f4f-070d-479b-9214-b7d6701b23e2": {
       "name": "Dumbbell Press",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [],
-      "finalScore": 5
-    },
-    "bec554f5-b080-409d-ba41-b93a51a56836": {
-      "name": "Barbell Back Squat",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [],
-      "finalScore": 5
-    },
-    "6712600b-d4a2-4708-962e-fa6b1c3eb9cc": {
-      "name": "Goblet Squat",
       "baseScore": 5,
       "bonuses": [],
       "penalties": [],
@@ -991,13 +1110,6 @@
       "penalties": [],
       "finalScore": 5
     },
-    "ac8126a5-92ea-42b5-9955-6d0ae38dd70a": {
-      "name": "Bulgarian Split Squat",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [],
-      "finalScore": 5
-    },
     "4daa20f6-b441-4ba2-b735-2f8e08280226": {
       "name": "Cable Low-to-High Chest Fly",
       "baseScore": 5,
@@ -1016,7 +1128,7 @@
   "debugLog": [
     {
       "step": 1,
-      "timestamp": "2025-07-18T04:32:31.729Z",
+      "timestamp": "2025-07-18T05:47:24.128Z",
       "phase": "filtering",
       "action": "Starting enhanced filtering",
       "details": {
@@ -1033,7 +1145,7 @@
     },
     {
       "step": 2,
-      "timestamp": "2025-07-18T04:32:31.729Z",
+      "timestamp": "2025-07-18T05:47:24.128Z",
       "phase": "filtering",
       "action": "Filtering by strength: moderate",
       "details": {
@@ -1048,7 +1160,7 @@
     },
     {
       "step": 3,
-      "timestamp": "2025-07-18T04:32:31.729Z",
+      "timestamp": "2025-07-18T05:47:24.128Z",
       "phase": "filtering",
       "action": "Strength filtering complete",
       "details": {
@@ -1056,11 +1168,11 @@
         "remaining": 120
       },
       "exercisesAffected": 10,
-      "performanceMs": 0.2590409999975236
+      "performanceMs": 0.056509000016376376
     },
     {
       "step": 4,
-      "timestamp": "2025-07-18T04:32:31.729Z",
+      "timestamp": "2025-07-18T05:47:24.128Z",
       "phase": "filtering",
       "action": "Filtering by skill: moderate",
       "details": {
@@ -1075,7 +1187,7 @@
     },
     {
       "step": 5,
-      "timestamp": "2025-07-18T04:32:31.730Z",
+      "timestamp": "2025-07-18T05:47:24.128Z",
       "phase": "filtering",
       "action": "Skill filtering complete",
       "details": {
@@ -1083,11 +1195,11 @@
         "remaining": 117
       },
       "exercisesAffected": 3,
-      "performanceMs": 0.10275200000251061
+      "performanceMs": 0.026455000042915344
     },
     {
       "step": 6,
-      "timestamp": "2025-07-18T04:32:31.730Z",
+      "timestamp": "2025-07-18T05:47:24.128Z",
       "phase": "filtering",
       "action": "Combined included and filtered exercises",
       "details": {
@@ -1097,7 +1209,7 @@
     },
     {
       "step": 7,
-      "timestamp": "2025-07-18T04:32:31.730Z",
+      "timestamp": "2025-07-18T05:47:24.129Z",
       "phase": "filtering",
       "action": "Filtering complete",
       "details": {

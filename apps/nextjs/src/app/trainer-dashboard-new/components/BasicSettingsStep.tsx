@@ -61,9 +61,12 @@ export function BasicSettingsStep({ workoutParams, onChange }: BasicSettingsStep
 
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-3">
-          Workout Template
+          Workout Template <span className="text-red-500">*</span>
         </label>
         <div className="space-y-3">
+          {!workoutParams.template && (
+            <p className="text-sm text-gray-500 italic">Select a template to continue</p>
+          )}
           {[
             { value: 'standard', label: 'Standard', description: 'Traditional workout structure' },
             { value: 'circuit', label: 'Circuit', description: 'Circuit-style training' },

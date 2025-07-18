@@ -314,6 +314,10 @@ export default function NewWorkoutModal({
     return 'Next';
   }, [currentStep]);
 
+  // Check if the current step is valid
+  const isStep1Valid = workoutParams.sessionGoal && workoutParams.intensity && workoutParams.template;
+  const canProceed = currentStep === 1 ? isStep1Valid : true;
+
   if (!isOpen) return null;
 
   return (
@@ -403,12 +407,16 @@ export default function NewWorkoutModal({
                 </Button>
               )}
             </div>
-            <Button
-              onClick={handleNext}
-              disabled={isLoading}
-            >
-              {isLoading ? (currentStep === 3 ? 'Generating Workout...' : 'Loading...') : nextButtonText}
-            </Button>
+            <div className="relative">
+              <Button
+                onClick={handleNext}
+                disabled={isLoading || !canProceed}
+                className={!canProceed ? 'opacity-50 cursor-not-allowed' : ''}
+                title={!canProceed && currentStep === 1 ? 'Please select a workout template' : ''}
+              >
+                {isLoading ? (currentStep === 3 ? 'Generating Workout...' : 'Loading...') : nextButtonText}
+              </Button>
+            </div>
           </div>
           </div>
         </div>

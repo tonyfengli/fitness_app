@@ -272,6 +272,9 @@ importers:
       '@acme/tsconfig':
         specifier: workspace:*
         version: link:../../tooling/typescript
+      '@playwright/test':
+        specifier: ^1.54.1
+        version: 1.54.1
       '@types/node':
         specifier: ^22.15.29
         version: 22.15.29
@@ -10046,7 +10049,6 @@ snapshots:
   '@playwright/test@1.54.1':
     dependencies:
       playwright: 1.54.1
-    optional: true
 
   '@polka/url@1.0.0-next.29': {}
 
@@ -14811,15 +14813,13 @@ snapshots:
 
   pirates@4.0.7: {}
 
-  playwright-core@1.54.1:
-    optional: true
+  playwright-core@1.54.1: {}
 
   playwright@1.54.1:
     dependencies:
       playwright-core: 1.54.1
     optionalDependencies:
       fsevents: 2.3.2
-    optional: true
 
   plist@3.1.0:
     dependencies:
