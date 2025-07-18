@@ -61,7 +61,7 @@ export function ConfirmDialog({
       
       {/* Dialog */}
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
+        <div className="bg-white rounded-lg shadow-xl max-w-md w-full" data-testid="confirm-dialog">
           <div className="p-6">
             {/* Icon */}
             <div className={`mx-auto flex items-center justify-center h-12 w-12 rounded-full ${styles.iconBg}`}>
@@ -85,8 +85,9 @@ export function ConfirmDialog({
               onClick={onConfirm}
               disabled={isLoading}
               className={`w-full sm:w-auto text-white ${styles.confirmButton} disabled:opacity-50`}
+              data-testid="confirm-delete-button"
             >
-              {isLoading ? 'Loading...' : confirmText}
+              {isLoading ? 'Deleting...' : confirmText}
             </Button>
             <Button
               variant="ghost"

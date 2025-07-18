@@ -11,7 +11,12 @@
     "lint": "eslint",
     "start": "pnpm with-env next start",
     "typecheck": "tsc --noEmit",
-    "with-env": "dotenv -e ../../.env --"
+    "with-env": "dotenv -e ../../.env --",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:debug": "playwright test --debug",
+    "test:e2e:list": "playwright test --reporter=list",
+    "test:e2e:ci": "playwright test --reporter=line"
   },
   "dependencies": {
     "@acme/ai": "workspace:*",

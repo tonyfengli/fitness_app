@@ -152,7 +152,7 @@ export function WorkoutProgramCard({
       "bg-white p-8 rounded-2xl shadow-lg transition-opacity duration-200",
       isDeleting && "opacity-50",
       className
-    )}>
+    )} data-testid="workout-card">
       <div className="flex justify-between items-start mb-6">
         <div>
           <h3 className="text-2xl font-bold text-gray-900">{title}</h3>
@@ -164,6 +164,7 @@ export function WorkoutProgramCard({
             onClick={() => setIsMenuOpen(!isMenuOpen)}
             className="text-gray-400 hover:text-gray-600 transition-colors duration-200 p-1.5 -m-1.5"
             aria-label="More options"
+            data-testid="workout-menu-button"
           >
             <Icon name="more_horiz" size={22} />
           </button>
@@ -172,6 +173,7 @@ export function WorkoutProgramCard({
             <div
               ref={menuRef}
               className="absolute right-0 mt-3 w-80 bg-white rounded-lg border-2 border-gray-200 shadow-[0_20px_50px_rgba(0,0,0,0.15)] py-3 z-50 overflow-hidden"
+              data-testid="workout-menu"
             >
               <button
                 onClick={() => {
@@ -188,6 +190,7 @@ export function WorkoutProgramCard({
                   setIsMenuOpen(false);
                 }}
                 className="w-full text-left px-8 py-4 text-lg font-medium text-gray-600 hover:bg-gray-50 transition-all duration-200"
+                data-testid="duplicate-workout-option"
               >
                 Duplicate Workout
               </button>
@@ -199,6 +202,7 @@ export function WorkoutProgramCard({
                 }}
                 disabled={isDeleting}
                 className="w-full text-left px-8 py-4 text-lg font-medium text-gray-600 hover:bg-gray-50 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                data-testid="delete-workout-option"
               >
                 {isDeleting ? 'Deleting...' : 'Delete Workout'}
               </button>
@@ -223,10 +227,11 @@ export function WorkoutProgramCard({
                   "transition-opacity duration-200",
                   deletingBlockName === block.blockName && "opacity-50"
                 )}
+                data-testid="section-block"
               >
                 <div className={cn("mb-4 border-b pb-3", colors.border)}>
                   <div className="flex items-center justify-between">
-                    <h4 className="text-lg font-semibold text-gray-800">
+                    <h4 className="text-lg font-semibold text-gray-800" data-testid="section-name">
                       {block.blockName}
                     </h4>
                     <div className="relative">
@@ -240,6 +245,7 @@ export function WorkoutProgramCard({
                         }))}
                         className="text-gray-400 hover:text-gray-600 transition-colors duration-200 p-1.5 -m-1.5"
                         aria-label={`More options for ${block.blockName}`}
+                        data-testid="section-menu-button"
                       >
                         <Icon name="more_horiz" size={22} />
                       </button>
@@ -250,6 +256,7 @@ export function WorkoutProgramCard({
                             blockMenuRefs.current[block.blockName] = el;
                           }}
                           className="absolute right-0 top-full mt-2 w-80 bg-white rounded-lg border-2 border-gray-200 shadow-[0_20px_50px_rgba(0,0,0,0.15)] py-3 z-50 overflow-hidden"
+                          data-testid="section-menu"
                         >
                           <button
                             onClick={() => {
@@ -257,6 +264,7 @@ export function WorkoutProgramCard({
                               setBlockMenuOpen(prev => ({ ...prev, [block.blockName]: false }));
                             }}
                             className="w-full text-left px-8 py-4 text-lg font-medium text-gray-600 hover:bg-gray-50 transition-all duration-200"
+                            data-testid="add-exercise-option"
                           >
                             Add Exercise
                           </button>
@@ -268,6 +276,7 @@ export function WorkoutProgramCard({
                             }}
                             disabled={deletingBlockName === block.blockName}
                             className="w-full text-left px-8 py-4 text-lg font-medium text-gray-600 hover:bg-gray-50 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                            data-testid="delete-section-option"
                           >
                             {deletingBlockName === block.blockName ? 'Deleting...' : `Delete ${block.blockName}`}
                           </button>
@@ -290,12 +299,13 @@ export function WorkoutProgramCard({
                             movingExerciseId === exercise.id && "opacity-50",
                             deletingExerciseId === exercise.id && "opacity-50"
                           )}
+                          data-testid="exercise-row"
                         >
                           <div className={cn("w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0", colors.icon)}>
-                            <span className={cn("text-lg", colors.numberText)}>{exerciseNumber}</span>
+                            <span className={cn("text-lg", colors.numberText)} data-testid="exercise-sequence">{exerciseNumber}.</span>
                           </div>
                         <div className="flex-1 ml-3">
-                          <p className="font-medium text-gray-800 leading-tight">{exercise.name}</p>
+                          <p className="font-medium text-gray-800 leading-tight" data-testid="exercise-name">{exercise.name}</p>
                           <p className="text-sm text-gray-500 mt-0.5">{exercise.sets} sets</p>
                         </div>
                         {showEditButton && (
@@ -310,6 +320,7 @@ export function WorkoutProgramCard({
                               }))}
                               className="text-gray-400 hover:text-gray-600 transition-colors p-1 -m-1 opacity-0 group-hover:opacity-100"
                               aria-label={`More options for ${exercise.name}`}
+                              data-testid="exercise-menu-button"
                             >
                               <Icon name="more_vert" size={18} />
                             </button>
@@ -320,6 +331,7 @@ export function WorkoutProgramCard({
                                   exerciseMenuRefs.current[exercise.id] = el;
                                 }}
                                 className="absolute left-0 top-full mt-2 w-80 bg-white rounded-lg border-2 border-gray-200 shadow-[0_20px_50px_rgba(0,0,0,0.15)] py-3 z-50 overflow-hidden"
+                                data-testid="exercise-menu"
                               >
                                 <button
                                   onClick={() => {
@@ -327,6 +339,7 @@ export function WorkoutProgramCard({
                                     setExerciseMenuOpen(prev => ({ ...prev, [exercise.id]: false }));
                                   }}
                                   className="w-full text-left px-8 py-4 text-lg font-medium text-gray-600 hover:bg-gray-50 transition-all duration-200"
+                                  data-testid="edit-exercise-option"
                                 >
                                   Edit Exercise
                                 </button>
@@ -345,6 +358,7 @@ export function WorkoutProgramCard({
                                     }}
                                     disabled={movingExerciseId === exercise.id}
                                     className="w-full text-left px-8 py-4 text-lg font-medium text-gray-600 hover:bg-gray-50 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    data-testid="move-up-option"
                                   >
                                     {movingExerciseId === exercise.id ? 'Moving...' : 'Move Up'}
                                   </button>
@@ -359,6 +373,7 @@ export function WorkoutProgramCard({
                                     }}
                                     disabled={movingExerciseId === exercise.id}
                                     className="w-full text-left px-8 py-4 text-lg font-medium text-gray-600 hover:bg-gray-50 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    data-testid="move-down-option"
                                   >
                                     {movingExerciseId === exercise.id ? 'Moving...' : 'Move Down'}
                                   </button>
@@ -376,6 +391,7 @@ export function WorkoutProgramCard({
                                   }}
                                   disabled={deletingExerciseId === exercise.id}
                                   className="w-full text-left px-8 py-4 text-lg font-medium text-gray-600 hover:bg-gray-50 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                                  data-testid="delete-exercise-option"
                                 >
                                   {deletingExerciseId === exercise.id ? 'Deleting...' : 'Delete Exercise'}
                                 </button>
@@ -392,7 +408,7 @@ export function WorkoutProgramCard({
                     "py-5 px-4 rounded-lg border border-dashed",
                     colors.border,
                     "bg-gray-50/50"
-                  )}>
+                  )} data-testid="empty-section-state">
                     <div className="flex items-center justify-center gap-2">
                       <Icon 
                         name="fitness_center" 

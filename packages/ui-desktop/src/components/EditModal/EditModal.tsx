@@ -86,6 +86,7 @@ export function EditModal({
       <div 
         className="fixed inset-0 bg-black bg-opacity-50 z-50"
         onClick={onClose}
+        data-testid="edit-exercise-modal"
       >
         {/* Modal */}
         <div className="flex items-center justify-center h-full p-4">

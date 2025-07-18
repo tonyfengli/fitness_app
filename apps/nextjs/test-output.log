@@ -1,0 +1,51 @@
+
+> @acme/nextjs@0.1.0 test:e2e /Users/tonyli/Desktop/fitness_app/apps/nextjs
+> playwright test
+
+[2m[WebServer] [22m [33m[1m⚠[22m[39m Webpack is configured while Turbopack is not, which may cause problems.
+[2m[WebServer] [22m [33m[1m⚠[22m[39m See instructions if you need to configure Turbopack:
+[2m[WebServer] [22m  https://nextjs.org/docs/app/api-reference/next-config-js/turbo
+[2m[WebServer] [22m
+🔐 Setting up authentication for E2E tests...
+📧 Using test email: test-trainer@example.com
+✅ Authentication successful!
+🌱 Seeding test data...
+✅ Test data seeded: E2E Test Workout - auto-generated with 5 exercises
+
+Running 4 tests using 4 workers
+
+  ✓  4 [chromium] › e2e/workout-management.spec.ts:74:3 › Workout Management › should show loading state during deletion (5.7s)
+[2m[WebServer] [22m>>> tRPC Error on 'workout.deleteExercise' Error [TRPCError]: Unexpected end of JSON input
+[2m[WebServer] [22m    at async (../../packages/api/src/trpc.ts:87:17)
+[2m[WebServer] [22m[0m [90m 85 |[39m   [36mconst[39m start [33m=[39m [33mDate[39m[33m.[39mnow()[33m;[39m[0m
+[2m[WebServer] [22m[0m [90m 86 |[39m[0m
+[2m[WebServer] [22m[0m[31m[1m>[22m[39m[90m 87 |[39m   [36mconst[39m result [33m=[39m [36mawait[39m next()[33m;[39m[0m
+[2m[WebServer] [22m[0m [90m    |[39m                 [31m[1m^[22m[39m[0m
+[2m[WebServer] [22m[0m [90m 88 |[39m[0m
+[2m[WebServer] [22m[0m [90m 89 |[39m   [36mconst[39m end [33m=[39m [33mDate[39m[33m.[39mnow()[33m;[39m[0m
+[2m[WebServer] [22m[0m [90m 90 |[39m[0m {
+[2m[WebServer] [22m  code: [32m'BAD_REQUEST'[39m,
+[2m[WebServer] [22m  [cause]: SyntaxError: Unexpected end of JSON input
+[2m[WebServer] [22m      at JSON.parse (<anonymous>)
+[2m[WebServer] [22m      at <unknown> (../../packages/api/src/trpc.ts:117:11)
+[2m[WebServer] [22m      at <unknown> (../../packages/api/src/trpc.ts:87:23)
+[2m[WebServer] [22m      at Array.map (<anonymous>)
+[2m[WebServer] [22m      at async handler (src/app/api/trpc/[trpc]/route.ts:34:19)
+[2m[WebServer] [22m  [0m [90m 115 |[39m       [36mthrow[39m [36mnew[39m [33mTRPCError[39m({ code[33m:[39m [32m"UNAUTHORIZED"[39m })[33m;[39m[0m
+[2m[WebServer] [22m  [0m [90m 116 |[39m     }[0m
+[2m[WebServer] [22m  [0m[31m[1m>[22m[39m[90m 117 |[39m     [36mreturn[39m next({[0m
+[2m[WebServer] [22m  [0m [90m     |[39m           [31m[1m^[22m[39m[0m
+[2m[WebServer] [22m  [0m [90m 118 |[39m       ctx[33m:[39m {[0m
+[2m[WebServer] [22m  [0m [90m 119 |[39m         [90m// infers the `session` as non-nullable[39m[0m
+[2m[WebServer] [22m  [0m [90m 120 |[39m         session[33m:[39m { [33m...[39mctx[33m.[39msession[33m,[39m user[33m:[39m ctx[33m.[39msession[33m.[39muser }[33m,[39m[0m
+[2m[WebServer] [22m}
+  ✓  3 [chromium-no-auth] › e2e/workout-management.spec.ts:74:3 › Workout Management › should show loading state during deletion (6.4s)
+  ✓  1 [chromium-no-auth] › e2e/workout-management.spec.ts:20:3 › Workout Management › should delete an exercise from workout block (8.8s)
+  ✓  2 [chromium] › e2e/workout-management.spec.ts:20:3 › Workout Management › should delete an exercise from workout block (9.4s)
+
+  4 passed (46.1s)
+
+To open last HTML report run:
+[36m[39m
+[36m  pnpm exec playwright show-report[39m
+[36m[39m

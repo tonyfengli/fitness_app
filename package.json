@@ -37,7 +37,8 @@
     "test:coverage": "turbo run test:coverage",
     "test:all": "turbo run test",
     "test:api": "turbo run test --filter=@acme/api",
-    "test:ai": "turbo run test --filter=@acme/ai"
+    "test:ai": "turbo run test --filter=@acme/ai",
+    "test:e2e": "turbo run test:e2e --filter=@acme/nextjs"
   },
   "devDependencies": {
     "@acme/prettier-config": "workspace:*",

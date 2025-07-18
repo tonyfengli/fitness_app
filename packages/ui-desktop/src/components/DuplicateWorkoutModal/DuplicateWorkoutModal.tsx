@@ -23,6 +23,7 @@ export function DuplicateWorkoutModal({
       <div 
         className="fixed inset-0 bg-black bg-opacity-50 z-50"
         onClick={onClose}
+        data-testid="duplicate-modal"
       >
         {/* Modal */}
         <div className="flex items-center justify-center h-full p-4">
@@ -98,6 +99,7 @@ export function DuplicateWorkoutModal({
                 onClick={handleConfirm}
                 disabled={isLoading}
                 className="bg-indigo-600 hover:bg-indigo-700 text-white"
+                data-testid="confirm-duplicate-button"
               >
                 {isLoading ? 'Duplicating...' : 'Confirm'}
               </Button>

@@ -94,7 +94,7 @@ export default function SignupPage() {
         });
         
         // Navigate back to trainer dashboard
-        router.push("/trainer-dashboard-new");
+        router.push("/trainer-dashboard");
         router.refresh();
       } else {
         // Normal signup flow

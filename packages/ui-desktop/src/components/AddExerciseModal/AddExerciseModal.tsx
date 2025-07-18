@@ -124,6 +124,7 @@ export function AddExerciseModal({
           <div 
             className="bg-white rounded-2xl shadow-xl max-w-2xl w-full h-[85vh] flex flex-col overflow-hidden"
             onClick={(e) => e.stopPropagation()}
+            data-testid="add-exercise-modal"
           >
           {/* Header */}
           <div className="px-8 py-6 border-b flex-shrink-0">
@@ -198,6 +199,7 @@ export function AddExerciseModal({
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       className="pl-10"
+                      data-testid="exercise-search-input"
                     />
                   </div>
                 </div>
@@ -232,6 +234,7 @@ export function AddExerciseModal({
                     className={`w-full px-4 py-2 bg-gray-50 hover:bg-gray-100 flex items-center justify-between transition-colors ${
                       hasSelectedExercise ? 'bg-indigo-50' : ''
                     }`}
+                    data-testid="exercise-select"
                   >
                     <span className="font-medium text-gray-700">{muscle}</span>
                     <div className="flex items-center gap-2">
@@ -255,6 +258,7 @@ export function AddExerciseModal({
                           className={`w-full px-4 py-3 text-left hover:bg-gray-50 transition-colors ${
                             selectedExercise?.id === exercise.id ? 'bg-indigo-50 border-l-4 border-indigo-500' : ''
                           }`}
+                          data-testid="exercise-option"
                         >
                           <div className="flex items-start justify-between">
                             <div className="flex-1">
@@ -315,6 +319,7 @@ export function AddExerciseModal({
                             min={1}
                             max={10}
                             className="text-center text-3xl font-bold px-4 py-3"
+                            data-testid="sets-input"
                           />
                         </div>
                         <button
@@ -344,6 +349,7 @@ export function AddExerciseModal({
                 onClick={goToNextStep}
                 disabled={!canProceed()}
                 className="bg-indigo-600 hover:bg-indigo-700 text-white"
+                data-testid={currentStep === 'exercise-details' ? 'add-exercise-button' : 'modal-next-button'}
               >
                 {currentStep === 'exercise-details' ? 'Add Exercise' : 'Continue'}
               </Button>

@@ -21,6 +21,7 @@ export function DeleteConfirmDialog({
       <div 
         className="fixed inset-0 bg-black bg-opacity-50 z-50"
         onClick={onClose}
+        data-testid="confirm-dialog"
       >
         {/* Modal */}
         <div className="flex items-center justify-center h-full p-4">
@@ -63,6 +64,7 @@ export function DeleteConfirmDialog({
                 onClick={onConfirm}
                 disabled={isDeleting}
                 className="bg-red-600 hover:bg-red-700 text-white"
+                data-testid="confirm-delete-button"
               >
                 {isDeleting ? 'Deleting...' : 'Delete'}
               </Button>

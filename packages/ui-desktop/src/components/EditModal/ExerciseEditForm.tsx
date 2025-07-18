@@ -250,6 +250,7 @@ export function ExerciseEditForm({
                   setCurrentStep('select-exercise');
                 }}
                 className="p-6 rounded-xl border-2 text-left transition-all border-gray-200 hover:border-indigo-600 hover:bg-indigo-50"
+                data-testid="edit-manually-option"
               >
                 <div className="flex items-start gap-4">
                   <div className="w-12 h-12 rounded-lg flex items-center justify-center bg-gray-100">
@@ -293,6 +294,7 @@ export function ExerciseEditForm({
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-12 pr-4 py-3 w-full"
+                data-testid="exercise-search-input"
               />
             </div>
 
@@ -309,6 +311,7 @@ export function ExerciseEditForm({
                         "w-full px-4 py-3 bg-gray-50 hover:bg-gray-100 flex items-center justify-between transition-colors",
                         hasSelectedExercise && "bg-indigo-50"
                       )}
+                      data-testid="exercise-select"
                     >
                       <span className="font-medium text-gray-900">{muscle}</span>
                       <div className="flex items-center gap-2">
@@ -336,6 +339,7 @@ export function ExerciseEditForm({
                               "w-full px-4 py-3 text-left hover:bg-gray-50 flex items-center justify-between transition-colors",
                               selectedExercise?.id === exercise.id && "bg-indigo-50 border-l-4 border-indigo-600"
                             )}
+                            data-testid="exercise-option"
                           >
                             <div>
                               <p className="font-medium text-gray-900">{exercise.name}</p>
@@ -390,6 +394,7 @@ export function ExerciseEditForm({
                       min={1}
                       max={10}
                       className="text-center text-3xl font-bold px-4 py-3"
+                      data-testid="sets-input"
                     />
                   </div>
                   <button
@@ -441,6 +446,7 @@ export function ExerciseEditForm({
             onClick={goToNextStep}
             disabled={!canProceed() || isLoading}
             className="bg-indigo-600 hover:bg-indigo-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+            data-testid={currentStep === 'exercise-details' ? 'save-changes-button' : 'modal-next-button'}
           >
             {currentStep === 'exercise-details' ? (isLoading ? 'Saving...' : 'Save Changes') : 'Continue'}
           </Button>
