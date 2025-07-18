@@ -19,10 +19,17 @@ export interface WorkoutProgramCardProps extends FeatureProps {
   exercises?: Exercise[];
   exerciseBlocks?: ExerciseBlock[];
   onAddExercise?: (blockName: string) => void;
-  onEditExercise?: (exerciseId: string) => void;
+  onEditExercise?: (exerciseId: string, exerciseName: string, blockName: string) => void;
+  onEditWorkout?: () => void;
+  onEditBlock?: (blockName: string) => void;
   onDeleteExercise?: (exerciseId: string, blockName: string) => void;
   onDeleteWorkout?: () => void;
+  onDuplicateWorkout?: () => void;
   onDeleteBlock?: (blockName: string) => void;
+  onMoveExercise?: (exerciseId: string, direction: 'up' | 'down') => void;
+  movingExerciseId?: string | null;
   isDeleting?: boolean;
+  deletingExerciseId?: string | null;
+  deletingBlockName?: string | null;
   className?: string;
 }

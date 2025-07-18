@@ -6,12 +6,15 @@ import {
   SidebarLayout, 
   ClientSidebar, 
   WorkoutProgramCard,
-  AddExerciseModal
+  AddExerciseModal,
+  DuplicateWorkoutModal,
+  EditModal,
+  DeleteConfirmDialog
 } from "@acme/ui-desktop";
 import { Button, FeedbackSection, Icon } from "@acme/ui-shared";
 import { useTRPC } from "~/trpc/react";
 import { useRouter } from "next/navigation";
-import type { ExerciseBlock } from "@acme/ui-desktop";
+import type { ExerciseBlock, EditContext } from "@acme/ui-desktop";
 import NewWorkoutModal from "./new-workout-modal";
 
 // Constants
@@ -38,10 +41,18 @@ interface WorkoutSectionProps {
   onFeedbackToggle: () => void;
   onLlmOutputToggle: () => void;
   onDeleteWorkout: (workoutId: string) => void;
+  onDuplicateWorkout: () => void;
   onDeleteBlock: (workoutId: string, blockName: string) => void;
   onDeleteExercise: (workoutId: string, exerciseId: string) => void;
   onAddExercise: (workoutId: string, blockName: string) => void;
+  onMoveExercise: (workoutId: string, exerciseId: string, direction: 'up' | 'down') => void;
+  onEditWorkout: (workoutId: string) => void;
+  onEditBlock: (workoutId: string, blockName: string) => void;
+  onEditExercise: (workoutId: string, exerciseId: string, exerciseName: string, blockName: string) => void;
+  movingExerciseId: string | null;
   isDeleting: boolean;
+  deletingExerciseId: string | null;
+  deletingBlockName: string | null;
   llmOutput?: any;
 }
 
@@ -55,10 +66,18 @@ function WorkoutSection({
   onFeedbackToggle, 
   onLlmOutputToggle,
   onDeleteWorkout,
+  onDuplicateWorkout,
   onDeleteBlock,
   onDeleteExercise,
   onAddExercise,
+  onMoveExercise,
+  onEditWorkout,
+  onEditBlock,
+  onEditExercise,
+  movingExerciseId,
   isDeleting,
+  deletingExerciseId,
+  deletingBlockName,
   llmOutput 
 }: WorkoutSectionProps) {
   return (
@@ -69,11 +88,18 @@ function WorkoutSection({
           week={week || DEFAULT_WORKOUT_WEEK}
           exerciseBlocks={exerciseBlocks}
           onAddExercise={(blockName) => onAddExercise(workoutId, blockName)}
-          onEditExercise={(id) => console.log("Edit exercise", id)}
+          onEditExercise={(exerciseId, exerciseName, blockName) => onEditExercise(workoutId, exerciseId, exerciseName, blockName)}
+          onEditWorkout={() => onEditWorkout(workoutId)}
+          onEditBlock={(blockName) => onEditBlock(workoutId, blockName)}
           onDeleteExercise={(exerciseId, blockName) => onDeleteExercise(workoutId, exerciseId)}
           onDeleteWorkout={() => onDeleteWorkout(workoutId)}
+          onDuplicateWorkout={onDuplicateWorkout}
           onDeleteBlock={(blockName) => onDeleteBlock(workoutId, blockName)}
+          onMoveExercise={(exerciseId, direction) => onMoveExercise(workoutId, exerciseId, direction)}
+          movingExerciseId={movingExerciseId}
           isDeleting={isDeleting}
+          deletingExerciseId={deletingExerciseId}
+          deletingBlockName={deletingBlockName}
           className="rounded-2xl shadow-none"
         />
         {/* LLM Output Section */}
@@ -190,6 +216,7 @@ export default function TrainerDashboardNew() {
   const [selectedClientId, setSelectedClientId] = useState<string>("");
   const [isNewWorkoutModalOpen, setIsNewWorkoutModalOpen] = useState(false);
   const [deletingWorkoutId, setDeletingWorkoutId] = useState<string | null>(null);
+  const [movingExerciseId, setMovingExerciseId] = useState<string | null>(null);
   const [addExerciseModal, setAddExerciseModal] = useState<{
     isOpen: boolean;
     workoutId: string;
@@ -199,6 +226,59 @@ export default function TrainerDashboardNew() {
     workoutId: "",
     blockName: "",
   });
+  const [duplicateWorkoutModal, setDuplicateWorkoutModal] = useState<{
+    isOpen: boolean;
+    workoutData: any | null;
+  }>({
+    isOpen: false,
+    workoutData: null,
+  });
+  const [editModal, setEditModal] = useState<{
+    isOpen: boolean;
+    context: EditContext | null;
+    currentData?: any;
+  }>({
+    isOpen: false,
+    context: null,
+    currentData: null,
+  });
+  
+  // Delete confirmation dialog states
+  const [deleteWorkoutDialog, setDeleteWorkoutDialog] = useState<{
+    isOpen: boolean;
+    workoutId: string | null;
+    workoutDate: string | null;
+  }>({
+    isOpen: false,
+    workoutId: null,
+    workoutDate: null,
+  });
+  
+  const [deleteBlockDialog, setDeleteBlockDialog] = useState<{
+    isOpen: boolean;
+    workoutId: string | null;
+    blockName: string | null;
+  }>({
+    isOpen: false,
+    workoutId: null,
+    blockName: null,
+  });
+  
+  const [deleteExerciseDialog, setDeleteExerciseDialog] = useState<{
+    isOpen: boolean;
+    workoutId: string | null;
+    exerciseId: string | null;
+    exerciseName: string | null;
+  }>({
+    isOpen: false,
+    workoutId: null,
+    exerciseId: null,
+    exerciseName: null,
+  });
+  
+  // Track which items are being deleted
+  const [deletingExerciseId, setDeletingExerciseId] = useState<string | null>(null);
+  const [deletingBlockName, setDeletingBlockName] = useState<string | null>(null);
   
   // Combined state for expanded sections
   interface ExpandedState {
@@ -279,71 +359,138 @@ export default function TrainerDashboardNew() {
     trpc.workout.addExercise.mutationOptions()
   );
   
+  // Duplicate workout mutation
+  const duplicateWorkoutMutation = useMutation(
+    trpc.workout.duplicateWorkout.mutationOptions()
+  );
+  
+  // Move exercise mutation
+  const moveExerciseMutation = useMutation(
+    trpc.workout.updateExerciseOrder.mutationOptions()
+  );
+  
   // Fetch available exercises for the business
   const { data: availableExercises } = useQuery(
     trpc.exercise.all.queryOptions({ limit: 1000 })
   );
 
   const handleDeleteWorkout = async (workoutId: string) => {
-    if (!confirm('Are you sure you want to delete this workout? This action cannot be undone.')) {
-      return;
-    }
-
-    setDeletingWorkoutId(workoutId);
+    // Find workout to get the date for display
+    const workout = workouts?.find(w => w.id === workoutId);
+    const workoutDate = workout ? new Date(workout.createdAt).toLocaleDateString() : 'this workout';
+    
+    setDeleteWorkoutDialog({
+      isOpen: true,
+      workoutId,
+      workoutDate,
+    });
+  };
+  
+  const confirmDeleteWorkout = async () => {
+    if (!deleteWorkoutDialog.workoutId) return;
+    
+    setDeletingWorkoutId(deleteWorkoutDialog.workoutId);
     try {
-      await deleteWorkoutMutation.mutateAsync({ workoutId });
+      await deleteWorkoutMutation.mutateAsync({ workoutId: deleteWorkoutDialog.workoutId });
+      
+      // Close dialog
+      setDeleteWorkoutDialog({ isOpen: false, workoutId: null, workoutDate: null });
       
       // Refresh the workouts list
       await queryClient.invalidateQueries({
         queryKey: [['workout', 'getClientWorkoutsWithExercises'], { input: { clientId: selectedClientId } }]
       });
+      
+      // Clear loading state after invalidation completes
+      setDeletingWorkoutId(null);
     } catch (error) {
       console.error('Failed to delete workout:', error);
       alert('Failed to delete workout. Please try again.');
-    } finally {
       setDeletingWorkoutId(null);
     }
   };
   
   const handleDeleteBlock = async (workoutId: string, blockName: string) => {
-    if (!confirm(`Are you sure you want to delete ${blockName}? This will remove all exercises in this block.`)) {
-      return;
-    }
-
+    setDeleteBlockDialog({
+      isOpen: true,
+      workoutId,
+      blockName,
+    });
+  };
+  
+  const confirmDeleteBlock = async () => {
+    if (!deleteBlockDialog.workoutId || !deleteBlockDialog.blockName) return;
+    
+    setDeletingBlockName(deleteBlockDialog.blockName);
     try {
       await deleteBlockMutation.mutateAsync({ 
-        workoutId, 
-        groupName: blockName 
+        workoutId: deleteBlockDialog.workoutId, 
+        groupName: deleteBlockDialog.blockName 
       });
+      
+      // Close dialog
+      setDeleteBlockDialog({ isOpen: false, workoutId: null, blockName: null });
       
       // Refresh the workouts list
       await queryClient.invalidateQueries({
         queryKey: [['workout', 'getClientWorkoutsWithExercises'], { input: { clientId: selectedClientId } }]
       });
+      
+      // Clear loading state after invalidation completes
+      setDeletingBlockName(null);
     } catch (error) {
       console.error('Failed to delete block:', error);
       alert('Failed to delete block. Please try again.');
+      setDeletingBlockName(null);
     }
   };
 
   const handleDeleteExercise = async (workoutId: string, exerciseId: string) => {
-    if (!confirm('Are you sure you want to delete this exercise?')) {
-      return;
+    // Find exercise name for display
+    const workout = workouts?.find(w => w.id === workoutId);
+    let exerciseName = 'this exercise';
+    if (workout) {
+      for (const block of workout.exerciseBlocks) {
+        const exercise = block.exercises.find(e => e.id === exerciseId);
+        if (exercise) {
+          exerciseName = exercise.name;
+          break;
+        }
+      }
     }
-
+    
+    setDeleteExerciseDialog({
+      isOpen: true,
+      workoutId,
+      exerciseId,
+      exerciseName,
+    });
+  };
+  
+  const confirmDeleteExercise = async () => {
+    if (!deleteExerciseDialog.workoutId || !deleteExerciseDialog.exerciseId) return;
+    
+    setDeletingExerciseId(deleteExerciseDialog.exerciseId);
     try {
       await deleteExerciseMutation.mutateAsync({ 
-        workoutId, 
-        workoutExerciseId: exerciseId // exerciseId is actually the workoutExerciseId based on our data structure
+        workoutId: deleteExerciseDialog.workoutId, 
+        workoutExerciseId: deleteExerciseDialog.exerciseId // exerciseId is actually the workoutExerciseId based on our data structure
       });
+      
+      // Close dialog
+      setDeleteExerciseDialog({ isOpen: false, workoutId: null, exerciseId: null, exerciseName: null });
       
       // Refresh the workouts list
       await queryClient.invalidateQueries({
         queryKey: [['workout', 'getClientWorkoutsWithExercises'], { input: { clientId: selectedClientId } }]
       });
+      
+      // Clear loading state after invalidation completes
+      setDeletingExerciseId(null);
     } catch (error) {
       console.error('Failed to delete exercise:', error);
       alert('Failed to delete exercise. Please try again.');
+      setDeletingExerciseId(null);
     }
   };
 
@@ -382,6 +529,107 @@ export default function TrainerDashboardNew() {
     }
   };
 
+  const handleDuplicateWorkout = (workout: any) => {
+    setDuplicateWorkoutModal({
+      isOpen: true,
+      workoutData: workout,
+    });
+  };
+
+  const handleDuplicateWorkoutConfirm = async () => {
+    if (!duplicateWorkoutModal.workoutData) return;
+    
+    try {
+      await duplicateWorkoutMutation.mutateAsync({
+        workoutId: duplicateWorkoutModal.workoutData.id,
+      });
+      
+      // Close modal
+      setDuplicateWorkoutModal({
+        isOpen: false,
+        workoutData: null,
+      });
+      
+      // Refresh the workouts list
+      await queryClient.invalidateQueries({
+        queryKey: [['workout', 'getClientWorkoutsWithExercises'], { input: { clientId: selectedClientId } }]
+      });
+    } catch (error) {
+      console.error('Failed to duplicate workout:', error);
+      alert('Failed to duplicate workout. Please try again.');
+    }
+  };
+
+  const handleMoveExercise = async (workoutId: string, exerciseId: string, direction: 'up' | 'down') => {
+    setMovingExerciseId(exerciseId);
+    
+    try {
+      await moveExerciseMutation.mutateAsync({
+        workoutId,
+        workoutExerciseId: exerciseId,
+        direction,
+      });
+      
+      // Refresh the workouts list
+      await queryClient.invalidateQueries({
+        queryKey: [['workout', 'getClientWorkoutsWithExercises'], { input: { clientId: selectedClientId } }]
+      });
+    } catch (error) {
+      console.error('Failed to move exercise:', error);
+      alert('Failed to move exercise. Please try again.');
+    } finally {
+      setMovingExerciseId(null);
+    }
+  };
+
+  const handleEditWorkout = (workoutId: string) => {
+    setEditModal({
+      isOpen: true,
+      context: { type: 'workout', workoutId },
+    });
+  };
+
+  const handleEditBlock = (workoutId: string, blockName: string) => {
+    setEditModal({
+      isOpen: true,
+      context: { type: 'block', workoutId, blockName },
+    });
+  };
+
+  const handleEditExercise = (workoutId: string, exerciseId: string, exerciseName: string, blockName: string) => {
+    // Find the exercise to get its current sets
+    const workout = workouts?.find(w => w.id === workoutId);
+    let exerciseData = null;
+    if (workout) {
+      for (const block of workout.exerciseBlocks) {
+        const exercise = block.exercises.find(e => e.id === exerciseId);
+        if (exercise) {
+          exerciseData = exercise;
+          break;
+        }
+      }
+    }
+    
+    setEditModal({
+      isOpen: true,
+      context: { type: 'exercise', workoutId, exerciseId, exerciseName, blockName },
+      currentData: exerciseData,
+    });
+  };
+
+  const handleEditSave = async (data: any) => {
+    // TODO: Implement save logic based on context
+    console.log('Saving edit data:', data, editModal.context);
+    
+    // Close modal after save
+    setEditModal({ isOpen: false, context: null, currentData: null });
+    
+    // Refresh data
+    await queryClient.invalidateQueries({
+      queryKey: [['workout', 'getClientWorkoutsWithExercises'], { input: { clientId: selectedClientId } }]
+    });
+  };
+
   if (error) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -403,6 +651,7 @@ export default function TrainerDashboardNew() {
           onAddNewClient={() => router.push("/signup")}
         />
       }
+      sidebarWidth="w-80"
     >
       <div className="flex flex-col h-full">
         {isLoading ? (
@@ -477,10 +726,18 @@ export default function TrainerDashboardNew() {
                           onFeedbackToggle={() => toggleExpanded('feedback', workout.id)}
                           onLlmOutputToggle={() => toggleExpanded('llmOutput', workout.id)}
                           onDeleteWorkout={handleDeleteWorkout}
+                          onDuplicateWorkout={() => handleDuplicateWorkout(workout)}
                           onDeleteBlock={handleDeleteBlock}
                           onDeleteExercise={handleDeleteExercise}
                           onAddExercise={handleAddExercise}
+                          onMoveExercise={handleMoveExercise}
+                          onEditWorkout={handleEditWorkout}
+                          onEditBlock={handleEditBlock}
+                          onEditExercise={handleEditExercise}
+                          movingExerciseId={movingExerciseId}
                           isDeleting={deletingWorkoutId === workout.id}
+                          deletingExerciseId={deletingExerciseId}
+                          deletingBlockName={deletingBlockName}
                           llmOutput={workout.llmOutput}
                         />
                       );
@@ -489,7 +746,7 @@ export default function TrainerDashboardNew() {
                     <div className="flex items-center justify-center h-64">
                       <div className="text-center">
                         <p className="text-gray-500 mb-4">No workouts found for this client</p>
-                        <Button onClick={() => router.push("/workout-generator")}>
+                        <Button onClick={() => setIsNewWorkoutModalOpen(true)}>
                           Generate First Workout
                         </Button>
                       </div>
@@ -524,6 +781,56 @@ export default function TrainerDashboardNew() {
         onAdd={handleAddExerciseSubmit}
         blockName={addExerciseModal.blockName}
         exercises={availableExercises || []}
+      />
+      
+      {/* Duplicate Workout Modal */}
+      <DuplicateWorkoutModal
+        isOpen={duplicateWorkoutModal.isOpen}
+        onClose={() => setDuplicateWorkoutModal({ isOpen: false, workoutData: null })}
+        onConfirm={handleDuplicateWorkoutConfirm}
+        workoutData={duplicateWorkoutModal.workoutData}
+        isLoading={duplicateWorkoutMutation.isPending}
+      />
+      
+      {/* Edit Modal */}
+      <EditModal
+        isOpen={editModal.isOpen}
+        onClose={() => setEditModal({ isOpen: false, context: null, currentData: null })}
+        onSave={handleEditSave}
+        context={editModal.context}
+        currentData={editModal.currentData}
+        availableExercises={availableExercises || []}
+      />
+      
+      {/* Delete Confirmation Dialogs */}
+      <DeleteConfirmDialog
+        isOpen={deleteWorkoutDialog.isOpen}
+        onClose={() => setDeleteWorkoutDialog({ isOpen: false, workoutId: null, workoutDate: null })}
+        onConfirm={confirmDeleteWorkout}
+        title="Delete Workout"
+        message="Are you sure you want to delete this workout? This action cannot be undone."
+        itemName={deleteWorkoutDialog.workoutDate ? `Workout from ${deleteWorkoutDialog.workoutDate}` : undefined}
+        isDeleting={deleteWorkoutMutation.isPending}
+      />
+      
+      <DeleteConfirmDialog
+        isOpen={deleteBlockDialog.isOpen}
+        onClose={() => setDeleteBlockDialog({ isOpen: false, workoutId: null, blockName: null })}
+        onConfirm={confirmDeleteBlock}
+        title="Delete Block"
+        message="Are you sure you want to delete this block? This will remove all exercises in this block."
+        itemName={deleteBlockDialog.blockName || undefined}
+        isDeleting={deleteBlockMutation.isPending}
+      />
+      
+      <DeleteConfirmDialog
+        isOpen={deleteExerciseDialog.isOpen}
+        onClose={() => setDeleteExerciseDialog({ isOpen: false, workoutId: null, exerciseId: null, exerciseName: null })}
+        onConfirm={confirmDeleteExercise}
+        title="Delete Exercise"
+        message="Are you sure you want to delete this exercise?"
+        itemName={deleteExerciseDialog.exerciseName || undefined}
+        isDeleting={deleteExerciseMutation.isPending}
       />
     </SidebarLayout>
   );

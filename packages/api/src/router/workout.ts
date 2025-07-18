@@ -499,53 +499,46 @@ export const workoutRouter = {
         currentUser.businessId
       );
       
-      // Get all exercises for this workout to reorder
-      const workoutExercises = await ctx.db.query.WorkoutExercise.findMany({
-        where: eq(WorkoutExercise.workoutId, input.workoutId),
-        orderBy: [WorkoutExercise.orderIndex],
-      });
-      
-      // Find the exercise to delete
-      const exerciseToDelete = workoutExercises.find(ex => ex.id === input.workoutExerciseId);
-      if (!exerciseToDelete) {
-        throw new TRPCError({
-          code: 'NOT_FOUND',
-          message: 'Exercise not found in workout',
-        });
-      }
-      
       // Use transaction to delete and reorder
       await ctx.db.transaction(async (tx) => {
+        // First, get the exercise to delete to know its group and orderIndex
+        const exerciseToDelete = await tx.query.WorkoutExercise.findFirst({
+          where: and(
+            eq(WorkoutExercise.id, input.workoutExerciseId),
+            eq(WorkoutExercise.workoutId, input.workoutId)
+          ),
+        });
+        
+        if (!exerciseToDelete) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Exercise not found in workout',
+          });
+        }
+        
         // Delete the exercise
         await tx.delete(WorkoutExercise)
           .where(eq(WorkoutExercise.id, input.workoutExerciseId));
         
-        // Reorder remaining exercises in the same group
-        const remainingExercises = workoutExercises
-          .filter(ex => ex.id !== input.workoutExerciseId && ex.groupName === exerciseToDelete.groupName)
-          .sort((a, b) => a.orderIndex - b.orderIndex);
-        
-        // Batch update orderIndex for exercises after the deleted one
-        // Build a list of exercises that need updating
-        const updates: { id: string; newOrderIndex: number }[] = [];
-        for (let i = 0; i < remainingExercises.length; i++) {
-          const newOrderIndex = i + 1;
-          if (remainingExercises[i].orderIndex !== newOrderIndex) {
-            updates.push({ id: remainingExercises[i].id, newOrderIndex });
-          }
-        }
-        
-        // Perform batch update more efficiently by updating all at once
-        if (updates.length > 0) {
-          // For now, we'll do individual updates in the transaction
-          // A more complex SQL CASE statement could be used for true batch updates
-          await Promise.all(
-            updates.map(u => 
-              tx.update(WorkoutExercise)
-                .set({ orderIndex: u.newOrderIndex })
-                .where(eq(WorkoutExercise.id, u.id))
-            )
-          );
+        // Only update exercises in the same group that come after the deleted one
+        // This is more efficient as it only updates what's necessary
+        if (exerciseToDelete.groupName !== null) {
+          await tx.update(WorkoutExercise)
+            .set({ orderIndex: sql`${WorkoutExercise.orderIndex} - 1` })
+            .where(and(
+              eq(WorkoutExercise.workoutId, input.workoutId),
+              eq(WorkoutExercise.groupName, exerciseToDelete.groupName),
+              sql`${WorkoutExercise.orderIndex} > ${exerciseToDelete.orderIndex}`
+            ));
+        } else {
+          // Handle case where groupName is null
+          await tx.update(WorkoutExercise)
+            .set({ orderIndex: sql`${WorkoutExercise.orderIndex} - 1` })
+            .where(and(
+              eq(WorkoutExercise.workoutId, input.workoutId),
+              sql`${WorkoutExercise.groupName} IS NULL`,
+              sql`${WorkoutExercise.orderIndex} > ${exerciseToDelete.orderIndex}`
+            ));
         }
       });
       

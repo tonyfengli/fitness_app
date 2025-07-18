@@ -1,5 +1,154 @@
 [
   {
+    "sessionId": "0ba4968c-ad34-4dae-b984-e2111e6badae",
+    "timestamp": "2025-07-17T23:41:55.420Z",
+    "filters": {
+      "clientName": "Hilary Chan",
+      "strengthCapacity": "moderate",
+      "skillCapacity": "moderate",
+      "intensity": "moderate",
+      "muscleTarget": [],
+      "muscleLessen": [],
+      "avoidJoints": [],
+      "includeExercises": [],
+      "avoidExercises": [],
+      "sessionGoal": "strength",
+      "isFullBody": false
+    },
+    "results": {
+      "template": "workout",
+      "exerciseCount": 117,
+      "constraintsSatisfied": true,
+      "generationTime": 39.92690400034189,
+      "blockCounts": {
+        "blockA": 5,
+        "blockB": 8,
+        "blockC": 8,
+        "blockD": 6
+      }
+    }
+  },
+  {
+    "sessionId": "e7fe0849-f836-48f6-acf4-78e5cf42b1a0",
+    "timestamp": "2025-07-17T20:52:07.793Z",
+    "filters": {
+      "clientName": "Curtis Yu",
+      "strengthCapacity": "moderate",
+      "skillCapacity": "moderate",
+      "intensity": "moderate",
+      "muscleTarget": [
+        "quads"
+      ],
+      "muscleLessen": [],
+      "avoidJoints": [],
+      "includeExercises": [],
+      "avoidExercises": [],
+      "sessionGoal": "strength",
+      "isFullBody": false
+    },
+    "results": {
+      "template": "workout",
+      "exerciseCount": 117,
+      "constraintsSatisfied": true,
+      "generationTime": 11.487833999563009,
+      "blockCounts": {
+        "blockA": 5,
+        "blockB": 8,
+        "blockC": 8,
+        "blockD": 6
+      }
+    }
+  },
+  {
+    "sessionId": "59c1fdaa-50bd-4f07-a9a1-035754ffe1d0",
+    "timestamp": "2025-07-17T18:23:43.560Z",
+    "filters": {
+      "clientName": "Curtis Yu",
+      "strengthCapacity": "moderate",
+      "skillCapacity": "moderate",
+      "intensity": "moderate",
+      "muscleTarget": [],
+      "muscleLessen": [],
+      "avoidJoints": [],
+      "includeExercises": [],
+      "avoidExercises": [],
+      "sessionGoal": "strength",
+      "isFullBody": false
+    },
+    "results": {
+      "template": "workout",
+      "exerciseCount": 117,
+      "constraintsSatisfied": true,
+      "generationTime": 5.4364999999525025,
+      "blockCounts": {
+        "blockA": 5,
+        "blockB": 8,
+        "blockC": 8,
+        "blockD": 6
+      }
+    }
+  },
+  {
+    "sessionId": "5f84f106-8fc8-4bc3-b6eb-2239a9288718",
+    "timestamp": "2025-07-17T18:22:20.678Z",
+    "filters": {
+      "clientName": "Curtis Yu",
+      "strengthCapacity": "moderate",
+      "skillCapacity": "moderate",
+      "intensity": "moderate",
+      "muscleTarget": [],
+      "muscleLessen": [],
+      "avoidJoints": [],
+      "includeExercises": [],
+      "avoidExercises": [],
+      "sessionGoal": "strength",
+      "isFullBody": false
+    },
+    "results": {
+      "template": "workout",
+      "exerciseCount": 117,
+      "constraintsSatisfied": true,
+      "generationTime": 4.060610000015004,
+      "blockCounts": {
+        "blockA": 5,
+        "blockB": 8,
+        "blockC": 8,
+        "blockD": 6
+      }
+    }
+  },
+  {
+    "sessionId": "132c267e-8c15-4bf4-b952-97b0ae88a6a9",
+    "timestamp": "2025-07-17T18:20:43.702Z",
+    "filters": {
+      "clientName": "Curtis Yu",
+      "strengthCapacity": "moderate",
+      "skillCapacity": "moderate",
+      "intensity": "moderate",
+      "muscleTarget": [
+        "glutes"
+      ],
+      "muscleLessen": [],
+      "avoidJoints": [],
+      "includeExercises": [],
+      "avoidExercises": [],
+      "sessionGoal": "strength",
+      "isFullBody": false
+    },
+    "results": {
+      "template": "workout",
+      "exerciseCount": 117,
+      "constraintsSatisfied": true,
+      "generationTime": 31.200831000023754,
+      "blockCounts": {
+        "blockA": 5,
+        "blockB": 8,
+        "blockC": 8,
+        "blockD": 6
+      }
+    }
+  },
+  {
     "sessionId": "2eda5a63-02af-4ceb-b69f-dfb7f00a5faa",
     "timestamp": "2025-07-17T17:50:23.651Z",
     "filters": {

@@ -1,3 +1,5 @@
+"use client";
+
 import React, { useState, useRef, useEffect } from "react";
 import type { WorkoutProgramCardProps } from "./WorkoutProgramCard.types";
 import { cn, Button, ExerciseItem, Icon } from "@acme/ui-shared";
@@ -5,54 +7,61 @@ import { cn, Button, ExerciseItem, Icon } from "@acme/ui-shared";
 // Block color configuration
 const BLOCK_COLORS = {
   "Block A": { 
-    border: "border-indigo-200", 
-    bg: "bg-indigo-50", 
-    hover: "hover:bg-indigo-50", 
-    icon: "bg-indigo-100", 
-    iconText: "text-indigo-600" 
+    border: "border-blue-200", 
+    bg: "bg-blue-50", 
+    hover: "hover:bg-blue-50", 
+    icon: "bg-blue-200", 
+    iconText: "text-blue-800",
+    numberText: "text-blue-800 font-bold"
   },
   "Block B": { 
     border: "border-green-200", 
     bg: "bg-green-50", 
     hover: "hover:bg-green-50", 
-    icon: "bg-green-100", 
-    iconText: "text-green-700" 
+    icon: "bg-green-200", 
+    iconText: "text-green-800",
+    numberText: "text-green-800 font-bold"
   },
   "Block C": { 
     border: "border-red-200", 
     bg: "bg-red-50", 
     hover: "hover:bg-red-50", 
-    icon: "bg-red-100", 
-    iconText: "text-red-600" 
+    icon: "bg-red-200", 
+    iconText: "text-red-800",
+    numberText: "text-red-800 font-bold"
   },
   "Block D": { 
     border: "border-yellow-200", 
     bg: "bg-yellow-50", 
     hover: "hover:bg-yellow-50", 
-    icon: "bg-yellow-100", 
-    iconText: "text-yellow-700" 
+    icon: "bg-yellow-200", 
+    iconText: "text-yellow-800",
+    numberText: "text-yellow-800 font-bold"
   },
   // Circuit rounds
   "Round 1": { 
     border: "border-purple-200", 
     bg: "bg-purple-50", 
     hover: "hover:bg-purple-50", 
-    icon: "bg-purple-100", 
-    iconText: "text-purple-600" 
+    icon: "bg-purple-200", 
+    iconText: "text-purple-800",
+    numberText: "text-purple-800 font-bold"
   },
   "Round 2": { 
     border: "border-pink-200", 
     bg: "bg-pink-50", 
     hover: "hover:bg-pink-50", 
-    icon: "bg-pink-100", 
-    iconText: "text-pink-600" 
+    icon: "bg-pink-200", 
+    iconText: "text-pink-800",
+    numberText: "text-pink-800 font-bold"
   },
   "Round 3": { 
     border: "border-orange-200", 
     bg: "bg-orange-50", 
     hover: "hover:bg-orange-50", 
-    icon: "bg-orange-100", 
-    iconText: "text-orange-600" 
+    icon: "bg-orange-200", 
+    iconText: "text-orange-800",
+    numberText: "text-orange-800 font-bold"
   },
 } as const;
 
@@ -63,10 +72,17 @@ export function WorkoutProgramCard({
   exerciseBlocks,
   onAddExercise,
   onEditExercise,
+  onEditWorkout,
+  onEditBlock,
   onDeleteExercise,
   onDeleteWorkout,
+  onDuplicateWorkout,
   onDeleteBlock,
+  onMoveExercise,
+  movingExerciseId,
   isDeleting = false,
+  deletingExerciseId,
+  deletingBlockName,
   className,
   showEditButton = true,
 }: WorkoutProgramCardProps) {
@@ -132,7 +148,11 @@ export function WorkoutProgramCard({
     }
   }, [isMenuOpen, blockMenuOpen, exerciseMenuOpen]);
   return (
-    <div className={cn("bg-white p-8 rounded-2xl shadow-lg", className)}>
+    <div className={cn(
+      "bg-white p-8 rounded-2xl shadow-lg transition-opacity duration-200",
+      isDeleting && "opacity-50",
+      className
+    )}>
       <div className="flex justify-between items-start mb-6">
         <div>
           <h3 className="text-2xl font-bold text-gray-900">{title}</h3>
@@ -155,6 +175,25 @@ export function WorkoutProgramCard({
             >
               <button
                 onClick={() => {
+                  onEditWorkout?.();
+                  setIsMenuOpen(false);
+                }}
+                className="w-full text-left px-8 py-4 text-lg font-medium text-gray-600 hover:bg-gray-50 transition-all duration-200"
+              >
+                Redo Workout
+              </button>
+              <button
+                onClick={() => {
+                  onDuplicateWorkout?.();
+                  setIsMenuOpen(false);
+                }}
+                className="w-full text-left px-8 py-4 text-lg font-medium text-gray-600 hover:bg-gray-50 transition-all duration-200"
+              >
+                Duplicate Workout
+              </button>
+              <div className="h-px bg-gray-200 mx-4 my-2" />
+              <button
+                onClick={() => {
                   onDeleteWorkout?.();
                   setIsMenuOpen(false);
                 }}
@@ -171,11 +210,20 @@ export function WorkoutProgramCard({
       <div className="space-y-6">
         {exerciseBlocks ? (
           // Render exercises grouped by blocks
-          exerciseBlocks.map((block, blockIndex) => {
-            const colors = BLOCK_COLORS[block.blockName as keyof typeof BLOCK_COLORS] || BLOCK_COLORS["Block A"];
+          (() => {
+            let exerciseNumber = 0; // Track exercise number across all blocks
             
-            return (
-              <div key={block.blockName}>
+            return exerciseBlocks.map((block, blockIndex) => {
+              const colors = BLOCK_COLORS[block.blockName as keyof typeof BLOCK_COLORS] || BLOCK_COLORS["Block A"];
+              
+              return (
+              <div 
+                key={block.blockName}
+                className={cn(
+                  "transition-opacity duration-200",
+                  deletingBlockName === block.blockName && "opacity-50"
+                )}
+              >
                 <div className={cn("mb-4 border-b pb-3", colors.border)}>
                   <div className="flex items-center justify-between">
                     <h4 className="text-lg font-semibold text-gray-800">
@@ -218,9 +266,10 @@ export function WorkoutProgramCard({
                               onDeleteBlock?.(block.blockName);
                               setBlockMenuOpen(prev => ({ ...prev, [block.blockName]: false }));
                             }}
-                            className="w-full text-left px-8 py-4 text-lg font-medium text-gray-600 hover:bg-gray-50 transition-all duration-200"
+                            disabled={deletingBlockName === block.blockName}
+                            className="w-full text-left px-8 py-4 text-lg font-medium text-gray-600 hover:bg-gray-50 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                           >
-                            Delete {block.blockName}
+                            {deletingBlockName === block.blockName ? 'Deleting...' : `Delete ${block.blockName}`}
                           </button>
                         </div>
                       )}
@@ -229,17 +278,22 @@ export function WorkoutProgramCard({
                 </div>
                 {block.exercises.length > 0 ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {block.exercises.map((exercise) => (
-                      <div 
-                        key={exercise.id}
-                        className={cn(
-                          "bg-gray-50 p-4 rounded-xl flex items-center transition-colors duration-200 group",
-                          colors.hover
-                        )}
-                      >
-                        <div className={cn("w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0", colors.icon)}>
-                          <Icon name="fitness_center" size={20} className={colors.iconText} />
-                        </div>
+                    {block.exercises.map((exercise, exerciseIndex) => {
+                      exerciseNumber++; // Increment exercise number for each exercise
+                      
+                      return (
+                        <div 
+                          key={exercise.id}
+                          className={cn(
+                            "bg-gray-50 p-4 rounded-xl flex items-center transition-all duration-200 group",
+                            colors.hover,
+                            movingExerciseId === exercise.id && "opacity-50",
+                            deletingExerciseId === exercise.id && "opacity-50"
+                          )}
+                        >
+                          <div className={cn("w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0", colors.icon)}>
+                            <span className={cn("text-lg", colors.numberText)}>{exerciseNumber}</span>
+                          </div>
                         <div className="flex-1 ml-3">
                           <p className="font-medium text-gray-800 leading-tight">{exercise.name}</p>
                           <p className="text-sm text-gray-500 mt-0.5">{exercise.sets} sets</p>
@@ -269,19 +323,69 @@ export function WorkoutProgramCard({
                               >
                                 <button
                                   onClick={() => {
+                                    onEditExercise?.(exercise.id, exercise.name, block.blockName);
+                                    setExerciseMenuOpen(prev => ({ ...prev, [exercise.id]: false }));
+                                  }}
+                                  className="w-full text-left px-8 py-4 text-lg font-medium text-gray-600 hover:bg-gray-50 transition-all duration-200"
+                                >
+                                  Edit Exercise
+                                </button>
+                                
+                                {/* Add divider if there are move options */}
+                                {(exerciseIndex > 0 || exerciseIndex < block.exercises.length - 1) && (
+                                  <div className="h-px bg-gray-200 mx-4 my-2" />
+                                )}
+                                
+                                {/* Move Up - show only if not first exercise */}
+                                {exerciseIndex > 0 && (
+                                  <button
+                                    onClick={() => {
+                                      onMoveExercise?.(exercise.id, 'up');
+                                      setExerciseMenuOpen(prev => ({ ...prev, [exercise.id]: false }));
+                                    }}
+                                    disabled={movingExerciseId === exercise.id}
+                                    className="w-full text-left px-8 py-4 text-lg font-medium text-gray-600 hover:bg-gray-50 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                                  >
+                                    {movingExerciseId === exercise.id ? 'Moving...' : 'Move Up'}
+                                  </button>
+                                )}
+                                
+                                {/* Move Down - show only if not last exercise */}
+                                {exerciseIndex < block.exercises.length - 1 && (
+                                  <button
+                                    onClick={() => {
+                                      onMoveExercise?.(exercise.id, 'down');
+                                      setExerciseMenuOpen(prev => ({ ...prev, [exercise.id]: false }));
+                                    }}
+                                    disabled={movingExerciseId === exercise.id}
+                                    className="w-full text-left px-8 py-4 text-lg font-medium text-gray-600 hover:bg-gray-50 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                                  >
+                                    {movingExerciseId === exercise.id ? 'Moving...' : 'Move Down'}
+                                  </button>
+                                )}
+                                
+                                {/* Add divider if there are move options */}
+                                {(exerciseIndex > 0 || exerciseIndex < block.exercises.length - 1) && (
+                                  <div className="h-px bg-gray-200 mx-4 my-2" />
+                                )}
+                                
+                                <button
+                                  onClick={() => {
                                     onDeleteExercise?.(exercise.id, block.blockName);
                                     setExerciseMenuOpen(prev => ({ ...prev, [exercise.id]: false }));
                                   }}
-                                  className="w-full text-left px-6 py-3.5 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-all duration-200"
+                                  disabled={deletingExerciseId === exercise.id}
+                                  className="w-full text-left px-8 py-4 text-lg font-medium text-gray-600 hover:bg-gray-50 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
-                                  Delete Exercise
+                                  {deletingExerciseId === exercise.id ? 'Deleting...' : 'Delete Exercise'}
                                 </button>
                               </div>
                             )}
                           </div>
                         )}
-                      </div>
-                    ))}
+                        </div>
+                      );
+                    })}
                   </div>
                 ) : (
                   <div className={cn(
@@ -301,7 +405,8 @@ export function WorkoutProgramCard({
                 )}
               </div>
             );
-          })
+          });
+          })()
         ) : exercises ? (
           // Render exercises without blocks (backward compatibility)
           exercises.map((exercise) => (

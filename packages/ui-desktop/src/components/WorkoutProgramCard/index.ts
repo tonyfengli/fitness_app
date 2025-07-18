@@ -1,2 +1,2 @@
 export { WorkoutProgramCard } from "./WorkoutProgramCard";
-export type { WorkoutProgramCardProps, Exercise } from "./WorkoutProgramCard.types";
+export type { WorkoutProgramCardProps, Exercise as WorkoutProgramExercise, ExerciseBlock } from "./WorkoutProgramCard.types";

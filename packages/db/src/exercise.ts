@@ -1,4 +1,5 @@
 import { pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { InferSelectModel } from "drizzle-orm";
 
 export const primaryMuscleEnum = pgEnum("primary_muscle", [
   "glutes",
@@ -175,3 +176,6 @@ export const exercises = pgTable("exercises", {
   strengthLevel: strengthLevelEnum("strength_level").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
+
+// Export the Exercise type
+export type Exercise = InferSelectModel<typeof exercises>;

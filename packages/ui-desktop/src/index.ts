@@ -9,3 +9,6 @@ export * from "./components/ClientWorkoutCard";
 export * from "./components/AppHeader";
 export * from "./components/PlayerListItem";
 export * from "./components/AddExerciseModal";
+export * from "./components/DuplicateWorkoutModal";
+export * from "./components/EditModal";
+export * from "./components/DeleteConfirmDialog";

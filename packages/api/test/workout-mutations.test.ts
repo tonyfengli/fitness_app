@@ -67,13 +67,13 @@ describe('Workout Mutations', () => {
         findFirst: vi.fn().mockResolvedValue(mockWorkout),
       };
       
-      // Mock exercise lookup
-      ctx.db.query.WorkoutExercise = {
-        findMany: vi.fn().mockResolvedValue(mockExercises),
-      };
-      
       // Mock transaction
       const mockTx = {
+        query: {
+          WorkoutExercise: {
+            findFirst: vi.fn().mockResolvedValue(mockExercises[0]), // Return first exercise
+          },
+        },
         delete: vi.fn().mockReturnValue({
           where: vi.fn().mockResolvedValue(undefined),
         }),
@@ -94,7 +94,7 @@ describe('Workout Mutations', () => {
       
       expect(result).toEqual({ success: true });
       expect(mockTx.delete).toHaveBeenCalled();
-      // Should update we-2 to have orderIndex 1
+      // Should update remaining exercises in the same group
       expect(mockTx.update).toHaveBeenCalledWith(WorkoutExercise);
     });
     
@@ -119,9 +119,16 @@ describe('Workout Mutations', () => {
       ctx.db.query.Workout = {
         findFirst: vi.fn().mockResolvedValue(mockWorkout),
       };
-      ctx.db.query.WorkoutExercise = {
-        findMany: vi.fn().mockResolvedValue(mockExercises),
+      
+      // Mock transaction with exercise not found
+      const mockTx = {
+        query: {
+          WorkoutExercise: {
+            findFirst: vi.fn().mockResolvedValue(null), // Exercise not found
+          },
+        },
       };
+      ctx.db.transaction = vi.fn().mockImplementation(async (fn) => fn(mockTx));
       
       caller = createCaller(ctx);
       
