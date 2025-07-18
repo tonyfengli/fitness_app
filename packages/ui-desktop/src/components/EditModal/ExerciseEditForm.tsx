@@ -11,6 +11,7 @@ interface ExerciseEditFormProps {
   availableExercises: any[];
   onSave: (data: any) => void;
   onCancel: () => void;
+  isLoading?: boolean;
 }
 
 type Step = 'choose-method' | 'select-exercise' | 'exercise-details';
@@ -48,6 +49,7 @@ export function ExerciseEditForm({
   availableExercises,
   onSave,
   onCancel,
+  isLoading = false,
 }: ExerciseEditFormProps) {
   // Find the current exercise from availableExercises based on the name
   const currentExercise = useMemo(() => {
@@ -421,6 +423,7 @@ export function ExerciseEditForm({
           <Button
             variant="ghost"
             onClick={onCancel}
+            disabled={isLoading}
           >
             Cancel
           </Button>
@@ -430,15 +433,16 @@ export function ExerciseEditForm({
           <Button
             variant="ghost"
             onClick={goToPreviousStep}
+            disabled={isLoading}
           >
             Back
           </Button>
           <Button
             onClick={goToNextStep}
-            disabled={!canProceed()}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white"
+            disabled={!canProceed() || isLoading}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {currentStep === 'exercise-details' ? 'Save Changes' : 'Continue'}
+            {currentStep === 'exercise-details' ? (isLoading ? 'Saving...' : 'Save Changes') : 'Continue'}
           </Button>
         </div>
       )}

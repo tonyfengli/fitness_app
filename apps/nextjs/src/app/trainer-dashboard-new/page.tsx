@@ -369,6 +369,16 @@ export default function TrainerDashboardNew() {
     trpc.workout.updateExerciseOrder.mutationOptions()
   );
   
+  // Replace exercise mutation
+  const replaceExerciseMutation = useMutation(
+    trpc.workout.replaceExercise.mutationOptions()
+  );
+  
+  // Update exercise sets mutation
+  const updateExerciseSetsMutation = useMutation(
+    trpc.workout.updateExerciseSets.mutationOptions()
+  );
+  
   // Fetch available exercises for the business
   const { data: availableExercises } = useQuery(
     trpc.exercise.all.queryOptions({ limit: 1000 })
@@ -618,16 +628,46 @@ export default function TrainerDashboardNew() {
   };
 
   const handleEditSave = async (data: any) => {
-    // TODO: Implement save logic based on context
-    console.log('Saving edit data:', data, editModal.context);
+    if (!editModal.context) return;
     
-    // Close modal after save
-    setEditModal({ isOpen: false, context: null, currentData: null });
-    
-    // Refresh data
-    await queryClient.invalidateQueries({
-      queryKey: [['workout', 'getClientWorkoutsWithExercises'], { input: { clientId: selectedClientId } }]
-    });
+    try {
+      if (editModal.context.type === 'exercise') {
+        const { workoutId, exerciseId } = editModal.context;
+        
+        // Check if we're changing the exercise or just the sets
+        const currentExercise = editModal.currentData;
+        const isChangingExercise = data.exerciseId && data.exerciseId !== currentExercise?.exerciseId;
+        
+        if (isChangingExercise) {
+          // Replace the exercise
+          await replaceExerciseMutation.mutateAsync({
+            workoutId,
+            workoutExerciseId: exerciseId,
+            newExerciseId: data.exerciseId
+          });
+        }
+        
+        // Always update sets if provided
+        if (data.sets) {
+          await updateExerciseSetsMutation.mutateAsync({
+            workoutId,
+            workoutExerciseId: exerciseId,
+            sets: data.sets
+          });
+        }
+      }
+      
+      // Close modal after save
+      setEditModal({ isOpen: false, context: null, currentData: null });
+      
+      // Refresh data
+      await queryClient.invalidateQueries({
+        queryKey: [['workout', 'getClientWorkoutsWithExercises'], { input: { clientId: selectedClientId } }]
+      });
+    } catch (error) {
+      console.error('Failed to save edit:', error);
+      alert('Failed to save changes. Please try again.');
+    }
   };
 
   if (error) {
@@ -800,6 +840,7 @@ export default function TrainerDashboardNew() {
         context={editModal.context}
         currentData={editModal.currentData}
         availableExercises={availableExercises || []}
+        isLoading={replaceExerciseMutation.isPending || updateExerciseSetsMutation.isPending}
       />
       
       {/* Delete Confirmation Dialogs */}

@@ -65,6 +65,7 @@ export function EditModal({
             availableExercises={availableExercises}
             onSave={onSave}
             onCancel={onClose}
+            isLoading={isLoading}
           />
         );
 

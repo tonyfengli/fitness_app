@@ -494,7 +494,7 @@ export const workoutRouter = {
       
       // Verify workout exists and user has access
       const workoutService = new WorkoutService(ctx.db);
-      const workout = await workoutService.verifyWorkoutAccess(
+      await workoutService.verifyWorkoutAccess(
         input.workoutId,
         currentUser.businessId
       );
@@ -557,7 +557,7 @@ export const workoutRouter = {
       
       // Verify workout exists and user has access
       const workoutService = new WorkoutService(ctx.db);
-      const workout = await workoutService.verifyWorkoutAccess(
+      await workoutService.verifyWorkoutAccess(
         input.workoutId,
         currentUser.businessId
       );
@@ -578,6 +578,12 @@ export const workoutRouter = {
       }
       
       const exercise = workoutExercises[exerciseIndex];
+      if (!exercise) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Exercise not found in workout',
+        });
+      }
       
       // Find exercises in the same group
       const groupExercises = workoutExercises
@@ -597,6 +603,12 @@ export const workoutRouter = {
       
       // Swap the exercises
       const targetExercise = groupExercises[targetGroupIndex];
+      if (!targetExercise) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Target exercise not found',
+        });
+      }
       
       await ctx.db.transaction(async (tx) => {
         // Swap orderIndex values
@@ -623,7 +635,7 @@ export const workoutRouter = {
       
       // Verify workout exists and user has access
       const workoutService = new WorkoutService(ctx.db);
-      const workout = await workoutService.verifyWorkoutAccess(
+      await workoutService.verifyWorkoutAccess(
         input.workoutId,
         currentUser.businessId
       );
@@ -695,7 +707,7 @@ export const workoutRouter = {
       
       // Use WorkoutService for validation
       const workoutService = new WorkoutService(ctx.db);
-      const workout = await workoutService.verifyWorkoutAccess(
+      await workoutService.verifyWorkoutAccess(
         input.workoutId, 
         currentUser.businessId
       );
@@ -743,6 +755,46 @@ export const workoutRouter = {
       return { success: true };
     }),
 
+  // Update exercise sets
+  updateExerciseSets: protectedProcedure
+    .input(z.object({
+      workoutId: z.string().uuid(),
+      workoutExerciseId: z.string().uuid(),
+      sets: z.number().int().min(1).max(10)
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const currentUser = getSessionUser(ctx);
+      
+      // Use WorkoutService for validation
+      const workoutService = new WorkoutService(ctx.db);
+      await workoutService.verifyWorkoutAccess(
+        input.workoutId, 
+        currentUser.businessId
+      );
+      
+      // Verify the workout exercise exists
+      const workoutExercise = await ctx.db.query.WorkoutExercise.findFirst({
+        where: and(
+          eq(WorkoutExercise.id, input.workoutExerciseId),
+          eq(WorkoutExercise.workoutId, input.workoutId)
+        ),
+      });
+      
+      if (!workoutExercise) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Exercise not found in workout',
+        });
+      }
+      
+      // Update the sets
+      await ctx.db.update(WorkoutExercise)
+        .set({ setsCompleted: input.sets })
+        .where(eq(WorkoutExercise.id, input.workoutExerciseId));
+      
+      return { success: true };
+    }),
+
   // Add a new exercise to an existing workout
   addExercise: protectedProcedure
     .input(z.object({
@@ -757,7 +809,7 @@ export const workoutRouter = {
       
       // Use WorkoutService for validation
       const workoutService = new WorkoutService(ctx.db);
-      const workout = await workoutService.verifyWorkoutAccess(
+      await workoutService.verifyWorkoutAccess(
         input.workoutId,
         currentUser.businessId
       );
@@ -795,7 +847,7 @@ export const workoutRouter = {
       
       if (input.position === 'beginning' && groupExercises.length > 0) {
         // Insert at beginning of group
-        newOrderIndex = groupExercises[0].orderIndex;
+        newOrderIndex = groupExercises[0]!.orderIndex;
         
         // Shift all exercises in workout with orderIndex >= newOrderIndex
         await ctx.db.transaction(async (tx) => {
@@ -820,9 +872,9 @@ export const workoutRouter = {
       } else {
         // Insert at end of group or as first exercise in new/empty group
         if (groupExercises.length > 0) {
-          newOrderIndex = groupExercises[groupExercises.length - 1].orderIndex + 1;
+          newOrderIndex = groupExercises[groupExercises.length - 1]!.orderIndex + 1;
         } else if (existingExercises.length > 0) {
-          newOrderIndex = existingExercises[existingExercises.length - 1].orderIndex + 1;
+          newOrderIndex = existingExercises[existingExercises.length - 1]!.orderIndex + 1;
         } else {
           newOrderIndex = 1;
         }
@@ -922,7 +974,6 @@ export const workoutRouter = {
                 orderIndex: ex.orderIndex,
                 setsCompleted: ex.setsCompleted,
                 groupName: ex.groupName,
-                notes: ex.notes,
               }))
             );
         }

@@ -100,7 +100,7 @@ export async function getWorkoutsWithExercisesOptimized(
     if (!acc[row.workoutId]) {
       acc[row.workoutId] = [];
     }
-    acc[row.workoutId].push({
+    acc[row.workoutId]!.push({
       workoutExerciseId: row.workoutExerciseId,
       orderIndex: row.orderIndex,
       setsCompleted: row.setsCompleted,

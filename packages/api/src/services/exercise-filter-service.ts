@@ -60,7 +60,7 @@ export class ExerciseFilterService {
     
     return exercises.filter(exercise => {
       const exerciseEquipment = exercise.equipment || [];
-      return equipment.some(eq => exerciseEquipment.includes(eq));
+      return equipment.some(eq => exerciseEquipment.includes(eq as any));
     });
   }
 
@@ -79,7 +79,7 @@ export class ExerciseFilterService {
       const primaryMuscle = exercise.primaryMuscle;
       const secondaryMuscles = exercise.secondaryMuscles || [];
       return muscleGroups.some(muscle => 
-        primaryMuscle === muscle || secondaryMuscles.includes(muscle)
+        primaryMuscle === muscle || secondaryMuscles.includes(muscle as any)
       );
     });
   }
@@ -118,8 +118,8 @@ export class ExerciseFilterService {
     const allowedDifficulties = difficultyMap[skillCapacity as keyof typeof difficultyMap] || difficultyMap.moderate;
     
     return exercises.filter(exercise => {
-      const difficulty = exercise.difficulty || "moderate";
-      return allowedDifficulties.includes(difficulty);
+      const complexity = exercise.complexityLevel || "moderate";
+      return allowedDifficulties.includes(complexity);
     });
   }
 

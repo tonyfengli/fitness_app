@@ -1,5 +1,5 @@
 {
-  "timestamp": "2025-07-17T23:41:55.415Z",
+  "timestamp": "2025-07-18T04:32:31.742Z",
   "filters": {
     "clientName": "Hilary Chan",
     "strengthCapacity": "moderate",
@@ -49,18 +49,18 @@
       "count": 8,
       "exercises": [
         {
-          "id": "dce44ce1-9f79-4c98-80ba-d4cc6d2bb9a6",
-          "name": "Lateral Step-Up with Goblet Hold",
+          "id": "dc085fdb-b6c4-4942-9eb5-3dbf04d7161e",
+          "name": "TRX Mid Row",
+          "score": 5
+        },
+        {
+          "id": "050e52d0-5f3a-491c-b424-24c5dad31a62",
+          "name": "Farmer's Carry Step-Up",
           "score": 5
         },
         {
           "id": "11611e20-e723-4cfe-9276-7ab4eb73f829",
           "name": "Landmine Reverse Lunge",
-          "score": 5
-        },
-        {
-          "id": "8a08ffdd-2998-4795-8030-ccd357613f7b",
-          "name": "Elevated Push-Ups",
           "score": 5
         }
       ]
@@ -69,18 +69,18 @@
       "count": 8,
       "exercises": [
         {
-          "id": "617f0ccf-e9ec-494a-9608-1a3402a57cab",
-          "name": "Band Pull-Apart",
-          "score": 5
-        },
-        {
           "id": "aa66d8b3-907a-42ec-ac9b-bbaa347a88b8",
           "name": "Y/W Raises",
           "score": 5
         },
         {
-          "id": "ebfd61ba-7bbc-470d-8b9b-c5bc66da2430",
-          "name": "Dumbbell Pullover",
+          "id": "5a75f68d-4d30-4211-a98c-a74c71f70f8d",
+          "name": "Glute Bridge Thrust with Dumbbell",
+          "score": 5
+        },
+        {
+          "id": "4e40b3f0-cf13-4998-8ec0-61a9b5dd5239",
+          "name": "Banded Prone Overhead Press",
           "score": 5
         }
       ]
@@ -89,23 +89,23 @@
       "count": 6,
       "exercises": [
         {
-          "id": "050e52d0-5f3a-491c-b424-24c5dad31a62",
-          "name": "Farmer's Carry Step-Up",
+          "id": "fb5bf2ce-611c-4a2f-ae16-8d21d28280c1",
+          "name": "Side Plank Hip Raise",
           "score": 5
         },
         {
-          "id": "b0736db8-79e4-493d-93da-fcc0af33ab17",
-          "name": "Bird Dog Row",
+          "id": "0975bd35-a1fd-4ea7-acc4-dd9c05d4a982",
+          "name": "Bosu Plank Jack",
           "score": 5
         },
         {
-          "id": "c9916c21-2e2f-44d0-9aa3-d94b5e35c65c",
-          "name": "BOSU Bird Dog",
+          "id": "dd47414b-bca2-4fa8-a200-c159632e31d6",
+          "name": "Box Pike Walkout",
           "score": 5
         },
         {
-          "id": "ed0ee454-b40b-403a-bc20-cff5647fa683",
-          "name": "Farmer's Carry Reverse Lunge",
+          "id": "8d628b77-b0bd-4104-b7d0-5e91802d785b",
+          "name": "Banded Side Plank Clamshell",
           "score": 5
         }
       ]
@@ -1016,7 +1016,7 @@
   "debugLog": [
     {
       "step": 1,
-      "timestamp": "2025-07-17T23:41:55.380Z",
+      "timestamp": "2025-07-18T04:32:31.729Z",
       "phase": "filtering",
       "action": "Starting enhanced filtering",
       "details": {
@@ -1033,7 +1033,7 @@
     },
     {
       "step": 2,
-      "timestamp": "2025-07-17T23:41:55.382Z",
+      "timestamp": "2025-07-18T04:32:31.729Z",
       "phase": "filtering",
       "action": "Filtering by strength: moderate",
       "details": {
@@ -1048,7 +1048,7 @@
     },
     {
       "step": 3,
-      "timestamp": "2025-07-17T23:41:55.382Z",
+      "timestamp": "2025-07-18T04:32:31.729Z",
       "phase": "filtering",
       "action": "Strength filtering complete",
       "details": {
@@ -1056,11 +1056,11 @@
         "remaining": 120
       },
       "exercisesAffected": 10,
-      "performanceMs": 2.1560169998556376
+      "performanceMs": 0.2590409999975236
     },
     {
       "step": 4,
-      "timestamp": "2025-07-17T23:41:55.382Z",
+      "timestamp": "2025-07-18T04:32:31.729Z",
       "phase": "filtering",
       "action": "Filtering by skill: moderate",
       "details": {
@@ -1075,7 +1075,7 @@
     },
     {
       "step": 5,
-      "timestamp": "2025-07-17T23:41:55.383Z",
+      "timestamp": "2025-07-18T04:32:31.730Z",
       "phase": "filtering",
       "action": "Skill filtering complete",
       "details": {
@@ -1083,11 +1083,11 @@
         "remaining": 117
       },
       "exercisesAffected": 3,
-      "performanceMs": 0.25303499959409237
+      "performanceMs": 0.10275200000251061
     },
     {
       "step": 6,
-      "timestamp": "2025-07-17T23:41:55.383Z",
+      "timestamp": "2025-07-18T04:32:31.730Z",
       "phase": "filtering",
       "action": "Combined included and filtered exercises",
       "details": {
@@ -1097,7 +1097,7 @@
     },
     {
       "step": 7,
-      "timestamp": "2025-07-17T23:41:55.383Z",
+      "timestamp": "2025-07-18T04:32:31.730Z",
       "phase": "filtering",
       "action": "Filtering complete",
       "details": {
