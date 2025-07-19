@@ -24,6 +24,8 @@ export interface CheckInResult {
   businessId?: string;
   sessionId?: string;
   checkInId?: string;
+  phoneNumber?: string;
+  shouldStartPreferences?: boolean;
 }
 
 export async function processCheckIn(phoneNumber: string): Promise<CheckInResult> {
@@ -104,6 +106,8 @@ export async function processCheckIn(phoneNumber: string): Promise<CheckInResult
         businessId: clientUser.businessId,
         sessionId: session.id,
         checkInId: existingCheckIn[0].id,
+        phoneNumber: normalizedPhone,
+        shouldStartPreferences: existingCheckIn[0].preferenceCollectionStep === "not_started",
       };
     }
     
@@ -147,6 +151,8 @@ export async function processCheckIn(phoneNumber: string): Promise<CheckInResult
         businessId: clientUser.businessId,
         sessionId: session.id,
         checkInId: existingCheckIn[0].id,
+        phoneNumber: normalizedPhone,
+        shouldStartPreferences: true, // Always true for new check-ins
       };
     } else {
       // Create new check-in record
@@ -195,6 +201,8 @@ export async function processCheckIn(phoneNumber: string): Promise<CheckInResult
         businessId: clientUser.businessId,
         sessionId: session.id,
         checkInId: newCheckIn.id,
+        phoneNumber: normalizedPhone,
+        shouldStartPreferences: true, // Always true for new check-ins
       };
     }
   } catch (error) {

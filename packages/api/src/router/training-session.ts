@@ -6,6 +6,7 @@ import { desc, eq, and, gte, lte, or } from "@acme/db";
 import { 
   TrainingSession, 
   UserTrainingSession,
+  WorkoutPreferences,
   CreateTrainingSessionSchema,
   CreateUserTrainingSessionSchema,
   user as userTable
@@ -132,17 +133,38 @@ export const trainingSessionRouter = {
         ))
         .orderBy(desc(UserTrainingSession.checkedInAt));
       
-      // Get user details for each checked-in user
+      // Get user details and preferences for each checked-in user
       const usersWithDetails = await Promise.all(
         checkedInUsers.map(async (checkin) => {
           const userInfo = await ctx.db.query.user.findFirst({
             where: eq(userTable.id, checkin.userId)
           });
+          
+          // Get workout preferences if collected
+          const [preferences] = await ctx.db
+            .select()
+            .from(WorkoutPreferences)
+            .where(and(
+              eq(WorkoutPreferences.userId, checkin.userId),
+              eq(WorkoutPreferences.trainingSessionId, input.sessionId)
+            ))
+            .limit(1);
+          
           return {
             userId: checkin.userId,
             checkedInAt: checkin.checkedInAt,
             userName: userInfo?.name || null,
-            userEmail: userInfo?.email || ""
+            userEmail: userInfo?.email || "",
+            preferenceCollectionStep: checkin.preferenceCollectionStep,
+            preferences: preferences ? {
+              intensity: preferences.intensity,
+              muscleTargets: preferences.muscleTargets,
+              muscleLessens: preferences.muscleLessens,
+              includeExercises: preferences.includeExercises,
+              avoidExercises: preferences.avoidExercises,
+              avoidJoints: preferences.avoidJoints,
+              sessionGoal: preferences.sessionGoal
+            } : null
           };
         })
       );

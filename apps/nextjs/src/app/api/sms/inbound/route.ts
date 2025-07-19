@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { validateRequest } from "twilio";
-import { interpretSMS } from "@acme/ai";
+import { interpretSMS, parseWorkoutPreferences } from "@acme/ai";
 import { 
   processCheckIn, 
   setBroadcastFunction,
   saveMessage, 
   getUserByPhone,
   twilioClient,
-  createLogger 
+  createLogger,
+  WorkoutPreferenceService
 } from "@acme/api";
 import { broadcastCheckIn } from "../../sse/connections";
 
@@ -117,6 +118,132 @@ export async function POST(request: NextRequest) {
       messageSid: payload.MessageSid 
     });
     
+    // First check if user is awaiting preference collection
+    const preferenceCheck = await WorkoutPreferenceService.isAwaitingPreferences(payload.From);
+    
+    if (preferenceCheck.waiting) {
+      logger.info("User is awaiting preference collection", { 
+        phoneNumber: payload.From,
+        userId: preferenceCheck.userId,
+        sessionId: preferenceCheck.sessionId 
+      });
+      
+      // Parse preferences with LLM
+      const startTime = Date.now();
+      const parsedPreferences = await parseWorkoutPreferences(payload.Body);
+      const parseTime = Date.now() - startTime;
+      
+      logger.info("Parsed preferences", { 
+        userId: preferenceCheck.userId,
+        preferences: parsedPreferences,
+        parseTime
+      });
+      
+      // Get user info for message saving
+      const userInfo = await getUserByPhone(payload.From);
+      
+      if (userInfo) {
+        // Save inbound preference message with detailed metadata
+        await saveMessage({
+          userId: userInfo.userId,
+          businessId: userInfo.businessId,
+          direction: 'inbound',
+          content: payload.Body,
+          phoneNumber: payload.From,
+          metadata: {
+            type: 'preference_collection',
+            step: preferenceCheck.currentStep,
+            twilioMessageSid: payload.MessageSid,
+          },
+          status: 'delivered',
+        });
+      }
+      
+      // Determine next step based on current step and parsed result
+      let nextStep: "initial_collected" | "followup_collected" | "complete";
+      let response: string;
+      
+      if (preferenceCheck.currentStep === "not_started") {
+        // First response
+        if (parsedPreferences.needsFollowUp) {
+          nextStep = "initial_collected";
+          response = "Thanks! Can you tell me more about what specific areas you'd like to focus on or avoid today?";
+        } else {
+          nextStep = "complete";
+          response = "Perfect! I've got your preferences and will use them to build your workout. See you in the gym!";
+        }
+      } else {
+        // Follow-up response (from initial_collected)
+        nextStep = "complete";
+        response = "Great! I've got all your preferences now. Your workout will be tailored to how you're feeling today. See you in the gym!";
+      }
+      
+      // Save preferences
+      await WorkoutPreferenceService.savePreferences(
+        preferenceCheck.userId!,
+        preferenceCheck.sessionId!,
+        preferenceCheck.businessId!,
+        parsedPreferences,
+        nextStep
+      );
+      
+      // Save outbound response with LLM parsing details
+      if (userInfo) {
+        await saveMessage({
+          userId: userInfo.userId,
+          businessId: userInfo.businessId,
+          direction: 'outbound',
+          content: response,
+          phoneNumber: payload.From,
+          metadata: {
+            type: 'preference_collection_response',
+            step: nextStep,
+            llmParsing: {
+              model: 'gpt-4o',
+              parseTimeMs: parseTime,
+              inputLength: payload.Body.length,
+              parsedData: parsedPreferences,
+              extractedFields: {
+                intensity: parsedPreferences.intensity || null,
+                muscleTargets: parsedPreferences.muscleTargets || [],
+                muscleLessens: parsedPreferences.muscleLessens || [],
+                includeExercises: parsedPreferences.includeExercises || [],
+                avoidExercises: parsedPreferences.avoidExercises || [],
+                avoidJoints: parsedPreferences.avoidJoints || [],
+                sessionGoal: parsedPreferences.sessionGoal || null,
+                generalNotes: parsedPreferences.generalNotes || null,
+                needsFollowUp: parsedPreferences.needsFollowUp || false,
+              },
+              userInput: payload.Body,
+              confidenceIndicators: {
+                hasIntensity: !!parsedPreferences.intensity,
+                hasMuscleTargets: !!(parsedPreferences.muscleTargets?.length),
+                hasRestrictions: !!(parsedPreferences.muscleLessens?.length || parsedPreferences.avoidJoints?.length),
+                hasSpecificRequests: !!(parsedPreferences.includeExercises?.length || parsedPreferences.avoidExercises?.length),
+                requiresFollowUp: parsedPreferences.needsFollowUp || false,
+              }
+            }
+          },
+          status: 'sent',
+        });
+      }
+      
+      await twilioClient.messages.create({
+        body: response,
+        from: process.env.TWILIO_PHONE_NUMBER!,
+        to: payload.From,
+      });
+      
+      logger.info("Preference response sent", { 
+        userId: preferenceCheck.userId,
+        needsFollowUp: parsedPreferences.needsFollowUp,
+        nextStep
+      });
+      
+      // Return early - preference handled
+      return new NextResponse("", { status: 200 });
+    }
+    
     // Check for common check-in keywords first to skip AI
     const checkInKeywords = [
       "here", "im here", "i'm here", "i am here",
@@ -173,7 +300,19 @@ export async function POST(request: NextRequest) {
         success: checkInResult.success,
         userId: checkInResult.userId,
         sessionId: checkInResult.sessionId,
+        shouldStartPreferences: checkInResult.shouldStartPreferences,
       });
+      
+      // If check-in was successful and preferences haven't been collected, add preference prompt
+      if (checkInResult.success && checkInResult.shouldStartPreferences) {
+        // Append preference prompt to check-in message
+        responseMessage = `${responseMessage}\n\n${WorkoutPreferenceService.PREFERENCE_PROMPT}`;
+        
+        logger.info("Added preference prompt to check-in response", {
+          userId: checkInResult.userId,
+          sessionId: checkInResult.sessionId
+        });
+      }
     } else {
       // For other intents, provide a generic response
       responseMessage = "Sorry, I can only help with session check-ins. Please text 'here' or 'checking in' when you arrive.";

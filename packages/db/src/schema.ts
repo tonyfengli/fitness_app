@@ -115,6 +115,7 @@ export const UserTrainingSession = pgTable("user_training_session", (t) => ({
   trainingSessionId: t.uuid().notNull().references(() => TrainingSession.id, { onDelete: "cascade" }),
   status: t.text().notNull().default("registered"), // "registered", "checked_in", "completed", "no_show"
   checkedInAt: t.timestamp(), // When the user checked in
+  preferenceCollectionStep: t.text().notNull().default("not_started"), // 'not_started', 'initial_collected', 'followup_collected', 'complete'
   createdAt: t.timestamp().defaultNow().notNull(),
 }));
 
@@ -123,9 +124,55 @@ export const CreateUserTrainingSessionSchema = createInsertSchema(UserTrainingSe
   trainingSessionId: z.string().uuid(),
   status: z.enum(["registered", "checked_in", "completed", "no_show"]).default("registered"),
   checkedInAt: z.date().optional(),
+  preferenceCollectionStep: z.enum(["not_started", "initial_collected", "followup_collected", "complete"]).default("not_started"),
 }).omit({
   id: true,
   createdAt: true,
+});
+
+// Workout preferences collected from users
+export const WorkoutPreferences = pgTable("workout_preferences", (t) => ({
+  id: t.uuid().notNull().primaryKey().defaultRandom(),
+  userId: t.text().notNull().references(() => user.id, { onDelete: "cascade" }),
+  trainingSessionId: t.uuid().notNull().references(() => TrainingSession.id, { onDelete: "cascade" }),
+  businessId: t.uuid().notNull().references(() => Business.id, { onDelete: "cascade" }),
+  
+  // Workout parameters
+  intensity: t.text(), // 'low', 'moderate', 'high'
+  muscleTargets: t.text().array(), // Array of muscle groups to target
+  muscleLessens: t.text().array(), // Array of muscles to avoid
+  
+  // Exercise filtering (matches workout engine architecture naming)
+  includeExercises: t.text().array(), // Exercises to include (overrides other filters)
+  avoidExercises: t.text().array(), // Exercises to exclude (final filter)
+  avoidJoints: t.text().array(), // Joints to avoid loading
+  
+  // Session goal
+  sessionGoal: t.text(), // 'strength', 'stability', etc.
+  
+  // Collection metadata
+  collectedAt: t.timestamp().defaultNow().notNull(),
+  collectionMethod: t.text().notNull().default('sms'), // 'sms', 'web', 'manual'
+}), (table) => ({
+  // Unique constraint: one preference per user per training session
+  userSessionUnique: unique().on(table.userId, table.trainingSessionId),
+}));
+
+export const CreateWorkoutPreferencesSchema = createInsertSchema(WorkoutPreferences, {
+  userId: z.string(),
+  trainingSessionId: z.string().uuid(),
+  businessId: z.string().uuid(),
+  intensity: z.enum(["low", "moderate", "high"]).optional(),
+  muscleTargets: z.array(z.string()).optional(),
+  muscleLessens: z.array(z.string()).optional(),
+  includeExercises: z.array(z.string()).optional(),
+  avoidExercises: z.array(z.string()).optional(),
+  avoidJoints: z.array(z.string()).optional(),
+  sessionGoal: z.string().optional(),
+  collectionMethod: z.enum(["sms", "web", "manual"]).default("sms"),
+}).omit({
+  id: true,
+  collectedAt: true,
 });
 
 // Actual workout data for a session

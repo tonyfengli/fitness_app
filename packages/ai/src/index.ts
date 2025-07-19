@@ -29,3 +29,6 @@ export * from "./formatting/exerciseFlags";
 
 // Utils for debugging
 export * from "./utils/debugToTest";
+
+// Workout preferences parsing
+export * from "./workout-preferences/parsePreferences";
