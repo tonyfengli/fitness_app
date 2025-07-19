@@ -17,6 +17,24 @@ interface ParsedPreferences {
   systemPromptUsed?: string;
 }
 
+// Type for the broadcast function - will be injected from the API layer
+let broadcastPreferenceUpdate: ((sessionId: string, preferenceData: {
+  userId: string;
+  preferences: {
+    intensity?: string | null;
+    muscleTargets?: string[] | null;
+    muscleLessens?: string[] | null;
+    includeExercises?: string[] | null;
+    avoidExercises?: string[] | null;
+    avoidJoints?: string[] | null;
+    sessionGoal?: string | null;
+  };
+}) => void) | null = null;
+
+export function setPreferenceBroadcastFunction(fn: typeof broadcastPreferenceUpdate) {
+  broadcastPreferenceUpdate = fn;
+}
+
 export class WorkoutPreferenceService {
   static readonly PREFERENCE_PROMPT = "How are you feeling today? Is there anything I should know before building your workout?";
 
@@ -144,6 +162,23 @@ export class WorkoutPreferenceService {
         );
 
       logger.info("Preferences saved successfully", { userId, sessionId, step, isUpdate: !!existing });
+      
+      // Broadcast preference update if broadcast function is available
+      if (broadcastPreferenceUpdate) {
+        broadcastPreferenceUpdate(sessionId, {
+          userId,
+          preferences: {
+            intensity: preferences.intensity || null,
+            muscleTargets: preferences.muscleTargets || null,
+            muscleLessens: preferences.muscleLessens || null,
+            includeExercises: preferences.includeExercises || null,
+            avoidExercises: preferences.avoidExercises || null,
+            avoidJoints: preferences.avoidJoints || null,
+            sessionGoal: preferences.sessionGoal || null,
+          }
+        });
+        logger.info("Broadcasted preference update", { userId, sessionId });
+      }
     } catch (error) {
       logger.error("Error saving preferences:", error);
       throw error;

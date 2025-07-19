@@ -2,6 +2,7 @@ import { parseWorkoutPreferences } from "@acme/ai";
 import { saveMessage } from "../../messageService";
 import { getUserByPhone } from "../../checkInService";
 import { WorkoutPreferenceService } from "../../workoutPreferenceService";
+import { ExerciseValidationService } from "../../exerciseValidationService";
 import { createLogger } from "../../../utils/logger";
 import { SMSResponse } from "../types";
 
@@ -33,10 +34,59 @@ export class PreferenceHandler {
         parseTime
       });
 
+      // Validate exercises if any were mentioned
+      let validatedPreferences = { ...parsedPreferences };
+      let exerciseValidationInfo = null;
+      
+      if (parsedPreferences.avoidExercises?.length || parsedPreferences.includeExercises?.length) {
+        logger.info("Validating exercises", {
+          avoidExercises: parsedPreferences.avoidExercises,
+          includeExercises: parsedPreferences.includeExercises,
+          businessId: preferenceCheck.businessId
+        });
+
+        try {
+          // Validate avoid exercises
+          if (parsedPreferences.avoidExercises?.length) {
+            const avoidValidation = await ExerciseValidationService.validateExercises(
+              parsedPreferences.avoidExercises,
+              preferenceCheck.businessId!
+            );
+            validatedPreferences.avoidExercises = avoidValidation.validatedExercises;
+            exerciseValidationInfo = { ...exerciseValidationInfo, avoidExercises: avoidValidation };
+            
+            logger.info("Avoid exercises validation result", {
+              input: parsedPreferences.avoidExercises,
+              validated: avoidValidation.validatedExercises,
+              matches: avoidValidation.matches
+            });
+          }
+
+          // Validate include exercises
+          if (parsedPreferences.includeExercises?.length) {
+            const includeValidation = await ExerciseValidationService.validateExercises(
+              parsedPreferences.includeExercises,
+              preferenceCheck.businessId!
+            );
+            validatedPreferences.includeExercises = includeValidation.validatedExercises;
+            exerciseValidationInfo = { ...exerciseValidationInfo, includeExercises: includeValidation };
+            
+            logger.info("Include exercises validation result", {
+              input: parsedPreferences.includeExercises,
+              validated: includeValidation.validatedExercises,
+              matches: includeValidation.matches
+            });
+          }
+        } catch (error) {
+          logger.error("Exercise validation error", error);
+          // Continue with unvalidated exercises rather than failing
+        }
+      }
+
       // Determine next step and response
       const { nextStep, response } = this.determineNextStep(
         preferenceCheck.currentStep,
-        parsedPreferences
+        validatedPreferences
       );
 
       // Save preferences
@@ -44,7 +94,7 @@ export class PreferenceHandler {
         preferenceCheck.userId!,
         preferenceCheck.sessionId!,
         preferenceCheck.businessId!,
-        parsedPreferences,
+        validatedPreferences,
         nextStep
       );
 
@@ -55,9 +105,10 @@ export class PreferenceHandler {
         response,
         messageSid,
         preferenceCheck,
-        parsedPreferences,
+        validatedPreferences,
         parseTime,
-        nextStep
+        nextStep,
+        exerciseValidationInfo
       );
 
       logger.info("Preference response complete", { 
@@ -113,7 +164,8 @@ export class PreferenceHandler {
     preferenceCheck: any,
     parsedPreferences: any,
     parseTime: number,
-    nextStep: string
+    nextStep: string,
+    exerciseValidationInfo: any
   ): Promise<void> {
     try {
       const userInfo = await getUserByPhone(phoneNumber);
@@ -153,7 +205,10 @@ export class PreferenceHandler {
             parseTimeMs: parseTime,
             inputLength: inboundContent.length,
             parsedData: parsedPreferences,
+            rawLLMResponse: parsedPreferences.rawLLMResponse || null,
             systemPrompt: parsedPreferences.systemPromptUsed || 'Not available',
+            debugInfo: parsedPreferences.debugInfo || null,
+            exerciseValidation: exerciseValidationInfo || null,
             extractedFields: {
               intensity: parsedPreferences.intensity || null,
               muscleTargets: parsedPreferences.muscleTargets || [],

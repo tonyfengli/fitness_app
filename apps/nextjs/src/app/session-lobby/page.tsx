@@ -7,14 +7,57 @@ import type { PlayerStatus } from "@acme/ui-desktop";
 import { useTRPC } from "~/trpc/react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useCheckInStream } from "~/hooks/useCheckInStream";
-import type { CheckInEvent } from "~/hooks/useCheckInStream";
+import type { CheckInEvent, PreferenceUpdateEvent } from "~/hooks/useCheckInStream";
+
+// Preference tag component
+function PreferenceTag({ label, value, type }: { label: string; value: string | string[]; type: string }) {
+  const getTagColor = () => {
+    switch (type) {
+      case 'intensity':
+        if (value === 'low') return 'bg-blue-100 text-blue-800';
+        if (value === 'moderate') return 'bg-yellow-100 text-yellow-800';
+        if (value === 'high') return 'bg-red-100 text-red-800';
+        return 'bg-gray-100 text-gray-800';
+      case 'goal':
+        return 'bg-purple-100 text-purple-800';
+      case 'target':
+        return 'bg-green-100 text-green-800';
+      case 'avoid':
+        return 'bg-orange-100 text-orange-800';
+      case 'joint':
+        return 'bg-pink-100 text-pink-800';
+      case 'include':
+        return 'bg-indigo-100 text-indigo-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const displayValue = Array.isArray(value) ? value.join(', ') : value;
+
+  return (
+    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getTagColor()}`}>
+      {label}: {displayValue}
+    </span>
+  );
+}
 
 interface CheckedInClient {
   userId: string;
   userName: string | null;
   userEmail: string;
   checkedInAt: Date | null;
+  preferences?: {
+    intensity?: string | null;
+    muscleTargets?: string[] | null;
+    muscleLessens?: string[] | null;
+    includeExercises?: string[] | null;
+    avoidExercises?: string[] | null;
+    avoidJoints?: string[] | null;
+    sessionGoal?: string | null;
+  } | null;
   isNew?: boolean; // For animation purposes
+  preferencesUpdated?: boolean; // For preference update animation
 }
 
 export default function SessionLobby() {
@@ -56,7 +99,10 @@ export default function SessionLobby() {
   // Set initial clients when data loads
   useEffect(() => {
     if (initialClients) {
-      setCheckedInClients(initialClients);
+      setCheckedInClients(initialClients.map(client => ({
+        ...client,
+        preferences: client.preferences
+      })));
     }
   }, [initialClients]);
   
@@ -75,6 +121,7 @@ export default function SessionLobby() {
         userName: event.name,
         userEmail: "", // We don't have email from the event
         checkedInAt: new Date(event.checkedInAt),
+        preferences: null, // Start with no preferences
         isNew: true
       }, ...prev];
     });
@@ -87,17 +134,42 @@ export default function SessionLobby() {
     }, 1000);
   }, []);
   
+  // Handle preference updates from SSE
+  const handlePreferenceUpdate = useCallback((event: PreferenceUpdateEvent) => {
+    setCheckedInClients(prev => 
+      prev.map(client => {
+        if (client.userId === event.userId) {
+          return {
+            ...client,
+            preferences: event.preferences,
+            preferencesUpdated: true
+          };
+        }
+        return client;
+      })
+    );
+    
+    // Remove the "updated" flag after animation completes
+    setTimeout(() => {
+      setCheckedInClients(prev => 
+        prev.map(client => ({ ...client, preferencesUpdated: false }))
+      );
+    }, 1500);
+  }, []);
+  
   // Set up SSE connection only if we have a sessionId
   const { isConnected, isReconnecting, error: streamError } = useCheckInStream(
     sessionId ? {
       sessionId,
       onCheckIn: handleCheckIn,
+      onPreferenceUpdate: handlePreferenceUpdate,
       onConnect: () => setConnectionStatus("connected"),
       onDisconnect: () => setConnectionStatus("disconnected"),
       onError: (err) => setError(err.message)
     } : {
       sessionId: "",
       onCheckIn: () => {},
+      onPreferenceUpdate: () => {},
       onConnect: () => {},
       onDisconnect: () => {},
       onError: () => {}
@@ -200,25 +272,102 @@ export default function SessionLobby() {
                     key={client.userId}
                     className={`transition-all duration-1000 ${
                       client.isNew 
-                        ? "animate-fadeIn bg-green-50 rounded-lg" 
+                        ? "animate-fadeIn bg-green-50" 
+                        : client.preferencesUpdated
+                        ? "animate-pulse bg-blue-50"
                         : ""
-                    }`}
+                    } rounded-lg`}
                   >
-                    <PlayerListItem
-                      name={client.userName || "Unknown"}
-                      avatar={`https://api.dicebear.com/7.x/avataaars/svg?seed=${client.userId}`}
-                      status="online" as PlayerStatus
-                      level={undefined}
-                      description={`Checked in ${
-                        client.checkedInAt 
-                          ? new Date(client.checkedInAt).toLocaleTimeString([], { 
-                              hour: '2-digit', 
-                              minute: '2-digit' 
-                            })
-                          : 'just now'
-                      }`}
-                      onEdit={() => console.log(`Edit ${client.userName}`)}
-                    />
+                    <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow">
+                      <div className="flex items-start space-x-4">
+                        {/* Avatar */}
+                        <img
+                          src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${client.userId}`}
+                          alt={client.userName || "User"}
+                          className="w-12 h-12 rounded-full"
+                        />
+                        
+                        {/* Content */}
+                        <div className="flex-1">
+                          <h3 className="text-lg font-medium text-gray-900">
+                            {client.userName || "Unknown"}
+                          </h3>
+                          
+                          {/* Preference Tags */}
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {client.preferences?.intensity && client.preferences.intensity !== 'moderate' && (
+                              <PreferenceTag 
+                                label="Intensity" 
+                                value={client.preferences.intensity} 
+                                type="intensity" 
+                              />
+                            )}
+                            
+                            {client.preferences?.sessionGoal && (
+                              <PreferenceTag 
+                                label="Goal" 
+                                value={client.preferences.sessionGoal} 
+                                type="goal" 
+                              />
+                            )}
+                            
+                            {client.preferences?.muscleTargets && client.preferences.muscleTargets.length > 0 && (
+                              <PreferenceTag 
+                                label="Target" 
+                                value={client.preferences.muscleTargets} 
+                                type="target" 
+                              />
+                            )}
+                            
+                            {client.preferences?.muscleLessens && client.preferences.muscleLessens.length > 0 && (
+                              <PreferenceTag 
+                                label="Avoid muscles" 
+                                value={client.preferences.muscleLessens} 
+                                type="avoid" 
+                              />
+                            )}
+                            
+                            {client.preferences?.avoidJoints && client.preferences.avoidJoints.length > 0 && (
+                              <PreferenceTag 
+                                label="Protect" 
+                                value={client.preferences.avoidJoints} 
+                                type="joint" 
+                              />
+                            )}
+                            
+                            {client.preferences?.avoidExercises && client.preferences.avoidExercises.length > 0 && (
+                              <PreferenceTag 
+                                label="Skip" 
+                                value={client.preferences.avoidExercises} 
+                                type="avoid" 
+                              />
+                            )}
+                            
+                            {client.preferences?.includeExercises && client.preferences.includeExercises.length > 0 && (
+                              <PreferenceTag 
+                                label="Include" 
+                                value={client.preferences.includeExercises} 
+                                type="include" 
+                              />
+                            )}
+                            
+                            {!client.preferences || (
+                              (client.preferences.intensity === 'moderate' || !client.preferences.intensity) && 
+                              !client.preferences.sessionGoal && 
+                              !client.preferences.muscleTargets?.length && 
+                              !client.preferences.muscleLessens?.length && 
+                              !client.preferences.avoidJoints?.length &&
+                              !client.preferences.avoidExercises?.length &&
+                              !client.preferences.includeExercises?.length
+                            ) && (
+                              <span className="text-sm text-gray-500 italic">
+                                Awaiting preferences...
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 ))}
               </div>

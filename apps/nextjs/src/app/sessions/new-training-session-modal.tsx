@@ -4,6 +4,7 @@ import { useState, useCallback, useMemo } from "react";
 import { Button, Icon } from "@acme/ui-shared";
 import { useTRPC } from "~/trpc/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
 
 interface NewTrainingSessionModalProps {
   isOpen: boolean;
@@ -80,6 +81,7 @@ export default function NewTrainingSessionModal({
 }: NewTrainingSessionModalProps) {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
+  const router = useRouter();
   
   // Get user session data
   const { data: session } = useQuery(
@@ -145,7 +147,7 @@ export default function NewTrainingSessionModal({
         throw new Error('No business ID found. Please log in again.');
       }
 
-      await createSessionMutation.mutateAsync({
+      const newSession = await createSessionMutation.mutateAsync({
         businessId: session.user.businessId,
         trainerId: session.user.id, // Add trainer ID from session
         name: formData.sessionName,
@@ -160,6 +162,9 @@ export default function NewTrainingSessionModal({
       });
       resetModalState();
       onClose();
+      
+      // Navigate to the session lobby
+      router.push(`/session-lobby?sessionId=${newSession.id}`);
     } catch (error) {
       setError('There was a problem creating the session. Please try again.');
       console.error('Failed to create session:', error);

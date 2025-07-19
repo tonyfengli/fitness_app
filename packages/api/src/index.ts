@@ -29,7 +29,8 @@ export { saveMessage } from "./services/messageService";
 export { getUserByPhone } from "./services/userService";
 export { twilioClient, normalizePhoneNumber } from "./services/twilio";
 export { createLogger } from "./utils/logger";
-export { WorkoutPreferenceService } from "./services/workoutPreferenceService";
+export { WorkoutPreferenceService, setPreferenceBroadcastFunction } from "./services/workoutPreferenceService";
+export { ExerciseValidationService } from "./services/exerciseValidationService";
 
 // Export new SMS handler components
 export { SMSWebhookHandler } from "./services/sms";

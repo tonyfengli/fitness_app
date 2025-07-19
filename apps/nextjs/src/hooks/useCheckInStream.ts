@@ -8,9 +8,23 @@ export interface CheckInEvent {
   checkedInAt: string;
 }
 
+export interface PreferenceUpdateEvent {
+  userId: string;
+  preferences: {
+    intensity?: string | null;
+    muscleTargets?: string[] | null;
+    muscleLessens?: string[] | null;
+    includeExercises?: string[] | null;
+    avoidExercises?: string[] | null;
+    avoidJoints?: string[] | null;
+    sessionGoal?: string | null;
+  };
+}
+
 interface UseCheckInStreamOptions {
   sessionId: string;
   onCheckIn?: (event: CheckInEvent) => void;
+  onPreferenceUpdate?: (event: PreferenceUpdateEvent) => void;
   onConnect?: () => void;
   onDisconnect?: () => void;
   onError?: (error: Error) => void;
@@ -19,6 +33,7 @@ interface UseCheckInStreamOptions {
 export function useCheckInStream({
   sessionId,
   onCheckIn,
+  onPreferenceUpdate,
   onConnect,
   onDisconnect,
   onError,
@@ -63,6 +78,12 @@ export function useCheckInStream({
         onCheckIn?.(checkInData);
       });
 
+      eventSource.addEventListener("preference-updated", (event) => {
+        const preferenceData: PreferenceUpdateEvent = JSON.parse(event.data);
+        console.log("Preferences updated:", preferenceData);
+        onPreferenceUpdate?.(preferenceData);
+      });
+
       eventSource.onerror = (error) => {
         console.error("SSE error:", error);
         setIsConnected(false);
@@ -95,7 +116,7 @@ export function useCheckInStream({
       setError(error);
       onError?.(error);
     }
-  }, [sessionId, onCheckIn, onConnect, onDisconnect, onError]);
+  }, [sessionId, onCheckIn, onPreferenceUpdate, onConnect, onDisconnect, onError]);
 
   const disconnect = useCallback(() => {
     if (reconnectTimeoutRef.current) {

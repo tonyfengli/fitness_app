@@ -205,6 +205,71 @@ export default function MessagesPage() {
                             <span className="font-medium">User Input:</span> "{message.metadata.llmParsing.userInput}"
                           </div>
                           
+                          {/* Raw LLM Response for debugging */}
+                          {message.metadata.llmParsing.rawLLMResponse && (
+                            <div className={
+                              message.direction === 'outbound' ? 'text-gray-300' : 'text-gray-600'
+                            }>
+                              <span className="font-medium">Raw LLM Response:</span>
+                              <pre className="mt-1 ml-2 text-xs overflow-x-auto whitespace-pre-wrap">
+                                {JSON.stringify(message.metadata.llmParsing.rawLLMResponse, null, 2)}
+                              </pre>
+                            </div>
+                          )}
+                          
+                          {/* Debug Information */}
+                          {message.metadata.llmParsing.debugInfo && (
+                            <div className={
+                              message.direction === 'outbound' ? 'text-red-300' : 'text-red-600'
+                            }>
+                              <span className="font-medium">🔧 Debug Info:</span>
+                              <pre className="mt-1 ml-2 text-xs overflow-x-auto whitespace-pre-wrap bg-black/10 p-2 rounded">
+                                {JSON.stringify(message.metadata.llmParsing.debugInfo, null, 2)}
+                              </pre>
+                            </div>
+                          )}
+                          
+                          {/* Exercise Validation Results */}
+                          {message.metadata.llmParsing.exerciseValidation && (
+                            <div className={
+                              message.direction === 'outbound' ? 'text-blue-200' : 'text-blue-700'
+                            }>
+                              <span className="font-medium">🏋️ Exercise Validation:</span>
+                              {message.metadata.llmParsing.exerciseValidation.avoidExercises && (
+                                <div className="ml-2 text-xs mt-1">
+                                  <span className="font-medium">Avoid exercises:</span>
+                                  {message.metadata.llmParsing.exerciseValidation.avoidExercises.matches.map((match: any, idx: number) => (
+                                    <div key={idx} className="ml-2">
+                                      "{match.userInput}" → {match.matchedExercise ? (
+                                        <span className={match.confidence === 'exact' ? 'text-green-600' : 'text-yellow-600'}>
+                                          {match.matchedExercise.name} ({match.confidence})
+                                        </span>
+                                      ) : (
+                                        <span className="text-red-600">No match found</span>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                              {message.metadata.llmParsing.exerciseValidation.includeExercises && (
+                                <div className="ml-2 text-xs mt-1">
+                                  <span className="font-medium">Include exercises:</span>
+                                  {message.metadata.llmParsing.exerciseValidation.includeExercises.matches.map((match: any, idx: number) => (
+                                    <div key={idx} className="ml-2">
+                                      "{match.userInput}" → {match.matchedExercise ? (
+                                        <span className={match.confidence === 'exact' ? 'text-green-600' : 'text-yellow-600'}>
+                                          {match.matchedExercise.name} ({match.confidence})
+                                        </span>
+                                      ) : (
+                                        <span className="text-red-600">No match found</span>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                          
                           {/* Extracted Fields */}
                           <div className={
                             message.direction === 'outbound' ? 'text-green-200' : 'text-green-700'

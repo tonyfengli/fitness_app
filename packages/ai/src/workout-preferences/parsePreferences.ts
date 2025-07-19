@@ -21,37 +21,48 @@ const PreferenceSchema = z.object({
 
 export type ParsedPreferences = z.infer<typeof PreferenceSchema> & {
   systemPromptUsed?: string;
+  rawLLMResponse?: any;
+  debugInfo?: any;
 };
 
 const SYSTEM_PROMPT = `You are an AI assistant helping a fitness trainer prepare workouts for clients. After a client checks in, they send a short message about how they're feeling and any preferences for their workout.
 
-Your job is to carefully extract structured data from their message and return it as JSON. You must use both explicit statements (e.g., "I want a light workout") and implicit cues (e.g., "I'm tired" → intensity=low).
+Your job is to carefully extract structured data from their message and return it as JSON. Always extract whatever information you can find, using both explicit statements and implicit cues.
+
+KEY PRINCIPLES:
+- Extract muscle/joint mentions even from casual statements like "hamstrings are sore"
+- Only use needsFollowUp=true if you truly cannot extract ANY useful preferences
+- Omit intensity field if there are no clear intensity indicators (don't default to moderate)
+
+IMPORTANT: When users mention specific joint issues (knees, shoulders, etc.) but still request high intensity, honor BOTH:
+- Add the joint to avoidJoints for protection
+- Keep the requested intensity level (don't automatically reduce to low)
 
 If the client's message is vague, ambiguous, or provides mixed/conflicting signals, set needsFollowUp=true. Otherwise, keep needsFollowUp=false.
 
 Return your response as a JSON object with the extracted preferences.
 
 EXTRACTION FIELDS:
-1. session_goal → Client's goal for the session
+1. sessionGoal → Client's goal for the session
    - Valid options: "strength", "stability", null
    
 2. intensity → Overall intensity level  
    - Valid options: "low", "moderate", "high"
    - IMPORTANT: Default to "moderate" if no intensity indicators are present
    
-3. muscle_targets → Muscle groups the client wants to target
+3. muscleTargets → Muscle groups the client wants to target
    - Valid options: chest, back, shoulders, arms, legs, glutes, core, triceps, biceps, quads, hamstrings, calves
    
-4. muscle_lessens → Muscle groups that are sore or fatigued
-   - Valid options: Same as muscle_targets
+4. muscleLessens → Muscle groups that are sore or fatigued
+   - Valid options: Same as muscleTargets
    
-5. include_exercises → Specific exercises the client requests to include
+5. includeExercises → Specific exercises the client requests to include
    - Must be specific exercise names (e.g., "squats", "bench press", "deadlifts")
    
-6. avoid_exercises → Specific exercises the client requests to avoid
+6. avoidExercises → Specific exercises the client requests to avoid
    - Must be specific exercise names
    
-7. avoid_joints → Joints the client wants to protect or avoid stressing
+7. avoidJoints → Joints the client wants to protect or avoid stressing
    - Common joints: knees, wrists, shoulders, elbows, ankles, hips, lower back
    
 8. needsFollowUp → true if vague/ambiguous; false if useful preferences extracted
@@ -60,28 +71,29 @@ DETAILED IMPLICIT MAPPING RULES:
 
 SESSION GOAL MAPPINGS:
 Strength Indicators:
-- "build strength", "get stronger", "strength work" → session_goal="strength"
-- "heavy", "heavy weights", "lift heavy", "go heavy" → session_goal="strength"
-- "PR", "personal record", "max out", "test max" → session_goal="strength"
-- "power", "explosive", "powerful" → session_goal="strength"
-- "compound movements", "big lifts" → session_goal="strength"
+- "build strength", "get stronger", "strength work" → sessionGoal="strength"
+- "heavy", "heavy weights", "lift heavy", "go heavy" → sessionGoal="strength"
+- "PR", "personal record", "max out", "test max" → sessionGoal="strength"
+- "power", "explosive", "powerful" → sessionGoal="strength"
+- "compound movements", "big lifts" → sessionGoal="strength"
 
 Stability Indicators:
-- "balance", "stability", "stabilization" → session_goal="stability"
-- "joint stability" → session_goal="stability"
-- "control", "controlled movements", "slow and controlled" → session_goal="stability"
-- "rehab", "prehab", "recovery work" → session_goal="stability"
-- "activation", "activate muscles" → session_goal="stability"
+- "balance", "stability", "stabilization" → sessionGoal="stability"
+- "joint stability" → sessionGoal="stability"
+- "control", "controlled movements", "slow and controlled" → sessionGoal="stability"
+- "rehab", "prehab", "recovery work" → sessionGoal="stability"
+- "activation", "activate muscles" → sessionGoal="stability"
 
-Default: If no clear goal indicators → session_goal=null
+Default: If no clear goal indicators → sessionGoal=null
 
 INTENSITY MAPPINGS:
 Low Intensity Indicators:
 - "tired", "exhausted", "wiped out", "drained", "beat", "worn out" → intensity="low"
 - "sore all over", "everything hurts", "rough night" → intensity="low"
-- "take it easy", "go easy", "light day", "easy session" → intensity="low"
+- "take it easy" (general), "go easy", "light day", "easy session" → intensity="low"
 - "not feeling it", "low energy", "dragging" → intensity="low"
-- Any mention of pain, injury, or illness → intensity="low"
+- General illness or injury → intensity="low"
+- NOTE: "Take it easy on [specific muscle]" does NOT lower overall intensity
 
 Moderate Intensity Indicators:
 - "normal", "regular", "standard", "typical" → intensity="moderate"
@@ -94,11 +106,13 @@ High Intensity Indicators:
 - "crush it", "push hard", "go heavy", "max out" → intensity="high"
 - "feeling strong", "well-rested", "fired up" → intensity="high"
 - "bring it on", "let's do this", "all in" → intensity="high"
+- "kick my butt", "kick my ass", "destroy me", "wreck me" → intensity="high"
+- "push me", "challenge me", "don't hold back" → intensity="high"
 
 MUSCLE GROUP MAPPINGS:
 Target Indicators:
-- "hit [muscle]", "work on [muscle]", "focus on [muscle]" → add to muscle_targets
-- "[muscle] day", "train [muscle]", "blast [muscle]" → add to muscle_targets
+- "hit [muscle]", "work on [muscle]", "focus on [muscle]" → add to muscleTargets
+- "[muscle] day", "train [muscle]", "blast [muscle]" → add to muscleTargets
 Common aliases:
 - "upper body" → [chest, back, shoulders, arms]
 - "lower body" → [legs, glutes]
@@ -106,95 +120,141 @@ Common aliases:
 - "legs" → [quads, hamstrings, calves]
 
 Avoidance Indicators:
-- "[muscle] is sore/tight/tired" → add to muscle_lessens
-- "skip [muscle]", "avoid [muscle]", "no [muscle]" → add to muscle_lessens
-- "[muscle] needs rest", "[muscle] is fried" → add to muscle_lessens
+- "[muscle] is sore/tight/tired" → add to muscleLessens
+- "skip [muscle]", "avoid [muscle]", "no [muscle]" → add to muscleLessens
+- "[muscle] needs rest", "[muscle] is fried" → add to muscleLessens
+- "take it easy on [muscle]", "go light on [muscle]" → add to muscleLessens
+- "slight/minor soreness in [muscle]" → add to muscleLessens
+- When "legs" is mentioned, consider adding relevant leg muscles (hamstrings, quads, glutes)
 
 JOINT PROTECTION MAPPINGS:
-- "my [joint] hurts/aches/is sore" → add to avoid_joints
-- "[joint] is bothering me", "[joint] is acting up" → add to avoid_joints
-- "easy on the [joint]", "protect my [joint]" → add to avoid_joints
+- "my [joint] hurts/aches/is sore" → add to avoidJoints
+- "[joint] is bothering me", "[joint] is acting up" → add to avoidJoints
+- "easy on the [joint]", "protect my [joint]" → add to avoidJoints
 
 CONFLICT RESOLUTION RULES:
-1. Pain/Injury Override: Any mention of pain or injury automatically sets intensity="low"
-2. Tired + Push = Moderate: "Tired but want to push" → intensity="moderate"`;
+1. General Pain/Illness Override: Mentions of overall illness, general pain, or systemic issues → intensity="low"
+   Examples: "I'm sick", "everything hurts", "I'm injured", "not feeling well"
+   
+2. Specific Joint Pain + High Intensity Request: When user mentions specific joint pain BUT explicitly requests high intensity:
+   - Extract the joint → add to avoidJoints
+   - Honor their intensity request → use the requested intensity
+   - Examples: "knees hurt but kick my butt" → avoidJoints=["knees"], intensity="high"
+   
+3. Tired + Push = Moderate: "Tired but want to push" → intensity="moderate"
+
+4. Priority Order for Intensity:
+   - Explicit GENERAL intensity requests ("go hard", "take it easy") take highest priority
+   - General illness/injury overrides to low
+   - Specific muscle soreness or joint issues do NOT override intensity
+   - "Take it easy on [specific body part]" affects only that body part, not overall intensity`;
 
 const FEW_SHOT_EXAMPLES = [
   {
     input: "I'm feeling tired today. Let's keep it light. My quads are sore from yesterday.",
     output: {
-      session_goal: null,
+      sessionGoal: null,
       intensity: "low",
-      muscle_targets: [],
-      muscle_lessens: ["quads"],
-      include_exercises: [],
-      avoid_exercises: [],
-      avoid_joints: [],
+      muscleTargets: [],
+      muscleLessens: ["quads"],
+      includeExercises: [],
+      avoidExercises: [],
+      avoidJoints: [],
       needsFollowUp: false
     }
   },
   {
     input: "Can we focus on stability today? And let's do some core work.",
     output: {
-      session_goal: "stability",
+      sessionGoal: "stability",
       intensity: "moderate",
-      muscle_targets: ["core"],
-      muscle_lessens: [],
-      include_exercises: [],
-      avoid_exercises: [],
-      avoid_joints: [],
+      muscleTargets: ["core"],
+      muscleLessens: [],
+      includeExercises: [],
+      avoidExercises: [],
+      avoidJoints: [],
       needsFollowUp: false
     }
   },
   {
     input: "Skip burpees today. Also nothing hard on my wrists please.",
     output: {
-      session_goal: null,
       intensity: "moderate",
-      muscle_targets: [],
-      muscle_lessens: [],
-      include_exercises: [],
-      avoid_exercises: ["burpees"],
-      avoid_joints: ["wrists"],
+      avoidExercises: ["burpees"],
+      avoidJoints: ["wrists"],
       needsFollowUp: false
     }
   },
   {
     input: "I'm tired but let's push through. My shoulders are tight.",
     output: {
-      session_goal: null,
+      sessionGoal: null,
       intensity: "moderate",
-      muscle_targets: [],
-      muscle_lessens: ["shoulders"],
-      include_exercises: [],
-      avoid_exercises: [],
-      avoid_joints: [],
+      muscleTargets: [],
+      muscleLessens: ["shoulders"],
+      includeExercises: [],
+      avoidExercises: [],
+      avoidJoints: [],
       needsFollowUp: true
     }
   },
   {
     input: "Feeling great today! Let's hit legs hard.",
     output: {
-      session_goal: "strength",
+      sessionGoal: "strength",
       intensity: "high",
-      muscle_targets: ["legs", "quads", "hamstrings", "glutes"],
-      muscle_lessens: [],
-      include_exercises: [],
-      avoid_exercises: [],
-      avoid_joints: [],
+      muscleTargets: ["legs", "quads", "hamstrings", "glutes"],
+      muscleLessens: [],
+      includeExercises: [],
+      avoidExercises: [],
+      avoidJoints: [],
       needsFollowUp: false
     }
   },
   {
     input: "I'm feeling tired today. Don't want to do too much",
     output: {
-      session_goal: null,
+      sessionGoal: null,
       intensity: "low",
-      muscle_targets: [],
-      muscle_lessens: [],
-      include_exercises: [],
-      avoid_exercises: [],
-      avoid_joints: [],
+      muscleTargets: [],
+      muscleLessens: [],
+      includeExercises: [],
+      avoidExercises: [],
+      avoidJoints: [],
+      needsFollowUp: false
+    }
+  },
+  {
+    input: "My knees hurt but otherwise, kick my butt today",
+    output: {
+      sessionGoal: null,
+      intensity: "high",
+      muscleTargets: [],
+      muscleLessens: [],
+      includeExercises: [],
+      avoidExercises: [],
+      avoidJoints: ["knees"],
+      needsFollowUp: false
+    }
+  },
+  {
+    input: "My shoulder is bothering me but I still want to go hard on legs",
+    output: {
+      sessionGoal: "strength",
+      intensity: "high",
+      muscleTargets: ["legs", "quads", "hamstrings", "glutes"],
+      muscleLessens: [],
+      includeExercises: [],
+      avoidExercises: [],
+      avoidJoints: ["shoulders"],
+      needsFollowUp: false
+    }
+  },
+  {
+    input: "Slight soreness in my hamstrings from Tuesday, so maybe take it easy on legs?",
+    output: {
+      intensity: "moderate",
+      muscleLessens: ["hamstrings", "legs"],
       needsFollowUp: false
     }
   }
@@ -203,6 +263,12 @@ const FEW_SHOT_EXAMPLES = [
 export async function parseWorkoutPreferences(userResponse: string): Promise<ParsedPreferences> {
   console.log("🚀 parseWorkoutPreferences called with:", userResponse);
   console.log("📋 SYSTEM_PROMPT starts with:", SYSTEM_PROMPT.substring(0, 50) + "...");
+  
+  let content: string | undefined;
+  let debugInfo: any = {
+    startTime: Date.now(),
+    userInput: userResponse
+  };
   
   try {
     const systemWithExamples = SYSTEM_PROMPT + "\n\nFEW-SHOT EXAMPLES:\n" + 
@@ -225,29 +291,67 @@ export async function parseWorkoutPreferences(userResponse: string): Promise<Par
       temperature: 0.3,
     });
 
-    const content = completion.choices[0]?.message.content;
+    content = completion.choices[0]?.message.content;
+    debugInfo.llmResponseTime = Date.now() - debugInfo.startTime;
+    debugInfo.rawLLMContent = content;
     if (!content) {
       throw new Error("No content in response");
     }
 
     const parsed = JSON.parse(content);
-    console.log("🤖 LLM response:", parsed);
+    console.log("🤖 LLM response:", JSON.stringify(parsed, null, 2));
+    console.log("🔍 Specific fields - avoidJoints:", parsed.avoidJoints);
+    console.log("🔍 Specific fields - intensity:", parsed.intensity);
+    
+    debugInfo.parsedResponse = parsed;
+    debugInfo.parseSuccess = true;
     
     const validated = PreferenceSchema.parse(parsed);
+    debugInfo.validationSuccess = true;
     
     const result = {
       ...validated,
-      systemPromptUsed: SYSTEM_PROMPT
+      systemPromptUsed: systemWithExamples,
+      rawLLMResponse: parsed, // Add the raw LLM response for debugging
+      debugInfo: debugInfo
     };
     
     console.log("✅ Returning result:", result);
     return result;
   } catch (error) {
     console.error("Error parsing workout preferences:", error);
+    console.error("Error details:", {
+      errorMessage: error instanceof Error ? error.message : "Unknown error",
+      errorStack: error instanceof Error ? error.stack : undefined
+    });
+    
+    // Try to get raw LLM response for debugging
+    let rawResponse = null;
+    try {
+      if (typeof content === 'string') {
+        rawResponse = JSON.parse(content);
+      }
+    } catch (parseErr) {
+      console.error("Could not parse content for debugging:", parseErr);
+    }
+    
     // Return a basic response that indicates follow-up is needed
     return {
       needsFollowUp: true,
-      generalNotes: userResponse
+      generalNotes: userResponse,
+      systemPromptUsed: SYSTEM_PROMPT + " [Error: " + (error instanceof Error ? error.message : "Unknown") + "]",
+      rawLLMResponse: rawResponse,
+      debugInfo: {
+        ...debugInfo,
+        error: error instanceof Error ? {
+          message: error.message,
+          stack: error.stack,
+          name: error.name
+        } : { message: String(error) },
+        errorOccurredAt: Date.now() - debugInfo.startTime,
+        rawContent: content,
+        attemptedParse: rawResponse
+      }
     };
   }
 }
