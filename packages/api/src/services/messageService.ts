@@ -16,6 +16,10 @@ interface SaveMessageParams {
     twilioMessageSid?: string;
     checkInResult?: { success: boolean; sessionId?: string };
     sentBy?: string;
+    type?: string; // For message type classification
+    step?: string; // For preference collection steps
+    llmParsing?: any; // For LLM parsing metadata
+    [key: string]: any; // Allow additional properties
   };
   status?: 'sent' | 'delivered' | 'failed' | 'read';
 }
