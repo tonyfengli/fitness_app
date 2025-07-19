@@ -7,6 +7,8 @@ vi.mock('@acme/ai', () => ({
   filterExercisesFromInput: vi.fn(),
   enhancedFilterExercisesFromInput: vi.fn(),
   saveFilterDebugData: vi.fn(),
+  parseWorkoutPreferences: vi.fn(),
+  interpretSMS: vi.fn(),
 }));
 
 // Mock the database

@@ -86,6 +86,10 @@ vi.mock('@acme/db/schema', () => ({
       parse: vi.fn((data) => data),
     })),
   },
+  WorkoutPreferences: {},
+  CreateWorkoutPreferencesSchema: {
+    parse: vi.fn((data) => data),
+  },
 }));
 
 // Mock the AI module
@@ -93,6 +97,8 @@ vi.mock('@acme/ai', () => ({
   filterExercisesFromInput: vi.fn(),
   enhancedFilterExercisesFromInput: vi.fn(),
   saveFilterDebugData: vi.fn(),
+  parseWorkoutPreferences: vi.fn(),
+  interpretSMS: vi.fn(),
 }));
 
 // Using ctx.db from mocks instead of importing

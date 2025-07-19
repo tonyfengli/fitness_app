@@ -3,7 +3,7 @@ import { z } from "zod";
 import { zodResponseFormat } from "openai/helpers/zod";
 
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+  apiKey: process.env.OPENAI_API_KEY || 'test-key',
 });
 
 // Schema for the parsed preferences
@@ -52,7 +52,7 @@ export async function parseWorkoutPreferences(userResponse: string): Promise<Par
       temperature: 0.3,
     });
 
-    const content = completion.choices[0].message.content;
+    const content = completion.choices[0]?.message.content;
     if (!content) {
       throw new Error("No content in response");
     }

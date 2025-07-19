@@ -54,6 +54,10 @@ vi.mock('@acme/db/schema', () => ({
       parse: vi.fn((data) => data),
     })),
   },
+  WorkoutPreferences: {},
+  CreateWorkoutPreferencesSchema: {
+    parse: vi.fn((data) => data),
+  },
 }));
 
 // Using ctx.db from mocks instead of importing
