@@ -480,4 +480,54 @@ export const trainingSessionRouter = {
         
       return updatedSession;
     }),
+
+  // Delete a session and all associated data
+  deleteSession: protectedProcedure
+    .input(z.object({ 
+      sessionId: z.string().uuid() 
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const user = ctx.session?.user as SessionUser;
+      
+      // Only trainers can delete sessions
+      if (user.role !== 'trainer') {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'Only trainers can delete sessions',
+        });
+      }
+      
+      // Get the session to verify it exists and belongs to the business
+      const session = await ctx.db.query.TrainingSession.findFirst({
+        where: and(
+          eq(TrainingSession.id, input.sessionId),
+          eq(TrainingSession.businessId, user.businessId)
+        ),
+      });
+      
+      if (!session) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Session not found',
+        });
+      }
+      
+      // Delete in the correct order to respect foreign key constraints
+      // 1. Delete workout preferences
+      await ctx.db
+        .delete(WorkoutPreferences)
+        .where(eq(WorkoutPreferences.trainingSessionId, input.sessionId));
+      
+      // 2. Delete user training sessions (registrations/check-ins)
+      await ctx.db
+        .delete(UserTrainingSession)
+        .where(eq(UserTrainingSession.trainingSessionId, input.sessionId));
+      
+      // 3. Finally delete the training session
+      await ctx.db
+        .delete(TrainingSession)
+        .where(eq(TrainingSession.id, input.sessionId));
+        
+      return { success: true, deletedSessionId: input.sessionId };
+    }),
 } satisfies TRPCRouterRecord;

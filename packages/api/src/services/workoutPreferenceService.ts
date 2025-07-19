@@ -12,8 +12,9 @@ interface ParsedPreferences {
   includeExercises?: string[];
   avoidExercises?: string[];
   avoidJoints?: string[];
-  sessionGoal?: string;
+  sessionGoal?: "strength" | "stability" | null;
   generalNotes?: string;
+  systemPromptUsed?: string;
 }
 
 export class WorkoutPreferenceService {

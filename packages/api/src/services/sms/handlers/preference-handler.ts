@@ -149,10 +149,11 @@ export class PreferenceHandler {
           type: 'preference_collection_response',
           step: nextStep,
           llmParsing: {
-            model: 'gpt-4o',
+            model: 'gpt-4o-mini',
             parseTimeMs: parseTime,
             inputLength: inboundContent.length,
             parsedData: parsedPreferences,
+            systemPrompt: parsedPreferences.systemPromptUsed || 'Not available',
             extractedFields: {
               intensity: parsedPreferences.intensity || null,
               muscleTargets: parsedPreferences.muscleTargets || [],

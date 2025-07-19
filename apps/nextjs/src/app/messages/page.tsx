@@ -187,16 +187,16 @@ export default function MessagesPage() {
                           }`}>🤖 LLM Analysis</div>
                           
                           {/* LLM System Prompt */}
-                          <div className={
-                            message.direction === 'outbound' ? 'text-gray-300' : 'text-gray-600'
-                          }>
-                            <span className="font-medium">System Prompt:</span>
-                            <div className="mt-1 ml-2 text-xs italic">
-                              "Extract workout preferences: intensity (tired→low, normal→moderate, energetic→high), 
-                              muscle targets/avoidance, joint issues, session goals (strength/stability/conditioning), 
-                              and specific exercise requests. Set needsFollowUp=true if vague."
+                          {message.metadata.llmParsing.systemPrompt && (
+                            <div className={
+                              message.direction === 'outbound' ? 'text-gray-300' : 'text-gray-600'
+                            }>
+                              <span className="font-medium">System Prompt:</span>
+                              <div className="mt-1 ml-2 text-xs italic max-h-40 overflow-y-auto whitespace-pre-wrap">
+                                {message.metadata.llmParsing.systemPrompt}
+                              </div>
                             </div>
-                          </div>
+                          )}
                           
                           {/* User Input */}
                           <div className={
