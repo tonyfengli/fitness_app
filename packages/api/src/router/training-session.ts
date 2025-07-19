@@ -36,11 +36,27 @@ export const trainingSessionRouter = {
         });
       }
       
+      // Check if there's already an open session for this business
+      const existingOpenSession = await ctx.db.query.TrainingSession.findFirst({
+        where: and(
+          eq(TrainingSession.businessId, user.businessId),
+          eq(TrainingSession.status, 'open')
+        ),
+      });
+      
+      if (existingOpenSession) {
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message: 'There is already an open session for this business. Please close it before creating a new one.',
+        });
+      }
+      
       const [session] = await ctx.db
         .insert(TrainingSession)
         .values({
           ...input,
           trainerId: user.id,
+          status: 'open', // Explicitly set to open
         })
         .returning();
         
@@ -244,5 +260,152 @@ export const trainingSessionRouter = {
         .offset(input.offset);
         
       return sessions.map(s => s.session);
+    }),
+
+  // Start a session (open -> in_progress)
+  startSession: protectedProcedure
+    .input(z.object({ 
+      sessionId: z.string().uuid() 
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const user = ctx.session?.user as SessionUser;
+      
+      // Only trainers can start sessions
+      if (user.role !== 'trainer') {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'Only trainers can start sessions',
+        });
+      }
+      
+      // Get the session
+      const session = await ctx.db.query.TrainingSession.findFirst({
+        where: and(
+          eq(TrainingSession.id, input.sessionId),
+          eq(TrainingSession.businessId, user.businessId)
+        ),
+      });
+      
+      if (!session) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Session not found',
+        });
+      }
+      
+      // Validate current status
+      if (session.status !== 'open') {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: `Cannot start session. Current status is ${session.status}. Session must be 'open' to start.`,
+        });
+      }
+      
+      // Update status
+      const [updatedSession] = await ctx.db
+        .update(TrainingSession)
+        .set({ status: 'in_progress' })
+        .where(eq(TrainingSession.id, input.sessionId))
+        .returning();
+        
+      return updatedSession;
+    }),
+
+  // Complete a session (in_progress -> completed)
+  completeSession: protectedProcedure
+    .input(z.object({ 
+      sessionId: z.string().uuid() 
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const user = ctx.session?.user as SessionUser;
+      
+      // Only trainers can complete sessions
+      if (user.role !== 'trainer') {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'Only trainers can complete sessions',
+        });
+      }
+      
+      // Get the session
+      const session = await ctx.db.query.TrainingSession.findFirst({
+        where: and(
+          eq(TrainingSession.id, input.sessionId),
+          eq(TrainingSession.businessId, user.businessId)
+        ),
+      });
+      
+      if (!session) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Session not found',
+        });
+      }
+      
+      // Validate current status
+      if (session.status !== 'in_progress') {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: `Cannot complete session. Current status is ${session.status}. Session must be 'in_progress' to complete.`,
+        });
+      }
+      
+      // Update status
+      const [updatedSession] = await ctx.db
+        .update(TrainingSession)
+        .set({ status: 'completed' })
+        .where(eq(TrainingSession.id, input.sessionId))
+        .returning();
+        
+      return updatedSession;
+    }),
+
+  // Cancel a session (open -> cancelled)
+  cancelSession: protectedProcedure
+    .input(z.object({ 
+      sessionId: z.string().uuid() 
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const user = ctx.session?.user as SessionUser;
+      
+      // Only trainers can cancel sessions
+      if (user.role !== 'trainer') {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'Only trainers can cancel sessions',
+        });
+      }
+      
+      // Get the session
+      const session = await ctx.db.query.TrainingSession.findFirst({
+        where: and(
+          eq(TrainingSession.id, input.sessionId),
+          eq(TrainingSession.businessId, user.businessId)
+        ),
+      });
+      
+      if (!session) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Session not found',
+        });
+      }
+      
+      // Validate current status - can only cancel open sessions
+      if (session.status !== 'open') {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: `Cannot cancel session. Current status is ${session.status}. Only 'open' sessions can be cancelled.`,
+        });
+      }
+      
+      // Update status
+      const [updatedSession] = await ctx.db
+        .update(TrainingSession)
+        .set({ status: 'cancelled' })
+        .where(eq(TrainingSession.id, input.sessionId))
+        .returning();
+        
+      return updatedSession;
     }),
 } satisfies TRPCRouterRecord;

@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable } from "drizzle-orm/pg-core";
+import { pgTable, pgEnum, unique } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -71,6 +71,14 @@ export const CreateUserProfileSchema = createInsertSchema(UserProfile, {
 });
 
 // Training Sessions (scheduled appointments)
+// Session status enum
+export const sessionStatusEnum = pgEnum("session_status", [
+  "open",
+  "in_progress", 
+  "completed",
+  "cancelled"
+]);
+
 export const TrainingSession = pgTable("training_session", (t) => ({
   id: t.uuid().notNull().primaryKey().defaultRandom(),
   businessId: t.uuid().notNull().references(() => Business.id, { onDelete: "cascade" }),
@@ -79,6 +87,7 @@ export const TrainingSession = pgTable("training_session", (t) => ({
   scheduledAt: t.timestamp().notNull(),
   durationMinutes: t.integer(),
   maxParticipants: t.integer(), // null = unlimited
+  status: sessionStatusEnum("status").notNull().default("open"),
   createdAt: t.timestamp().defaultNow().notNull(),
   updatedAt: t
     .timestamp({ mode: "date", withTimezone: true })
@@ -92,6 +101,7 @@ export const CreateTrainingSessionSchema = createInsertSchema(TrainingSession, {
   scheduledAt: z.date(),
   durationMinutes: z.number().int().positive().optional(),
   maxParticipants: z.number().int().positive().optional(),
+  status: z.enum(["open", "in_progress", "completed", "cancelled"]).optional().default("open"),
 }).omit({
   id: true,
   createdAt: true,

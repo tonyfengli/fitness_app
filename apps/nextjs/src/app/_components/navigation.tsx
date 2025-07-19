@@ -100,6 +100,17 @@ export function Navigation() {
                 >
                   Messages
                 </Link>
+                <Link 
+                  href="/sessions" 
+                  className={cn(
+                    "text-sm font-medium transition-colors",
+                    pathname === "/sessions" 
+                      ? "text-primary" 
+                      : "text-muted-foreground hover:text-primary"
+                  )}
+                >
+                  Sessions
+                </Link>
               </>
             )}
           </div>

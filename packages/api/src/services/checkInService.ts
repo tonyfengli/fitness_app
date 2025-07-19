@@ -68,33 +68,29 @@ export async function processCheckIn(phoneNumber: string): Promise<CheckInResult
     const clientUser = foundUser[0];
     logger.info("User found", { userId: clientUser.id, businessId: clientUser.businessId, name: clientUser.name });
     
-    // 2. Find active session for user's business
+    // 2. Find open session for user's business
     const now = new Date();
-    const activeSession = await db
+    const openSession = await db
       .select()
       .from(TrainingSession)
       .where(
         and(
           eq(TrainingSession.businessId, clientUser.businessId),
-          lte(TrainingSession.scheduledAt, now),
-          gte(
-            sql`${TrainingSession.scheduledAt} + INTERVAL '1 minute' * ${TrainingSession.durationMinutes}`,
-            now
-          )
+          eq(TrainingSession.status, "open")
         )
       )
       .limit(1);
     
-    if (!activeSession.length || !activeSession[0]) {
-      logger.warn("No active session found", { businessId: clientUser.businessId });
+    if (!openSession.length || !openSession[0]) {
+      logger.warn("No open session found", { businessId: clientUser.businessId });
       return {
         success: false,
-        message: `Hello ${clientUser.name}! There's no active session at your gym right now. Please check with your trainer.`,
+        message: `Hello ${clientUser.name}! There's no open session at your gym right now. Please check with your trainer.`,
       };
     }
     
-    const session = activeSession[0];
-    logger.info("Active session found", { sessionId: session.id });
+    const session = openSession[0];
+    logger.info("Open session found", { sessionId: session.id });
     
     // 3. Check if already checked in
     const existingCheckIn = await db
