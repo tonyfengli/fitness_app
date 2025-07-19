@@ -1,10 +1,21 @@
 import { db } from "@acme/db/client";
-import { eq, and, gte, lte, sql } from "@acme/db";
+import { eq, and, or, sql } from "@acme/db";
 import { user, TrainingSession, UserTrainingSession } from "@acme/db/schema";
 import { normalizePhoneNumber } from "./twilio";
 import { createLogger } from "../utils/logger";
 
 const logger = createLogger("CheckInService");
+
+// Type for the broadcast function - will be injected from the API layer
+let broadcastCheckInEvent: ((sessionId: string, clientData: {
+  userId: string;
+  name: string;
+  checkedInAt: string;
+}) => void) | null = null;
+
+export function setBroadcastFunction(fn: typeof broadcastCheckInEvent) {
+  broadcastCheckInEvent = fn;
+}
 
 export interface CheckInResult {
   success: boolean;
@@ -25,39 +36,19 @@ export async function processCheckIn(phoneNumber: string): Promise<CheckInResult
       normalizedPhone: normalizedPhone 
     });
     
-    // 1. Find user by phone number - try multiple formats
-    let foundUser = await db
+    // 1. Find user by normalized phone number only
+    logger.info("Searching for user with normalized phone", { normalizedPhone });
+    
+    const foundUser = await db
       .select()
       .from(user)
       .where(eq(user.phone, normalizedPhone))
       .limit(1);
     
-    // If not found, try without country code
-    if (!foundUser.length && normalizedPhone.startsWith("+1")) {
-      const phoneWithoutCountry = normalizedPhone.substring(2);
-      logger.info("Trying without country code", { phone: phoneWithoutCountry });
-      
-      foundUser = await db
-        .select()
-        .from(user)
-        .where(eq(user.phone, phoneWithoutCountry))
-        .limit(1);
-    }
-    
-    // If still not found, try the original format
-    if (!foundUser.length) {
-      logger.info("Trying original format", { phone: phoneNumber });
-      
-      foundUser = await db
-        .select()
-        .from(user)
-        .where(eq(user.phone, phoneNumber))
-        .limit(1);
-    }
-    
     if (!foundUser.length || !foundUser[0]) {
-      logger.warn("No user found for any phone format", { 
-        tried: [normalizedPhone, normalizedPhone.substring(2), phoneNumber] 
+      logger.warn("No user found for normalized phone", { 
+        normalizedPhone,
+        originalPhone: phoneNumber 
       });
       return {
         success: false,
@@ -133,6 +124,22 @@ export async function processCheckIn(phoneNumber: string): Promise<CheckInResult
         checkInId: existingCheckIn[0].id 
       });
       
+      // Broadcast check-in event if broadcast function is available
+      if (broadcastCheckInEvent) {
+        logger.info("Broadcasting check-in event", {
+          sessionId: session.id,
+          userId: clientUser.id,
+          name: clientUser.name
+        });
+        broadcastCheckInEvent(session.id, {
+          userId: clientUser.id,
+          name: clientUser.name || "Unknown",
+          checkedInAt: now.toISOString()
+        });
+      } else {
+        logger.warn("Broadcast function not available");
+      }
+      
       return {
         success: true,
         message: `Hello ${clientUser.name}! You're checked in for the session. Welcome!`,
@@ -164,6 +171,22 @@ export async function processCheckIn(phoneNumber: string): Promise<CheckInResult
         sessionId: session.id,
         checkInId: newCheckIn.id 
       });
+      
+      // Broadcast check-in event if broadcast function is available
+      if (broadcastCheckInEvent) {
+        logger.info("Broadcasting check-in event", {
+          sessionId: session.id,
+          userId: clientUser.id,
+          name: clientUser.name
+        });
+        broadcastCheckInEvent(session.id, {
+          userId: clientUser.id,
+          name: clientUser.name || "Unknown",
+          checkedInAt: now.toISOString()
+        });
+      } else {
+        logger.warn("Broadcast function not available");
+      }
       
       return {
         success: true,

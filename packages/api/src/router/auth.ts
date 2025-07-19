@@ -7,6 +7,7 @@ import { user, UserProfile, account } from "@acme/db/schema";
 
 import { protectedProcedure, publicProcedure } from "../trpc";
 import type { SessionUser } from "../types/auth";
+import { normalizePhoneNumber } from "../services/twilio";
 
 export const authRouter = {
   getSession: publicProcedure.query(({ ctx }) => {
@@ -224,12 +225,15 @@ export const authRouter = {
       const userId = crypto.randomUUID();
       const now = new Date();
 
+      // Normalize phone number if provided
+      const normalizedPhone = input.phone ? normalizePhoneNumber(input.phone) : null;
+      
       // Create the user
       await ctx.db.insert(user).values({
         id: userId,
         email: input.email,
         name: input.name,
-        phone: input.phone || null,
+        phone: normalizedPhone,
         role: input.role,
         businessId: businessId,
         emailVerified: false,

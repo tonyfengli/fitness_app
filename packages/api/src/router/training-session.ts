@@ -7,7 +7,8 @@ import {
   TrainingSession, 
   UserTrainingSession,
   CreateTrainingSessionSchema,
-  CreateUserTrainingSessionSchema 
+  CreateUserTrainingSessionSchema,
+  user as userTable
 } from "@acme/db/schema";
 
 import { protectedProcedure } from "../trpc";
@@ -98,6 +99,55 @@ export const trainingSessionRouter = {
         .offset(input.offset);
         
       return sessions;
+    }),
+
+  // Get checked-in clients for a session
+  getCheckedInClients: protectedProcedure
+    .input(z.object({ sessionId: z.string().uuid() }))
+    .query(async ({ ctx, input }) => {
+      const user = ctx.session?.user as SessionUser;
+      
+      // Verify session belongs to user's business
+      const session = await ctx.db.query.TrainingSession.findFirst({
+        where: and(
+          eq(TrainingSession.id, input.sessionId),
+          eq(TrainingSession.businessId, user.businessId)
+        ),
+      });
+      
+      if (!session) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Session not found',
+        });
+      }
+      
+      // Get checked-in users
+      const checkedInUsers = await ctx.db
+        .select()
+        .from(UserTrainingSession)
+        .where(and(
+          eq(UserTrainingSession.trainingSessionId, input.sessionId),
+          eq(UserTrainingSession.status, 'checked_in')
+        ))
+        .orderBy(desc(UserTrainingSession.checkedInAt));
+      
+      // Get user details for each checked-in user
+      const usersWithDetails = await Promise.all(
+        checkedInUsers.map(async (checkin) => {
+          const userInfo = await ctx.db.query.user.findFirst({
+            where: eq(userTable.id, checkin.userId)
+          });
+          return {
+            userId: checkin.userId,
+            checkedInAt: checkin.checkedInAt,
+            userName: userInfo?.name || null,
+            userEmail: userInfo?.email || ""
+          };
+        })
+      );
+        
+      return usersWithDetails;
     }),
 
   // Get session by ID with participants

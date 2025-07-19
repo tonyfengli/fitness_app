@@ -24,7 +24,7 @@ export { createTRPCContext, appRouter };
 export type { AppRouter, RouterInputs, RouterOutputs };
 
 // Export services for SMS webhook
-export { processCheckIn } from "./services/checkInService";
+export { processCheckIn, setBroadcastFunction } from "./services/checkInService";
 export { saveMessage } from "./services/messageService";
 export { getUserByPhone } from "./services/userService";
 export { twilioClient, normalizePhoneNumber } from "./services/twilio";

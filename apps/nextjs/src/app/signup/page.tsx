@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { authClient } from "~/auth/client";
 import { useTRPC } from "~/trpc/react";
+import { normalizePhoneNumber } from "~/utils/phone";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -97,12 +98,12 @@ export default function SignupPage() {
         router.push("/trainer-dashboard");
         router.refresh();
       } else {
-        // Normal signup flow
+        // Normal signup flow - normalize phone number
         const result = await authClient.signUp.email({
           email: formData.email,
           password: formData.password,
           name: formData.name,
-          phone: formData.phone,
+          phone: formData.phone ? normalizePhoneNumber(formData.phone) : "",
           role: formData.role,
           businessId: formData.businessId,
         });

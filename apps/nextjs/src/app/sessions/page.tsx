@@ -63,6 +63,7 @@ interface SessionWithParticipants {
   scheduledAt: Date;
   durationMinutes: number | null;
   maxParticipants: number | null;
+  status: "open" | "in_progress" | "completed" | "cancelled";
   participants?: Array<{
     userId: string;
     userName?: string;
@@ -73,11 +74,13 @@ interface SessionWithParticipants {
 function SessionCard({ 
   session, 
   index,
-  participants = []
+  participants = [],
+  onViewLobby
 }: { 
   session: SessionWithParticipants; 
   index: number;
   participants?: Array<{ id: string; name: string | null; email: string }>;
+  onViewLobby: (sessionId: string) => void;
 }) {
   const status = getSessionStatus(session.scheduledAt, session.durationMinutes);
   const isPast = status === "past";
@@ -87,8 +90,21 @@ function SessionCard({
   const startTime = formatTime(sessionDate);
   const endTime = getEndTime(sessionDate, session.durationMinutes);
   
+  const canViewLobby = session.status === "open";
+  const statusColors = {
+    open: "bg-green-100 text-green-800",
+    in_progress: "bg-blue-100 text-blue-800",
+    completed: "bg-gray-100 text-gray-800",
+    cancelled: "bg-red-100 text-red-800"
+  };
+  
   return (
-    <div className={`bg-gray-50 rounded-xl p-4 ${isPast ? 'opacity-70' : ''} ${isActive ? 'ring-2 ring-green-500' : ''}`}>
+    <div 
+      className={`bg-gray-50 rounded-xl p-4 transition-colors ${
+        canViewLobby ? 'cursor-pointer hover:bg-gray-100' : ''
+      } ${isPast ? 'opacity-70' : ''} ${isActive ? 'ring-2 ring-green-500' : ''}`}
+      onClick={() => canViewLobby && onViewLobby(session.id)}
+    >
       <div className="flex justify-between items-start">
         <div>
           <p className="font-semibold text-lg text-gray-800">
@@ -96,8 +112,15 @@ function SessionCard({
           </p>
           <p className="text-sm text-gray-500">
             {session.name} | {startTime} - {endTime}
-            {isActive && <span className="ml-2 text-green-600 font-medium">(Active)</span>}
           </p>
+          <div className="flex items-center gap-2 mt-2">
+            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${statusColors[session.status]}`}>
+              {session.status.replace('_', ' ')}
+            </span>
+            {canViewLobby && (
+              <span className="text-xs text-blue-600">Click to view lobby</span>
+            )}
+          </div>
         </div>
         <button className="text-gray-500 hover:text-gray-700">
           <Icon name="more_horiz" size={24} />
@@ -142,6 +165,10 @@ export default function SessionsPage() {
   const router = useRouter();
   const trpc = useTRPC();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  
+  const handleViewLobby = (sessionId: string) => {
+    router.push(`/session-lobby?sessionId=${sessionId}`);
+  };
 
   // Fetch sessions from API
   const { data: sessions, isLoading: sessionsLoading, refetch } = useQuery(
@@ -234,6 +261,7 @@ export default function SessionsPage() {
                         session={session} 
                         index={index}
                         participants={[]}
+                        onViewLobby={handleViewLobby}
                       />
                     );
                   })}
@@ -252,6 +280,7 @@ export default function SessionsPage() {
                       session={session} 
                       index={index + activeSessions.length}
                       participants={[]}
+                      onViewLobby={handleViewLobby}
                     />
                   ))
                 ) : (
@@ -273,6 +302,7 @@ export default function SessionsPage() {
                       session={session} 
                       index={index + upcomingSessions.length + activeSessions.length}
                       participants={[]}
+                      onViewLobby={handleViewLobby}
                     />
                   ))
                 ) : (

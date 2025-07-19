@@ -3,11 +3,13 @@ import { validateRequest } from "twilio";
 import { interpretSMS } from "@acme/ai";
 import { 
   processCheckIn, 
+  setBroadcastFunction,
   saveMessage, 
   getUserByPhone,
   twilioClient,
   createLogger 
 } from "@acme/api";
+import { broadcastCheckIn } from "../../sse/connections";
 
 // Twilio webhook payload type
 interface TwilioSMSPayload {
@@ -25,6 +27,9 @@ const logger = createLogger("SMSWebhook");
 
 export async function POST(request: NextRequest) {
   try {
+    // Set up the broadcast function for real-time updates
+    setBroadcastFunction(broadcastCheckIn);
+    
     // Get the Twilio signature from headers
     const twilioSignature = request.headers.get("X-Twilio-Signature");
     
@@ -112,12 +117,34 @@ export async function POST(request: NextRequest) {
       messageSid: payload.MessageSid 
     });
     
-    // Parse intent using LangGraph
-    const interpretation = await interpretSMS(payload.Body);
-    logger.info("SMS interpretation", { 
-      intent: interpretation.intent,
-      rawMessage: payload.Body 
-    });
+    // Check for common check-in keywords first to skip AI
+    const checkInKeywords = [
+      "here", "im here", "i'm here", "i am here",
+      "ready", "im ready", "i'm ready", "i am ready", 
+      "checking in", "check in", "checkin",
+      "arrived", "im in", "i'm in", "i am in",
+      "present", "at the gym", "at gym"
+    ];
+    
+    const lowerBody = payload.Body.toLowerCase().trim();
+    const isCheckIn = checkInKeywords.some(keyword => lowerBody.includes(keyword));
+    
+    let interpretation;
+    if (isCheckIn) {
+      // Skip AI completely for check-ins - saves 200-500ms
+      interpretation = { intent: { type: "check_in", confidence: 0.9 } };
+      logger.info("Check-in detected by keywords, skipping AI", { 
+        message: payload.Body,
+        detected: true 
+      });
+    } else {
+      // Only use AI for non-check-in messages
+      interpretation = await interpretSMS(payload.Body);
+      logger.info("SMS interpretation via AI", { 
+        intent: interpretation.intent,
+        rawMessage: payload.Body 
+      });
+    }
     
     // Normalize phone number
     let toNumber = payload.From;
@@ -207,19 +234,18 @@ export async function POST(request: NextRequest) {
       }
     }
     
-    // Send response SMS
-    try {
-      await twilioClient.messages.create({
-        body: responseMessage,
-        from: process.env.TWILIO_PHONE_NUMBER!,
-        to: toNumber,
-      });
+    // Send response SMS asynchronously (don't block the response)
+    twilioClient.messages.create({
+      body: responseMessage,
+      from: process.env.TWILIO_PHONE_NUMBER!,
+      to: toNumber,
+    }).then(() => {
       logger.info("Response SMS sent", { to: toNumber });
-    } catch (error) {
+    }).catch((error) => {
       logger.error("Failed to send SMS", error);
-    }
+    });
 
-    // Twilio expects an empty 200 response or TwiML
+    // Return 200 immediately to Twilio (faster response)
     return new NextResponse("", { status: 200 });
   } catch (error) {
     console.error("Error processing SMS webhook:", error);
