@@ -28,6 +28,30 @@ export interface CheckInResult {
   shouldStartPreferences?: boolean;
 }
 
+export async function getUserByPhone(phoneNumber: string): Promise<{ userId: string; businessId: string } | null> {
+  try {
+    const normalizedPhone = normalizePhoneNumber(phoneNumber);
+    
+    const foundUser = await db
+      .select()
+      .from(user)
+      .where(eq(user.phone, normalizedPhone))
+      .limit(1);
+    
+    if (!foundUser.length || !foundUser[0]) {
+      return null;
+    }
+    
+    return {
+      userId: foundUser[0].id,
+      businessId: foundUser[0].businessId || '',
+    };
+  } catch (error) {
+    logger.error("Error finding user by phone", error);
+    return null;
+  }
+}
+
 export async function processCheckIn(phoneNumber: string): Promise<CheckInResult> {
   try {
     // Normalize phone number

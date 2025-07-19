@@ -98,6 +98,14 @@ export const createMockContext = (
         Post: {
           findMany: vi.fn(),
         },
+        TrainingSession: {
+          findMany: vi.fn(),
+          findFirst: vi.fn(),
+        },
+        UserTrainingSession: {
+          findMany: vi.fn(),
+          findFirst: vi.fn(),
+        },
       },
       // For direct queries
       businessExercise: {
@@ -112,20 +120,22 @@ export const createMockContext = (
       // New select pattern for business filtering
       select: selectFn,
       selectMockChain: mockChain, // Expose for test configuration
-    } as any,
-    insert: vi.fn(() => ({
-      values: vi.fn(() => ({
-        returning: vi.fn(() => Promise.resolve([])),
+      insert: vi.fn(() => ({
+        values: vi.fn(() => ({
+          returning: vi.fn(() => Promise.resolve([])),
+        })),
       })),
-    })),
-    update: vi.fn(() => ({
-      set: vi.fn(() => ({
+      update: vi.fn(() => ({
+        set: vi.fn(() => ({
+          where: vi.fn(() => ({
+            returning: vi.fn(() => Promise.resolve([])),
+          })),
+        })),
+      })),
+      delete: vi.fn(() => ({
         where: vi.fn(() => Promise.resolve()),
       })),
-    })),
-    delete: vi.fn(() => ({
-      where: vi.fn(() => Promise.resolve()),
-    })),
+    } as any,
   };
 };
 
