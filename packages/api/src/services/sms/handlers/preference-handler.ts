@@ -34,6 +34,16 @@ export class PreferenceHandler {
         parseTime
       });
 
+      // Save simple preferences immediately (fire-and-forget)
+      WorkoutPreferenceService.saveSimplePreferences(
+        preferenceCheck.userId!,
+        preferenceCheck.sessionId!,
+        preferenceCheck.businessId!,
+        parsedPreferences
+      ).catch(error => {
+        logger.error("Failed to save simple preferences (non-blocking)", error);
+      });
+
       // Validate exercises if any were mentioned
       let validatedPreferences = { ...parsedPreferences };
       let exerciseValidationInfo: any = {};

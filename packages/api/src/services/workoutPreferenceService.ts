@@ -99,6 +99,90 @@ export class WorkoutPreferenceService {
     return { waiting: false };
   }
 
+  static async saveSimplePreferences(
+    userId: string,
+    sessionId: string,
+    businessId: string,
+    preferences: Partial<ParsedPreferences>
+  ): Promise<void> {
+    try {
+      // Only save if there are simple preferences to save
+      const hasSimplePrefs = preferences.intensity || 
+                            preferences.sessionGoal !== undefined ||
+                            preferences.muscleTargets?.length ||
+                            preferences.muscleLessens?.length ||
+                            preferences.avoidJoints?.length;
+      
+      if (!hasSimplePrefs) {
+        return;
+      }
+
+      logger.info("Saving simple preferences (fire-and-forget)", { 
+        userId, 
+        sessionId,
+        hasIntensity: !!preferences.intensity,
+        hasSessionGoal: preferences.sessionGoal !== undefined,
+        hasMuscleTargets: !!preferences.muscleTargets?.length
+      });
+
+      // Check if preferences already exist
+      const [existing] = await db
+        .select()
+        .from(WorkoutPreferences)
+        .where(
+          and(
+            eq(WorkoutPreferences.userId, userId),
+            eq(WorkoutPreferences.trainingSessionId, sessionId)
+          )
+        )
+        .limit(1);
+
+      if (existing) {
+        // Update only the simple preference fields
+        await db
+          .update(WorkoutPreferences)
+          .set({
+            intensity: preferences.intensity || existing.intensity,
+            muscleTargets: preferences.muscleTargets || existing.muscleTargets,
+            muscleLessens: preferences.muscleLessens || existing.muscleLessens,
+            avoidJoints: preferences.avoidJoints || existing.avoidJoints,
+            sessionGoal: preferences.sessionGoal !== undefined ? preferences.sessionGoal : existing.sessionGoal,
+          })
+          .where(eq(WorkoutPreferences.id, existing.id));
+      } else {
+        // Insert new preferences with only simple fields
+        await db.insert(WorkoutPreferences).values({
+          userId,
+          trainingSessionId: sessionId,
+          businessId,
+          intensity: preferences.intensity,
+          muscleTargets: preferences.muscleTargets,
+          muscleLessens: preferences.muscleLessens,
+          avoidJoints: preferences.avoidJoints,
+          sessionGoal: preferences.sessionGoal,
+          collectionMethod: "sms",
+        });
+      }
+
+      // Broadcast update if available
+      if (broadcastPreferenceUpdate) {
+        broadcastPreferenceUpdate(sessionId, {
+          userId,
+          preferences: {
+            intensity: preferences.intensity || null,
+            muscleTargets: preferences.muscleTargets || null,
+            muscleLessens: preferences.muscleLessens || null,
+            avoidJoints: preferences.avoidJoints || null,
+            sessionGoal: preferences.sessionGoal || null,
+          }
+        });
+      }
+    } catch (error) {
+      logger.error("Error saving simple preferences (non-blocking):", error);
+      // Don't throw - this is fire-and-forget
+    }
+  }
+
   static async savePreferences(
     userId: string,
     sessionId: string,

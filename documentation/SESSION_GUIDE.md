@@ -185,11 +185,79 @@ messages (
 )
 ```
 
+## Preference Collection Flow
+
+After successful check-in, the system initiates a preference collection conversation:
+
+### Post Check-in Branching Logic
+```
+┌─────────────────┐
+│  Check-in       │
+│  Successful     │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│ Send Opening    │ "How are you feeling today? Is there
+│ Prompt Message  │  anything I should know before building
+└────────┬────────┘  your workout?"
+         │
+         ▼
+┌─────────────────┐
+│ Parse User      │
+│ Response        │
+└────────┬────────┘
+         │
+    ┌────┴────┬─────────┬─────────┬──────────┐
+    │         │         │         │          │
+    ▼         ▼         ▼         ▼          ▼
+┌────────┐┌────────┐┌────────┐┌────────┐
+│Simple  ││Exclude ││Include ││Multiple│
+│Prefs   ││Exercise││Exercise││Combined│
+└────┬───┘└────┬───┘└────┬───┘└────┬───┘
+     │         │         │         │
+     ▼         ▼         ▼         ▼
+┌────────┐┌────────┐┌────────┐┌────────┐
+│Direct  ││Match & ││Disambig││Handle  │
+│Save    ││Exclude ││-uate   ││Each    │
+└────────┘└────────┘└────┬───┘└────────┘
+                         │
+                         ▼
+                   ┌──────────┐
+                   │Send      │ "Which exercises?"
+                   │Options   │ "1. Barbell Bench"
+                   └────┬─────┘ "2. Dumbbell Press"
+                        │
+                        ▼
+                   ┌──────────┐
+                   │Process   │
+                   │Selection │
+                   └──────────┘
+```
+
+### Branch Types
+
+1. **Simple Preferences**: Direct extraction of intensity, session goals, muscle targets
+   - Example: "I'm tired today" → `intensity: "low"`
+   - Example: "Let's work on stability" → `sessionGoal: "stability"`
+
+2. **Exclude Exercises**: User wants to avoid specific exercises
+   - Example: "No squats today" → Match all squat variations
+   - Uses exercise matcher to find all relevant exercises
+
+3. **Include Exercises**: User wants specific exercises (requires disambiguation)
+   - Example: "I want to do bench press" → Needs clarification
+   - Triggers disambiguation conversation for selection
+
+4. **Multiple Combined**: Mix of preferences in one message
+   - Example: "Feeling good, let's go heavy but skip deadlifts"
+   - Processes each component appropriately
+
 ## Response Messages
 
 | Scenario | Message | Broadcast Event |
 |----------|---------|-----------------|
-| ✅ Successful check-in | "Hello [Name]! You're checked in for the session. Welcome!" | Yes - Updates lobby |
+| ✅ Successful check-in | "Hello [Name]! You're checked in for the session. Welcome!\n\nHow are you feeling today? Is there anything I should know before building your workout?" | Yes - Updates lobby |
 | 🔄 Already checked in | "Hello [Name]! You're already checked in for this session!" | No |
 | ⚠️ No open session | "Hello [Name]! There's no open session at your gym right now. Please check with your trainer." | No |
 | ❌ No account found | "We couldn't find your account. Contact your trainer to get set up." | No |
