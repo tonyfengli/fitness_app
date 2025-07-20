@@ -135,7 +135,7 @@ export class WorkoutPreferenceService {
           .where(eq(WorkoutPreferences.id, existing.id));
       } else {
         // Insert new preferences
-        await db.insert(WorkoutPreferences).values({
+        const valuesToInsert = {
           userId,
           trainingSessionId: sessionId,
           businessId,
@@ -147,7 +147,19 @@ export class WorkoutPreferenceService {
           avoidJoints: preferences.avoidJoints,
           sessionGoal: preferences.sessionGoal,
           collectionMethod: "sms",
+        };
+        
+        logger.info("Inserting new preferences", {
+          userId,
+          sessionId,
+          exerciseCounts: {
+            avoidExercises: preferences.avoidExercises?.length || 0,
+            includeExercises: preferences.includeExercises?.length || 0,
+          },
+          fullValues: valuesToInsert
         });
+        
+        await db.insert(WorkoutPreferences).values(valuesToInsert);
       }
 
       // Update check-in to mark preferences collection step

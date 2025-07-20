@@ -264,7 +264,7 @@ export async function parseWorkoutPreferences(userResponse: string): Promise<Par
   console.log("🚀 parseWorkoutPreferences called with:", userResponse);
   console.log("📋 SYSTEM_PROMPT starts with:", SYSTEM_PROMPT.substring(0, 50) + "...");
   
-  let content: string | undefined;
+  let content: string | null | undefined;
   let debugInfo: any = {
     startTime: Date.now(),
     userInput: userResponse

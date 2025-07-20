@@ -31,6 +31,7 @@ export { twilioClient, normalizePhoneNumber } from "./services/twilio";
 export { createLogger } from "./utils/logger";
 export { WorkoutPreferenceService, setPreferenceBroadcastFunction } from "./services/workoutPreferenceService";
 export { ExerciseValidationService } from "./services/exerciseValidationService";
+export { ExerciseMatchingLLMService } from "./services/exerciseMatchingLLMService";
 
 // Export new SMS handler components
 export { SMSWebhookHandler } from "./services/sms";

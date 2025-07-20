@@ -36,10 +36,17 @@ export class PreferenceHandler {
 
       // Validate exercises if any were mentioned
       let validatedPreferences = { ...parsedPreferences };
-      let exerciseValidationInfo = null;
+      let exerciseValidationInfo: any = {};
       
-      if (parsedPreferences.avoidExercises?.length || parsedPreferences.includeExercises?.length) {
-        logger.info("Validating exercises", {
+      console.log("DEBUG: Checking for exercises", {
+        avoidExercises: parsedPreferences.avoidExercises,
+        includeExercises: parsedPreferences.includeExercises,
+        hasAvoid: (parsedPreferences.avoidExercises?.length ?? 0) > 0,
+        hasInclude: (parsedPreferences.includeExercises?.length ?? 0) > 0
+      });
+      
+      if ((parsedPreferences.avoidExercises?.length ?? 0) > 0 || (parsedPreferences.includeExercises?.length ?? 0) > 0) {
+        logger.info("Starting exercise validation", {
           avoidExercises: parsedPreferences.avoidExercises,
           includeExercises: parsedPreferences.includeExercises,
           businessId: preferenceCheck.businessId
@@ -50,10 +57,11 @@ export class PreferenceHandler {
           if (parsedPreferences.avoidExercises?.length) {
             const avoidValidation = await ExerciseValidationService.validateExercises(
               parsedPreferences.avoidExercises,
-              preferenceCheck.businessId!
+              preferenceCheck.businessId!,
+              "avoid"
             );
             validatedPreferences.avoidExercises = avoidValidation.validatedExercises;
-            exerciseValidationInfo = { ...exerciseValidationInfo, avoidExercises: avoidValidation };
+            exerciseValidationInfo.avoidExercises = avoidValidation;
             
             logger.info("Avoid exercises validation result", {
               input: parsedPreferences.avoidExercises,
@@ -66,10 +74,11 @@ export class PreferenceHandler {
           if (parsedPreferences.includeExercises?.length) {
             const includeValidation = await ExerciseValidationService.validateExercises(
               parsedPreferences.includeExercises,
-              preferenceCheck.businessId!
+              preferenceCheck.businessId!,
+              "include"
             );
             validatedPreferences.includeExercises = includeValidation.validatedExercises;
-            exerciseValidationInfo = { ...exerciseValidationInfo, includeExercises: includeValidation };
+            exerciseValidationInfo.includeExercises = includeValidation;
             
             logger.info("Include exercises validation result", {
               input: parsedPreferences.includeExercises,
@@ -90,6 +99,16 @@ export class PreferenceHandler {
       );
 
       // Save preferences
+      logger.info("About to save preferences", {
+        userId: preferenceCheck.userId,
+        sessionId: preferenceCheck.sessionId,
+        validatedPreferences: {
+          ...validatedPreferences,
+          avoidExercisesCount: validatedPreferences.avoidExercises?.length || 0,
+          includeExercisesCount: validatedPreferences.includeExercises?.length || 0
+        }
+      });
+      
       await WorkoutPreferenceService.savePreferences(
         preferenceCheck.userId!,
         preferenceCheck.sessionId!,

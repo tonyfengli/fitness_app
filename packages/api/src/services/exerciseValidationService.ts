@@ -2,29 +2,39 @@ import { db } from "@acme/db/client";
 import { exercises, BusinessExercise } from "@acme/db/schema";
 import { eq, and, ilike, sql } from "@acme/db";
 import { createLogger } from "../utils/logger";
+import { ExerciseMatchingLLMService } from "./exerciseMatchingLLMService";
 
 const logger = createLogger("ExerciseValidationService");
 
 export interface ExerciseMatch {
   userInput: string;
-  matchedExercise?: {
+  matchedExercises: Array<{
     id: string;
     name: string;
-  };
-  confidence: "exact" | "fuzzy" | "no_match";
+  }>;
+  confidence: "llm_match" | "no_match";
+  llmReasoning?: string;
+  systemPrompt?: string;
+  model?: string;
+  parseTimeMs?: number;
 }
 
 export class ExerciseValidationService {
+  private static llmService = new ExerciseMatchingLLMService();
+  
   /**
    * Validate and match exercise names from user input to actual exercises in the database
    */
   static async validateExercises(
     userInputExercises: string[] | undefined | null,
-    businessId: string
+    businessId: string,
+    intent: "avoid" | "include" = "avoid"
   ): Promise<{
     validatedExercises: string[];
     matches: ExerciseMatch[];
     hasUnrecognized: boolean;
+    model?: string;
+    parseTimeMs?: number;
   }> {
     logger.info("Starting exercise validation", {
       userInputExercises,
@@ -42,27 +52,59 @@ export class ExerciseValidationService {
     const matches: ExerciseMatch[] = [];
     const validatedExercises: string[] = [];
 
-    // Get all business exercises for fuzzy matching
+    // Get all business exercises - only fetch the fields we need
     const businessExercises = await db
       .select({
         id: exercises.id,
         name: exercises.name,
+        primaryMuscle: exercises.primaryMuscle,
+        equipment: exercises.equipment,
+        movementPattern: exercises.movementPattern,
+        complexityLevel: exercises.complexityLevel,
       })
       .from(exercises)
       .innerJoin(BusinessExercise, eq(exercises.id, BusinessExercise.exerciseId))
       .where(eq(BusinessExercise.businessId, businessId));
 
+    // Use LLM to match all exercises at once for efficiency
     for (const userInput of userInputExercises) {
-      const match = await this.findBestMatch(userInput, businessExercises, businessId);
-      matches.push(match);
-      
-      logger.info("Exercise match result", {
-        userInput,
-        match
-      });
-      
-      if (match.matchedExercise) {
-        validatedExercises.push(match.matchedExercise.name);
+      try {
+        const llmResult = await ExerciseValidationService.llmService.matchUserIntent(
+          userInput,
+          businessExercises,
+          intent
+        );
+        
+        // Find the exercise objects for matched names
+        const matchedExercises = businessExercises
+          .filter(ex => llmResult.matchedExerciseNames.includes(ex.name))
+          .map(ex => ({ id: ex.id, name: ex.name }));
+        
+        matches.push({
+          userInput,
+          matchedExercises,
+          confidence: matchedExercises.length > 0 ? "llm_match" : "no_match",
+          llmReasoning: llmResult.reasoning,
+          systemPrompt: llmResult.systemPrompt,
+          model: llmResult.model,
+          parseTimeMs: llmResult.parseTimeMs
+        });
+        
+        // Add all matched exercise names
+        validatedExercises.push(...matchedExercises.map(ex => ex.name));
+        
+        logger.info("LLM exercise match result", {
+          userInput,
+          matchCount: matchedExercises.length,
+          matchedNames: matchedExercises.map(ex => ex.name)
+        });
+      } catch (error) {
+        logger.error("LLM matching failed for input", { userInput, error });
+        matches.push({
+          userInput,
+          matchedExercises: [],
+          confidence: "no_match"
+        });
       }
     }
 
@@ -74,21 +116,28 @@ export class ExerciseValidationService {
       hasUnrecognized,
     });
 
+    // Aggregate metadata from all matches
+    const totalParseTime = matches.reduce((sum, match) => sum + (match.parseTimeMs || 0), 0);
+    const model = matches.find(m => m.model)?.model;
+
     return {
       validatedExercises,
       matches,
       hasUnrecognized,
+      model,
+      parseTimeMs: totalParseTime
     };
   }
 
   /**
-   * Find the best match for a user input exercise name
+   * [DEPRECATED - Kept for reference]
+   * Find the best match for a user input exercise name using fuzzy matching
    */
-  private static async findBestMatch(
+  private static async findBestMatchFuzzy(
     userInput: string,
     businessExercises: Array<{ id: string; name: string }>,
     businessId: string
-  ): Promise<ExerciseMatch> {
+  ): Promise<any> {
     const normalizedInput = this.normalizeExerciseName(userInput);
 
     // 1. Try exact match (case-insensitive)
@@ -238,28 +287,31 @@ export class ExerciseValidationService {
   private static levenshteinDistance(str1: string, str2: string): number {
     const matrix: number[][] = [];
 
+    // Initialize the matrix
     for (let i = 0; i <= str2.length; i++) {
-      matrix[i] = [i];
+      matrix[i] = [];
+      matrix[i]![0] = i;
     }
 
     for (let j = 0; j <= str1.length; j++) {
-      matrix[0][j] = j;
+      matrix[0]![j] = j;
     }
 
+    // Fill the matrix
     for (let i = 1; i <= str2.length; i++) {
       for (let j = 1; j <= str1.length; j++) {
         if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
-          matrix[i][j] = matrix[i - 1][j - 1];
+          matrix[i]![j] = matrix[i - 1]![j - 1]!;
         } else {
-          matrix[i][j] = Math.min(
-            matrix[i - 1][j - 1] + 1, // substitution
-            matrix[i][j - 1] + 1, // insertion
-            matrix[i - 1][j] + 1 // deletion
+          matrix[i]![j] = Math.min(
+            matrix[i - 1]![j - 1]! + 1, // substitution
+            matrix[i]![j - 1]! + 1, // insertion
+            matrix[i - 1]![j]! + 1 // deletion
           );
         }
       }
     }
 
-    return matrix[str2.length][str1.length];
+    return matrix[str2.length]![str1.length]!;
   }
 }
