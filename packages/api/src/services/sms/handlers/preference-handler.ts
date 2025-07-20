@@ -79,12 +79,6 @@ export class PreferenceHandler {
       let validatedPreferences = { ...parsedPreferences };
       let exerciseValidationInfo: any = {};
       
-      console.log("DEBUG: Checking for exercises", {
-        avoidExercises: parsedPreferences.avoidExercises,
-        includeExercises: parsedPreferences.includeExercises,
-        hasAvoid: (parsedPreferences.avoidExercises?.length ?? 0) > 0,
-        hasInclude: (parsedPreferences.includeExercises?.length ?? 0) > 0
-      });
       
       if ((parsedPreferences.avoidExercises?.length ?? 0) > 0 || (parsedPreferences.includeExercises?.length ?? 0) > 0) {
         logger.info("Starting exercise validation", {
@@ -249,7 +243,7 @@ export class PreferenceHandler {
   }
 
   private determineNextStep(currentStep: string, parsedPreferences: any) {
-    let nextStep: "initial_collected" | "followup_collected" | "complete";
+    let nextStep: "initial_collected" | "disambiguation_pending" | "disambiguation_resolved" | "followup_sent" | "preferences_active";
     let response: string;
     
     if (currentStep === "not_started") {
@@ -258,12 +252,12 @@ export class PreferenceHandler {
         nextStep = "initial_collected";
         response = "Thanks! Can you tell me more about what specific areas you'd like to focus on or avoid today?";
       } else {
-        nextStep = "complete";
+        nextStep = "followup_sent";
         response = "Perfect! I've got your preferences and will use them to build your workout. See you in the gym!";
       }
     } else {
       // Follow-up response (from initial_collected)
-      nextStep = "complete";
+      nextStep = "followup_sent";
       response = "Great! I've got all your preferences now. Your workout will be tailored to how you're feeling today. See you in the gym!";
     }
 

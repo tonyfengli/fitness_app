@@ -1,6 +1,6 @@
 import { db } from "@acme/db/client";
 import { conversationState } from "@acme/db/schema";
-import { eq, and } from "@acme/db";
+import { eq, and, desc } from "@acme/db";
 import { createLogger } from "../utils/logger";
 
 const logger = createLogger("ConversationStateService");
@@ -29,7 +29,7 @@ export class ConversationStateService {
         optionCount: options.length
       });
 
-      const [newState] = await db
+      const result = await db
         .insert(conversationState)
         .values({
           userId,
@@ -47,7 +47,7 @@ export class ConversationStateService {
         })
         .returning();
 
-      return newState.id;
+      return result[0]?.id || '';
     } catch (error) {
       logger.error("Error creating conversation state", error);
       throw error;
@@ -77,7 +77,7 @@ export class ConversationStateService {
             eq(conversationState.currentStep, "awaiting_selection")
           )
         )
-        .orderBy(conversationState.createdAt, "desc")
+        .orderBy(desc(conversationState.createdAt))
         .limit(1);
 
       if (!pending) {

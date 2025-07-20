@@ -18,17 +18,9 @@ export function broadcastCheckIn(sessionId: string, clientData: {
   name: string;
   checkedInAt: string;
 }) {
-  console.log("[SSE] broadcastCheckIn called", { 
-    sessionId, 
-    clientName: clientData.name,
-    activeConnections: sseConnections.get(sessionId)?.size || 0,
-    allSessions: Array.from(sseConnections.keys())
-  });
-  
   const sessionControllers = sseConnections.get(sessionId);
   
   if (!sessionControllers || sessionControllers.size === 0) {
-    console.log("[SSE] No active connections for session", { sessionId });
     return;
   }
   
@@ -43,9 +35,7 @@ export function broadcastCheckIn(sessionId: string, clientData: {
   sessionControllers.forEach((controller) => {
     try {
       controller.enqueue(encoder.encode(eventData));
-      console.log("[SSE] Event sent to controller");
     } catch (error) {
-      console.log("[SSE] Controller is closed, marking for removal");
       deadControllers.add(controller);
     }
   });
@@ -58,12 +48,6 @@ export function broadcastCheckIn(sessionId: string, clientData: {
   if (sessionControllers.size === 0) {
     sseConnections.delete(sessionId);
   }
-  
-  console.log("[SSE] Broadcast complete", { 
-    sessionId, 
-    clientName: clientData.name,
-    remainingConnections: sessionControllers.size 
-  });
 }
 
 export function broadcastPreferenceUpdate(sessionId: string, preferenceData: {
@@ -78,16 +62,9 @@ export function broadcastPreferenceUpdate(sessionId: string, preferenceData: {
     sessionGoal?: string | null;
   };
 }) {
-  console.log("[SSE] broadcastPreferenceUpdate called", { 
-    sessionId, 
-    userId: preferenceData.userId,
-    activeConnections: sseConnections.get(sessionId)?.size || 0
-  });
-  
   const sessionControllers = sseConnections.get(sessionId);
   
   if (!sessionControllers || sessionControllers.size === 0) {
-    console.log("[SSE] No active connections for session", { sessionId });
     return;
   }
   
@@ -102,9 +79,7 @@ export function broadcastPreferenceUpdate(sessionId: string, preferenceData: {
   sessionControllers.forEach((controller) => {
     try {
       controller.enqueue(encoder.encode(eventData));
-      console.log("[SSE] Preference update sent to controller");
     } catch (error) {
-      console.log("[SSE] Controller is closed, marking for removal");
       deadControllers.add(controller);
     }
   });
@@ -117,10 +92,4 @@ export function broadcastPreferenceUpdate(sessionId: string, preferenceData: {
   if (sessionControllers.size === 0) {
     sseConnections.delete(sessionId);
   }
-  
-  console.log("[SSE] Preference broadcast complete", { 
-    sessionId, 
-    userId: preferenceData.userId,
-    remainingConnections: sessionControllers.size 
-  });
 }

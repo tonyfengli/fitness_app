@@ -202,7 +202,112 @@ conversation_state (
 
 ## Preference Collection Flow
 
-After successful check-in, the system initiates a preference collection conversation:
+After successful check-in, the system initiates a preference collection conversation with a sophisticated state machine:
+
+### Preference Collection State Machine
+
+```
+not_started → initial_collected → disambiguation_pending → disambiguation_clarifying → disambiguation_resolved → followup_sent → preferences_active
+```
+
+### State Definitions
+
+1. **`not_started`**: User checked in, no preferences yet
+2. **`initial_collected`**: First preferences received, determining next step
+3. **`disambiguation_pending`**: Waiting for user to select exercise numbers
+4. **`disambiguation_clarifying`**: First invalid response, asking for clarification (1 attempt only)
+5. **`disambiguation_resolved`**: User selected exercises OR clarification failed
+6. **`followup_sent`**: Targeted follow-up question sent (sessionGoal + 1 other field)
+7. **`preferences_active`**: In update-only mode, accepting changes indefinitely
+
+### Complete Flow Examples
+
+#### Path 1: Simple preferences (no exercises)
+```
+User: "Feeling good, medium intensity"
+Bot: "Got it! What's your training focus today - strength, endurance, or stability? Also, any specific areas you want to work on?"
+State: not_started → initial_collected → followup_sent
+
+User: "Strength focus, work on upper body"
+Bot: "Great, thank you for that. If you have anything else to add, let me know."
+State: followup_sent → preferences_active
+
+User: "Actually, let's do endurance"
+Bot: "Updated to endurance focus. Let me know if you need any other changes."
+State: (remains in preferences_active)
+```
+
+#### Path 2: With disambiguation (valid response)
+```
+User: "I want to do presses today"
+Bot: "I found multiple exercises matching 'presses'. Please select by number:
+     1. Barbell Bench Press
+     2. Dumbbell Shoulder Press
+     3. Incline Dumbbell Press
+     ..."
+State: not_started → initial_collected → disambiguation_pending
+
+User: "1 and 3"
+Bot: "Perfect! I'll include Barbell Bench Press and Incline Dumbbell Press. What's your training focus today - strength, endurance, or stability?"
+State: disambiguation_pending → disambiguation_resolved → followup_sent
+
+User: "Strength"
+Bot: "Great, thank you for that. If you have anything else to add, let me know."
+State: followup_sent → preferences_active
+```
+
+#### Path 3: With disambiguation (invalid response)
+```
+User: "I want to do presses today"
+Bot: "I found multiple exercises matching 'presses'. Please select by number:..."
+State: not_started → initial_collected → disambiguation_pending
+
+User: "bench press" (invalid - not a number)
+Bot: "I didn't catch that. Please reply with just the numbers of the exercises you want (e.g., '1' or '1,3'). Here are your options again:
+     1. Barbell Bench Press
+     2. Dumbbell Shoulder Press
+     ..."
+State: disambiguation_pending → disambiguation_clarifying
+
+User: "the first one" (still invalid)
+Bot: "What's your training focus today - strength, endurance, or stability? Also, any areas you'd like to avoid working?"
+State: disambiguation_clarifying → disambiguation_resolved → followup_sent
+(Exercise selection ignored, moves on)
+```
+
+#### Path 4: Mixed preferences with exercises to avoid
+```
+User: "High intensity today but no squats please"
+Bot: "Got it - high intensity and I'll exclude all squat variations. What's your training focus today? Also, any specific areas you want to work on?"
+State: not_started → initial_collected → followup_sent
+
+User: "Focus on strength, especially back"
+Bot: "Great, thank you for that. If you have anything else to add, let me know."
+State: followup_sent → preferences_active
+```
+
+### Key Business Rules
+
+1. **Targeted follow-up priorities**:
+   - Always ask for `sessionGoal` if not set
+   - Then pick 1 other missing field (excluding intensity which has a default)
+   - Priority: muscleTargets → avoidJoints/muscleLessens → includeExercises → avoidExercises
+
+2. **Disambiguation rules**:
+   - Only triggered for "include exercises" (not exclude)
+   - Shows ALL matching options (no truncation)
+   - One clarification attempt only
+   - Accepts: "1", "1,3", "1 and 2", "1, 2, 3"
+
+3. **Preferences_active behavior**:
+   - All new messages UPDATE existing fields (not append)
+   - Continues indefinitely until session starts
+   - Always responds with "Let me know if you need any other changes"
+
+4. **LLM usage**:
+   - Preference parsing: Existing robust parser
+   - Targeted follow-up generation: Cheaper LLM (gpt-3.5-turbo) for coach-like questions
+   - Exercise matching: Existing hybrid matcher
 
 ### Post Check-in Branching Logic
 ```

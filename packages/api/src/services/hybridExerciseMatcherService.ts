@@ -217,8 +217,8 @@ export class HybridExerciseMatcherService {
       {
         pattern: /^(heavy|barbell)\s+(squats?|deadlifts?|bench\s*press)$/,
         matcher: (ex: typeof exercises[0], match: RegExpMatchArray) => {
-          const exerciseTypeMatch = this.getExerciseTypeFromPhrase(match[2]);
-          return ex.exerciseType === exerciseTypeMatch && 
+          const exerciseTypeMatch = this.getExerciseTypeFromPhrase(match[2] || '');
+          return exerciseTypeMatch && ex.exerciseType === exerciseTypeMatch && 
                  ex.equipment?.includes('barbell');
         },
         reasoning: "Matched heavy/barbell exercises"
@@ -226,8 +226,8 @@ export class HybridExerciseMatcherService {
       {
         pattern: /^(light|dumbbell)\s+(squats?|press|presses|bench\s*press)$/,
         matcher: (ex: typeof exercises[0], match: RegExpMatchArray) => {
-          const exerciseTypeMatch = this.getExerciseTypeFromPhrase(match[2]);
-          return ex.exerciseType === exerciseTypeMatch && 
+          const exerciseTypeMatch = this.getExerciseTypeFromPhrase(match[2] || '');
+          return exerciseTypeMatch && ex.exerciseType === exerciseTypeMatch && 
                  ex.equipment?.includes('dumbbells');
         },
         reasoning: "Matched light/dumbbell exercises"
@@ -235,8 +235,8 @@ export class HybridExerciseMatcherService {
       {
         pattern: /^bodyweight\s+(.+)$/,
         matcher: (ex: typeof exercises[0], match: RegExpMatchArray) => {
-          const exerciseTypeMatch = this.getExerciseTypeFromPhrase(match[1]);
-          return ex.exerciseType === exerciseTypeMatch && 
+          const exerciseTypeMatch = this.getExerciseTypeFromPhrase(match[1] || '');
+          return exerciseTypeMatch && ex.exerciseType === exerciseTypeMatch && 
                  (!ex.equipment || ex.equipment.length === 0);
         },
         reasoning: "Matched bodyweight exercises"
@@ -305,7 +305,7 @@ export class HybridExerciseMatcherService {
 
     if (movementPatterns[normalized]) {
       const matched = exercises.filter(ex => 
-        movementPatterns[normalized].includes(ex.movementPattern)
+        ex.movementPattern && movementPatterns[normalized]?.includes(ex.movementPattern)
       );
       return {
         matchedExerciseNames: matched.map(ex => ex.name),

@@ -98,7 +98,7 @@ export class DisambiguationHandler {
         {
           includeExercises: selectedExercises.map(ex => ex.name)
         },
-        "complete"
+        "disambiguation_resolved"
       );
 
       // Save messages

@@ -60,7 +60,6 @@ export function useCheckInStream({
       );
 
       eventSource.onopen = () => {
-        console.log("SSE connection opened");
         setIsConnected(true);
         setIsReconnecting(false);
         reconnectAttemptsRef.current = 0;
@@ -69,23 +68,20 @@ export function useCheckInStream({
 
       eventSource.addEventListener("connected", (event) => {
         const data = JSON.parse(event.data);
-        console.log("Connected to session:", data);
+        // Connection confirmed
       });
 
       eventSource.addEventListener("client-checked-in", (event) => {
         const checkInData: CheckInEvent = JSON.parse(event.data);
-        console.log("Client checked in:", checkInData);
         onCheckIn?.(checkInData);
       });
 
       eventSource.addEventListener("preference-updated", (event) => {
         const preferenceData: PreferenceUpdateEvent = JSON.parse(event.data);
-        console.log("Preferences updated:", preferenceData);
         onPreferenceUpdate?.(preferenceData);
       });
 
       eventSource.onerror = (error) => {
-        console.error("SSE error:", error);
         setIsConnected(false);
         eventSourceRef.current = null;
 
@@ -94,8 +90,6 @@ export function useCheckInStream({
         if (attempt < 5) {
           const delay = Math.min(1000 * Math.pow(2, attempt), 30000);
           setIsReconnecting(true);
-          
-          console.log(`Reconnecting in ${delay}ms (attempt ${attempt + 1})...`);
           
           reconnectTimeoutRef.current = setTimeout(() => {
             reconnectAttemptsRef.current++;

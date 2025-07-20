@@ -38,3 +38,7 @@ export { SMSWebhookHandler } from "./services/sms";
 
 // Export session test data logger
 export { sessionTestDataLogger } from "./utils/sessionTestDataLogger";
+
+// Export preference state manager
+export { PreferenceStateManager } from "./utils/preferenceStateManager";
+export type { PreferenceCollectionStep } from "./utils/preferenceStateManager";

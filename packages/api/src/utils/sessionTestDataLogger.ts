@@ -54,7 +54,7 @@ export interface ExerciseMatcherCall {
 
 class SessionTestDataLogger {
   private sessionData: Map<string, SessionTestData> = new Map();
-  private enabled: boolean = process.env.SESSION_TEST_DATA_ENABLED === 'true' || true; // Temporarily always enabled
+  private enabled: boolean = process.env.SESSION_TEST_DATA_ENABLED === 'true';
 
   enable() {
     this.enabled = true;

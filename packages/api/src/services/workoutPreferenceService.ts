@@ -76,7 +76,10 @@ export class WorkoutPreferenceService {
             eq(UserTrainingSession.status, "checked_in"),
             or(
               eq(UserTrainingSession.preferenceCollectionStep, "not_started"),
-              eq(UserTrainingSession.preferenceCollectionStep, "initial_collected")
+              eq(UserTrainingSession.preferenceCollectionStep, "initial_collected"),
+              eq(UserTrainingSession.preferenceCollectionStep, "disambiguation_pending"),
+              eq(UserTrainingSession.preferenceCollectionStep, "disambiguation_clarifying"),
+              eq(UserTrainingSession.preferenceCollectionStep, "followup_sent")
             ),
             eq(TrainingSession.status, "open")
           )
@@ -188,7 +191,7 @@ export class WorkoutPreferenceService {
     sessionId: string,
     businessId: string,
     preferences: ParsedPreferences,
-    step: "initial_collected" | "followup_collected" | "complete" = "initial_collected"
+    step: "initial_collected" | "disambiguation_pending" | "disambiguation_resolved" | "followup_sent" | "preferences_active" = "initial_collected"
   ): Promise<void> {
     try {
       // Check if preferences already exist

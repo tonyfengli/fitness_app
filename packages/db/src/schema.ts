@@ -116,7 +116,7 @@ export const UserTrainingSession = pgTable("user_training_session", (t) => ({
   trainingSessionId: t.uuid().notNull().references(() => TrainingSession.id, { onDelete: "cascade" }),
   status: t.text().notNull().default("registered"), // "registered", "checked_in", "completed", "no_show"
   checkedInAt: t.timestamp(), // When the user checked in
-  preferenceCollectionStep: t.text().notNull().default("not_started"), // 'not_started', 'initial_collected', 'followup_collected', 'complete'
+  preferenceCollectionStep: t.text().notNull().default("not_started"), // 'not_started', 'initial_collected', 'disambiguation_pending', 'disambiguation_clarifying', 'disambiguation_resolved', 'followup_sent', 'preferences_active'
   createdAt: t.timestamp().defaultNow().notNull(),
 }));
 
@@ -125,7 +125,7 @@ export const CreateUserTrainingSessionSchema = createInsertSchema(UserTrainingSe
   trainingSessionId: z.string().uuid(),
   status: z.enum(["registered", "checked_in", "completed", "no_show"]).default("registered"),
   checkedInAt: z.date().optional(),
-  preferenceCollectionStep: z.enum(["not_started", "initial_collected", "followup_collected", "complete"]).default("not_started"),
+  preferenceCollectionStep: z.enum(["not_started", "initial_collected", "disambiguation_pending", "disambiguation_clarifying", "disambiguation_resolved", "followup_sent", "preferences_active"]).default("not_started"),
 }).omit({
   id: true,
   createdAt: true,
