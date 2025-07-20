@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { SMSWebhookHandler } from '../../../src/services/sms/webhook-handler';
-import { setBroadcastFunction } from '../../../src/services/checkInService';
+import { setBroadcastFunction, getUserByPhone } from '../../../src/services/checkInService';
 import { WorkoutPreferenceService } from '../../../src/services/workoutPreferenceService';
 
 // Mock dependencies
@@ -17,8 +17,36 @@ vi.mock('../../../src/services/messageService', () => ({
 vi.mock('../../../src/services/workoutPreferenceService', () => ({
   WorkoutPreferenceService: {
     isAwaitingPreferences: vi.fn(),
-    savePreferences: vi.fn(),
+    savePreferences: vi.fn().mockResolvedValue(undefined),
+    saveSimplePreferences: vi.fn().mockResolvedValue(undefined),
     PREFERENCE_PROMPT: 'How are you feeling today?',
+  },
+}));
+
+vi.mock('../../../src/services/conversationStateService', () => ({
+  ConversationStateService: {
+    getPendingDisambiguation: vi.fn(),
+    createExerciseDisambiguation: vi.fn(),
+    processSelection: vi.fn(),
+  },
+}));
+
+vi.mock('../../../src/services/exerciseValidationService', () => ({
+  ExerciseValidationService: {
+    validateExercises: vi.fn().mockResolvedValue({
+      validatedExercises: [],
+      matches: [],
+    }),
+  },
+}));
+
+vi.mock('../../../src/utils/sessionTestDataLogger', () => ({
+  sessionTestDataLogger: {
+    isEnabled: vi.fn().mockReturnValue(false),
+    initSession: vi.fn(),
+    logMessage: vi.fn(),
+    logLLMCall: vi.fn(),
+    saveSessionData: vi.fn(),
   },
 }));
 
@@ -49,6 +77,10 @@ describe('SMSWebhookHandler', () => {
       SKIP_TWILIO_VALIDATION: 'true',
     };
     handler = new SMSWebhookHandler();
+    
+    // Ensure mocks return promises
+    vi.mocked(WorkoutPreferenceService.savePreferences).mockResolvedValue(undefined);
+    vi.mocked(WorkoutPreferenceService.saveSimplePreferences).mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -113,12 +145,19 @@ describe('SMSWebhookHandler', () => {
       const mockPreferenceCheck = {
         waiting: true,
         userId: 'user-123',
-        sessionId: 'session-789',
+        trainingSessionId: 'session-789',
         businessId: 'business-456',
         currentStep: 'not_started',
       };
 
       vi.mocked(WorkoutPreferenceService.isAwaitingPreferences).mockResolvedValue(mockPreferenceCheck);
+      
+      // Mock getUserByPhone for saveMessages calls
+      vi.mocked(getUserByPhone).mockResolvedValue({
+        userId: 'user-123',
+        businessId: 'business-456',
+        trainingSessionId: 'session-789',
+      });
 
       const { parseWorkoutPreferences } = await import('@acme/ai');
       vi.mocked(parseWorkoutPreferences).mockResolvedValue({
@@ -145,6 +184,9 @@ describe('SMSWebhookHandler', () => {
       
       expect(response.status).toBe(200);
       expect(parseWorkoutPreferences).toHaveBeenCalledWith('feeling good today, medium intensity');
+      // At minimum, saveSimplePreferences is called for fire-and-forget
+      expect(WorkoutPreferenceService.saveSimplePreferences).toHaveBeenCalled();
+      // savePreferences is called after validation - in this case with simple preferences
       expect(WorkoutPreferenceService.savePreferences).toHaveBeenCalled();
     });
 

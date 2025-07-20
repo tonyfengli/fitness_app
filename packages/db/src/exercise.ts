@@ -1,6 +1,39 @@
 import { pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { InferSelectModel } from "drizzle-orm";
 
+export const exerciseTypeEnum = pgEnum("exercise_type", [
+  "squat",
+  "lunge",
+  "bench_press",
+  "pull_up",
+  "deadlift",
+  "row",
+  "press",
+  "curl",
+  "fly",
+  "plank",
+  "carry",
+  "raise",
+  "extension",
+  "push_up",
+  "dip",
+  "shrug",
+  "bridge",
+  "step_up",
+  "calf_raise",
+  "crunch",
+  "leg_raise",
+  "pulldown",
+  "pullover",
+  "kickback",
+  "thruster",
+  "clean",
+  "snatch",
+  "swing",
+  "turkish_get_up",
+  "other"
+]);
+
 export const primaryMuscleEnum = pgEnum("primary_muscle", [
   "glutes",
   "quads", 
@@ -72,6 +105,7 @@ export const strengthLevelEnum = pgEnum("strength_level", [
 export const exercises = pgTable("exercises", {
   id: uuid("id").defaultRandom().primaryKey(),
   name: text("name").notNull(),
+  exerciseType: exerciseTypeEnum("exercise_type"),
   primaryMuscle: primaryMuscleEnum("primary_muscle").notNull(),
   secondaryMuscles: text("secondary_muscles", {
     enum: [

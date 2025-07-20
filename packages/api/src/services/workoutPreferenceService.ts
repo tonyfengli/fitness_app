@@ -41,7 +41,7 @@ export class WorkoutPreferenceService {
   static async isAwaitingPreferences(phoneNumber: string): Promise<{
     waiting: boolean;
     userId?: string;
-    sessionId?: string;
+    trainingSessionId?: string;
     businessId?: string;
     currentStep?: string;
   }> {
@@ -60,7 +60,7 @@ export class WorkoutPreferenceService {
       // Check if user is checked into an open session without preferences
       const [activeCheckIn] = await db
         .select({
-          sessionId: UserTrainingSession.trainingSessionId,
+          trainingSessionId: UserTrainingSession.trainingSessionId,
           userId: UserTrainingSession.userId,
           preferenceCollectionStep: UserTrainingSession.preferenceCollectionStep,
           businessId: TrainingSession.businessId,
@@ -87,7 +87,7 @@ export class WorkoutPreferenceService {
         return {
           waiting: true,
           userId: activeCheckIn.userId,
-          sessionId: activeCheckIn.sessionId,
+          trainingSessionId: activeCheckIn.trainingSessionId,
           businessId: activeCheckIn.businessId,
           currentStep: activeCheckIn.preferenceCollectionStep,
         };

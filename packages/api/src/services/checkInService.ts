@@ -28,7 +28,7 @@ export interface CheckInResult {
   shouldStartPreferences?: boolean;
 }
 
-export async function getUserByPhone(phoneNumber: string): Promise<{ userId: string; businessId: string } | null> {
+export async function getUserByPhone(phoneNumber: string): Promise<{ userId: string; businessId: string; trainingSessionId?: string } | null> {
   try {
     const normalizedPhone = normalizePhoneNumber(phoneNumber);
     
@@ -42,9 +42,29 @@ export async function getUserByPhone(phoneNumber: string): Promise<{ userId: str
       return null;
     }
     
+    // Check if user is checked into an active session
+    const activeSession = await db
+      .select({
+        sessionId: UserTrainingSession.trainingSessionId
+      })
+      .from(UserTrainingSession)
+      .innerJoin(
+        TrainingSession,
+        eq(UserTrainingSession.trainingSessionId, TrainingSession.id)
+      )
+      .where(
+        and(
+          eq(UserTrainingSession.userId, foundUser[0].id),
+          eq(UserTrainingSession.status, "checked_in"),
+          eq(TrainingSession.status, "open")
+        )
+      )
+      .limit(1);
+    
     return {
       userId: foundUser[0].id,
       businessId: foundUser[0].businessId || '',
+      trainingSessionId: activeSession[0]?.sessionId,
     };
   } catch (error) {
     logger.error("Error finding user by phone", error);

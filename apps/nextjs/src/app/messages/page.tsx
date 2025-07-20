@@ -37,130 +37,316 @@ interface Message {
   createdAt: Date | string;
 }
 
-// LLM Analysis Display Component
-interface LLMAnalysisDisplayProps {
-  llmParsing: any;
-  direction: 'inbound' | 'outbound';
-  index: number;
-  isExerciseValidation?: boolean;
+// Preference Collection Summary Component
+interface PreferenceCollectionSummaryProps {
+  message: Message;
 }
 
-function LLMAnalysisDisplay({ llmParsing, direction, index, isExerciseValidation = false }: LLMAnalysisDisplayProps) {
-  const [isExpanded, setIsExpanded] = useState(false);
+function PreferenceCollectionSummary({ message }: PreferenceCollectionSummaryProps) {
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
   
+  const toggleSection = (sectionId: string) => {
+    setExpandedSections(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(sectionId)) {
+        newSet.delete(sectionId);
+      } else {
+        newSet.add(sectionId);
+      }
+      return newSet;
+    });
+  };
+
+  // Get preference parsing data
+  const preferenceParsingLLM = message.metadata?.llmCalls?.find((call: any) => call.type === 'preference_parsing') ||
+                               message.metadata?.llmParsing;
+  
+  // Get exercise validation data
+  const exerciseValidation = message.metadata?.exerciseValidation || 
+                            message.metadata?.llmParsing?.exerciseValidation;
+  
+  // Check for ambiguous matches (disambiguation cases)
+  // For disambiguation messages, ambiguous matches are nested under llmParsing.exerciseValidation
+  const ambiguousMatches = message.metadata?.ambiguousMatches || 
+                          message.metadata?.llmParsing?.exerciseValidation?.ambiguousMatches || 
+                          [];
+
+  // Get all exercise matching LLM calls
+  const exerciseMatchingLLMs = message.metadata?.llmCalls?.filter((call: any) => call.type === 'exercise_matching') || [];
+
+  if (!preferenceParsingLLM && !exerciseValidation) {
+    return null;
+  }
+
   return (
-    <div className={`mt-2 p-2 rounded text-xs ${
-      direction === 'outbound' 
-        ? 'bg-white/10' 
-        : 'bg-gray-800/10 border border-gray-200'
+    <div className={`mt-3 p-3 rounded-lg text-sm ${
+      message.direction === 'outbound' 
+        ? 'bg-white/5 border border-white/10' 
+        : 'bg-gray-50 border border-gray-200'
     }`}>
-      <button
-        onClick={() => setIsExpanded(!isExpanded)}
-        className={`flex items-center gap-2 w-full text-left font-semibold ${
-          direction === 'outbound' ? 'text-yellow-200' : 'text-yellow-600'
-        } hover:opacity-80 transition-opacity`}
-      >
-        <span className="text-sm">{isExpanded ? '▼' : '▶'}</span>
-        <span>🤖 LLM {index}: {llmParsing.model || 'Analysis'}</span>
-        {llmParsing.parseTimeMs && (
-          <span className="ml-auto font-normal text-xs opacity-70">
-            {llmParsing.parseTimeMs}ms
-          </span>
-        )}
-      </button>
-      
-      {isExpanded && (
-        <div className="mt-3 space-y-3 text-sm">
-          {/* LLM Input (System Prompt) */}
-          <div className={direction === 'outbound' ? 'text-white' : 'text-gray-900'}>
-            <span className="font-semibold">LLM Input:</span>
-            <div className="mt-1 ml-4 whitespace-pre-wrap">
-              {isExerciseValidation ? (
-                // For LLM 2 (Exercise Matcher) - show the actual system prompt if available
-                (() => {
-                  // Try to find the system prompt from any of the matches
-                  const systemPrompt = 
-                    llmParsing.exerciseValidation?.avoidExercises?.matches?.[0]?.systemPrompt ||
-                    llmParsing.exerciseValidation?.includeExercises?.matches?.[0]?.systemPrompt ||
-                    llmParsing.exerciseValidation?.matches?.[0]?.systemPrompt;
-                  
-                  return systemPrompt ? (
-                    <div className="opacity-70">{systemPrompt}</div>
-                  ) : (
-                    <div>
-                      <div className="opacity-70">System: Match exercises to database</div>
-                      <div className="mt-2">User Input: {llmParsing.userInput}</div>
-                    </div>
-                  );
-                })()
-              ) : (
-                // For LLM 1 - show the system prompt
-                llmParsing.systemPrompt ? (
-                  <div className="opacity-70">{llmParsing.systemPrompt}</div>
-                ) : (
-                  <div className="opacity-70">No system prompt available</div>
-                )
+      <div className={`font-semibold mb-3 text-base ${
+        message.direction === 'outbound' ? 'text-blue-100' : 'text-gray-800'
+      }`}>
+        ═══ Preference Collection Summary ═══
+      </div>
+
+      {/* 1. Input Message */}
+      <div className={`mb-3 ${message.direction === 'outbound' ? 'text-white' : 'text-gray-900'}`}>
+        <span className="font-semibold">1. Input Message:</span>
+        <div className="ml-4 mt-1 italic">"{preferenceParsingLLM?.userInput || 'N/A'}"</div>
+      </div>
+
+      {/* 2. Preference Parsing */}
+      {preferenceParsingLLM && (
+        <div className={`mb-3 ${message.direction === 'outbound' ? 'text-white' : 'text-gray-900'}`}>
+          <div className="flex items-center justify-between">
+            <span className="font-semibold">
+              2. Preference Parsing {preferenceParsingLLM.parseTimeMs && `(${preferenceParsingLLM.parseTimeMs}ms)`}:
+            </span>
+            <button
+              onClick={() => toggleSection('preference-parsing')}
+              className={`text-xs px-2 py-1 rounded ${
+                message.direction === 'outbound' 
+                  ? 'bg-white/10 hover:bg-white/20' 
+                  : 'bg-gray-200 hover:bg-gray-300'
+              } transition-colors`}
+            >
+              {expandedSections.has('preference-parsing') ? '▼ Collapse' : '▶ Expand'}
+            </button>
+          </div>
+          
+          {!expandedSections.has('preference-parsing') ? (
+            <div className="ml-4 mt-2 space-y-1">
+              {preferenceParsingLLM.parsedResponse?.sessionGoal && (
+                <div>✓ Session Goal: {preferenceParsingLLM.parsedResponse.sessionGoal}</div>
+              )}
+              {preferenceParsingLLM.parsedResponse?.intensity && (
+                <div>✓ Intensity: {preferenceParsingLLM.parsedResponse.intensity}</div>
+              )}
+              {preferenceParsingLLM.parsedResponse?.muscleTargets?.length > 0 && (
+                <div>✓ Muscle Targets: {preferenceParsingLLM.parsedResponse.muscleTargets.join(', ')}</div>
+              )}
+              {preferenceParsingLLM.parsedResponse?.muscleLessens?.length > 0 && (
+                <div>✓ Muscle Lessens: {preferenceParsingLLM.parsedResponse.muscleLessens.join(', ')}</div>
+              )}
+              {preferenceParsingLLM.parsedResponse?.includeExercises?.length > 0 && (
+                <div>✓ Include Exercises: {preferenceParsingLLM.parsedResponse.includeExercises.join(', ')}</div>
+              )}
+              {preferenceParsingLLM.parsedResponse?.avoidExercises?.length > 0 && (
+                <div>✓ Avoid Exercises: {preferenceParsingLLM.parsedResponse.avoidExercises.join(', ')}</div>
+              )}
+              {preferenceParsingLLM.parsedResponse?.avoidJoints?.length > 0 && (
+                <div>✓ Avoid Joints: {preferenceParsingLLM.parsedResponse.avoidJoints.join(', ')}</div>
               )}
             </div>
-          </div>
-          
-          {/* LLM Output (Raw) */}
-          <div className={direction === 'outbound' ? 'text-white' : 'text-gray-900'}>
-            <span className="font-semibold">LLM Output:</span>
-            <div className="mt-1 ml-4">
-              <pre className="whitespace-pre-wrap">
-                {isExerciseValidation ? (
-                  // For LLM 2 - show the raw exercise validation response without system prompts
-                  (() => {
-                    const cleanedValidation = JSON.parse(JSON.stringify(llmParsing.exerciseValidation));
-                    // Remove system prompts from the output to avoid duplication
-                    if (cleanedValidation.avoidExercises?.matches) {
-                      cleanedValidation.avoidExercises.matches = cleanedValidation.avoidExercises.matches.map((match: any) => {
-                        const { systemPrompt, ...cleanMatch } = match;
-                        return cleanMatch;
-                      });
-                    }
-                    if (cleanedValidation.includeExercises?.matches) {
-                      cleanedValidation.includeExercises.matches = cleanedValidation.includeExercises.matches.map((match: any) => {
-                        const { systemPrompt, ...cleanMatch } = match;
-                        return cleanMatch;
-                      });
-                    }
-                    if (cleanedValidation.matches) {
-                      cleanedValidation.matches = cleanedValidation.matches.map((match: any) => {
-                        const { systemPrompt, ...cleanMatch } = match;
-                        return cleanMatch;
-                      });
-                    }
-                    return JSON.stringify(cleanedValidation, null, 2);
-                  })()
-                ) : (
-                  // For LLM 1 - show the raw LLM response
-                  llmParsing.rawLLMResponse ? 
-                    JSON.stringify(llmParsing.rawLLMResponse, null, 2) :
-                    "No raw response available"
-                )}
-              </pre>
-            </div>
-          </div>
-          
-          {/* Debug Info - Only show if there's an error */}
-          <div className={direction === 'outbound' ? 'text-white' : 'text-gray-900'}>
-            <span className="font-semibold">Debug Info:</span>
-            <div className="mt-1 ml-4">
-              {(llmParsing.debugInfo?.parseSuccess === false || 
-                llmParsing.debugInfo?.validationSuccess === false ||
-                llmParsing.debugInfo?.error) ? (
-                <pre className="whitespace-pre-wrap text-red-400">
-                  {JSON.stringify(llmParsing.debugInfo, null, 2)}
+          ) : (
+            <div className="ml-4 mt-2 space-y-3">
+              <div>
+                <div className="font-semibold text-sm mb-1">LLM Input (System Prompt):</div>
+                <pre className="text-xs bg-black/10 p-2 rounded overflow-x-auto whitespace-pre-wrap">
+                  {preferenceParsingLLM.systemPrompt || 'No system prompt available'}
                 </pre>
-              ) : (
-                <span className="opacity-70">N/A</span>
-              )}
+              </div>
+              <div>
+                <div className="font-semibold text-sm mb-1">LLM Output (Raw):</div>
+                <pre className="text-xs bg-black/10 p-2 rounded overflow-x-auto">
+                  {JSON.stringify(preferenceParsingLLM.rawResponse || preferenceParsingLLM.rawLLMResponse, null, 2)}
+                </pre>
+              </div>
             </div>
+          )}
+        </div>
+      )}
+
+      {/* 3. Exclude Exercises */}
+      {exerciseValidation?.avoidExercises?.matches?.length > 0 && (
+        <div className={`mb-3 ${message.direction === 'outbound' ? 'text-white' : 'text-gray-900'}`}>
+          <div className="font-semibold mb-2">3. Exclude Exercises:</div>
+          <div className="ml-4 space-y-2">
+            {exerciseValidation.avoidExercises.matches.map((match: any, idx: number) => {
+              const matchLLM = exerciseMatchingLLMs.find((llm: any) => 
+                llm.userInput === match.userInput
+              );
+              const sectionId = `exclude-${idx}`;
+              
+              return (
+                <div key={idx}>
+                  <div className="flex items-center justify-between">
+                    <span>
+                      "{match.userInput}" → {match.matchedExercises?.length || 0} matches 
+                      [{match.matchMethod?.toUpperCase()}, {match.parseTimeMs || 0}ms]
+                    </span>
+                    <button
+                      onClick={() => toggleSection(sectionId)}
+                      className={`text-xs px-2 py-1 rounded ml-2 ${
+                        message.direction === 'outbound' 
+                          ? 'bg-white/10 hover:bg-white/20' 
+                          : 'bg-gray-200 hover:bg-gray-300'
+                      } transition-colors`}
+                    >
+                      {expandedSections.has(sectionId) ? '▼ Details' : '▶ Details'}
+                    </button>
+                  </div>
+                  
+                  {expandedSections.has(sectionId) && (
+                    <div className="ml-4 mt-2 text-xs space-y-2">
+                      <div>
+                        <span className="font-semibold">Matched Exercises:</span>
+                        <div className="ml-2 mt-1">
+                          {match.matchedExercises?.map((ex: any) => ex.name).join(', ') || 'None'}
+                        </div>
+                      </div>
+                      
+                      {match.matchMethod === 'llm' && matchLLM && (
+                        <>
+                          <div>
+                            <span className="font-semibold">LLM System Prompt:</span>
+                            <pre className="bg-black/10 p-2 rounded mt-1 overflow-x-auto whitespace-pre-wrap">
+                              {matchLLM.systemPrompt}
+                            </pre>
+                          </div>
+                          <div>
+                            <span className="font-semibold">LLM Raw Output:</span>
+                            <pre className="bg-black/10 p-2 rounded mt-1 overflow-x-auto">
+                              {JSON.stringify(matchLLM.rawResponse, null, 2)}
+                            </pre>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
+
+      {/* 4. Include Exercises */}
+      {(exerciseValidation?.includeExercises?.matches?.length > 0 || ambiguousMatches.length > 0) && (
+        <div className={`mb-3 ${message.direction === 'outbound' ? 'text-white' : 'text-gray-900'}`}>
+          <div className="font-semibold mb-2">
+            {exerciseValidation?.avoidExercises?.matches?.length > 0 ? '4' : '3'}. Include Exercises:
+          </div>
+          <div className="ml-4 space-y-2">
+            {/* Regular include matches */}
+            {exerciseValidation?.includeExercises?.matches?.map((match: any, idx: number) => {
+              const matchLLM = exerciseMatchingLLMs.find((llm: any) => 
+                llm.userInput === match.userInput
+              );
+              const sectionId = `include-${idx}`;
+              
+              return (
+                <div key={idx}>
+                  <div className="flex items-center justify-between">
+                    <span>
+                      "{match.userInput}" → {match.matchedExercises?.length || 0} matches 
+                      [{match.matchMethod?.toUpperCase() || 'UNKNOWN'}, {match.parseTimeMs || 0}ms]
+                    </span>
+                    <button
+                      onClick={() => toggleSection(sectionId)}
+                      className={`text-xs px-2 py-1 rounded ml-2 ${
+                        message.direction === 'outbound' 
+                          ? 'bg-white/10 hover:bg-white/20' 
+                          : 'bg-gray-200 hover:bg-gray-300'
+                      } transition-colors`}
+                    >
+                      {expandedSections.has(sectionId) ? '▼ Details' : '▶ Details'}
+                    </button>
+                  </div>
+                  
+                  {expandedSections.has(sectionId) && (
+                    <div className="ml-4 mt-2 text-xs space-y-2">
+                      <div>
+                        <span className="font-semibold">Matched Exercises:</span>
+                        <div className="ml-2 mt-1">
+                          {match.matchedExercises?.map((ex: any) => ex.name).join(', ') || 'None'}
+                        </div>
+                      </div>
+                      
+                      {match.matchMethod === 'llm' && matchLLM && (
+                        <>
+                          <div>
+                            <span className="font-semibold">LLM System Prompt:</span>
+                            <pre className="bg-black/10 p-2 rounded mt-1 overflow-x-auto whitespace-pre-wrap">
+                              {matchLLM.systemPrompt}
+                            </pre>
+                          </div>
+                          <div>
+                            <span className="font-semibold">LLM Raw Output:</span>
+                            <pre className="bg-black/10 p-2 rounded mt-1 overflow-x-auto">
+                              {JSON.stringify(matchLLM.rawResponse, null, 2)}
+                            </pre>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+            
+            {/* Ambiguous matches (for disambiguation) */}
+            {ambiguousMatches.map((match: any, idx: number) => {
+              const matchLLM = exerciseMatchingLLMs.find((llm: any) => 
+                llm.userInput === match.userInput
+              );
+              const sectionId = `include-ambiguous-${idx}`;
+              
+              return (
+                <div key={`ambiguous-${idx}`}>
+                  <div className="flex items-center justify-between">
+                    <span>
+                      "{match.userInput}" → {match.matchedExercises?.length || 0} matches 
+                      [{match.matchMethod?.toUpperCase() || match.confidence?.toUpperCase() || 'UNKNOWN'}, {match.parseTimeMs || 0}ms]
+                      <span className="text-amber-600 ml-1">(disambiguation needed)</span>
+                    </span>
+                    <button
+                      onClick={() => toggleSection(sectionId)}
+                      className={`text-xs px-2 py-1 rounded ml-2 ${
+                        message.direction === 'outbound' 
+                          ? 'bg-white/10 hover:bg-white/20' 
+                          : 'bg-gray-200 hover:bg-gray-300'
+                      } transition-colors`}
+                    >
+                      {expandedSections.has(sectionId) ? '▼ Details' : '▶ Details'}
+                    </button>
+                  </div>
+                  
+                  {expandedSections.has(sectionId) && (
+                    <div className="ml-4 mt-2 text-xs space-y-2">
+                      <div>
+                        <span className="font-semibold">Matched Exercises:</span>
+                        <div className="ml-2 mt-1">
+                          {match.matchedExercises?.map((ex: any) => ex.name).join(', ') || 'None'}
+                        </div>
+                      </div>
+                      
+                      {match.matchMethod === 'llm' && matchLLM && (
+                        <>
+                          <div>
+                            <span className="font-semibold">LLM System Prompt:</span>
+                            <pre className="bg-black/10 p-2 rounded mt-1 overflow-x-auto whitespace-pre-wrap">
+                              {matchLLM.systemPrompt}
+                            </pre>
+                          </div>
+                          <div>
+                            <span className="font-semibold">LLM Raw Output:</span>
+                            <pre className="bg-black/10 p-2 rounded mt-1 overflow-x-auto">
+                              {JSON.stringify(matchLLM.rawResponse, null, 2)}
+                            </pre>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
@@ -303,49 +489,8 @@ export default function MessagesPage() {
                     >
                       <p className="whitespace-pre-wrap">{message.content}</p>
                       
-                      {/* LLM Parsing Details for Preference Collection */}
-                      {message.metadata?.llmParsing && (
-                        <>
-                          <LLMAnalysisDisplay 
-                            llmParsing={message.metadata.llmParsing}
-                            direction={message.direction}
-                            index={1}
-                          />
-                          
-                          {/* Extract Exercise Validation as LLM 2 */}
-                          {message.metadata.llmParsing.exerciseValidation && (
-                            <LLMAnalysisDisplay 
-                              llmParsing={{
-                                model: message.metadata.llmParsing.exerciseValidation.model || 'gpt-4o-mini',
-                                userInput: (() => {
-                                  // Get all the actual user inputs from the matches
-                                  const avoidInputs = message.metadata.llmParsing.exerciseValidation.avoidExercises?.matches?.map((m: any) => m.userInput) || [];
-                                  const includeInputs = message.metadata.llmParsing.exerciseValidation.includeExercises?.matches?.map((m: any) => m.userInput) || [];
-                                  return JSON.stringify({
-                                    avoidExercises: avoidInputs,
-                                    includeExercises: includeInputs
-                                  });
-                                })(),
-                                exerciseValidation: message.metadata.llmParsing.exerciseValidation,
-                                parseTimeMs: message.metadata.llmParsing.exerciseValidation.parseTimeMs || 
-                                  message.metadata.llmParsing.exerciseValidation.matches?.reduce((sum: number, m: any) => sum + (m.parseTimeMs || 0), 0)
-                              }}
-                              direction={message.direction}
-                              index={2}
-                              isExerciseValidation={true}
-                            />
-                          )}
-                        </>
-                      )}
-                      
-                      {/* Alternative Second LLM if exists (for other chained LLM calls) */}
-                      {message.metadata?.llmParsing2 && (
-                        <LLMAnalysisDisplay 
-                          llmParsing={message.metadata.llmParsing2}
-                          direction={message.direction}
-                          index={2}
-                        />
-                      )}
+                      {/* Display preference collection summary if available */}
+                      <PreferenceCollectionSummary message={message} />
                       
                       <div className={`text-xs mt-2 ${
                         message.direction === 'outbound' ? 'text-blue-100' : 'text-gray-500'

@@ -73,7 +73,7 @@ Core business logic for processing check-ins:
 Key functions:
 ```typescript
 processCheckIn(phoneNumber: string): Promise<CheckInResult>
-getUserByPhone(phoneNumber: string): Promise<{userId, businessId} | null>
+getUserByPhone(phoneNumber: string): Promise<{userId, businessId, trainingSessionId?} | null>
 setBroadcastFunction(fn: BroadcastFunction): void
 ```
 
@@ -125,11 +125,12 @@ CHECK_IN_KEYWORDS = [
 
 2. **AI Detection (Smart Path)**
 ```typescript
-// Uses OpenAI GPT-4o-mini for natural language understanding
+// Uses GPT-4o-mini for natural language understanding
 // Can detect variations like:
 // - "Just walked into the gym"
 // - "Ready to workout"
 // - "I've arrived for class"
+// NOTE: Currently disabled - goes straight to keyword detection
 ```
 
 3. **Fallback Chain**
@@ -179,9 +180,23 @@ messages (
   direction,    -- 'inbound', 'outbound'
   content,
   phoneNumber,
-  metadata,     -- JSON with intent, results
+  metadata,     -- JSON with intent, results, llmCalls array
   status,
   createdAt
+)
+
+-- Conversation state for disambiguation
+conversation_state (
+  id,
+  userId,
+  trainingSessionId,
+  businessId,
+  type,         -- 'exercise_disambiguation'
+  status,       -- 'pending', 'completed', 'expired'
+  context,      -- JSON with options and user input
+  createdAt,
+  updatedAt,
+  expiresAt
 )
 ```
 
@@ -224,14 +239,20 @@ After successful check-in, the system initiates a preference collection conversa
                          │
                          ▼
                    ┌──────────┐
-                   │Send      │ "Which exercises?"
-                   │Options   │ "1. Barbell Bench"
-                   └────┬─────┘ "2. Dumbbell Press"
+                   │Send      │ "I found multiple exercises matching your
+                   │Options   │  request. Please select by number:"
+                   └────┬─────┘ 
+                        │       For "bench":
+                        │       1. Barbell Bench Press
+                        │       2. Dumbbell Bench Press  
+                        │       3. Incline Barbell Bench Press
+                        │       4. Decline Bench Press
+                        │       (Shows ALL matches, no truncation)
                         │
                         ▼
                    ┌──────────┐
-                   │Process   │
-                   │Selection │
+                   │Process   │ Accepts: "1", "1,3", "1 and 2"
+                   │Selection │ Uses flexible regex pattern
                    └──────────┘
 ```
 
@@ -243,7 +264,7 @@ After successful check-in, the system initiates a preference collection conversa
 
 2. **Exclude Exercises**: User wants to avoid specific exercises
    - Example: "No squats today" → Match all squat variations
-   - Uses exercise matcher to find all relevant exercises
+   - Uses hybrid exercise matcher to find all relevant exercises
 
 3. **Include Exercises**: User wants specific exercises (requires disambiguation)
    - Example: "I want to do bench press" → Needs clarification
@@ -252,6 +273,103 @@ After successful check-in, the system initiates a preference collection conversa
 4. **Multiple Combined**: Mix of preferences in one message
    - Example: "Feeling good, let's go heavy but skip deadlifts"
    - Processes each component appropriately
+
+### Hybrid Exercise Matching System
+
+The exercise matcher receives **extracted exercise phrases** from user messages and uses a streamlined approach with **parallel processing** for better performance:
+
+```
+┌─────────────────────┐
+│ Extracted Exercise  │ "squats" / "heavy deadlifts" / "back squats"
+│      Phrase         │ (Already categorized as include/avoid)
+└──────────┬──────────┘
+           │
+           ▼
+┌─────────────────────┐
+│ 1. Exercise Type    │ Check if phrase matches a known exercise_type
+│    Matching         │ with basic normalization (plurals, spaces)
+└──────────┬──────────┘
+           │
+      ┌────┴───┐
+      │Matched?│──Yes──→ Return all exercises with that type
+      └────┬───┘
+           │No
+           ▼
+┌─────────────────────┐
+│ 2. Deterministic    │ Check specific patterns:
+│    Patterns         │ • Modifier + type (heavy squats)
+│                     │ • Equipment only (band work)
+│                     │ • Movement patterns (pushing/pulling)
+└──────────┬──────────┘
+           │
+      ┌────┴───┐
+      │Matched?│──Yes──→ Return filtered exercises
+      └────┬───┘
+           │No
+           ▼
+┌─────────────────────┐
+│ 3. LLM Matching     │ Handle everything else:
+│                     │ • Fuzzy names (back squats, farmer walks)
+│                     │ • Abbreviations (RDLs, DB press)
+│                     │ • Partial matches (lat pulls)
+│                     │ • Ambiguous (leg stuff)
+└─────────────────────┘
+```
+
+#### Deterministic Rules:
+
+**1. Exercise Type Matching** (with normalization)
+```javascript
+// Direct mappings
+"squats" → exercise_type = 'squat'
+"squat" → exercise_type = 'squat'
+"lunges" → exercise_type = 'lunge'
+"bench" → exercise_type = 'bench_press'
+"bench press" → exercise_type = 'bench_press'
+"deadlifts" → exercise_type = 'deadlift'
+"rows" → exercise_type = 'row'
+"pull-ups" → exercise_type = 'pull_up'
+"pullups" → exercise_type = 'pull_up'
+```
+
+**2. Pattern Matching**
+```javascript
+// Modifier patterns
+"heavy squats" → exercise_type='squat' AND equipment includes 'barbell'
+"light squats" → exercise_type='squat' AND equipment includes 'dumbbells'
+"bodyweight squats" → exercise_type='squat' AND equipment IS NULL
+
+// Equipment patterns
+"band work" → equipment includes 'bands'
+"bodyweight" → equipment IS NULL or empty
+"dumbbells only" → equipment = ['dumbbells'] exactly
+
+// Movement patterns
+"pushing" → movement_pattern IN ('horizontal_push', 'vertical_push')
+"pulling" → movement_pattern IN ('horizontal_pull', 'vertical_pull')
+"core work" → movement_pattern = 'core'
+```
+
+#### What Goes to LLM:
+- **Fuzzy names**: "back squats", "goblet squats", "farmer walks"
+- **Abbreviations**: "DB press", "BB squats", "RDLs"
+- **Partial matches**: "lat pulls", "tri extensions"
+- **Misspellings**: "dumbell", "skullcrushers"
+- **Vague references**: "leg stuff", "something hard"
+
+#### Key Implementation Details:
+
+1. **Parallel Processing**: All exercise phrases are processed in parallel using `Promise.all()` for better performance
+2. **No Muscle Target Inference**: The LLM is explicitly instructed NOT to infer muscle targets from exercise names
+   - "I want to do squats" → `includeExercises: ["squats"]`, `muscleTargets: []`
+   - Only explicit muscle mentions count: "Let's work legs" → `muscleTargets: ["legs"]`
+
+#### Benefits:
+- **Fast**: Common patterns (<20ms) vs LLM (200-500ms)
+- **Parallel**: All exercises processed simultaneously
+- **Predictable**: Deterministic rules always return same results
+- **Accurate**: LLM handles the messy edge cases
+- **Simple**: Only 3 steps, easy to debug and maintain
 
 ## Response Messages
 
@@ -367,6 +485,67 @@ SSE_INITIAL_RETRY_DELAY=1000
    - Prevent SMS flooding
    - Protect against abuse
 
+## Session Test Data Logging
+
+The system includes comprehensive test data logging for debugging preference collection flows:
+
+### Enabling Test Data Logging
+```javascript
+// In browser console
+await sessionTestData.enable()
+
+// Check if enabled
+await sessionTestData.isEnabled()
+
+// List all sessions
+await sessionTestData.listSessions()
+
+// Get specific session data
+await sessionTestData.getSession('session-id')
+```
+
+### What Gets Logged
+1. **Messages**: All inbound/outbound SMS messages with timestamps
+2. **LLM Calls**: 
+   - Preference parsing calls with prompts and responses
+   - Exercise matching calls with reasoning
+   - Disambiguation generation
+3. **Exercise Matcher Calls**: Track which matching method was used (exercise_type, pattern, or LLM)
+
+### Session Data Structure
+```typescript
+{
+  sessionId: string,
+  phoneNumber: string,
+  startTime: string,
+  messages: [{
+    timestamp: string,
+    direction: 'inbound' | 'outbound',
+    content: string,
+    metadata: any
+  }],
+  llmCalls: [{
+    timestamp: string,
+    type: 'preference_parsing' | 'exercise_matching',
+    model: string,
+    systemPrompt: string,
+    userInput: string,
+    rawResponse: any,
+    parsedResponse?: any,
+    parseTimeMs: number
+  }],
+  exerciseMatcherCalls: [{
+    timestamp: string,
+    intent: 'include' | 'avoid',
+    userInput: string,
+    matchMethod: 'exercise_type' | 'pattern' | 'llm',
+    matchedExercises: any[],
+    confidence: number,
+    parseTimeMs: number
+  }]
+}
+```
+
 ## Monitoring & Debugging
 
 ### Logging Structure
@@ -423,23 +602,40 @@ SSE_INITIAL_RETRY_DELAY=1000
    - Keyword detection before AI calls
    - Circuit breakers for external services (future)
 
-## Future Enhancements
 
-### Completed ✅
-- [x] Real-time check-in broadcasting
-- [x] Message history tracking
-- [x] Comprehensive test coverage
-- [x] Session lifecycle management
+## Message Display Format
 
-### Planned 📋
-- [ ] Workout preference collection via SMS
-- [ ] Check-out functionality
-- [ ] Multi-language support
-- [ ] Advanced analytics dashboard
-- [ ] Push notifications for trainers
-- [ ] Client app integration
-- [ ] Rate limiting and circuit breakers
-- [ ] Enhanced security (data masking, audit logs)
+The messages page shows preference collection data in a clean, expandable format:
+
+### Summary View
+- **Preference Collection**: Shows extracted fields in a clean summary
+  - Intensity, muscle targets, session goals
+  - Include/exclude exercises with match counts
+  - Exercise matcher method used (exercise_type ✓, pattern ✓, or LLM ✓)
+- **Disambiguation Requests**: Shows exercise options with counts
+- **Check-in Messages**: Display check-in status and metadata
+
+### Expandable Sections
+Each message can have multiple expandable sections:
+1. **Raw LLM Response**: Full JSON response from preference parsing
+2. **Exercise Matching Details**: For each matched exercise:
+   - Match method used
+   - Confidence score
+   - LLM reasoning (if applicable)
+3. **Multiple LLM Calls**: When both preference parsing and exercise matching use LLM
+
+### Example Display
+```
+📱 Inbound Message (10:15 AM)
+"I'd like to do both deadlifts and squats today"
+
+🤖 AI Response (10:15 AM)
+Preference Collection:
+• Include Exercises: deadlifts (exercise_type ✓), squats (exercise_type ✓)
+
+[▼ Raw LLM Response]
+[▼ Exercise Matching Details]
+```
 
 ## API Reference
 

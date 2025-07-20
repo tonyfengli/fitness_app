@@ -76,13 +76,23 @@ describe('CheckInService', () => {
         businessId: 'business-456',
       };
 
-      const mockQuery = {
-        limit: vi.fn().mockResolvedValue([mockUser]),
-      };
-
-      vi.mocked(db.select).mockReturnValue({
+      // First call - find user
+      vi.mocked(db.select).mockReturnValueOnce({
         from: vi.fn().mockReturnValue({
-          where: vi.fn().mockReturnValue(mockQuery),
+          where: vi.fn().mockReturnValue({
+            limit: vi.fn().mockResolvedValue([mockUser]),
+          }),
+        }),
+      } as any);
+
+      // Second call - check for active session (no active session)
+      vi.mocked(db.select).mockReturnValueOnce({
+        from: vi.fn().mockReturnValue({
+          innerJoin: vi.fn().mockReturnValue({
+            where: vi.fn().mockReturnValue({
+              limit: vi.fn().mockResolvedValue([]),
+            }),
+          }),
         }),
       } as any);
 
@@ -91,6 +101,7 @@ describe('CheckInService', () => {
       expect(result).toEqual({
         userId: 'user-123',
         businessId: 'business-456',
+        trainingSessionId: undefined,
       });
     });
 

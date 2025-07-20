@@ -139,9 +139,28 @@ export default function SessionLobby() {
     setCheckedInClients(prev => 
       prev.map(client => {
         if (client.userId === event.userId) {
+          // Helper function to merge arrays without duplicates
+          const mergeArrays = (existing: string[] | null | undefined, incoming: string[] | null | undefined): string[] | null => {
+            if (!existing && !incoming) return null;
+            const existingArray = existing || [];
+            const incomingArray = incoming || [];
+            // Use Set to avoid duplicates
+            return [...new Set([...existingArray, ...incomingArray])];
+          };
+
           return {
             ...client,
-            preferences: event.preferences,
+            preferences: {
+              // For non-array fields, use incoming value if provided, otherwise keep existing
+              intensity: event.preferences.intensity || client.preferences?.intensity,
+              sessionGoal: event.preferences.sessionGoal || client.preferences?.sessionGoal,
+              // For array fields, merge instead of replace
+              muscleTargets: mergeArrays(client.preferences?.muscleTargets, event.preferences.muscleTargets),
+              muscleLessens: mergeArrays(client.preferences?.muscleLessens, event.preferences.muscleLessens),
+              includeExercises: mergeArrays(client.preferences?.includeExercises, event.preferences.includeExercises),
+              avoidExercises: mergeArrays(client.preferences?.avoidExercises, event.preferences.avoidExercises),
+              avoidJoints: mergeArrays(client.preferences?.avoidJoints, event.preferences.avoidJoints),
+            },
             preferencesUpdated: true
           };
         }

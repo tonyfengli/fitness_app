@@ -53,3 +53,6 @@ dist/
 
 # test output
 test-failures.json
+
+# Session test data
+session-test-data/

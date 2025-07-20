@@ -1,9 +1,12 @@
 import { WorkoutPreferenceService } from "../workoutPreferenceService";
+import { ConversationStateService } from "../conversationStateService";
+import { getUserByPhone } from "../checkInService";
 import { createLogger } from "../../utils/logger";
 import { TwilioWebhookValidator } from "./webhook-validator";
 import { SMSIntentRouter } from "./intent-router";
 import { CheckInHandler } from "./handlers/check-in-handler";
 import { PreferenceHandler } from "./handlers/preference-handler";
+import { DisambiguationHandler } from "./handlers/disambiguation-handler";
 import { DefaultHandler } from "./handlers/default-handler";
 import { SMSResponseSender } from "./response-sender";
 import { TwilioSMSPayload, SMSResponse } from "./types";
@@ -15,6 +18,7 @@ export class SMSWebhookHandler {
   private intentRouter: SMSIntentRouter;
   private checkInHandler: CheckInHandler;
   private preferenceHandler: PreferenceHandler;
+  private disambiguationHandler: DisambiguationHandler;
   private defaultHandler: DefaultHandler;
   private responseSender: SMSResponseSender;
 
@@ -23,6 +27,7 @@ export class SMSWebhookHandler {
     this.intentRouter = new SMSIntentRouter();
     this.checkInHandler = new CheckInHandler();
     this.preferenceHandler = new PreferenceHandler();
+    this.disambiguationHandler = new DisambiguationHandler();
     this.defaultHandler = new DefaultHandler();
     this.responseSender = new SMSResponseSender();
   }
@@ -69,6 +74,27 @@ export class SMSWebhookHandler {
 
   private async routeAndHandle(payload: TwilioSMSPayload): Promise<SMSResponse> {
     try {
+      // Check if this is a disambiguation response (numbers only)
+      const disambiguationCheck = DisambiguationHandler.isDisambiguationResponse(payload.Body);
+      if (disambiguationCheck.isValid) {
+        // Get user info to check for pending disambiguation
+        const userInfo = await getUserByPhone(payload.From);
+        if (userInfo && userInfo.trainingSessionId) {
+          const pendingDisambiguation = await ConversationStateService.getPendingDisambiguation(
+            userInfo.userId,
+            userInfo.trainingSessionId
+          );
+          
+          if (pendingDisambiguation) {
+            return await this.disambiguationHandler.handle(
+              payload.From,
+              payload.Body,
+              payload.MessageSid
+            );
+          }
+        }
+      }
+
       // Check if user is awaiting preference collection
       const preferenceCheck = await WorkoutPreferenceService.isAwaitingPreferences(
         payload.From

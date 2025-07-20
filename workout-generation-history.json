@@ -1,5 +1,36 @@
 [
   {
+    "sessionId": "7b7257d0-bf02-448f-a725-0351ee250935",
+    "timestamp": "2025-07-20T22:27:18.892Z",
+    "filters": {
+      "clientName": "Curtis Yu",
+      "strengthCapacity": "moderate",
+      "skillCapacity": "moderate",
+      "intensity": "moderate",
+      "muscleTarget": [],
+      "muscleLessen": [],
+      "avoidJoints": [],
+      "includeExercises": [],
+      "avoidExercises": [
+        "bench_press"
+      ],
+      "sessionGoal": "strength",
+      "isFullBody": false
+    },
+    "results": {
+      "template": "workout",
+      "exerciseCount": 117,
+      "constraintsSatisfied": true,
+      "generationTime": 10.646020000000135,
+      "blockCounts": {
+        "blockA": 5,
+        "blockB": 8,
+        "blockC": 8,
+        "blockD": 6
+      }
+    }
+  },
+  {
     "sessionId": "3d4fdfcd-be13-4ceb-9a91-fd465536aed9",
     "timestamp": "2025-07-18T17:05:03.102Z",
     "filters": {

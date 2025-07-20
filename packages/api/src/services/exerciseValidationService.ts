@@ -2,7 +2,8 @@ import { db } from "@acme/db/client";
 import { exercises, BusinessExercise } from "@acme/db/schema";
 import { eq, and, ilike, sql } from "@acme/db";
 import { createLogger } from "../utils/logger";
-import { ExerciseMatchingLLMService } from "./exerciseMatchingLLMService";
+import { HybridExerciseMatcherService } from "./hybridExerciseMatcherService";
+import { sessionTestDataLogger } from "../utils/sessionTestDataLogger";
 
 const logger = createLogger("ExerciseValidationService");
 
@@ -12,7 +13,8 @@ export interface ExerciseMatch {
     id: string;
     name: string;
   }>;
-  confidence: "llm_match" | "no_match";
+  confidence: "exercise_type" | "pattern" | "llm_match" | "no_match";
+  matchMethod?: "exercise_type" | "pattern" | "llm";
   llmReasoning?: string;
   systemPrompt?: string;
   model?: string;
@@ -20,7 +22,7 @@ export interface ExerciseMatch {
 }
 
 export class ExerciseValidationService {
-  private static llmService = new ExerciseMatchingLLMService();
+  private static hybridMatcher = new HybridExerciseMatcherService();
   
   /**
    * Validate and match exercise names from user input to actual exercises in the database
@@ -28,7 +30,8 @@ export class ExerciseValidationService {
   static async validateExercises(
     userInputExercises: string[] | undefined | null,
     businessId: string,
-    intent: "avoid" | "include" = "avoid"
+    intent: "avoid" | "include" = "avoid",
+    sessionId?: string
   ): Promise<{
     validatedExercises: string[];
     matches: ExerciseMatch[];
@@ -57,6 +60,7 @@ export class ExerciseValidationService {
       .select({
         id: exercises.id,
         name: exercises.name,
+        exerciseType: exercises.exerciseType,
         primaryMuscle: exercises.primaryMuscle,
         equipment: exercises.equipment,
         movementPattern: exercises.movementPattern,
@@ -66,47 +70,94 @@ export class ExerciseValidationService {
       .innerJoin(BusinessExercise, eq(exercises.id, BusinessExercise.exerciseId))
       .where(eq(BusinessExercise.businessId, businessId));
 
-    // Use LLM to match all exercises at once for efficiency
-    for (const userInput of userInputExercises) {
+    // Use hybrid matcher for all exercise phrases in parallel
+    const matchPromises = userInputExercises.map(async (userInput) => {
       try {
-        const llmResult = await ExerciseValidationService.llmService.matchUserIntent(
+        const matchResult = await ExerciseValidationService.hybridMatcher.matchExercises(
           userInput,
           businessExercises,
           intent
         );
         
-        // Find the exercise objects for matched names
-        const matchedExercises = businessExercises
-          .filter(ex => llmResult.matchedExerciseNames.includes(ex.name))
-          .map(ex => ({ id: ex.id, name: ex.name }));
-        
-        matches.push({
+        logger.info("Hybrid matcher result", {
           userInput,
-          matchedExercises,
-          confidence: matchedExercises.length > 0 ? "llm_match" : "no_match",
-          llmReasoning: llmResult.reasoning,
-          systemPrompt: llmResult.systemPrompt,
-          model: llmResult.model,
-          parseTimeMs: llmResult.parseTimeMs
+          matchMethod: matchResult.matchMethod,
+          matchCount: matchResult.matchedExercises.length,
+          matchedNames: matchResult.matchedExerciseNames,
+          parseTimeMs: matchResult.parseTimeMs
         });
         
-        // Add all matched exercise names
-        validatedExercises.push(...matchedExercises.map(ex => ex.name));
+        // Log exercise matcher call if session logging is enabled
+        if (sessionId && sessionTestDataLogger.isEnabled()) {
+          const matcherCall = {
+            userPhrase: userInput,
+            intent,
+            matchMethod: matchResult.matchMethod as "exercise_type" | "pattern" | "llm",
+            matchedExercises: matchResult.matchedExerciseNames,
+            parseTimeMs: matchResult.parseTimeMs || 0
+          };
+          
+          // If LLM was used, include the LLM details
+          if (matchResult.matchMethod === 'llm' && matchResult.systemPrompt) {
+            (matcherCall as any).llmFallback = {
+              systemPrompt: matchResult.systemPrompt,
+              rawResponse: matchResult.llmResponse || matchResult.reasoning,
+              reasoning: matchResult.reasoning || ''
+            };
+            
+            // Also log as a separate LLM call
+            sessionTestDataLogger.logLLMCall(sessionId, {
+              type: 'exercise_matching',
+              model: matchResult.model || 'gpt-4o-mini',
+              systemPrompt: matchResult.systemPrompt,
+              userInput: userInput,
+              rawResponse: matchResult.llmResponse || matchResult.reasoning,
+              parseTimeMs: matchResult.parseTimeMs || 0
+            });
+          }
+          
+          sessionTestDataLogger.logExerciseMatcherCall(sessionId, matcherCall);
+        }
         
-        logger.info("LLM exercise match result", {
+        return {
           userInput,
-          matchCount: matchedExercises.length,
-          matchedNames: matchedExercises.map(ex => ex.name)
-        });
+          matchedExercises: matchResult.matchedExercises,
+          confidence: matchResult.matchedExercises.length > 0 ? (matchResult.matchMethod === "llm" ? "llm_match" : matchResult.matchMethod) : "no_match",
+          matchMethod: matchResult.matchMethod,
+          llmReasoning: matchResult.reasoning,
+          systemPrompt: matchResult.systemPrompt,
+          model: matchResult.model,
+          parseTimeMs: matchResult.parseTimeMs,
+          matchedExerciseNames: matchResult.matchedExerciseNames
+        };
       } catch (error) {
-        logger.error("LLM matching failed for input", { userInput, error });
-        matches.push({
+        logger.error("Exercise matching failed for input", { userInput, error });
+        return {
           userInput,
           matchedExercises: [],
-          confidence: "no_match"
-        });
+          confidence: "no_match" as const,
+          matchedExerciseNames: []
+        };
       }
-    }
+    });
+    
+    // Wait for all matches to complete in parallel
+    const matchResults = await Promise.all(matchPromises);
+    
+    // Process results
+    matchResults.forEach(result => {
+      matches.push({
+        userInput: result.userInput,
+        matchedExercises: result.matchedExercises,
+        confidence: result.confidence as "exercise_type" | "pattern" | "llm_match" | "no_match",
+        matchMethod: result.matchMethod,
+        llmReasoning: result.llmReasoning,
+        parseTimeMs: result.parseTimeMs
+      });
+      
+      // Add all matched exercise names
+      validatedExercises.push(...result.matchedExerciseNames);
+    });
 
     const hasUnrecognized = matches.some(m => m.confidence === "no_match");
 

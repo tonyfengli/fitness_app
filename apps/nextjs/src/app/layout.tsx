@@ -6,6 +6,7 @@ import { cn, ThemeProvider, ThemeToggle, Toaster } from "@acme/ui-shared";
 import { TRPCReactProvider } from "~/trpc/react";
 import { Navigation } from "./_components/navigation";
 import { DebugInitializer } from "./_components/debug-initializer";
+import { SessionTestDataInitializer } from "./_components/session-test-data-initializer";
 
 import "~/app/globals.css";
 
@@ -67,6 +68,7 @@ export default function RootLayout(props: { children: React.ReactNode }) {
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           <TRPCReactProvider>
             <DebugInitializer />
+            <SessionTestDataInitializer />
             <div className="flex flex-col h-screen overflow-hidden">
               <Navigation />
               <div className="flex-1">

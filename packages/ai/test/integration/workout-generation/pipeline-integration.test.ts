@@ -13,6 +13,7 @@ const mockExercises: Exercise[] = [
     {
       id: 'ex1',
       name: 'Barbell Squat',
+      exerciseType: 'squat',
       primaryMuscle: 'quads',
       secondaryMuscles: ['glutes', 'hamstrings'],
       loadedJoints: ['knees', 'hips'],
@@ -29,6 +30,7 @@ const mockExercises: Exercise[] = [
     {
       id: 'ex2',
       name: 'Bench Press',
+      exerciseType: 'bench_press',
       primaryMuscle: 'chest',
       secondaryMuscles: ['triceps', 'shoulders'],
       loadedJoints: ['shoulders', 'elbows'],
@@ -45,6 +47,7 @@ const mockExercises: Exercise[] = [
     {
       id: 'ex3',
       name: 'Romanian Deadlift',
+      exerciseType: 'deadlift',
       primaryMuscle: 'hamstrings',
       secondaryMuscles: ['glutes', 'lower_back'],
       loadedJoints: ['hips', 'lower_back'],
@@ -61,6 +64,7 @@ const mockExercises: Exercise[] = [
     {
       id: 'ex4',
       name: 'Pull-Ups',
+      exerciseType: 'pull_up',
       primaryMuscle: 'lats',
       secondaryMuscles: ['biceps', 'upper_back'],
       loadedJoints: ['shoulders', 'elbows'],
@@ -77,6 +81,7 @@ const mockExercises: Exercise[] = [
     {
       id: 'ex5',
       name: 'Plank',
+      exerciseType: 'plank',
       primaryMuscle: 'core',
       secondaryMuscles: ['shoulders'],
       loadedJoints: ['spine'],
@@ -93,6 +98,7 @@ const mockExercises: Exercise[] = [
     {
       id: 'ex6',
       name: 'Jump Squats',
+      exerciseType: 'squat',
       primaryMuscle: 'quads',
       secondaryMuscles: ['glutes', 'calves'],
       loadedJoints: ['knees', 'hips', 'ankles'],
@@ -109,6 +115,7 @@ const mockExercises: Exercise[] = [
     {
       id: 'ex7',
       name: 'Push-Ups',
+      exerciseType: 'press',
       primaryMuscle: 'chest',
       secondaryMuscles: ['triceps', 'shoulders'],
       loadedJoints: ['shoulders', 'elbows'],
@@ -125,6 +132,7 @@ const mockExercises: Exercise[] = [
     {
       id: 'ex8',
       name: 'Mountain Climbers',
+      exerciseType: null,
       primaryMuscle: 'core',
       secondaryMuscles: ['shoulders', 'quads'],
       loadedJoints: ['spine', 'hips', 'shoulders'],

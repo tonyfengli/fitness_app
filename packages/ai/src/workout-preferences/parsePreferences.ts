@@ -33,6 +33,7 @@ KEY PRINCIPLES:
 - Extract muscle/joint mentions even from casual statements like "hamstrings are sore"
 - Only use needsFollowUp=true if you truly cannot extract ANY useful preferences
 - Omit intensity field if there are no clear intensity indicators (don't default to moderate)
+- Do NOT infer muscle targets from exercise requests. Only add to muscleTargets when the user explicitly mentions wanting to work/target/focus on specific muscle groups
 
 IMPORTANT: When users mention specific joint issues (knees, shoulders, etc.) but still request high intensity, honor BOTH:
 - Add the joint to avoidJoints for protection
@@ -50,7 +51,9 @@ EXTRACTION FIELDS:
    - Valid options: "low", "moderate", "high"
    - IMPORTANT: Default to "moderate" if no intensity indicators are present
    
-3. muscleTargets → Muscle groups the client wants to target
+3. muscleTargets → Muscle groups the client EXPLICITLY wants to target
+   - Only add when user says things like "let's work legs", "focus on chest", "target glutes"
+   - Do NOT infer from exercise mentions (e.g., "deadlifts" does not mean add legs/glutes)
    - Valid options: chest, back, shoulders, arms, legs, glutes, core, triceps, biceps, quads, hamstrings, calves
    
 4. muscleLessens → Muscle groups that are sore or fatigued
@@ -110,14 +113,19 @@ High Intensity Indicators:
 - "push me", "challenge me", "don't hold back" → intensity="high"
 
 MUSCLE GROUP MAPPINGS:
-Target Indicators:
+Target Indicators (MUST be explicit):
 - "hit [muscle]", "work on [muscle]", "focus on [muscle]" → add to muscleTargets
 - "[muscle] day", "train [muscle]", "blast [muscle]" → add to muscleTargets
+- "let's do [muscle]", "target [muscle]" → add to muscleTargets
 Common aliases:
 - "upper body" → [chest, back, shoulders, arms]
 - "lower body" → [legs, glutes]
 - "arms" → [biceps, triceps]
 - "legs" → [quads, hamstrings, calves]
+
+NOT Target Indicators:
+- Exercise names alone (deadlifts, squats, bench press, etc.)
+- General workout descriptions
 
 Avoidance Indicators:
 - "[muscle] is sore/tight/tired" → add to muscleLessens
@@ -128,9 +136,11 @@ Avoidance Indicators:
 - When "legs" is mentioned, consider adding relevant leg muscles (hamstrings, quads, glutes)
 
 JOINT PROTECTION MAPPINGS:
-- "my [joint] hurts/aches/is sore" → add to avoidJoints
+- "my [joint] hurts/aches" → add to avoidJoints (NOT for muscle soreness)
 - "[joint] is bothering me", "[joint] is acting up" → add to avoidJoints
 - "easy on the [joint]", "protect my [joint]" → add to avoidJoints
+- IMPORTANT: "shoulders are sore" → muscleLessens NOT avoidJoints (shoulders are muscles too!)
+- Only use avoidJoints for actual joint pain/injury, not muscle soreness
 
 CONFLICT RESOLUTION RULES:
 1. General Pain/Illness Override: Mentions of overall illness, general pain, or systemic issues → intensity="low"
@@ -255,6 +265,32 @@ const FEW_SHOT_EXAMPLES = [
     output: {
       intensity: "moderate",
       muscleLessens: ["hamstrings", "legs"],
+      needsFollowUp: false
+    }
+  },
+  {
+    input: "My shoulders are sore from yesterday's workout but I want to train hard today",
+    output: {
+      sessionGoal: null,
+      intensity: "high",
+      muscleTargets: [],
+      muscleLessens: ["shoulders"],
+      includeExercises: [],
+      avoidExercises: [],
+      avoidJoints: [],
+      needsFollowUp: false
+    }
+  },
+  {
+    input: "I'd like to do both deadlifts and squats today",
+    output: {
+      sessionGoal: null,
+      intensity: "moderate",
+      muscleTargets: [],
+      muscleLessens: [],
+      includeExercises: ["deadlifts", "squats"],
+      avoidExercises: [],
+      avoidJoints: [],
       needsFollowUp: false
     }
   }

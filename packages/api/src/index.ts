@@ -35,3 +35,6 @@ export { ExerciseMatchingLLMService } from "./services/exerciseMatchingLLMServic
 
 // Export new SMS handler components
 export { SMSWebhookHandler } from "./services/sms";
+
+// Export session test data logger
+export { sessionTestDataLogger } from "./utils/sessionTestDataLogger";
