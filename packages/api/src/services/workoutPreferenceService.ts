@@ -40,7 +40,10 @@ export function setPreferenceBroadcastFunction(fn: typeof broadcastPreferenceUpd
 }
 
 export class WorkoutPreferenceService {
-  static readonly PREFERENCE_PROMPT = "How are you feeling today? Is there anything I should know before building your workout?";
+  static getPreferencePrompt(userName?: string): string {
+    const name = userName || "there";
+    return `You're checked in, ${name}! What's your priority for today's session? Examples: "abs" or "stability work."`;
+  }
 
   static async isAwaitingPreferences(phoneNumber: string): Promise<{
     waiting: boolean;
@@ -178,9 +181,9 @@ export class WorkoutPreferenceService {
           userId,
           preferences: {
             intensity: preferences.intensity || null,
-            muscleTargets: preferences.muscleTargets || null,
-            muscleLessens: preferences.muscleLessens || null,
-            avoidJoints: preferences.avoidJoints || null,
+            muscleTargets: preferences.muscleTargets || [],
+            muscleLessens: preferences.muscleLessens || [],
+            avoidJoints: preferences.avoidJoints || [],
             sessionGoal: preferences.sessionGoal || null,
           }
         });
@@ -220,19 +223,19 @@ export class WorkoutPreferenceService {
           intensitySource: preferences.intensity !== undefined 
             ? (preferences.intensitySource || 'explicit')
             : existing.intensitySource,
-          muscleTargets: (preferences.muscleTargets?.length ?? 0) > 0 
+          muscleTargets: preferences.muscleTargets !== undefined
             ? preferences.muscleTargets 
             : existing.muscleTargets,
-          muscleLessens: (preferences.muscleLessens?.length ?? 0) > 0
+          muscleLessens: preferences.muscleLessens !== undefined
             ? preferences.muscleLessens
             : existing.muscleLessens,
-          includeExercises: (preferences.includeExercises?.length ?? 0) > 0
+          includeExercises: preferences.includeExercises !== undefined
             ? preferences.includeExercises
             : existing.includeExercises,
-          avoidExercises: (preferences.avoidExercises?.length ?? 0) > 0
+          avoidExercises: preferences.avoidExercises !== undefined
             ? preferences.avoidExercises
             : existing.avoidExercises,
-          avoidJoints: (preferences.avoidJoints?.length ?? 0) > 0
+          avoidJoints: preferences.avoidJoints !== undefined
             ? preferences.avoidJoints
             : existing.avoidJoints,
           sessionGoal: preferences.sessionGoal !== undefined 
@@ -322,17 +325,26 @@ export class WorkoutPreferenceService {
             preferences: {
               intensity: savedPrefs.intensity || null,
               intensitySource: savedPrefs.intensitySource || null,
-              muscleTargets: savedPrefs.muscleTargets || null,
-              muscleLessens: savedPrefs.muscleLessens || null,
-              includeExercises: savedPrefs.includeExercises || null,
-              avoidExercises: savedPrefs.avoidExercises || null,
-              avoidJoints: savedPrefs.avoidJoints || null,
+              muscleTargets: savedPrefs.muscleTargets || [],
+              muscleLessens: savedPrefs.muscleLessens || [],
+              includeExercises: savedPrefs.includeExercises || [],
+              avoidExercises: savedPrefs.avoidExercises || [],
+              avoidJoints: savedPrefs.avoidJoints || [],
               sessionGoal: savedPrefs.sessionGoal || null,
               sessionGoalSource: savedPrefs.sessionGoalSource || null,
             }
           });
         }
-        logger.info("Broadcasted preference update", { userId, sessionId });
+        logger.info("Broadcasted preference update", { 
+          userId, 
+          sessionId,
+          includeExercisesCount: savedPrefs?.includeExercises?.length || 0,
+          avoidExercisesCount: savedPrefs?.avoidExercises?.length || 0,
+          broadcastData: {
+            includeExercises: savedPrefs?.includeExercises || [],
+            avoidExercises: savedPrefs?.avoidExercises || []
+          }
+        });
       }
     } catch (error) {
       logger.error("Error saving preferences:", error);
@@ -356,11 +368,11 @@ export class WorkoutPreferenceService {
       return {
         intensity: preference.intensity as ParsedPreferences["intensity"],
         intensitySource: preference.intensitySource as ParsedPreferences["intensitySource"],
-        muscleTargets: preference.muscleTargets || undefined,
-        muscleLessens: preference.muscleLessens || undefined,
-        includeExercises: preference.includeExercises || undefined,
-        avoidExercises: preference.avoidExercises || undefined,
-        avoidJoints: preference.avoidJoints || undefined,
+        muscleTargets: preference.muscleTargets || [],
+        muscleLessens: preference.muscleLessens || [],
+        includeExercises: preference.includeExercises || [],
+        avoidExercises: preference.avoidExercises || [],
+        avoidJoints: preference.avoidJoints || [],
         sessionGoal: preference.sessionGoal as ParsedPreferences["sessionGoal"],
         sessionGoalSource: preference.sessionGoalSource as ParsedPreferences["sessionGoalSource"],
       };

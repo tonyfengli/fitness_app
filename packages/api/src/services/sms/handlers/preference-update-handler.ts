@@ -1,6 +1,7 @@
 import { WorkoutPreferenceService } from "../../workoutPreferenceService";
 import { PreferenceUpdateParser } from "../../preferenceUpdateParser";
 import { TargetedFollowupService } from "../../targetedFollowupService";
+import { ExerciseDisambiguationService } from "../../exerciseDisambiguationService";
 import { saveMessage } from "../../messageService";
 import { getUserByPhone } from "../../checkInService";
 import { createLogger } from "../../../utils/logger";
@@ -73,11 +74,124 @@ export class PreferenceUpdateHandler {
         };
       }
 
-      // Apply the updates
+      // Check if disambiguation is needed
+      if (updateResult.exerciseValidation?.needsDisambiguation) {
+        // Get the validation result that needs disambiguation
+        const validation = updateResult.exerciseValidation.includeValidation || 
+                         updateResult.exerciseValidation.avoidValidation;
+        
+        // Use the already-validated matches instead of re-processing
+        const disambiguationResult = {
+          needsDisambiguation: true,
+          disambiguationMessage: ExerciseDisambiguationService.formatMessage(
+            validation.matches.filter((m: any) => m.matchedExercises.length > 1),
+            {
+              type: 'preference_update',
+              sessionId: userInfo.trainingSessionId,
+              userId: userInfo.userId,
+              businessId: userInfo.businessId
+            }
+          ),
+          ambiguousMatches: validation.matches.filter((m: any) => m.matchedExercises.length > 1),
+          allOptions: ExerciseDisambiguationService.collectAllOptions(
+            validation.matches.filter((m: any) => m.matchedExercises.length > 1)
+          )
+        };
+
+        if (disambiguationResult.needsDisambiguation) {
+          // Save disambiguation state
+          await ExerciseDisambiguationService.saveDisambiguationState(
+            {
+              ambiguousMatches: disambiguationResult.ambiguousMatches!,
+              allOptions: disambiguationResult.allOptions!,
+              originalIntent: updateResult.updateType === 'remove' ? 'avoid' : 'include'
+            },
+            {
+              type: 'preference_update',
+              sessionId: userInfo.trainingSessionId,
+              userId: userInfo.userId,
+              businessId: userInfo.businessId
+            }
+          );
+
+          // Log disambiguation if session logging is enabled
+          if (sessionTestDataLogger.isEnabled() && userInfo.trainingSessionId) {
+            sessionTestDataLogger.initSession(userInfo.trainingSessionId, phoneNumber);
+            
+            // Log inbound message
+            sessionTestDataLogger.logMessage(userInfo.trainingSessionId, {
+              direction: 'inbound',
+              content: messageContent,
+              metadata: {
+                messageSid,
+                currentStep: "preferences_active",
+                updateType: "preference_update",
+                requiresDisambiguation: true
+              }
+            });
+            
+            // Log outbound disambiguation message
+            sessionTestDataLogger.logMessage(userInfo.trainingSessionId, {
+              direction: 'outbound',
+              content: disambiguationResult.disambiguationMessage!,
+              metadata: {
+                type: 'disambiguation_request',
+                ambiguousMatches: disambiguationResult.ambiguousMatches,
+                options: disambiguationResult.allOptions,
+                currentState: "preferences_active"
+              }
+            });
+            
+            await sessionTestDataLogger.saveSessionData(userInfo.trainingSessionId);
+          }
+
+          // Save messages
+          await saveMessage({
+            userId: userInfo.userId,
+            businessId: userInfo.businessId,
+            direction: 'inbound',
+            content: messageContent,
+            phoneNumber,
+            metadata: {
+              type: 'preference_update',
+              requiresDisambiguation: true,
+              twilioMessageSid: messageSid,
+            },
+            status: 'delivered',
+          });
+
+          await saveMessage({
+            userId: userInfo.userId,
+            businessId: userInfo.businessId,
+            direction: 'outbound',
+            content: disambiguationResult.disambiguationMessage!,
+            phoneNumber,
+            metadata: {
+              type: 'disambiguation_request',
+              updateContext: 'preference_update',
+              optionCount: disambiguationResult.allOptions?.length
+            },
+            status: 'sent',
+          });
+
+          return {
+            success: true,
+            message: disambiguationResult.disambiguationMessage!,
+            metadata: {
+              userId: userInfo.userId,
+              businessId: userInfo.businessId,
+              requiresDisambiguation: true,
+              currentState: "preferences_active"
+            }
+          };
+        }
+      }
+
+      // Apply the updates (no disambiguation needed)
       const updatedPreferences = this.mergePreferences(
         { ...currentPreferences, needsFollowUp: false },
         updateResult.updates
-      );
+      ) as ParsedPreferences;
 
       // Save the updated preferences
       await WorkoutPreferenceService.savePreferences(
@@ -179,10 +293,10 @@ export class PreferenceUpdateHandler {
    * Merge current preferences with updates
    */
   private mergePreferences(
-    current: ParsedPreferences & { intensitySource?: string; sessionGoalSource?: string },
+    current: ParsedPreferences & { intensitySource?: "explicit" | "default" | "inherited"; sessionGoalSource?: "explicit" | "default" | "inherited" },
     updates: Partial<ParsedPreferences>
-  ): ParsedPreferences & { intensitySource?: string; sessionGoalSource?: string } {
-    const merged: ParsedPreferences & { intensitySource?: string; sessionGoalSource?: string } = { 
+  ): ParsedPreferences & { intensitySource?: "explicit" | "default" | "inherited"; sessionGoalSource?: "explicit" | "default" | "inherited" } {
+    const merged: ParsedPreferences & { intensitySource?: "explicit" | "default" | "inherited"; sessionGoalSource?: "explicit" | "default" | "inherited" } = { 
       ...current, 
       needsFollowUp: false 
     };

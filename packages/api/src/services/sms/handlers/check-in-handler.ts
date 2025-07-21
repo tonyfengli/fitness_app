@@ -3,6 +3,9 @@ import { saveMessage } from "../../messageService";
 import { createLogger } from "../../../utils/logger";
 import { WorkoutPreferenceService } from "../../workoutPreferenceService";
 import { SMSResponse } from "../types";
+import { db } from "@acme/db/client";
+import { user } from "@acme/db/schema";
+import { eq } from "@acme/db";
 
 const logger = createLogger("CheckInHandler");
 
@@ -29,11 +32,17 @@ export class CheckInHandler {
       
       // Add preference prompt if needed
       if (checkInResult.success && checkInResult.shouldStartPreferences) {
-        responseMessage = `${responseMessage}\n\n${WorkoutPreferenceService.PREFERENCE_PROMPT}`;
+        // Get user info to include their name
+        const userInfo = await getUserByPhone(phoneNumber);
+        const userName = userInfo ? await this.getUserName(userInfo.userId) : undefined;
+        
+        const preferencePrompt = WorkoutPreferenceService.getPreferencePrompt(userName);
+        responseMessage = `${responseMessage}\n\n${preferencePrompt}`;
         
         logger.info("Added preference prompt to check-in response", {
           userId: checkInResult.userId,
-          sessionId: checkInResult.sessionId
+          sessionId: checkInResult.sessionId,
+          userName
         });
       }
 
@@ -110,6 +119,21 @@ export class CheckInHandler {
     } catch (error) {
       logger.error("Failed to save messages", error);
       // Don't throw - message saving shouldn't break the flow
+    }
+  }
+
+  private async getUserName(userId: string): Promise<string | undefined> {
+    try {
+      const userRecord = await db
+        .select({ name: user.name })
+        .from(user)
+        .where(eq(user.id, userId))
+        .limit(1);
+      
+      return userRecord[0]?.name || undefined;
+    } catch (error) {
+      logger.error("Failed to get user name", { userId, error });
+      return undefined;
     }
   }
 }

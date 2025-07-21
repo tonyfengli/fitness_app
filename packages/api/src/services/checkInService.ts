@@ -26,6 +26,7 @@ export interface CheckInResult {
   checkInId?: string;
   phoneNumber?: string;
   shouldStartPreferences?: boolean;
+  userName?: string;
 }
 
 export async function getUserByPhone(phoneNumber: string): Promise<{ userId: string; businessId: string; trainingSessionId?: string } | null> {

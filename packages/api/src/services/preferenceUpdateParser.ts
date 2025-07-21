@@ -1,5 +1,7 @@
 import { createLogger } from "../utils/logger";
 import { exerciseUpdateParser } from "./exerciseUpdateParser";
+import { ExerciseValidationService } from "./exerciseValidationService";
+import { ExerciseDisambiguationService } from "./exerciseDisambiguationService";
 import type { ParsedPreferences } from "@acme/ai";
 
 const logger = createLogger("PreferenceUpdateParser");
@@ -10,6 +12,11 @@ export interface UpdateParseResult {
   updateType: 'add' | 'remove' | 'change' | 'mixed' | null;
   fieldsUpdated: string[];
   rawInput: string;
+  exerciseValidation?: {
+    includeValidation?: any;
+    avoidValidation?: any;
+    needsDisambiguation?: boolean;
+  };
 }
 
 export class PreferenceUpdateParser {
@@ -67,36 +74,80 @@ export class PreferenceUpdateParser {
       result.hasUpdates = true;
     }
 
+    // Check if this is a replacement scenario (contains "instead")
+    const isReplacement = /\binstead\b/i.test(message);
+    
     // Check for exercise additions/removals using the exercise update parser
     const exerciseUpdateIntent = await exerciseUpdateParser.parseExerciseUpdate(message, businessId);
     
     if (exerciseUpdateIntent.action !== 'unknown' && exerciseUpdateIntent.exercises.length > 0) {
-      if (exerciseUpdateIntent.action === 'add') {
-        // For additions, append to include list (avoiding duplicates)
-        const currentIncludes = currentPreferences.includeExercises || [];
-        const newExercises = exerciseUpdateIntent.exercises.filter(
-          exercise => !currentIncludes.some(
-            included => included.toLowerCase() === exercise.toLowerCase()
-          )
-        );
+      // Use the validation result from the exercise update parser if available
+      if (exerciseUpdateIntent.action === 'add' || isReplacement) {
+        const validation = exerciseUpdateIntent.validationResult || {
+          validatedExercises: exerciseUpdateIntent.exercises,
+          matches: [],
+          hasUnrecognized: false
+        };
         
-        if (newExercises.length > 0) {
-          result.updates.includeExercises = [...currentIncludes, ...newExercises];
+        // Check if disambiguation is needed
+        if (ExerciseDisambiguationService.checkNeedsDisambiguation(validation)) {
+          result.exerciseValidation = {
+            includeValidation: validation,
+            needsDisambiguation: true
+          };
+          result.hasUpdates = true;
+          result.updateType = isReplacement ? 'change' : 'add';
+          return result; // Return early - disambiguation needed
+        }
+        
+        // No disambiguation needed - proceed with validated exercises
+        if (isReplacement) {
+          result.updates.includeExercises = validation.validatedExercises;
           result.fieldsUpdated.push('includeExercises');
           result.hasUpdates = true;
+          result.updateType = 'change';
+        } else {
+          // For additions, append to include list (avoiding duplicates)
+          const currentIncludes = currentPreferences.includeExercises || [];
+          const newExercises = validation.validatedExercises.filter(
+            (exercise: string) => !currentIncludes.some(
+              (included: string) => included.toLowerCase() === exercise.toLowerCase()
+            )
+          );
+          
+          if (newExercises.length > 0) {
+            result.updates.includeExercises = [...currentIncludes, ...newExercises];
+            result.fieldsUpdated.push('includeExercises');
+            result.hasUpdates = true;
+          }
         }
       } else if (exerciseUpdateIntent.action === 'remove') {
-        // For removals, we have two options:
-        // 1. If the exercise is in includeExercises, remove it
-        // 2. Otherwise, add it to avoidExercises
+        // Use the validation result from the exercise update parser if available
+        const validation = exerciseUpdateIntent.validationResult || {
+          validatedExercises: exerciseUpdateIntent.exercises,
+          matches: [],
+          hasUnrecognized: false
+        };
         
+        // Check if disambiguation is needed
+        if (ExerciseDisambiguationService.checkNeedsDisambiguation(validation)) {
+          result.exerciseValidation = {
+            avoidValidation: validation,
+            needsDisambiguation: true
+          };
+          result.hasUpdates = true;
+          result.updateType = 'remove';
+          return result; // Return early - disambiguation needed
+        }
+        
+        // No disambiguation needed - proceed with validated exercises
         const currentIncludes = currentPreferences.includeExercises || [];
-        const exercisesToRemove = exerciseUpdateIntent.exercises;
+        const exercisesToRemove = validation.validatedExercises;
         
         // Filter out from includes
         const filteredIncludes = currentIncludes.filter(
-          exercise => !exercisesToRemove.some(
-            toRemove => exercise.toLowerCase() === toRemove.toLowerCase()
+          (exercise: string) => !exercisesToRemove.some(
+            (toRemove: string) => exercise.toLowerCase() === toRemove.toLowerCase()
           )
         );
         
@@ -113,8 +164,8 @@ export class PreferenceUpdateParser {
         // Always add removed exercises to avoid list
         const currentAvoids = currentPreferences.avoidExercises || [];
         const newAvoids = exercisesToRemove.filter(
-          exercise => !currentAvoids.some(
-            avoided => avoided.toLowerCase() === exercise.toLowerCase()
+          (exercise: string) => !currentAvoids.some(
+            (avoided: string) => avoided.toLowerCase() === exercise.toLowerCase()
           )
         );
         

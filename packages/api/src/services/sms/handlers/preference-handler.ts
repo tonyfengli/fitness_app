@@ -153,6 +153,13 @@ export class PreferenceHandler {
       const newAvoidExercises = parsedPreferences.avoidExercises || [];
       const newIncludeExercises = parsedPreferences.includeExercises || [];
       
+      logger.info("Exercise arrays from parsed preferences", {
+        newAvoidExercises,
+        newIncludeExercises,
+        currentStep: preferenceCheck.currentStep,
+        hasExistingPrefs: !!existingPrefs
+      });
+      
       // Clear exercise arrays from validatedPreferences if we're going to validate them
       // to avoid duplicates when merging
       if (newAvoidExercises.length > 0) {
@@ -170,6 +177,10 @@ export class PreferenceHandler {
         });
 
         try {
+          // Declare variables at the top of the try block
+          let filteredIncludes: string[] | undefined;
+          const existingIncludes = existingPrefs?.includeExercises || [];
+          
           // Validate NEW avoid exercises only
           if (newAvoidExercises.length > 0) {
             const avoidValidation = await ExerciseValidationService.validateExercises(
@@ -180,9 +191,8 @@ export class PreferenceHandler {
             );
             
             // Remove any newly avoided exercises from includes
-            const existingIncludes = existingPrefs?.includeExercises || [];
             const validatedAvoidsLower = avoidValidation.validatedExercises.map((e: string) => e.toLowerCase());
-            const filteredIncludes = existingIncludes.filter(
+            filteredIncludes = existingIncludes.filter(
               (exercise: string) => !validatedAvoidsLower.includes(exercise.toLowerCase())
             );
             
@@ -198,7 +208,7 @@ export class PreferenceHandler {
               input: newAvoidExercises,
               validated: avoidValidation.validatedExercises,
               matches: avoidValidation.matches,
-              removedFromIncludes: existingIncludes.length - filteredIncludes.length
+              removedFromIncludes: existingIncludes.length - (filteredIncludes?.length || 0)
             });
           }
 
@@ -211,26 +221,61 @@ export class PreferenceHandler {
               preferenceCheck.trainingSessionId
             );
             
+            logger.info("Include validation result", {
+              newIncludeExercises,
+              validationResult: {
+                validatedExercises: includeValidation.validatedExercises,
+                matchesCount: includeValidation.matches.length,
+                matches: includeValidation.matches
+              }
+            });
+            
             // Check if any exercises need disambiguation
             const ambiguousMatches = includeValidation.matches.filter(
-              match => match.matchedExercises.length > 1
+              match => match.matchedExercises && match.matchedExercises.length > 1
             );
             
+            logger.info("Checking for disambiguation in follow-up", {
+              includeValidationMatches: includeValidation.matches.map(m => ({
+                userInput: m.userInput,
+                matchCount: m.matchedExercises.length,
+                matches: m.matchedExercises.map((e: any) => e.name)
+              })),
+              ambiguousMatchesCount: ambiguousMatches.length,
+              currentStep: preferenceCheck.currentStep
+            });
+            
             if (ambiguousMatches.length > 0) {
-              // Save any validated avoid exercises before handling disambiguation
-              if (validatedPreferences.avoidExercises?.length) {
+              logger.info("Disambiguation needed - returning disambiguation message", {
+                ambiguousMatchesCount: ambiguousMatches.length,
+                userId: preferenceCheck.userId
+              });
+              
+              // Save any validated avoid exercises AND filtered includes before handling disambiguation
+              if (validatedPreferences.avoidExercises?.length || filteredIncludes) {
+                const preDisambiguationSave: any = {};
+                
+                if (validatedPreferences.avoidExercises?.length) {
+                  preDisambiguationSave.avoidExercises = validatedPreferences.avoidExercises;
+                }
+                
+                // If we filtered includes due to conflicts, save the filtered version
+                if (filteredIncludes && filteredIncludes.length !== existingIncludes.length) {
+                  preDisambiguationSave.includeExercises = filteredIncludes;
+                }
+                
                 await WorkoutPreferenceService.savePreferences(
                   preferenceCheck.userId!,
                   preferenceCheck.trainingSessionId!,
                   preferenceCheck.businessId!,
-                  {
-                    avoidExercises: validatedPreferences.avoidExercises
-                  },
+                  preDisambiguationSave,
                   "initial_collected"
                 );
-                logger.info("Saved avoid exercises before disambiguation", {
+                logger.info("Saved avoid exercises and filtered includes before disambiguation", {
                   userId: preferenceCheck.userId,
-                  avoidExercises: validatedPreferences.avoidExercises
+                  avoidExercises: validatedPreferences.avoidExercises,
+                  filteredIncludes: filteredIncludes,
+                  removedFromIncludes: existingIncludes.length - (filteredIncludes?.length || 0)
                 });
               }
               
@@ -265,7 +310,13 @@ export class PreferenceHandler {
             });
           }
         } catch (error) {
-          logger.error("Exercise validation error", error);
+          logger.error("Exercise validation error", {
+            error: error instanceof Error ? error.message : error,
+            stack: error instanceof Error ? error.stack : undefined,
+            currentStep: preferenceCheck.currentStep,
+            newIncludeExercises,
+            newAvoidExercises
+          });
           // Continue with unvalidated exercises rather than failing
         }
       }
