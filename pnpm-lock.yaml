@@ -310,13 +310,13 @@ importers:
         version: link:../db
       '@langchain/core':
         specifier: ^0.3.26
-        version: 0.3.61(@opentelemetry/api@1.9.0)(openai@5.8.2(ws@8.18.2(bufferutil@4.0.8)(utf-8-validate@6.0.4))(zod@3.25.49))
+        version: 0.3.61(@opentelemetry/api@1.9.0)(openai@5.10.1(ws@8.18.2(bufferutil@4.0.8)(utf-8-validate@6.0.4))(zod@3.25.49))
       '@langchain/langgraph':
         specifier: ^0.3.6
-        version: 0.3.6(@langchain/core@0.3.61(@opentelemetry/api@1.9.0)(openai@5.8.2(ws@8.18.2(bufferutil@4.0.8)(utf-8-validate@6.0.4))(zod@3.25.49)))(react@19.0.0)(zod-to-json-schema@3.24.6(zod@3.25.49))
+        version: 0.3.6(@langchain/core@0.3.61(@opentelemetry/api@1.9.0)(openai@5.10.1(ws@8.18.2(bufferutil@4.0.8)(utf-8-validate@6.0.4))(zod@3.25.49)))(react@19.0.0)(zod-to-json-schema@3.24.6(zod@3.25.49))
       '@langchain/openai':
         specifier: ^0.5.16
-        version: 0.5.16(@langchain/core@0.3.61(@opentelemetry/api@1.9.0)(openai@5.8.2(ws@8.18.2(bufferutil@4.0.8)(utf-8-validate@6.0.4))(zod@3.25.49)))(ws@8.18.2(bufferutil@4.0.8)(utf-8-validate@6.0.4))
+        version: 0.5.16(@langchain/core@0.3.61(@opentelemetry/api@1.9.0)(openai@5.10.1(ws@8.18.2(bufferutil@4.0.8)(utf-8-validate@6.0.4))(zod@3.25.49)))(ws@8.18.2(bufferutil@4.0.8)(utf-8-validate@6.0.4))
       dotenv:
         specifier: ^16.4.7
         version: 16.4.7
@@ -381,6 +381,9 @@ importers:
       '@trpc/server':
         specifier: 'catalog:'
         version: 11.4.0(typescript@5.8.3)
+      openai:
+        specifier: ^5.10.1
+        version: 5.10.1(ws@8.18.2(bufferutil@4.0.8)(utf-8-validate@6.0.4))(zod@3.25.49)
       superjson:
         specifier: 2.2.2
         version: 2.2.2
@@ -6423,6 +6426,18 @@ packages:
     resolution: {integrity: sha512-7x81NCL719oNbsq/3mh+hVrAWmFuEYUqrq/Iw3kUzH8ReypT9QQ0BLoJS7/G9k6N81XjW4qHWtjWwe/9eLy1EQ==}
     engines: {node: '>=12'}
 
+  openai@5.10.1:
+    resolution: {integrity: sha512-fq6xVfv1/gpLbsj8fArEt3b6B9jBxdhAK+VJ+bDvbUvNd+KTLlA3bnDeYZaBsGH9LUhJ1M1yXfp9sEyBLMx6eA==}
+    hasBin: true
+    peerDependencies:
+      ws: ^8.18.0
+      zod: ^3.23.8
+    peerDependenciesMeta:
+      ws:
+        optional: true
+      zod:
+        optional: true
+
   openai@5.8.2:
     resolution: {integrity: sha512-8C+nzoHYgyYOXhHGN6r0fcb4SznuEn1R7YZMvlqDbnCuE0FM2mm3T1HiYW6WIcMS/F1Of2up/cSPjLPaWt0X9Q==}
     hasBin: true
@@ -9960,14 +9975,14 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.0
 
-  '@langchain/core@0.3.61(@opentelemetry/api@1.9.0)(openai@5.8.2(ws@8.18.2(bufferutil@4.0.8)(utf-8-validate@6.0.4))(zod@3.25.49))':
+  '@langchain/core@0.3.61(@opentelemetry/api@1.9.0)(openai@5.10.1(ws@8.18.2(bufferutil@4.0.8)(utf-8-validate@6.0.4))(zod@3.25.49))':
     dependencies:
       '@cfworker/json-schema': 4.1.1
       ansi-styles: 5.2.0
       camelcase: 6.3.0
       decamelize: 1.2.0
       js-tiktoken: 1.0.20
-      langsmith: 0.3.37(@opentelemetry/api@1.9.0)(openai@5.8.2(ws@8.18.2(bufferutil@4.0.8)(utf-8-validate@6.0.4))(zod@3.25.49))
+      langsmith: 0.3.37(@opentelemetry/api@1.9.0)(openai@5.10.1(ws@8.18.2(bufferutil@4.0.8)(utf-8-validate@6.0.4))(zod@3.25.49))
       mustache: 4.2.0
       p-queue: 6.6.2
       p-retry: 4.6.2
@@ -9980,26 +9995,26 @@ snapshots:
       - '@opentelemetry/sdk-trace-base'
       - openai
 
-  '@langchain/langgraph-checkpoint@0.0.18(@langchain/core@0.3.61(@opentelemetry/api@1.9.0)(openai@5.8.2(ws@8.18.2(bufferutil@4.0.8)(utf-8-validate@6.0.4))(zod@3.25.49)))':
+  '@langchain/langgraph-checkpoint@0.0.18(@langchain/core@0.3.61(@opentelemetry/api@1.9.0)(openai@5.10.1(ws@8.18.2(bufferutil@4.0.8)(utf-8-validate@6.0.4))(zod@3.25.49)))':
     dependencies:
-      '@langchain/core': 0.3.61(@opentelemetry/api@1.9.0)(openai@5.8.2(ws@8.18.2(bufferutil@4.0.8)(utf-8-validate@6.0.4))(zod@3.25.49))
+      '@langchain/core': 0.3.61(@opentelemetry/api@1.9.0)(openai@5.10.1(ws@8.18.2(bufferutil@4.0.8)(utf-8-validate@6.0.4))(zod@3.25.49))
       uuid: 10.0.0
 
-  '@langchain/langgraph-sdk@0.0.88(@langchain/core@0.3.61(@opentelemetry/api@1.9.0)(openai@5.8.2(ws@8.18.2(bufferutil@4.0.8)(utf-8-validate@6.0.4))(zod@3.25.49)))(react@19.0.0)':
+  '@langchain/langgraph-sdk@0.0.88(@langchain/core@0.3.61(@opentelemetry/api@1.9.0)(openai@5.10.1(ws@8.18.2(bufferutil@4.0.8)(utf-8-validate@6.0.4))(zod@3.25.49)))(react@19.0.0)':
     dependencies:
       '@types/json-schema': 7.0.15
       p-queue: 6.6.2
       p-retry: 4.6.2
       uuid: 9.0.1
     optionalDependencies:
-      '@langchain/core': 0.3.61(@opentelemetry/api@1.9.0)(openai@5.8.2(ws@8.18.2(bufferutil@4.0.8)(utf-8-validate@6.0.4))(zod@3.25.49))
+      '@langchain/core': 0.3.61(@opentelemetry/api@1.9.0)(openai@5.10.1(ws@8.18.2(bufferutil@4.0.8)(utf-8-validate@6.0.4))(zod@3.25.49))
       react: 19.0.0
 
-  '@langchain/langgraph@0.3.6(@langchain/core@0.3.61(@opentelemetry/api@1.9.0)(openai@5.8.2(ws@8.18.2(bufferutil@4.0.8)(utf-8-validate@6.0.4))(zod@3.25.49)))(react@19.0.0)(zod-to-json-schema@3.24.6(zod@3.25.49))':
+  '@langchain/langgraph@0.3.6(@langchain/core@0.3.61(@opentelemetry/api@1.9.0)(openai@5.10.1(ws@8.18.2(bufferutil@4.0.8)(utf-8-validate@6.0.4))(zod@3.25.49)))(react@19.0.0)(zod-to-json-schema@3.24.6(zod@3.25.49))':
     dependencies:
-      '@langchain/core': 0.3.61(@opentelemetry/api@1.9.0)(openai@5.8.2(ws@8.18.2(bufferutil@4.0.8)(utf-8-validate@6.0.4))(zod@3.25.49))
-      '@langchain/langgraph-checkpoint': 0.0.18(@langchain/core@0.3.61(@opentelemetry/api@1.9.0)(openai@5.8.2(ws@8.18.2(bufferutil@4.0.8)(utf-8-validate@6.0.4))(zod@3.25.49)))
-      '@langchain/langgraph-sdk': 0.0.88(@langchain/core@0.3.61(@opentelemetry/api@1.9.0)(openai@5.8.2(ws@8.18.2(bufferutil@4.0.8)(utf-8-validate@6.0.4))(zod@3.25.49)))(react@19.0.0)
+      '@langchain/core': 0.3.61(@opentelemetry/api@1.9.0)(openai@5.10.1(ws@8.18.2(bufferutil@4.0.8)(utf-8-validate@6.0.4))(zod@3.25.49))
+      '@langchain/langgraph-checkpoint': 0.0.18(@langchain/core@0.3.61(@opentelemetry/api@1.9.0)(openai@5.10.1(ws@8.18.2(bufferutil@4.0.8)(utf-8-validate@6.0.4))(zod@3.25.49)))
+      '@langchain/langgraph-sdk': 0.0.88(@langchain/core@0.3.61(@opentelemetry/api@1.9.0)(openai@5.10.1(ws@8.18.2(bufferutil@4.0.8)(utf-8-validate@6.0.4))(zod@3.25.49)))(react@19.0.0)
       uuid: 10.0.0
       zod: 3.25.49
     optionalDependencies:
@@ -10007,9 +10022,9 @@ snapshots:
     transitivePeerDependencies:
       - react
 
-  '@langchain/openai@0.5.16(@langchain/core@0.3.61(@opentelemetry/api@1.9.0)(openai@5.8.2(ws@8.18.2(bufferutil@4.0.8)(utf-8-validate@6.0.4))(zod@3.25.49)))(ws@8.18.2(bufferutil@4.0.8)(utf-8-validate@6.0.4))':
+  '@langchain/openai@0.5.16(@langchain/core@0.3.61(@opentelemetry/api@1.9.0)(openai@5.10.1(ws@8.18.2(bufferutil@4.0.8)(utf-8-validate@6.0.4))(zod@3.25.49)))(ws@8.18.2(bufferutil@4.0.8)(utf-8-validate@6.0.4))':
     dependencies:
-      '@langchain/core': 0.3.61(@opentelemetry/api@1.9.0)(openai@5.8.2(ws@8.18.2(bufferutil@4.0.8)(utf-8-validate@6.0.4))(zod@3.25.49))
+      '@langchain/core': 0.3.61(@opentelemetry/api@1.9.0)(openai@5.10.1(ws@8.18.2(bufferutil@4.0.8)(utf-8-validate@6.0.4))(zod@3.25.49))
       js-tiktoken: 1.0.20
       openai: 5.8.2(ws@8.18.2(bufferutil@4.0.8)(utf-8-validate@6.0.4))(zod@3.25.49)
       zod: 3.25.49
@@ -14086,7 +14101,7 @@ snapshots:
 
   lan-network@0.1.7: {}
 
-  langsmith@0.3.37(@opentelemetry/api@1.9.0)(openai@5.8.2(ws@8.18.2(bufferutil@4.0.8)(utf-8-validate@6.0.4))(zod@3.25.49)):
+  langsmith@0.3.37(@opentelemetry/api@1.9.0)(openai@5.10.1(ws@8.18.2(bufferutil@4.0.8)(utf-8-validate@6.0.4))(zod@3.25.49)):
     dependencies:
       '@types/uuid': 10.0.0
       chalk: 4.1.2
@@ -14097,7 +14112,7 @@ snapshots:
       uuid: 10.0.0
     optionalDependencies:
       '@opentelemetry/api': 1.9.0
-      openai: 5.8.2(ws@8.18.2(bufferutil@4.0.8)(utf-8-validate@6.0.4))(zod@3.25.49)
+      openai: 5.10.1(ws@8.18.2(bufferutil@4.0.8)(utf-8-validate@6.0.4))(zod@3.25.49)
 
   language-subtag-registry@0.3.23: {}
 
@@ -14763,6 +14778,11 @@ snapshots:
       define-lazy-prop: 2.0.0
       is-docker: 2.2.1
       is-wsl: 2.2.0
+
+  openai@5.10.1(ws@8.18.2(bufferutil@4.0.8)(utf-8-validate@6.0.4))(zod@3.25.49):
+    optionalDependencies:
+      ws: 8.18.2(bufferutil@4.0.8)(utf-8-validate@6.0.4)
+      zod: 3.25.49
 
   openai@5.8.2(ws@8.18.2(bufferutil@4.0.8)(utf-8-validate@6.0.4))(zod@3.25.49):
     optionalDependencies:

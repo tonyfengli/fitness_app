@@ -7,6 +7,7 @@ import { SMSIntentRouter } from "./intent-router";
 import { CheckInHandler } from "./handlers/check-in-handler";
 import { PreferenceHandler } from "./handlers/preference-handler";
 import { DisambiguationHandler } from "./handlers/disambiguation-handler";
+import { PreferenceUpdateHandler } from "./handlers/preference-update-handler";
 import { DefaultHandler } from "./handlers/default-handler";
 import { SMSResponseSender } from "./response-sender";
 import { TwilioSMSPayload, SMSResponse } from "./types";
@@ -19,6 +20,7 @@ export class SMSWebhookHandler {
   private checkInHandler: CheckInHandler;
   private preferenceHandler: PreferenceHandler;
   private disambiguationHandler: DisambiguationHandler;
+  private preferenceUpdateHandler: PreferenceUpdateHandler;
   private defaultHandler: DefaultHandler;
   private responseSender: SMSResponseSender;
 
@@ -28,6 +30,7 @@ export class SMSWebhookHandler {
     this.checkInHandler = new CheckInHandler();
     this.preferenceHandler = new PreferenceHandler();
     this.disambiguationHandler = new DisambiguationHandler();
+    this.preferenceUpdateHandler = new PreferenceUpdateHandler();
     this.defaultHandler = new DefaultHandler();
     this.responseSender = new SMSResponseSender();
   }
@@ -101,6 +104,16 @@ export class SMSWebhookHandler {
       );
       
       if (preferenceCheck.waiting) {
+        // Check if in active mode (can update preferences)
+        if (preferenceCheck.currentStep === "preferences_active") {
+          return await this.preferenceUpdateHandler.handle(
+            payload.From,
+            payload.Body,
+            payload.MessageSid
+          );
+        }
+        
+        // Otherwise handle normal preference collection flow
         return await this.preferenceHandler.handle(
           payload.From,
           payload.Body,

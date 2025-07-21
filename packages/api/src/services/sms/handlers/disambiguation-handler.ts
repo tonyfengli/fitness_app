@@ -9,17 +9,64 @@ const logger = createLogger("DisambiguationHandler");
 
 export class DisambiguationHandler {
   /**
-   * Check if a message is a disambiguation response (numbers only)
+   * Generate a clarification message based on the error type
    */
-  static isDisambiguationResponse(message: string): { isValid: boolean; selections?: number[] } {
-    // Match patterns like "1", "1,3", "1, 2, 4", "1 3 5", "1 and 2", "1, 2 and 3"
+  static generateClarificationMessage(
+    errorType: 'mixed_content' | 'no_numbers' | 'invalid_format',
+    maxOption: number
+  ): string {
+    switch (errorType) {
+      case 'mixed_content':
+        return maxOption === 1 
+          ? "I just need the number '1' to confirm your choice."
+          : `I just need the numbers (1-${maxOption}). For example: "1" or "1,3"`;
+      
+      case 'no_numbers':
+        return maxOption === 1
+          ? "Please reply with '1' to select that exercise."
+          : `Please reply with just the numbers of your choices (1-${maxOption}). For example: "2" or "1,3"`;
+      
+      case 'invalid_format':
+        return `Please use only numbers separated by commas. For example: "1" or "2,4" (choose from 1-${maxOption})`;
+      
+      default:
+        return `Please reply with numbers only (1-${maxOption})`;
+    }
+  }
+  /**
+   * Check if a message is a disambiguation response (numbers only)
+   * Returns detailed error information for clarification responses
+   */
+  static isDisambiguationResponse(message: string): { 
+    isValid: boolean; 
+    selections?: number[]; 
+    errorType?: 'mixed_content' | 'no_numbers' | 'invalid_format';
+    errorDetail?: string;
+  } {
     const cleaned = message.trim().toLowerCase();
+    
+    // Check for common mixed content patterns
+    if (/\b(yes|no|maybe|ok|sure|thanks|please|want|need|like|don't|dont)\b/i.test(message)) {
+      return { 
+        isValid: false, 
+        errorType: 'mixed_content',
+        errorDetail: 'Message contains words instead of just numbers'
+      };
+    }
     
     // Check if message contains only numbers, commas, spaces, and connecting words
     const validPattern = /^[\d\s,]+(\s+(and|&)\s+[\d\s,]+)*$/;
     
     if (!validPattern.test(cleaned)) {
-      return { isValid: false };
+      // Check if there are any numbers at all
+      const hasNumbers = /\d/.test(cleaned);
+      return { 
+        isValid: false,
+        errorType: hasNumbers ? 'invalid_format' : 'no_numbers',
+        errorDetail: hasNumbers ? 
+          'Message contains numbers but also other text' : 
+          'Message contains no numbers'
+      };
     }
 
     // Extract all numbers from the message
@@ -28,8 +75,16 @@ export class DisambiguationHandler {
       ?.map(n => parseInt(n))
       .filter(n => !isNaN(n) && n > 0) || [];
 
+    if (numbers.length === 0) {
+      return {
+        isValid: false,
+        errorType: 'no_numbers',
+        errorDetail: 'No valid numbers found'
+      };
+    }
+
     return {
-      isValid: numbers.length > 0,
+      isValid: true,
       selections: numbers
     };
   }
@@ -49,17 +104,7 @@ export class DisambiguationHandler {
         };
       }
 
-      // Parse the number selections
-      const { selections } = DisambiguationHandler.isDisambiguationResponse(messageContent);
-      if (!selections || selections.length === 0) {
-        return {
-          success: false,
-          message: "Please reply with numbers only (e.g., '1' or '1,3')",
-          metadata: { reason: "invalid_format" }
-        };
-      }
-
-      // Get pending disambiguation
+      // Get pending disambiguation first to check clarification attempts
       const pending = await ConversationStateService.getPendingDisambiguation(
         userInfo.userId,
         userInfo.trainingSessionId!
@@ -72,6 +117,85 @@ export class DisambiguationHandler {
           metadata: { reason: "no_pending_disambiguation" }
         };
       }
+
+      // Parse the number selections with error details
+      const parseResult = DisambiguationHandler.isDisambiguationResponse(messageContent);
+      
+      if (!parseResult.isValid) {
+        // Check if we've already attempted clarification
+        const clarificationAttempts = (pending.state?.metadata?.clarificationAttempts || 0) as number;
+        
+        if (clarificationAttempts >= 1) {
+          // Skip to follow-up after one failed clarification
+          logger.info("Skipping to follow-up after clarification failure", {
+            userId: userInfo.userId,
+            attempts: clarificationAttempts + 1
+          });
+          
+          // Update preference state to skip disambiguation
+          await WorkoutPreferenceService.savePreferences(
+            userInfo.userId,
+            userInfo.trainingSessionId!,
+            userInfo.businessId,
+            {},
+            "disambiguation_clarifying"
+          );
+          
+          // Generate targeted follow-up
+          const { TargetedFollowupService } = await import("../../targetedFollowupService");
+          const currentPrefs = await WorkoutPreferenceService.getPreferences(
+            userInfo.trainingSessionId!
+          );
+          
+          const followupResult = await TargetedFollowupService.generateFollowup(
+            "disambiguation_clarifying",
+            currentPrefs || {}
+          );
+          
+          // Update to followup_sent state
+          await WorkoutPreferenceService.savePreferences(
+            userInfo.userId,
+            userInfo.trainingSessionId!,
+            userInfo.businessId,
+            {},
+            "followup_sent"
+          );
+          
+          return {
+            success: true,
+            message: `I'll note that for your workout. ${followupResult.followupQuestion}`,
+            metadata: {
+              skippedDisambiguation: true,
+              clarificationAttempts: clarificationAttempts + 1,
+              nextStep: "followup_sent"
+            }
+          };
+        }
+        
+        // First clarification attempt - update attempts count
+        await ConversationStateService.updateDisambiguationAttempts(
+          pending.id,
+          clarificationAttempts + 1
+        );
+        
+        // Generate clarification message based on error type
+        const clarificationMessage = DisambiguationHandler.generateClarificationMessage(
+          parseResult.errorType!,
+          pending.options.length
+        );
+        
+        return {
+          success: false,
+          message: clarificationMessage,
+          metadata: { 
+            reason: "clarification_needed",
+            errorType: parseResult.errorType,
+            clarificationAttempt: clarificationAttempts + 1
+          }
+        };
+      }
+      
+      const selections = parseResult.selections!;
 
       // Validate selections are within range
       const maxOption = pending.options.length;
@@ -90,15 +214,46 @@ export class DisambiguationHandler {
         selections
       );
 
-      // Save the selected exercises to preferences
+      // Get existing preferences to merge with
+      const existingPrefs = await WorkoutPreferenceService.getPreferences(
+        userInfo.trainingSessionId!
+      );
+      
+      // Merge selected exercises with existing preferences
+      const mergedIncludeExercises = [
+        ...(existingPrefs?.includeExercises || []),
+        ...selectedExercises.map(ex => ex.name)
+      ];
+      
+      // Save the merged preferences
       await WorkoutPreferenceService.savePreferences(
         userInfo.userId,
         userInfo.trainingSessionId!,
         userInfo.businessId,
         {
-          includeExercises: selectedExercises.map(ex => ex.name)
+          ...existingPrefs,
+          includeExercises: mergedIncludeExercises
         },
         "disambiguation_resolved"
+      );
+      
+      // Generate targeted follow-up question with merged preferences
+      const { TargetedFollowupService } = await import("../../targetedFollowupService");
+      const followupResult = await TargetedFollowupService.generateFollowup(
+        "disambiguation_resolved",
+        {
+          ...existingPrefs,
+          includeExercises: mergedIncludeExercises
+        }
+      );
+      
+      // Update state to followup_sent
+      await WorkoutPreferenceService.savePreferences(
+        userInfo.userId,
+        userInfo.trainingSessionId!,
+        userInfo.businessId,
+        {},
+        "followup_sent"
       );
 
       // Save messages
@@ -112,14 +267,17 @@ export class DisambiguationHandler {
       );
 
       const exerciseNames = selectedExercises.map(ex => ex.name).join(", ");
-      const response = selectedExercises.length === 1
-        ? `Perfect! I'll make sure to include ${exerciseNames} in your workout.`
-        : `Perfect! I'll make sure to include these exercises in your workout: ${exerciseNames}`;
+      const confirmationPrefix = selectedExercises.length === 1
+        ? `Perfect! I'll include ${exerciseNames}. `
+        : `Perfect! I'll include ${exerciseNames}. `;
+      
+      const response = confirmationPrefix + followupResult.followupQuestion;
 
-      logger.info("Disambiguation completed", {
+      logger.info("Disambiguation completed with follow-up", {
         userId: userInfo.userId,
         selectedCount: selectedExercises.length,
-        exercises: exerciseNames
+        exercises: exerciseNames,
+        followupFieldsAsked: followupResult.fieldsAsked
       });
 
       return {
@@ -128,7 +286,8 @@ export class DisambiguationHandler {
         metadata: {
           userId: userInfo.userId,
           businessId: userInfo.businessId,
-          selectedExercises: exerciseNames
+          selectedExercises: exerciseNames,
+          nextStep: "followup_sent"
         }
       };
     } catch (error) {

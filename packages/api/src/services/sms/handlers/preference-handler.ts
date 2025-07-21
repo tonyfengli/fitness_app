@@ -6,6 +6,8 @@ import { ExerciseValidationService } from "../../exerciseValidationService";
 import { ConversationStateService } from "../../conversationStateService";
 import { createLogger } from "../../../utils/logger";
 import { sessionTestDataLogger } from "../../../utils/sessionTestDataLogger";
+import { TargetedFollowupService } from "../../targetedFollowupService";
+import { PreferenceStateManager } from "../../../utils/preferenceStateManager";
 import { SMSResponse } from "../types";
 
 const logger = createLogger("PreferenceHandler");
@@ -51,6 +53,74 @@ export class PreferenceHandler {
         parseTime
       });
 
+      // Get existing preferences if available
+      let existingPrefs: any = null;
+      if (preferenceCheck.currentStep === "followup_sent") {
+        existingPrefs = await WorkoutPreferenceService.getPreferences(preferenceCheck.trainingSessionId!);
+      }
+      
+      // If this is a follow-up response, merge with existing preferences
+      let mergedPreferences: any;
+      if (preferenceCheck.currentStep === "followup_sent") {
+        if (existingPrefs) {
+          logger.info("Merging follow-up preferences with existing", {
+            existing: existingPrefs,
+            new: parsedPreferences
+          });
+          
+          // Merge preferences, keeping existing values when new ones are empty/undefined
+          mergedPreferences = {
+            // Only update intensity if explicitly provided (not undefined)
+            intensity: parsedPreferences.intensity !== undefined 
+              ? parsedPreferences.intensity 
+              : existingPrefs.intensity,
+            intensitySource: parsedPreferences.intensity !== undefined
+              ? 'explicit'
+              : 'inherited', // If not mentioned in follow-up, it's inherited
+            muscleTargets: (parsedPreferences.muscleTargets && parsedPreferences.muscleTargets.length > 0) 
+              ? [...(existingPrefs.muscleTargets || []), ...parsedPreferences.muscleTargets]
+              : existingPrefs.muscleTargets,
+            muscleLessens: (parsedPreferences.muscleLessens && parsedPreferences.muscleLessens.length > 0)
+              ? [...(existingPrefs.muscleLessens || []), ...parsedPreferences.muscleLessens]
+              : existingPrefs.muscleLessens,
+            includeExercises: (parsedPreferences.includeExercises && parsedPreferences.includeExercises.length > 0)
+              ? [...(existingPrefs.includeExercises || []), ...parsedPreferences.includeExercises]
+              : existingPrefs.includeExercises,
+            avoidExercises: (parsedPreferences.avoidExercises && parsedPreferences.avoidExercises.length > 0)
+              ? [...(existingPrefs.avoidExercises || []), ...parsedPreferences.avoidExercises]
+              : existingPrefs.avoidExercises,
+            avoidJoints: (parsedPreferences.avoidJoints && parsedPreferences.avoidJoints.length > 0)
+              ? [...(existingPrefs.avoidJoints || []), ...parsedPreferences.avoidJoints]
+              : existingPrefs.avoidJoints,
+            // Only update sessionGoal if explicitly provided (not undefined)
+            sessionGoal: parsedPreferences.sessionGoal !== undefined 
+              ? parsedPreferences.sessionGoal 
+              : existingPrefs.sessionGoal,
+            sessionGoalSource: parsedPreferences.sessionGoal !== undefined
+              ? 'explicit'
+              : 'inherited', // If not mentioned in follow-up, it's inherited
+            needsFollowUp: false, // We're resolving the follow-up
+            systemPromptUsed: parsedPreferences.systemPromptUsed,
+            rawLLMResponse: parsedPreferences.rawLLMResponse,
+            debugInfo: parsedPreferences.debugInfo
+          };
+        } else {
+          // No existing preferences in follow-up, use parsed with defaults
+          mergedPreferences = {
+            ...parsedPreferences,
+            intensitySource: parsedPreferences.intensity !== undefined ? 'explicit' : 'default',
+            sessionGoalSource: parsedPreferences.sessionGoal !== undefined ? 'explicit' : 'default'
+          };
+        }
+      } else {
+        // Initial preferences - add source tracking
+        mergedPreferences = {
+          ...parsedPreferences,
+          intensitySource: parsedPreferences.intensity !== undefined ? 'explicit' : 'default',
+          sessionGoalSource: parsedPreferences.sessionGoal !== undefined ? 'explicit' : 'default'
+        };
+      }
+
       // Log LLM call for preference parsing
       if (sessionTestDataLogger.isEnabled()) {
         sessionTestDataLogger.logLLMCall(preferenceCheck.trainingSessionId!, {
@@ -70,46 +140,72 @@ export class PreferenceHandler {
         preferenceCheck.userId!,
         preferenceCheck.trainingSessionId!,
         preferenceCheck.businessId!,
-        parsedPreferences
+        mergedPreferences
       ).catch(error => {
         logger.error("Failed to save simple preferences (non-blocking)", error);
       });
 
-      // Validate exercises if any were mentioned
-      let validatedPreferences = { ...parsedPreferences };
+      // Validate exercises if any NEW ones were mentioned in the current message
+      let validatedPreferences = { ...mergedPreferences };
       let exerciseValidationInfo: any = {};
       
+      // Only validate NEW exercises from the current message, not previously saved ones
+      const newAvoidExercises = parsedPreferences.avoidExercises || [];
+      const newIncludeExercises = parsedPreferences.includeExercises || [];
       
-      if ((parsedPreferences.avoidExercises?.length ?? 0) > 0 || (parsedPreferences.includeExercises?.length ?? 0) > 0) {
-        logger.info("Starting exercise validation", {
-          avoidExercises: parsedPreferences.avoidExercises,
-          includeExercises: parsedPreferences.includeExercises,
+      // Clear exercise arrays from validatedPreferences if we're going to validate them
+      // to avoid duplicates when merging
+      if (newAvoidExercises.length > 0) {
+        validatedPreferences.avoidExercises = existingPrefs?.avoidExercises || [];
+      }
+      if (newIncludeExercises.length > 0) {
+        validatedPreferences.includeExercises = existingPrefs?.includeExercises || [];
+      }
+      
+      if (newAvoidExercises.length > 0 || newIncludeExercises.length > 0) {
+        logger.info("Starting exercise validation for NEW exercises only", {
+          newAvoidExercises,
+          newIncludeExercises,
           businessId: preferenceCheck.businessId
         });
 
         try {
-          // Validate avoid exercises
-          if (parsedPreferences.avoidExercises?.length) {
+          // Validate NEW avoid exercises only
+          if (newAvoidExercises.length > 0) {
             const avoidValidation = await ExerciseValidationService.validateExercises(
-              parsedPreferences.avoidExercises,
+              newAvoidExercises,
               preferenceCheck.businessId!,
               "avoid",
               preferenceCheck.trainingSessionId
             );
-            validatedPreferences.avoidExercises = avoidValidation.validatedExercises;
+            
+            // Remove any newly avoided exercises from includes
+            const existingIncludes = existingPrefs?.includeExercises || [];
+            const validatedAvoidsLower = avoidValidation.validatedExercises.map((e: string) => e.toLowerCase());
+            const filteredIncludes = existingIncludes.filter(
+              (exercise: string) => !validatedAvoidsLower.includes(exercise.toLowerCase())
+            );
+            
+            // Update both lists
+            validatedPreferences.includeExercises = filteredIncludes;
+            validatedPreferences.avoidExercises = [
+              ...(existingPrefs?.avoidExercises || []),
+              ...avoidValidation.validatedExercises
+            ];
             exerciseValidationInfo.avoidExercises = avoidValidation;
             
-            logger.info("Avoid exercises validation result", {
-              input: parsedPreferences.avoidExercises,
+            logger.info("NEW avoid exercises validation result", {
+              input: newAvoidExercises,
               validated: avoidValidation.validatedExercises,
-              matches: avoidValidation.matches
+              matches: avoidValidation.matches,
+              removedFromIncludes: existingIncludes.length - filteredIncludes.length
             });
           }
 
-          // Validate include exercises
-          if (parsedPreferences.includeExercises?.length) {
+          // Validate NEW include exercises only
+          if (newIncludeExercises.length > 0) {
             const includeValidation = await ExerciseValidationService.validateExercises(
-              parsedPreferences.includeExercises,
+              newIncludeExercises,
               preferenceCheck.businessId!,
               "include",
               preferenceCheck.trainingSessionId
@@ -145,19 +241,27 @@ export class PreferenceHandler {
                 messageSid,
                 messageContent,
                 ambiguousMatches,
-                parsedPreferences,
+                mergedPreferences,
                 parseTime,
                 exerciseValidationInfo
               );
             }
             
-            validatedPreferences.includeExercises = includeValidation.validatedExercises;
+            // Merge validated new exercises with existing ones (or filtered ones if we removed some)
+            const currentIncludes = validatedPreferences.includeExercises !== undefined 
+              ? validatedPreferences.includeExercises 
+              : (existingPrefs?.includeExercises || []);
+            validatedPreferences.includeExercises = [
+              ...currentIncludes,
+              ...includeValidation.validatedExercises
+            ];
             exerciseValidationInfo.includeExercises = includeValidation;
             
-            logger.info("Include exercises validation result", {
-              input: parsedPreferences.includeExercises,
+            logger.info("NEW include exercises validation result", {
+              input: newIncludeExercises,
               validated: includeValidation.validatedExercises,
-              matches: includeValidation.matches
+              matches: includeValidation.matches,
+              finalMerged: validatedPreferences.includeExercises
             });
           }
         } catch (error) {
@@ -167,7 +271,7 @@ export class PreferenceHandler {
       }
 
       // Determine next step and response
-      const { nextStep, response } = this.determineNextStep(
+      const { nextStep, response } = await this.determineNextStep(
         preferenceCheck.currentStep,
         validatedPreferences
       );
@@ -221,7 +325,7 @@ export class PreferenceHandler {
 
       logger.info("Preference response complete", { 
         userId: preferenceCheck.userId,
-        needsFollowUp: parsedPreferences.needsFollowUp,
+        needsFollowUp: mergedPreferences.needsFollowUp,
         nextStep
       });
 
@@ -242,23 +346,35 @@ export class PreferenceHandler {
     }
   }
 
-  private determineNextStep(currentStep: string, parsedPreferences: any) {
+  private async determineNextStep(
+    currentStep: string, 
+    validatedPreferences: any
+  ): Promise<{ nextStep: "initial_collected" | "disambiguation_pending" | "disambiguation_resolved" | "followup_sent" | "preferences_active"; response: string }> {
     let nextStep: "initial_collected" | "disambiguation_pending" | "disambiguation_resolved" | "followup_sent" | "preferences_active";
     let response: string;
     
-    if (currentStep === "not_started") {
-      // First response
-      if (parsedPreferences.needsFollowUp) {
-        nextStep = "initial_collected";
-        response = "Thanks! Can you tell me more about what specific areas you'd like to focus on or avoid today?";
-      } else {
-        nextStep = "followup_sent";
-        response = "Perfect! I've got your preferences and will use them to build your workout. See you in the gym!";
-      }
-    } else {
-      // Follow-up response (from initial_collected)
+    if (currentStep === "not_started" || currentStep === "disambiguation_resolved") {
+      // Generate targeted follow-up question
+      const followupResult = await TargetedFollowupService.generateFollowup(
+        currentStep as any,
+        validatedPreferences
+      );
+      
       nextStep = "followup_sent";
-      response = "Great! I've got all your preferences now. Your workout will be tailored to how you're feeling today. See you in the gym!";
+      response = followupResult.followupQuestion;
+      
+      logger.info("Generated targeted follow-up", {
+        fieldsAsked: followupResult.fieldsAsked,
+        currentStep
+      });
+    } else if (currentStep === "followup_sent") {
+      // They've answered the follow-up
+      nextStep = "preferences_active";
+      response = TargetedFollowupService.generateFinalResponse();
+    } else {
+      // Default response
+      nextStep = "followup_sent";
+      response = "Got it! What's your training focus today, and any specific areas you'd like to work on?";
     }
 
     return { nextStep, response };

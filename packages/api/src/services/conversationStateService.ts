@@ -1,6 +1,6 @@
 import { db } from "@acme/db/client";
 import { conversationState } from "@acme/db/schema";
-import { eq, and, desc } from "@acme/db";
+import { eq, and, desc, sql } from "@acme/db";
 import { createLogger } from "../utils/logger";
 
 const logger = createLogger("ConversationStateService");
@@ -64,6 +64,7 @@ export class ConversationStateService {
     id: string;
     userInput: string;
     options: ExerciseOption[];
+    state: any;
   } | null> {
     try {
       const [pending] = await db
@@ -88,7 +89,8 @@ export class ConversationStateService {
       return {
         id: pending.id,
         userInput: state.userInput,
-        options: state.options || []
+        options: state.options || [],
+        state: pending.state
       };
     } catch (error) {
       logger.error("Error getting pending disambiguation", error);
@@ -144,6 +146,40 @@ export class ConversationStateService {
       return selectedExercises;
     } catch (error) {
       logger.error("Error processing selection", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update the clarification attempts count for a disambiguation
+   */
+  static async updateDisambiguationAttempts(
+    stateId: string,
+    attempts: number
+  ): Promise<void> {
+    try {
+      await db
+        .update(conversationState)
+        .set({
+          state: sql`
+            jsonb_set(
+              jsonb_set(
+                ${conversationState.state},
+                '{metadata}',
+                COALESCE(${conversationState.state}->'metadata', '{}')::jsonb,
+                true
+              ),
+              '{metadata,clarificationAttempts}',
+              ${attempts}::jsonb
+            )
+          `,
+          updatedAt: new Date()
+        })
+        .where(eq(conversationState.id, stateId));
+        
+      logger.info("Updated clarification attempts", { stateId, attempts });
+    } catch (error) {
+      logger.error("Error updating clarification attempts", error);
       throw error;
     }
   }

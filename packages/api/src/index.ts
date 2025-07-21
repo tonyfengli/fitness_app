@@ -32,6 +32,7 @@ export { createLogger } from "./utils/logger";
 export { WorkoutPreferenceService, setPreferenceBroadcastFunction } from "./services/workoutPreferenceService";
 export { ExerciseValidationService } from "./services/exerciseValidationService";
 export { ExerciseMatchingLLMService } from "./services/exerciseMatchingLLMService";
+export { TargetedFollowupService } from "./services/targetedFollowupService";
 
 // Export new SMS handler components
 export { SMSWebhookHandler } from "./services/sms";

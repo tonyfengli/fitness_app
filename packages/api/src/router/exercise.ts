@@ -1,4 +1,5 @@
 import type { TRPCRouterRecord } from "@trpc/server";
+import { TRPCError } from "@trpc/server";
 import { z } from "zod/v4";
 
 import { desc, eq, ilike, and } from "@acme/db";
@@ -201,16 +202,23 @@ export const exerciseRouter = {
       debug: z.boolean().optional(),
     }).optional())
     .query(async ({ ctx, input }) => {
-      const user = ctx.session?.user as SessionUser;
-      const exerciseService = new ExerciseService(ctx.db);
-      const businessId = exerciseService.verifyUserHasBusiness(user);
-      
-      const filterService = new ExerciseFilterService(ctx.db);
-      const result = await filterService.filterExercises(input, {
-        userId: user.id,
-        businessId
-      });
-      return result.exercises;
+      try {
+        const user = ctx.session?.user as SessionUser;
+        const exerciseService = new ExerciseService(ctx.db);
+        const businessId = exerciseService.verifyUserHasBusiness(user);
+        
+        const filterService = new ExerciseFilterService(ctx.db);
+        const result = await filterService.filterExercises(input, {
+          userId: user.id,
+          businessId
+        });
+        return result.exercises;
+      } catch (error) {
+        if (error instanceof TRPCError) {
+          throw error;
+        }
+        throw new Error('Failed to filter exercises');
+      }
     }),
 
   create: protectedProcedure

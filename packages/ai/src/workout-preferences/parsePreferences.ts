@@ -49,7 +49,8 @@ EXTRACTION FIELDS:
    
 2. intensity → Overall intensity level  
    - Valid options: "low", "moderate", "high"
-   - IMPORTANT: Default to "moderate" if no intensity indicators are present
+   - IMPORTANT: Only include intensity if there are clear intensity indicators in the message
+   - DO NOT default to "moderate" - omit the field entirely if no intensity is mentioned
    
 3. muscleTargets → Muscle groups the client EXPLICITLY wants to target
    - Only add when user says things like "let's work legs", "focus on chest", "target glutes"
@@ -102,7 +103,7 @@ Moderate Intensity Indicators:
 - "normal", "regular", "standard", "typical" → intensity="moderate"
 - "decent", "okay", "alright", "fine" → intensity="moderate"
 - Mixed signals (tired + push through) → intensity="moderate"
-- NO intensity indicators mentioned → intensity="moderate" (DEFAULT)
+- NO intensity indicators mentioned → OMIT intensity field entirely (do not default)
 
 High Intensity Indicators:
 - "feeling great", "energized", "pumped", "ready to go" → intensity="high"
@@ -177,7 +178,6 @@ const FEW_SHOT_EXAMPLES = [
     input: "Can we focus on stability today? And let's do some core work.",
     output: {
       sessionGoal: "stability",
-      intensity: "moderate",
       muscleTargets: ["core"],
       muscleLessens: [],
       includeExercises: [],
@@ -189,7 +189,6 @@ const FEW_SHOT_EXAMPLES = [
   {
     input: "Skip burpees today. Also nothing hard on my wrists please.",
     output: {
-      intensity: "moderate",
       avoidExercises: ["burpees"],
       avoidJoints: ["wrists"],
       needsFollowUp: false
@@ -263,7 +262,6 @@ const FEW_SHOT_EXAMPLES = [
   {
     input: "Slight soreness in my hamstrings from Tuesday, so maybe take it easy on legs?",
     output: {
-      intensity: "moderate",
       muscleLessens: ["hamstrings", "legs"],
       needsFollowUp: false
     }
@@ -285,7 +283,6 @@ const FEW_SHOT_EXAMPLES = [
     input: "I'd like to do both deadlifts and squats today",
     output: {
       sessionGoal: null,
-      intensity: "moderate",
       muscleTargets: [],
       muscleLessens: [],
       includeExercises: ["deadlifts", "squats"],

@@ -151,6 +151,10 @@ export const WorkoutPreferences = pgTable("workout_preferences", (t) => ({
   // Session goal
   sessionGoal: t.text(), // 'strength', 'stability', etc.
   
+  // Source tracking for fields (to differentiate explicit, default, inherited)
+  intensitySource: t.text().default('default'), // 'explicit', 'default', 'inherited'
+  sessionGoalSource: t.text().default('default'), // 'explicit', 'default', 'inherited'
+  
   // Collection metadata
   collectedAt: t.timestamp().defaultNow().notNull(),
   collectionMethod: t.text().notNull().default('sms'), // 'sms', 'web', 'manual'
@@ -170,6 +174,8 @@ export const CreateWorkoutPreferencesSchema = createInsertSchema(WorkoutPreferen
   avoidExercises: z.array(z.string()).optional(),
   avoidJoints: z.array(z.string()).optional(),
   sessionGoal: z.string().optional(),
+  intensitySource: z.enum(["explicit", "default", "inherited"]).default("default"),
+  sessionGoalSource: z.enum(["explicit", "default", "inherited"]).default("default"),
   collectionMethod: z.enum(["sms", "web", "manual"]).default("sms"),
 }).omit({
   id: true,

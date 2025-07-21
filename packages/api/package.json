@@ -27,6 +27,7 @@
     "@acme/db": "workspace:*",
     "@acme/validators": "workspace:*",
     "@trpc/server": "catalog:",
+    "openai": "^5.10.1",
     "superjson": "2.2.2",
     "twilio": "^5.7.3",
     "zod": "catalog:"

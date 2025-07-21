@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { SMSWebhookHandler } from '../../../src/services/sms/webhook-handler';
 import { setBroadcastFunction, getUserByPhone } from '../../../src/services/checkInService';
 import { WorkoutPreferenceService } from '../../../src/services/workoutPreferenceService';
+import { TargetedFollowupService } from '../../../src/services/targetedFollowupService';
 
 // Mock dependencies
 vi.mock('../../../src/services/checkInService', () => ({
@@ -37,6 +38,17 @@ vi.mock('../../../src/services/exerciseValidationService', () => ({
       validatedExercises: [],
       matches: [],
     }),
+  },
+}));
+
+vi.mock('../../../src/services/targetedFollowupService', () => ({
+  TargetedFollowupService: {
+    generateFollowup: vi.fn().mockResolvedValue({
+      followupQuestion: 'What muscle groups would you like to focus on today?',
+      fieldsAsked: ['muscleTargets']
+    }),
+    generateFinalResponse: vi.fn().mockReturnValue('Great, thank you for that. If you have anything else to add, let me know.'),
+    generateUpdateResponse: vi.fn().mockReturnValue('Updated your preferences. Let me know if you need any other changes.')
   },
 }));
 
@@ -162,7 +174,14 @@ describe('SMSWebhookHandler', () => {
       const { parseWorkoutPreferences } = await import('@acme/ai');
       vi.mocked(parseWorkoutPreferences).mockResolvedValue({
         intensity: 'medium',
-        needsFollowUp: false,
+        needsFollowUp: true,  // Changed to true to trigger followup flow
+      });
+      
+      // Ensure TargetedFollowupService mock is set up
+      const { TargetedFollowupService } = await import('../../../src/services/targetedFollowupService');
+      vi.mocked(TargetedFollowupService.generateFollowup).mockResolvedValue({
+        followupQuestion: 'What muscle groups would you like to focus on today?',
+        fieldsAsked: ['muscleTargets']
       });
 
       const request = new Request('http://localhost/api/sms/inbound', {
