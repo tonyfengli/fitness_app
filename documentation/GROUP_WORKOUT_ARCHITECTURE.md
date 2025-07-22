@@ -113,56 +113,68 @@ LLM will handle distribution during Phase 5
 ### Phase 4: Template Organization (Enhanced)
 ```
 Input: 
-- GroupExercisePool per block
+- GroupExercisePool per block (from Phase 2.5)
 - Individual ScoredExercise[] per client
 - GroupCohesionSettings
+- ClientGroupSettings
 
 Process:
 ┌─────────────────────────────────────────────────────────┐
-│                  Block Planning                         │
+│              Block Blueprint Creation                   │
 │                                                         │
-│  Block A (70% shared):                                 │
-│  ├─ Select 2-3 from GroupExercisePool                  │
-│  └─ Track which clients get which exercises            │
+│  For Each Block:                                       │
+│  1. Calculate slot allocation:                         │
+│     - targetShared = floor(maxExercises * sharedRatio) │
+│     - actualShared = min(targetShared, qualityShared)  │
+│     - individualSlots = maxExercises - actualShared    │
 │                                                         │
-│  Block B (50% shared):                                 │
-│  ├─ Select 1-2 from GroupExercisePool                  │
-│  └─ Reserve slots for individual exercises             │
+│  2. Prepare shared candidates:                         │
+│     - Filter exercises with 2+ clients                 │
+│     - Include top N by group score                     │
+│     - Calculate possible sub-groupings                 │
 │                                                         │
-│  Block C (30% shared):                                 │
-│  ├─ Mostly individual selections                       │
-│  └─ Optional 1 shared exercise                         │
+│  3. Prepare individual candidates:                     │
+│     - For each client's remaining slots                │
+│     - Include their top-scored exercises               │
+│     - Exclude already assigned shared exercises        │
 │                                                         │
-│  Block D (100% shared):                                │
-│  └─ Must find exercises ALL clients can do             │
+│  4. Track cohesion satisfaction per client            │
 └─────────────────────────────────────────────────────────┘
 
-Output: BlockPlan with shared/individual exercise slots
+Output: GroupBlockBlueprint[] with structure and candidates
 ```
 
 ### Phase 5: LLM Workout Generation (Hybrid Approach)
 ```
-Input: BlockPlan with exercise candidates
+Input: GroupBlockBlueprint[] from Phase 4
 
 Process:
 ┌─────────────────────────────────────────────────────────┐
 │                  LLM Call Strategy                      │
 │                                                         │
 │  Step 1: Shared Group Call                             │
-│  ├─ Input: GroupExercisePool, BlockPlan                │
-│  ├─ Task: Select shared exercises                      │
-│  └─ Output: SharedExerciseAssignments                  │
+│  ├─ Input: All block blueprints with:                  │
+│  │   - Shared candidate exercises                      │
+│  │   - Possible sub-groupings                          │
+│  │   - Client cohesion targets                         │
+│  ├─ Task: Select which exercises from candidates       │
+│  │   - Assign clients to sub-groups                    │
+│  │   - Balance across blocks                           │
+│  └─ Output: SharedExerciseSelections                   │
 │                                                         │
-│  Step 2: Parallel Individual Calls                     │
-│  ├─ Input: SharedAssignments + Individual pools        │
-│  ├─ Task: Fill remaining slots                         │
+│  Step 2: Parallel Individual Calls (N clients)         │
+│  ├─ Input for each client:                             │
+│  │   - Their assigned shared exercises                 │
+│  │   - Their individual slot candidates                │
+│  │   - Number of slots to fill per block               │
+│  ├─ Task: Select individual exercises                  │
 │  └─ Output: CompleteWorkout per client                 │
 │                                                         │
 │  Step 3: Final Assembly                                │
 │  └─ Merge shared + individual into GroupWorkout        │
 └─────────────────────────────────────────────────────────┘
 
-Output: GroupWorkout with per-client variations
+Output: GroupWorkout with per-client variations and sub-groups
 ```
 
 ## Data Structure Flow
@@ -191,10 +203,12 @@ GroupContext
 └───────────────────────────┘
     ↓
 ┌───────────────────────────┐
-│ Phase 4: Block Planning   │
+│ Phase 4: Block Blueprint  │
 │ ┌─────────────────────┐  │
-│ │  Shared: [Ex1, Ex2] │  │
-│ │  Individual: [...]   │  │
+│ │  Blueprint:          │  │
+│ │  - Slot allocations  │  │
+│ │  - Candidates lists  │  │
+│ │  - Sub-group options │  │
 │ └─────────────────────┘  │
 └───────────────────────────┘
     ↓
@@ -283,7 +297,83 @@ interface GroupScoredExercise extends ScoredExercise {
 }
 ```
 
-### 4. Database Considerations
+### 5. Phase B Types (Blueprint Structure)
+
+```typescript
+// Main output from Phase 4
+interface GroupWorkoutBlueprint {
+  blocks: GroupBlockBlueprint[];
+  clientCohesionTracking: ClientCohesionTracking[];
+  validationWarnings?: string[];
+}
+
+// Blueprint for each block
+interface GroupBlockBlueprint {
+  blockId: string;
+  blockConfig: BlockConfig;
+  
+  // Slot allocation
+  slots: {
+    total: number;
+    targetShared: number;
+    actualSharedAvailable: number;
+    individualPerClient: number;
+  };
+  
+  // Candidates for LLM selection
+  sharedCandidates: {
+    exercises: GroupScoredExercise[];
+    minClientsRequired: number;
+    subGroupPossibilities: SubGroupPossibility[];
+  };
+  
+  individualCandidates: {
+    [clientId: string]: {
+      exercises: ScoredExercise[];
+      slotsToFill: number;
+    };
+  };
+  
+  // Cohesion state after this block
+  cohesionSnapshot: ClientCohesionTracking[];
+}
+
+// Tracks client cohesion satisfaction
+interface ClientCohesionTracking {
+  clientId: string;
+  cohesionRatio: number;
+  totalExercisesInWorkout: number;
+  targetSharedExercises: number;
+  currentSharedSlots: number;
+  remainingSharedNeeded: number;
+  satisfactionStatus: 'on_track' | 'needs_more' | 'satisfied' | 'over';
+}
+
+// Sub-group possibilities for shared exercises
+interface SubGroupPossibility {
+  exerciseId: string;
+  clientIds: string[];
+  groupSize: number;
+}
+```
+
+### 6. Phase B Decision Summary
+
+**Cohesion Enforcement**
+- ✅ Enforced across entire workout (not per block)
+- ✅ Mandatory shared exercises (enforceShared: true) don't count against preference ratio
+
+**Slot Allocation**
+- ✅ Flexible based on quality: actualShared = min(target, available)
+- ✅ Quality threshold: 2+ clients minimum
+- ✅ Individual slots = total - actualShared
+
+**Edge Cases**
+- ✅ No shared candidates: Report 0, let LLM adapt
+- ✅ Block conflicts: Block settings override client preferences
+- ✅ Sub-groups: Track for equipment/timing coordination
+
+### 7. Database Considerations
 ```sql
 -- Option 1: Extend existing workout table
 ALTER TABLE workout ADD COLUMN group_workout_id UUID;
@@ -325,8 +415,21 @@ CREATE TABLE group_workout_member (
 
 ### Phase B: Block Planning (NEXT)
 1. Enhance Phase 4 with group constraints
+   - Create separate GroupWorkoutTemplateHandler (composition pattern)
+   - Use group scores for all selections (already includes overlap + quality)
+   - Track sub-groups for equipment/timing coordination
+   
 2. Create shared/individual slot allocation
+   - Flexible: actualShared = min(targetShared, qualityAvailable)
+   - Quality threshold: 2+ clients minimum for shared
+   - Remaining slots cascade to individual assignments
+   - Sub-group tracking for trainer visibility
+   
 3. Add cohesion ratio enforcement
+   - Enforce across entire workout (not per block)
+   - Track progress: target, current, remaining needed
+   - Block settings override when enforceShared = true
+   - Pass targets and status to LLM for decisions
 
 ### Phase C: LLM Integration
 1. Build hybrid LLM strategy
