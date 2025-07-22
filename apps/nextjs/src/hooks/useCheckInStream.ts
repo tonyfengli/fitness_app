@@ -43,6 +43,7 @@ export function useCheckInStream({
   const [error, setError] = useState<Error | null>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout>();
+  const connectionTimeoutRef = useRef<NodeJS.Timeout>();
   const reconnectAttemptsRef = useRef(0);
 
   const connect = useCallback(() => {
@@ -59,7 +60,23 @@ export function useCheckInStream({
         `/api/sse/check-ins?sessionId=${sessionId}`
       );
 
+      // Set a timeout for initial connection
+      connectionTimeoutRef.current = setTimeout(() => {
+        console.log('SSE connection timeout, closing');
+        eventSource.close();
+        if (eventSourceRef.current === eventSource) {
+          eventSourceRef.current = null;
+          setIsConnected(false);
+          setError(new Error('Connection timeout'));
+        }
+      }, 10000); // 10 second timeout
+
       eventSource.onopen = () => {
+        // Clear the connection timeout
+        if (connectionTimeoutRef.current) {
+          clearTimeout(connectionTimeoutRef.current);
+          connectionTimeoutRef.current = undefined;
+        }
         setIsConnected(true);
         setIsReconnecting(false);
         reconnectAttemptsRef.current = 0;
@@ -82,13 +99,27 @@ export function useCheckInStream({
       });
 
       eventSource.onerror = (error) => {
+        console.log('SSE error, closing connection');
+        
+        // Clear connection timeout
+        if (connectionTimeoutRef.current) {
+          clearTimeout(connectionTimeoutRef.current);
+          connectionTimeoutRef.current = undefined;
+        }
+        
+        eventSource.close();
         setIsConnected(false);
         eventSourceRef.current = null;
 
+        // Don't reconnect if component is unmounting
+        if (reconnectTimeoutRef.current === undefined) {
+          return;
+        }
+
         // Implement exponential backoff for reconnection
         const attempt = reconnectAttemptsRef.current;
-        if (attempt < 5) {
-          const delay = Math.min(1000 * Math.pow(2, attempt), 30000);
+        if (attempt < 3) { // Reduced from 5 to 3 attempts
+          const delay = Math.min(1000 * Math.pow(2, attempt), 10000); // Max 10 seconds
           setIsReconnecting(true);
           
           reconnectTimeoutRef.current = setTimeout(() => {
@@ -96,7 +127,7 @@ export function useCheckInStream({
             connect();
           }, delay);
         } else {
-          const err = new Error("Failed to connect after 5 attempts");
+          const err = new Error("Failed to connect after 3 attempts");
           setError(err);
           onError?.(err);
         }
@@ -113,8 +144,15 @@ export function useCheckInStream({
   }, [sessionId, onCheckIn, onPreferenceUpdate, onConnect, onDisconnect, onError]);
 
   const disconnect = useCallback(() => {
+    // Clear all timeouts first to prevent new connections
     if (reconnectTimeoutRef.current) {
       clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = undefined; // Mark as unmounting
+    }
+    
+    if (connectionTimeoutRef.current) {
+      clearTimeout(connectionTimeoutRef.current);
+      connectionTimeoutRef.current = undefined;
     }
     
     if (eventSourceRef.current) {

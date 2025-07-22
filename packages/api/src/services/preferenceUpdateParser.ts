@@ -77,8 +77,14 @@ export class PreferenceUpdateParser {
     // Check if this is a replacement scenario (contains "instead")
     const isReplacement = /\binstead\b/i.test(message);
     
+    // Skip exercise parsing if this is purely a session goal update
+    const isSessionGoalOnly = goalUpdate !== undefined && 
+      /\b(make\s+(this|it)\s+a?\s+(strength|stability|endurance)\s+session|focus\s+on\s+(strength|stability|endurance))\b/i.test(lowerMessage);
+    
     // Check for exercise additions/removals using the exercise update parser
-    const exerciseUpdateIntent = await exerciseUpdateParser.parseExerciseUpdate(message, businessId);
+    const exerciseUpdateIntent = isSessionGoalOnly 
+      ? { action: 'unknown' as const, exercises: [], rawInput: message }
+      : await exerciseUpdateParser.parseExerciseUpdate(message, businessId);
     
     if (exerciseUpdateIntent.action !== 'unknown' && exerciseUpdateIntent.exercises.length > 0) {
       // Use the validation result from the exercise update parser if available
