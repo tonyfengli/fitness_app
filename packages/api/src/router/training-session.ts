@@ -2,7 +2,7 @@ import type { TRPCRouterRecord } from "@trpc/server";
 import { z } from "zod/v4";
 import { TRPCError } from "@trpc/server";
 
-import { desc, eq, and, gte, lte, or } from "@acme/db";
+import { desc, eq, and, gte, lte, or, sql } from "@acme/db";
 import { 
   TrainingSession, 
   UserTrainingSession,
@@ -529,5 +529,158 @@ export const trainingSessionRouter = {
         .where(eq(TrainingSession.id, input.sessionId));
         
       return { success: true, deletedSessionId: input.sessionId };
+    }),
+
+  // Add test clients to session (development only)
+  addTestClients: protectedProcedure
+    .input(z.object({ 
+      sessionId: z.string().uuid() 
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const user = ctx.session?.user as SessionUser;
+      
+      // Only trainers can add test clients
+      if (user.role !== 'trainer') {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'Only trainers can add test clients',
+        });
+      }
+      
+      // Verify session exists and belongs to user's business
+      const session = await ctx.db.query.TrainingSession.findFirst({
+        where: and(
+          eq(TrainingSession.id, input.sessionId),
+          eq(TrainingSession.businessId, user.businessId),
+          eq(TrainingSession.status, 'open')
+        ),
+      });
+      
+      if (!session) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Open session not found',
+        });
+      }
+      
+      // Get existing clients who are not already in this session
+      const existingCheckIns = await ctx.db
+        .select({ userId: UserTrainingSession.userId })
+        .from(UserTrainingSession)
+        .where(eq(UserTrainingSession.trainingSessionId, input.sessionId));
+      
+      const checkedInUserIds = existingCheckIns.map(c => c.userId);
+      
+      // Find 3 clients from this business who aren't already checked in
+      const whereConditions = [
+        eq(userTable.businessId, user.businessId),
+        eq(userTable.role, 'client')
+      ];
+      
+      if (checkedInUserIds.length > 0) {
+        whereConditions.push(
+          sql`${userTable.id} NOT IN (${sql.join(checkedInUserIds.map(id => sql`${id}`), sql`, `)})`
+        );
+      }
+      
+      const availableClients = await ctx.db
+        .select()
+        .from(userTable)
+        .where(and(...whereConditions))
+        .limit(3);
+      
+      if (availableClients.length === 0) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'No available clients found to add to the session',
+        });
+      }
+      
+      const addedClients = [];
+      
+      // Random preference options for testing
+      const intensityOptions = ['low', 'moderate', 'high'];
+      const muscleOptions = ['chest', 'back', 'shoulders', 'legs', 'arms', 'core', 'glutes'];
+      const jointOptions = ['knees', 'shoulders', 'lower back', 'wrists', 'ankles'];
+      const exerciseOptions = ['squats', 'deadlifts', 'bench press', 'pull-ups', 'rows', 'lunges', 'overhead press'];
+      const goalOptions = ['strength', 'stability', 'endurance'];
+      
+      // Add each client to the session and check them in
+      for (const client of availableClients) {
+        await ctx.db
+          .insert(UserTrainingSession)
+          .values({
+            userId: client.id,
+            trainingSessionId: input.sessionId,
+            status: 'checked_in',
+            checkedInAt: new Date(),
+            preferenceCollectionStep: 'ACTIVE',
+          });
+        
+        // Generate random preferences
+        const randomIntensity = intensityOptions[Math.floor(Math.random() * intensityOptions.length)];
+        const randomGoal = goalOptions[Math.floor(Math.random() * goalOptions.length)];
+        
+        // Randomly select 1-2 muscle targets
+        const numMuscleTargets = Math.floor(Math.random() * 2) + 1;
+        const randomMuscleTargets = [];
+        for (let i = 0; i < numMuscleTargets; i++) {
+          const muscle = muscleOptions[Math.floor(Math.random() * muscleOptions.length)];
+          if (!randomMuscleTargets.includes(muscle)) {
+            randomMuscleTargets.push(muscle);
+          }
+        }
+        
+        // Sometimes add muscle lessens (30% chance)
+        const randomMuscleLessens = Math.random() < 0.3 
+          ? [muscleOptions[Math.floor(Math.random() * muscleOptions.length)]]
+          : [];
+        
+        // Sometimes add joint avoidance (20% chance)
+        const randomAvoidJoints = Math.random() < 0.2
+          ? [jointOptions[Math.floor(Math.random() * jointOptions.length)]]
+          : [];
+        
+        // Sometimes add exercise preferences (40% chance for includes, 30% for avoids)
+        const randomIncludeExercises = Math.random() < 0.4
+          ? [exerciseOptions[Math.floor(Math.random() * exerciseOptions.length)]]
+          : [];
+          
+        const randomAvoidExercises = Math.random() < 0.3
+          ? [exerciseOptions[Math.floor(Math.random() * exerciseOptions.length)]]
+          : [];
+        
+        // Insert preferences
+        await ctx.db
+          .insert(WorkoutPreferences)
+          .values({
+            userId: client.id,
+            trainingSessionId: input.sessionId,
+            businessId: user.businessId,
+            intensity: randomIntensity as "low" | "moderate" | "high",
+            muscleTargets: randomMuscleTargets,
+            muscleLessens: randomMuscleLessens.length > 0 ? randomMuscleLessens : null,
+            includeExercises: randomIncludeExercises.length > 0 ? randomIncludeExercises : null,
+            avoidExercises: randomAvoidExercises.length > 0 ? randomAvoidExercises : null,
+            avoidJoints: randomAvoidJoints.length > 0 ? randomAvoidJoints : null,
+            sessionGoal: randomGoal,
+            intensitySource: 'explicit',
+            sessionGoalSource: 'explicit',
+            collectionMethod: 'manual',
+          });
+        
+        addedClients.push({
+          userId: client.id,
+          name: client.name,
+          email: client.email,
+          checkedInAt: new Date(),
+        });
+      }
+      
+      return {
+        success: true,
+        message: `Successfully added ${addedClients.length} clients`,
+        clients: addedClients,
+      };
     }),
 } satisfies TRPCRouterRecord;
