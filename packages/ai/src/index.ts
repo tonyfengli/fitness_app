@@ -3,11 +3,14 @@ export * from "./nodes";
 export * from "./utils";
 export * from "./types";
 export * from "./types/scoredExercise";
+export * from "./types/groupContext";
+export * from "./types/groupBlueprint";
 
 // API functions
 export * from "./api/filterExercisesFromInput";
 export * from "./api/debugBlockSystem";
 export * from "./api/enhancedFilterExercisesFromInput";
+export * from "./api/generateGroupWorkoutBlueprint";
 
 // Core functionality
 export * from "./core/filtering";

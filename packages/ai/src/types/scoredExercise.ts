@@ -17,7 +17,7 @@ export interface ScoreBreakdown {
  */
 export interface ScoredExercise extends Exercise {
   score: number;
-  scoreBreakdown?: ScoreBreakdown;
+  scoreBreakdown: ScoreBreakdown; // Made required to ensure it flows through pipeline
 }
 
 /**

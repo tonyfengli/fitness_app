@@ -1,4 +1,4 @@
-import type { ScoredExercise } from "../core/scoring/types";
+import type { ScoredExercise } from "./scoredExercise";
 import type { GroupScoredExercise } from "./groupContext";
 import type { BlockConfig } from "../core/templates/types/dynamicBlockTypes";
 

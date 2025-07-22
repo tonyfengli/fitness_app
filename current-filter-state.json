@@ -1,16 +1,20 @@
 {
-  "timestamp": "2025-07-22T03:33:24.466Z",
+  "timestamp": "2025-07-22T20:36:12.408Z",
   "filters": {
-    "clientName": "Curtis Yu",
+    "clientName": "Hilary Chan",
     "strengthCapacity": "moderate",
     "skillCapacity": "moderate",
-    "intensity": "low",
-    "muscleTarget": [],
-    "muscleLessen": [],
+    "intensity": "moderate",
+    "muscleTarget": [
+      "upper_back"
+    ],
+    "muscleLessen": [
+      "calves"
+    ],
     "avoidJoints": [],
     "includeExercises": [],
     "avoidExercises": [],
-    "sessionGoal": "strength",
+    "sessionGoal": "mobility",
     "isFullBody": false
   },
   "results": {
@@ -19,29 +23,29 @@
       "count": 5,
       "exercises": [
         {
-          "id": "57c24380-6ee2-4242-84b5-0cf299ae8369",
-          "name": "Landmine Shoulder Press",
-          "score": 5.75
+          "id": "cf620cdf-70a6-4999-adab-4993b9408c2b",
+          "name": "Australian Pull-Up",
+          "score": 8
         },
         {
-          "id": "cdd9c4a6-4048-4ee2-9292-aa36e7a2a9ae",
-          "name": "Barbell Glute Bridge on Bench",
-          "score": 5.75
-        },
-        {
-          "id": "4faeab78-16bd-4d71-b935-226bc691531d",
-          "name": "Hollow Body Dumbbell Press",
-          "score": 5.75
+          "id": "49bc7005-5179-4d96-be77-ac790cf00759",
+          "name": "Landmine T Bar Row",
+          "score": 6.5
         },
         {
           "id": "27bddaac-3ee7-4767-95a9-fbda6f40ff84",
           "name": "Bent-Over Single Arm Kettlebell Row (Gorilla Row)",
-          "score": 5.75
+          "score": 6.5
         },
         {
-          "id": "cf620cdf-70a6-4999-adab-4993b9408c2b",
-          "name": "Australian Pull-Up",
-          "score": 5.75
+          "id": "57c24380-6ee2-4242-84b5-0cf299ae8369",
+          "name": "Landmine Shoulder Press",
+          "score": 5
+        },
+        {
+          "id": "cdd9c4a6-4048-4ee2-9292-aa36e7a2a9ae",
+          "name": "Barbell Glute Bridge on Bench",
+          "score": 5
         }
       ]
     },
@@ -49,19 +53,19 @@
       "count": 8,
       "exercises": [
         {
-          "id": "53141345-2351-436a-9b1c-21bc273ba554",
-          "name": "Spanish Lunge",
+          "id": "dc085fdb-b6c4-4942-9eb5-3dbf04d7161e",
+          "name": "TRX Mid Row",
+          "score": 8
+        },
+        {
+          "id": "27bddaac-3ee7-4767-95a9-fbda6f40ff84",
+          "name": "Bent-Over Single Arm Kettlebell Row (Gorilla Row)",
           "score": 6.5
         },
         {
           "id": "5a75f68d-4d30-4211-a98c-a74c71f70f8d",
           "name": "Glute Bridge Thrust with Dumbbell",
-          "score": 5.75
-        },
-        {
-          "id": "1e2240ed-388b-463b-96aa-2ca72ddb9cd7",
-          "name": "Side Plank Reverse Fly",
-          "score": 5.75
+          "score": 5
         }
       ]
     },
@@ -69,19 +73,19 @@
       "count": 8,
       "exercises": [
         {
-          "id": "617f0ccf-e9ec-494a-9608-1a3402a57cab",
-          "name": "Band Pull-Apart",
+          "id": "ed8cddc4-0a55-440a-8ee6-2f5f6024adbf",
+          "name": "Dumbbell Bent-Over Reverse Fly",
           "score": 6.5
         },
         {
           "id": "aa66d8b3-907a-42ec-ac9b-bbaa347a88b8",
           "name": "Y/W Raises",
-          "score": 6.5
+          "score": 5
         },
         {
-          "id": "ebfd61ba-7bbc-470d-8b9b-c5bc66da2430",
-          "name": "Dumbbell Pullover",
-          "score": 5.75
+          "id": "141589ed-ffb0-48eb-aab5-02cd568e287e",
+          "name": "Bodyweight Triceps Extension",
+          "score": 5
         }
       ]
     },
@@ -89,24 +93,24 @@
       "count": 6,
       "exercises": [
         {
-          "id": "8596d22e-6349-45e6-83f1-835e3360771f",
-          "name": "Plank",
+          "id": "b0736db8-79e4-493d-93da-fcc0af33ab17",
+          "name": "Bird Dog Row",
           "score": 6.5
         },
         {
-          "id": "fb5bf2ce-611c-4a2f-ae16-8d21d28280c1",
-          "name": "Side Plank Hip Raise",
-          "score": 5.75
+          "id": "e824764c-7860-4254-a2c5-9eca52db2e5d",
+          "name": "Medicine Ball Slam",
+          "score": 5
         },
         {
-          "id": "0975bd35-a1fd-4ea7-acc4-dd9c05d4a982",
-          "name": "Bosu Plank Jack",
-          "score": 5.75
+          "id": "aed8cfc3-3405-440e-8249-3e646de7e9c5",
+          "name": "Copenhagen Plank",
+          "score": 5
         },
         {
-          "id": "dd47414b-bca2-4fa8-a200-c159632e31d6",
-          "name": "Box Pike Walkout",
-          "score": 5.75
+          "id": "53febb99-c0d1-4fb6-90e8-856dc4a7827b",
+          "name": "Hanging Knee Raise",
+          "score": 5
         }
       ]
     }

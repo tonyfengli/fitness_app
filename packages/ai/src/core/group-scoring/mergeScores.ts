@@ -1,4 +1,4 @@
-import type { ScoredExercise } from "../scoring/types";
+import type { ScoredExercise } from "../../types/scoredExercise";
 import type { GroupScoredExercise, GroupContext } from "../../types/groupContext";
 import type { BlockConfig } from "../templates/types/dynamicBlockTypes";
 
@@ -106,26 +106,118 @@ export function performGroupMergeScoring(
   blockConfigs: BlockConfig[],
   clientScoredExercises: Map<string, { [blockId: string]: ScoredExercise[] }>
 ): GroupContext {
+  console.log('📊 Starting Phase 2.5: Group Merge Scoring');
+  console.log(`  Processing ${blockConfigs.length} blocks for ${context.clients.length} clients`);
+  
   const groupExercisePools: { [blockId: string]: GroupScoredExercise[] } = {};
   const clientIds = context.clients.map(c => c.user_id);
   
+  // Get test data logger if available
+  let testDataLogger: any;
+  try {
+    // Dynamic import to avoid circular dependencies
+    const loggerModule = require('../../../../api/src/utils/groupWorkoutTestDataLogger');
+    testDataLogger = loggerModule.groupWorkoutTestDataLogger;
+  } catch (error) {
+    console.debug('Test data logger not available in this context');
+  }
+  
   for (const block of blockConfigs) {
+    console.log(`\n  🔄 Processing Block ${block.id} (${block.name}):`);
+    
     // Collect exercises from each client for this block
     const blockExercisesByClient = new Map<string, ScoredExercise[]>();
+    let totalExercisesInBlock = 0;
     
     for (const [clientId, clientBlocks] of clientScoredExercises) {
       const exercises = clientBlocks[block.id] || [];
       blockExercisesByClient.set(clientId, exercises);
+      totalExercisesInBlock += exercises.length;
+      console.log(`    Client ${clientId}: ${exercises.length} exercises available`);
+    }
+    
+    if (totalExercisesInBlock === 0) {
+      console.warn(`    ⚠️ Block ${block.id}: No exercises available from any client!`);
+      groupExercisePools[block.id] = [];
+      continue;
     }
     
     // Collect top exercises from each client
+    console.log(`    Collecting top ${Math.ceil(block.maxExercises * 1.5)} exercises per client...`);
     const collectedExercises = collectExercisesForGroupPool(block, blockExercisesByClient);
     
+    // Log collection results
+    let totalCollected = 0;
+    for (const [clientId, exercises] of collectedExercises) {
+      totalCollected += exercises.length;
+      console.log(`      Client ${clientId}: ${exercises.length} exercises collected`);
+    }
+    
     // Merge into group pool with cohesion scoring
+    console.log(`    Merging ${totalCollected} exercises into group pool...`);
     const groupPool = mergeClientScoresIntoGroupPool(collectedExercises, clientIds);
+    
+    // Analyze overlap
+    const sharedByAll = groupPool.filter(ex => ex.clientsSharing.length === clientIds.length);
+    const sharedBy2Plus = groupPool.filter(ex => ex.clientsSharing.length >= 2);
+    const uniqueToOne = groupPool.filter(ex => ex.clientsSharing.length === 1);
+    
+    console.log(`    ✅ Block ${block.id} merge complete:`);
+    console.log(`       Total exercises in pool: ${groupPool.length}`);
+    console.log(`       Shared by all clients: ${sharedByAll.length}`);
+    console.log(`       Shared by 2+ clients: ${sharedBy2Plus.length}`);
+    console.log(`       Unique to one client: ${uniqueToOne.length}`);
+    
+    // Log top exercises by group score
+    if (groupPool.length > 0) {
+      console.log(`       Top 3 exercises by group score:`);
+      groupPool.slice(0, 3).forEach((ex, i) => {
+        console.log(`         ${i + 1}. ${ex.name} (score: ${ex.groupScore.toFixed(2)}, shared by: ${ex.clientsSharing.length})`);
+      });
+    }
+    
+    // Log block scoring data for test data
+    if (testDataLogger && context.sessionId) {
+      const blockScoringData = {
+        blockId: block.id,
+        blockName: block.name,
+        totalUniqueExercises: groupPool.length,
+        exercisesPerClient: Array.from(blockExercisesByClient.entries()).map(([clientId, exercises]) => ({
+          clientId,
+          count: exercises.length
+        })),
+        overlapAnalysis: {
+          sharedByAllClients: sharedByAll.map(ex => ex.id),
+          sharedBy2Plus: sharedBy2Plus.map(ex => ex.id),
+          uniqueToOneClient: uniqueToOne.map(ex => ex.id)
+        },
+        cohesionBonuses: sharedBy2Plus.map(ex => ({
+          exerciseId: ex.id,
+          exerciseName: ex.name,
+          clientsSharing: ex.clientsSharing,
+          averageScore: ex.groupScore - ex.cohesionBonus,
+          cohesionBonus: ex.cohesionBonus,
+          finalGroupScore: ex.groupScore
+        })),
+        qualityMetrics: {
+          highQualityShared: sharedBy2Plus.filter(ex => ex.groupScore > 7).length,
+          mediumQualityShared: sharedBy2Plus.filter(ex => ex.groupScore >= 5 && ex.groupScore <= 7).length,
+          lowQualityShared: sharedBy2Plus.filter(ex => ex.groupScore < 5).length
+        }
+      };
+      
+      testDataLogger.logBlockScoring(
+        context.sessionId,
+        block.id,
+        block.name,
+        blockScoringData
+      );
+    }
     
     groupExercisePools[block.id] = groupPool;
   }
+  
+  console.log('\n✅ Phase 2.5 complete: Group exercise pools created for all blocks');
   
   // Return updated context with group pools
   return {

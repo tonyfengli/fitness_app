@@ -154,7 +154,15 @@ function createScoredExercise(exerciseId: string, score: number): ScoredExercise
   if (!exercise) throw new Error(`Exercise ${exerciseId} not found`);
   return {
     ...exercise,
-    score
+    score,
+    scoreBreakdown: {
+      base: 5,
+      includeExerciseBoost: 0,
+      muscleTargetBonus: 0,
+      muscleLessenPenalty: 0,
+      intensityAdjustment: 0,
+      total: score
+    }
   };
 }
 

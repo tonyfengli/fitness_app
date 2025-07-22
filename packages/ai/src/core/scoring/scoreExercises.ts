@@ -10,13 +10,11 @@ import { analyzeScoreDistribution, logScoringPerformance } from "./scoreAnalysis
  * 
  * @param exercises - Array of exercises to score
  * @param criteria - Scoring criteria from Phase 1 and Phase 2 filters
- * @param includeBreakdown - Whether to include score breakdown (useful for debugging)
  * @returns Array of scored exercises sorted by score (highest first)
  */
 export async function scoreAndSortExercises(
   exercises: Exercise[],
-  criteria: ScoringCriteria,
-  includeBreakdown = false
+  criteria: ScoringCriteria
 ): Promise<ScoredExercise[]> {
   const startTime = performance.now();
   // console.log('🎯 Scoring exercises with criteria:', {
@@ -30,16 +28,14 @@ export async function scoreAndSortExercises(
   // PASS 1: Score all exercises normally (without include boost)
   const { scoredExercises: firstPassResults, maxScore } = performFirstPassScoring(
     exercises,
-    criteria,
-    includeBreakdown
+    criteria
   );
   
   // PASS 2: Add foundational adjustments and boost included exercises
   const finalScoredExercises = performSecondPassScoring(
     firstPassResults,
     criteria,
-    maxScore,
-    includeBreakdown
+    maxScore
   );
   
   // Sort by score (highest first)

@@ -9,6 +9,11 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useCheckInStream } from "~/hooks/useCheckInStream";
 import type { CheckInEvent, PreferenceUpdateEvent } from "~/hooks/useCheckInStream";
 
+// Helper to format muscle names for display (convert underscore to space and capitalize)
+function formatMuscleName(muscle: string): string {
+  return muscle.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+}
+
 // Preference tag component
 function PreferenceTag({ label, value, type }: { label: string; value: string | string[]; type: string }) {
   const getTagColor = () => {
@@ -33,7 +38,14 @@ function PreferenceTag({ label, value, type }: { label: string; value: string | 
     }
   };
 
-  const displayValue = Array.isArray(value) ? value.join(', ') : value;
+  // Format display value - convert muscle names if it's a target/avoid type
+  const displayValue = Array.isArray(value) 
+    ? (type === 'target' || type === 'avoid') 
+      ? value.map(formatMuscleName).join(', ')
+      : value.join(', ')
+    : (type === 'target' || type === 'avoid') && typeof value === 'string'
+      ? formatMuscleName(value)
+      : value;
 
   return (
     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getTagColor()}`}>
@@ -293,7 +305,14 @@ export default function SessionLobby() {
           </div>
           
           <div className="text-center mb-8 space-y-4">
-            <button className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 px-12 rounded-full shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 text-lg inline-flex items-center justify-center">
+            <button 
+              onClick={() => {
+                if (sessionId) {
+                  router.push(`/session-lobby/group-visualization?sessionId=${sessionId}`);
+                }
+              }}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 px-12 rounded-full shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 text-lg inline-flex items-center justify-center"
+            >
               Start Session
             </button>
             

@@ -282,6 +282,91 @@ npm run debug-to-test generate joint_bug
 - **Test helper**: `packages/ai/src/utils/debugToTest.ts`
 - **Browser helper**: `apps/nextjs/src/utils/testHelper.ts`
 
+### Group Workout Data Debugging
+
+The group workout test data has been restructured for efficient querying of client exercises and scores.
+
+#### New Data Structure
+Group workout data is saved to `apps/nextjs/session-test-data/group-workouts/latest-group-workout.json` with an improved structure:
+
+```typescript
+{
+  phaseB: {
+    blocks: [
+      {
+        blockId: "A",
+        individualExercises: {
+          "clientId": {
+            clientName: "Curtis Yu",
+            exercises: [
+              {
+                exerciseName: "Landmine Shoulder Press",
+                individualScore: 5.75,
+                rank: 1  // Position in list
+              }
+              // ... all 21 exercises
+            ],
+            totalCount: 21
+          }
+        }
+      }
+    ]
+  }
+}
+```
+
+#### Query Examples
+
+##### 1. Get All Exercises for a Specific Client in a Block
+```bash
+# Using jq to get Curtis Yu's Block A exercises
+jq '.phaseB.blocks[] | select(.blockId=="A") | .individualExercises | to_entries[] | select(.value.clientName=="Curtis Yu") | .value.exercises' latest-group-workout.json
+
+# Simplified view (names and scores only)
+jq '.phaseB.blocks[] | select(.blockId=="A") | .individualExercises | to_entries[] | select(.value.clientName=="Curtis Yu") | .value.exercises[] | {rank, name: .exerciseName, score: .individualScore}' latest-group-workout.json
+```
+
+##### 2. Compare All Clients in a Block
+```bash
+jq '.phaseB.blocks[] | select(.blockId=="A") | {
+  blockId,
+  clients: .individualExercises | to_entries | map({
+    name: .value.clientName,
+    count: .value.totalCount,
+    selected: (.value.exercises | map(select(.isSelected)) | length)
+  })
+}' latest-group-workout.json
+```
+
+##### 3. Find Who Has a Specific Exercise
+```bash
+# Find who has "Barbell Bench Press" in Block A
+jq '.phaseB.blocks[] | select(.blockId=="A") | .individualExercises | to_entries | map(select(.value.exercises[] | .exerciseName == "Barbell Bench Press") | .value.clientName)' latest-group-workout.json
+```
+
+##### 4. Get Shared Exercises in a Block
+```bash
+jq '.phaseB.blocks[] | select(.blockId=="A") | .sharedExercises[] | {name: .exerciseName, groupScore, sharedBy: .clientsSharing | length}' latest-group-workout.json
+```
+
+#### TypeScript Query Utilities
+```typescript
+// Use the provided utilities
+import { getClientBlockExercises, compareClientsInBlock } from '@acme/api/utils/queryGroupWorkoutData';
+
+// Get Curtis Yu's Block A exercises
+const exercises = await getClientBlockExercises('latest-group-workout.json', 'Curtis Yu', 'A');
+
+// Compare all clients in Block A
+const comparison = await compareClientsInBlock('latest-group-workout.json', 'A');
+```
+
+#### When to Use
+- Debugging exercise selection issues
+- Verifying score calculations
+- Checking cohesion requirements
+- Comparing client exercise assignments
+
 ---
 
 ## Architecture Overview

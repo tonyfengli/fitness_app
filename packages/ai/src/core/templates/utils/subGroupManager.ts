@@ -90,20 +90,20 @@ export function optimizeSubGroupPairings(
   const sorted = [...subGroups].sort((a, b) => b.groupSize - a.groupSize);
   
   for (let i = 0; i < sorted.length; i++) {
-    if (used.has(sorted[i].exerciseId)) continue;
-    
     const group1 = sorted[i];
+    if (!group1 || used.has(group1.exerciseId)) continue;
+    
     const exercise1 = exercises.get(group1.exerciseId);
     
     // Find best pairing (non-overlapping clients, different equipment)
     for (let j = i + 1; j < sorted.length; j++) {
-      if (used.has(sorted[j].exerciseId)) continue;
-      
       const group2 = sorted[j];
+      if (!group2 || used.has(group2.exerciseId)) continue;
+      
       const exercise2 = exercises.get(group2.exerciseId);
       
       // Check if clients overlap
-      const hasOverlap = group1.clientIds.some(id => group2.clientIds.includes(id));
+      const hasOverlap = group1?.clientIds.some(id => group2?.clientIds.includes(id)) || false;
       if (hasOverlap) continue;
       
       // Check equipment compatibility
@@ -112,9 +112,11 @@ export function optimizeSubGroupPairings(
       const hasEquipmentConflict = [...equipment1].some(eq => equipment2.has(eq));
       
       if (!hasEquipmentConflict) {
-        pairings.push([group1, group2]);
-        used.add(group1.exerciseId);
-        used.add(group2.exerciseId);
+        if (group1 && group2) {
+          pairings.push([group1, group2]);
+          used.add(group1.exerciseId);
+          used.add(group2.exerciseId);
+        }
         break;
       }
     }

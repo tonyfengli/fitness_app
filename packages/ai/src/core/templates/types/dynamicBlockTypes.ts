@@ -42,6 +42,9 @@ export interface DynamicOrganizedExercises {
   };
 }
 
+// Export alias for compatibility
+export type BlockConfig = DynamicBlockDefinition;
+
 /**
  * Maps between legacy and dynamic formats
  */

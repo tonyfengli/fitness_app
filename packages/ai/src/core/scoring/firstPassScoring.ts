@@ -81,8 +81,7 @@ function calculateIntensityAdjustment(exercise: Exercise, intensity?: string): n
 export function scoreExercise(
   exercise: Exercise,
   criteria: ScoringCriteria,
-  includeExerciseBoost = 0,
-  includeBreakdown = false
+  includeExerciseBoost = 0
 ): ScoredExercise {
   const base = calculateBaseScore(exercise);
   const muscleTargetBonus = calculateMuscleTargetBonus(exercise, criteria.muscleTarget);
@@ -94,18 +93,15 @@ export function scoreExercise(
   const scoredExercise: ScoredExercise = {
     ...exercise,
     score: Math.max(0, total), // Ensure score doesn't go negative
-  };
-  
-  if (includeBreakdown) {
-    scoredExercise.scoreBreakdown = {
+    scoreBreakdown: {
       base,
       includeExerciseBoost,
       muscleTargetBonus,
       muscleLessenPenalty,
       intensityAdjustment,
-      total: scoredExercise.score,
-    };
-  }
+      total: Math.max(0, total),
+    },
+  };
   
   return scoredExercise;
 }
@@ -115,13 +111,12 @@ export function scoreExercise(
  */
 export function performFirstPassScoring(
   exercises: Exercise[],
-  criteria: ScoringCriteria,
-  includeBreakdown = false
+  criteria: ScoringCriteria
 ): { scoredExercises: ScoredExercise[]; maxScore: number } {
   console.log('🎯 First pass: Scoring exercises without include boost');
   
   const scoredExercises = exercises.map(exercise => 
-    scoreExercise(exercise, criteria, 0, includeBreakdown)
+    scoreExercise(exercise, criteria, 0)
   );
   
   const maxScore = scoredExercises.length > 0 

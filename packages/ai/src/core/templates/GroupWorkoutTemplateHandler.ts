@@ -5,8 +5,8 @@ import type {
   ClientCohesionTracking,
   SubGroupPossibility 
 } from "../../types/groupBlueprint";
-import type { WorkoutTemplate } from "../../types/workoutTemplate";
-import type { ScoredExercise } from "../scoring/types";
+import type { WorkoutTemplate as DynamicWorkoutTemplate } from "./types/dynamicBlockTypes";
+import type { ScoredExercise } from "../../types/scoredExercise";
 import type { BlockConfig } from "./types/dynamicBlockTypes";
 import { WorkoutTemplateHandler } from "./WorkoutTemplateHandler";
 import { getWorkoutTemplate } from "./config/defaultTemplates";
@@ -16,13 +16,13 @@ import { getWorkoutTemplate } from "./config/defaultTemplates";
  * Creates blueprints with shared/individual slot allocation
  */
 export class GroupWorkoutTemplateHandler {
-  private template: WorkoutTemplate;
+  private template: DynamicWorkoutTemplate;
   private groupContext: GroupContext;
   private blockConfigs: BlockConfig[];
   private individualHandlers: Map<string, WorkoutTemplateHandler>;
   private cohesionTracking: Map<string, ClientCohesionTracking>;
   
-  constructor(groupContext: GroupContext, template: WorkoutTemplate) {
+  constructor(groupContext: GroupContext, template: DynamicWorkoutTemplate) {
     this.groupContext = groupContext;
     this.template = template;
     
@@ -38,7 +38,7 @@ export class GroupWorkoutTemplateHandler {
     for (const client of groupContext.clients) {
       this.individualHandlers.set(
         client.user_id,
-        new WorkoutTemplateHandler(template)
+        new WorkoutTemplateHandler(false, undefined, false)
       );
     }
     
@@ -168,7 +168,7 @@ export class GroupWorkoutTemplateHandler {
     for (const [clientId, exercises] of clientExercises) {
       // Filter to only exercises matching this block's function tags
       const blockExercises = exercises.filter(ex => 
-        block.functionTags.some(tag => ex.function_tags?.includes(tag))
+        block.functionTags.some(tag => ex.functionTags?.includes(tag))
       );
       
       individualCandidates[clientId] = {
@@ -205,13 +205,30 @@ export class GroupWorkoutTemplateHandler {
   public createBlueprint(
     clientScoredExercises: Map<string, ScoredExercise[]>
   ): GroupWorkoutBlueprint {
+    console.log('🏗️ GroupWorkoutTemplateHandler.createBlueprint called');
+    console.log('  Block configs:', this.blockConfigs.map(b => ({ id: b.id, name: b.name })));
+    console.log('  Client count:', this.groupContext.clients.length);
+    console.log('  Group exercise pools available:', !!this.groupContext.groupExercisePools);
+    
     const blocks: GroupBlockBlueprint[] = [];
     const warnings: string[] = [];
     
     // Process each block
     for (const block of this.blockConfigs) {
+      console.log(`\n  📦 Processing block ${block.id} (${block.name})`);
+      
       // Get group pool for this block
       const groupPool = this.groupContext.groupExercisePools?.[block.id] || [];
+      console.log(`    Group pool size: ${groupPool.length}`);
+      
+      if (groupPool.length === 0) {
+        console.warn(`    ⚠️ No exercises in group pool for block ${block.id}!`);
+      } else {
+        console.log(`    Top 3 exercises in pool:`);
+        groupPool.slice(0, 3).forEach((ex, i) => {
+          console.log(`      ${i + 1}. ${ex.name} (score: ${ex.groupScore.toFixed(2)}, shared by: ${ex.clientsSharing.length})`);
+        });
+      }
       
       // Create blueprint for this block
       const blockBlueprint = this.createBlockBlueprint(
@@ -220,26 +237,38 @@ export class GroupWorkoutTemplateHandler {
         clientScoredExercises
       );
       
+      console.log(`    ✅ Block blueprint created:`, {
+        totalSlots: blockBlueprint.slots.total,
+        targetShared: blockBlueprint.slots.targetShared,
+        actualSharedAvailable: blockBlueprint.slots.actualSharedAvailable,
+        individualPerClient: blockBlueprint.slots.individualPerClient
+      });
+      
       blocks.push(blockBlueprint);
       
       // Add warnings if needed
       if (blockBlueprint.slots.actualSharedAvailable === 0 && 
           blockBlueprint.slots.targetShared > 0) {
-        warnings.push(
-          `${block.name}: No exercises available for sharing (target was ${blockBlueprint.slots.targetShared})`
-        );
+        const warning = `${block.name}: No exercises available for sharing (target was ${blockBlueprint.slots.targetShared})`;
+        warnings.push(warning);
+        console.warn(`    ⚠️ ${warning}`);
       }
     }
     
     // Final cohesion validation
     const finalTracking = Array.from(this.cohesionTracking.values());
+    console.log('\n  📊 Final cohesion tracking:');
     for (const tracking of finalTracking) {
+      console.log(`    Client ${tracking.clientId}: ${tracking.currentSharedSlots}/${tracking.targetSharedExercises} shared (${tracking.satisfactionStatus})`);
+      
       if (tracking.satisfactionStatus === 'needs_more' && tracking.remainingSharedNeeded > 2) {
-        warnings.push(
-          `Client ${tracking.clientId}: Only ${tracking.currentSharedSlots}/${tracking.targetSharedExercises} shared exercises allocated`
-        );
+        const warning = `Client ${tracking.clientId}: Only ${tracking.currentSharedSlots}/${tracking.targetSharedExercises} shared exercises allocated`;
+        warnings.push(warning);
+        console.warn(`    ⚠️ ${warning}`);
       }
     }
+    
+    console.log(`\n  ✅ Blueprint complete with ${blocks.length} blocks and ${warnings.length} warnings`);
     
     return {
       blocks,

@@ -1,5 +1,5 @@
 import type { ClientContext } from "./clientContext";
-import type { ScoredExercise } from "../core/scoring/types";
+import type { ScoredExercise } from "./scoredExercise";
 
 /**
  * Settings for how much group cohesion should be enforced per block

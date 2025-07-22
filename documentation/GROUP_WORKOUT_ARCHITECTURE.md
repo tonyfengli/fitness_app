@@ -413,23 +413,34 @@ CREATE TABLE group_workout_member (
    - No changes needed - LLM handles distribution
    - Each client maintains individual intensity/strength
 
-### Phase B: Block Planning (NEXT)
-1. Enhance Phase 4 with group constraints
-   - Create separate GroupWorkoutTemplateHandler (composition pattern)
-   - Use group scores for all selections (already includes overlap + quality)
-   - Track sub-groups for equipment/timing coordination
+### Phase B: Block Planning ✅ COMPLETED
+1. ✅ Enhance Phase 4 with group constraints
+   - Created separate GroupWorkoutTemplateHandler (composition pattern)
+   - Uses group scores for all selections (already includes overlap + quality)
+   - Tracks sub-groups for equipment/timing coordination
    
-2. Create shared/individual slot allocation
+2. ✅ Create shared/individual slot allocation
    - Flexible: actualShared = min(targetShared, qualityAvailable)
    - Quality threshold: 2+ clients minimum for shared
    - Remaining slots cascade to individual assignments
    - Sub-group tracking for trainer visibility
    
-3. Add cohesion ratio enforcement
-   - Enforce across entire workout (not per block)
-   - Track progress: target, current, remaining needed
+3. ✅ Add cohesion ratio enforcement
+   - Enforces across entire workout (not per block)
+   - Tracks progress: target, current, remaining needed
    - Block settings override when enforceShared = true
-   - Pass targets and status to LLM for decisions
+   - Passes targets and status to LLM for decisions
+
+### Implementation Integration (IN PROGRESS)
+1. ⏳ API Integration
+   - `generateGroupWorkoutBlueprint()` function exists but needs export
+   - Needs API endpoint to call from frontend
+   - Requires ClientContext creation from session data
+   
+2. ⏳ Frontend Visualization
+   - Display Phase A group scoring results
+   - Show Phase B blueprint allocation
+   - Visualize cohesion tracking
 
 ### Phase C: LLM Integration
 1. Build hybrid LLM strategy

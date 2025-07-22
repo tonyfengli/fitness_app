@@ -18,8 +18,7 @@ function isIncludedExercise(exercise: Exercise, includeExercises: string[]): boo
 export function performSecondPassScoring(
   firstPassResults: ScoredExercise[],
   criteria: ScoringCriteria,
-  maxScore: number,
-  includeBreakdown = false
+  maxScore: number
 ): ScoredExercise[] {
   console.log('🎯 Second pass: Boosting included exercises');
   
@@ -32,7 +31,7 @@ export function performSecondPassScoring(
       const includeBoost = maxScore + SCORING_CONFIG.INCLUDE_EXERCISE_PRIORITY - exercise.score;
       
       // Re-score the exercise with the boost
-      const boostedExercise = scoreExercise(exercise, criteria, includeBoost, includeBreakdown);
+      const boostedExercise = scoreExercise(exercise, criteria, includeBoost);
       
       console.log(`🔹 Boosted included exercise "${exercise.name}" to score ${boostedExercise.score}`);
       return boostedExercise;

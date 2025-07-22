@@ -114,13 +114,12 @@ export async function enhancedFilterExercisesFromInput(
           muscleLessen: [],
           intensity: intensity || 'moderate',
           includeExercises: []
-        }, 0, true);
+        }, 0);
         
-        if (scoredWithBreakdown.scoreBreakdown) {
-          const breakdown = scoredWithBreakdown.scoreBreakdown;
-          // Track in a score tracker (we'll create this)
-          scoreTracker.addScoreBreakdown(exercise, breakdown);
-        }
+        // scoreBreakdown is now always present
+        const breakdown = scoredWithBreakdown.scoreBreakdown;
+        // Track in a score tracker (we'll create this)
+        scoreTracker.addScoreBreakdown(exercise, breakdown);
       }
     }
     
