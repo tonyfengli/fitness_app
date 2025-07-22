@@ -1,9 +1,10 @@
 import { WorkoutTemplateHandler } from "./WorkoutTemplateHandler";
+import { GroupWorkoutTemplateHandler } from "./GroupWorkoutTemplateHandler";
 import type { TemplateHandler } from "./types";
 import type { TemplateSelectionCriteria } from "./config/templateSelector";
 
 export * from "./types";
-export { WorkoutTemplateHandler };
+export { WorkoutTemplateHandler, GroupWorkoutTemplateHandler };
 
 /**
  * Factory function to get the appropriate template handler

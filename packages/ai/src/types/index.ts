@@ -5,3 +5,4 @@ export * from "./workoutTemplate";
 export * from "./filterTypes";
 export * from "./testHelpers";
 export * from "./groupContext";
+export * from "./groupBlueprint";

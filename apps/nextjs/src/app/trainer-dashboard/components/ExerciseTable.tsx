@@ -50,8 +50,8 @@ export function ExerciseTable({ exercises, workoutParams }: ExerciseTableProps) 
                 const fatigueLevel = exercise.fatigueProfile.split('_')[0];
                 const intensityMap: Record<string, Record<string, number>> = {
                   low: { low: 1.5, moderate: 0.75, high: -1.5 },
-                  moderate: { low: -1.5, moderate: 0, high: 1.5 },
-                  high: { low: -0.75, moderate: -0.75, high: 0.75 }
+                  moderate: { low: 0, moderate: 0, high: 0 },
+                  high: { low: -1.5, moderate: -0.75, high: 1.5 }
                 };
                 intensityAdjustment = intensityMap[workoutParams.intensity]?.[fatigueLevel] || 0;
               }
