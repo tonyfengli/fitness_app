@@ -3,19 +3,6 @@ import type { GroupScoredExercise } from "./groupContext";
 import type { BlockConfig } from "../core/templates/types/dynamicBlockTypes";
 
 /**
- * Tracks a client's progress toward their cohesion ratio target
- */
-export interface ClientCohesionTracking {
-  clientId: string;
-  cohesionRatio: number;                    // Their preference (0.0-1.0)
-  totalExercisesInWorkout: number;          // Sum of all block maxExercises
-  targetSharedExercises: number;            // Math.round(total * ratio)
-  currentSharedSlots: number;               // Slots allocated so far
-  remainingSharedNeeded: number;            // target - current
-  satisfactionStatus: 'on_track' | 'needs_more' | 'satisfied' | 'over';
-}
-
-/**
  * Represents a possible sub-group for a shared exercise
  */
 export interface SubGroupPossibility {
@@ -54,8 +41,6 @@ export interface GroupBlockBlueprint {
     };
   };
   
-  // Cohesion tracking state after this block
-  cohesionSnapshot: ClientCohesionTracking[];
 }
 
 /**
@@ -64,6 +49,5 @@ export interface GroupBlockBlueprint {
  */
 export interface GroupWorkoutBlueprint {
   blocks: GroupBlockBlueprint[];
-  clientCohesionTracking: ClientCohesionTracking[];
   validationWarnings?: string[];
 }

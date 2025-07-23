@@ -6,444 +6,230 @@ import type {
   GroupScoredExercise, 
   GroupWorkoutBlueprint,
   ClientContext,
-  GroupCohesionSettings,
-  ClientGroupSettings,
-  ClientCohesionTracking,
   GroupBlockBlueprint,
-  SubGroupPossibility
 } from '@acme/ai';
 import type { ScoredExercise, Exercise } from '@acme/ai';
 
 const logger = createLogger('GroupWorkoutTestDataLogger');
 
-export interface GroupWorkoutTestData {
-  sessionId: string;
-  timestamp: string;
-  groupSize: number;
-  
-  // Phase A: Individual Processing
-  phaseA: {
-    clients: ClientProcessingData[];
-    timingMs: number;
+/**
+ * Essential exercise data for debugging
+ */
+interface EssentialExercise {
+  id: string;
+  name: string;
+  score: number;
+  // Key fields for debugging
+  movementPattern?: string;
+  primaryMuscle?: string;
+  secondaryMuscles?: string[];
+  loadedJoints?: string[];
+  functionTags?: string[];
+  // Scoring adjustments
+  scoreBreakdown?: {
+    baseScore: number;
+    muscleTargetBonus: number;
+    muscleLessenPenalty: number;
+    intensityAdjustment: number;
+    includeBoost: number;
+    foundationalBoost: number;
   };
-  
-  // Phase 2.5: Group Merge Scoring
-  phase2_5: {
-    blockScoringData: BlockScoringData[];
-    groupExercisePools: {
-      [blockId: string]: GroupScoredExerciseData[];
-    };
-    timingMs: number;
-  };
-  
-  // Phase B: Blueprint Generation
-  phaseB: {
-    blueprint: GroupWorkoutBlueprint;
-    cohesionAnalysis: CohesionAnalysisData;
-    slotAllocationDetails: SlotAllocationData[];
-    timingMs: number;
-    // NEW: Structured block data for easy querying
-    blocks: StructuredBlockData[];
-  };
-  
-  // Overall Summary
-  summary: GroupWorkoutSummary;
-  
-  // Context and Settings
-  groupContext: GroupContext;
-  warnings?: string[];
-  errors?: string[];
 }
 
-// NEW: Structured block data for efficient querying
-interface StructuredBlockData {
-  blockId: string;
-  blockName: string;
-  slotAllocation: {
-    totalSlots: number;
-    targetShared: number;
-    availableShared: number;
-    individualPerClient: number;
-  };
-  sharedExercises: {
-    exerciseId: string;
-    exerciseName: string;
-    groupScore: number;
-    cohesionBonus: number;
-    clientsSharing: string[];
+/**
+ * Essential group exercise data
+ */
+interface EssentialGroupExercise extends EssentialExercise {
+  groupScore: number;
+  clientsSharing: string[];
+  clientScores: {
+    clientId: string;
+    clientName: string;
+    individualScore: number;
   }[];
-  individualExercises: {
-    [clientId: string]: {
-      clientName: string;
-      exercises: {
-        exerciseId: string;
-        exerciseName: string;
-        individualScore: number;
-        scoreBreakdown?: any;
-        isSelected: boolean;
-        rank: number; // Position in the list (1-based)
-      }[];
-      totalCount: number;
-    };
-  };
 }
 
-interface ClientProcessingData {
+/**
+ * Client preferences and filtering results
+ */
+interface ClientDebugData {
   clientId: string;
   clientName: string;
   preferences: {
     intensity: string;
-    sessionGoal: string;
     muscleTargets: string[];
     muscleLessens: string[];
     includeExercises: string[];
     avoidExercises: string[];
     avoidJoints: string[];
   };
-  
-  // Phase 1 Results
-  phase1: {
+  filtering: {
     totalExercises: number;
-    filteredCount: number;
-    excludedReasons: {
-      strength: number;
-      skill: number;
-      jointRestrictions: number;
-      avoidExercises: number;
-    };
-    timingMs: number;
+    afterStrengthFilter: number;
+    afterSkillFilter: number;
+    afterJointFilter: number;
+    afterAvoidFilter: number;
+    finalCount: number;
   };
-  
-  // Phase 2 Results
-  phase2: {
-    scoredCount: number;
+  scoring: {
+    topExercises: EssentialExercise[]; // Top 10
+    includedExercises: EssentialExercise[];
     scoreDistribution: {
-      range: string; // e.g., "0-2", "2-4", etc.
+      range: string;
       count: number;
     }[];
-    topExercises: {
-      id: string;
-      name: string;
-      score: number;
-      scoreBreakdown?: {
-        base: number;
-        includeExerciseBoost: number;
-        muscleTargetBonus: number;
-        muscleLessenPenalty: number;
-        intensityAdjustment: number;
-      };
-    }[];
-    timingMs: number;
   };
 }
 
-interface BlockScoringData {
+/**
+ * Block-level debug data
+ */
+interface BlockDebugData {
   blockId: string;
   blockName: string;
-  
-  // Input stats
-  totalUniqueExercises: number;
-  exercisesPerClient: {
-    clientId: string;
-    count: number;
-  }[];
-  
-  // Overlap analysis
-  overlapAnalysis: {
-    sharedByAllClients: string[];
-    sharedBy2Plus: string[];
-    uniqueToOneClient: string[];
+  config: {
+    functionTags: string[];
+    maxExercises: number;
+    movementPatternFilter?: {
+      include?: string[];
+      exclude?: string[];
+    };
   };
-  
-  // Cohesion calculations
-  cohesionBonuses: {
-    exerciseId: string;
-    exerciseName: string;
-    clientsSharing: string[];
-    averageScore: number;
-    cohesionBonus: number;
-    finalGroupScore: number;
-  }[];
-  
-  // Quality metrics
-  qualityMetrics: {
-    highQualityShared: number; // exercises with 2+ clients and score > threshold
-    mediumQualityShared: number;
-    lowQualityShared: number;
+  slots: {
+    total: number;
+    targetShared: number;
+    actualSharedAvailable: number;
+    individualPerClient: number;
   };
-}
-
-interface GroupScoredExerciseData extends GroupScoredExercise {
-  // Additional debug data
-  scoringDetails: {
-    individualScores: {
-      clientId: string;
-      individualScore: number;
-      hasExercise: boolean;
-    }[];
-    averageCalculation: string; // e.g., "(5.5 + 6.0) / 2 = 5.75"
-    cohesionCalculation: string; // e.g., "(3 - 1) * 0.5 = 1.0"
+  sharedCandidates: {
+    total: number;
+    topExercises: EssentialGroupExercise[]; // Top 10
   };
-}
-
-interface CohesionAnalysisData {
-  clientTargets: {
+  individualCandidates: {
     clientId: string;
     clientName: string;
-    cohesionRatio: number;
-    totalExercisesNeeded: number;
-    targetSharedExercises: number;
-  }[];
-  
-  blockProgress: {
-    blockId: string;
-    sharedExercisesAssigned: number;
-    clientProgress: {
-      clientId: string;
-      sharedSoFar: number;
-      remainingNeeded: number;
-      status: 'on_track' | 'needs_more' | 'satisfied' | 'over';
-    }[];
-  }[];
-  
-  finalStatus: {
-    clientId: string;
-    satisfied: boolean;
-    actualSharedRatio: number;
-    targetSharedRatio: number;
+    exerciseCount: number;
+    allExercises: EssentialExercise[]; // All candidates for this client
   }[];
 }
 
-interface SlotAllocationData {
-  blockId: string;
-  blockConfig: {
-    maxExercises: number;
-    functionTags: string[];
-    constraints?: any;
-  };
+/**
+ * Main logger class - splits data into focused files
+ */
+export class GroupWorkoutTestDataLogger {
+  private enabled: boolean = true;
+  private sessionData = new Map<string, any>();
   
-  allocation: {
-    totalSlots: number;
-    targetSharedSlots: number;
-    actualSharedAvailable: number;
-    finalSharedSlots: number;
-    individualSlotsPerClient: number;
-  };
-  
-  candidateStats: {
-    sharedCandidatesCount: number;
-    sharedCandidatesQuality: {
-      excellent: number; // 3+ clients
-      good: number;      // 2 clients
-    };
-    individualCandidatesPerClient: {
-      clientId: string;
-      count: number;
-    }[];
-  };
-  
-  subGroupAnalysis: {
-    possibleSubGroups: SubGroupPossibility[];
-    equipmentGroups?: {
-      equipment: string;
-      clientIds: string[];
-    }[];
-  };
-}
-
-interface GroupWorkoutSummary {
-  totalClients: number;
-  templateType: string;
-  
-  // Phase metrics
-  totalProcessingTimeMs: number;
-  phaseBreakdown: {
-    phase1_2_parallel: number;
-    phase2_5_merge: number;
-    phaseB_blueprint: number;
-  };
-  
-  // Exercise metrics
-  totalUniqueExercisesAcrossClients: number;
-  sharedExerciseOpportunities: {
-    sharedByAll: number;
-    sharedBy75Percent: number;
-    sharedBy50Percent: number;
-  };
-  
-  // Cohesion metrics
-  cohesionSatisfaction: {
-    fullyMet: number;
-    partiallyMet: number;
-    notMet: number;
-  };
-  averageCohesionRatio: number;
-  
-  // Quality metrics
-  blueprintQuality: {
-    blocksWithSufficientShared: number;
-    blocksWithInsufficientShared: number;
-    averageSharedQuality: number; // 1-5 scale based on client overlap
-  };
-  
-  // Warnings and issues
-  warningCount: number;
-  errorCount: number;
-}
-
-class GroupWorkoutTestDataLogger {
-  private sessionData: Map<string, GroupWorkoutTestData> = new Map();
-  private enabled: boolean = process.env.GROUP_WORKOUT_TEST_DATA_ENABLED === 'true' || true;
-  
-  enable() {
-    this.enabled = true;
-    logger.info('Group workout test data logging enabled');
+  constructor() {
+    this.enabled = process.env.NODE_ENV !== 'production';
   }
   
-  disable() {
-    this.enabled = false;
-    logger.info('Group workout test data logging disabled');
-  }
-  
-  isEnabled(): boolean {
+  async isEnabled(): Promise<boolean> {
     return this.enabled;
   }
   
-  // Initialize a new group workout session
-  initGroupSession(sessionId: string, groupContext: GroupContext): GroupWorkoutTestData {
-    if (!this.enabled) return {} as GroupWorkoutTestData;
+  /**
+   * Initialize a new session
+   */
+  initSession(sessionId: string, groupContext: GroupContext) {
+    if (!this.enabled) return;
     
-    const testData: GroupWorkoutTestData = {
+    this.sessionData.set(sessionId, {
       sessionId,
       timestamp: new Date().toISOString(),
-      groupSize: groupContext.clients.length,
-      
-      phaseA: {
-        clients: [],
-        timingMs: 0
-      },
-      
-      phase2_5: {
-        blockScoringData: [],
-        groupExercisePools: {},
-        timingMs: 0
-      },
-      
-      phaseB: {
-        blueprint: {} as GroupWorkoutBlueprint,
-        cohesionAnalysis: {
-          clientTargets: [],
-          blockProgress: [],
-          finalStatus: []
-        },
-        slotAllocationDetails: [],
-        timingMs: 0,
-        blocks: []
-      },
-      
-      summary: {
-        totalClients: groupContext.clients.length,
-        templateType: groupContext.templateType || 'standard',
-        totalProcessingTimeMs: 0,
-        phaseBreakdown: {
-          phase1_2_parallel: 0,
-          phase2_5_merge: 0,
-          phaseB_blueprint: 0
-        },
-        totalUniqueExercisesAcrossClients: 0,
-        sharedExerciseOpportunities: {
-          sharedByAll: 0,
-          sharedBy75Percent: 0,
-          sharedBy50Percent: 0
-        },
-        cohesionSatisfaction: {
-          fullyMet: 0,
-          partiallyMet: 0,
-          notMet: 0
-        },
-        averageCohesionRatio: 0,
-        blueprintQuality: {
-          blocksWithSufficientShared: 0,
-          blocksWithInsufficientShared: 0,
-          averageSharedQuality: 0
-        },
-        warningCount: 0,
-        errorCount: 0
-      },
-      
-      groupContext,
-      warnings: [],
-      errors: []
-    };
-    
-    this.sessionData.set(sessionId, testData);
-    logger.info('Initialized group workout test data', { sessionId, groupSize: groupContext.clients.length });
-    
-    return testData;
+      groupContext: this.extractGroupContext(groupContext),
+      phases: {},
+      timing: {},
+      errors: [],
+      warnings: []
+    });
   }
   
-  // Log Phase 1 & 2 results for a client
+  /**
+   * Extract essential group context data
+   */
+  private extractGroupContext(context: GroupContext) {
+    return {
+      sessionId: context.sessionId,
+      businessId: context.businessId,
+      templateType: context.templateType,
+      clients: context.clients.map(c => ({
+        id: c.user_id,
+        name: c.name,
+        strengthCapacity: c.strength_capacity,
+        skillCapacity: c.skill_capacity,
+        intensity: c.intensity,
+        primaryGoal: c.primary_goal
+      }))
+    };
+  }
+  
+  /**
+   * Log Phase 1 & 2: Individual client processing
+   */
   logClientProcessing(
-    sessionId: string, 
-    clientId: string,
-    clientName: string,
-    preferences: any,
-    phase1Results: any,
-    phase2Results: any
-  ) {
-    if (!this.enabled) return;
-    
-    const session = this.sessionData.get(sessionId);
-    if (!session) return;
-    
-    const clientData: ClientProcessingData = {
-      clientId,
-      clientName,
-      preferences: {
-        intensity: preferences.intensity || 'moderate',
-        sessionGoal: preferences.sessionGoal || 'strength',
-        muscleTargets: preferences.muscleTargets || [],
-        muscleLessens: preferences.muscleLessens || [],
-        includeExercises: preferences.includeExercises || [],
-        avoidExercises: preferences.avoidExercises || [],
-        avoidJoints: preferences.avoidJoints || []
-      },
-      phase1: {
-        totalExercises: phase1Results.totalExercises || 0,
-        filteredCount: phase1Results.filteredCount || 0,
-        excludedReasons: phase1Results.excludedReasons || {
-          strength: 0,
-          skill: 0,
-          jointRestrictions: 0,
-          avoidExercises: 0
-        },
-        timingMs: phase1Results.timingMs || 0
-      },
-      phase2: {
-        scoredCount: phase2Results.scoredCount || 0,
-        scoreDistribution: phase2Results.scoreDistribution || [],
-        topExercises: phase2Results.topExercises || [],
-        timingMs: phase2Results.timingMs || 0
-      }
-    };
-    
-    session.phaseA.clients.push(clientData);
-  }
-  
-  // Log Phase 2.5 block scoring data
-  logBlockScoring(
     sessionId: string,
-    scoringData: BlockScoringData
+    clientId: string,
+    filtering: any,
+    scoring: ScoredExercise[]
   ) {
     if (!this.enabled) return;
     
     const session = this.sessionData.get(sessionId);
     if (!session) return;
     
-    session.phase2_5.blockScoringData.push(scoringData);
+    const client = session.groupContext.clients.find((c: any) => c.id === clientId);
+    if (!client) return;
+    
+    if (!session.phases.clients) {
+      session.phases.clients = [];
+    }
+    
+    // Extract essential exercise data
+    const essentialExercises = scoring.map(ex => this.extractEssentialExercise(ex));
+    
+    session.phases.clients.push({
+      clientId,
+      clientName: client.name,
+      preferences: {
+        intensity: client.intensity,
+        muscleTargets: filtering.muscleTarget || [],
+        muscleLessens: filtering.muscleLessen || [],
+        includeExercises: filtering.includeExercises || [],
+        avoidExercises: filtering.avoidExercises || [],
+        avoidJoints: filtering.avoidJoints || []
+      },
+      filtering: filtering.stats || {},
+      scoring: {
+        topExercises: essentialExercises.slice(0, 10),
+        includedExercises: essentialExercises.filter(ex => 
+          filtering.includeExercises?.includes(ex.name)
+        ),
+        scoreDistribution: this.calculateScoreDistribution(essentialExercises)
+      }
+    } as ClientDebugData);
   }
   
-  // Log Phase 2.5 group exercise pools
+  /**
+   * Extract essential exercise fields
+   */
+  private extractEssentialExercise(exercise: ScoredExercise): EssentialExercise {
+    return {
+      id: exercise.id,
+      name: exercise.name,
+      score: exercise.score,
+      movementPattern: exercise.movementPattern,
+      primaryMuscle: exercise.primaryMuscle,
+      secondaryMuscles: exercise.secondaryMuscles,
+      loadedJoints: exercise.loadedJoints,
+      functionTags: exercise.functionTags,
+      scoreBreakdown: exercise.scoreBreakdown
+    };
+  }
+  
+  /**
+   * Log Phase 2.5: Group merge scoring (simplified)
+   */
   logGroupExercisePools(
     sessionId: string,
     groupExercisePools: { [blockId: string]: GroupScoredExercise[] }
@@ -453,321 +239,286 @@ class GroupWorkoutTestDataLogger {
     const session = this.sessionData.get(sessionId);
     if (!session) return;
     
-    // Convert to enhanced data with scoring details
+    if (!session.phases.groupPools) {
+      session.phases.groupPools = {};
+    }
+    
+    // Store simplified group exercise pools
     for (const [blockId, exercises] of Object.entries(groupExercisePools)) {
-      session.phase2_5.groupExercisePools[blockId] = exercises.map(ex => ({
-        ...ex,
-        scoringDetails: {
-          individualScores: ex.clientScores,
-          averageCalculation: this.formatAverageCalculation(ex.clientScores),
-          cohesionCalculation: `(${ex.clientsSharing.length} - 1) * 0.5 = ${ex.cohesionBonus}`
-        }
-      }));
+      session.phases.groupPools[blockId] = {
+        total: exercises.length,
+        sharedByAll: exercises.filter(ex => 
+          ex.clientsSharing.length === session.groupContext.clients.length
+        ).length,
+        sharedBy2Plus: exercises.filter(ex => ex.clientsSharing.length >= 2).length,
+        topShared: exercises
+          .filter(ex => ex.clientsSharing.length >= 2)
+          .slice(0, 10)
+          .map(ex => this.extractEssentialGroupExercise(ex, session))
+      };
     }
   }
   
-  // Log Phase B blueprint and analysis
+  /**
+   * Log Phase 3: Template organization and blueprint
+   */
   logBlueprint(
     sessionId: string,
     blueprint: GroupWorkoutBlueprint,
-    cohesionAnalysis: CohesionAnalysisData,
-    slotAllocationDetails: SlotAllocationData[]
+    cohesionAnalysis: any, // Ignored - will be removed
+    slotAllocationDetails: any[]
   ) {
     if (!this.enabled) return;
     
     const session = this.sessionData.get(sessionId);
     if (!session) return;
     
-    session.phaseB.blueprint = blueprint;
-    session.phaseB.cohesionAnalysis = cohesionAnalysis;
-    session.phaseB.slotAllocationDetails = slotAllocationDetails;
-    
-    // NEW: Build structured block data
-    session.phaseB.blocks = this.buildStructuredBlockData(blueprint, session);
+    session.phases.blueprint = {
+      blocks: blueprint.blocks.map(block => this.extractBlockDebugData(block, session)),
+      validationWarnings: blueprint.validationWarnings || []
+    };
   }
   
-  // NEW: Build structured block data for easier querying
-  private buildStructuredBlockData(
-    blueprint: GroupWorkoutBlueprint, 
-    session: GroupWorkoutTestData
-  ): StructuredBlockData[] {
-    const structuredBlocks: StructuredBlockData[] = [];
-    
-    // Get client name map
-    const clientNameMap = new Map<string, string>();
-    session.phaseA.clients.forEach(client => {
-      clientNameMap.set(client.clientId, client.clientName);
-    });
-    
-    for (const block of blueprint.blocks) {
-      const structuredBlock: StructuredBlockData = {
-        blockId: block.blockId,
-        blockName: `Block ${block.blockId}`,
-        slotAllocation: {
-          totalSlots: block.slots.total,
-          targetShared: block.slots.targetShared,
-          availableShared: block.slots.actualSharedAvailable,
-          individualPerClient: block.slots.individualPerClient
-        },
-        sharedExercises: [],
-        individualExercises: {}
-      };
-      
-      // Add shared exercises
-      if (block.sharedCandidates?.exercises) {
-        structuredBlock.sharedExercises = block.sharedCandidates.exercises.map((ex: any) => ({
-          exerciseId: ex.id,
-          exerciseName: ex.name,
-          groupScore: ex.groupScore,
-          cohesionBonus: ex.cohesionBonus,
-          clientsSharing: ex.clientsSharing
-        }));
-      }
-      
-      // Add individual exercises for each client
-      if (block.individualCandidates) {
-        for (const [clientId, candidateData] of Object.entries(block.individualCandidates)) {
-          structuredBlock.individualExercises[clientId] = {
-            clientName: clientNameMap.get(clientId) || 'Unknown',
-            exercises: candidateData.exercises.map((ex: any, index: number) => ({
-              exerciseId: ex.id,
-              exerciseName: ex.name,
-              individualScore: ex.score,
-              scoreBreakdown: ex.scoreBreakdown,
-              isSelected: ex.isSelected || false,
-              rank: index + 1
-            })),
-            totalCount: candidateData.exercises.length
+  /**
+   * Extract block debug data
+   */
+  private extractBlockDebugData(block: GroupBlockBlueprint, session: any): BlockDebugData {
+    return {
+      blockId: block.blockId,
+      blockName: block.blockConfig.name,
+      config: {
+        functionTags: block.blockConfig.functionTags,
+        maxExercises: block.blockConfig.maxExercises,
+        movementPatternFilter: block.blockConfig.movementPatternFilter
+      },
+      slots: block.slots,
+      sharedCandidates: {
+        total: block.sharedCandidates.exercises.length,
+        topExercises: block.sharedCandidates.exercises
+          .slice(0, 10)
+          .map(ex => this.extractEssentialGroupExercise(ex, session))
+      },
+      individualCandidates: Object.entries(block.individualCandidates).map(
+        ([clientId, data]) => {
+          const client = session.groupContext.clients.find((c: any) => c.id === clientId);
+          return {
+            clientId,
+            clientName: client?.name || clientId,
+            exerciseCount: data.exercises.length,
+            allExercises: data.exercises.map(ex => this.extractEssentialExercise(ex))
           };
         }
-      }
-      
-      structuredBlocks.push(structuredBlock);
-    }
-    
-    return structuredBlocks;
+      )
+    };
   }
   
-  // Update timing information
-  updateTiming(sessionId: string, phase: string, timingMs: number) {
+  /**
+   * Extract essential group exercise data
+   */
+  private extractEssentialGroupExercise(exercise: GroupScoredExercise, session: any): EssentialGroupExercise {
+    return {
+      ...this.extractEssentialExercise(exercise),
+      groupScore: exercise.groupScore,
+      clientsSharing: exercise.clientsSharing,
+      clientScores: exercise.clientScores.map(cs => ({
+        clientId: cs.clientId,
+        clientName: session.groupContext.clients.find((c: any) => c.id === cs.clientId)?.name || cs.clientId,
+        individualScore: cs.individualScore
+      }))
+    };
+  }
+  
+  /**
+   * Calculate score distribution
+   */
+  private calculateScoreDistribution(exercises: EssentialExercise[]) {
+    const ranges = [
+      { range: '0-2', count: 0 },
+      { range: '2-4', count: 0 },
+      { range: '4-6', count: 0 },
+      { range: '6-8', count: 0 },
+      { range: '8-10', count: 0 }
+    ];
+    
+    exercises.forEach(ex => {
+      if (ex.score < 2) ranges[0].count++;
+      else if (ex.score < 4) ranges[1].count++;
+      else if (ex.score < 6) ranges[2].count++;
+      else if (ex.score < 8) ranges[3].count++;
+      else ranges[4].count++;
+    });
+    
+    return ranges.filter(r => r.count > 0);
+  }
+  
+  /**
+   * Add timing information
+   */
+  updateTiming(sessionId: string, phase: string, durationMs: number) {
     if (!this.enabled) return;
     
     const session = this.sessionData.get(sessionId);
     if (!session) return;
     
-    switch (phase) {
-      case 'phase1_2':
-        session.phaseA.timingMs = timingMs;
-        session.summary.phaseBreakdown.phase1_2_parallel = timingMs;
-        break;
-      case 'phase2_5':
-        session.phase2_5.timingMs = timingMs;
-        session.summary.phaseBreakdown.phase2_5_merge = timingMs;
-        break;
-      case 'phaseB':
-        session.phaseB.timingMs = timingMs;
-        session.summary.phaseBreakdown.phaseB_blueprint = timingMs;
-        break;
-    }
-    
-    session.summary.totalProcessingTimeMs = 
-      session.summary.phaseBreakdown.phase1_2_parallel +
-      session.summary.phaseBreakdown.phase2_5_merge +
-      session.summary.phaseBreakdown.phaseB_blueprint;
+    session.timing[phase] = durationMs;
   }
   
-  // Calculate and update summary statistics
-  calculateSummaryStats(sessionId: string) {
-    if (!this.enabled) return;
-    
-    const session = this.sessionData.get(sessionId);
-    if (!session) return;
-    
-    // Calculate unique exercises across all clients
-    const allExercises = new Set<string>();
-    const exerciseClientMap = new Map<string, Set<string>>();
-    
-    for (const client of session.phaseA.clients) {
-      for (const exercise of client.phase2.topExercises) {
-        allExercises.add(exercise.id);
-        if (!exerciseClientMap.has(exercise.id)) {
-          exerciseClientMap.set(exercise.id, new Set());
-        }
-        exerciseClientMap.get(exercise.id)!.add(client.clientId);
-      }
-    }
-    
-    session.summary.totalUniqueExercisesAcrossClients = allExercises.size;
-    
-    // Calculate shared exercise opportunities
-    const totalClients = session.groupSize;
-    let sharedByAll = 0;
-    let sharedBy75 = 0;
-    let sharedBy50 = 0;
-    
-    for (const [_, clientSet] of exerciseClientMap) {
-      const shareRatio = clientSet.size / totalClients;
-      if (shareRatio === 1) sharedByAll++;
-      if (shareRatio >= 0.75) sharedBy75++;
-      if (shareRatio >= 0.5) sharedBy50++;
-    }
-    
-    session.summary.sharedExerciseOpportunities = {
-      sharedByAll,
-      sharedBy75Percent: sharedBy75,
-      sharedBy50Percent: sharedBy50
-    };
-    
-    // Calculate cohesion satisfaction
-    if (session.phaseB.cohesionAnalysis.finalStatus.length > 0) {
-      let fullyMet = 0;
-      let partiallyMet = 0;
-      let notMet = 0;
-      let totalRatio = 0;
-      
-      for (const status of session.phaseB.cohesionAnalysis.finalStatus) {
-        totalRatio += status.actualSharedRatio;
-        
-        const satisfaction = status.actualSharedRatio / status.targetSharedRatio;
-        if (satisfaction >= 0.95) fullyMet++;
-        else if (satisfaction >= 0.7) partiallyMet++;
-        else notMet++;
-      }
-      
-      session.summary.cohesionSatisfaction = { fullyMet, partiallyMet, notMet };
-      session.summary.averageCohesionRatio = totalRatio / session.phaseB.cohesionAnalysis.finalStatus.length;
-    }
-    
-    // Calculate blueprint quality
-    let sufficientBlocks = 0;
-    let insufficientBlocks = 0;
-    let totalQuality = 0;
-    
-    for (const block of session.phaseB.slotAllocationDetails) {
-      const hasEnoughShared = block.allocation.finalSharedSlots >= block.allocation.targetSharedSlots * 0.8;
-      if (hasEnoughShared) sufficientBlocks++;
-      else insufficientBlocks++;
-      
-      // Quality score based on candidate availability
-      const qualityScore = Math.min(5, 
-        (block.candidateStats.sharedCandidatesQuality.excellent * 2 + 
-         block.candidateStats.sharedCandidatesQuality.good) / 
-        Math.max(1, block.allocation.targetSharedSlots)
-      );
-      totalQuality += qualityScore;
-    }
-    
-    session.summary.blueprintQuality = {
-      blocksWithSufficientShared: sufficientBlocks,
-      blocksWithInsufficientShared: insufficientBlocks,
-      averageSharedQuality: totalQuality / Math.max(1, session.phaseB.slotAllocationDetails.length)
-    };
-    
-    // Update warning/error counts
-    session.summary.warningCount = session.warnings?.length || 0;
-    session.summary.errorCount = session.errors?.length || 0;
-  }
-  
-  // Add warning
+  /**
+   * Add warning
+   */
   addWarning(sessionId: string, warning: string) {
     if (!this.enabled) return;
     
     const session = this.sessionData.get(sessionId);
     if (!session) return;
     
-    session.warnings = session.warnings || [];
     session.warnings.push(warning);
-    session.summary.warningCount++;
   }
   
-  // Add error
+  /**
+   * Add error
+   */
   addError(sessionId: string, error: string) {
     if (!this.enabled) return;
     
     const session = this.sessionData.get(sessionId);
     if (!session) return;
     
-    session.errors = session.errors || [];
     session.errors.push(error);
-    session.summary.errorCount++;
   }
   
-  // Save session data to file
-  async saveGroupWorkoutData(sessionId: string) {
+  /**
+   * Save session data to multiple focused files
+   */
+  async saveGroupWorkoutData(sessionId: string): Promise<void> {
     if (!this.enabled) return;
     
     const session = this.sessionData.get(sessionId);
     if (!session) {
-      logger.warn('Group workout session not found for saving', { sessionId });
+      logger.warn(`No session data found for ${sessionId}`);
       return;
     }
     
-    // Calculate final statistics
-    this.calculateSummaryStats(sessionId);
-    
     try {
-      // Create directory if it doesn't exist
-      const dirPath = path.join(process.cwd(), 'session-test-data', 'group-workouts');
-      await fs.mkdir(dirPath, { recursive: true });
-      
-      // Create filename with timestamp
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const filename = `group_${sessionId}_${timestamp}.json`;
-      const filepath = path.join(dirPath, filename);
+      const baseDir = path.join(process.cwd(), 'session-test-data', 'group-workouts', sessionId);
       
-      // Write the file
-      await fs.writeFile(
-        filepath,
-        JSON.stringify(session, null, 2),
-        'utf-8'
+      // Create directory
+      await fs.mkdir(baseDir, { recursive: true });
+      
+      // Save different aspects to separate files
+      
+      // 1. Overview file - quick summary
+      await this.saveFile(
+        path.join(baseDir, `1-overview.json`),
+        {
+          sessionId,
+          timestamp: session.timestamp,
+          templateType: session.groupContext.templateType,
+          groupSize: session.groupContext.clients.length,
+          clients: session.groupContext.clients.map((c: any) => ({
+            id: c.id,
+            name: c.name,
+            capacity: `${c.strengthCapacity}/${c.skillCapacity}`
+          })),
+          timing: session.timing,
+          warnings: session.warnings,
+          errors: session.errors,
+          summary: {
+            totalBlocks: session.phases.blueprint?.blocks.length || 0,
+            totalSharedExercises: session.phases.blueprint?.blocks.reduce((sum: number, b: any) => 
+              sum + b.sharedCandidates.topExercises.length, 0
+            ) || 0
+          }
+        }
       );
       
-      logger.info('Group workout test data saved', { 
-        sessionId, 
-        filepath,
-        summary: session.summary 
-      });
+      // 2. Client processing data
+      if (session.phases.clients) {
+        await this.saveFile(
+          path.join(baseDir, `2-clients.json`),
+          session.phases.clients
+        );
+      }
       
-      // Also save a "latest" file for easy access
-      const latestPath = path.join(dirPath, 'latest-group-workout.json');
-      await fs.writeFile(
-        latestPath,
-        JSON.stringify(session, null, 2),
-        'utf-8'
+      // 3. Group pools data
+      if (session.phases.groupPools) {
+        await this.saveFile(
+          path.join(baseDir, `3-group-pools.json`),
+          session.phases.groupPools
+        );
+      }
+      
+      // 4. Blueprint data
+      if (session.phases.blueprint) {
+        await this.saveFile(
+          path.join(baseDir, `4-blueprint.json`),
+          session.phases.blueprint
+        );
+      }
+      
+      // 5. Also save combined "latest" file for quick access
+      const latestDir = path.join(process.cwd(), 'session-test-data', 'group-workouts');
+      await this.saveFile(
+        path.join(latestDir, 'latest.json'),
+        {
+          overview: {
+            sessionId,
+            timestamp: session.timestamp,
+            templateType: session.groupContext.templateType,
+            files: [
+              `${sessionId}/1-overview.json`,
+              `${sessionId}/2-clients.json`,
+              `${sessionId}/3-group-pools.json`,
+              `${sessionId}/4-blueprint.json`
+            ]
+          },
+          quickView: {
+            clients: session.groupContext.clients.map((c: any) => c.name),
+            timing: session.timing,
+            warnings: session.warnings.length,
+            errors: session.errors.length
+          }
+        }
       );
+      
+      logger.info(`Group workout data saved to ${baseDir}`);
       
       // Clear session data from memory
       this.sessionData.delete(sessionId);
       
     } catch (error) {
-      logger.error('Failed to save group workout test data', { sessionId, error });
+      logger.error('Failed to save group workout data:', error);
     }
   }
   
-  // Helper to format average calculation string
-  private formatAverageCalculation(clientScores: any[]): string {
-    const scores = clientScores
-      .filter(cs => cs.hasExercise)
-      .map(cs => cs.individualScore);
-    
-    if (scores.length === 0) return "No scores";
-    if (scores.length === 1) return `${scores[0]}`;
-    
-    const sum = scores.reduce((a, b) => a + b, 0);
-    const avg = sum / scores.length;
-    
-    return `(${scores.join(' + ')}) / ${scores.length} = ${avg.toFixed(2)}`;
+  /**
+   * Helper to save JSON file
+   */
+  private async saveFile(filepath: string, data: any) {
+    await fs.writeFile(
+      filepath,
+      JSON.stringify(data, null, 2),
+      'utf-8'
+    );
   }
   
-  // Get current session data (for debugging)
-  getGroupSessionData(sessionId: string): GroupWorkoutTestData | undefined {
-    return this.sessionData.get(sessionId);
+  // Legacy methods for compatibility (simplified implementations)
+  
+  logPhase1Client(sessionId: string, clientId: string, data: any) {
+    // Map to new method
+    this.logClientProcessing(sessionId, clientId, data.filters, data.scored || []);
   }
   
-  // Clear session data
-  clearGroupSession(sessionId: string) {
-    this.sessionData.delete(sessionId);
+  logPhase2Client(sessionId: string, clientId: string, data: any) {
+    // Already handled in logClientProcessing
+  }
+  
+  buildStructuredBlockData(blueprint: GroupWorkoutBlueprint, session: any) {
+    // Legacy method - not needed anymore
+    return [];
   }
 }
 
+// Export singleton instance
 export const groupWorkoutTestDataLogger = new GroupWorkoutTestDataLogger();

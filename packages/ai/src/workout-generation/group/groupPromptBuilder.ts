@@ -60,7 +60,7 @@ export class GroupPromptBuilder {
       
       block.sharedCandidates.exercises.forEach((exercise, idx) => {
         sections.push(`\n${idx + 1}. **${exercise.name}** (ID: ${exercise.id})`);
-        sections.push(`   Group Score: ${exercise.groupScore.toFixed(2)} (includes +${exercise.cohesionBonus.toFixed(2)} cohesion bonus)`);
+        sections.push(`   Group Score: ${exercise.groupScore.toFixed(2)}`);
         sections.push(`   Shared by: ${exercise.clientsSharing.length} clients`);
         
         // Show which clients can do this exercise and their scores
@@ -96,19 +96,7 @@ export class GroupPromptBuilder {
       sections.push(""); // Empty line between blocks
     });
     
-    // 4. Current Cohesion Status
-    sections.push("## Current Cohesion Tracking\n");
-    const firstBlock = input.blocks[0];
-    if (firstBlock?.cohesionSnapshot) {
-      firstBlock.cohesionSnapshot.forEach(tracking => {
-        const client = input.clients.find(c => c.user_id === tracking.clientId);
-        sections.push(`${client?.name || tracking.clientId}:`);
-        sections.push(`- Needs ${tracking.targetSharedExercises} shared exercises total`);
-        sections.push(`- Currently has ${tracking.currentSharedSlots} allocated`);
-        sections.push(`- Status: ${tracking.satisfactionStatus}`);
-        sections.push("");
-      });
-    }
+    // 4. Removed cohesion tracking for now
     
     return sections.join('\n');
   }

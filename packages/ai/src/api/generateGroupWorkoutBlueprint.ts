@@ -4,8 +4,7 @@ import type { ScoredExercise } from "../types/scoredExercise";
 import type { Exercise } from "../types/exercise";
 import { filterExercises } from "../core/filtering/filterExercises";
 import { scoreAndSortExercises } from "../core/scoring/scoreExercises";
-import { performGroupMergeScoring } from "../core/group-scoring/mergeScores";
-import { GroupWorkoutTemplateHandler } from "../core/templates/GroupWorkoutTemplateHandler";
+import { TemplateProcessor } from "../core/templates/TemplateProcessor";
 import { getWorkoutTemplate } from "../core/templates/config/defaultTemplates";
 
 /**
@@ -42,7 +41,6 @@ export async function generateGroupWorkoutBlueprint(
     
     // Phase 1 & 2: Filter and score for each client (in parallel)
     let clientScoredExercises = new Map<string, ScoredExercise[]>();
-    const clientExercisesByBlock = new Map<string, { [blockId: string]: ScoredExercise[] }>();
     
     if (preScoredExercises) {
       // Use pre-scored exercises if provided
@@ -108,130 +106,18 @@ export async function generateGroupWorkoutBlueprint(
       throw new Error(error);
     }
     
-    // Get block configs from the template
-    const blockConfigs = template.blocks;
-    console.log(`✅ Template loaded with ${blockConfigs.length} blocks`);
+    console.log(`✅ Template loaded with ${template.blocks.length} blocks`);
     
-    // Organize exercises by block for Phase 2.5
-    console.log('🔄 Organizing exercises by block...');
-    for (const [clientId, exercises] of clientScoredExercises) {
-      const byBlock: { [blockId: string]: ScoredExercise[] } = {};
-      
-      // Debug: Check first exercise's function tags
-      if (exercises.length > 0) {
-        const firstEx = exercises[0];
-        if (firstEx) {
-          console.log(`  Debug - First exercise for client ${clientId}:`, {
-            name: firstEx.name,
-            functionTags: firstEx.functionTags,
-            hasFunctionTags: !!firstEx.functionTags,
-            functionTagsType: typeof firstEx.functionTags
-          });
-        }
-      }
-      
-      for (const block of blockConfigs) {
-        console.log(`  Block ${block.id} requires tags:`, block.functionTags);
-        if (block.movementPatternFilter) {
-          console.log(`  Block ${block.id} movement pattern filter:`, block.movementPatternFilter);
-        }
-        
-        // Filter exercises by block function tags AND movement patterns
-        byBlock[block.id] = exercises.filter(ex => {
-          // First check function tags
-          if (!ex.functionTags || !Array.isArray(ex.functionTags)) {
-            return false;
-          }
-          if (!block.functionTags.some(tag => ex.functionTags?.includes(tag))) {
-            return false;
-          }
-          
-          // Then check movement pattern filter if specified
-          if (block.movementPatternFilter) {
-            const { include, exclude } = block.movementPatternFilter;
-            
-            if (!ex.movementPattern) {
-              return false; // No movement pattern = can't match filter
-            }
-            
-            // If include list is specified, exercise must have one of these patterns
-            if (include && include.length > 0) {
-              if (!include.includes(ex.movementPattern)) {
-                return false;
-              }
-            }
-            
-            // If exclude list is specified, exercise must not have any of these patterns
-            if (exclude && exclude.length > 0) {
-              if (exclude.includes(ex.movementPattern)) {
-                return false;
-              }
-            }
-          }
-          
-          return true;
-        });
-        
-        console.log(`  Client ${clientId}, Block ${block.id}: ${byBlock[block.id]?.length || 0} exercises after all filters`);
-      }
-      
-      clientExercisesByBlock.set(clientId, byBlock);
-    }
-    
-    // Phase 2.5: Group merge scoring
-    console.log('🔄 Starting Phase 2.5: Group merge scoring...');
-    const phase25StartTime = Date.now();
+    // Phase 3: Create blueprint using new TemplateProcessor
+    console.log('🔄 Starting Phase 3: Template organization...');
+    const phase3StartTime = Date.now();
     
     try {
-      const updatedContext = performGroupMergeScoring(
-        groupContext,
-        blockConfigs,
-        clientExercisesByBlock
-      );
+      const processor = new TemplateProcessor(template);
+      const blueprint = processor.processForGroup(clientScoredExercises);
       
-      const phase25Time = Date.now() - phase25StartTime;
-      console.log(`✅ Phase 2.5 complete in ${phase25Time}ms`);
-      
-      // Log Phase 2.5 results
-      if (updatedContext.groupExercisePools) {
-        for (const [blockId, pool] of Object.entries(updatedContext.groupExercisePools)) {
-          console.log(`  Block ${blockId}: ${pool.length} exercises in group pool`);
-          
-          // Log top shared exercises
-          const topShared = pool
-            .filter(ex => ex.clientsSharing.length > 1)
-            .slice(0, 3);
-          
-          if (topShared.length > 0) {
-            console.log(`    Top shared exercises:`);
-            topShared.forEach(ex => {
-              console.log(`      - ${ex.name}: shared by ${ex.clientsSharing.length} clients (score: ${ex.groupScore.toFixed(2)})`);
-            });
-          } else {
-            console.log(`    ⚠️ No shared exercises in this block`);
-            groupWorkoutTestDataLogger?.addWarning(
-              groupContext.sessionId,
-              `Block ${blockId}: No shared exercises available`
-            );
-          }
-        }
-      }
-      
-      groupWorkoutTestDataLogger?.updateTiming(groupContext.sessionId, 'phase2_5', phase25Time);
-      groupWorkoutTestDataLogger?.logGroupExercisePools(
-        groupContext.sessionId,
-        updatedContext.groupExercisePools || {}
-      );
-      
-      // Phase 4: Create blueprint
-      console.log('🔄 Starting Phase B: Blueprint creation...');
-      const phaseBStartTime = Date.now();
-      
-      const handler = new GroupWorkoutTemplateHandler(updatedContext, template);
-      const blueprint = handler.createBlueprint(clientScoredExercises);
-      
-      const phaseBTime = Date.now() - phaseBStartTime;
-      console.log(`✅ Phase B complete in ${phaseBTime}ms`);
+      const phase3Time = Date.now() - phase3StartTime;
+      console.log(`✅ Phase 3 complete in ${phase3Time}ms`);
       console.log(`📊 Blueprint created with ${blueprint.blocks.length} blocks`);
       
       // Log warnings if any
@@ -243,32 +129,14 @@ export async function generateGroupWorkoutBlueprint(
         });
       }
       
-      // Log Phase B data to test data logger
+      // Log Phase 3 data to test data logger
       if (groupWorkoutTestDataLogger && groupContext.sessionId) {
-        // Create cohesion analysis data
-        const cohesionAnalysis: any = {
-          clientTargets: blueprint.clientCohesionTracking?.map(tracking => ({
-            clientId: tracking.clientId,
-            clientName: updatedContext.clients.find(c => c.user_id === tracking.clientId)?.name || tracking.clientId,
-            cohesionRatio: tracking.cohesionRatio,
-            totalExercisesNeeded: tracking.totalExercisesInWorkout,
-            targetSharedExercises: tracking.targetSharedExercises
-          })) || [],
-          blockProgress: [],
-          finalStatus: blueprint.clientCohesionTracking?.map(tracking => ({
-            clientId: tracking.clientId,
-            satisfied: tracking.satisfactionStatus === 'satisfied',
-            actualSharedRatio: tracking.currentSharedSlots / tracking.totalExercisesInWorkout,
-            targetSharedRatio: tracking.cohesionRatio
-          })) || []
-        };
-        
         // Create slot allocation details
         const slotAllocationDetails = blueprint.blocks.map(block => ({
           blockId: block.blockId,
           blockConfig: {
             maxExercises: block.slots.total,
-            functionTags: [], // Would need to get from block config
+            functionTags: block.blockConfig.functionTags,
             constraints: {}
           },
           allocation: {
@@ -293,25 +161,25 @@ export async function generateGroupWorkoutBlueprint(
         groupWorkoutTestDataLogger.logBlueprint(
           groupContext.sessionId,
           blueprint,
-          cohesionAnalysis,
+          null, // No cohesion analysis for now
           slotAllocationDetails
         );
       }
       
-      groupWorkoutTestDataLogger?.updateTiming(groupContext.sessionId, 'phaseB', phaseBTime);
+      groupWorkoutTestDataLogger?.updateTiming(groupContext.sessionId, 'phase3', phase3Time);
       
       const totalTime = Date.now() - startTime;
       console.log(`✅ Total group workout generation time: ${totalTime}ms`);
       
       return blueprint;
       
-    } catch (phase25Error) {
-      console.error('❌ Error in Phase 2.5:', phase25Error);
+    } catch (phase3Error) {
+      console.error('❌ Error in Phase 3:', phase3Error);
       groupWorkoutTestDataLogger?.addError(
         groupContext.sessionId,
-        `Phase 2.5 error: ${phase25Error instanceof Error ? phase25Error.message : 'Unknown error'}`
+        `Phase 3 error: ${phase3Error instanceof Error ? phase3Error.message : 'Unknown error'}`
       );
-      throw phase25Error;
+      throw phase3Error;
     }
     
   } catch (error) {

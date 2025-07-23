@@ -28,7 +28,7 @@ export async function generateGroupWorkout(
     const groupWorkout = await strategy.generateGroupWorkout(
       blueprint.blocks,
       groupContext.clients,
-      groupContext.groupCohesionSettings,
+      undefined, // No cohesion settings for now
       groupContext.sessionId
     );
     

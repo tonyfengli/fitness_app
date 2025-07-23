@@ -3,28 +3,7 @@
  * These match the existing hardcoded structure for backward compatibility
  */
 
-import type { WorkoutTemplate, DynamicBlockDefinition } from "../types/dynamicBlockTypes";
-import { BLOCK_CONFIGS } from "../types/blockConfig";
-
-/**
- * Convert existing block config to dynamic format
- */
-function convertBlockConfig(
-  id: string,
-  config: typeof BLOCK_CONFIGS[keyof typeof BLOCK_CONFIGS]
-): DynamicBlockDefinition {
-  return {
-    id,
-    name: config.name,
-    functionTags: config.functionTag === 'core_capacity' 
-      ? ['core', 'capacity'] 
-      : [config.functionTag],
-    maxExercises: config.maxExercises,
-    constraints: config.constraints,
-    selectionStrategy: config.selectionStrategy,
-    penaltyForReuse: config.penaltyForReuse
-  };
-}
+import type { WorkoutTemplate, BlockDefinition } from "../types/dynamicBlockTypes";
 
 /**
  * Default workout template - matches existing hardcoded structure
@@ -34,53 +13,86 @@ export const DEFAULT_WORKOUT_TEMPLATE: WorkoutTemplate = {
   name: 'Standard Workout',
   description: 'Traditional strength training workout with 4 blocks',
   blocks: [
-    convertBlockConfig('A', BLOCK_CONFIGS.A),
-    convertBlockConfig('B', BLOCK_CONFIGS.B),
-    convertBlockConfig('C', BLOCK_CONFIGS.C),
-    convertBlockConfig('D', BLOCK_CONFIGS.D)
+    {
+      id: 'A',
+      name: 'Block A - Primary Strength',
+      functionTags: ['primary_strength'],
+      maxExercises: 5,
+      selectionStrategy: 'deterministic',
+      movementPatternFilter: {
+        include: ['squat', 'hinge', 'horizontal_push', 'vertical_push', 'horizontal_pull', 'vertical_pull']
+      }
+    },
+    {
+      id: 'B',
+      name: 'Block B - Secondary Strength',
+      functionTags: ['secondary_strength'],
+      maxExercises: 8,
+      selectionStrategy: 'randomized',
+      movementPatternFilter: {
+        include: ['squat', 'hinge', 'lunge', 'horizontal_push', 'vertical_push', 'horizontal_pull', 'vertical_pull']
+      }
+    },
+    {
+      id: 'C',
+      name: 'Block C - Accessory',
+      functionTags: ['accessory'],
+      maxExercises: 8,
+      selectionStrategy: 'randomized'
+    },
+    {
+      id: 'D',
+      name: 'Block D - Core & Capacity',
+      functionTags: ['core', 'capacity'],
+      maxExercises: 6,
+      selectionStrategy: 'randomized'
+    }
   ],
   blockOrder: ['A', 'B', 'C', 'D']
 };
 
 /**
- * Full body workout template - adds muscle constraints
+ * Full body workout template
  */
 export const FULL_BODY_TEMPLATE: WorkoutTemplate = {
   id: 'full_body',
   name: 'Full Body Workout',
-  description: 'Balanced workout with muscle group constraints',
+  description: 'Balanced full body workout',
   blocks: [
     {
-      ...convertBlockConfig('A', BLOCK_CONFIGS.A),
-      constraints: {
-        ...BLOCK_CONFIGS.A.constraints,
-        muscles: {
-          minLowerBody: 2,
-          minUpperBody: 2
-        }
+      id: 'A',
+      name: 'Block A - Primary Strength',
+      functionTags: ['primary_strength'],
+      maxExercises: 5,
+      selectionStrategy: 'deterministic',
+      movementPatternFilter: {
+        include: ['squat', 'hinge', 'horizontal_push', 'vertical_push', 'horizontal_pull', 'vertical_pull']
       }
     },
     {
-      ...convertBlockConfig('B', BLOCK_CONFIGS.B),
-      constraints: {
-        ...BLOCK_CONFIGS.B.constraints,
-        muscles: {
-          minLowerBody: 2,
-          minUpperBody: 2
-        }
+      id: 'B',
+      name: 'Block B - Secondary Strength',
+      functionTags: ['secondary_strength'],
+      maxExercises: 8,
+      selectionStrategy: 'randomized',
+      movementPatternFilter: {
+        include: ['squat', 'hinge', 'lunge', 'horizontal_push', 'vertical_push', 'horizontal_pull', 'vertical_pull']
       }
     },
     {
-      ...convertBlockConfig('C', BLOCK_CONFIGS.C),
-      constraints: {
-        ...BLOCK_CONFIGS.C.constraints,
-        muscles: {
-          minLowerBody: 2,
-          minUpperBody: 2
-        }
-      }
+      id: 'C',
+      name: 'Block C - Accessory',
+      functionTags: ['accessory'],
+      maxExercises: 8,
+      selectionStrategy: 'randomized'
     },
-    convertBlockConfig('D', BLOCK_CONFIGS.D) // Block D doesn't use muscle constraints
+    {
+      id: 'D',
+      name: 'Block D - Core & Capacity',
+      functionTags: ['core', 'capacity'],
+      maxExercises: 6,
+      selectionStrategy: 'randomized'
+    }
   ],
   blockOrder: ['A', 'B', 'C', 'D']
 };

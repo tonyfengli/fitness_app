@@ -1,6 +1,6 @@
 import type { ScoredExercise } from "../types/scoredExercise";
 import type { OrganizedExercises } from "../core/templates/types";
-import type { DynamicOrganizedExercises } from "../core/templates/types/dynamicBlockTypes";
+// DynamicOrganizedExercises removed - template organization simplified
 import { BlockDebugger, logBlock, logBlockTransformation } from "../utils/blockDebugger";
 
 export interface ExerciseWithUIFlags extends ScoredExercise {
@@ -22,7 +22,7 @@ export interface ExerciseWithUIFlags extends ScoredExercise {
  */
 export function addPresentationFlagsDynamic(
   exercises: ScoredExercise[],
-  organizedExercises: DynamicOrganizedExercises | null
+  organizedExercises: Record<string, ScoredExercise[]> | null
 ): ExerciseWithUIFlags[] {
   logBlock('addPresentationFlagsDynamic - Start', {
     totalExercises: exercises.length,
@@ -220,13 +220,13 @@ export function addPresentationFlags(
  */
 export function addPresentationFlagsAuto(
   exercises: ScoredExercise[],
-  organizedExercises: OrganizedExercises | DynamicOrganizedExercises | null
+  organizedExercises: OrganizedExercises | Record<string, ScoredExercise[]> | null
 ): ExerciseWithUIFlags[] {
   // Check if it's legacy format (has blockA, blockB, etc.)
   if (organizedExercises && 'blockA' in organizedExercises) {
-    return addPresentationFlags(exercises, organizedExercises);
+    return addPresentationFlags(exercises, organizedExercises as OrganizedExercises);
   }
   
   // Otherwise treat as dynamic format
-  return addPresentationFlagsDynamic(exercises, organizedExercises);
+  return addPresentationFlagsDynamic(exercises, organizedExercises as Record<string, ScoredExercise[]> | null);
 }

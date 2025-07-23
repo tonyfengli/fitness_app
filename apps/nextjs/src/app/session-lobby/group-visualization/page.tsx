@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { useTRPC } from "~/trpc/react";
-import type { GroupScoredExercise, ClientCohesionTracking } from "@acme/ai";
+import type { GroupScoredExercise } from "@acme/ai";
 
 // Helper to format muscle names for display (convert underscore to space and capitalize)
 function formatMuscleName(muscle: string): string {
@@ -421,9 +421,6 @@ export default function GroupVisualizationPage() {
                                           <span className="text-gray-500">
                                             Score: <span className="font-medium text-gray-900">{sharedExercise.groupScore.toFixed(2)}</span>
                                           </span>
-                                          <span className="text-green-600">
-                                            +{sharedExercise.cohesionBonus.toFixed(2)}
-                                          </span>
                                           <span className="text-blue-600">
                                             {sharedExercise.clientsSharing.length} clients
                                           </span>
@@ -505,14 +502,7 @@ export default function GroupVisualizationPage() {
             </details>
             
               {/* Cohesion Tracking */}
-              <div className="bg-white rounded-lg shadow-sm p-4">
-                <h3 className="text-base font-medium text-gray-900 mb-3">Cohesion Tracking</h3>
-                <div className="space-y-2">
-                {selectedBlockData.cohesionSnapshot.map((tracking) => (
-                  <CohesionTrackingCard key={tracking.clientId} tracking={tracking} />
-                ))}
-              </div>
-            </div>
+              {/* Cohesion tracking removed */}
             
               {/* LLM Debug Section */}
               <div className="bg-white rounded-lg shadow-sm p-4">
@@ -594,9 +584,6 @@ function SharedExerciseCard({ exercise, rank }: { exercise: GroupScoredExercise;
             <span className="text-gray-500">
               Score: <span className="font-medium text-gray-900">{exercise.groupScore.toFixed(2)}</span>
             </span>
-            <span className="text-green-600">
-              +{exercise.cohesionBonus.toFixed(2)}
-            </span>
             <span className="text-blue-600">
               {exercise.clientsSharing.length} clients
             </span>
@@ -619,32 +606,4 @@ function SharedExerciseCard({ exercise, rank }: { exercise: GroupScoredExercise;
   );
 }
 
-// Component for cohesion tracking
-function CohesionTrackingCard({ tracking }: { tracking: ClientCohesionTracking }) {
-  const percentage = (tracking.currentSharedSlots / tracking.targetSharedExercises) * 100;
-  const statusColor = {
-    satisfied: "text-green-600",
-    on_track: "text-blue-600",
-    needs_more: "text-yellow-600",
-    over: "text-purple-600",
-  }[tracking.satisfactionStatus];
-  
-  return (
-    <div className="flex items-center justify-between p-2 border border-gray-200 rounded">
-      <div>
-        <p className="text-sm font-medium text-gray-900">{tracking.clientId.slice(0, 12)}</p>
-        <p className="text-xs text-gray-500">
-          {tracking.currentSharedSlots}/{tracking.targetSharedExercises} shared
-        </p>
-      </div>
-      <div className="text-right">
-        <p className={`text-sm font-medium ${statusColor}`}>
-          {percentage.toFixed(0)}%
-        </p>
-        <p className={`text-xs ${statusColor}`}>
-          {tracking.satisfactionStatus.replace("_", " ")}
-        </p>
-      </div>
-    </div>
-  );
-}
+// CohesionTrackingCard component removed - cohesion tracking no longer used

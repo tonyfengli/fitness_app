@@ -3,7 +3,7 @@ import type { WorkoutSessionStateType, ClientContext, FilterWorkoutTemplate } fr
 import type { ScoredExercise } from "../types/scoredExercise";
 import { ExerciseFilterError } from "../core/filtering/applyClientFilters";
 import { buildScoringCriteria } from "../utils/scoringCriteria";
-import { applyTemplateOrganization } from "../utils/templateOrganization";
+// Template organization removed - individual workouts not template-aware yet
 import { addPresentationFlagsAuto } from "../formatting/exerciseFlags";
 
 export interface FilterExercisesOptions {
@@ -58,23 +58,11 @@ export async function filterExercisesFromInput(options: FilterExercisesOptions):
     const filterEndTime = performance.now();
     // console.log(`⏱️ Filtering took: ${(filterEndTime - filterStartTime).toFixed(2)}ms`);
     
-    // Step 3: Apply template organization if provided
-    const templateStartTime = performance.now();
-    const templateResult = applyTemplateOrganization(
-      filteredExercises as ScoredExercise[], 
-      workoutTemplate
-    );
-    
-    // Step 4: Add presentation flags for UI
+    // Step 3: Add presentation flags for UI (no template organization for now)
     const exercisesWithFlags = addPresentationFlagsAuto(
       filteredExercises as ScoredExercise[],
-      templateResult?.organizedExercises ?? null
+      null // No template organization for individual workouts yet
     );
-    
-    if (templateResult) {
-      const templateEndTime = performance.now();
-      // console.log(`⏱️ Template organization took: ${(templateEndTime - templateStartTime).toFixed(2)}ms`);
-    }
     
     const totalTime = performance.now() - startTime;
     // console.log(`⏱️ TOTAL filterExercisesFromInput time: ${totalTime.toFixed(2)}ms`);

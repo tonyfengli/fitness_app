@@ -4,7 +4,7 @@ import type { ScoredExercise } from "../types/scoredExercise";
 import { ExerciseFilterError } from "../core/filtering/applyClientFilters";
 import { buildScoringCriteria } from "../utils/scoringCriteria";
 import type { FilterCriteria } from "../core/filtering/types";
-import { applyTemplateOrganization } from "../utils/templateOrganization";
+// Template organization removed - individual workouts not template-aware yet
 import { addPresentationFlagsAuto } from "../formatting/exerciseFlags";
 import { applyAllFiltersEnhanced } from "../core/filtering/enhancedFilterFunctions";
 import { 
@@ -125,16 +125,11 @@ export async function enhancedFilterExercisesFromInput(
     
     const scoreEndTime = performance.now();
     
-    // Step 4: Apply template organization with enhanced constraint tracking
-    const templateStartTime = performance.now();
-    const templateResult = applyTemplateOrganization(scoredExercises, workoutTemplate, enableDebug);
-    const templateEndTime = performance.now();
-    
-    // Step 5: Add presentation flags
+    // Step 4: Add presentation flags (no template organization for now)
     const flagStartTime = performance.now();
     const exercisesWithFlags = addPresentationFlagsAuto(
       scoredExercises,
-      templateResult?.organizedExercises || null
+      null // No template organization for individual workouts yet
     );
     const flagEndTime = performance.now();
     
@@ -224,9 +219,9 @@ export async function enhancedFilterExercisesFromInput(
       timestamp: new Date().toISOString(),
       filters: standardDebugData.filters,
       results: {
-        template: templateResult?.templateId || 'none',
+        template: 'none', // No template organization for individual workouts
         exerciseCount: exercisesWithFlags.length,
-        constraintsSatisfied: templateResult !== null, // Simple check for now
+        constraintsSatisfied: true, // No constraints for now
         generationTime: totalTime,
         blockCounts: {
           blockA: blockA.length,

@@ -924,7 +924,7 @@ export const trainingSessionRouter = {
       };
       
       // Initialize test data logging
-      const testData = groupWorkoutTestDataLogger.initGroupSession(input.sessionId, initialGroupContext);
+      groupWorkoutTestDataLogger.initSession(input.sessionId, initialGroupContext);
       
       console.log('💪 Running Phase 1 & 2 for each client...');
       

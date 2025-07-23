@@ -201,17 +201,7 @@ export function setupMocks(
   return { logger, llm, repository };
 }
 
-/**
- * Helper to extract exercises by block from results
- */
-export function getExercisesByBlock(exercises: any[]) {
-  return {
-    blockA: exercises.filter(ex => ex.isSelectedBlockA),
-    blockB: exercises.filter(ex => ex.isSelectedBlockB),
-    blockC: exercises.filter(ex => ex.isSelectedBlockC),
-    blockD: exercises.filter(ex => ex.isSelectedBlockD)
-  };
-}
+// getExercisesByBlock removed - template organization no longer used for individual workouts
 
 /**
  * Helper to create a test scenario from debug file data

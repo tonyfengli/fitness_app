@@ -18,8 +18,8 @@ export * from "./core/filtering";
 export * from "./core/scoring";
 export * from "./core/templates";
 export { 
-  type DynamicBlockDefinition,
-  type DynamicOrganizedExercises
+  type BlockDefinition,
+  type WorkoutTemplate
 } from "./core/templates/types/dynamicBlockTypes";
 
 // SMS interpretation graph
