@@ -60,5 +60,5 @@ export interface GroupContext {
   
   // Metadata
   businessId: string;
-  templateType?: 'standard' | 'circuit' | 'full_body';
+  templateType?: 'workout' | 'circuit_training' | 'full_body' | 'full_body_bmf';
 }

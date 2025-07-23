@@ -24,9 +24,9 @@ const STEPS = [
 
 // Template options (matching workout templates)
 const WORKOUT_TEMPLATES = [
-  { value: 'standard', label: 'Standard', description: 'Traditional workout structure' },
-  { value: 'circuit', label: 'Circuit', description: 'Circuit-style training' },
-  { value: 'full_body', label: 'Full Body', description: 'Comprehensive full body workout' }
+  { value: 'workout', label: 'Standard', description: 'Traditional workout structure' },
+  { value: 'circuit_training', label: 'Circuit', description: 'Circuit-style training' },
+  { value: 'full_body_bmf', label: 'Full Body BMF', description: 'Bold Movement Fitness full body workout with 4 sequential rounds' }
 ];
 
 // Duration options in minutes
@@ -153,7 +153,8 @@ export default function NewTrainingSessionModal({
         name: formData.sessionName,
         scheduledAt: new Date(), // Always "now"
         durationMinutes: formData.duration,
-        maxParticipants: undefined // Optional - undefined instead of null
+        maxParticipants: undefined, // Optional - undefined instead of null
+        templateType: formData.selectedTemplate // Pass the selected template
       });
       
       // Success - refresh sessions and close modal

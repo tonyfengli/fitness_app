@@ -132,16 +132,47 @@ export async function generateGroupWorkoutBlueprint(
       
       for (const block of blockConfigs) {
         console.log(`  Block ${block.id} requires tags:`, block.functionTags);
+        if (block.movementPatternFilter) {
+          console.log(`  Block ${block.id} movement pattern filter:`, block.movementPatternFilter);
+        }
         
-        // Filter exercises by block function tags
+        // Filter exercises by block function tags AND movement patterns
         byBlock[block.id] = exercises.filter(ex => {
+          // First check function tags
           if (!ex.functionTags || !Array.isArray(ex.functionTags)) {
             return false;
           }
-          return block.functionTags.some(tag => ex.functionTags?.includes(tag));
+          if (!block.functionTags.some(tag => ex.functionTags?.includes(tag))) {
+            return false;
+          }
+          
+          // Then check movement pattern filter if specified
+          if (block.movementPatternFilter) {
+            const { include, exclude } = block.movementPatternFilter;
+            
+            if (!ex.movementPattern) {
+              return false; // No movement pattern = can't match filter
+            }
+            
+            // If include list is specified, exercise must have one of these patterns
+            if (include && include.length > 0) {
+              if (!include.includes(ex.movementPattern)) {
+                return false;
+              }
+            }
+            
+            // If exclude list is specified, exercise must not have any of these patterns
+            if (exclude && exclude.length > 0) {
+              if (exclude.includes(ex.movementPattern)) {
+                return false;
+              }
+            }
+          }
+          
+          return true;
         });
         
-        console.log(`  Client ${clientId}, Block ${block.id}: ${byBlock[block.id]?.length || 0} exercises`);
+        console.log(`  Client ${clientId}, Block ${block.id}: ${byBlock[block.id]?.length || 0} exercises after all filters`);
       }
       
       clientExercisesByBlock.set(clientId, byBlock);

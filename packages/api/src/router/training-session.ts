@@ -681,7 +681,7 @@ export const trainingSessionRouter = {
       // Random preference options for testing
       const intensityOptions = ['low', 'moderate', 'high'];
       const jointOptions = ['knees', 'shoulders', 'lower back', 'wrists', 'ankles', 'elbows', 'hips'];
-      const goalOptions = ['strength', 'stability', 'endurance'];
+      const goalOptions = ['strength', 'mobility', 'general_fitness'];
       
       // Add each client to the session and check them in
       for (const client of availableClients) {
@@ -701,7 +701,7 @@ export const trainingSessionRouter = {
           const randomGoal = goalOptions[Math.floor(Math.random() * goalOptions.length)];
         
         // For the first client, ensure specific test conditions
-        let randomMuscleTargets = [];
+        let randomMuscleTargets: string[] = [];
         if (addedClients.length === 0 && muscleOptions.includes('upper_back')) {
           // First client gets specific settings for testing
           randomIntensity = 'moderate'; // Force moderate intensity
@@ -710,7 +710,10 @@ export const trainingSessionRouter = {
           if (Math.random() < 0.5) {
             const otherMuscles = muscleOptions.filter(m => m !== 'upper_back' && m !== 'calves');
             if (otherMuscles.length > 0) {
-              randomMuscleTargets.push(otherMuscles[Math.floor(Math.random() * otherMuscles.length)]);
+              const muscle = otherMuscles[Math.floor(Math.random() * otherMuscles.length)];
+              if (muscle) {
+                randomMuscleTargets.push(muscle);
+              }
             }
           }
         } else {
@@ -718,14 +721,14 @@ export const trainingSessionRouter = {
           const numMuscleTargets = Math.floor(Math.random() * 2) + 1;
           for (let i = 0; i < numMuscleTargets; i++) {
             const muscle = muscleOptions[Math.floor(Math.random() * muscleOptions.length)];
-            if (!randomMuscleTargets.includes(muscle)) {
+            if (muscle && !randomMuscleTargets.includes(muscle)) {
               randomMuscleTargets.push(muscle);
             }
           }
         }
         
         // Sometimes add muscle lessens (30% chance)
-        let randomMuscleLessens = [];
+        let randomMuscleLessens: string[] = [];
         if (addedClients.length === 0 && muscleOptions.includes('calves')) {
           // First client always gets calves as muscle lessen for testing
           randomMuscleLessens = ['calves'];
@@ -733,47 +736,63 @@ export const trainingSessionRouter = {
           // Other clients: Pick a muscle that's not already in targets
           const availableMusclesForLessen = muscleOptions.filter(m => !randomMuscleTargets.includes(m));
           if (availableMusclesForLessen.length > 0) {
-            randomMuscleLessens = [availableMusclesForLessen[Math.floor(Math.random() * availableMusclesForLessen.length)]];
+            const lessenMuscle = availableMusclesForLessen[Math.floor(Math.random() * availableMusclesForLessen.length)];
+            if (lessenMuscle) {
+              randomMuscleLessens = [lessenMuscle];
+            }
           }
         }
         
         // Sometimes add joint avoidance (20% chance)
-        const randomAvoidJoints = Math.random() < 0.2
-          ? [jointOptions[Math.floor(Math.random() * jointOptions.length)]]
-          : [];
+        const randomAvoidJoints: string[] = [];
+        if (Math.random() < 0.2 && jointOptions.length > 0) {
+          const joint = jointOptions[Math.floor(Math.random() * jointOptions.length)];
+          if (joint) {
+            randomAvoidJoints.push(joint);
+          }
+        }
         
         // Sometimes add exercise preferences (40% chance for includes, 30% for avoids)
-        const randomIncludeExercises = Math.random() < 0.4 && exerciseNames.length > 0
-          ? [exerciseNames[Math.floor(Math.random() * exerciseNames.length)]]
-          : [];
+        const randomIncludeExercises: string[] = [];
+        if (Math.random() < 0.4 && exerciseNames.length > 0) {
+          const includeExercise = exerciseNames[Math.floor(Math.random() * exerciseNames.length)];
+          if (includeExercise) {
+            randomIncludeExercises.push(includeExercise);
+          }
+        }
           
-        let randomAvoidExercises = [];
+        let randomAvoidExercises: string[] = [];
         if (Math.random() < 0.3 && exerciseNames.length > 1) {
           // Pick an exercise that's not already in includes
           const availableExercisesForAvoid = exerciseNames.filter(e => !randomIncludeExercises.includes(e));
           if (availableExercisesForAvoid.length > 0) {
-            randomAvoidExercises = [availableExercisesForAvoid[Math.floor(Math.random() * availableExercisesForAvoid.length)]];
+            const avoidExercise = availableExercisesForAvoid[Math.floor(Math.random() * availableExercisesForAvoid.length)];
+            if (avoidExercise) {
+              randomAvoidExercises = [avoidExercise];
+            }
           }
         }
         
         // Insert preferences
+        const preferenceValues = {
+          userId: client.id,
+          trainingSessionId: input.sessionId,
+          businessId: user.businessId,
+          intensity: randomIntensity as "low" | "moderate" | "high",
+          muscleTargets: randomMuscleTargets.length > 0 ? randomMuscleTargets : undefined,
+          muscleLessens: randomMuscleLessens.length > 0 ? randomMuscleLessens : undefined,
+          includeExercises: randomIncludeExercises.length > 0 ? randomIncludeExercises : undefined,
+          avoidExercises: randomAvoidExercises.length > 0 ? randomAvoidExercises : undefined,
+          avoidJoints: randomAvoidJoints.length > 0 ? randomAvoidJoints : undefined,
+          sessionGoal: randomGoal,
+          intensitySource: 'explicit' as const,
+          sessionGoalSource: 'explicit' as const,
+          collectionMethod: 'manual' as const
+        };
+        
         await ctx.db
           .insert(WorkoutPreferences)
-          .values({
-            userId: client.id,
-            trainingSessionId: input.sessionId,
-            businessId: user.businessId,
-            intensity: randomIntensity as "low" | "moderate" | "high",
-            muscleTargets: randomMuscleTargets,
-            muscleLessens: randomMuscleLessens.length > 0 ? randomMuscleLessens : null,
-            includeExercises: randomIncludeExercises.length > 0 ? randomIncludeExercises : null,
-            avoidExercises: randomAvoidExercises.length > 0 ? randomAvoidExercises : null,
-            avoidJoints: randomAvoidJoints.length > 0 ? randomAvoidJoints : null,
-            sessionGoal: randomGoal,
-            intensitySource: 'explicit',
-            sessionGoalSource: 'explicit',
-            collectionMethod: 'manual',
-          });
+          .values(preferenceValues);
         
           addedClients.push({
             userId: client.id,
@@ -901,7 +920,7 @@ export const trainingSessionRouter = {
         clientGroupSettings: clientGroupSettings,
         sessionId: input.sessionId,
         businessId: user.businessId,
-        templateType: 'workout',
+        templateType: session.templateType as 'workout' | 'circuit_training' | 'full_body' | 'full_body_bmf',
       };
       
       // Initialize test data logging
@@ -931,9 +950,9 @@ export const trainingSessionRouter = {
             clientName: client.userName || client.userEmail,
             strengthCapacity: (userProfile?.strengthLevel || 'moderate') as 'very_low' | 'low' | 'moderate' | 'high',
             skillCapacity: (userProfile?.skillLevel || 'moderate') as 'very_low' | 'low' | 'moderate' | 'high',
-            sessionGoal: (prefs?.sessionGoal as 'strength' | 'stability') || 'strength',
+            sessionGoal: (prefs?.sessionGoal as 'strength' | 'mobility' | 'general_fitness') || 'strength',
             intensity: (prefs?.intensity as 'low' | 'moderate' | 'high') || 'moderate',
-            template: 'standard' as const, // Using same template for all
+            template: session.templateType === 'full_body_bmf' ? 'full_body' : 'standard' as const, // Use appropriate template based on session
             includeExercises: prefs?.includeExercises || [],
             avoidExercises: prefs?.avoidExercises || [],
             muscleTarget: prefs?.muscleTargets || [],
@@ -1042,14 +1061,14 @@ export const trainingSessionRouter = {
         }
       }
       
-      // Create GroupContext
+      // Create GroupContext with dynamic template type from existing session
       const groupContext: GroupContext = {
         clients: clientContexts,
         groupCohesionSettings: cohesionSettings,
         clientGroupSettings: clientGroupSettings,
         sessionId: input.sessionId,
         businessId: user.businessId,
-        templateType: 'workout',
+        templateType: (session.templateType ?? 'workout') as 'workout' | 'circuit_training' | 'full_body' | 'full_body_bmf', // Use session's template or default
       };
       
       // Run Phase A & B to generate blueprint

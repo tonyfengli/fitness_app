@@ -89,6 +89,7 @@ export const TrainingSession = pgTable("training_session", (t) => ({
   durationMinutes: t.integer(),
   maxParticipants: t.integer(), // null = unlimited
   status: sessionStatusEnum("status").notNull().default("open"),
+  templateType: t.varchar({ length: 50 }).default("workout"), // workout template type
   createdAt: t.timestamp().defaultNow().notNull(),
   updatedAt: t
     .timestamp({ mode: "date", withTimezone: true })
@@ -103,6 +104,7 @@ export const CreateTrainingSessionSchema = createInsertSchema(TrainingSession, {
   durationMinutes: z.number().int().positive().optional(),
   maxParticipants: z.number().int().positive().optional(),
   status: z.enum(["open", "in_progress", "completed", "cancelled"]).optional().default("open"),
+  templateType: z.string().max(50).optional().default("workout"),
 }).omit({
   id: true,
   createdAt: true,

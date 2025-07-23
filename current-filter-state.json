@@ -1,53 +1,52 @@
 {
-  "timestamp": "2025-07-23T16:29:24.606Z",
+  "timestamp": "2025-07-23T17:31:27.385Z",
   "filters": {
-    "clientName": "Tony Lee",
-    "strengthCapacity": "moderate",
-    "skillCapacity": "moderate",
-    "intensity": "high",
+    "clientName": "Hilary Chan",
+    "strengthCapacity": "low",
+    "skillCapacity": "low",
+    "intensity": "moderate",
     "muscleTarget": [
-      "glutes"
+      "upper_back",
+      "upper_chest"
     ],
     "muscleLessen": [
-      "quads"
+      "calves"
     ],
     "avoidJoints": [],
-    "includeExercises": [
-      "Pistol Squat"
-    ],
+    "includeExercises": [],
     "avoidExercises": [],
-    "sessionGoal": "mobility",
+    "sessionGoal": "strength",
     "isFullBody": false
   },
   "results": {
-    "totalExercises": 118,
+    "totalExercises": 47,
     "blockA": {
       "count": 5,
       "exercises": [
         {
-          "id": "e943357b-3ac8-4e43-948f-b4a15901561a",
-          "name": "Deadlift",
+          "id": "8050aa27-29fd-43f8-a647-8828e484d28b",
+          "name": "Incline Dumbbell Press",
           "score": 8
         },
         {
-          "id": "cdd9c4a6-4048-4ee2-9292-aa36e7a2a9ae",
-          "name": "Barbell Glute Bridge on Bench",
-          "score": 7.25
+          "id": "e922ce7d-d596-4f62-9d0b-78f624ae4102",
+          "name": "Lat Pulldown",
+          "score": 6.5
         },
         {
-          "id": "144e1124-e7d7-4594-8c75-f9522081060e",
-          "name": "Kettlebell Deadlift",
-          "score": 7.25
-        },
-        {
-          "id": "49bc7005-5179-4d96-be77-ac790cf00759",
-          "name": "Landmine T Bar Row",
-          "score": 5.75
+          "id": "68b71b3b-3b30-48f0-acd1-73441bff8bea",
+          "name": "Dumbbell Shoulder Press",
+          "score": 6.5
         },
         {
           "id": "b10fc80a-3bc6-4d31-8a1d-d653d55dccc3",
           "name": "Dumbbell Bridge Chest Press",
-          "score": 5.75
+          "score": 5
+        },
+        {
+          "id": "144e1124-e7d7-4594-8c75-f9522081060e",
+          "name": "Kettlebell Deadlift",
+          "score": 5
         }
       ]
     },
@@ -55,19 +54,19 @@
       "count": 8,
       "exercises": [
         {
-          "id": "ca9f0cdf-a148-4fb7-825c-56863986ea31",
-          "name": "Pistol Squat",
-          "score": 9.75
+          "id": "8050aa27-29fd-43f8-a647-8828e484d28b",
+          "name": "Incline Dumbbell Press",
+          "score": 8
         },
         {
-          "id": "698adb88-ad38-4e98-9735-489f5b7d0c45",
-          "name": "Curtsy Lunge",
-          "score": 7.25
+          "id": "d0fbe3a3-a122-46c7-a3ee-4ec5b2acd602",
+          "name": "Two-Arm Cable Row",
+          "score": 6.5
         },
         {
-          "id": "cdd9c4a6-4048-4ee2-9292-aa36e7a2a9ae",
-          "name": "Barbell Glute Bridge on Bench",
-          "score": 7.25
+          "id": "5a75f68d-4d30-4211-a98c-a74c71f70f8d",
+          "name": "Glute Bridge Thrust with Dumbbell",
+          "score": 5
         }
       ]
     },
@@ -77,17 +76,17 @@
         {
           "id": "5a75f68d-4d30-4211-a98c-a74c71f70f8d",
           "name": "Glute Bridge Thrust with Dumbbell",
-          "score": 7.25
+          "score": 5
         },
         {
-          "id": "8442a047-e5a7-49d7-a40e-fce4812b40ce",
-          "name": "Single-Leg Glute Bridge with Band",
-          "score": 7.25
+          "id": "1503a525-aa1c-483b-a121-183d00397919",
+          "name": "Lateral Shoulder Raise",
+          "score": 5
         },
         {
-          "id": "9a20f880-861a-4d2d-b412-bbcf71260d89",
-          "name": "Face Pull to Overhead Press",
-          "score": 5.75
+          "id": "80c543b0-16fe-4821-9d04-0aadfe1b0082",
+          "name": "Incline Bicep Curl",
+          "score": 5
         }
       ]
     },
@@ -95,24 +94,24 @@
       "count": 6,
       "exercises": [
         {
-          "id": "b16c277f-9a95-4d94-a039-88686bcf263d",
-          "name": "Kettlebell Swings",
-          "score": 8.75
+          "id": "e824764c-7860-4254-a2c5-9eca52db2e5d",
+          "name": "Medicine Ball Slam",
+          "score": 5
         },
         {
-          "id": "71aee1c7-b87e-48fb-a28f-7a5c251b0808",
-          "name": "Plank Jack",
-          "score": 8
+          "id": "c4755d77-e9a6-4dd8-971f-b41a326c0cfa",
+          "name": "Russian Twist",
+          "score": 5
         },
         {
-          "id": "5eaede2f-c9d5-41ef-8942-9d74a95ded1e",
-          "name": "Twisting Pistons",
-          "score": 6.5
+          "id": "9d50d2f2-0eda-48c4-9f7d-7a1fcff879b1",
+          "name": "Dumbbell Thruster",
+          "score": 5
         },
         {
-          "id": "d0752a4c-668e-431d-989f-1099e4e7d8a9",
-          "name": "Renegade Row",
-          "score": 5.75
+          "id": "53febb99-c0d1-4fb6-90e8-856dc4a7827b",
+          "name": "Hanging Knee Raise",
+          "score": 5
         }
       ]
     }

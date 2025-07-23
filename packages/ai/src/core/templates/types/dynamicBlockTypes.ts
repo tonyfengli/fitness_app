@@ -7,6 +7,14 @@ import type { ScoredExercise } from "../../../types/scoredExercise";
 import type { BlockConstraints } from "./blockConfig";
 
 /**
+ * Movement pattern filter for blocks
+ */
+export interface MovementPatternFilter {
+  include?: string[];  // Only allow these movement patterns
+  exclude?: string[];  // Block these movement patterns
+}
+
+/**
  * Defines a single block in a template
  */
 export interface DynamicBlockDefinition {
@@ -17,6 +25,7 @@ export interface DynamicBlockDefinition {
   constraints?: BlockConstraints;
   selectionStrategy: 'deterministic' | 'randomized';
   penaltyForReuse?: number;      // Penalty if exercise was selected in previous block
+  movementPatternFilter?: MovementPatternFilter;  // Filter exercises by movement patterns
 }
 
 /**

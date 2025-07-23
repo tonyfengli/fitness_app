@@ -104,12 +104,57 @@ export const CIRCUIT_TRAINING_TEMPLATE: WorkoutTemplate = {
 };
 
 /**
+ * Full Body BMF (Bold Movement Fitness) template
+ * 4 sequential rounds with movement pattern filtering
+ */
+export const FULL_BODY_BMF_TEMPLATE: WorkoutTemplate = {
+  id: 'full_body_bmf',
+  name: 'Full Body BMF',
+  description: 'Bold Movement Fitness full body workout with 4 sequential rounds',
+  blocks: [
+    {
+      id: 'Round1',
+      name: 'Round 1',
+      functionTags: ['primary_strength'],
+      maxExercises: 1,
+      selectionStrategy: 'deterministic',
+      movementPatternFilter: {
+        include: ['squat', 'hinge', 'lunge']
+      }
+    },
+    {
+      id: 'Round2',
+      name: 'Round 2',
+      functionTags: ['primary_strength'],  // Placeholder
+      maxExercises: 3,  // Placeholder
+      selectionStrategy: 'randomized'  // Placeholder
+    },
+    {
+      id: 'Round3',
+      name: 'Round 3',
+      functionTags: ['secondary_strength'],  // Placeholder
+      maxExercises: 4,  // Placeholder
+      selectionStrategy: 'randomized'  // Placeholder
+    },
+    {
+      id: 'FinalRound',
+      name: 'Final Round',
+      functionTags: ['capacity'],  // Placeholder
+      maxExercises: 2,  // Placeholder
+      selectionStrategy: 'randomized'  // Placeholder
+    }
+  ],
+  blockOrder: ['Round1', 'Round2', 'Round3', 'FinalRound']
+};
+
+/**
  * Template registry
  */
 export const WORKOUT_TEMPLATES: Record<string, WorkoutTemplate> = {
   'workout': DEFAULT_WORKOUT_TEMPLATE,
   'full_body': FULL_BODY_TEMPLATE,
-  'circuit_training': CIRCUIT_TRAINING_TEMPLATE
+  'circuit_training': CIRCUIT_TRAINING_TEMPLATE,
+  'full_body_bmf': FULL_BODY_BMF_TEMPLATE
 };
 
 /**

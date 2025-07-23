@@ -325,6 +325,31 @@ export class WorkoutTemplateHandler implements TemplateHandler {
       );
     });
 
+    // Apply movement pattern filter if specified
+    if (blockDef.movementPatternFilter) {
+      const { include, exclude } = blockDef.movementPatternFilter;
+      
+      candidates = candidates.filter(exercise => {
+        if (!exercise.movementPattern) return false;
+        
+        // If include list is specified, exercise must have one of these patterns
+        if (include && include.length > 0) {
+          if (!include.includes(exercise.movementPattern)) {
+            return false;
+          }
+        }
+        
+        // If exclude list is specified, exercise must not have any of these patterns
+        if (exclude && exclude.length > 0) {
+          if (exclude.includes(exercise.movementPattern)) {
+            return false;
+          }
+        }
+        
+        return true;
+      });
+    }
+
     // Apply penalties for previously selected exercises
     if (blockDef.penaltyForReuse && blockDef.penaltyForReuse > 0 && previousSelections.size > 0) {
       candidates = candidates.map(exercise => {
