@@ -1,10 +1,10 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { useTRPC } from "~/trpc/react";
-import type { GroupScoredExercise, GroupBlockBlueprint, ClientCohesionTracking } from "@acme/ai";
+import type { GroupScoredExercise, ClientCohesionTracking } from "@acme/ai";
 
 // Helper to format muscle names for display (convert underscore to space and capitalize)
 function formatMuscleName(muscle: string): string {
@@ -12,10 +12,10 @@ function formatMuscleName(muscle: string): string {
 }
 
 // Helper function to determine score adjustment labels
-function getScoreAdjustmentLabels(score: number, scoreBreakdown?: any): JSX.Element | JSX.Element[] | null {
+function getScoreAdjustmentLabels(score: number, scoreBreakdown?: any): React.ReactElement | React.ReactElement[] | null {
   // If we have the actual breakdown, use it
   if (scoreBreakdown) {
-    const labels: JSX.Element[] = [];
+    const labels: React.ReactElement[] = [];
     
     if (scoreBreakdown.includeExerciseBoost > 0) {
       labels.push(
@@ -146,15 +146,39 @@ export default function GroupVisualizationPage() {
   
   const [selectedBlock, setSelectedBlock] = useState<string>("A");
   const [showRawData, setShowRawData] = useState(false);
+  const [llmDebugData, setLlmDebugData] = useState<{
+    systemPrompt: string | null;
+    userMessage: string | null;
+    llmOutput: string | null;
+  }>({ systemPrompt: null, userMessage: null, llmOutput: null });
   
   // Fetch visualization data
-  const { data, isLoading, error } = useQuery(
-    sessionId ? trpc.trainingSession.visualizeGroupWorkout.queryOptions({ sessionId }) : {
-      enabled: false,
-      queryKey: ["disabled"],
-      queryFn: () => Promise.resolve(null)
+  const { data, isLoading, error } = useQuery({
+    ...trpc.trainingSession.visualizeGroupWorkout.queryOptions({ sessionId: sessionId! }),
+    enabled: !!sessionId,
+  });
+  
+  // Generate group workout query
+  const { data: workoutData, isLoading: isGenerating, refetch: generateWorkout } = useQuery({
+    ...trpc.trainingSession.generateGroupWorkout.queryOptions({ sessionId: sessionId! }),
+    enabled: false, // Manual trigger only
+  });
+  
+  // Handle workout generation result
+  useEffect(() => {
+    if (workoutData) {
+      console.log('Group workout generation result:', workoutData);
+      
+      // Update the debug data
+      if (workoutData.debug) {
+        setLlmDebugData({
+          systemPrompt: workoutData.debug.systemPrompt,
+          userMessage: workoutData.debug.userMessage,
+          llmOutput: workoutData.debug.llmOutput
+        });
+      }
     }
-  );
+  }, [workoutData]);
   
   if (!sessionId) {
     return (
@@ -208,12 +232,21 @@ export default function GroupVisualizationPage() {
               <h1 className="text-2xl font-bold text-gray-900">Group Workout Visualization</h1>
               <p className="text-sm text-gray-600">Phase A & B Results for {summary.totalClients} clients</p>
             </div>
-            <button
-              onClick={() => router.back()}
-              className="px-3 py-1 text-sm text-gray-600 hover:text-gray-900"
-            >
-              ← Back
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => generateWorkout()}
+                disabled={isGenerating}
+                className="px-3 py-1 text-sm bg-indigo-600 text-white hover:bg-indigo-700 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isGenerating ? 'Generating...' : 'Test LLM Generation'}
+              </button>
+              <button
+                onClick={() => router.back()}
+                className="px-3 py-1 text-sm text-gray-600 hover:text-gray-900"
+              >
+                ← Back
+              </button>
+            </div>
           </div>
         </div>
         
@@ -339,14 +372,14 @@ export default function GroupVisualizationPage() {
                   <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
                       <tr>
-                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-64 min-w-[16rem]">
                           Shared ({selectedBlockData.slots.actualSharedAvailable})
                         </th>
                         {groupContext.clients.map((client) => {
                           const clientName = client.name.split(' ')[0]; // First name only
                           return (
                             <th key={client.user_id} className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              {clientName} ({selectedBlockData.slots.individualPerClient})
+                              {clientName} (Top 6)
                             </th>
                           );
                         })}
@@ -368,15 +401,44 @@ export default function GroupVisualizationPage() {
                           return (
                             <tr key={rowIndex}>
                               {/* Shared Exercise Column */}
-                              <td className="px-3 py-2 whitespace-nowrap text-sm">
+                              <td className="px-3 py-2 text-sm">
                                 {sharedExercise ? (
-                                  <div>
-                                    <div className="font-medium text-gray-900">
-                                      {rowIndex + 1}. {sharedExercise.name}
+                                  <div className="border border-gray-200 rounded p-3">
+                                    <div className="flex items-start justify-between">
+                                      <div className="flex-1">
+                                        <div className="flex items-center space-x-2">
+                                          <span className="text-sm font-medium text-gray-900">#{rowIndex + 1}</span>
+                                          <h4 className="text-sm font-medium text-gray-900">{sharedExercise.name}</h4>
+                                        </div>
+                                        <div className="mt-1 flex items-center space-x-3 text-xs">
+                                          <span className="text-gray-500">
+                                            Score: <span className="font-medium text-gray-900">{sharedExercise.groupScore.toFixed(2)}</span>
+                                          </span>
+                                          <span className="text-green-600">
+                                            +{sharedExercise.cohesionBonus.toFixed(2)}
+                                          </span>
+                                          <span className="text-blue-600">
+                                            {sharedExercise.clientsSharing.length} clients
+                                          </span>
+                                        </div>
+                                      </div>
                                     </div>
-                                    <div className="text-xs text-gray-500">
-                                      Score: {sharedExercise.groupScore.toFixed(2)}
-                                      <span className="text-green-600 ml-1">+{sharedExercise.cohesionBonus.toFixed(2)}</span>
+                                    <div className="mt-2 flex flex-wrap gap-1">
+                                      {sharedExercise.clientScores.map((cs) => {
+                                        const client = groupContext.clients.find(c => c.user_id === cs.clientId);
+                                        const clientName = client?.name || cs.clientId;
+                                        const firstName = clientName.split(' ')[0];
+                                        return (
+                                          <div
+                                            key={cs.clientId}
+                                            className={`text-xs px-1 py-0.5 rounded ${
+                                              cs.hasExercise ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"
+                                            }`}
+                                          >
+                                            {firstName}: {cs.individualScore.toFixed(2)}
+                                          </div>
+                                        );
+                                      })}
                                     </div>
                                   </div>
                                 ) : (
@@ -391,7 +453,7 @@ export default function GroupVisualizationPage() {
                                 return (
                                   <td key={client.user_id} className="px-3 py-2 whitespace-nowrap text-sm">
                                     {clientExercise ? (
-                                      <div>
+                                      <div className={`${rowIndex < 6 ? 'border-2 border-blue-500 rounded-md p-2 -m-2' : ''}`}>
                                         <div className="font-medium text-gray-900">
                                           {rowIndex + 1}. {clientExercise.name}
                                         </div>
@@ -444,6 +506,47 @@ export default function GroupVisualizationPage() {
                 ))}
               </div>
             </div>
+            
+              {/* LLM Debug Section */}
+              <div className="bg-white rounded-lg shadow-sm p-4">
+                <h3 className="text-base font-medium text-gray-900 mb-3">LLM Generation Debug</h3>
+                
+                {/* System Prompt */}
+                <details className="mb-4">
+                  <summary className="cursor-pointer text-sm font-medium text-gray-700 hover:text-gray-900">
+                    System Prompt (Step 1: Shared Exercise Selection)
+                  </summary>
+                  <div className="mt-2 p-3 bg-gray-50 rounded-md">
+                    <pre className="text-xs text-gray-600 whitespace-pre-wrap font-mono">
+                      {llmDebugData.systemPrompt || <span className="text-gray-400">Click "Test LLM Generation" to see the system prompt</span>}
+                    </pre>
+                  </div>
+                </details>
+                
+                {/* User Message */}
+                <details className="mb-4">
+                  <summary className="cursor-pointer text-sm font-medium text-gray-700 hover:text-gray-900">
+                    User Message (Step 1: Shared Exercise Selection)
+                  </summary>
+                  <div className="mt-2 p-3 bg-gray-50 rounded-md">
+                    <pre className="text-xs text-gray-600 whitespace-pre-wrap font-mono">
+                      {llmDebugData.userMessage || <span className="text-gray-400">Click "Test LLM Generation" to see the user message</span>}
+                    </pre>
+                  </div>
+                </details>
+                
+                {/* LLM Output */}
+                <details>
+                  <summary className="cursor-pointer text-sm font-medium text-gray-700 hover:text-gray-900">
+                    LLM Output (Step 1: Shared Exercise Selection)
+                  </summary>
+                  <div className="mt-2 p-3 bg-gray-50 rounded-md">
+                    <pre className="text-xs text-gray-600 whitespace-pre-wrap font-mono">
+                      {llmDebugData.llmOutput || <span className="text-gray-400">Click "Test LLM Generation" to see the LLM output</span>}
+                    </pre>
+                  </div>
+                </details>
+              </div>
             
             {/* Spacer to ensure content isn't cut off */}
             <div className="h-24"></div>

@@ -58,7 +58,7 @@ Process:
 Output: FilteredExercises[] per client
 ```
 
-### Phase 2: Exercise Scoring (No Changes)
+### Phase 2: Exercise Scoring (Enhanced with Required ScoreBreakdown)
 ```
 Input: FilteredExercises[] per client
 
@@ -70,9 +70,20 @@ Process:
 │  Client 2 Exercises → Score → Scored[]  │
 │  Client 3 Exercises → Score → Scored[]  │
 │  ...                                    │
+│                                         │
+│  Each ScoredExercise now includes:     │
+│  - score: number                        │
+│  - scoreBreakdown: {                   │
+│      base: 5.0                         │
+│      muscleTargetBonus: 0-3.0          │
+│      muscleLessenPenalty: 0 to -3.0    │
+│      intensityAdjustment: -2.0 to +2.0 │
+│      includeExerciseBoost: 0-N         │
+│      total: sum of above               │
+│    }                                    │
 └─────────────────────────────────────────┘
 
-Output: ScoredExercise[] per client
+Output: ScoredExercise[] per client (with mandatory scoreBreakdown)
 ```
 
 ### Phase 2.5: Group Merge Scoring (NEW - IMPLEMENTED)
@@ -294,6 +305,7 @@ interface GroupScoredExercise extends ScoredExercise {
   }[];
   cohesionBonus: number;
   clientsSharing: string[];
+  // Inherits scoreBreakdown from ScoredExercise (now required)
 }
 ```
 
@@ -329,7 +341,7 @@ interface GroupBlockBlueprint {
   
   individualCandidates: {
     [clientId: string]: {
-      exercises: ScoredExercise[];
+      exercises: ScoredExercise[]; // Each includes scoreBreakdown
       slotsToFill: number;
     };
   };
@@ -431,6 +443,23 @@ CREATE TABLE group_workout_member (
    - Block settings override when enforceShared = true
    - Passes targets and status to LLM for decisions
 
+### ScoreBreakdown Refactor ✅ COMPLETED
+1. ✅ Made scoreBreakdown required in ScoredExercise interface
+   - Changed from optional (`scoreBreakdown?`) to required
+   - TypeScript now enforces inclusion throughout pipeline
+   - Prevents scoreBreakdown from being lost during transformations
+   
+2. ✅ Updated scoring functions
+   - `scoreExercise()` always creates scoreBreakdown
+   - Removed `includeBreakdown` parameter - always included
+   - `scoreAndSortExercises()` simplified API
+   
+3. ✅ Benefits of the refactor
+   - Frontend visualization always has accurate score components
+   - No more guessing "Target +1.5" vs "Target +3.0"
+   - Score transparency for debugging and user understanding
+   - Type safety ensures data flows through entire pipeline
+
 ### Implementation Integration (IN PROGRESS)
 1. ⏳ API Integration
    - `generateGroupWorkoutBlueprint()` function exists but needs export
@@ -441,6 +470,7 @@ CREATE TABLE group_workout_member (
    - Display Phase A group scoring results
    - Show Phase B blueprint allocation
    - Visualize cohesion tracking
+   - ✅ Score breakdown display now always accurate
 
 ### Phase C: LLM Integration
 1. Build hybrid LLM strategy

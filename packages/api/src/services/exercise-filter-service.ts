@@ -1,7 +1,7 @@
 import { TRPCError } from "@trpc/server";
-import { eq } from "@acme/db";
+import { eq, and } from "@acme/db";
 import type { Database } from "@acme/db/client";
-import { BusinessExercise, exercises, user } from "@acme/db/schema";
+import { BusinessExercise, exercises, user, UserProfile } from "@acme/db/schema";
 import { 
   filterExercisesFromInput, 
   enhancedFilterExercisesFromInput,
@@ -325,10 +325,16 @@ export class ExerciseFilterService {
     }
     
     // Get client's strength and skill capacity from profile
-    // TODO: Fetch from UserProfile table when available
+    const userProfile = await this.db.query.UserProfile.findFirst({
+      where: and(
+        eq(UserProfile.userId, input.clientId),
+        eq(UserProfile.businessId, context.businessId)
+      ),
+    });
+    
     const clientProfile = {
-      strengthCapacity: "moderate" as const,
-      skillCapacity: "moderate" as const,
+      strengthCapacity: (userProfile?.strengthLevel || "moderate") as "very_low" | "low" | "moderate" | "high",
+      skillCapacity: (userProfile?.skillLevel || "moderate") as "very_low" | "low" | "moderate" | "high",
     };
     
     // Map session goal to primary goal

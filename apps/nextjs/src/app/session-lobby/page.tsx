@@ -351,8 +351,8 @@ export default function SessionLobby() {
             ) : checkedInClients.length === 0 ? (
               <div className="text-center py-12">
                 <p className="text-gray-500">No clients have checked in yet.</p>
-                <p className="text-sm text-gray-400 mt-2">
-                  Clients can text "here" to your gym's number to check in.
+                <p className="text-4xl font-bold text-gray-800 mt-4">
+                  Text "here" to 562-608-1666
                 </p>
               </div>
             ) : (

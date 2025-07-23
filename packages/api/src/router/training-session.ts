@@ -7,6 +7,7 @@ import {
   TrainingSession, 
   UserTrainingSession,
   WorkoutPreferences,
+  UserProfile,
   CreateTrainingSessionSchema,
   CreateUserTrainingSessionSchema,
   user as userTable,
@@ -916,12 +917,20 @@ export const trainingSessionRouter = {
           const prefs = client.preferences;
           const clientStartTime = Date.now();
           
+          // Get user profile for strength and skill levels
+          const userProfile = await ctx.db.query.UserProfile.findFirst({
+            where: and(
+              eq(UserProfile.userId, client.userId),
+              eq(UserProfile.businessId, user.businessId)
+            ),
+          });
+          
           // Create filter input matching the expected format
           const filterInput = {
             clientId: client.userId,
             clientName: client.userName || client.userEmail,
-            strengthCapacity: 'moderate' as const, // Would need to get from profile
-            skillCapacity: 'moderate' as const, // Would need to get from profile
+            strengthCapacity: (userProfile?.strengthLevel || 'moderate') as 'very_low' | 'low' | 'moderate' | 'high',
+            skillCapacity: (userProfile?.skillLevel || 'moderate') as 'very_low' | 'low' | 'moderate' | 'high',
             sessionGoal: (prefs?.sessionGoal as 'strength' | 'stability') || 'strength',
             intensity: (prefs?.intensity as 'low' | 'moderate' | 'high') || 'moderate',
             template: 'standard' as const, // Using same template for all
@@ -934,10 +943,11 @@ export const trainingSessionRouter = {
           };
           
           console.log(`  📋 Processing client ${client.userName || client.userId}...`);
+          console.log(`    Strength: ${filterInput.strengthCapacity}, Skill: ${filterInput.skillCapacity}`);
           
           // Run Phase 1 & 2 using the filter service
           const filteredResult = await filterService.filterForWorkoutGeneration(filterInput, {
-            userId: user.id,
+            userId: user.id, // Keep trainer ID for context
             businessId: user.businessId
           });
           
@@ -980,8 +990,10 @@ export const trainingSessionRouter = {
             primary_goal: filterInput.sessionGoal,
             muscle_target: filterInput.muscleTarget,
             muscle_lessen: filterInput.muscleLessen,
-            avoid_exercises: filterInput.avoidExercises,
-            exercise_requests: filterInput.includeExercises,
+            exercise_requests: {
+              include: filterInput.includeExercises,
+              avoid: filterInput.avoidExercises
+            },
             avoid_joints: filterInput.avoidJoints,
           };
           
@@ -1093,6 +1105,139 @@ export const trainingSessionRouter = {
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: error instanceof Error ? error.message : 'Failed to generate group workout blueprint',
+        });
+      }
+    }),
+    
+  /**
+   * Generate complete group workout with LLM
+   * This builds on visualizeGroupWorkout but adds the LLM generation step
+   */
+  generateGroupWorkout: protectedProcedure
+    .input(z.object({
+      sessionId: z.string().uuid()
+    }))
+    .query(async ({ ctx, input }) => {
+      console.log('🎯 generateGroupWorkout called with:', { sessionId: input.sessionId });
+      
+      const user = ctx.session?.user as SessionUser;
+      
+      // Only trainers can generate group workouts
+      if (user.role !== 'trainer') {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'Only trainers can generate group workouts',
+        });
+      }
+      
+      try {
+        // Import what we need
+        const { GroupPromptBuilder, HybridLLMStrategy } = await import("@acme/ai");
+        
+        // For testing, let's create a mock blueprint and generate just the prompts
+        // In production, we'd get the real blueprint from visualizeGroupWorkout
+        
+        // First we need to get the blueprint by running the same logic as visualizeGroupWorkout
+        // Import necessary functions
+        const { generateGroupWorkoutBlueprint } = await import("@acme/ai");
+        const { ExerciseFilterService } = await import("../services/exercise-filter-service");
+        const { groupWorkoutTestDataLogger } = await import("../utils/groupWorkoutTestDataLogger");
+        
+        // Create a mock blueprint for testing the prompts
+        // In production, this would come from running the full visualization pipeline
+        const mockBlueprint = {
+          blocks: [{
+            blockId: "A",
+            blockConfig: {
+              id: "A",
+              name: "Block A - Primary Strength",
+              functionTags: ["primary_strength"],
+              maxExercises: 5
+            },
+            slots: {
+              total: 5,
+              targetShared: 2,
+              actualSharedAvailable: 0,
+              individualPerClient: 5
+            },
+            sharedCandidates: {
+              exercises: [],
+              minClientsRequired: 2,
+              subGroupPossibilities: []
+            },
+            individualCandidates: {},
+            cohesionSnapshot: []
+          }],
+          clientCohesionTracking: []
+        };
+        
+        const mockGroupContext = {
+          clients: [{
+            user_id: "test-user-1",
+            name: "Test User 1",
+            primary_goal: "strength",
+            intensity: "moderate",
+            strength_capacity: "moderate",
+            skill_capacity: "moderate",
+            muscle_target: [],
+            muscle_lessen: [],
+            exercise_requests: { include: [], avoid: [] },
+            avoid_joints: []
+          }],
+          groupCohesionSettings: {
+            defaultSharedRatio: 0.5,
+            blockSettings: {
+              'A': { sharedRatio: 0.5, enforceShared: false },
+              'B': { sharedRatio: 0.5, enforceShared: false },
+              'C': { sharedRatio: 0.5, enforceShared: false },
+              'D': { sharedRatio: 0.5, enforceShared: false },
+            }
+          },
+          clientGroupSettings: {
+            "test-user-1": { cohesionRatio: 0.5 }
+          },
+          sessionId: input.sessionId,
+          businessId: user.businessId,
+          templateType: 'workout' as const
+        };
+        
+        const blueprint = mockBlueprint;
+        const groupContext = mockGroupContext;
+        
+        // Build the prompts for debugging
+        const systemPrompt = GroupPromptBuilder.buildSharedSelectionSystemPrompt();
+        const userMessage = GroupPromptBuilder.buildSharedSelectionUserMessage({
+          blocks: blueprint.blocks,
+          clients: groupContext.clients,
+          cohesionTargets: {
+            overall: groupContext.groupCohesionSettings.defaultSharedRatio,
+            byClient: Object.fromEntries(
+              groupContext.clients.map(c => [
+                c.user_id,
+                groupContext.clientGroupSettings[c.user_id]?.cohesionRatio || 
+                groupContext.groupCohesionSettings.defaultSharedRatio
+              ])
+            )
+          }
+        });
+        
+        // For now, just return the prompts for debugging
+        // In the next step, we'll actually call the LLM
+        
+        return {
+          success: true,
+          debug: {
+            systemPrompt,
+            userMessage,
+            llmOutput: "LLM call not implemented yet - this will show the actual LLM response"
+          },
+          sessionId: input.sessionId
+        };
+      } catch (error) {
+        console.error('❌ Error in generateGroupWorkout:', error);
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: error instanceof Error ? error.message : 'Failed to generate group workout',
         });
       }
     }),

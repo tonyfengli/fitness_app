@@ -11,6 +11,7 @@ export * from "./api/filterExercisesFromInput";
 export * from "./api/debugBlockSystem";
 export * from "./api/enhancedFilterExercisesFromInput";
 export * from "./api/generateGroupWorkoutBlueprint";
+export * from "./api/generateGroupWorkout";
 
 // Core functionality
 export * from "./core/filtering";
@@ -26,6 +27,7 @@ export * from "./sms/smsInterpretationGraph";
 
 // Workout generation graph
 export * from "./workout-generation";
+export * from "./workout-generation/group";
 
 // Formatting utilities
 export * from "./formatting/exerciseFlags";
