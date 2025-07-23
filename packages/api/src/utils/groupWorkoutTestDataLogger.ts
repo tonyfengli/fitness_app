@@ -305,7 +305,8 @@ export class GroupWorkoutTestDataLogger {
             clientId,
             clientName: client?.name || clientId,
             exerciseCount: data.exercises.length,
-            allExercises: data.exercises.map(ex => this.extractEssentialExercise(ex))
+            allExercises: data.exercises.map(ex => this.extractEssentialExercise(ex)),
+            totalFilteredCount: data.allFilteredExercises?.length || data.exercises.length
           };
         }
       )

@@ -1,22 +1,26 @@
 {
-  "timestamp": "2025-07-23T19:15:39.387Z",
+  "timestamp": "2025-07-23T19:41:36.279Z",
   "filters": {
-    "clientName": "Tony Lee",
-    "strengthCapacity": "moderate",
-    "skillCapacity": "moderate",
-    "intensity": "low",
+    "clientName": "Hilary Chan",
+    "strengthCapacity": "low",
+    "skillCapacity": "low",
+    "intensity": "moderate",
     "muscleTarget": [
-      "triceps"
+      "upper_back"
     ],
-    "muscleLessen": [],
+    "muscleLessen": [
+      "calves"
+    ],
     "avoidJoints": [],
-    "includeExercises": [],
+    "includeExercises": [
+      "Alternating Incline Dumbbell Chest Press"
+    ],
     "avoidExercises": [],
     "sessionGoal": "mobility",
     "isFullBody": true
   },
   "results": {
-    "totalExercises": 117,
+    "totalExercises": 48,
     "blockA": {
       "count": 0,
       "exercises": []

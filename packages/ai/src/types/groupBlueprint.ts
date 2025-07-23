@@ -38,6 +38,7 @@ export interface GroupBlockBlueprint {
     [clientId: string]: {
       exercises: ScoredExercise[];
       slotsToFill: number;
+      allFilteredExercises?: ScoredExercise[]; // All exercises that passed block filters
     };
   };
   

@@ -164,9 +164,16 @@ export class TemplateProcessor {
    * This would need to be implemented based on how client includes are tracked
    */
   private isClientIncludedExercise(exercise: ScoredExercise, clientId: string): boolean {
-    // TODO: Check if exercise.score has include boost for this client
-    // For now, check if score is unusually high (indicating include boost)
-    return exercise.score > 8;
+    // Check if the exercise has an include boost in its score breakdown
+    if (exercise.scoreBreakdown && 'includeExerciseBoost' in exercise.scoreBreakdown) {
+      return exercise.scoreBreakdown.includeExerciseBoost > 0;
+    }
+    // Legacy check for older data format
+    if (exercise.scoreBreakdown && 'includeBoost' in exercise.scoreBreakdown) {
+      const breakdown = exercise.scoreBreakdown as Record<string, number>;
+      return (breakdown.includeBoost ?? 0) > 0;
+    }
+    return false;
   }
 
   /**
@@ -242,13 +249,14 @@ export class TemplateProcessor {
   private prepareIndividualCandidates(
     clientExercises: Map<string, ScoredExercise[]>,
     maxExercises: number
-  ): Record<string, { exercises: ScoredExercise[]; slotsToFill: number }> {
-    const candidates: Record<string, { exercises: ScoredExercise[]; slotsToFill: number }> = {};
+  ): Record<string, { exercises: ScoredExercise[]; slotsToFill: number; allFilteredExercises?: ScoredExercise[] }> {
+    const candidates: Record<string, { exercises: ScoredExercise[]; slotsToFill: number; allFilteredExercises?: ScoredExercise[] }> = {};
 
     for (const [clientId, exercises] of clientExercises) {
       candidates[clientId] = {
         exercises: exercises.slice(0, maxExercises * 3), // Give LLM options
-        slotsToFill: maxExercises // Will be adjusted based on shared selections
+        slotsToFill: maxExercises, // Will be adjusted based on shared selections
+        allFilteredExercises: exercises // Include all exercises that passed the block filter
       };
     }
 

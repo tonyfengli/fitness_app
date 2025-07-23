@@ -17,8 +17,6 @@ import {
   generateGroupWorkoutBlueprint,
   type GroupContext,
   type ClientContext,
-  type GroupCohesionSettings,
-  type ClientGroupSettings,
   type ScoredExercise,
   type Exercise
 } from "@acme/ai";
@@ -866,7 +864,7 @@ export const trainingSessionRouter = {
           )
         );
       
-      // Get preferences for each client separately
+      // Get preferences and user profile for each client
       const clientsWithPreferences = await Promise.all(
         checkedInClients.map(async (client) => {
           const [preferences] = await ctx.db
@@ -877,7 +875,17 @@ export const trainingSessionRouter = {
               eq(WorkoutPreferences.trainingSessionId, input.sessionId)
             ))
             .limit(1);
-          return { ...client, preferences };
+            
+          const [userProfile] = await ctx.db
+            .select()
+            .from(UserProfile)
+            .where(and(
+              eq(UserProfile.userId, client.userId),
+              eq(UserProfile.businessId, user.businessId)
+            ))
+            .limit(1);
+            
+          return { ...client, preferences, userProfile };
         })
       );
       
@@ -896,28 +904,28 @@ export const trainingSessionRouter = {
       const { groupWorkoutTestDataLogger } = await import("../utils/groupWorkoutTestDataLogger");
       const filterService = new ExerciseFilterService(ctx.db);
       
-      // Create default cohesion settings (50% shared across all blocks)
-      const cohesionSettings: GroupCohesionSettings = {
-        blockSettings: {
-          'A': { sharedRatio: 0.5, enforceShared: false },
-          'B': { sharedRatio: 0.5, enforceShared: false },
-          'C': { sharedRatio: 0.5, enforceShared: false },
-          'D': { sharedRatio: 0.5, enforceShared: false },
+      // Create client contexts from the checked-in clients
+      const initialClientContexts = clientsWithPreferences.map(client => ({
+        user_id: client.userId,
+        name: client.userName ?? 'Unknown',
+        strength_capacity: (client.userProfile?.strengthLevel ?? 'moderate') as "very_low" | "low" | "moderate" | "high",
+        skill_capacity: (client.userProfile?.skillLevel ?? 'moderate') as "very_low" | "low" | "moderate" | "high",
+        primary_goal: client.preferences?.sessionGoal === 'strength' ? 'strength' as const : 'general_fitness' as const,
+        intensity: (client.preferences?.intensity ?? 'moderate') as "low" | "moderate" | "high",
+        muscle_target: client.preferences?.muscleTargets ?? [],
+        muscle_lessen: client.preferences?.muscleLessens ?? [],
+        exercise_requests: {
+          include: client.preferences?.includeExercises ?? [],
+          avoid: client.preferences?.avoidExercises ?? []
         },
-        defaultSharedRatio: 0.5,
-      };
-      
-      // Create default client group settings (all clients want 50% shared)
-      const clientGroupSettings: ClientGroupSettings = {};
-      for (const client of clientsWithPreferences) {
-        clientGroupSettings[client.userId] = { cohesionRatio: 0.5 };
-      }
+        avoid_joints: client.preferences?.avoidJoints ?? [],
+        business_id: user.businessId,
+        templateType: session.templateType as "standard" | "circuit" | "full_body" | undefined
+      }));
       
       // Create initial GroupContext for logging
       const initialGroupContext: GroupContext = {
-        clients: [], // Will be populated after processing
-        groupCohesionSettings: cohesionSettings,
-        clientGroupSettings: clientGroupSettings,
+        clients: initialClientContexts,
         sessionId: input.sessionId,
         businessId: user.businessId,
         templateType: session.templateType as 'workout' | 'circuit_training' | 'full_body' | 'full_body_bmf',
@@ -978,25 +986,22 @@ export const trainingSessionRouter = {
           groupWorkoutTestDataLogger.logClientProcessing(
             input.sessionId,
             client.userId,
-            client.userName || client.userEmail,
-            prefs,
             {
-              totalExercises: filteredResult.totalExercises || 1000, // Approximate
-              filteredCount: filteredResult.exercises.length,
-              excludedReasons: filteredResult.excludedReasons || {},
-              timingMs: clientProcessingTime
+              stats: {
+                totalExercises: filteredResult.totalExercises || 1000,
+                afterStrengthFilter: filteredResult.exercises.length,
+                afterSkillFilter: filteredResult.exercises.length,
+                afterJointFilter: filteredResult.exercises.length,
+                afterAvoidFilter: filteredResult.exercises.length,
+                finalCount: filteredResult.exercises.length
+              },
+              muscleTarget: prefs?.muscleTargets || [],
+              muscleLessen: prefs?.muscleLessens || [],
+              includeExercises: prefs?.includeExercises || [],
+              avoidExercises: prefs?.avoidExercises || [],
+              avoidJoints: prefs?.avoidJoints || []
             },
-            {
-              scoredCount: filteredResult.exercises.length,
-              scoreDistribution: calculateScoreDistribution(filteredResult.exercises),
-              topExercises: filteredResult.exercises.slice(0, 10).map(ex => ({
-                id: ex.id,
-                name: ex.name,
-                score: ex.score,
-                scoreBreakdown: ex.scoreBreakdown
-              })),
-              timingMs: clientProcessingTime // Combined time for this implementation
-            }
+            filteredResult.exercises
           );
           
           // Create ClientContext for group processing
@@ -1064,8 +1069,6 @@ export const trainingSessionRouter = {
       // Create GroupContext with dynamic template type from existing session
       const groupContext: GroupContext = {
         clients: clientContexts,
-        groupCohesionSettings: cohesionSettings,
-        clientGroupSettings: clientGroupSettings,
         sessionId: input.sessionId,
         businessId: user.businessId,
         templateType: (session.templateType ?? 'workout') as 'workout' | 'circuit_training' | 'full_body' | 'full_body_bmf', // Use session's template or default
@@ -1074,8 +1077,7 @@ export const trainingSessionRouter = {
       // Run Phase A & B to generate blueprint
       console.log('🚀 Running Phase A & B with GroupContext:', {
         clientCount: groupContext.clients.length,
-        templateType: groupContext.templateType,
-        cohesionSettings: groupContext.groupCohesionSettings
+        templateType: groupContext.templateType
       });
       
       try {

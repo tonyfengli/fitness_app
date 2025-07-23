@@ -395,11 +395,13 @@ export default function GroupVisualizationPage() {
                     <tbody className="bg-white divide-y divide-gray-200">
                       {/* Calculate max rows needed */}
                       {(() => {
+                        // Calculate max rows based on all filtered exercises, not just top candidates
                         const maxRows = Math.max(
                           selectedBlockData.sharedCandidates?.exercises?.length || 0,
-                          ...groupContext.clients.map(client => 
-                            selectedBlockData.individualCandidates?.[client.user_id]?.exercises?.length || 0
-                          )
+                          ...groupContext.clients.map(client => {
+                            const clientData = selectedBlockData.individualCandidates?.[client.user_id];
+                            return clientData?.allFilteredExercises?.length || clientData?.exercises?.length || 0;
+                          })
                         );
                         
                         return Array.from({ length: maxRows }, (_, rowIndex) => {
@@ -452,12 +454,15 @@ export default function GroupVisualizationPage() {
                               
                               {/* Client Exercise Columns */}
                               {groupContext.clients.map((client) => {
-                                const clientExercise = selectedBlockData.individualCandidates?.[client.user_id]?.exercises?.[rowIndex];
+                                const clientData = selectedBlockData.individualCandidates?.[client.user_id];
+                                const allExercises = clientData?.allFilteredExercises || clientData?.exercises || [];
+                                const clientExercise = allExercises[rowIndex];
+                                const isCandidate = rowIndex < (clientData?.exercises?.length || 0);
                                 
                                 return (
                                   <td key={client.user_id} className="px-3 py-2 whitespace-nowrap text-sm">
                                     {clientExercise ? (
-                                      <div className={`${rowIndex < 6 ? 'border-2 border-blue-500 rounded-md p-2 -m-2' : ''}`}>
+                                      <div className={`${isCandidate ? 'border-2 border-blue-500 rounded-md p-2 -m-2' : ''}`}>
                                         <div className="font-medium text-gray-900">
                                           {rowIndex + 1}. {clientExercise.name}
                                         </div>
