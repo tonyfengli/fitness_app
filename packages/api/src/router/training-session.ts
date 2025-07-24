@@ -2,7 +2,7 @@ import type { TRPCRouterRecord } from "@trpc/server";
 import { z } from "zod/v4";
 import { TRPCError } from "@trpc/server";
 
-import { desc, eq, and, gte, lte, or, sql } from "@acme/db";
+import { desc, eq, and, gte, lte, or, sql, inArray } from "@acme/db";
 import { 
   TrainingSession, 
   UserTrainingSession,
@@ -11,6 +11,7 @@ import {
   CreateTrainingSessionSchema,
   CreateUserTrainingSessionSchema,
   user as userTable,
+  user as User,
   exercises
 } from "@acme/db/schema";
 import { 
@@ -1152,107 +1153,140 @@ export const trainingSessionRouter = {
       }
       
       try {
-        // Import what we need
-        const { GroupPromptBuilder, HybridLLMStrategy } = await import("@acme/ai");
+        // Get the actual session data by running the same logic as visualizeGroupWorkout
+        const session = await ctx.db
+          .select()
+          .from(TrainingSession)
+          .where(eq(TrainingSession.id, input.sessionId))
+          .leftJoin(UserTrainingSession, eq(UserTrainingSession.trainingSessionId, TrainingSession.id))
+          .then(rows => {
+            if (rows.length === 0) return null;
+            const session = rows[0]!.training_session;
+            const trainees = rows
+              .filter(row => row.user_training_session?.userId)
+              .map(row => ({ userId: row.user_training_session!.userId, checkedInAt: row.user_training_session!.checkedInAt }));
+            return { ...session, trainees };
+          });
         
-        // For testing, let's create a mock blueprint and generate just the prompts
-        // In production, we'd get the real blueprint from visualizeGroupWorkout
+        if (!session) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Session not found',
+          });
+        }
         
-        // First we need to get the blueprint by running the same logic as visualizeGroupWorkout
-        // Import necessary functions
-        const { generateGroupWorkoutBlueprint } = await import("@acme/ai");
-        const { ExerciseFilterService } = await import("../services/exercise-filter-service");
-        const { groupWorkoutTestDataLogger } = await import("../utils/groupWorkoutTestDataLogger");
+        if (session.trainerId !== user.id) {
+          throw new TRPCError({
+            code: 'FORBIDDEN',
+            message: 'You can only view your own sessions',
+          });
+        }
         
-        // Create a mock blueprint for testing the prompts
-        // In production, this would come from running the full visualization pipeline
-        const mockBlueprint = {
-          blocks: [{
-            blockId: "A",
-            blockConfig: {
-              id: "A",
-              name: "Block A - Primary Strength",
-              functionTags: ["primary_strength"],
-              maxExercises: 5
+        const clientIds = session.trainees.map(t => t.userId);
+        
+        // Get client details and preferences
+        const [clientsData, preferencesData] = await Promise.all([
+          ctx.db
+            .select()
+            .from(User)
+            .leftJoin(UserProfile, eq(UserProfile.userId, User.id))
+            .where(inArray(User.id, clientIds))
+            .then(rows => rows.map(row => ({
+              ...row.user,
+              userProfile: row.user_profile
+            }))),
+          ctx.db
+            .select()
+            .from(WorkoutPreferences)
+            .where(and(
+              eq(WorkoutPreferences.trainingSessionId, input.sessionId),
+              inArray(WorkoutPreferences.userId, clientIds)
+            ))
+        ]);
+        
+        // Map preferences by userId
+        const preferencesByUserId = Object.fromEntries(
+          preferencesData.map(p => [p.userId, p])
+        );
+        
+        // Create ClientContext for each client
+        const clientsWithPreferences = clientsData.map(client => {
+          const prefs = preferencesByUserId[client.id];
+          const profile = client.userProfile;
+          
+          return {
+            user_id: client.id,
+            name: client.name || 'Unknown',
+            strength_capacity: (profile?.strengthLevel ?? 'moderate') as 'very_low' | 'low' | 'moderate' | 'high',
+            skill_capacity: (profile?.skillLevel ?? 'moderate') as 'very_low' | 'low' | 'moderate' | 'high',
+            primary_goal: (prefs?.sessionGoal || 'strength') as 'mobility' | 'strength' | 'general_fitness' | 'hypertrophy' | 'burn_fat',
+            intensity: (prefs?.intensity || 'moderate') as 'low' | 'moderate' | 'high',
+            muscle_target: prefs?.muscleTargets || [],
+            muscle_lessen: prefs?.muscleLessens || [],
+            exercise_requests: {
+              include: prefs?.includeExercises || [],
+              avoid: prefs?.avoidExercises || []
             },
-            slots: {
-              total: 5,
-              targetShared: 2,
-              actualSharedAvailable: 0,
-              individualPerClient: 5
-            },
-            sharedCandidates: {
-              exercises: [],
-              minClientsRequired: 2,
-              subGroupPossibilities: []
-            },
-            individualCandidates: {},
-            cohesionSnapshot: []
-          }],
-          clientCohesionTracking: []
-        };
-        
-        const mockGroupContext = {
-          clients: [{
-            user_id: "test-user-1",
-            name: "Test User 1",
-            primary_goal: "strength",
-            intensity: "moderate",
-            strength_capacity: "moderate",
-            skill_capacity: "moderate",
-            muscle_target: [],
-            muscle_lessen: [],
-            exercise_requests: { include: [], avoid: [] },
-            avoid_joints: []
-          }],
-          groupCohesionSettings: {
-            defaultSharedRatio: 0.5,
-            blockSettings: {
-              'A': { sharedRatio: 0.5, enforceShared: false },
-              'B': { sharedRatio: 0.5, enforceShared: false },
-              'C': { sharedRatio: 0.5, enforceShared: false },
-              'D': { sharedRatio: 0.5, enforceShared: false },
-            }
-          },
-          clientGroupSettings: {
-            "test-user-1": { cohesionRatio: 0.5 }
-          },
-          sessionId: input.sessionId,
-          businessId: user.businessId,
-          templateType: 'workout' as const
-        };
-        
-        const blueprint = mockBlueprint;
-        const groupContext = mockGroupContext;
-        
-        // Build the prompts for debugging
-        const systemPrompt = GroupPromptBuilder.buildSharedSelectionSystemPrompt();
-        const userMessage = GroupPromptBuilder.buildSharedSelectionUserMessage({
-          blocks: blueprint.blocks,
-          clients: groupContext.clients,
-          cohesionTargets: {
-            overall: groupContext.groupCohesionSettings.defaultSharedRatio,
-            byClient: Object.fromEntries(
-              groupContext.clients.map(c => [
-                c.user_id,
-                groupContext.clientGroupSettings[c.user_id]?.cohesionRatio || 
-                groupContext.groupCohesionSettings.defaultSharedRatio
-              ])
-            )
-          }
+            avoid_joints: prefs?.avoidJoints || []
+          };
         });
         
-        // For now, just return the prompts for debugging
-        // In the next step, we'll actually call the LLM
+        // Import what we need
+        const { generateGroupWorkoutBlueprint, buildGroupWorkoutPrompt, DEFAULT_EQUIPMENT } = await import("@acme/ai");
+        const { ExerciseFilterService } = await import("../services/exercise-filter-service");
+        
+        // Get exercises for this business
+        const filterService = new ExerciseFilterService(ctx.db);
+        const exercisePool = await filterService.fetchBusinessExercises(user.businessId);
+        
+        // Create GroupContext
+        const groupContext = {
+          clients: clientsWithPreferences,
+          sessionId: input.sessionId,
+          businessId: user.businessId,
+          templateType: 'full_body_bmf' as const // Using BMF template for testing
+        };
+        
+        // Generate the blueprint
+        const blueprint = await generateGroupWorkoutBlueprint(
+          groupContext as GroupContext,
+          exercisePool
+        );
+        
+        // For now, create mock deterministic assignments for rounds 1-2
+        // In production, these would come from actual deterministic selection
+        const round1Assignments = clientsWithPreferences.map(client => ({
+          clientId: client.user_id,
+          clientName: client.name,
+          exercise: "Goblet Squat", // Mock - would be determined by algorithm
+          equipment: ["KB"]
+        }));
+        
+        const round2Assignments = clientsWithPreferences.map(client => ({
+          clientId: client.user_id,
+          clientName: client.name,
+          exercise: "Dumbbell Row", // Mock - would be determined by algorithm
+          equipment: ["DB", "bench"]
+        }));
+        
+        // Build the dynamic prompt
+        const systemPrompt = buildGroupWorkoutPrompt({
+          clients: clientsWithPreferences,
+          blocks: blueprint.blocks,
+          round1Assignments,
+          round2Assignments,
+          equipment: DEFAULT_EQUIPMENT
+        });
         
         return {
           success: true,
           debug: {
             systemPrompt,
-            userMessage,
-            llmOutput: "LLM call not implemented yet - this will show the actual LLM response"
+            userMessage: null, // We're not using user message anymore
+            llmOutput: "Click 'Generate' to see the actual LLM response"
           },
-          sessionId: input.sessionId
+          sessionId: input.sessionId,
+          blueprint // Include for debugging
         };
       } catch (error) {
         console.error('❌ Error in generateGroupWorkout:', error);

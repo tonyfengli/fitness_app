@@ -514,25 +514,13 @@ export default function GroupVisualizationPage() {
                 <h3 className="text-base font-medium text-gray-900 mb-3">LLM Generation Debug</h3>
                 
                 {/* System Prompt */}
-                <details className="mb-4">
+                <details className="mb-4" open>
                   <summary className="cursor-pointer text-sm font-medium text-gray-700 hover:text-gray-900">
-                    System Prompt (Step 1: Shared Exercise Selection)
+                    System Prompt Step 1: Group Workout Assignment (Rounds 3 & 4)
                   </summary>
                   <div className="mt-2 p-3 bg-gray-50 rounded-md">
                     <pre className="text-xs text-gray-600 whitespace-pre-wrap font-mono">
-                      {llmDebugData.systemPrompt || <span className="text-gray-400">Click "Test LLM Generation" to see the system prompt</span>}
-                    </pre>
-                  </div>
-                </details>
-                
-                {/* User Message */}
-                <details className="mb-4">
-                  <summary className="cursor-pointer text-sm font-medium text-gray-700 hover:text-gray-900">
-                    User Message (Step 1: Shared Exercise Selection)
-                  </summary>
-                  <div className="mt-2 p-3 bg-gray-50 rounded-md">
-                    <pre className="text-xs text-gray-600 whitespace-pre-wrap font-mono">
-                      {llmDebugData.userMessage || <span className="text-gray-400">Click "Test LLM Generation" to see the user message</span>}
+                      {llmDebugData.systemPrompt || <span className="text-gray-400">Click "Test LLM Generation" to see the dynamic prompt based on session data</span>}
                     </pre>
                   </div>
                 </details>
@@ -540,11 +528,11 @@ export default function GroupVisualizationPage() {
                 {/* LLM Output */}
                 <details>
                   <summary className="cursor-pointer text-sm font-medium text-gray-700 hover:text-gray-900">
-                    LLM Output (Step 1: Shared Exercise Selection)
+                    LLM Output
                   </summary>
                   <div className="mt-2 p-3 bg-gray-50 rounded-md">
                     <pre className="text-xs text-gray-600 whitespace-pre-wrap font-mono">
-                      {llmDebugData.llmOutput || <span className="text-gray-400">Click "Test LLM Generation" to see the LLM output</span>}
+                      {llmDebugData.llmOutput || <span className="text-gray-400">Click "Test LLM Generation" to see the LLM response</span>}
                     </pre>
                   </div>
                 </details>

@@ -29,6 +29,9 @@ export * from "./sms/smsInterpretationGraph";
 export * from "./workout-generation";
 export * from "./workout-generation/group";
 
+// Group workout prompt builder
+export { buildGroupWorkoutPrompt, DEFAULT_EQUIPMENT } from "./workout-generation/group/prompts/groupWorkoutPromptBuilder";
+
 // Formatting utilities
 export * from "./formatting/exerciseFlags";
 

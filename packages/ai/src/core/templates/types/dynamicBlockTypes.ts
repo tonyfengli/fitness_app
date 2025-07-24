@@ -27,7 +27,8 @@ export interface BlockDefinition {
   id: string;                    // "A", "B", "C", "D" or "Round1", "Round2", etc.
   name: string;                  // "Primary Strength" or "Circuit Round 1"
   functionTags: string[];        // ["primary_strength"] or ["circuit"]
-  maxExercises: number;          // 5, 8, etc.
+  maxExercises: number;          // Maximum exercises the LLM can select
+  candidateCount?: number;       // Number of candidate exercises to show (defaults to maxExercises)
   selectionStrategy: 'deterministic' | 'randomized';
   movementPatternFilter?: MovementPatternFilter;  // Filter exercises by movement patterns
   equipmentFilter?: EquipmentFilter;              // Filter exercises by equipment

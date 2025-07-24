@@ -127,8 +127,9 @@ export const FULL_BODY_BMF_TEMPLATE: WorkoutTemplate = {
     {
       id: 'Round1',
       name: 'Round 1',
-      functionTags: ['primary_strength'],
+      functionTags: ['primary_strength', 'secondary_strength'],
       maxExercises: 1,
+      candidateCount: 1,
       selectionStrategy: 'deterministic',
       movementPatternFilter: {
         include: ['squat', 'hinge', 'lunge']
@@ -137,23 +138,30 @@ export const FULL_BODY_BMF_TEMPLATE: WorkoutTemplate = {
     {
       id: 'Round2',
       name: 'Round 2',
-      functionTags: ['primary_strength'],  // Placeholder
-      maxExercises: 3,  // Placeholder
-      selectionStrategy: 'randomized'  // Placeholder
+      functionTags: [],  // No function tag filters
+      maxExercises: 1,  // LLM can select max 1 exercise
+      candidateCount: 6,  // Show 6 candidates
+      selectionStrategy: 'randomized',
+      movementPatternFilter: {
+        include: ['vertical_pull', 'horizontal_pull']  // Only pulling movements
+      }
     },
     {
       id: 'Round3',
       name: 'Round 3',
-      functionTags: ['secondary_strength'],  // Placeholder
-      maxExercises: 4,  // Placeholder
-      selectionStrategy: 'randomized'  // Placeholder
+      functionTags: [],  // No function tag filter - show everything
+      maxExercises: 2,  // LLM can select max 2 exercises
+      candidateCount: 8,  // Show 8 candidates
+      selectionStrategy: 'randomized'
+      // No movement pattern filter - show all exercises
     },
     {
       id: 'FinalRound',
       name: 'Final Round',
-      functionTags: ['capacity'],  // Placeholder
-      maxExercises: 2,  // Placeholder
-      selectionStrategy: 'randomized'  // Placeholder
+      functionTags: ['core', 'capacity'],  // Core or capacity exercises
+      maxExercises: 2,  // LLM can select max 2 exercises
+      candidateCount: 8,  // Show 8 candidates
+      selectionStrategy: 'randomized'
     }
   ],
   blockOrder: ['Round1', 'Round2', 'Round3', 'FinalRound']

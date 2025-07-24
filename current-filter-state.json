@@ -1,18 +1,17 @@
 {
-  "timestamp": "2025-07-24T17:01:40.657Z",
+  "timestamp": "2025-07-24T20:50:52.305Z",
   "filters": {
-    "clientName": "Tony Lee",
+    "clientName": "Curtis Yu",
     "strengthCapacity": "moderate",
     "skillCapacity": "moderate",
     "intensity": "low",
     "muscleTarget": [
-      "core"
+      "lats",
+      "adductors"
     ],
     "muscleLessen": [],
     "avoidJoints": [],
-    "includeExercises": [
-      "Curtsy Lunge"
-    ],
+    "includeExercises": [],
     "avoidExercises": [],
     "sessionGoal": "strength",
     "isFullBody": true

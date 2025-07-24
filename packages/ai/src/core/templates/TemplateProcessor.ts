@@ -74,7 +74,8 @@ export class TemplateProcessor {
     // Step 3: Prepare individual candidates
     const individualCandidates = this.prepareIndividualCandidates(
       blockFilteredExercises,
-      blockDef.maxExercises
+      blockDef.maxExercises,
+      blockDef.candidateCount
     );
 
     // Step 4: Calculate slot allocation
@@ -112,9 +113,11 @@ export class TemplateProcessor {
         return true;
       }
 
-      // Step 2: Check function tags
-      if (!exercise.functionTags?.some(tag => blockDef.functionTags.includes(tag))) {
-        return false;
+      // Step 2: Check function tags (skip if no tags specified)
+      if (blockDef.functionTags && blockDef.functionTags.length > 0) {
+        if (!exercise.functionTags?.some(tag => blockDef.functionTags.includes(tag))) {
+          return false;
+        }
       }
 
       // Step 3: Apply movement pattern filter (if specified)
@@ -184,15 +187,24 @@ export class TemplateProcessor {
   ): GroupScoredExercise[] {
     const exerciseClientMap = new Map<string, Set<string>>();
     const exerciseMap = new Map<string, ScoredExercise>();
+    const exerciseScoreMap = new Map<string, Map<string, number>>();
 
     // Build map of exercise ID to client IDs
+    // Only include if the exercise scores >= 5.0 for the client
     for (const [clientId, exercises] of clientExercises) {
       for (const exercise of exercises) {
+        // Skip exercises that score below base (5.0) for this client
+        if (exercise.score < 5.0) {
+          continue;
+        }
+        
         if (!exerciseClientMap.has(exercise.id)) {
           exerciseClientMap.set(exercise.id, new Set());
           exerciseMap.set(exercise.id, exercise);
+          exerciseScoreMap.set(exercise.id, new Map());
         }
         exerciseClientMap.get(exercise.id)!.add(clientId);
+        exerciseScoreMap.get(exercise.id)!.set(clientId, exercise.score);
       }
     }
 
@@ -205,11 +217,11 @@ export class TemplateProcessor {
         const clientsArray = Array.from(clientIds);
         
         // Calculate group score (average of individual scores)
+        // Use stored scores from the map (we know they're all >= 5.0)
         let totalScore = 0;
+        const scoreMap = exerciseScoreMap.get(exerciseId)!;
         const clientScores = clientsArray.map(clientId => {
-          const clientExerciseList = clientExercises.get(clientId) || [];
-          const clientExercise = clientExerciseList.find(ex => ex.id === exerciseId);
-          const score = clientExercise?.score || 5;
+          const score = scoreMap.get(clientId) ?? 5;
           totalScore += score;
           
           return {
@@ -235,7 +247,7 @@ export class TemplateProcessor {
       return b.groupScore - a.groupScore;
     });
 
-    console.log(`  Found ${sharedExercises.length} shared exercises (2+ clients)`);
+    console.log(`  Found ${sharedExercises.length} shared exercises (2+ clients with score >= 5.0)`);
     if (sharedExercises.length > 0) {
       console.log(`  Top shared: ${sharedExercises[0]!.name} (${sharedExercises[0]!.clientsSharing.length} clients)`);
     }
@@ -248,13 +260,16 @@ export class TemplateProcessor {
    */
   private prepareIndividualCandidates(
     clientExercises: Map<string, ScoredExercise[]>,
-    maxExercises: number
+    maxExercises: number,
+    candidateCount?: number
   ): Record<string, { exercises: ScoredExercise[]; slotsToFill: number; allFilteredExercises?: ScoredExercise[] }> {
     const candidates: Record<string, { exercises: ScoredExercise[]; slotsToFill: number; allFilteredExercises?: ScoredExercise[] }> = {};
+    // Use candidateCount if specified, otherwise default to maxExercises
+    const numCandidates = candidateCount ?? maxExercises;
 
     for (const [clientId, exercises] of clientExercises) {
       candidates[clientId] = {
-        exercises: exercises.slice(0, maxExercises * 3), // Give LLM options
+        exercises: exercises.slice(0, numCandidates), // Limit to candidateCount
         slotsToFill: maxExercises, // Will be adjusted based on shared selections
         allFilteredExercises: exercises // Include all exercises that passed the block filter
       };
