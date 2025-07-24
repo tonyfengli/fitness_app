@@ -1,5 +1,209 @@
 [
   {
+    "sessionId": "5fa0b8ac-68bc-4b97-8f2a-f3cde10c8b53",
+    "timestamp": "2025-07-24T17:01:40.656Z",
+    "filters": {
+      "clientName": "Tony Lee",
+      "strengthCapacity": "moderate",
+      "skillCapacity": "moderate",
+      "intensity": "low",
+      "muscleTarget": [
+        "core"
+      ],
+      "muscleLessen": [],
+      "avoidJoints": [],
+      "includeExercises": [
+        "Curtsy Lunge"
+      ],
+      "avoidExercises": [],
+      "sessionGoal": "strength",
+      "isFullBody": true
+    },
+    "results": {
+      "template": "none",
+      "exerciseCount": 117,
+      "constraintsSatisfied": true,
+      "generationTime": 1.3083970001898706,
+      "blockCounts": {
+        "blockA": 0,
+        "blockB": 0,
+        "blockC": 0,
+        "blockD": 0
+      }
+    }
+  },
+  {
+    "sessionId": "68f553fa-495f-4658-bfa1-fb9e9fbf5dbf",
+    "timestamp": "2025-07-24T17:01:40.651Z",
+    "filters": {
+      "clientName": "Hilary Chan",
+      "strengthCapacity": "low",
+      "skillCapacity": "low",
+      "intensity": "moderate",
+      "muscleTarget": [
+        "upper_back"
+      ],
+      "muscleLessen": [
+        "calves"
+      ],
+      "avoidJoints": [],
+      "includeExercises": [
+        "Alternating Incline Dumbbell Chest Press"
+      ],
+      "avoidExercises": [],
+      "sessionGoal": "mobility",
+      "isFullBody": true
+    },
+    "results": {
+      "template": "none",
+      "exerciseCount": 48,
+      "constraintsSatisfied": true,
+      "generationTime": 1.0019189999438822,
+      "blockCounts": {
+        "blockA": 0,
+        "blockB": 0,
+        "blockC": 0,
+        "blockD": 0
+      }
+    }
+  },
+  {
+    "sessionId": "1e0b63ed-8db9-47b7-b40d-236d1eeb5f83",
+    "timestamp": "2025-07-24T17:01:40.639Z",
+    "filters": {
+      "clientName": "Curtis Yu",
+      "strengthCapacity": "moderate",
+      "skillCapacity": "moderate",
+      "intensity": "low",
+      "muscleTarget": [
+        "upper_chest",
+        "adductors"
+      ],
+      "muscleLessen": [],
+      "avoidJoints": [],
+      "includeExercises": [],
+      "avoidExercises": [
+        "Upside-Down Kettlebell Press (single arm)"
+      ],
+      "sessionGoal": "mobility",
+      "isFullBody": true
+    },
+    "results": {
+      "template": "none",
+      "exerciseCount": 116,
+      "constraintsSatisfied": true,
+      "generationTime": 0.9624860002659261,
+      "blockCounts": {
+        "blockA": 0,
+        "blockB": 0,
+        "blockC": 0,
+        "blockD": 0
+      }
+    }
+  },
+  {
+    "sessionId": "4a1a17d2-345e-490e-936d-7e7394b6aa4b",
+    "timestamp": "2025-07-24T17:01:39.036Z",
+    "filters": {
+      "clientName": "Hilary Chan",
+      "strengthCapacity": "low",
+      "skillCapacity": "low",
+      "intensity": "moderate",
+      "muscleTarget": [
+        "upper_back"
+      ],
+      "muscleLessen": [
+        "calves"
+      ],
+      "avoidJoints": [],
+      "includeExercises": [
+        "Alternating Incline Dumbbell Chest Press"
+      ],
+      "avoidExercises": [],
+      "sessionGoal": "mobility",
+      "isFullBody": true
+    },
+    "results": {
+      "template": "none",
+      "exerciseCount": 48,
+      "constraintsSatisfied": true,
+      "generationTime": 1.5983649999834597,
+      "blockCounts": {
+        "blockA": 0,
+        "blockB": 0,
+        "blockC": 0,
+        "blockD": 0
+      }
+    }
+  },
+  {
+    "sessionId": "dbb3820d-513e-42b2-90cc-90437d603901",
+    "timestamp": "2025-07-24T17:01:39.028Z",
+    "filters": {
+      "clientName": "Curtis Yu",
+      "strengthCapacity": "moderate",
+      "skillCapacity": "moderate",
+      "intensity": "low",
+      "muscleTarget": [
+        "upper_chest",
+        "adductors"
+      ],
+      "muscleLessen": [],
+      "avoidJoints": [],
+      "includeExercises": [],
+      "avoidExercises": [
+        "Upside-Down Kettlebell Press (single arm)"
+      ],
+      "sessionGoal": "mobility",
+      "isFullBody": true
+    },
+    "results": {
+      "template": "none",
+      "exerciseCount": 116,
+      "constraintsSatisfied": true,
+      "generationTime": 1.6956900004297495,
+      "blockCounts": {
+        "blockA": 0,
+        "blockB": 0,
+        "blockC": 0,
+        "blockD": 0
+      }
+    }
+  },
+  {
+    "sessionId": "42912ccb-abd6-4b4e-b563-1fb4d1b90666",
+    "timestamp": "2025-07-24T17:01:38.968Z",
+    "filters": {
+      "clientName": "Tony Lee",
+      "strengthCapacity": "moderate",
+      "skillCapacity": "moderate",
+      "intensity": "low",
+      "muscleTarget": [
+        "core"
+      ],
+      "muscleLessen": [],
+      "avoidJoints": [],
+      "includeExercises": [
+        "Curtsy Lunge"
+      ],
+      "avoidExercises": [],
+      "sessionGoal": "strength",
+      "isFullBody": true
+    },
+    "results": {
+      "template": "none",
+      "exerciseCount": 117,
+      "constraintsSatisfied": true,
+      "generationTime": 10.059361999854445,
+      "blockCounts": {
+        "blockA": 0,
+        "blockB": 0,
+        "blockC": 0,
+        "blockD": 0
+      }
+    }
+  },
+  {
     "sessionId": "25f10476-5e52-4676-988e-3fd014f2f45d",
     "timestamp": "2025-07-23T19:41:36.277Z",
     "filters": {
@@ -3175,202 +3379,6 @@
       "exerciseCount": 117,
       "constraintsSatisfied": true,
       "generationTime": 2.2781409999588504,
-      "blockCounts": {
-        "blockA": 5,
-        "blockB": 8,
-        "blockC": 8,
-        "blockD": 6
-      }
-    }
-  },
-  {
-    "sessionId": "0d2b645f-3561-427a-a130-bcd4623cb191",
-    "timestamp": "2025-07-23T00:31:52.317Z",
-    "filters": {
-      "clientName": "Tony Lee",
-      "strengthCapacity": "moderate",
-      "skillCapacity": "moderate",
-      "intensity": "low",
-      "muscleTarget": [
-        "glutes"
-      ],
-      "muscleLessen": [
-        "upper_chest"
-      ],
-      "avoidJoints": [],
-      "includeExercises": [],
-      "avoidExercises": [],
-      "sessionGoal": "mobility",
-      "isFullBody": false
-    },
-    "results": {
-      "template": "workout",
-      "exerciseCount": 117,
-      "constraintsSatisfied": true,
-      "generationTime": 2.868396000005305,
-      "blockCounts": {
-        "blockA": 5,
-        "blockB": 8,
-        "blockC": 8,
-        "blockD": 6
-      }
-    }
-  },
-  {
-    "sessionId": "5d183bff-93b3-4710-b33c-7e9ac2e72680",
-    "timestamp": "2025-07-23T00:24:47.237Z",
-    "filters": {
-      "clientName": "Hilary Chan",
-      "strengthCapacity": "low",
-      "skillCapacity": "low",
-      "intensity": "moderate",
-      "muscleTarget": [
-        "upper_back"
-      ],
-      "muscleLessen": [
-        "calves"
-      ],
-      "avoidJoints": [],
-      "includeExercises": [],
-      "avoidExercises": [
-        "Landmine T Bar Row"
-      ],
-      "sessionGoal": "mobility",
-      "isFullBody": false
-    },
-    "results": {
-      "template": "workout",
-      "exerciseCount": 47,
-      "constraintsSatisfied": true,
-      "generationTime": 2.547908999986248,
-      "blockCounts": {
-        "blockA": 5,
-        "blockB": 8,
-        "blockC": 8,
-        "blockD": 6
-      }
-    }
-  },
-  {
-    "sessionId": "732cc608-261f-45ab-ac96-d5af396445f3",
-    "timestamp": "2025-07-23T00:24:47.172Z",
-    "filters": {
-      "clientName": "Tony Lee",
-      "strengthCapacity": "moderate",
-      "skillCapacity": "moderate",
-      "intensity": "low",
-      "muscleTarget": [
-        "glutes"
-      ],
-      "muscleLessen": [
-        "upper_chest"
-      ],
-      "avoidJoints": [],
-      "includeExercises": [],
-      "avoidExercises": [],
-      "sessionGoal": "mobility",
-      "isFullBody": false
-    },
-    "results": {
-      "template": "workout",
-      "exerciseCount": 117,
-      "constraintsSatisfied": true,
-      "generationTime": 3.048360999993747,
-      "blockCounts": {
-        "blockA": 5,
-        "blockB": 8,
-        "blockC": 8,
-        "blockD": 6
-      }
-    }
-  },
-  {
-    "sessionId": "4f015782-24fc-423e-a9c1-4baf80105b8e",
-    "timestamp": "2025-07-23T00:24:47.163Z",
-    "filters": {
-      "clientName": "Curtis Yu",
-      "strengthCapacity": "moderate",
-      "skillCapacity": "moderate",
-      "intensity": "low",
-      "muscleTarget": [
-        "hamstrings"
-      ],
-      "muscleLessen": [],
-      "avoidJoints": [],
-      "includeExercises": [],
-      "avoidExercises": [],
-      "sessionGoal": "mobility",
-      "isFullBody": false
-    },
-    "results": {
-      "template": "workout",
-      "exerciseCount": 117,
-      "constraintsSatisfied": true,
-      "generationTime": 3.231781000009505,
-      "blockCounts": {
-        "blockA": 5,
-        "blockB": 8,
-        "blockC": 8,
-        "blockD": 6
-      }
-    }
-  },
-  {
-    "sessionId": "31d3021d-982b-48a6-8f91-90f0b5b8594e",
-    "timestamp": "2025-07-23T00:24:09.345Z",
-    "filters": {
-      "clientName": "Tony Lee",
-      "strengthCapacity": "moderate",
-      "skillCapacity": "moderate",
-      "intensity": "low",
-      "muscleTarget": [
-        "glutes"
-      ],
-      "muscleLessen": [
-        "upper_chest"
-      ],
-      "avoidJoints": [],
-      "includeExercises": [],
-      "avoidExercises": [],
-      "sessionGoal": "mobility",
-      "isFullBody": false
-    },
-    "results": {
-      "template": "workout",
-      "exerciseCount": 117,
-      "constraintsSatisfied": true,
-      "generationTime": 3.197890000010375,
-      "blockCounts": {
-        "blockA": 5,
-        "blockB": 8,
-        "blockC": 8,
-        "blockD": 6
-      }
-    }
-  },
-  {
-    "sessionId": "938374ed-a0da-4d34-863e-59643a7545cd",
-    "timestamp": "2025-07-23T00:24:09.287Z",
-    "filters": {
-      "clientName": "Curtis Yu",
-      "strengthCapacity": "moderate",
-      "skillCapacity": "moderate",
-      "intensity": "low",
-      "muscleTarget": [
-        "hamstrings"
-      ],
-      "muscleLessen": [],
-      "avoidJoints": [],
-      "includeExercises": [],
-      "avoidExercises": [],
-      "sessionGoal": "mobility",
-      "isFullBody": false
-    },
-    "results": {
-      "template": "workout",
-      "exerciseCount": 117,
-      "constraintsSatisfied": true,
-      "generationTime": 3.319331000006059,
       "blockCounts": {
         "blockA": 5,
         "blockB": 8,
