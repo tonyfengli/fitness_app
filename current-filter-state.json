@@ -1,28 +1,24 @@
 {
-  "timestamp": "2025-07-25T00:41:30.098Z",
+  "timestamp": "2025-07-25T18:22:28.049Z",
   "filters": {
-    "clientName": "Hilary Chan",
-    "strengthCapacity": "low",
-    "skillCapacity": "low",
-    "intensity": "moderate",
+    "clientName": "Tony Lee",
+    "strengthCapacity": "moderate",
+    "skillCapacity": "moderate",
+    "intensity": "high",
     "muscleTarget": [
-      "upper_back"
+      "biceps"
     ],
-    "muscleLessen": [
-      "calves"
-    ],
+    "muscleLessen": [],
     "avoidJoints": [],
-    "includeExercises": [
-      "Single-Arm Kettlebell Overhead Press"
-    ],
+    "includeExercises": [],
     "avoidExercises": [
-      "Elevated Push-Ups"
+      "Cable Chest Press (variations)"
     ],
     "sessionGoal": "mobility",
     "isFullBody": true
   },
   "results": {
-    "totalExercises": 47,
+    "totalExercises": 116,
     "blockA": {
       "count": 0,
       "exercises": []

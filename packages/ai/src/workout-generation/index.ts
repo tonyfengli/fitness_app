@@ -36,5 +36,5 @@ export type {
 } from './integration/workoutPipeline';
 
 // Prompt building (for advanced usage)
-export { WorkoutPromptBuilder } from './prompts/workoutInterpretationPrompt';
+export { WorkoutPromptBuilder } from './prompts/promptBuilder';
 export type { PromptConfig, WorkoutStructure } from './prompts/types';

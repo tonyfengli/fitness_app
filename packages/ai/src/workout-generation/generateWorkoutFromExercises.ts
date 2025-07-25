@@ -2,12 +2,13 @@ import { ChatOpenAI } from "@langchain/openai";
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import type { WorkoutInterpretationStateType, ExercisesByBlock, TopExercise } from "./types";
 import { determineTotalSetCount } from "./setCountLogic";
-import { WorkoutPromptBuilder } from "./prompts/workoutInterpretationPrompt";
+import { WorkoutPromptBuilder } from "./prompts/promptBuilder";
 import type { LLMProvider } from "../config/llm";
 import { createLLM } from "../config/llm";
 import { BlockDebugger, logBlock, logBlockTransformation } from "../utils/blockDebugger";
 import { getWorkoutStructure } from "./templates/workoutTemplates";
 import type { WorkoutTemplateType } from "./templates/workoutTemplates";
+import { extractJSON } from "./group/utils/jsonExtraction";
 
 // Global LLM instance that can be overridden for testing
 let globalLLM: LLMProvider | undefined;
@@ -147,19 +148,10 @@ Please interpret these exercises according to the system instructions.`;
 
     // Parse JSON response
     const parseStartTime = performance.now();
-    let structuredOutput;
-    try {
-      // Extract JSON from the response (in case LLM adds extra text)
-      const jsonMatch = interpretation.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        structuredOutput = JSON.parse(jsonMatch[0]);
-      } else {
-        throw new Error("No JSON object found in response");
-      }
-    } catch (parseError) {
-      console.error("Error parsing LLM response as JSON:", parseError);
-      structuredOutput = { error: "Failed to parse response as JSON", raw: interpretation };
-    }
+    const structuredOutput = extractJSON(interpretation) || { 
+      error: "Failed to parse response as JSON", 
+      raw: interpretation 
+    };
     timing.responseParsing = performance.now() - parseStartTime;
     
     timing.total = performance.now() - startTime;
@@ -184,7 +176,7 @@ Please interpret these exercises according to the system instructions.`;
       },
       {
         outputStructure: structuredOutput ? Object.keys(structuredOutput) : [],
-        hasError: !!structuredOutput?.error,
+        hasError: structuredOutput && 'error' in structuredOutput,
         timing: timing
       }
     );
@@ -243,5 +235,3 @@ function formatExercisesForPrompt(exercises: ExercisesByBlock): string {
   return formatted.trim();
 }
 
-// Export alias for backward compatibility
-export const interpretExercisesNode = generateWorkoutFromExercises;

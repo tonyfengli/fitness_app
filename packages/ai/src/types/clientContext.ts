@@ -21,6 +21,7 @@ export interface ClientContext {
   avoid_joints?: string[]; // Array of joint names to avoid (for injuries/limitations)
   business_id?: string; // UUID of the business this client belongs to
   templateType?: "standard" | "circuit" | "full_body"; // Workout template type
+  default_sets?: number; // Default number of sets for this client's workouts
 }
 
 /**
@@ -38,7 +39,8 @@ export function createDefaultClientContext(
   avoidJoints: string[] = [],
   businessId?: string,
   name: string = "Default Client",
-  templateType: ClientContext["templateType"] = "standard"
+  templateType: ClientContext["templateType"] = "standard",
+  defaultSets: number = 20
 ): ClientContext {
   return {
     user_id: userId,
@@ -52,7 +54,8 @@ export function createDefaultClientContext(
     exercise_requests: exerciseRequests,
     avoid_joints: avoidJoints,
     business_id: businessId,
-    templateType: templateType
+    templateType: templateType,
+    default_sets: defaultSets
   };
 }
 

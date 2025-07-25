@@ -8,16 +8,23 @@ import {
   INSTRUCTIONS_SECTION
 } from './sections';
 import { generateStructureConstraints, generateOutputFormat } from './sections/dynamicStructure';
+import { generateBMFGroupPrompt } from './sections/group/bmfPrompt';
 import type { PromptConfig } from './types';
 
 export class WorkoutPromptBuilder {
-  private config: PromptConfig;
+  protected config: PromptConfig;
   
   constructor(config: PromptConfig = {}) {
     this.config = config;
   }
   
   build(): string {
+    // Handle group workouts
+    if (this.config.workoutType === 'group') {
+      return this.buildGroupPrompt();
+    }
+    
+    // Existing individual workout logic
     const sections: string[] = [];
     
     // Add role section
@@ -75,5 +82,23 @@ export class WorkoutPromptBuilder {
   // Static method for backward compatibility
   static buildDefault(): string {
     return new WorkoutPromptBuilder().build();
+  }
+  
+  // Build group workout prompt
+  private buildGroupPrompt(): string {
+    if (!this.config.groupConfig) {
+      throw new Error('Group workout requires groupConfig');
+    }
+    
+    // For now, only support BMF template
+    // In the future, we can add more template strategies here
+    const templateType = this.config.groupConfig.templateType || 'full_body_bmf';
+    
+    switch (templateType) {
+      case 'full_body_bmf':
+        return generateBMFGroupPrompt(this.config.groupConfig);
+      default:
+        throw new Error(`Unsupported group template type: ${templateType}`);
+    }
   }
 }

@@ -51,6 +51,8 @@ export const UserProfile = pgTable("user_profile", (t) => ({
   // Client fitness levels
   strengthLevel: t.text().notNull().default('moderate'), // 'very_low', 'low', 'moderate', 'high'
   skillLevel: t.text().notNull().default('moderate'), // 'very_low', 'low', 'moderate', 'high'
+  // Default workout parameters
+  defaultSets: t.integer().notNull().default(20), // Default number of sets for this client
   // Additional profile fields can be added here
   notes: t.text(),
   createdAt: t.timestamp().defaultNow().notNull(),
@@ -64,6 +66,7 @@ export const CreateUserProfileSchema = createInsertSchema(UserProfile, {
   businessId: z.string().uuid(),
   strengthLevel: z.enum(["very_low", "low", "moderate", "high"]).default("moderate"),
   skillLevel: z.enum(["very_low", "low", "moderate", "high"]).default("moderate"),
+  defaultSets: z.number().int().min(10).max(40).default(20),
   notes: z.string().optional(),
 }).omit({
   id: true,

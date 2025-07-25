@@ -270,58 +270,95 @@ export default function GroupVisualizationPage() {
           {/* Client Overview */}
           <div className="mb-1 flex-shrink-0">
             <h2 className="text-xs font-bold text-gray-900">Clients</h2>
-            <div className="grid grid-cols-3 gap-0.5">
-            {groupContext.clients.map((client) => (
-              <div key={client.user_id} className="bg-white rounded p-1 text-[9px] border border-gray-200">
-                <div className="flex items-start space-x-1">
-                  <img
-                    src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${client.user_id}`}
-                    alt={client.name}
-                    className="w-5 h-5 rounded-full flex-shrink-0"
-                  />
-                  <div className="min-w-0 flex-1">
-                    <h4 className="font-medium text-gray-900 text-[10px]">{client.name}</h4>
-                    <div className="space-y-0">
-                      {client.primary_goal && (
-                        <p className="text-gray-600 leading-tight">
-                          <span className="font-medium">Goal:</span> {client.primary_goal}
-                        </p>
-                      )}
-                      {client.intensity && (
-                        <p className="text-gray-600 leading-tight">
-                          <span className="font-medium">Intensity:</span> {client.intensity}
-                        </p>
-                      )}
-                      {client.muscle_target && client.muscle_target.length > 0 && (
-                        <p className="text-gray-600 leading-tight">
-                          <span className="font-medium">Target:</span> {client.muscle_target.map(formatMuscleName).join(', ')}
-                        </p>
-                      )}
-                      {client.muscle_lessen && client.muscle_lessen.length > 0 && (
-                        <p className="text-gray-600 leading-tight">
-                          <span className="font-medium">Lessen:</span> {client.muscle_lessen.map(formatMuscleName).join(', ')}
-                        </p>
-                      )}
-                      {client.exercise_requests?.include && client.exercise_requests.include.length > 0 && (
-                        <p className="text-green-600 leading-tight">
-                          <span className="font-medium">Include:</span> {client.exercise_requests.include.join(', ')}
-                        </p>
-                      )}
-                      {client.exercise_requests?.avoid && client.exercise_requests.avoid.length > 0 && (
-                        <p className="text-red-600 leading-tight">
-                          <span className="font-medium">Exclude:</span> {client.exercise_requests.avoid.join(', ')}
-                        </p>
-                      )}
-                      {client.avoid_joints && client.avoid_joints.length > 0 && (
-                        <p className="text-orange-600 leading-tight">
-                          <span className="font-medium">Avoid Joints:</span> {client.avoid_joints.join(', ')}
-                        </p>
-                      )}
+            <div className="grid grid-cols-4 gap-0.5">
+            {groupContext.clients.map((client) => {
+              // Get exercises for this client in the selected block
+              const clientExercises = selectedBlockData?.individualCandidates[client.user_id]?.exercises || [];
+              
+              return (
+                <div key={client.user_id} className="bg-white rounded p-2 text-[9px] border border-gray-200">
+                  <div className="flex items-start gap-2">
+                    <img
+                      src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${client.user_id}`}
+                      alt={client.name}
+                      className="w-5 h-5 rounded-full flex-shrink-0"
+                    />
+                    <div className="flex-1 grid grid-cols-2 gap-2">
+                      {/* Left column: Client info and preferences */}
+                      <div>
+                        <h4 className="font-medium text-gray-900 text-[10px] mb-1">{client.name}</h4>
+                        <div className="space-y-0">
+                          {client.primary_goal && (
+                            <p className="text-gray-600 leading-tight">
+                              <span className="font-medium">Goal:</span> {client.primary_goal}
+                            </p>
+                          )}
+                          {client.intensity && (
+                            <p className="text-gray-600 leading-tight">
+                              <span className="font-medium">Intensity:</span> {client.intensity}
+                            </p>
+                          )}
+                          {client.muscle_target && client.muscle_target.length > 0 && (
+                            <p className="text-gray-600 leading-tight">
+                              <span className="font-medium">Target:</span> {client.muscle_target.map(formatMuscleName).join(', ')}
+                            </p>
+                          )}
+                          {client.muscle_lessen && client.muscle_lessen.length > 0 && (
+                            <p className="text-gray-600 leading-tight">
+                              <span className="font-medium">Lessen:</span> {client.muscle_lessen.map(formatMuscleName).join(', ')}
+                            </p>
+                          )}
+                          {client.exercise_requests?.include && client.exercise_requests.include.length > 0 && (
+                            <p className="text-green-600 leading-tight">
+                              <span className="font-medium">Include:</span> {client.exercise_requests.include.join(', ')}
+                            </p>
+                          )}
+                          {client.exercise_requests?.avoid && client.exercise_requests.avoid.length > 0 && (
+                            <p className="text-red-600 leading-tight">
+                              <span className="font-medium">Exclude:</span> {client.exercise_requests.avoid.join(', ')}
+                            </p>
+                          )}
+                          {client.avoid_joints && client.avoid_joints.length > 0 && (
+                            <p className="text-orange-600 leading-tight">
+                              <span className="font-medium">Avoid Joints:</span> {client.avoid_joints.join(', ')}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      
+                      {/* Right column: Exercises for selected block */}
+                      <div className="border-l pl-2">
+                        <h5 className="font-medium text-gray-700 text-[9px] mb-1">{selectedBlock} Options:</h5>
+                        <div className="space-y-0.5">
+                          {clientExercises.slice(0, 5).map((exercise, idx) => {
+                            const isClientRequest = exercise.scoreBreakdown?.includeExerciseBoost > 0;
+                            const isTopChoice = idx === 0;
+                            
+                            return (
+                              <p 
+                                key={exercise.id} 
+                                className={`leading-tight ${
+                                  isTopChoice ? 'text-indigo-700 font-medium' : 
+                                  isClientRequest ? 'text-green-700' : 
+                                  'text-gray-600'
+                                }`}
+                              >
+                                {idx + 1}. {exercise.name} 
+                                <span className="text-gray-400 ml-1">({exercise.score.toFixed(1)})</span>
+                                {isClientRequest && <span className="text-green-600 ml-1 text-[8px]">✓</span>}
+                              </p>
+                            );
+                          })}
+                          {clientExercises.length === 0 && (
+                            <p className="text-gray-400 italic">No exercises available</p>
+                          )}
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
             </div>
           </div>
           

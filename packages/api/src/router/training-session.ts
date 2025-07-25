@@ -985,7 +985,8 @@ export const trainingSessionRouter = {
         },
         avoid_joints: client.preferences?.avoidJoints ?? [],
         business_id: user.businessId,
-        templateType: session.templateType as "standard" | "circuit" | "full_body" | undefined
+        templateType: session.templateType as "standard" | "circuit" | "full_body" | undefined,
+        default_sets: client.userProfile?.defaultSets ?? 20
       }));
       
       // Create initial GroupContext for logging
@@ -1291,12 +1292,13 @@ export const trainingSessionRouter = {
               include: prefs?.includeExercises || [],
               avoid: prefs?.avoidExercises || []
             },
-            avoid_joints: prefs?.avoidJoints || []
+            avoid_joints: prefs?.avoidJoints || [],
+            default_sets: profile?.defaultSets ?? 20
           };
         });
         
         // Import what we need
-        const { generateGroupWorkoutBlueprint, buildGroupWorkoutPrompt, DEFAULT_EQUIPMENT, createLLM } = await import("@acme/ai");
+        const { generateGroupWorkoutBlueprint, createLLM, WorkoutPromptBuilder } = await import("@acme/ai");
         const { ExerciseFilterService } = await import("../services/exercise-filter-service");
         const { HumanMessage, SystemMessage } = await import("@langchain/core/messages");
         
@@ -1360,14 +1362,188 @@ export const trainingSessionRouter = {
           };
         });
         
-        // Build the dynamic prompt
-        const systemPrompt = buildGroupWorkoutPrompt({
-          clients: clientsWithPreferences,
-          blocks: blueprint.blocks,
-          round1Assignments,
-          round2Assignments,
-          equipment: DEFAULT_EQUIPMENT
+        // Process client-requested exercises and muscle targets deterministically
+        const clientRequestAssignments: Record<string, Array<{
+          clientId: string;
+          clientName: string;
+          exercise: string;
+          equipment: string[];
+          roundAssigned: string;
+          reason: 'client_request' | 'muscle_target';
+        }>> = {};
+        
+        // Track which exercises have been used per client
+        const usedExercisesPerClient = new Map<string, Set<string>>();
+        
+        // Initialize with Round 1 and 2 exercises
+        clientsWithPreferences.forEach(client => {
+          const used = new Set<string>();
+          const r1 = round1Assignments.find(a => a.clientId === client.user_id);
+          const r2 = round2Assignments.find(a => a.clientId === client.user_id);
+          if (r1) used.add(r1.exercise.toLowerCase());
+          if (r2) used.add(r2.exercise.toLowerCase());
+          usedExercisesPerClient.set(client.user_id, used);
         });
+        
+        // Check Round 3 and 4 for client requests
+        const round3Block = blueprint.blocks.find(b => b.blockId === 'Round3');
+        const round4Block = blueprint.blocks.find(b => b.blockId === 'FinalRound');
+        
+        clientsWithPreferences.forEach(client => {
+          if (!client.exercise_requests?.include || client.exercise_requests.include.length === 0) return;
+          
+          const usedExercises = usedExercisesPerClient.get(client.user_id) || new Set();
+          const requestedExercises = client.exercise_requests.include;
+          
+          requestedExercises.forEach(requestedName => {
+            // Skip if already used
+            if (usedExercises.has(requestedName.toLowerCase())) return;
+            
+            // Try to find in Round 3 first
+            const r3Exercises = round3Block?.individualCandidates[client.user_id]?.exercises || [];
+            const r3Match = r3Exercises.find(ex => 
+              ex.name.toLowerCase() === requestedName.toLowerCase() && 
+              ex.scoreBreakdown?.includeExerciseBoost > 0
+            );
+            
+            if (r3Match) {
+              if (!clientRequestAssignments.Round3) clientRequestAssignments.Round3 = [];
+              clientRequestAssignments.Round3.push({
+                clientId: client.user_id,
+                clientName: client.name,
+                exercise: r3Match.name,
+                equipment: getEquipmentFromExercise(r3Match.name),
+                roundAssigned: 'Round3',
+                reason: 'client_request'
+              });
+              usedExercises.add(r3Match.name.toLowerCase());
+              return;
+            }
+            
+            // Try Round 4 if not found in Round 3
+            const r4Exercises = round4Block?.individualCandidates[client.user_id]?.exercises || [];
+            const r4Match = r4Exercises.find(ex => 
+              ex.name.toLowerCase() === requestedName.toLowerCase() && 
+              ex.scoreBreakdown?.includeExerciseBoost > 0
+            );
+            
+            if (r4Match) {
+              if (!clientRequestAssignments.FinalRound) clientRequestAssignments.FinalRound = [];
+              clientRequestAssignments.FinalRound.push({
+                clientId: client.user_id,
+                clientName: client.name,
+                exercise: r4Match.name,
+                equipment: getEquipmentFromExercise(r4Match.name),
+                roundAssigned: 'FinalRound',
+                reason: 'client_request'
+              });
+              usedExercises.add(r4Match.name.toLowerCase());
+            }
+          });
+        });
+        
+        // Process muscle targets deterministically
+        clientsWithPreferences.forEach(client => {
+          if (!client.muscle_target || client.muscle_target.length === 0) return;
+          
+          const usedExercises = usedExercisesPerClient.get(client.user_id) || new Set();
+          const muscleTargets = client.muscle_target;
+          
+          // Check if any muscle targets are already covered
+          const uncoveredTargets = muscleTargets.filter(target => {
+            // Check R1-R4 exercises for this muscle target
+            const r1Exercise = round1Assignments.find(a => a.clientId === client.user_id)?.exercise;
+            const r2Exercise = round2Assignments.find(a => a.clientId === client.user_id)?.exercise;
+            
+            // Simple check - in production, would check actual exercise muscle groups
+            return true; // For now, assume target not covered
+          });
+          
+          // Try to assign uncovered muscle targets
+          uncoveredTargets.forEach(muscleTarget => {
+            // Look for highest scoring exercise targeting this muscle in R3/R4
+            const r3Exercises = round3Block?.individualCandidates[client.user_id]?.exercises || [];
+            const r4Exercises = round4Block?.individualCandidates[client.user_id]?.exercises || [];
+            
+            // Find exercise with muscle target boost
+            const r3Match = r3Exercises.find(ex => 
+              !usedExercises.has(ex.name.toLowerCase()) &&
+              ex.scoreBreakdown?.muscleTargetBonus > 0
+            );
+            
+            if (r3Match) {
+              if (!clientRequestAssignments.Round3) clientRequestAssignments.Round3 = [];
+              // Check if client already has assignment in R3
+              const existingR3 = clientRequestAssignments.Round3.filter(a => a.clientId === client.user_id).length;
+              if (existingR3 === 0) { // Only assign if slot available
+                clientRequestAssignments.Round3.push({
+                  clientId: client.user_id,
+                  clientName: client.name,
+                  exercise: r3Match.name,
+                  equipment: getEquipmentFromExercise(r3Match.name),
+                  roundAssigned: 'Round3',
+                  reason: 'muscle_target'
+                });
+                usedExercises.add(r3Match.name.toLowerCase());
+                return;
+              }
+            }
+            
+            // Try R4 if R3 is full or no match
+            const r4Match = r4Exercises.find(ex => 
+              !usedExercises.has(ex.name.toLowerCase()) &&
+              ex.scoreBreakdown?.muscleTargetBonus > 0
+            );
+            
+            if (r4Match) {
+              if (!clientRequestAssignments.FinalRound) clientRequestAssignments.FinalRound = [];
+              const existingR4 = clientRequestAssignments.FinalRound.filter(a => a.clientId === client.user_id).length;
+              if (existingR4 === 0) {
+                clientRequestAssignments.FinalRound.push({
+                  clientId: client.user_id,
+                  clientName: client.name,
+                  exercise: r4Match.name,
+                  equipment: getEquipmentFromExercise(r4Match.name),
+                  roundAssigned: 'FinalRound',
+                  reason: 'muscle_target'
+                });
+                usedExercises.add(r4Match.name.toLowerCase());
+              }
+            }
+          });
+        });
+        
+        // Build the dynamic prompt using new prompt builder
+        const promptBuilder = new WorkoutPromptBuilder({
+          workoutType: 'group',
+          groupConfig: {
+            clients: clientsWithPreferences,
+            blueprint: blueprint.blocks,
+            deterministicAssignments: {
+              Round1: round1Assignments,
+              Round2: round2Assignments,
+              ...clientRequestAssignments
+            },
+            equipment: {
+              barbells: 2,
+              benches: 2,
+              cable_machine: 1,
+              row_machine: 1,
+              ab_wheel: 1,
+              bands: 3,
+              bosu_ball: 1,
+              kettlebells: 2,
+              landmine: 1,
+              swiss_ball: 1,
+              deadlift_stations: 2,
+              medicine_balls: 2,
+              dumbbells: "unlimited"
+            },
+            templateType: 'full_body_bmf'
+          }
+        });
+        
+        const systemPrompt = promptBuilder.build();
         
         // Create LLM instance and make the call
         let llmOutput = "Click 'Generate' to see the actual LLM response";
