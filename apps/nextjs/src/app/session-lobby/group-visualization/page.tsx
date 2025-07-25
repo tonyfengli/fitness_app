@@ -268,52 +268,52 @@ export default function GroupVisualizationPage() {
         {/* Main Content Area */}
         <div className="flex-1 flex flex-col min-h-0">
           {/* Client Overview */}
-          <div className="mb-4 flex-shrink-0">
-            <h2 className="text-lg font-bold text-gray-900 mb-2">Clients</h2>
-            <div className="grid grid-cols-3 gap-2">
+          <div className="mb-1 flex-shrink-0">
+            <h2 className="text-xs font-bold text-gray-900">Clients</h2>
+            <div className="grid grid-cols-3 gap-0.5">
             {groupContext.clients.map((client) => (
-              <div key={client.user_id} className="bg-white rounded p-3 text-xs border border-gray-200">
-                <div className="flex items-start space-x-2">
+              <div key={client.user_id} className="bg-white rounded p-1 text-[9px] border border-gray-200">
+                <div className="flex items-start space-x-1">
                   <img
                     src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${client.user_id}`}
                     alt={client.name}
-                    className="w-10 h-10 rounded-full flex-shrink-0"
+                    className="w-5 h-5 rounded-full flex-shrink-0"
                   />
                   <div className="min-w-0 flex-1">
-                    <h4 className="font-medium text-gray-900 text-sm">{client.name}</h4>
-                    <div className="mt-1 space-y-0.5">
+                    <h4 className="font-medium text-gray-900 text-[10px]">{client.name}</h4>
+                    <div className="space-y-0">
                       {client.primary_goal && (
-                        <p className="text-gray-600">
+                        <p className="text-gray-600 leading-tight">
                           <span className="font-medium">Goal:</span> {client.primary_goal}
                         </p>
                       )}
                       {client.intensity && (
-                        <p className="text-gray-600">
+                        <p className="text-gray-600 leading-tight">
                           <span className="font-medium">Intensity:</span> {client.intensity}
                         </p>
                       )}
                       {client.muscle_target && client.muscle_target.length > 0 && (
-                        <p className="text-gray-600">
+                        <p className="text-gray-600 leading-tight">
                           <span className="font-medium">Target:</span> {client.muscle_target.map(formatMuscleName).join(', ')}
                         </p>
                       )}
                       {client.muscle_lessen && client.muscle_lessen.length > 0 && (
-                        <p className="text-gray-600">
+                        <p className="text-gray-600 leading-tight">
                           <span className="font-medium">Lessen:</span> {client.muscle_lessen.map(formatMuscleName).join(', ')}
                         </p>
                       )}
                       {client.exercise_requests?.include && client.exercise_requests.include.length > 0 && (
-                        <p className="text-green-600">
+                        <p className="text-green-600 leading-tight">
                           <span className="font-medium">Include:</span> {client.exercise_requests.include.join(', ')}
                         </p>
                       )}
                       {client.exercise_requests?.avoid && client.exercise_requests.avoid.length > 0 && (
-                        <p className="text-red-600">
+                        <p className="text-red-600 leading-tight">
                           <span className="font-medium">Exclude:</span> {client.exercise_requests.avoid.join(', ')}
                         </p>
                       )}
                       {client.avoid_joints && client.avoid_joints.length > 0 && (
-                        <p className="text-orange-600">
+                        <p className="text-orange-600 leading-tight">
                           <span className="font-medium">Avoid Joints:</span> {client.avoid_joints.join(', ')}
                         </p>
                       )}
@@ -349,29 +349,35 @@ export default function GroupVisualizationPage() {
           {/* Selected Block Details - Scrollable */}
           {selectedBlockData && (
             <div className="flex-1 overflow-y-auto space-y-4 pr-2 min-h-0">
-              {/* Slot Allocation */}
+              {/* LLM Debug Section */}
               <div className="bg-white rounded-lg shadow-sm p-4">
-                <h3 className="text-base font-medium text-gray-900 mb-3">Slot Allocation</h3>
-                <div className="grid grid-cols-4 gap-3 text-center">
-                <div>
-                  <p className="text-xs text-gray-500">Total Slots</p>
-                  <p className="text-xl font-bold text-gray-900">{selectedBlockData.slots.total}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-500">Target Shared</p>
-                  <p className="text-xl font-bold text-blue-600">{selectedBlockData.slots.targetShared}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-500">Available Shared</p>
-                  <p className="text-xl font-bold text-green-600">{selectedBlockData.slots.actualSharedAvailable}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-500">Individual/Client</p>
-                  <p className="text-xl font-bold text-purple-600">{selectedBlockData.slots.individualPerClient}</p>
+                <div className="space-y-4">
+                  {/* System Prompt */}
+                  <details className="border border-gray-200 rounded-lg p-3">
+                    <summary className="cursor-pointer text-sm font-medium text-gray-700 hover:text-gray-900">
+                      System Prompt Step 1: Group Workout Assignment (Rounds 3 & 4)
+                    </summary>
+                    <div className="mt-2 p-3 bg-gray-50 rounded-md">
+                      <pre className="text-xs text-gray-600 whitespace-pre-wrap font-mono">
+                        {llmDebugData.systemPrompt || <span className="text-gray-400">Click "Test LLM Generation" to see the dynamic prompt based on session data</span>}
+                      </pre>
+                    </div>
+                  </details>
+                  
+                  {/* LLM Output */}
+                  <details className="border border-gray-200 rounded-lg p-3">
+                    <summary className="cursor-pointer text-sm font-medium text-gray-700 hover:text-gray-900">
+                      LLM Output
+                    </summary>
+                    <div className="mt-2 p-3 bg-gray-50 rounded-md">
+                      <pre className="text-xs text-gray-600 whitespace-pre-wrap font-mono">
+                        {llmDebugData.llmOutput || <span className="text-gray-400">Click "Test LLM Generation" to see the LLM response</span>}
+                      </pre>
+                    </div>
+                  </details>
                 </div>
               </div>
-            </div>
-            
+              
               {/* Exercise Table View */}
               <div className="bg-white rounded-lg shadow-sm p-4">
                 <h3 className="text-base font-medium text-gray-900 mb-3">{selectedBlock} Exercises</h3>
@@ -490,56 +496,6 @@ export default function GroupVisualizationPage() {
                   </table>
                 </div>
               </div>
-            
-            {/* Original Shared Candidates View - Collapsed by default */}
-            <details className="bg-white rounded-lg shadow-sm p-4">
-              <summary className="cursor-pointer text-base font-medium text-gray-900 mb-3">
-                Shared Exercise Details ({selectedBlockData.sharedCandidates?.exercises?.length || 0})
-              </summary>
-              <div className="space-y-2 mt-3">
-                {selectedBlockData.sharedCandidates?.exercises?.map((exercise, idx) => (
-                  <SharedExerciseCard key={exercise.id} exercise={exercise} rank={idx + 1} />
-                ))}
-                {(!selectedBlockData.sharedCandidates?.exercises || selectedBlockData.sharedCandidates.exercises.length === 0) && (
-                  <p className="text-sm text-gray-500 italic">No shared exercise candidates available</p>
-                )}
-              </div>
-            </details>
-            
-              {/* Cohesion Tracking */}
-              {/* Cohesion tracking removed */}
-            
-              {/* LLM Debug Section */}
-              <div className="bg-white rounded-lg shadow-sm p-4">
-                <h3 className="text-base font-medium text-gray-900 mb-3">LLM Generation Debug</h3>
-                
-                {/* System Prompt */}
-                <details className="mb-4" open>
-                  <summary className="cursor-pointer text-sm font-medium text-gray-700 hover:text-gray-900">
-                    System Prompt Step 1: Group Workout Assignment (Rounds 3 & 4)
-                  </summary>
-                  <div className="mt-2 p-3 bg-gray-50 rounded-md">
-                    <pre className="text-xs text-gray-600 whitespace-pre-wrap font-mono">
-                      {llmDebugData.systemPrompt || <span className="text-gray-400">Click "Test LLM Generation" to see the dynamic prompt based on session data</span>}
-                    </pre>
-                  </div>
-                </details>
-                
-                {/* LLM Output */}
-                <details>
-                  <summary className="cursor-pointer text-sm font-medium text-gray-700 hover:text-gray-900">
-                    LLM Output
-                  </summary>
-                  <div className="mt-2 p-3 bg-gray-50 rounded-md">
-                    <pre className="text-xs text-gray-600 whitespace-pre-wrap font-mono">
-                      {llmDebugData.llmOutput || <span className="text-gray-400">Click "Test LLM Generation" to see the LLM response</span>}
-                    </pre>
-                  </div>
-                </details>
-              </div>
-            
-            {/* Spacer to ensure content isn't cut off */}
-            <div className="h-24"></div>
             </div>
           )}
         </div>

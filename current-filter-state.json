@@ -1,23 +1,28 @@
 {
-  "timestamp": "2025-07-24T20:50:52.305Z",
+  "timestamp": "2025-07-25T00:41:30.098Z",
   "filters": {
-    "clientName": "Curtis Yu",
-    "strengthCapacity": "moderate",
-    "skillCapacity": "moderate",
-    "intensity": "low",
+    "clientName": "Hilary Chan",
+    "strengthCapacity": "low",
+    "skillCapacity": "low",
+    "intensity": "moderate",
     "muscleTarget": [
-      "lats",
-      "adductors"
+      "upper_back"
     ],
-    "muscleLessen": [],
+    "muscleLessen": [
+      "calves"
+    ],
     "avoidJoints": [],
-    "includeExercises": [],
-    "avoidExercises": [],
-    "sessionGoal": "strength",
+    "includeExercises": [
+      "Single-Arm Kettlebell Overhead Press"
+    ],
+    "avoidExercises": [
+      "Elevated Push-Ups"
+    ],
+    "sessionGoal": "mobility",
     "isFullBody": true
   },
   "results": {
-    "totalExercises": 117,
+    "totalExercises": 47,
     "blockA": {
       "count": 0,
       "exercises": []

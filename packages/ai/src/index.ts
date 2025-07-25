@@ -40,3 +40,6 @@ export * from "./utils/debugToTest";
 
 // Workout preferences parsing
 export * from "./workout-preferences/parsePreferences";
+
+// LLM configuration
+export { createLLM } from "./config/llm";

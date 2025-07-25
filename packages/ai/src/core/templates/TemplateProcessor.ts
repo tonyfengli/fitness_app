@@ -36,11 +36,45 @@ export class TemplateProcessor {
     });
 
     const blocks: GroupBlockBlueprint[] = [];
+    
+    // Track used exercises per client to prevent repetition
+    const usedExercisesByClient = new Map<string, Set<string>>();
 
     // Process each block in the template
     for (const blockDef of this.template.blocks) {
-      const blockBlueprint = this.processBlock(blockDef, clientExercises);
+      // Create a filtered version of client exercises that excludes already-used exercises
+      const availableClientExercises = new Map<string, ScoredExercise[]>();
+      
+      for (const [clientId, exercises] of clientExercises) {
+        const clientUsed = usedExercisesByClient.get(clientId) || new Set<string>();
+        
+        // Filter out already used exercises before any block processing
+        const availableExercises = exercises.filter(ex => !clientUsed.has(ex.id));
+        availableClientExercises.set(clientId, availableExercises);
+        
+        console.log(`  Client ${clientId}: ${availableExercises.length} exercises available (${clientUsed.size} already used)`);
+      }
+      
+      // Process the block with available exercises only
+      const blockBlueprint = this.processBlock(blockDef, availableClientExercises);
       blocks.push(blockBlueprint);
+      
+      // For deterministic blocks with single selection, track which exercises were selected
+      // These are guaranteed to be in the final workout
+      if (blockDef.selectionStrategy === 'deterministic' && (blockDef.candidateCount || 1) === 1) {
+        for (const [clientId, candidateData] of Object.entries(blockBlueprint.individualCandidates)) {
+          const clientUsed = usedExercisesByClient.get(clientId) || new Set<string>();
+          
+          // Take the top exercise (we know candidateCount is 1)
+          const topExercise = candidateData.exercises[0];
+          
+          if (topExercise) {
+            clientUsed.add(topExercise.id);
+            console.log(`    Marking exercise "${topExercise.name}" as used for client ${clientId} (deterministic selection)`);
+            usedExercisesByClient.set(clientId, clientUsed);
+          }
+        }
+      }
     }
 
     return {
@@ -99,7 +133,7 @@ export class TemplateProcessor {
 
   /**
    * Filter exercises for a specific block based on its requirements
-   * Client preferences always override template requirements
+   * Block constraints are enforced on ALL exercises, including client includes
    */
   private filterExercisesForBlock(
     exercises: ScoredExercise[],
@@ -107,20 +141,17 @@ export class TemplateProcessor {
     clientId: string
   ): ScoredExercise[] {
     return exercises.filter(exercise => {
-      // Step 1: Check if client explicitly included this exercise
-      // If so, it passes ALL filters (client preference wins)
-      if (this.isClientIncludedExercise(exercise, clientId)) {
-        return true;
-      }
-
-      // Step 2: Check function tags (skip if no tags specified)
+      // Note: Client includes no longer bypass block filters
+      // They must meet block requirements to appear in that block
+      
+      // Step 1: Check function tags (skip if no tags specified)
       if (blockDef.functionTags && blockDef.functionTags.length > 0) {
         if (!exercise.functionTags?.some(tag => blockDef.functionTags.includes(tag))) {
           return false;
         }
       }
 
-      // Step 3: Apply movement pattern filter (if specified)
+      // Step 2: Apply movement pattern filter (if specified)
       if (blockDef.movementPatternFilter) {
         const { include, exclude } = blockDef.movementPatternFilter;
         
@@ -141,7 +172,7 @@ export class TemplateProcessor {
         }
       }
 
-      // Step 4: Apply equipment filter (if specified)
+      // Step 3: Apply equipment filter (if specified)
       if (blockDef.equipmentFilter) {
         const { required, forbidden } = blockDef.equipmentFilter;
         

@@ -48,6 +48,70 @@ function calculateScoreDistribution(exercises: ScoredExercise[]): { range: strin
   return ranges.map(r => ({ range: r.range, count: r.count }));
 }
 
+// Helper to get equipment needs from exercise name
+function getEquipmentFromExercise(exerciseName: string): string[] {
+  const name = exerciseName.toLowerCase();
+  const equipment: string[] = [];
+  
+  // Barbells
+  if (name.includes('barbell') && !name.includes('dumbbell')) {
+    equipment.push('barbell');
+  }
+  
+  // Benches
+  if (name.includes('bench') || name.includes('incline')) {
+    equipment.push('bench');
+  }
+  
+  // Dumbbells
+  if (name.includes('dumbbell') || name.includes('db ')) {
+    equipment.push('DB');
+  }
+  
+  // Kettlebells
+  if (name.includes('kettlebell') || name.includes('goblet')) {
+    equipment.push('KB');
+  }
+  
+  // Cable
+  if (name.includes('cable') || name.includes('lat pulldown')) {
+    equipment.push('cable');
+  }
+  
+  // Bands
+  if (name.includes('band')) {
+    equipment.push('band');
+  }
+  
+  // Landmine
+  if (name.includes('landmine')) {
+    equipment.push('landmine');
+  }
+  
+  // Medicine ball
+  if (name.includes('medicine ball') || name.includes('med ball')) {
+    equipment.push('med ball');
+  }
+  
+  // Row machine
+  if (name.includes('row machine')) {
+    equipment.push('row machine');
+  }
+  
+  // Floor exercises
+  if (name.includes('plank') || name.includes('dead bug') || name.includes('bird dog') || 
+      name.includes('bear crawl') || name.includes('push-up')) {
+    equipment.push('none');
+  }
+  
+  // Swiss ball
+  if (name.includes('swiss ball') || name.includes('stability ball')) {
+    equipment.push('swiss ball');
+  }
+  
+  return equipment.length > 0 ? equipment : ['none'];
+}
+
 export const trainingSessionRouter = {
   // Create a new training session (trainers only)
   create: protectedProcedure
@@ -1232,8 +1296,9 @@ export const trainingSessionRouter = {
         });
         
         // Import what we need
-        const { generateGroupWorkoutBlueprint, buildGroupWorkoutPrompt, DEFAULT_EQUIPMENT } = await import("@acme/ai");
+        const { generateGroupWorkoutBlueprint, buildGroupWorkoutPrompt, DEFAULT_EQUIPMENT, createLLM } = await import("@acme/ai");
         const { ExerciseFilterService } = await import("../services/exercise-filter-service");
+        const { HumanMessage, SystemMessage } = await import("@langchain/core/messages");
         
         // Get exercises for this business
         const filterService = new ExerciseFilterService(ctx.db);
@@ -1253,21 +1318,47 @@ export const trainingSessionRouter = {
           exercisePool
         );
         
-        // For now, create mock deterministic assignments for rounds 1-2
-        // In production, these would come from actual deterministic selection
-        const round1Assignments = clientsWithPreferences.map(client => ({
-          clientId: client.user_id,
-          clientName: client.name,
-          exercise: "Goblet Squat", // Mock - would be determined by algorithm
-          equipment: ["KB"]
-        }));
+        // Get actual exercise selections for rounds 1-2 from the blueprint
+        const round1Block = blueprint.blocks.find(b => b.blockId === 'Round1');
+        const round2Block = blueprint.blocks.find(b => b.blockId === 'Round2');
         
-        const round2Assignments = clientsWithPreferences.map(client => ({
-          clientId: client.user_id,
-          clientName: client.name,
-          exercise: "Dumbbell Row", // Mock - would be determined by algorithm
-          equipment: ["DB", "bench"]
-        }));
+        if (!round1Block || !round2Block) {
+          throw new Error('Round1 and Round2 blocks are required');
+        }
+        
+        // Extract top exercise for each client from Round 1
+        const round1Assignments = clientsWithPreferences.map(client => {
+          const clientData = round1Block.individualCandidates[client.user_id];
+          const topExercise = clientData?.exercises?.[0]; // Get top candidate
+          
+          if (!topExercise) {
+            throw new Error(`No Round 1 exercise found for client ${client.name}`);
+          }
+          
+          return {
+            clientId: client.user_id,
+            clientName: client.name,
+            exercise: topExercise.name,
+            equipment: getEquipmentFromExercise(topExercise.name)
+          };
+        });
+        
+        // Extract top exercise for each client from Round 2
+        const round2Assignments = clientsWithPreferences.map(client => {
+          const clientData = round2Block.individualCandidates[client.user_id];
+          const topExercise = clientData?.exercises?.[0]; // Get top candidate
+          
+          if (!topExercise) {
+            throw new Error(`No Round 2 exercise found for client ${client.name}`);
+          }
+          
+          return {
+            clientId: client.user_id,
+            clientName: client.name,
+            exercise: topExercise.name,
+            equipment: getEquipmentFromExercise(topExercise.name)
+          };
+        });
         
         // Build the dynamic prompt
         const systemPrompt = buildGroupWorkoutPrompt({
@@ -1278,12 +1369,44 @@ export const trainingSessionRouter = {
           equipment: DEFAULT_EQUIPMENT
         });
         
+        // Create LLM instance and make the call
+        let llmOutput = "Click 'Generate' to see the actual LLM response";
+        
+        try {
+          const llm = createLLM();
+          const userMessage = "Generate the group workout assignments for rounds 3 and 4.";
+          
+          console.log('🤖 Calling LLM for group workout generation...');
+          const startTime = Date.now();
+          
+          const response = await llm.invoke([
+            new SystemMessage(systemPrompt),
+            new HumanMessage(userMessage)
+          ]);
+          
+          const llmTime = Date.now() - startTime;
+          console.log(`✅ LLM response received in ${llmTime}ms`);
+          
+          llmOutput = response.content.toString();
+          
+          // Parse the JSON from the LLM response
+          const jsonMatch = llmOutput.match(/```json\n([\s\S]*?)\n```/);
+          if (jsonMatch?.[1]) {
+            const parsedResponse = JSON.parse(jsonMatch[1]);
+            console.log('📊 Parsed LLM response:', parsedResponse);
+          }
+          
+        } catch (error) {
+          console.error('❌ Error calling LLM:', error);
+          llmOutput = `Error calling LLM: ${error instanceof Error ? error.message : 'Unknown error'}`;
+        }
+        
         return {
           success: true,
           debug: {
             systemPrompt,
-            userMessage: null, // We're not using user message anymore
-            llmOutput: "Click 'Generate' to see the actual LLM response"
+            userMessage: "Generate the group workout assignments for rounds 3 and 4.",
+            llmOutput
           },
           sessionId: input.sessionId,
           blueprint // Include for debugging

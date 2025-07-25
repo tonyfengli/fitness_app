@@ -140,8 +140,8 @@ export const FULL_BODY_BMF_TEMPLATE: WorkoutTemplate = {
       name: 'Round 2',
       functionTags: [],  // No function tag filters
       maxExercises: 1,  // LLM can select max 1 exercise
-      candidateCount: 6,  // Show 6 candidates
-      selectionStrategy: 'randomized',
+      candidateCount: 1,  // Show only top candidate
+      selectionStrategy: 'deterministic',
       movementPatternFilter: {
         include: ['vertical_pull', 'horizontal_pull']  // Only pulling movements
       }
