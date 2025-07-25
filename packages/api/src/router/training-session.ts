@@ -1442,8 +1442,9 @@ export const trainingSessionRouter = {
           });
         });
         
-        // Process muscle targets deterministically
-        clientsWithPreferences.forEach(client => {
+        // Process muscle targets deterministically (BMF template only)
+        if (session.templateType === 'full_body_bmf') {
+          clientsWithPreferences.forEach(client => {
           if (!client.muscle_target || client.muscle_target.length === 0) return;
           
           const usedExercises = usedExercisesPerClient.get(client.user_id) || new Set();
@@ -1512,6 +1513,7 @@ export const trainingSessionRouter = {
             }
           });
         });
+        }
         
         // Build the dynamic prompt using new prompt builder
         const promptBuilder = new WorkoutPromptBuilder({

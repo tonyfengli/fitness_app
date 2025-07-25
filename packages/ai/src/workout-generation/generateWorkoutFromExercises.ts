@@ -1,11 +1,10 @@
 import { ChatOpenAI } from "@langchain/openai";
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import type { WorkoutInterpretationStateType, ExercisesByBlock, TopExercise } from "./types";
-import { determineTotalSetCount } from "./setCountLogic";
 import { WorkoutPromptBuilder } from "./prompts/promptBuilder";
 import type { LLMProvider } from "../config/llm";
 import { createLLM } from "../config/llm";
-import { BlockDebugger, logBlock, logBlockTransformation } from "../utils/blockDebugger";
+import { logBlock, logBlockTransformation } from "../utils/blockDebugger";
 import { getWorkoutStructure } from "./templates/workoutTemplates";
 import type { WorkoutTemplateType } from "./templates/workoutTemplates";
 import { extractJSON } from "./group/utils/jsonExtraction";
@@ -70,13 +69,8 @@ export async function generateWorkoutFromExercises(
     const formattedExercises = formatExercisesForPrompt(exercises);
     timing.exerciseFormatting = performance.now() - formatStartTime;
     
-    // Calculate set count based on client context
-    const setCountStartTime = performance.now();
-    const setCount = determineTotalSetCount({
-      strengthLevel: clientContext?.strength_capacity || clientContext?.strengthLevel,
-      intensity: clientContext?.intensity
-    });
-    timing.setCountCalculation = performance.now() - setCountStartTime;
+    // Use default sets from client context
+    const defaultSets = clientContext?.default_sets || 20;
     
     // Build the system prompt - can be customized based on client context
     const promptBuildStartTime = performance.now();
@@ -116,8 +110,7 @@ ${clientContext && Object.keys(clientContext).length > 0
   ? `\nClient Context:\n${JSON.stringify(clientContext, null, 2)}` 
   : ''}
 
-Total Set Range: ${setCount.minSets}-${setCount.maxSets} sets
-${setCount.reasoning}
+Total Sets Target: ${defaultSets} sets
 
 Please interpret these exercises according to the system instructions.`;
     timing.promptBuilding = performance.now() - promptBuildStartTime;
@@ -128,7 +121,7 @@ Please interpret these exercises according to the system instructions.`;
     logBlock('LLM Call - Request', {
       systemPromptLength: systemPrompt.length,
       userMessageLength: userMessage.length,
-      setRange: { min: setCount.minSets, max: setCount.maxSets }
+      totalSets: defaultSets
     });
     
     const llmStartTime = performance.now();
@@ -159,7 +152,6 @@ Please interpret these exercises according to the system instructions.`;
     // Log detailed timing breakdown
     console.log('⏱️ LLM Interpretation Timing Breakdown:');
     console.log(`   - Exercise formatting: ${timing.exerciseFormatting.toFixed(2)}ms`);
-    console.log(`   - Set count calculation: ${timing.setCountCalculation.toFixed(2)}ms`);
     console.log(`   - Prompt building: ${timing.promptBuilding.toFixed(2)}ms`);
     console.log(`   - LLM API call: ${timing.llmApiCall.toFixed(2)}ms (${(timing.llmApiCall/1000).toFixed(2)}s)`);
     console.log(`   - Response parsing: ${timing.responseParsing.toFixed(2)}ms`);

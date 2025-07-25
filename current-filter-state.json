@@ -1,24 +1,27 @@
 {
-  "timestamp": "2025-07-25T18:22:28.049Z",
+  "timestamp": "2025-07-25T20:24:33.528Z",
   "filters": {
-    "clientName": "Tony Lee",
-    "strengthCapacity": "moderate",
-    "skillCapacity": "moderate",
-    "intensity": "high",
+    "clientName": "Hilary Chan",
+    "strengthCapacity": "low",
+    "skillCapacity": "low",
+    "intensity": "moderate",
     "muscleTarget": [
-      "biceps"
+      "upper_back",
+      "adductors"
     ],
-    "muscleLessen": [],
+    "muscleLessen": [
+      "calves"
+    ],
     "avoidJoints": [],
-    "includeExercises": [],
-    "avoidExercises": [
-      "Cable Chest Press (variations)"
+    "includeExercises": [
+      "Spanish Lunge"
     ],
+    "avoidExercises": [],
     "sessionGoal": "mobility",
     "isFullBody": true
   },
   "results": {
-    "totalExercises": 116,
+    "totalExercises": 47,
     "blockA": {
       "count": 0,
       "exercises": []

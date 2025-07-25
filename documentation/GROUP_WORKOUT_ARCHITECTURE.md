@@ -34,6 +34,12 @@ This document describes the current architecture of the group (semi-private) wor
 
 ## Core Data Structures
 
+**File Locations**:
+- GroupContext: `/packages/ai/src/types/groupContext.ts`
+- ClientContext: `/packages/ai/src/types/clientContext.ts`
+- ScoredExercise: `/packages/ai/src/types/scoredExercise.ts`
+- WorkoutTemplate: `/packages/ai/src/types/workoutTemplate.ts`
+
 ### GroupContext
 ```typescript
 interface GroupContext {
@@ -46,6 +52,11 @@ interface GroupContext {
   
   // Template configuration
   templateType?: string;  // e.g., 'workout', 'circuit_training', 'full_body_bmf'
+  
+  // Legacy field - not actively used but still present in types
+  groupExercisePools?: {
+    [blockId: string]: GroupScoredExercise[];
+  };
 }
 ```
 
@@ -83,7 +94,7 @@ interface ClientContext {
 
 **Purpose**: Filter the exercise database based on each client's capabilities and constraints.
 
-**Core Module**: `core/filtering/filterExercises.ts`
+**Core Module**: `/packages/ai/src/core/filtering/filterExercises.ts`
 
 ```
 Input: 
@@ -129,9 +140,9 @@ Output: Map<clientId, Exercise[]>
 
 ### Phase 2: Exercise Scoring (Per Client)
 
-**Purpose**: Score exercises based on each client's preferences and goals.
+**Purpose**: Score exercises based on each client's preferences and goals using a two-pass scoring system.
 
-**Core Module**: `core/scoring/scoreExercises.ts`
+**Core Module**: `/packages/ai/src/core/scoring/scoreExercises.ts`
 
 ```
 Input: Filtered Exercise[] per client
@@ -139,9 +150,26 @@ Input: Filtered Exercise[] per client
 Two-Pass Scoring Process:
 ┌─────────────────────────────────────────┐
 │  Pass 1: Calculate base scores for all │
-│  Pass 2: Re-score included exercises   │
-│         with boost to guarantee top    │
-│         ranking (max_score + 1.0)      │
+│         exercises without include boost │
+│         (via firstPassScoring.ts)       │
+│                                         │
+│  - Base score: 5.0 for all exercises   │
+│  - Add muscle target bonus if matches  │
+│  - Add muscle lessen penalty if matches│
+│  - Add intensity adjustment based on   │
+│    exercise fatigue profile            │
+│  - Track maximum score achieved        │
+│                                         │
+│  Pass 2: Apply include exercise boost   │
+│         to guarantee top ranking        │
+│         (via secondPassScoring.ts)      │
+│                                         │
+│  - For client-requested exercises:     │
+│    boost = (max_score + 1.0) -         │
+│    current_score                       │
+│  - This ensures they score higher than │
+│    any naturally scored exercise       │
+│  - Other exercises keep Pass 1 scores  │
 └─────────────────────────────────────────┘
 
 Output: Map<clientId, ScoredExercise[]> sorted by score (highest first)
@@ -193,9 +221,9 @@ Maps workout intensity to exercise fatigue profiles:
 ```typescript
 interface ScoredExercise extends Exercise {
   score: number;
-  scoreBreakdown: {  // NOT optional - always included
+  scoreBreakdown: {  // Required - always included
     base: number;              // Always 5.0
-    includeExerciseBoost: number;
+    includeExerciseBoost: number;  // > 0 indicates client requested
     muscleTargetBonus: number;
     muscleLessenPenalty: number;
     intensityAdjustment: number;
@@ -204,11 +232,33 @@ interface ScoredExercise extends Exercise {
 }
 ```
 
+**Two-Pass Implementation Details**:
+
+The two-pass scoring system ensures client-requested exercises always rank highest while maintaining fair scoring for all other exercises:
+
+1. **First Pass** (`/packages/ai/src/core/scoring/firstPassScoring.ts`):
+   - Calculates base scores for ALL exercises without any include boost
+   - Each exercise starts with a base score of 5.0
+   - Applies muscle target bonuses (+3.0 primary, +1.5 secondary)
+   - Applies muscle lessen penalties (-3.0 primary, -1.5 secondary)
+   - Applies intensity adjustments based on exercise fatigue profile
+   - Tracks the maximum score achieved across all exercises
+
+2. **Second Pass** (`/packages/ai/src/core/scoring/secondPassScoring.ts`):
+   - Takes first pass results and the maximum score
+   - For client-requested exercises: calculates boost = (maxScore + 1.0) - currentScore
+   - This guarantees included exercises score higher than any naturally scored exercise
+   - All other exercises retain their first pass scores
+
+3. **Score Analysis** (`/packages/ai/src/core/scoring/scoreAnalysis.ts`):
+   - Provides logging and analysis of score distributions
+   - Tracks performance metrics and scoring patterns
+
 ### Phase 3: Template Processing
 
 **Purpose**: Organize exercises into workout blocks based on template configuration.
 
-**Key Component**: `TemplateProcessor`
+**Key Component**: `TemplateProcessor` at `/packages/ai/src/core/templates/TemplateProcessor.ts`
 
 ```
 Input: 
@@ -249,59 +299,57 @@ Output: GroupWorkoutBlueprint
 
 **Key Features**:
 - Movement pattern filtering with proper include/exclude logic
-- Client-included exercises (`includeExerciseBoost > 0`) bypass all filters
+- Client-included exercises bypass all filters (checked via `scoreBreakdown.includeExerciseBoost > 0`)
 - Simplified shared exercise detection (no cohesion bonuses)
 - All filtered exercises available for frontend display
+- Tracks used exercises to prevent repetition across blocks
 
-### Phase 4: Set Count Determination
+**TemplateProcessor Methods**:
+- `processForGroup(clientExercises: Map<string, ScoredExercise[]>)`: Main entry point
+- `processBlock()`: Processes individual blocks with filtering
+- `filterExercisesForBlock()`: Applies block-specific constraints
+- `isClientIncludedExercise()`: Checks if exercise was explicitly requested by client
+- `findSharedExercises()`: Identifies exercises available to multiple clients
+- `prepareIndividualCandidates()`: Prepares per-client exercise options
 
-**Purpose**: Determine appropriate set counts for each exercise based on client capabilities.
+### Phase 4: LLM Workout Generation
 
-```
-Process:
-┌─────────────────────────────────────────┐
-│    Each client maintains individual:    │
-│                                         │
-│  - Strength level → base set range     │
-│  - Intensity preference → adjustment   │
-│  - Exercise type → specific ranges     │
-│                                         │
-│  LLM handles final distribution in      │
-│  Phase 5 based on these constraints    │
-└─────────────────────────────────────────┘
-```
-
-### Phase 5: LLM Workout Generation (Hybrid Strategy)
-
-**Purpose**: Use LLM to select final exercises and create coherent workouts.
+**Purpose**: Use LLM to select final exercises and create coherent workouts. The generation strategy is template-specific.
 
 ```
 Input: GroupWorkoutBlueprint
 
 Process:
 ┌─────────────────────────────────────────────────────┐
-│                Hybrid LLM Strategy                  │
+│           Template-Specific Generation              │
 │                                                     │
-│  Step 1: Shared Exercise Selection                 │
-│  ├─ Input: All block blueprints                    │
-│  ├─ Task: Select shared exercises from candidates  │
-│  ├─ Consider: Client overlap, balance, variety     │
-│  └─ Output: SharedSelectionOutput                  │
+│  Each template defines its own generation strategy  │
+│  using a single LLM call with custom prompts       │
 │                                                     │
-│  Step 2: Individual Workout Generation (Parallel)  │
-│  ├─ Input per client:                              │
-│  │   - Assigned shared exercises                   │
-│  │   - Individual exercise candidates              │
-│  │   - Slots to fill per block                     │
-│  ├─ Task: Complete individual workout              │
-│  └─ Output: CompleteWorkout per client             │
+│  Example: BMF Template Strategy                     │
+│  ├─ Rounds 1-2: Deterministic selection            │
+│  │   (directly from blueprint)                      │
+│  ├─ Rounds 3-4: LLM selection based on:            │
+│  │   - Client preferences                           │
+│  │   - Available candidates                         │
+│  │   - Equipment constraints                        │
+│  └─ Output: Complete workout assignments           │
 │                                                     │
-│  Step 3: Final Assembly                            │
-│  └─ Combine into GroupWorkout structure            │
+│  Other templates will implement their own           │
+│  custom strategies as they are developed            │
 └─────────────────────────────────────────────────────┘
 
 Output: GroupWorkout with exercises, sets, rest periods
 ```
+
+**Current Template Support**:
+- **Full Body BMF** (`full_body_bmf`): Fully implemented with custom BMF prompt strategy
+- **Other templates**: Placeholder implementations, to be developed
+
+**Key Design Principles**:
+- Single LLM call per workout generation
+- Template-specific prompt builders handle unique requirements
+- Flexible architecture allows each template to define its generation approach
 
 ## Data Flow Example
 
@@ -344,9 +392,13 @@ Output: GroupWorkout with exercises, sets, rest periods
          }
        }
 
-4. Phase 5 (LLM Selection)
-   └─> Shared: Selects 0-1 shared exercises based on availability
-   └─> Individual: Each client gets remaining slots filled
+4. LLM Generation (Optional)
+   └─> Template-specific strategy (e.g., BMF):
+       - Some blocks/rounds may use deterministic selection
+       - Others use LLM-based selection
+       - Single LLM call with template-specific prompt
+   └─> Final Assembly:
+       - Complete workouts with sets, rest, instructions
 ```
 
 ## Template Configuration
@@ -462,23 +514,39 @@ The separation of `candidateCount` and `maxExercises` allows:
 - Round 2 to show 6 options but only select 1 (variety with focus)
 - Rounds 3 & 4 to show 8 options but select up to 2 (flexibility)
 
+## API Endpoints
+
+### Blueprint Generation (Visualization)
+**Endpoint**: `/api/training-session/visualize-group-workout`
+- **Purpose**: Generate workout blueprint for frontend visualization
+- **Implementation**: `/packages/api/src/router/training-session.ts`
+- **Process**: Runs Phases 1-3 only
+- **Returns**: `GroupWorkoutBlueprint` with all exercise candidates
+
+### Full Workout Generation
+**Endpoint**: `/api/training-session/generate-group-workout`  
+- **Purpose**: Generate complete group workout with LLM selection
+- **Implementation**: `/packages/api/src/router/training-session.ts`
+- **Process**: Runs Phases 1-3 + LLM selection
+- **Returns**: Complete `GroupWorkout` with exercises, sets, rest periods
+
 ## Debugging and Monitoring
 
-The system includes comprehensive debugging through `GroupWorkoutTestDataLogger`:
+The system includes debugging through `GroupWorkoutTestDataLogger` at `/packages/api/src/utils/groupWorkoutTestDataLogger.ts`:
 
 ```
 session-test-data/group-workouts/{sessionId}/
 ├── 1-overview.json      # Session summary, timing, client list
-├── 2-clients.json       # Per-client filtering and scoring details
-├── 3-group-pools.json   # Shared exercise analysis
+├── 2-clients.json       # Per-client filtering and scoring details  
+├── 3-group-pools.json   # Legacy shared exercise analysis
 └── 4-blueprint.json     # Final block organization
 ```
 
-**Key Metrics**:
-- Filtering effectiveness (exercises remaining after each filter)
-- Score distributions per client
-- Shared exercise availability per block
-- Template constraint satisfaction
+**Features**:
+- Split debug files for better performance (75% size reduction)
+- Essential exercise data only to minimize file size
+- Phase timing tracking
+- Filter effectiveness metrics
 
 ## Frontend Integration
 
@@ -490,7 +558,6 @@ The Group Workout Visualization page displays:
 
 ## Key Design Decisions
 
-1. **No Cohesion Complexity**: Removed cohesion bonuses and complex group scoring in favor of simple averaging
 2. **Client Preferences First**: Client includes always override template constraints
 3. **Transparent Scoring**: All score adjustments visible in scoreBreakdown
 4. **Flexible Templates**: Templates guide organization but don't enforce rigid rules
