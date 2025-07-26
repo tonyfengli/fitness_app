@@ -1,5 +1,5 @@
 {
-  "timestamp": "2025-07-25T20:24:33.527Z",
+  "timestamp": "2025-07-26T00:21:58.721Z",
   "filters": {
     "clientName": "Hilary Chan",
     "strengthCapacity": "low",
@@ -7,21 +7,21 @@
     "intensity": "moderate",
     "muscleTarget": [
       "upper_back",
-      "adductors"
+      "quads"
     ],
     "muscleLessen": [
       "calves"
     ],
     "avoidJoints": [],
     "includeExercises": [
-      "Spanish Lunge"
+      "Nordic Hamstring Curl"
     ],
     "avoidExercises": [],
-    "sessionGoal": "mobility",
+    "sessionGoal": "strength",
     "isFullBody": true
   },
   "results": {
-    "totalExercises": 47,
+    "totalExercises": 48,
     "blockA": {
       "count": 0,
       "exercises": []
@@ -56,12 +56,6 @@
       "name": "Lateral Step-Up with Goblet Hold",
       "reasons": [
         "strength_too_high:moderate_exceeds_low"
-      ]
-    },
-    "028e0f12-017d-492e-8774-123e48007fd7": {
-      "name": "Nordic Hamstring Curl",
-      "reasons": [
-        "strength_too_high:high_exceeds_low"
       ]
     },
     "e6ef63e1-56bb-4e61-a036-9a6fbbcf825a": {
@@ -541,12 +535,84 @@
   },
   "constraintAnalysis": {},
   "scoreBreakdowns": {
-    "53141345-2351-436a-9b1c-21bc273ba554": {
-      "name": "Spanish Lunge",
+    "028e0f12-017d-492e-8774-123e48007fd7": {
+      "name": "Nordic Hamstring Curl",
       "baseScore": 5,
       "bonuses": [],
       "penalties": [],
-      "finalScore": 7.5
+      "finalScore": 9
+    },
+    "7ed3976c-c9f3-4672-966c-424778e1cd8c": {
+      "name": "Goblet Squat Pulse",
+      "baseScore": 5,
+      "bonuses": [
+        {
+          "reason": "Muscle Target Match",
+          "value": 3
+        }
+      ],
+      "penalties": [],
+      "finalScore": 8
+    },
+    "9d50d2f2-0eda-48c4-9f7d-7a1fcff879b1": {
+      "name": "Dumbbell Thruster",
+      "baseScore": 5,
+      "bonuses": [
+        {
+          "reason": "Muscle Target Match",
+          "value": 3
+        }
+      ],
+      "penalties": [],
+      "finalScore": 8
+    },
+    "a5d09b5a-d62f-477b-8b71-216f35a20291": {
+      "name": "Wall Squat Hold",
+      "baseScore": 5,
+      "bonuses": [
+        {
+          "reason": "Muscle Target Match",
+          "value": 3
+        }
+      ],
+      "penalties": [],
+      "finalScore": 8
+    },
+    "53141345-2351-436a-9b1c-21bc273ba554": {
+      "name": "Spanish Lunge",
+      "baseScore": 5,
+      "bonuses": [
+        {
+          "reason": "Muscle Target Match",
+          "value": 3
+        }
+      ],
+      "penalties": [],
+      "finalScore": 8
+    },
+    "dabd605d-42d5-4c18-bbf8-856eb175a78c": {
+      "name": "Goblet Pause Squat (3 Seconds)",
+      "baseScore": 5,
+      "bonuses": [
+        {
+          "reason": "Muscle Target Match",
+          "value": 3
+        }
+      ],
+      "penalties": [],
+      "finalScore": 8
+    },
+    "6712600b-d4a2-4708-962e-fa6b1c3eb9cc": {
+      "name": "Goblet Squat",
+      "baseScore": 5,
+      "bonuses": [
+        {
+          "reason": "Muscle Target Match",
+          "value": 3
+        }
+      ],
+      "penalties": [],
+      "finalScore": 8
     },
     "fcef4310-6e73-41f7-addf-8c474c8ec781": {
       "name": "Dumbbell Bench Row",
@@ -675,13 +741,6 @@
       "penalties": [],
       "finalScore": 5
     },
-    "7ed3976c-c9f3-4672-966c-424778e1cd8c": {
-      "name": "Goblet Squat Pulse",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [],
-      "finalScore": 5
-    },
     "40e201e6-bb65-406f-911f-685368d6fd22": {
       "name": "Cable Chest Press (variations)",
       "baseScore": 5,
@@ -691,13 +750,6 @@
     },
     "bdb4c362-96eb-4349-b908-8526dcb2db96": {
       "name": "Skull Crusher",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [],
-      "finalScore": 5
-    },
-    "9d50d2f2-0eda-48c4-9f7d-7a1fcff879b1": {
-      "name": "Dumbbell Thruster",
       "baseScore": 5,
       "bonuses": [],
       "penalties": [],
@@ -773,13 +825,6 @@
       "penalties": [],
       "finalScore": 5
     },
-    "a5d09b5a-d62f-477b-8b71-216f35a20291": {
-      "name": "Wall Squat Hold",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [],
-      "finalScore": 5
-    },
     "53febb99-c0d1-4fb6-90e8-856dc4a7827b": {
       "name": "Hanging Knee Raise",
       "baseScore": 5,
@@ -850,22 +895,8 @@
       "penalties": [],
       "finalScore": 5
     },
-    "dabd605d-42d5-4c18-bbf8-856eb175a78c": {
-      "name": "Goblet Pause Squat (3 Seconds)",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [],
-      "finalScore": 5
-    },
     "2d073f4f-070d-479b-9214-b7d6701b23e2": {
       "name": "Dumbbell Press",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [],
-      "finalScore": 5
-    },
-    "6712600b-d4a2-4708-962e-fa6b1c3eb9cc": {
-      "name": "Goblet Squat",
       "baseScore": 5,
       "bonuses": [],
       "penalties": [],
@@ -894,7 +925,7 @@
   "debugLog": [
     {
       "step": 1,
-      "timestamp": "2025-07-25T20:24:33.526Z",
+      "timestamp": "2025-07-26T00:21:58.720Z",
       "phase": "filtering",
       "action": "Starting enhanced filtering",
       "details": {
@@ -903,7 +934,7 @@
           "strength": "low",
           "skill": "low",
           "include": [
-            "Spanish Lunge"
+            "Nordic Hamstring Curl"
           ],
           "avoid": [],
           "avoidJoints": []
@@ -913,19 +944,19 @@
     },
     {
       "step": 2,
-      "timestamp": "2025-07-25T20:24:33.526Z",
+      "timestamp": "2025-07-26T00:21:58.720Z",
       "phase": "filtering",
       "action": "Processing include list",
       "details": {
         "includeList": [
-          "Spanish Lunge"
+          "Nordic Hamstring Curl"
         ]
       },
       "performanceMs": 0
     },
     {
       "step": 3,
-      "timestamp": "2025-07-25T20:24:33.526Z",
+      "timestamp": "2025-07-26T00:21:58.720Z",
       "phase": "filtering",
       "action": "Include list processed",
       "details": {
@@ -936,7 +967,7 @@
     },
     {
       "step": 4,
-      "timestamp": "2025-07-25T20:24:33.526Z",
+      "timestamp": "2025-07-26T00:21:58.720Z",
       "phase": "filtering",
       "action": "Filtering by strength: low",
       "details": {
@@ -950,19 +981,19 @@
     },
     {
       "step": 5,
-      "timestamp": "2025-07-25T20:24:33.526Z",
+      "timestamp": "2025-07-26T00:21:58.720Z",
       "phase": "filtering",
       "action": "Strength filtering complete",
       "details": {
-        "excluded": 62,
-        "remaining": 67
+        "excluded": 61,
+        "remaining": 68
       },
-      "exercisesAffected": 62,
-      "performanceMs": 0.09443299996200949
+      "exercisesAffected": 61,
+      "performanceMs": 0.13910500006750226
     },
     {
       "step": 6,
-      "timestamp": "2025-07-25T20:24:33.526Z",
+      "timestamp": "2025-07-26T00:21:58.720Z",
       "phase": "filtering",
       "action": "Filtering by skill: low",
       "details": {
@@ -970,41 +1001,41 @@
           "very_low",
           "low"
         ],
-        "inputCount": 67
+        "inputCount": 68
       },
       "performanceMs": 0
     },
     {
       "step": 7,
-      "timestamp": "2025-07-25T20:24:33.526Z",
+      "timestamp": "2025-07-26T00:21:58.720Z",
       "phase": "filtering",
       "action": "Skill filtering complete",
       "details": {
         "excluded": 21,
-        "remaining": 46
+        "remaining": 47
       },
       "exercisesAffected": 21,
-      "performanceMs": 0.053447999991476536
+      "performanceMs": 0.03274499997496605
     },
     {
       "step": 8,
-      "timestamp": "2025-07-25T20:24:33.526Z",
+      "timestamp": "2025-07-26T00:21:58.720Z",
       "phase": "filtering",
       "action": "Combined included and filtered exercises",
       "details": {
-        "combinedCount": 47
+        "combinedCount": 48
       },
       "performanceMs": 0
     },
     {
       "step": 9,
-      "timestamp": "2025-07-25T20:24:33.526Z",
+      "timestamp": "2025-07-26T00:21:58.720Z",
       "phase": "filtering",
       "action": "Filtering complete",
       "details": {
-        "finalCount": 47,
-        "totalExcluded": 83,
-        "exclusionsSummary": 83
+        "finalCount": 48,
+        "totalExcluded": 82,
+        "exclusionsSummary": 82
       },
       "performanceMs": 0
     }

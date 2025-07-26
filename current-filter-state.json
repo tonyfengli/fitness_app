@@ -1,5 +1,5 @@
 {
-  "timestamp": "2025-07-25T20:24:33.528Z",
+  "timestamp": "2025-07-26T00:21:58.723Z",
   "filters": {
     "clientName": "Hilary Chan",
     "strengthCapacity": "low",
@@ -7,21 +7,21 @@
     "intensity": "moderate",
     "muscleTarget": [
       "upper_back",
-      "adductors"
+      "quads"
     ],
     "muscleLessen": [
       "calves"
     ],
     "avoidJoints": [],
     "includeExercises": [
-      "Spanish Lunge"
+      "Nordic Hamstring Curl"
     ],
     "avoidExercises": [],
-    "sessionGoal": "mobility",
+    "sessionGoal": "strength",
     "isFullBody": true
   },
   "results": {
-    "totalExercises": 47,
+    "totalExercises": 48,
     "blockA": {
       "count": 0,
       "exercises": []

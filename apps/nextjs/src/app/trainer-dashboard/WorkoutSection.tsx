@@ -107,57 +107,118 @@ export function WorkoutSection({
               <div className="p-4 bg-gray-50 rounded-xl">
                 {llmOutput ? (
                   <div className="space-y-4">
-                    {/* Show timing breakdown if available */}
-                    {llmOutput.timing && (
-                      <div className="mb-4">
-                        <details className="text-sm text-gray-600">
-                          <summary className="cursor-pointer hover:text-gray-800 font-medium">
-                            Show timing breakdown
+                    {/* Show system prompt */}
+                    {llmOutput.systemPrompt && (
+                      <div>
+                        <h4 className="font-semibold text-gray-700 mb-2">System Prompt</h4>
+                        <details className="text-sm">
+                          <summary className="cursor-pointer hover:text-gray-800 font-medium text-indigo-600">
+                            Click to view system prompt
                           </summary>
-                          <div className="mt-2 space-y-1 text-sm">
-                            <div>Exercise formatting: {(llmOutput.timing.exerciseFormatting || 0).toFixed(0)}ms</div>
-                            <div>Set calculation: {(llmOutput.timing.setCountCalculation || 0).toFixed(0)}ms</div>
-                            <div>Prompt building: {(llmOutput.timing.promptBuilding || 0).toFixed(0)}ms</div>
-                            <div className="font-semibold">LLM API call: {((llmOutput.timing.llmApiCall || 0) / 1000).toFixed(2)}s</div>
-                            <div>Response parsing: {(llmOutput.timing.responseParsing || 0).toFixed(0)}ms</div>
-                          </div>
+                          <pre className="mt-2 p-3 bg-white rounded-lg text-xs text-gray-600 overflow-x-auto whitespace-pre-wrap font-mono">
+                            {llmOutput.systemPrompt}
+                          </pre>
                         </details>
                       </div>
                     )}
                     
-                    {/* Show reasoning if available */}
-                    {llmOutput.reasoning && (
+                    {/* Show LLM raw response */}
+                    {llmOutput.rawResponse && (
                       <div>
-                        <h4 className="font-semibold text-gray-700 mb-2">Workout Reasoning</h4>
-                        <p className="text-gray-600">{llmOutput.reasoning}</p>
+                        <h4 className="font-semibold text-gray-700 mb-2">LLM Response</h4>
+                        <details className="text-sm">
+                          <summary className="cursor-pointer hover:text-gray-800 font-medium text-indigo-600">
+                            Click to view raw LLM response
+                          </summary>
+                          <pre className="mt-2 p-3 bg-white rounded-lg text-xs text-gray-600 overflow-x-auto whitespace-pre-wrap font-mono">
+                            {llmOutput.rawResponse}
+                          </pre>
+                        </details>
                       </div>
                     )}
                     
-                    {/* Show block details */}
-                    <div>
-                      <h4 className="font-semibold text-gray-700 mb-2">Exercise Details</h4>
-                      <div className="space-y-3">
-                        {Object.entries(llmOutput).map(([key, value]) => {
-                          if (key === 'reasoning' || key === 'timing' || key === 'processingTime' || !Array.isArray(value)) return null;
-                          
-                          const blockName = key.replace('block', 'Block ').toUpperCase();
-                          return (
-                            <div key={key} className="border-l-4 border-indigo-200 pl-4">
-                              <h5 className="font-medium text-gray-700 mb-1">{blockName}</h5>
+                    {/* Show parsed response in a more readable format */}
+                    {llmOutput.parsedResponse && (
+                      <div>
+                        <h4 className="font-semibold text-gray-700 mb-2">Parsed Response</h4>
+                        <div className="space-y-3">
+                          {/* For group workouts, show round information */}
+                          {llmOutput.parsedResponse.round3 && (
+                            <div className="border-l-4 border-indigo-200 pl-4">
+                              <h5 className="font-medium text-gray-700 mb-1">Round 3</h5>
+                              <p className="text-sm text-gray-600 mb-2">{llmOutput.parsedResponse.round3.reasoning}</p>
                               <div className="space-y-1">
-                                {value.map((exercise: any, idx: number) => (
+                                {llmOutput.parsedResponse.round3.exercises?.map((exercise: any, idx: number) => (
                                   <div key={idx} className="text-sm text-gray-600">
-                                    <span className="font-medium">{exercise.exercise}</span>
-                                    {exercise.sets && <span> - {exercise.sets} sets</span>}
-                                    {exercise.reps && <span> x {exercise.reps} reps</span>}
-                                    {exercise.rest && <span> ({exercise.rest} rest)</span>}
-                                    {exercise.notes && <div className="text-xs text-gray-500 mt-1">{exercise.notes}</div>}
+                                    {exercise.type === 'shared' ? (
+                                      <span>
+                                        <span className="font-medium">{exercise.name}</span> (Shared: {exercise.clients?.join(', ')})
+                                      </span>
+                                    ) : (
+                                      <span>
+                                        <span className="font-medium">{exercise.exercise}</span> ({exercise.client})
+                                      </span>
+                                    )}
                                   </div>
                                 ))}
                               </div>
                             </div>
-                          );
-                        })}
+                          )}
+                          
+                          {llmOutput.parsedResponse.round4 && (
+                            <div className="border-l-4 border-indigo-200 pl-4">
+                              <h5 className="font-medium text-gray-700 mb-1">Round 4</h5>
+                              <p className="text-sm text-gray-600 mb-2">{llmOutput.parsedResponse.round4.reasoning}</p>
+                              <div className="space-y-1">
+                                {llmOutput.parsedResponse.round4.exercises?.map((exercise: any, idx: number) => (
+                                  <div key={idx} className="text-sm text-gray-600">
+                                    {exercise.type === 'shared' ? (
+                                      <span>
+                                        <span className="font-medium">{exercise.name}</span> (Shared: {exercise.clients?.join(', ')})
+                                      </span>
+                                    ) : (
+                                      <span>
+                                        <span className="font-medium">{exercise.exercise}</span> ({exercise.client})
+                                      </span>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          
+                          {/* For individual workouts, show block details */}
+                          {!llmOutput.parsedResponse.round3 && Object.entries(llmOutput.parsedResponse).map(([key, value]) => {
+                            if (key === 'reasoning' || key === 'timing' || !Array.isArray(value)) return null;
+                            
+                            const blockName = key.replace('block', 'Block ').toUpperCase();
+                            return (
+                              <div key={key} className="border-l-4 border-indigo-200 pl-4">
+                                <h5 className="font-medium text-gray-700 mb-1">{blockName}</h5>
+                                <div className="space-y-1">
+                                  {value.map((exercise: any, idx: number) => (
+                                    <div key={idx} className="text-sm text-gray-600">
+                                      <span className="font-medium">{exercise.exercise}</span>
+                                      {exercise.sets && <span> - {exercise.sets} sets</span>}
+                                      {exercise.reps && <span> x {exercise.reps} reps</span>}
+                                      {exercise.rest && <span> ({exercise.rest} rest)</span>}
+                                      {exercise.notes && <div className="text-xs text-gray-500 mt-1">{exercise.notes}</div>}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Show metadata */}
+                    <div className="mt-4 pt-4 border-t border-gray-200">
+                      <div className="text-xs text-gray-500 space-y-1">
+                        {llmOutput.llmModel && <div>Model: {llmOutput.llmModel}</div>}
+                        {llmOutput.timestamp && <div>Generated: {new Date(llmOutput.timestamp).toLocaleString()}</div>}
+                        {llmOutput.userMessage && <div>Prompt: {llmOutput.userMessage}</div>}
                       </div>
                     </div>
                   </div>

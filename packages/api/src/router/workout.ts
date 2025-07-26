@@ -369,6 +369,100 @@ export const workoutRouter = {
       return workouts;
     }),
 
+  // Get session workouts with exercises included (optimized version)
+  sessionWorkoutsWithExercises: protectedProcedure
+    .input(z.object({
+      sessionId: z.string().uuid(),
+    }))
+    .query(async ({ ctx, input }) => {
+      const currentUser = getSessionUser(ctx);
+      
+      // Verify session belongs to user's business
+      const session = await ctx.db.query.TrainingSession.findFirst({
+        where: and(
+          eq(TrainingSession.id, input.sessionId),
+          eq(TrainingSession.businessId, currentUser.businessId)
+        ),
+      });
+      
+      if (!session) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Training session not found',
+        });
+      }
+      
+      // Trainers can see all workouts, users can only see their own
+      const conditions = [eq(Workout.trainingSessionId, input.sessionId)];
+      if (currentUser.role !== 'trainer') {
+        conditions.push(eq(Workout.userId, currentUser.id));
+      }
+      
+      // First get all workouts for the session
+      const workouts = await ctx.db
+        .select({
+          workout: Workout,
+          user: {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+          },
+        })
+        .from(Workout)
+        .innerJoin(user, eq(Workout.userId, user.id))
+        .where(and(...conditions))
+        .orderBy(desc(Workout.createdAt));
+      
+      // Get all workout IDs
+      const workoutIds = workouts.map(w => w.workout.id);
+      
+      if (workoutIds.length === 0) {
+        return [];
+      }
+      
+      // Fetch all exercises for all workouts in one query
+      const allExercises = await ctx.db
+        .select({
+          workoutId: WorkoutExercise.workoutId,
+          id: WorkoutExercise.id,
+          orderIndex: WorkoutExercise.orderIndex,
+          setsCompleted: WorkoutExercise.setsCompleted,
+          groupName: WorkoutExercise.groupName,
+          exercise: {
+            id: exercises.id,
+            name: exercises.name,
+            primaryMuscle: exercises.primaryMuscle,
+            equipment: exercises.equipment,
+          },
+        })
+        .from(WorkoutExercise)
+        .innerJoin(exercises, eq(WorkoutExercise.exerciseId, exercises.id))
+        .where(inArray(WorkoutExercise.workoutId, workoutIds))
+        .orderBy(WorkoutExercise.workoutId, WorkoutExercise.orderIndex);
+      
+      // Group exercises by workout ID
+      const exercisesByWorkout = allExercises.reduce((acc, exercise) => {
+        if (!acc[exercise.workoutId]) {
+          acc[exercise.workoutId] = [];
+        }
+        acc[exercise.workoutId].push({
+          id: exercise.id,
+          orderIndex: exercise.orderIndex,
+          setsCompleted: exercise.setsCompleted,
+          groupName: exercise.groupName,
+          exercise: exercise.exercise,
+        });
+        return acc;
+      }, {} as Record<string, typeof allExercises>);
+      
+      // Combine workouts with their exercises
+      return workouts.map(w => ({
+        ...w,
+        exercises: exercisesByWorkout[w.workout.id] || [],
+        exerciseCount: exercisesByWorkout[w.workout.id]?.length || 0,
+      }));
+    }),
+
   // Save LLM-generated workout
   saveWorkout: protectedProcedure
     .input(z.object({

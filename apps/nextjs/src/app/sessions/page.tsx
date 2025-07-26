@@ -75,13 +75,28 @@ function SessionCard({
   session, 
   index,
   participants = [],
-  onViewLobby
+  onViewLobby,
+  onViewWorkouts
 }: { 
   session: SessionWithParticipants; 
   index: number;
   participants?: Array<{ id: string; name: string | null; email: string }>;
   onViewLobby: (sessionId: string) => void;
+  onViewWorkouts: (sessionId: string) => void;
 }) {
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const trpc = useTRPC();
+  
+  // Fetch workouts for this specific session
+  const { data: workouts } = useQuery({
+    ...trpc.workout.sessionWorkouts.queryOptions({ sessionId: session.id }),
+    enabled: true,
+    staleTime: 30000, // Cache for 30 seconds
+    retry: false, // Don't retry on error (e.g., no permission)
+  });
+  
+  const hasWorkouts = (workouts?.length || 0) > 0;
+  
   const status = getSessionStatus(session.scheduledAt, session.durationMinutes);
   const isPast = status === "past";
   const isActive = status === "active";
@@ -122,9 +137,73 @@ function SessionCard({
             )}
           </div>
         </div>
-        <button className="text-gray-500 hover:text-gray-700">
-          <Icon name="more_horiz" size={24} />
-        </button>
+        <div className="relative">
+          <button 
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsMenuOpen(!isMenuOpen);
+            }}
+            className="text-gray-500 hover:text-gray-700 p-1 rounded-lg hover:bg-gray-200 transition-colors"
+          >
+            <Icon name="more_horiz" size={24} />
+          </button>
+          
+          {isMenuOpen && (
+            <>
+              {/* Backdrop to close menu */}
+              <div 
+                className="fixed inset-0 z-10" 
+                onClick={() => setIsMenuOpen(false)}
+              />
+              
+              {/* Dropdown menu */}
+              <div className="absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-20">
+                <div className="py-1">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onViewWorkouts(session.id);
+                      setIsMenuOpen(false);
+                    }}
+                    disabled={!hasWorkouts}
+                    className={`block w-full text-left px-4 py-2 text-sm ${
+                      hasWorkouts 
+                        ? 'text-gray-700 hover:bg-gray-100' 
+                        : 'text-gray-400 cursor-not-allowed'
+                    }`}
+                  >
+                    <Icon name="visibility" size={18} className="inline mr-2" />
+                    View Workouts
+                  </button>
+                  
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      // TODO: Add edit functionality
+                      setIsMenuOpen(false);
+                    }}
+                    className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                  >
+                    <Icon name="edit" size={18} className="inline mr-2" />
+                    Edit Session
+                  </button>
+                  
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      // TODO: Add delete functionality
+                      setIsMenuOpen(false);
+                    }}
+                    className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-100"
+                  >
+                    <Icon name="delete" size={18} className="inline mr-2" />
+                    Delete Session
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
       </div>
       <div className="mt-4">
         <p className="text-sm font-medium text-gray-600 mb-2">
@@ -168,6 +247,11 @@ export default function SessionsPage() {
   
   const handleViewLobby = (sessionId: string) => {
     router.push(`/session-lobby?sessionId=${sessionId}`);
+  };
+  
+  const handleViewWorkouts = (sessionId: string) => {
+    // Navigate to workout overview page with session ID
+    router.push(`/workout-overview?sessionId=${sessionId}`);
   };
 
   // Fetch sessions from API
@@ -262,6 +346,7 @@ export default function SessionsPage() {
                         index={index}
                         participants={[]}
                         onViewLobby={handleViewLobby}
+                        onViewWorkouts={handleViewWorkouts}
                       />
                     );
                   })}
@@ -281,6 +366,7 @@ export default function SessionsPage() {
                       index={index + activeSessions.length}
                       participants={[]}
                       onViewLobby={handleViewLobby}
+                      onViewWorkouts={handleViewWorkouts}
                     />
                   ))
                 ) : (
@@ -303,6 +389,7 @@ export default function SessionsPage() {
                       index={index + upcomingSessions.length + activeSessions.length}
                       participants={[]}
                       onViewLobby={handleViewLobby}
+                      onViewWorkouts={handleViewWorkouts}
                     />
                   ))
                 ) : (

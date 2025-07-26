@@ -247,12 +247,20 @@ export default function GroupVisualizationPage() {
               >
                 {isGenerating ? 'Generating...' : 'Test LLM Generation'}
               </button>
-              <button
-                onClick={() => router.back()}
-                className="px-3 py-1 text-sm text-gray-600 hover:text-gray-900"
-              >
-                ← Back
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => router.push(`/workout-overview?sessionId=${sessionId}`)}
+                  className="px-3 py-1 text-sm bg-blue-600 text-white hover:bg-blue-700 rounded-md transition-colors"
+                >
+                  View Workouts
+                </button>
+                <button
+                  onClick={() => router.back()}
+                  className="px-3 py-1 text-sm text-gray-600 hover:text-gray-900"
+                >
+                  ← Back
+                </button>
+              </div>
             </div>
           </div>
         </div>

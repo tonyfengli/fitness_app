@@ -93,6 +93,7 @@ export const TrainingSession = pgTable("training_session", (t) => ({
   maxParticipants: t.integer(), // null = unlimited
   status: sessionStatusEnum("status").notNull().default("open"),
   templateType: t.varchar({ length: 50 }).default("workout"), // workout template type
+  templateConfig: t.jsonb(), // Stores group workout blueprint and other template configuration
   createdAt: t.timestamp().defaultNow().notNull(),
   updatedAt: t
     .timestamp({ mode: "date", withTimezone: true })

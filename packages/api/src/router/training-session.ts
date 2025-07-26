@@ -8,6 +8,8 @@ import {
   UserTrainingSession,
   WorkoutPreferences,
   UserProfile,
+  Workout,
+  WorkoutExercise,
   CreateTrainingSessionSchema,
   CreateUserTrainingSessionSchema,
   user as userTable,
@@ -398,6 +400,42 @@ export const trainingSessionRouter = {
         ));
         
       return { success: true };
+    }),
+
+  // Get session with template config (blueprint)
+  getWithTemplateConfig: protectedProcedure
+    .input(z.object({
+      sessionId: z.string().uuid(),
+    }))
+    .query(async ({ ctx, input }) => {
+      const user = ctx.session?.user as SessionUser;
+      
+      const session = await ctx.db.query.TrainingSession.findFirst({
+        where: and(
+          eq(TrainingSession.id, input.sessionId),
+          eq(TrainingSession.businessId, user.businessId)
+        ),
+        with: {
+          trainer: true,
+        },
+      });
+      
+      if (!session) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Training session not found',
+        });
+      }
+      
+      // Only trainers can see the template config
+      if (user.role !== 'trainer') {
+        return {
+          ...session,
+          templateConfig: undefined
+        };
+      }
+      
+      return session;
     }),
 
   // Get past sessions for current user
@@ -1328,6 +1366,8 @@ export const trainingSessionRouter = {
           throw new Error('Round1 and Round2 blocks are required');
         }
         
+        // We'll create workouts after LLM generation
+        
         // Extract top exercise for each client from Round 1
         const round1Assignments = clientsWithPreferences.map(client => {
           const clientData = round1Block.individualCandidates[client.user_id];
@@ -1361,6 +1401,7 @@ export const trainingSessionRouter = {
             equipment: getEquipmentFromExercise(topExercise.name)
           };
         });
+        
         
         // Process client-requested exercises and muscle targets deterministically
         const clientRequestAssignments: Record<string, Array<{
@@ -1550,6 +1591,9 @@ export const trainingSessionRouter = {
         // Create LLM instance and make the call
         let llmOutput = "Click 'Generate' to see the actual LLM response";
         
+        // Initialize workout storage for each client (declare here for proper scope)
+        const clientWorkouts = new Map<string, string>(); // clientId -> workoutId
+        
         try {
           const llm = createLLM();
           const userMessage = "Generate the group workout assignments for rounds 3 and 4.";
@@ -1570,8 +1614,267 @@ export const trainingSessionRouter = {
           // Parse the JSON from the LLM response
           const jsonMatch = llmOutput.match(/```json\n([\s\S]*?)\n```/);
           if (jsonMatch?.[1]) {
-            const parsedResponse = JSON.parse(jsonMatch[1]);
+            const parsedResponse = JSON.parse(jsonMatch[1]) as {
+              round3: {
+                exercises: Array<{
+                  type: 'shared' | 'individual';
+                  name?: string;
+                  client?: string;
+                  exercise?: string;
+                  clients?: string[];
+                  equipment: string[];
+                }>;
+                reasoning: string;
+              };
+              round4: {
+                exercises: Array<{
+                  type: 'shared' | 'individual';
+                  name?: string;
+                  client?: string;
+                  exercise?: string;
+                  clients?: string[];
+                  equipment: string[];
+                }>;
+                reasoning: string;
+              };
+              finalSlots: Record<string, { used: number; total: number }>;
+            };
             console.log('📊 Parsed LLM response:', parsedResponse);
+            
+            // Save complete workout to database (all rounds together)
+            console.log('💾 Saving complete group workout to database...');
+            
+            await ctx.db.transaction(async (tx) => {
+              // First, store the blueprint at the session level
+              try {
+                // Create a minimal blueprint summary instead of storing the entire blueprint
+                // This avoids serialization issues and reduces storage
+                const blueprintSummary = {
+                  blockCount: blueprint.blocks.length,
+                  blockIds: blueprint.blocks.map(b => b.blockId),
+                  validationWarnings: blueprint.validationWarnings || [],
+                  generatedAt: new Date().toISOString(),
+                  llmModel: 'gpt-4o'
+                };
+                
+                await tx
+                  .update(TrainingSession)
+                  .set({
+                    templateConfig: blueprintSummary
+                  })
+                  .where(eq(TrainingSession.id, input.sessionId));
+              } catch (error) {
+                console.error('Error storing blueprint summary:', error);
+                // Continue without storing blueprint rather than failing entire transaction
+              }
+              // Prepare all workout records
+              const workoutValues = clientsWithPreferences.map(client => ({
+                trainingSessionId: input.sessionId,
+                userId: client.user_id,
+                businessId: user.businessId,
+                createdByTrainerId: user.id,
+                notes: `${session.templateType || 'BMF'} - ${new Date().toLocaleDateString()}`,
+                workoutType: session.templateType || 'full_body_bmf',
+                totalPlannedSets: 99,
+                llmOutput: JSON.parse(JSON.stringify({
+                  systemPrompt,
+                  userMessage: "Generate the group workout assignments for rounds 3 and 4.",
+                  rawResponse: llmOutput,
+                  parsedResponse,
+                  llmModel: 'gpt-4o',
+                  timestamp: new Date().toISOString()
+                })),
+                // Blueprint now stored at session level, not in individual workouts
+                context: 'group',
+              }));
+              
+              // Bulk insert all workouts at once
+              const createdWorkouts = await tx
+                .insert(Workout)
+                .values(workoutValues)
+                .returning();
+              
+              // Map client IDs to workout IDs
+              createdWorkouts.forEach((workout, index) => {
+                const client = clientsWithPreferences[index];
+                if (client) {
+                  clientWorkouts.set(client.user_id, workout.id);
+                }
+              });
+              
+              // Now prepare all exercises for all clients
+              const allExercises = [];
+              
+              for (const client of clientsWithPreferences) {
+                const workoutId = clientWorkouts.get(client.user_id);
+                if (!workoutId) continue;
+                
+                // Now create all exercises for this client
+                const clientExercises = [];
+                
+                // Round 1
+                const r1Assignment = round1Assignments.find(a => a.clientId === client.user_id);
+                if (r1Assignment) {
+                  const r1Exercise = exercisePool.find(ex => ex.name === r1Assignment.exercise);
+                  if (r1Exercise) {
+                    clientExercises.push({
+                      workoutId: workoutId,
+                      exerciseId: r1Exercise.id,
+                      orderIndex: 1,
+                      setsCompleted: 99,
+                      groupName: 'Round 1',
+                    });
+                  }
+                }
+                
+                // Round 2
+                const r2Assignment = round2Assignments.find(a => a.clientId === client.user_id);
+                if (r2Assignment) {
+                  const r2Exercise = exercisePool.find(ex => ex.name === r2Assignment.exercise);
+                  if (r2Exercise) {
+                    clientExercises.push({
+                      workoutId: workoutId,
+                      exerciseId: r2Exercise.id,
+                      orderIndex: 2,
+                      setsCompleted: 99,
+                      groupName: 'Round 2',
+                    });
+                  }
+                }
+                
+                // Round 3 - merge pre-assigned and LLM-assigned
+                const clientR3Exercises = new Set<string>();
+                
+                // First add pre-assigned R3 exercises
+                if (clientRequestAssignments.Round3) {
+                  const preAssigned = clientRequestAssignments.Round3.filter(a => a.clientId === client.user_id);
+                  for (const assignment of preAssigned) {
+                    const exercise = exercisePool.find(ex => ex.name === assignment.exercise);
+                    if (exercise) {
+                      clientExercises.push({
+                        workoutId: workoutId,
+                        exerciseId: exercise.id,
+                        orderIndex: 3,
+                        setsCompleted: 99,
+                        groupName: 'Round 3',
+                        notes: `Pre-assigned: ${assignment.reason}`,
+                      });
+                      clientR3Exercises.add(exercise.name.toLowerCase());
+                    }
+                  }
+                }
+                
+                // Then add LLM-assigned R3 exercises (skip if already pre-assigned)
+                for (const exercise of parsedResponse.round3.exercises) {
+                  if (exercise.type === 'individual' && exercise.client === client.name) {
+                    // Skip if already pre-assigned
+                    if (!clientR3Exercises.has((exercise.exercise || '').toLowerCase())) {
+                      const dbExercise = exercisePool.find(ex => 
+                        ex.name.toLowerCase() === (exercise.exercise || '').toLowerCase()
+                      );
+                      
+                      if (dbExercise) {
+                        clientExercises.push({
+                          workoutId: workoutId,
+                          exerciseId: dbExercise.id,
+                          orderIndex: 3,
+                          setsCompleted: 99,
+                          groupName: 'Round 3',
+                        });
+                      }
+                    }
+                  } else if (exercise.type === 'shared' && exercise.clients?.includes(client.name)) {
+                    // Skip if already pre-assigned
+                    if (!clientR3Exercises.has((exercise.name || '').toLowerCase())) {
+                      const dbExercise = exercisePool.find(ex => 
+                        ex.name.toLowerCase() === (exercise.name || '').toLowerCase()
+                      );
+                      
+                      if (dbExercise) {
+                        clientExercises.push({
+                          workoutId: workoutId,
+                          exerciseId: dbExercise.id,
+                          orderIndex: 3,
+                          setsCompleted: 99,
+                          groupName: 'Round 3',
+                        });
+                      }
+                    }
+                  }
+                }
+                
+                // Round 4 - merge pre-assigned and LLM-assigned
+                const clientR4Exercises = new Set<string>();
+                
+                // First add pre-assigned R4 exercises
+                if (clientRequestAssignments.FinalRound) {
+                  const preAssigned = clientRequestAssignments.FinalRound.filter(a => a.clientId === client.user_id);
+                  for (const assignment of preAssigned) {
+                    const exercise = exercisePool.find(ex => ex.name === assignment.exercise);
+                    if (exercise) {
+                      clientExercises.push({
+                        workoutId: workoutId,
+                        exerciseId: exercise.id,
+                        orderIndex: 4,
+                        setsCompleted: 99,
+                        groupName: 'Round 4',
+                        notes: `Pre-assigned: ${assignment.reason}`,
+                      });
+                      clientR4Exercises.add(exercise.name.toLowerCase());
+                    }
+                  }
+                }
+                
+                // Then add LLM-assigned R4 exercises (skip if already pre-assigned)
+                for (const exercise of parsedResponse.round4.exercises) {
+                  if (exercise.type === 'individual' && exercise.client === client.name) {
+                    // Skip if already pre-assigned
+                    if (!clientR4Exercises.has((exercise.exercise || '').toLowerCase())) {
+                      const dbExercise = exercisePool.find(ex => 
+                        ex.name.toLowerCase() === (exercise.exercise || '').toLowerCase()
+                      );
+                      
+                      if (dbExercise) {
+                        clientExercises.push({
+                          workoutId: workoutId,
+                          exerciseId: dbExercise.id,
+                          orderIndex: 4,
+                          setsCompleted: 99,
+                          groupName: 'Round 4',
+                        });
+                      }
+                    }
+                  } else if (exercise.type === 'shared' && exercise.clients?.includes(client.name)) {
+                    // Skip if already pre-assigned
+                    if (!clientR4Exercises.has((exercise.name || '').toLowerCase())) {
+                      const dbExercise = exercisePool.find(ex => 
+                        ex.name.toLowerCase() === (exercise.name || '').toLowerCase()
+                      );
+                      
+                      if (dbExercise) {
+                        clientExercises.push({
+                          workoutId: workoutId,
+                          exerciseId: dbExercise.id,
+                          orderIndex: 4,
+                          setsCompleted: 99,
+                          groupName: 'Round 4',
+                        });
+                      }
+                    }
+                  }
+                }
+                
+                // Add to all exercises array instead of inserting
+                allExercises.push(...clientExercises);
+              }
+              
+              // Bulk insert all exercises for all clients at once
+              if (allExercises.length > 0) {
+                await tx.insert(WorkoutExercise).values(allExercises);
+              }
+            });
+            
+            console.log('✅ Complete group workout saved successfully');
           }
           
         } catch (error) {
@@ -1587,7 +1890,11 @@ export const trainingSessionRouter = {
             llmOutput
           },
           sessionId: input.sessionId,
-          blueprint // Include for debugging
+          workoutIds: Array.from(clientWorkouts.entries()).map(([clientId, workoutId]) => ({
+            clientId,
+            workoutId
+          })),
+          // Blueprint now stored at session level, not returned in response
         };
       } catch (error) {
         console.error('❌ Error in generateGroupWorkout:', error);
