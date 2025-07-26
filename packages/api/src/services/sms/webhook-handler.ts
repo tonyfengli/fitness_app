@@ -1,3 +1,6 @@
+import { db } from "@acme/db/client";
+import { TrainingSession } from "@acme/db/schema";
+import { eq } from "@acme/db";
 import { WorkoutPreferenceService } from "../workoutPreferenceService";
 import { ConversationStateService } from "../conversationStateService";
 import { getUserByPhone } from "../checkInService";
@@ -9,6 +12,8 @@ import { PreferenceHandler } from "./handlers/preference-handler";
 import { DisambiguationHandler } from "./handlers/disambiguation-handler";
 import { PreferenceUpdateHandler } from "./handlers/preference-update-handler";
 import { DefaultHandler } from "./handlers/default-handler";
+import { DummyHandler } from "./handlers/dummy-handler";
+import { FlowRouter } from "./flow-router";
 import { SMSResponseSender } from "./response-sender";
 import { TwilioSMSPayload, SMSResponse } from "./types";
 
@@ -77,11 +82,28 @@ export class SMSWebhookHandler {
 
   private async routeAndHandle(payload: TwilioSMSPayload): Promise<SMSResponse> {
     try {
+      // First, check if user has an active session and get template type
+      const userInfo = await getUserByPhone(payload.From);
+      let templateType: string | null = null;
+      
+      if (userInfo?.trainingSessionId) {
+        const [session] = await db
+          .select({ templateType: TrainingSession.templateType })
+          .from(TrainingSession)
+          .where(eq(TrainingSession.id, userInfo.trainingSessionId))
+          .limit(1);
+        
+        templateType = session?.templateType || null;
+        
+        // Check if we should use dummy handler
+        if (DummyHandler.shouldUseDummyHandler(templateType)) {
+          return DummyHandler.handle(payload.Body);
+        }
+      }
+      
       // Check if this is a disambiguation response (numbers only)
       const disambiguationCheck = DisambiguationHandler.isDisambiguationResponse(payload.Body);
       if (disambiguationCheck.isValid) {
-        // Get user info to check for pending disambiguation
-        const userInfo = await getUserByPhone(payload.From);
         if (userInfo && userInfo.trainingSessionId) {
           const pendingDisambiguation = await ConversationStateService.getPendingDisambiguation(
             userInfo.userId,
@@ -111,6 +133,20 @@ export class SMSWebhookHandler {
             payload.Body,
             payload.MessageSid
           );
+        }
+        
+        // Check if session is using a new flow type
+        if (preferenceCheck.trainingSessionId) {
+          const isNewFlow = await FlowRouter.isUsingNewFlow(preferenceCheck.trainingSessionId);
+          if (isNewFlow) {
+            return await FlowRouter.route(
+              payload.From,
+              payload.Body,
+              payload.MessageSid,
+              preferenceCheck.trainingSessionId,
+              preferenceCheck
+            );
+          }
         }
         
         // Otherwise handle normal preference collection flow

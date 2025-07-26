@@ -2,6 +2,7 @@ import { processCheckIn, getUserByPhone } from "../../checkInService";
 import { saveMessage } from "../../messageService";
 import { createLogger } from "../../../utils/logger";
 import { WorkoutPreferenceService } from "../../workoutPreferenceService";
+import { TemplateSMSService } from "../template-sms-service";
 import { SMSResponse } from "../types";
 import { db } from "@acme/db/client";
 import { user } from "@acme/db/schema";
@@ -36,13 +37,21 @@ export class CheckInHandler {
         const userInfo = await getUserByPhone(phoneNumber);
         const userName = userInfo ? await this.getUserName(userInfo.userId) : undefined;
         
-        const preferencePrompt = WorkoutPreferenceService.getPreferencePrompt(userName);
+        // Get template-based SMS config
+        const smsConfig = checkInResult.sessionId 
+          ? await TemplateSMSService.getSMSConfigForSession(checkInResult.sessionId)
+          : null;
+        
+        // Get template-aware response and preference prompt
+        responseMessage = TemplateSMSService.getCheckInResponse(smsConfig, userName);
+        const preferencePrompt = TemplateSMSService.getPreferencePrompt(smsConfig, userName);
         responseMessage = `${responseMessage}\n\n${preferencePrompt}`;
         
-        logger.info("Added preference prompt to check-in response", {
+        logger.info("Added template-based preference prompt to check-in response", {
           userId: checkInResult.userId,
           sessionId: checkInResult.sessionId,
-          userName
+          userName,
+          hasTemplate: !!smsConfig
         });
       }
 

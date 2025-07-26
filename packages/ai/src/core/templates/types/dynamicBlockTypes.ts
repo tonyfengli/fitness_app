@@ -35,6 +35,64 @@ export interface BlockDefinition {
 }
 
 /**
+ * SMS configuration for templates
+ */
+export interface SMSConfig {
+  checkInResponse: string;
+  preferencePrompt: string;
+  followUpPrompts: {
+    sessionGoal?: string;
+    muscleTargets?: string;
+    intensity?: string;
+    avoidance?: string; // Combined for joints/exercises to avoid
+  };
+  confirmationMessage: string;
+  priorityFields: string[]; // Which fields to prioritize for this template
+}
+
+/**
+ * Linear flow step definition
+ */
+export interface LinearFlowStep {
+  id: string;
+  question: string;
+  fieldToCollect: string;
+  required: boolean;
+  options?: string[]; // For multiple choice
+  validation?: 'text' | 'number' | 'choice';
+}
+
+/**
+ * Linear flow definition
+ */
+export interface LinearFlow {
+  steps: LinearFlowStep[];
+  confirmationMessage: string;
+}
+
+/**
+ * State machine state definition
+ */
+export interface StateMachineState {
+  id: string;
+  prompt: string;
+  handler?: 'preference' | 'disambiguation' | 'custom';
+  nextStates: {
+    [condition: string]: string; // condition -> next state
+  };
+  metadata?: Record<string, any>;
+}
+
+/**
+ * State machine flow definition
+ */
+export interface StateMachineFlow {
+  states: Record<string, StateMachineState>;
+  initialState: string;
+  finalStates: string[]; // Can have multiple final states
+}
+
+/**
  * Defines a complete workout template
  */
 export interface WorkoutTemplate {
@@ -43,6 +101,10 @@ export interface WorkoutTemplate {
   description?: string;
   blocks: BlockDefinition[];
   blockOrder?: string[];         // Optional for backward compatibility
+  smsConfig?: SMSConfig;         // Legacy SMS configuration
+  smsFlowType?: 'legacy' | 'linear' | 'stateMachine'; // Flow type
+  smsLinearFlow?: LinearFlow;    // Linear flow definition
+  smsStateMachine?: StateMachineFlow; // State machine flow definition
 }
 
 // Export aliases for compatibility

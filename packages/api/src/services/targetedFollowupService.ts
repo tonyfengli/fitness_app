@@ -1,7 +1,9 @@
 import OpenAI from "openai";
 import { createLogger } from "../utils/logger";
 import { PreferenceStateManager } from "../utils/preferenceStateManager";
+import { TemplateSMSService } from "./sms/template-sms-service";
 import type { PreferenceCollectionStep } from "../utils/preferenceStateManager";
+import type { SMSConfig } from "@acme/ai";
 
 const logger = createLogger("TargetedFollowupService");
 
@@ -121,16 +123,42 @@ Generate only the question, nothing else.`;
 
   /**
    * Generates a targeted follow-up question based on missing preference fields
+   * This is kept for backward compatibility but delegates to template service when possible
    */
   static async generateFollowup(
     currentState: PreferenceCollectionStep,
-    preferences: ParsedPreferences
+    preferences: ParsedPreferences,
+    smsConfig?: SMSConfig | null
   ): Promise<FollowupGenerationResult> {
     try {
-      // Determine which fields to ask about
+      // If we have a template config, use it
+      if (smsConfig) {
+        const fieldsToAsk = TemplateSMSService.determineFieldsToAsk(smsConfig, preferences, 2);
+        
+        if (fieldsToAsk.length === 0) {
+          return {
+            followupQuestion: TemplateSMSService.getConfirmationMessage(smsConfig),
+            fieldsAsked: [],
+            promptUsed: "Template-based confirmation"
+          };
+        }
+        
+        const followupQuestion = TemplateSMSService.generateTemplateFollowUp(
+          smsConfig,
+          fieldsToAsk,
+          preferences
+        );
+        
+        return {
+          followupQuestion,
+          fieldsAsked: fieldsToAsk,
+          promptUsed: "Template-based follow-up"
+        };
+      }
+      
+      // Otherwise, use the original LLM-based approach
       const fieldsToAsk = this.determineFieldsToAsk(preferences);
       
-      // If no fields to ask about, return a confirmation
       if (fieldsToAsk.length === 0) {
         return {
           followupQuestion: "Perfect! I've got all your preferences. Your workout will be tailored to how you're feeling today. See you in the gym!",
@@ -139,10 +167,8 @@ Generate only the question, nothing else.`;
         };
       }
 
-      // Create the prompt
       const prompt = this.createFollowupPrompt(fieldsToAsk, preferences);
 
-      // Call GPT-3.5 for speed and cost efficiency
       const completion = await getOpenAIClient().chat.completions.create({
         model: "gpt-3.5-turbo",
         messages: [
@@ -160,7 +186,8 @@ Generate only the question, nothing else.`;
 
       logger.info("Generated follow-up question", {
         fieldsAsked: fieldsToAsk,
-        questionLength: followupQuestion.length
+        questionLength: followupQuestion.length,
+        usedTemplate: false
       });
 
       return {
@@ -172,7 +199,6 @@ Generate only the question, nothing else.`;
     } catch (error) {
       logger.error("Error generating follow-up question", error);
       
-      // Fallback question if LLM fails
       return {
         followupQuestion: "What's your training focus today - strength, endurance, or stability? Also, any specific areas you want to work on?",
         fieldsAsked: ['sessionGoal', 'muscleTargets'],

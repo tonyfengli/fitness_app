@@ -8,6 +8,7 @@ import { createLogger } from "../../../utils/logger";
 import { sessionTestDataLogger } from "../../../utils/sessionTestDataLogger";
 import { TargetedFollowupService } from "../../targetedFollowupService";
 import { PreferenceStateManager } from "../../../utils/preferenceStateManager";
+import { TemplateSMSService } from "../template-sms-service";
 import { SMSResponse } from "../types";
 
 const logger = createLogger("PreferenceHandler");
@@ -324,7 +325,8 @@ export class PreferenceHandler {
       // Determine next step and response
       const { nextStep, response } = await this.determineNextStep(
         preferenceCheck.currentStep,
-        validatedPreferences
+        validatedPreferences,
+        preferenceCheck.trainingSessionId
       );
 
       // Save preferences
@@ -399,29 +401,48 @@ export class PreferenceHandler {
 
   private async determineNextStep(
     currentStep: string, 
-    validatedPreferences: any
+    validatedPreferences: any,
+    sessionId?: string
   ): Promise<{ nextStep: "initial_collected" | "disambiguation_pending" | "disambiguation_resolved" | "followup_sent" | "preferences_active"; response: string }> {
     let nextStep: "initial_collected" | "disambiguation_pending" | "disambiguation_resolved" | "followup_sent" | "preferences_active";
     let response: string;
     
+    // Get template SMS config if we have a session
+    const smsConfig = sessionId 
+      ? await TemplateSMSService.getSMSConfigForSession(sessionId)
+      : null;
+    
     if (currentStep === "not_started" || currentStep === "disambiguation_resolved") {
-      // Generate targeted follow-up question
-      const followupResult = await TargetedFollowupService.generateFollowup(
-        currentStep as any,
-        validatedPreferences
+      // Determine fields to ask based on template
+      const fieldsToAsk = TemplateSMSService.determineFieldsToAsk(
+        smsConfig,
+        validatedPreferences,
+        2 // Ask for up to 2 fields
       );
       
-      nextStep = "followup_sent";
-      response = followupResult.followupQuestion;
-      
-      logger.info("Generated targeted follow-up", {
-        fieldsAsked: followupResult.fieldsAsked,
-        currentStep
-      });
+      if (fieldsToAsk.length === 0) {
+        // No more fields needed
+        nextStep = "preferences_active";
+        response = TemplateSMSService.getConfirmationMessage(smsConfig);
+      } else {
+        // Generate follow-up based on template
+        nextStep = "followup_sent";
+        response = TemplateSMSService.generateTemplateFollowUp(
+          smsConfig,
+          fieldsToAsk,
+          validatedPreferences
+        );
+        
+        logger.info("Generated template-based follow-up", {
+          fieldsAsked: fieldsToAsk,
+          currentStep,
+          hasTemplate: !!smsConfig
+        });
+      }
     } else if (currentStep === "followup_sent") {
       // They've answered the follow-up
       nextStep = "preferences_active";
-      response = TargetedFollowupService.generateFinalResponse();
+      response = TemplateSMSService.getConfirmationMessage(smsConfig);
     } else {
       // Default response
       nextStep = "followup_sent";

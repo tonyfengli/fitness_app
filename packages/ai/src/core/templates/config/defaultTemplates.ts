@@ -3,7 +3,7 @@
  * These match the existing hardcoded structure for backward compatibility
  */
 
-import type { WorkoutTemplate, BlockDefinition } from "../types/dynamicBlockTypes";
+import type { WorkoutTemplate, BlockDefinition, SMSConfig } from "../types/dynamicBlockTypes";
 
 /**
  * Default workout template - matches existing hardcoded structure
@@ -48,7 +48,19 @@ export const DEFAULT_WORKOUT_TEMPLATE: WorkoutTemplate = {
       selectionStrategy: 'randomized'
     }
   ],
-  blockOrder: ['A', 'B', 'C', 'D']
+  blockOrder: ['A', 'B', 'C', 'D'],
+  smsConfig: {
+    checkInResponse: "You're checked in! Ready to crush some strength training?",
+    preferencePrompt: "What's your priority for today's strength session? Examples: 'upper body focus', 'heavy legs', or 'core stability'.",
+    followUpPrompts: {
+      sessionGoal: "Are you looking to build strength, improve stability, or work on endurance today?",
+      muscleTargets: "Which muscle groups do you want to focus on?",
+      intensity: "How are you feeling today - ready for high intensity, moderate, or taking it easy?",
+      avoidance: "Any areas we should be careful with or exercises to avoid?"
+    },
+    confirmationMessage: "Perfect! I've tailored your strength workout based on your preferences. See you in the gym!",
+    priorityFields: ['sessionGoal', 'muscleTargets', 'intensity']
+  }
 };
 
 /**
@@ -94,7 +106,19 @@ export const FULL_BODY_TEMPLATE: WorkoutTemplate = {
       selectionStrategy: 'randomized'
     }
   ],
-  blockOrder: ['A', 'B', 'C', 'D']
+  blockOrder: ['A', 'B', 'C', 'D'],
+  smsConfig: {
+    checkInResponse: "Welcome! Ready for a full body workout?",
+    preferencePrompt: "What areas do you want to focus on in today's full body session? Any specific goals?",
+    followUpPrompts: {
+      sessionGoal: "What's your main goal today - strength, endurance, or balanced work?",
+      muscleTargets: "Any specific areas you'd like to emphasize?",
+      intensity: "How's your energy level - high, moderate, or need to take it easier?",
+      avoidance: "Any movements or areas we should avoid today?"
+    },
+    confirmationMessage: "Great! Your full body workout is ready. Let's make it a great session!",
+    priorityFields: ['muscleTargets', 'intensity', 'sessionGoal']
+  }
 };
 
 /**
@@ -112,7 +136,19 @@ export const CIRCUIT_TRAINING_TEMPLATE: WorkoutTemplate = {
     maxExercises: 1,
     selectionStrategy: 'randomized' as const
   })),
-  blockOrder: Array.from({ length: 6 }, (_, i) => `Round${i + 1}`)
+  blockOrder: Array.from({ length: 6 }, (_, i) => `Round${i + 1}`),
+  smsConfig: {
+    checkInResponse: "Let's go! Ready for some circuit training? 🔥",
+    preferencePrompt: "How's your cardio feeling today? Any specific areas to target or avoid during circuits?",
+    followUpPrompts: {
+      sessionGoal: "Looking for strength circuits, cardio focus, or a mix?",
+      intensity: "What intensity level - high energy, moderate pace, or recovery mode?",
+      muscleTargets: "Any muscle groups you want to hit hard today?",
+      avoidance: "Any exercises or movements to skip?"
+    },
+    confirmationMessage: "Awesome! Your circuit workout is set. Let's get that heart rate up!",
+    priorityFields: ['intensity', 'sessionGoal', 'avoidance']
+  }
 };
 
 /**
@@ -164,7 +200,19 @@ export const FULL_BODY_BMF_TEMPLATE: WorkoutTemplate = {
       selectionStrategy: 'randomized'
     }
   ],
-  blockOrder: ['Round1', 'Round2', 'Round3', 'FinalRound']
+  blockOrder: ['Round1', 'Round2', 'Round3', 'FinalRound'],
+  smsConfig: {
+    checkInResponse: "BMF time! Ready to move? 💪",
+    preferencePrompt: "What movement patterns feel good today? Any areas to focus on or avoid?",
+    followUpPrompts: {
+      sessionGoal: "What's the focus - power, endurance, or movement quality?",
+      muscleTargets: "Which movement patterns do you want to emphasize - squats, hinges, pulls?",
+      intensity: "How are you feeling - ready to push hard or need a moderate pace?",
+      avoidance: "Any movements or joints we should be careful with?"
+    },
+    confirmationMessage: "Let's do this! Your BMF workout is ready. Time to move boldly!",
+    priorityFields: ['muscleTargets', 'avoidance', 'intensity']
+  }
 };
 
 /**
