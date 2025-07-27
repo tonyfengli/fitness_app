@@ -10,6 +10,7 @@ interface SaveMessageParams {
   businessId: string;
   direction: 'inbound' | 'outbound';
   content: string;
+  channel?: 'sms' | 'in_app';
   phoneNumber?: string;
   metadata?: {
     intent?: { type: string; confidence: number };
@@ -32,7 +33,7 @@ export async function saveMessage(params: SaveMessageParams) {
         userId: params.userId,
         businessId: params.businessId,
         direction: params.direction,
-        channel: 'sms',
+        channel: params.channel || 'sms',
         content: params.content,
         phoneNumber: params.phoneNumber,
         metadata: params.metadata || {},

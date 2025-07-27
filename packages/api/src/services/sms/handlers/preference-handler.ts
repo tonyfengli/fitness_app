@@ -14,16 +14,18 @@ import { SMSResponse } from "../types";
 const logger = createLogger("PreferenceHandler");
 
 export class PreferenceHandler {
-  async handle(
-    phoneNumber: string,
-    messageContent: string,
-    messageSid: string,
-    preferenceCheck: any
-  ): Promise<SMSResponse> {
+  async handle(payload: any): Promise<SMSResponse> {
+    const phoneNumber = payload.From;
+    const messageContent = payload.Body;
+    const messageSid = payload.MessageSid;
+    const userId = payload.UserId;
+    const channel = payload.Channel;
+    const preferenceCheck = payload.intent?.data || {};
+    
     try {
       logger.info("Handling preference response", { 
         phoneNumber,
-        userId: preferenceCheck.userId,
+        userId: preferenceCheck.userId || userId,
         trainingSessionId: preferenceCheck.trainingSessionId,
         currentStep: preferenceCheck.currentStep
       });
@@ -463,7 +465,10 @@ export class PreferenceHandler {
     exerciseValidationInfo?: any
   ): Promise<SMSResponse> {
     try {
-      const userInfo = await getUserByPhone(phoneNumber);
+      // For web app messages, we already have userId in preferenceCheck
+      const userInfo = preferenceCheck.userId 
+        ? { userId: preferenceCheck.userId, businessId: preferenceCheck.businessId }
+        : await getUserByPhone(phoneNumber);
       if (!userInfo) {
         throw new Error("User not found");
       }
@@ -649,7 +654,10 @@ export class PreferenceHandler {
     exerciseValidationInfo: any
   ): Promise<void> {
     try {
-      const userInfo = await getUserByPhone(phoneNumber);
+      // For web app messages, we already have userId in preferenceCheck
+      const userInfo = preferenceCheck.userId 
+        ? { userId: preferenceCheck.userId, businessId: preferenceCheck.businessId }
+        : await getUserByPhone(phoneNumber);
       
       if (!userInfo) {
         logger.warn("User not found for message saving", { phoneNumber });

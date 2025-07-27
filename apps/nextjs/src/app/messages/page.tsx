@@ -1,13 +1,15 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { 
   SidebarLayout, 
   ClientSidebar,
 } from "@acme/ui-desktop";
 import { useTRPC } from "~/trpc/react";
 import { useRouter } from "next/navigation";
+import { useMessageStream } from "~/hooks/useMessageStream";
+import type { MessageEvent } from "~/hooks/useMessageStream";
 
 // Constants
 const AVATAR_API_URL = "https://api.dicebear.com/7.x/avataaars/svg";
@@ -353,10 +355,13 @@ function PreferenceCollectionSummary({ message }: PreferenceCollectionSummaryPro
 
 export default function MessagesPage() {
   const [selectedClientId, setSelectedClientId] = useState<string>("");
+  const [messageInput, setMessageInput] = useState<string>("");
+  const [isSending, setIsSending] = useState(false);
   const trpc = useTRPC();
   const router = useRouter();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   // Fetch clients from the API
   const { data: clientsData, isLoading, error } = useQuery(
@@ -387,10 +392,53 @@ export default function MessagesPage() {
   const selectedClient = clients.find(c => c.id === selectedClientId);
 
   // Fetch messages for selected client
-  const { data: messages, isLoading: messagesLoading, error: messagesError } = useQuery({
+  const { data: messages, isLoading: messagesLoading, error: messagesError, refetch: refetchMessages } = useQuery({
     ...trpc.messages.getByUser.queryOptions({ userId: selectedClientId || "" }),
     enabled: !!selectedClientId && selectedClientId !== "",
   });
+
+  // Send message mutation
+  const sendMessageMutation = useMutation({
+    ...trpc.messages.sendMessage.mutationOptions(),
+    onMutate: () => {
+      setIsSending(true);
+    },
+    onSuccess: async () => {
+      // Clear input
+      setMessageInput("");
+      
+      // Refetch messages to show the new ones
+      await refetchMessages();
+      
+      // Focus back on input
+      inputRef.current?.focus();
+    },
+    onError: (error) => {
+      console.error("Failed to send message:", error);
+      alert("Failed to send message. Please try again.");
+    },
+    onSettled: () => {
+      setIsSending(false);
+    },
+  });
+
+  // Handle sending message
+  const handleSendMessage = () => {
+    if (!messageInput.trim() || !selectedClientId || isSending) return;
+    
+    sendMessageMutation.mutate({
+      recipientId: selectedClientId,
+      content: messageInput.trim(),
+    });
+  };
+
+  // Handle enter key press
+  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSendMessage();
+    }
+  };
 
   // Sort messages by date (oldest first, so newest appears at bottom)
   const sortedMessages = React.useMemo(() => {
@@ -399,6 +447,30 @@ export default function MessagesPage() {
       new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
     );
   }, [messages]);
+
+  // Get current training session for the selected client if any
+  const { data: activeSession } = useQuery({
+    ...trpc.trainingSession.getActiveSessionForUser.queryOptions({ userId: selectedClientId || "" }),
+    enabled: !!selectedClientId && selectedClientId !== "",
+  });
+
+  // Set up real-time message updates
+  const { isConnected } = useMessageStream({
+    sessionId: activeSession?.id,
+    enabled: !!activeSession?.id,
+    onMessage: (event: MessageEvent) => {
+      // Only refetch if the message is for the selected client
+      if (event.userId === selectedClientId) {
+        refetchMessages();
+      }
+    },
+    onConnect: () => {
+      console.log("Message stream connected");
+    },
+    onDisconnect: () => {
+      console.log("Message stream disconnected");
+    },
+  });
 
   // Scroll to bottom when messages change or selected client changes
   const scrollToBottom = () => {
@@ -469,6 +541,25 @@ export default function MessagesPage() {
               </div>
             </header>
 
+            {/* Connection status indicator */}
+            {activeSession && (
+              <div className="px-8 py-2">
+                <div className="flex items-center text-sm text-gray-500">
+                  {isConnected ? (
+                    <>
+                      <span className="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
+                      Live updates enabled
+                    </>
+                  ) : (
+                    <>
+                      <span className="w-2 h-2 bg-gray-400 rounded-full mr-2"></span>
+                      Not connected to live updates
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* Scrollable messages area */}
             <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-8">
               <div className="space-y-4 max-w-4xl mx-auto">
@@ -509,6 +600,44 @@ export default function MessagesPage() {
                 )}
                 {/* Invisible element to scroll to */}
                 <div ref={messagesEndRef} />
+              </div>
+            </div>
+
+            {/* Message input area */}
+            <div className="flex-shrink-0 border-t border-gray-200 p-4 bg-yellow-50">
+              <div className="max-w-4xl mx-auto">
+                <p className="text-sm text-yellow-800 mb-2 flex items-center">
+                  <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                  </svg>
+                  Test Mode: Simulating {selectedClient?.name} sending a message
+                </p>
+                <div className="flex items-center space-x-4">
+                  <input
+                    ref={inputRef}
+                    type="text"
+                    value={messageInput}
+                    onChange={(e) => setMessageInput(e.target.value)}
+                    onKeyPress={handleKeyPress}
+                    placeholder="Type a message as the client..."
+                    disabled={isSending}
+                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+                  />
+                <button
+                  onClick={handleSendMessage}
+                  disabled={!messageInput.trim() || isSending}
+                  className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {isSending ? (
+                    <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                  ) : (
+                    "Send"
+                  )}
+                </button>
+                </div>
               </div>
             </div>
           </div>

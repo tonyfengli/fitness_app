@@ -3,6 +3,7 @@ import { z } from "zod/v4";
 import { TRPCError } from "@trpc/server";
 
 import { desc, eq, and, gte, lte, or, sql, inArray } from "@acme/db";
+import { db } from "@acme/db/client";
 import { 
   TrainingSession, 
   UserTrainingSession,
@@ -1972,6 +1973,104 @@ export const trainingSessionRouter = {
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: error instanceof Error ? error.message : 'Failed to generate group workout',
+        });
+      }
+    }),
+
+  // Get active training session for a user
+  getActiveSessionForUser: protectedProcedure
+    .input(
+      z.object({
+        userId: z.string().min(1, "User ID is required"),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      try {
+        // Check if the current user is authorized to view this data
+        const viewer = await db
+          .select()
+          .from(userTable)
+          .where(eq(userTable.id, ctx.session.user.id))
+          .limit(1);
+
+        if (!viewer[0]) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "User not found",
+          });
+        }
+
+        // If viewer is not the user themselves, must be a trainer in the same business
+        if (ctx.session.user.id !== input.userId) {
+          const targetUser = await db
+            .select()
+            .from(userTable)
+            .where(eq(userTable.id, input.userId))
+            .limit(1);
+
+          if (!targetUser[0] || targetUser[0].businessId !== viewer[0].businessId) {
+            throw new TRPCError({
+              code: "FORBIDDEN",
+              message: "Can only view sessions for users in your business",
+            });
+          }
+
+          if (viewer[0].role !== "trainer") {
+            throw new TRPCError({
+              code: "FORBIDDEN",
+              message: "Only trainers can view other users' sessions",
+            });
+          }
+        }
+
+        // Find active session for the user
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
+        const activeSessions = await db
+          .select({
+            id: TrainingSession.id,
+            name: TrainingSession.name,
+            date: TrainingSession.date,
+            templateType: TrainingSession.templateType,
+            businessId: TrainingSession.businessId,
+          })
+          .from(TrainingSession)
+          .innerJoin(
+            UserTrainingSession,
+            eq(UserTrainingSession.trainingSessionId, TrainingSession.id)
+          )
+          .where(
+            and(
+              eq(UserTrainingSession.userId, input.userId),
+              gte(TrainingSession.date, today)
+            )
+          )
+          .orderBy(desc(TrainingSession.createdAt))
+          .limit(1);
+
+        if (!activeSessions || activeSessions.length === 0) {
+          return null;
+        }
+
+        // Ensure we return a plain object
+        const session = activeSessions[0];
+        if (!session) {
+          return null;
+        }
+
+        return {
+          id: session.id,
+          name: session.name,
+          date: session.date,
+          templateType: session.templateType,
+          businessId: session.businessId,
+        };
+      } catch (error) {
+        console.error("Error in getActiveSessionForUser:", error);
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to fetch active session",
         });
       }
     }),

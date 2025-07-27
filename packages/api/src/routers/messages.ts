@@ -1,9 +1,12 @@
 import { z } from "zod/v4";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 import { db } from "@acme/db/client";
-import { messages, user } from "@acme/db/schema";
+import { messages, user, UserTrainingSession, TrainingSession } from "@acme/db/schema";
 import { eq, desc, and, sql } from "@acme/db";
 import { TRPCError } from "@trpc/server";
+import { saveMessage } from "../services/messageService";
+import { MessagePipeline } from "../services/messaging/message-pipeline";
+import { WebAdapter } from "../services/messaging/adapters/web-adapter";
 
 export const messagesRouter = createTRPCRouter({
   // Get messages for a specific user (trainer view)
@@ -114,6 +117,112 @@ export const messagesRouter = createTRPCRouter({
       (b.lastMessageAt?.getTime() || 0) - (a.lastMessageAt?.getTime() || 0)
     );
   }),
+
+  // Send a message from the web app (simulating client messaging)
+  sendMessage: protectedProcedure
+    .input(
+      z.object({
+        recipientId: z.string().min(1, "Recipient ID is required"),
+        content: z.string().min(1, "Message content is required"),
+        trainingSessionId: z.string().optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      // Verify the sender is a trainer
+      const trainer = await db
+        .select()
+        .from(user)
+        .where(eq(user.id, ctx.session.user.id))
+        .limit(1);
+
+      if (!trainer.length || trainer[0]?.role !== "trainer") {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Only trainers can send messages",
+        });
+      }
+
+      // Get the recipient (client) to ensure they're in the same business
+      const recipient = await db
+        .select()
+        .from(user)
+        .where(eq(user.id, input.recipientId))
+        .limit(1);
+
+      if (!recipient.length || recipient[0]?.businessId !== trainer[0].businessId) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Can only send messages to users in your business",
+        });
+      }
+
+      const businessId = trainer[0].businessId;
+      if (!businessId) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Business ID not found",
+        });
+      }
+
+      try {
+        // Get active training session for the user if not provided
+        let trainingSessionId = input.trainingSessionId;
+        
+        if (!trainingSessionId) {
+          // Find active session for the user
+          const activeSession = await db
+            .select({
+              sessionId: UserTrainingSession.trainingSessionId
+            })
+            .from(UserTrainingSession)
+            .innerJoin(
+              TrainingSession,
+              eq(UserTrainingSession.trainingSessionId, TrainingSession.id)
+            )
+            .where(
+              and(
+                eq(UserTrainingSession.userId, input.recipientId),
+                eq(UserTrainingSession.status, "checked_in"),
+                eq(TrainingSession.status, "open")
+              )
+            )
+            .limit(1);
+          
+          if (activeSession.length > 0) {
+            trainingSessionId = activeSession[0].sessionId;
+            console.log(`[${new Date().toISOString()}] Found active session for user:`, {
+              userId: input.recipientId,
+              sessionId: trainingSessionId
+            });
+          }
+        }
+        
+        // Create unified message from web request
+        const unifiedMessage = WebAdapter.fromWebRequest({
+          recipientId: input.recipientId,
+          content: input.content,
+          businessId,
+          trainingSessionId,
+          sentBy: ctx.session.user.id,
+          sentByName: trainer[0].name,
+        });
+        
+        // Process through unified pipeline
+        const pipeline = new MessagePipeline();
+        const processed = await pipeline.process(unifiedMessage);
+
+        return {
+          success: processed.response.success,
+          response: processed.response.message,
+        };
+      } catch (error) {
+        console.error(`[${new Date().toISOString()}] Failed to process test message:`, error);
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to process message",
+        });
+      }
+    }),
 
   // Get message stats for debugging
   getStats: protectedProcedure

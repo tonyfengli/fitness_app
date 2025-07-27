@@ -109,11 +109,13 @@ export class BlueprintGenerationService {
             includeScoring: false
           });
 
-          // Score exercises
-          const scoredExercises = scoreAndSortExercises(
-            filterInput,
-            filteredResult.exercises
-          );
+          // Check if we have exercises to score
+          const exercisesToScore = filteredResult.exercises || [];
+          
+          // Score exercises only if we have some
+          const scoredExercises = exercisesToScore.length > 0 
+            ? scoreAndSortExercises(filterInput, exercisesToScore)
+            : [];
 
           // Create ClientContext
           const clientContext: ClientContext = {

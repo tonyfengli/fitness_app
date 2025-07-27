@@ -93,3 +93,42 @@ export function broadcastPreferenceUpdate(sessionId: string, preferenceData: {
     sseConnections.delete(sessionId);
   }
 }
+
+export function broadcastMessage(sessionId: string, messageData: {
+  userId: string;
+  userName?: string | null;
+  direction: 'inbound' | 'outbound';
+  content: string;
+  timestamp?: string;
+}) {
+  const sessionControllers = sseConnections.get(sessionId);
+  
+  if (!sessionControllers || sessionControllers.size === 0) {
+    return;
+  }
+  
+  const encoder = new TextEncoder();
+  const eventData = `event: new-message\ndata: ${JSON.stringify({
+    ...messageData,
+    timestamp: messageData.timestamp || new Date().toISOString()
+  })}\n\n`;
+  
+  const deadControllers = new Set<ReadableStreamDefaultController>();
+  
+  sessionControllers.forEach((controller) => {
+    try {
+      controller.enqueue(encoder.encode(eventData));
+    } catch (error) {
+      deadControllers.add(controller);
+    }
+  });
+  
+  // Remove dead controllers
+  deadControllers.forEach(controller => {
+    sessionControllers.delete(controller);
+  });
+  
+  if (sessionControllers.size === 0) {
+    sseConnections.delete(sessionId);
+  }
+}

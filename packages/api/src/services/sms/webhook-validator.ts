@@ -25,12 +25,6 @@ export class TwilioWebhookValidator {
     signature: string | null
   ): Promise<ValidationResult> {
     try {
-      // Check signature header
-      if (!signature) {
-        logger.warn("Missing Twilio signature");
-        return { valid: false, error: "Missing X-Twilio-Signature header" };
-      }
-
       // Parse form data
       const formData = await request.formData();
       const params: Record<string, string> = {};
@@ -50,6 +44,12 @@ export class TwilioWebhookValidator {
       if (this.skipValidation) {
         logger.debug("Skipping Twilio signature validation (development mode)");
         return { valid: true, payload: params };
+      }
+
+      // Check signature header (only if not skipping validation)
+      if (!signature) {
+        logger.warn("Missing Twilio signature");
+        return { valid: false, error: "Missing X-Twilio-Signature header" };
       }
 
       // Validate auth token is configured

@@ -7,26 +7,39 @@ import { BlueprintGenerationService } from "../../blueprint-generation-service";
 import { ExerciseSelectionService } from "../template-services/exercise-selection-service";
 import { SMSResponse } from "../types";
 import { db } from "@acme/db/client";
-import { user, TrainingSession } from "@acme/db/schema";
-import { eq } from "@acme/db";
+import { user, TrainingSession, UserTrainingSession } from "@acme/db/schema";
+import { eq, and } from "@acme/db";
 import { getWorkoutTemplate } from "@acme/ai";
 
 const logger = createLogger("CheckInHandler");
 
 export class CheckInHandler {
-  async handle(
-    phoneNumber: string, 
-    messageContent: string,
-    messageSid: string,
-    intent: any
-  ): Promise<SMSResponse> {
+  async handle(payload: any): Promise<SMSResponse> {
     try {
-      // Process the check-in
-      const checkInResult = await processCheckIn(phoneNumber);
+      const phoneNumber = payload.From;
+      const messageContent = payload.Body;
+      const messageSid = payload.MessageSid;
+      const userId = payload.UserId;
+      const channel = payload.Channel;
+      
+      logger.info("Check-in handler called", {
+        phoneNumber,
+        messageContent,
+        userId,
+        channel,
+        hasUserId: !!userId,
+        isInApp: channel === 'in_app'
+      });
+      
+      // Process the check-in - use userId if available (web app), otherwise use phone
+      const checkInResult = userId && channel === 'in_app' 
+        ? await this.processCheckInByUserId(userId)
+        : await processCheckIn(phoneNumber);
       
       logger.info("Check-in processed", {
         success: checkInResult.success,
         userId: checkInResult.userId,
+        message: checkInResult.message,
         sessionId: checkInResult.sessionId,
         shouldStartPreferences: checkInResult.shouldStartPreferences,
       });
@@ -147,7 +160,7 @@ export class CheckInHandler {
         messageContent,
         responseMessage,
         messageSid,
-        intent,
+        payload, // Pass the full payload to access intent
         checkInResult
       );
 
@@ -172,11 +185,21 @@ export class CheckInHandler {
     inboundContent: string,
     outboundContent: string,
     messageSid: string,
-    intent: any,
+    payload: any,
     checkInResult: any
   ): Promise<void> {
     try {
-      const userInfo = await getUserByPhone(phoneNumber);
+      // For web app messages, we already have the user info from check-in result
+      let userInfo;
+      
+      if (payload.Channel === 'in_app' && checkInResult.userId) {
+        userInfo = {
+          userId: checkInResult.userId,
+          businessId: checkInResult.businessId
+        };
+      } else {
+        userInfo = await getUserByPhone(phoneNumber);
+      }
       
       if (!userInfo) {
         logger.warn("User not found for message saving", { phoneNumber });
@@ -191,8 +214,9 @@ export class CheckInHandler {
         content: inboundContent,
         phoneNumber,
         metadata: {
-          intent,
+          intent: payload.intent || { type: 'check_in' },
           twilioMessageSid: messageSid,
+          channel: payload.Channel,
         },
         status: 'delivered',
       });
@@ -229,6 +253,149 @@ export class CheckInHandler {
     } catch (error) {
       logger.error("Failed to get user name", { userId, error });
       return undefined;
+    }
+  }
+
+  private async processCheckInByUserId(userId: string): Promise<any> {
+    try {
+      logger.info("Processing check-in by userId", { userId });
+      
+      // Get user details
+      const [userRecord] = await db
+        .select()
+        .from(user)
+        .where(eq(user.id, userId))
+        .limit(1);
+      
+      if (!userRecord) {
+        logger.warn("No user found for userId", { userId });
+        return {
+          success: false,
+          message: "We couldn't find your account.",
+        };
+      }
+      
+      logger.info("User found", { 
+        userId: userRecord.id, 
+        businessId: userRecord.businessId, 
+        name: userRecord.name 
+      });
+      
+      // Find open session for user's business
+      const now = new Date();
+      const [openSession] = await db
+        .select()
+        .from(TrainingSession)
+        .where(
+          and(
+            eq(TrainingSession.businessId, userRecord.businessId),
+            eq(TrainingSession.status, "open")
+          )
+        )
+        .limit(1);
+      
+      if (!openSession) {
+        logger.warn("No open session found", { businessId: userRecord.businessId });
+        return {
+          success: false,
+          message: `Hello ${userRecord.name}! There's no open session at your gym right now. Please check with your trainer.`,
+        };
+      }
+      
+      logger.info("Open session found", { sessionId: openSession.id });
+      
+      // Check if already checked in
+      const [existingCheckIn] = await db
+        .select()
+        .from(UserTrainingSession)
+        .where(
+          and(
+            eq(UserTrainingSession.userId, userRecord.id),
+            eq(UserTrainingSession.trainingSessionId, openSession.id)
+          )
+        )
+        .limit(1);
+      
+      if (existingCheckIn && existingCheckIn.status === "checked_in") {
+        logger.info("User already checked in", { userId: userRecord.id, sessionId: openSession.id });
+        return {
+          success: true,
+          message: `Hello ${userRecord.name}! You're already checked in for this session!`,
+          userId: userRecord.id,
+          businessId: userRecord.businessId,
+          sessionId: openSession.id,
+          checkInId: existingCheckIn.id,
+          phoneNumber: userRecord.phone,
+          shouldStartPreferences: existingCheckIn.preferenceCollectionStep === "not_started",
+        };
+      }
+      
+      // Create or update check-in record
+      if (existingCheckIn) {
+        // Update existing registration to checked_in
+        await db
+          .update(UserTrainingSession)
+          .set({
+            status: "checked_in",
+            checkedInAt: now,
+          })
+          .where(eq(UserTrainingSession.id, existingCheckIn.id));
+        
+        logger.info("Updated check-in status", { 
+          userId: userRecord.id, 
+          sessionId: openSession.id,
+          checkInId: existingCheckIn.id 
+        });
+        
+        return {
+          success: true,
+          message: `Hello ${userRecord.name}! You're checked in for the session. Welcome!`,
+          userId: userRecord.id,
+          businessId: userRecord.businessId,
+          sessionId: openSession.id,
+          checkInId: existingCheckIn.id,
+          phoneNumber: userRecord.phone,
+          shouldStartPreferences: true,
+        };
+      } else {
+        // Create new check-in record
+        const [newCheckIn] = await db
+          .insert(UserTrainingSession)
+          .values({
+            userId: userRecord.id,
+            trainingSessionId: openSession.id,
+            status: "checked_in",
+            checkedInAt: now,
+          })
+          .returning();
+        
+        if (!newCheckIn) {
+          throw new Error("Failed to create check-in record");
+        }
+        
+        logger.info("Created new check-in", { 
+          userId: userRecord.id, 
+          sessionId: openSession.id,
+          checkInId: newCheckIn.id 
+        });
+        
+        return {
+          success: true,
+          message: `Hello ${userRecord.name}! You're checked in for the session. Welcome!`,
+          userId: userRecord.id,
+          businessId: userRecord.businessId,
+          sessionId: openSession.id,
+          checkInId: newCheckIn.id,
+          phoneNumber: userRecord.phone,
+          shouldStartPreferences: true,
+        };
+      }
+    } catch (error) {
+      logger.error("Check-in by userId failed", { userId, error });
+      return {
+        success: false,
+        message: "Sorry, something went wrong. Please try again or contact your trainer.",
+      };
     }
   }
 }
