@@ -211,7 +211,8 @@ export const FULL_BODY_BMF_TEMPLATE: WorkoutTemplate = {
       avoidance: "Any movements or joints we should be careful with?"
     },
     confirmationMessage: "Let's do this! Your BMF workout is ready. Time to move boldly!",
-    priorityFields: ['muscleTargets', 'avoidance', 'intensity']
+    priorityFields: ['muscleTargets', 'avoidance', 'intensity'],
+    showDeterministicSelections: true // Show the pre-selected exercises in check-in
   }
 };
 

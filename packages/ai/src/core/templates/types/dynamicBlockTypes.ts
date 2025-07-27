@@ -48,6 +48,8 @@ export interface SMSConfig {
   };
   confirmationMessage: string;
   priorityFields: string[]; // Which fields to prioritize for this template
+  showDeterministicSelections?: boolean; // Show deterministic exercise selections in check-in
+  customCheckIn?: boolean; // Use completely custom check-in logic
 }
 
 /**

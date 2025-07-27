@@ -3,10 +3,13 @@ import { saveMessage } from "../../messageService";
 import { createLogger } from "../../../utils/logger";
 import { WorkoutPreferenceService } from "../../workoutPreferenceService";
 import { TemplateSMSService } from "../template-sms-service";
+import { BlueprintGenerationService } from "../../blueprint-generation-service";
+import { ExerciseSelectionService } from "../template-services/exercise-selection-service";
 import { SMSResponse } from "../types";
 import { db } from "@acme/db/client";
-import { user } from "@acme/db/schema";
+import { user, TrainingSession } from "@acme/db/schema";
 import { eq } from "@acme/db";
+import { getWorkoutTemplate } from "@acme/ai";
 
 const logger = createLogger("CheckInHandler");
 
@@ -42,10 +45,93 @@ export class CheckInHandler {
           ? await TemplateSMSService.getSMSConfigForSession(checkInResult.sessionId)
           : null;
         
-        // Get template-aware response and preference prompt
-        responseMessage = TemplateSMSService.getCheckInResponse(smsConfig, userName);
-        const preferencePrompt = TemplateSMSService.getPreferencePrompt(smsConfig, userName);
-        responseMessage = `${responseMessage}\n\n${preferencePrompt}`;
+        // Check if this is a BMF template that needs deterministic selections
+        if (checkInResult.sessionId) {
+          const [session] = await db
+            .select({ templateType: TrainingSession.templateType })
+            .from(TrainingSession)
+            .where(eq(TrainingSession.id, checkInResult.sessionId))
+            .limit(1);
+          
+          const template = session?.templateType ? getWorkoutTemplate(session.templateType) : null;
+          
+          logger.info("Checking for BMF template in standard handler", {
+            sessionId: checkInResult.sessionId,
+            templateType: session?.templateType,
+            templateFound: !!template,
+            smsConfig: template?.smsConfig,
+            showDeterministicSelections: template?.smsConfig?.showDeterministicSelections,
+            isBMF: session?.templateType === 'full_body_bmf'
+          });
+          
+          // Generate blueprint and get deterministic selections for BMF
+          if (session?.templateType === 'full_body_bmf' || template?.smsConfig?.showDeterministicSelections) {
+            try {
+              logger.info("Attempting to generate blueprint and get selections", {
+                sessionId: checkInResult.sessionId,
+                templateType: session?.templateType
+              });
+              
+              // Try to generate blueprint first
+              const blueprintExists = await BlueprintGenerationService.ensureBlueprintExists(checkInResult.sessionId);
+              
+              let selections: any[] = [];
+              
+              if (blueprintExists) {
+                // Get selections from existing blueprint
+                selections = await ExerciseSelectionService.getDeterministicSelections(checkInResult.sessionId);
+                logger.info("Got selections from blueprint", {
+                  sessionId: checkInResult.sessionId,
+                  selectionCount: selections.length
+                });
+              } else {
+                // Use preview for check-in message
+                logger.info("Blueprint not available, using preview", {
+                  sessionId: checkInResult.sessionId,
+                  templateType: session?.templateType
+                });
+                selections = await ExerciseSelectionService.getDeterministicPreview(session.templateType);
+              }
+              
+              if (selections.length > 0) {
+                const clientName = ExerciseSelectionService.formatClientName(userName);
+                responseMessage = ExerciseSelectionService.formatSelectionsForSMS(selections, clientName);
+                
+                logger.info("Using deterministic selections in check-in", {
+                  sessionId: checkInResult.sessionId,
+                  selectionCount: selections.length,
+                  usedPreview: !blueprintExists
+                });
+              } else {
+                // Fall back to template response
+                logger.info("No deterministic selections found, using template response");
+                responseMessage = TemplateSMSService.getCheckInResponse(smsConfig, userName);
+                const preferencePrompt = TemplateSMSService.getPreferencePrompt(smsConfig, userName);
+                responseMessage = `${responseMessage}\n\n${preferencePrompt}`;
+              }
+            } catch (bmfError) {
+              logger.error("Error handling BMF template in check-in", {
+                error: bmfError,
+                sessionId: checkInResult.sessionId,
+                templateType: session?.templateType
+              });
+              // Fall back to standard template response
+              responseMessage = TemplateSMSService.getCheckInResponse(smsConfig, userName);
+              const preferencePrompt = TemplateSMSService.getPreferencePrompt(smsConfig, userName);
+              responseMessage = `${responseMessage}\n\n${preferencePrompt}`;
+            }
+          } else {
+            // Use standard template response
+            responseMessage = TemplateSMSService.getCheckInResponse(smsConfig, userName);
+            const preferencePrompt = TemplateSMSService.getPreferencePrompt(smsConfig, userName);
+            responseMessage = `${responseMessage}\n\n${preferencePrompt}`;
+          }
+        } else {
+          // No session ID, use standard response
+          responseMessage = TemplateSMSService.getCheckInResponse(smsConfig, userName);
+          const preferencePrompt = TemplateSMSService.getPreferencePrompt(smsConfig, userName);
+          responseMessage = `${responseMessage}\n\n${preferencePrompt}`;
+        }
         
         logger.info("Added template-based preference prompt to check-in response", {
           userId: checkInResult.userId,

@@ -37,6 +37,15 @@ export class TemplateSMSService {
       const templateType = session.templateType || 'workout';
       const template = getWorkoutTemplate(templateType);
 
+      logger.info("Getting SMS config for session", {
+        sessionId,
+        templateType: session.templateType,
+        defaultedTo: templateType,
+        templateFound: !!template,
+        hasSmsConfig: !!template?.smsConfig,
+        templateName: template?.name
+      });
+
       if (!template?.smsConfig) {
         logger.info("No SMS config for template", { templateType });
         return null;

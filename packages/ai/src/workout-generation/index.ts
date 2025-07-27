@@ -6,13 +6,7 @@ export { interpretWorkout } from "./workoutInterpretationGraph";
 // Workout generation
 export { generateWorkoutFromExercises } from './generateWorkoutFromExercises';
 
-// Workout templates
-export { 
-  getWorkoutTemplate, 
-  getWorkoutStructure,
-  WORKOUT_TEMPLATES 
-} from './templates/workoutTemplates';
-export type { WorkoutTemplateType } from './templates/workoutTemplates';
+// Workout templates - removed, use core/templates instead
 
 // Transformers
 export { 

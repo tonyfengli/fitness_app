@@ -1,27 +1,23 @@
 {
-  "timestamp": "2025-07-26T00:21:58.723Z",
+  "timestamp": "2025-07-27T04:04:51.560Z",
   "filters": {
-    "clientName": "Hilary Chan",
-    "strengthCapacity": "low",
-    "skillCapacity": "low",
-    "intensity": "moderate",
+    "clientName": "Tony Lee",
+    "strengthCapacity": "moderate",
+    "skillCapacity": "moderate",
+    "intensity": "high",
     "muscleTarget": [
-      "upper_back",
-      "quads"
+      "adductors",
+      "glutes"
     ],
-    "muscleLessen": [
-      "calves"
-    ],
+    "muscleLessen": [],
     "avoidJoints": [],
-    "includeExercises": [
-      "Nordic Hamstring Curl"
-    ],
+    "includeExercises": [],
     "avoidExercises": [],
     "sessionGoal": "strength",
     "isFullBody": true
   },
   "results": {
-    "totalExercises": 48,
+    "totalExercises": 117,
     "blockA": {
       "count": 0,
       "exercises": []

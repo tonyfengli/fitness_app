@@ -115,6 +115,77 @@ function getEquipmentFromExercise(exerciseName: string): string[] {
 }
 
 export const trainingSessionRouter = {
+  // Get deterministic exercise selections for a session
+  getDeterministicSelections: protectedProcedure
+    .input(z.object({
+      sessionId: z.string().uuid()
+    }))
+    .query(async ({ ctx, input }) => {
+      const user = ctx.session?.user as SessionUser;
+      
+      // Get session with template config
+      const [session] = await ctx.db
+        .select({
+          id: TrainingSession.id,
+          templateConfig: TrainingSession.templateConfig,
+          templateType: TrainingSession.templateType
+        })
+        .from(TrainingSession)
+        .where(eq(TrainingSession.id, input.sessionId))
+        .limit(1);
+
+      if (!session) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Session not found'
+        });
+      }
+
+      const templateConfig = session.templateConfig as any;
+      const blueprint = templateConfig?.blueprint;
+      
+      if (!blueprint?.blocks) {
+        return { selections: [] };
+      }
+
+      // Extract deterministic selections for the requesting user
+      const selections = [];
+      
+      for (const block of blueprint.blocks) {
+        if (block.selectionStrategy === 'deterministic') {
+          // Check individual candidates for this user
+          const userCandidates = block.individualCandidates?.[user.id];
+          if (userCandidates?.exercises?.length > 0) {
+            selections.push({
+              roundId: block.blockId,
+              roundName: block.name,
+              exercise: {
+                name: userCandidates.exercises[0].name,
+                movementPattern: userCandidates.exercises[0].movementPattern,
+                primaryMuscle: userCandidates.exercises[0].primaryMuscle
+              }
+            });
+          } else if (block.sharedCandidates?.length > 0) {
+            // Fall back to shared candidates
+            selections.push({
+              roundId: block.blockId,
+              roundName: block.name,
+              exercise: {
+                name: block.sharedCandidates[0].name,
+                movementPattern: block.sharedCandidates[0].movementPattern,
+                primaryMuscle: block.sharedCandidates[0].primaryMuscle
+              }
+            });
+          }
+        }
+      }
+
+      return { 
+        selections,
+        templateType: session.templateType,
+        hasBlueprint: !!blueprint
+      };
+    }),
   // Create a new training session (trainers only)
   create: protectedProcedure
     .input(CreateTrainingSessionSchema)

@@ -1,10 +1,11 @@
 import { db } from "@acme/db/client";
-import { TrainingSession } from "@acme/db/schema";
+import { TrainingSession, user as userTable } from "@acme/db/schema";
 import { eq } from "@acme/db";
 import { WorkoutPreferenceService } from "../workoutPreferenceService";
 import { ConversationStateService } from "../conversationStateService";
 import { getUserByPhone } from "../checkInService";
 import { createLogger } from "../../utils/logger";
+import { SMSDebugLogger } from "../../utils/smsDebugLogger";
 import { TwilioWebhookValidator } from "./webhook-validator";
 import { SMSIntentRouter } from "./intent-router";
 import { CheckInHandler } from "./handlers/check-in-handler";
@@ -13,6 +14,7 @@ import { DisambiguationHandler } from "./handlers/disambiguation-handler";
 import { PreferenceUpdateHandler } from "./handlers/preference-update-handler";
 import { DefaultHandler } from "./handlers/default-handler";
 import { DummyHandler } from "./handlers/dummy-handler";
+import { TemplateCheckInHandler } from "./handlers/template-check-in-handler";
 import { FlowRouter } from "./flow-router";
 import { SMSResponseSender } from "./response-sender";
 import { TwilioSMSPayload, SMSResponse } from "./types";
@@ -65,9 +67,31 @@ export class SMSWebhookHandler {
         body: payload.Body,
         messageSid: payload.MessageSid 
       });
+      
+      // Get user info for session tracking
+      const preliminaryUserInfo = await getUserByPhone(payload.From);
+      
+      // Log to debug session
+      await SMSDebugLogger.logInboundMessage(
+        payload.From,
+        payload.Body,
+        preliminaryUserInfo?.trainingSessionId,
+        { messageSid: payload.MessageSid }
+      );
 
       // Step 2: Route and handle the message
       const response = await this.routeAndHandle(payload);
+
+      // Log outbound message
+      const userInfo = await getUserByPhone(payload.From);
+      if (userInfo?.trainingSessionId) {
+        await SMSDebugLogger.logOutboundMessage(
+          payload.From,
+          response.message,
+          userInfo.trainingSessionId,
+          response.metadata
+        );
+      }
 
       // Step 3: Send SMS response asynchronously
       this.responseSender.sendResponseAsync(payload.From, response.message);
@@ -88,12 +112,37 @@ export class SMSWebhookHandler {
       
       if (userInfo?.trainingSessionId) {
         const [session] = await db
-          .select({ templateType: TrainingSession.templateType })
+          .select({ 
+            templateType: TrainingSession.templateType,
+            id: TrainingSession.id 
+          })
           .from(TrainingSession)
           .where(eq(TrainingSession.id, userInfo.trainingSessionId))
           .limit(1);
         
         templateType = session?.templateType || null;
+        
+        logger.info("Session template check", {
+          sessionId: session?.id,
+          templateType: session?.templateType,
+          userTrainingSessionId: userInfo.trainingSessionId
+        });
+        
+        // Log routing info
+        await SMSDebugLogger.logRouting(
+          payload.From,
+          {
+            hasUserInfo: !!userInfo,
+            hasTrainingSessionId: !!userInfo?.trainingSessionId,
+            templateType,
+            shouldUseDummyHandler: DummyHandler.shouldUseDummyHandler(templateType)
+          },
+          userInfo.trainingSessionId
+        );
+        
+        if (templateType && userInfo.trainingSessionId) {
+          SMSDebugLogger.setTemplateType(userInfo.trainingSessionId, templateType);
+        }
         
         // Check if we should use dummy handler
         if (DummyHandler.shouldUseDummyHandler(templateType)) {
@@ -164,6 +213,36 @@ export class SMSWebhookHandler {
       // Route based on intent
       switch (interpretation.intent.type) {
         case "check_in":
+          logger.info("Check-in intent detected", {
+            hasUserInfo: !!userInfo,
+            hasTrainingSessionId: !!userInfo?.trainingSessionId,
+            templateType,
+            shouldUseTemplateHandler: !!(userInfo && userInfo.trainingSessionId && templateType)
+          });
+          
+          // Check if we should use template-specific check-in
+          if (userInfo && userInfo.trainingSessionId && templateType) {
+            logger.info("Using template check-in handler", { templateType });
+            
+            // Get user details for the handler
+            const [userDetails] = await db
+              .select({ name: userTable.name })
+              .from(userTable)
+              .where(eq(userTable.id, userInfo.userId))
+              .limit(1);
+            
+            return await TemplateCheckInHandler.handle(
+              payload.From,
+              payload.Body,
+              payload.MessageSid,
+              {
+                ...userInfo,
+                userName: userDetails?.name || null
+              }
+            );
+          }
+          
+          // Otherwise use standard check-in
           return await this.checkInHandler.handle(
             payload.From,
             payload.Body,
