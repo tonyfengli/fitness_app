@@ -17,31 +17,42 @@ const logger = createLogger("BlueprintGenerationService");
 
 export class BlueprintGenerationService {
   /**
-   * Generate and store blueprint for a session if it doesn't exist
+   * Generate blueprint for a session and return it (no DB storage)
    */
-  static async ensureBlueprintExists(sessionId: string): Promise<boolean> {
+  static async generateBlueprint(sessionId: string): Promise<any | null> {
+    console.log("[BlueprintGenerationService] generateBlueprint called!", { sessionId });
+    
     try {
-      // Check if blueprint already exists
+      console.log("[BlueprintGenerationService] Inside try block");
+      
+      // Log the calling context
+      const stack = new Error().stack;
+      const caller = stack?.split('\n')[3]?.trim() || 'unknown';
+      
+      console.log("[BlueprintGenerationService] About to log with logger");
+      logger.info("Starting blueprint generation", { 
+        sessionId,
+        caller,
+        timestamp: new Date().toISOString(),
+        nodeEnv: process.env.NODE_ENV
+      });
+      console.log("[BlueprintGenerationService] Logger call completed");
+      
+      // Get the session
+      console.log("[BlueprintGenerationService] About to query session");
       const [session] = await db
         .select({
-          templateConfig: TrainingSession.templateConfig,
           templateType: TrainingSession.templateType,
           businessId: TrainingSession.businessId
         })
         .from(TrainingSession)
         .where(eq(TrainingSession.id, sessionId))
         .limit(1);
+      console.log("[BlueprintGenerationService] Session query result:", session);
 
       if (!session) {
         logger.error("Session not found", { sessionId });
-        return false;
-      }
-
-      // Check if we already have a full blueprint (not just summary)
-      const config = session.templateConfig as any;
-      if (config?.blueprint?.blocks) {
-        logger.info("Blueprint already exists", { sessionId });
-        return true;
+        return null;
       }
 
       // Get all checked-in clients with preferences
@@ -76,13 +87,35 @@ export class BlueprintGenerationService {
       });
 
       // Get all exercises (no business filtering for now)
+      logger.info("About to query exercises from database", {
+        sessionId,
+        dbClient: !!db,
+        exercisesTable: !!exercises
+      });
+      
+      const startQuery = Date.now();
       const businessExercises = await db
         .select()
         .from(exercises);
+      const queryTime = Date.now() - startQuery;
+
+      logger.info("Exercise query results", { 
+        exerciseCount: businessExercises.length,
+        sessionId,
+        queryTimeMs: queryTime,
+        firstFewExercises: businessExercises.slice(0, 3).map(e => ({ 
+          id: e.id, 
+          name: e.name,
+          strengthLevel: e.strengthLevel,
+          complexityLevel: e.complexityLevel,
+          primaryMuscle: e.primaryMuscle
+        })),
+        sampleFieldCheck: businessExercises[0] ? Object.keys(businessExercises[0]) : []
+      });
 
       if (businessExercises.length === 0) {
         logger.error("No exercises found for business", { businessId: session.businessId });
-        return false;
+        return null;
       }
 
       // Process each client
@@ -103,14 +136,46 @@ export class BlueprintGenerationService {
             avoidJoints: prefs?.avoidJoints || []
           };
 
-          const filteredResult = filterExercises({
+          logger.info("About to call filterExercises", {
+            clientId: client.userId,
+            exerciseCount: businessExercises.length,
+            filterInput,
+            firstExerciseBeforeFilter: businessExercises[0] ? { id: businessExercises[0].id, name: businessExercises[0].name } : null
+          });
+
+          const filterStart = Date.now();
+          
+          // Log the exact data being passed to filterExercises
+          logger.info("Calling filterExercises with data", {
+            clientId: client.userId,
+            exerciseArrayLength: (businessExercises as Exercise[]).length,
+            isArray: Array.isArray(businessExercises),
+            exerciseType: typeof businessExercises,
+            sampleExercise: businessExercises[0] ? {
+              ...businessExercises[0],
+              hasStrengthLevel: 'strengthLevel' in businessExercises[0],
+              hasComplexityLevel: 'complexityLevel' in businessExercises[0]
+            } : null
+          });
+          
+          const filteredResult = await filterExercises({
             exercises: businessExercises as Exercise[],
             clientContext: filterInput,
             includeScoring: false
           });
+          const filterTime = Date.now() - filterStart;
 
-          // Check if we have exercises to score
-          const exercisesToScore = filteredResult.exercises || [];
+          // filterExercises returns an array directly
+          const exercisesToScore = filteredResult || [];
+          
+          logger.info("Client filter results", {
+            clientId: client.userId,
+            exercisesBeforeFilter: (businessExercises as Exercise[]).length,
+            exercisesAfterFilter: exercisesToScore.length,
+            filteredResultType: Array.isArray(filteredResult) ? 'array' : typeof filteredResult,
+            filterTimeMs: filterTime,
+            firstFilteredExercise: exercisesToScore[0] ? { id: exercisesToScore[0].id, name: exercisesToScore[0].name } : null
+          });
           
           // Score exercises only if we have some
           const scoredExercises = exercisesToScore.length > 0 
@@ -174,24 +239,21 @@ export class BlueprintGenerationService {
         preScoredExercises
       );
 
-      // Store full blueprint in templateConfig
-      await db
-        .update(TrainingSession)
-        .set({
-          templateConfig: {
-            blueprint,
-            generatedAt: new Date().toISOString(),
-            clientCount: clientsData.length
-          }
-        })
-        .where(eq(TrainingSession.id, sessionId));
+      logger.info("Blueprint generated successfully", { 
+        sessionId,
+        blockCount: blueprint.blocks.length
+      });
 
-      logger.info("Blueprint stored successfully", { sessionId });
-      return true;
+      return blueprint;
 
     } catch (error) {
-      logger.error("Error generating blueprint", error);
-      return false;
+      console.error("[BlueprintGenerationService] Error in generateBlueprint:", error);
+      logger.error("Error generating blueprint", {
+        errorMessage: error instanceof Error ? error.message : 'Unknown error',
+        errorStack: error instanceof Error ? error.stack : undefined,
+        sessionId
+      });
+      return null;
     }
   }
 }

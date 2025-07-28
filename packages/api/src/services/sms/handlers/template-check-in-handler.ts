@@ -139,7 +139,7 @@ export class TemplateCheckInHandler {
           templateType: session.templateType,
           showDeterministicSelections: template?.smsConfig?.showDeterministicSelections
         });
-        await BlueprintGenerationService.ensureBlueprintExists(session.id);
+        await BlueprintGenerationService.generateBlueprint(session.id);
       }
 
       // Get deterministic selections if available

@@ -152,7 +152,7 @@ export class ExerciseSelectionService {
     const round2 = selections.find(s => s.roundId === 'Round2');
 
     if (round1 && round2) {
-      return `You're checked in, ${clientName}! We've set you up for a full-body workout: starting with ${round1.exerciseName}, then ${round2.exerciseName}. Does that work for you? If not, just let me know what you'd prefer, and I can suggest some alternatives.`;
+      return `Your first set of exercises is on the TV—feel free to request any swaps. The rest of your workout will build based on your preferences and the group flow.`;
     }
 
     // Fallback for other templates or partial selections

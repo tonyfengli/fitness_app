@@ -255,6 +255,12 @@ export default function GroupVisualizationPage() {
                   View Workouts
                 </button>
                 <button
+                  onClick={() => router.push(`/preferences?sessionId=${sessionId}`)}
+                  className="px-3 py-1 text-sm bg-purple-600 text-white hover:bg-purple-700 rounded-md transition-colors"
+                >
+                  View Preferences
+                </button>
+                <button
                   onClick={() => router.back()}
                   className="px-3 py-1 text-sm text-gray-600 hover:text-gray-900"
                 >
@@ -277,7 +283,15 @@ export default function GroupVisualizationPage() {
         <div className="flex-1 flex flex-col min-h-0">
           {/* Client Overview */}
           <div className="mb-1 flex-shrink-0">
-            <h2 className="text-xs font-bold text-gray-900">Clients</h2>
+            <div className="flex items-center justify-between mb-1">
+              <h2 className="text-xs font-bold text-gray-900">Clients</h2>
+              <div className="flex items-center gap-3 text-[8px]">
+                <span className="flex items-center gap-1">
+                  <span className="text-green-600">✓</span>
+                  <span className="text-gray-500">Client request</span>
+                </span>
+              </div>
+            </div>
             <div className="grid grid-cols-4 gap-0.5">
             {groupContext.clients.map((client) => {
               // Get exercises for this client in the selected block

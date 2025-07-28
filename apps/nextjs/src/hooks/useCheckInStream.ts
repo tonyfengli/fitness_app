@@ -167,6 +167,10 @@ export function useCheckInStream({
 
   // Connect on mount and disconnect on unmount
   useEffect(() => {
+    // SSE temporarily disabled
+    return;
+    
+    /*
     if (sessionId) {
       connect();
     }
@@ -174,6 +178,7 @@ export function useCheckInStream({
     return () => {
       disconnect();
     };
+    */
     // Only re-run if sessionId changes
   }, [sessionId]);
 

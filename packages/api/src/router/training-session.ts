@@ -25,7 +25,7 @@ import {
   type Exercise
 } from "@acme/ai";
 
-import { protectedProcedure } from "../trpc";
+import { protectedProcedure, publicProcedure } from "../trpc";
 import type { SessionUser } from "../types/auth";
 
 // Helper function to calculate score distribution
@@ -1075,158 +1075,29 @@ export const trainingSessionRouter = {
       }
       
       // Import what we need
-      const { ExerciseFilterService } = await import("../services/exercise-filter-service");
-      const { groupWorkoutTestDataLogger } = await import("../utils/groupWorkoutTestDataLogger");
-      const filterService = new ExerciseFilterService(ctx.db);
-      
-      // Create client contexts from the checked-in clients
-      const initialClientContexts = clientsWithPreferences.map(client => ({
-        user_id: client.userId,
-        name: client.userName ?? 'Unknown',
-        strength_capacity: (client.userProfile?.strengthLevel ?? 'moderate') as "very_low" | "low" | "moderate" | "high",
-        skill_capacity: (client.userProfile?.skillLevel ?? 'moderate') as "very_low" | "low" | "moderate" | "high",
-        primary_goal: client.preferences?.sessionGoal === 'strength' ? 'strength' as const : 'general_fitness' as const,
-        intensity: (client.preferences?.intensity ?? 'moderate') as "low" | "moderate" | "high",
-        muscle_target: client.preferences?.muscleTargets ?? [],
-        muscle_lessen: client.preferences?.muscleLessens ?? [],
-        exercise_requests: {
-          include: client.preferences?.includeExercises ?? [],
-          avoid: client.preferences?.avoidExercises ?? []
-        },
-        avoid_joints: client.preferences?.avoidJoints ?? [],
-        business_id: user.businessId,
-        templateType: session.templateType as "standard" | "circuit" | "full_body" | undefined,
-        default_sets: client.userProfile?.defaultSets ?? 20
-      }));
-      
-      // Create initial GroupContext for logging
-      const initialGroupContext: GroupContext = {
-        clients: initialClientContexts,
+      console.log('[visualizeGroupWorkout] Starting import and exercise filtering', {
         sessionId: input.sessionId,
-        businessId: user.businessId,
-        templateType: session.templateType as 'workout' | 'circuit_training' | 'full_body' | 'full_body_bmf',
-      };
+        timestamp: new Date().toISOString()
+      });
       
-      // Initialize test data logging
-      groupWorkoutTestDataLogger.initSession(input.sessionId, initialGroupContext);
+      const { WorkoutBlueprintService } = await import("../services/workout-blueprint-service");
+      const { groupWorkoutTestDataLogger } = await import("../utils/groupWorkoutTestDataLogger");
       
-      console.log('💪 Running Phase 1 & 2 for each client...');
-      
+      // Use shared service to prepare clients and generate blueprint
       const phase1_2StartTime = Date.now();
       
-      // Process each client through Phase 1 & 2 in parallel
-      const clientProcessingResults = await Promise.all(
-        clientsWithPreferences.map(async (client) => {
-          const prefs = client.preferences;
-          const clientStartTime = Date.now();
-          
-          // Get user profile for strength and skill levels
-          const userProfile = await ctx.db.query.UserProfile.findFirst({
-            where: and(
-              eq(UserProfile.userId, client.userId),
-              eq(UserProfile.businessId, user.businessId)
-            ),
-          });
-          
-          // Create filter input matching the expected format
-          const filterInput = {
-            clientId: client.userId,
-            clientName: client.userName || client.userEmail,
-            strengthCapacity: (userProfile?.strengthLevel || 'moderate') as 'very_low' | 'low' | 'moderate' | 'high',
-            skillCapacity: (userProfile?.skillLevel || 'moderate') as 'very_low' | 'low' | 'moderate' | 'high',
-            sessionGoal: (prefs?.sessionGoal as 'strength' | 'mobility' | 'general_fitness') || 'strength',
-            intensity: (prefs?.intensity as 'low' | 'moderate' | 'high') || 'moderate',
-            template: session.templateType === 'full_body_bmf' ? 'full_body' : 'standard' as const, // Use appropriate template based on session
-            includeExercises: prefs?.includeExercises || [],
-            avoidExercises: prefs?.avoidExercises || [],
-            muscleTarget: prefs?.muscleTargets || [],
-            muscleLessen: prefs?.muscleLessens || [],
-            avoidJoints: prefs?.avoidJoints || [],
-            debug: true, // Enable debug for visibility
-          };
-          
-          console.log(`  📋 Processing client ${client.userName || client.userId}...`);
-          console.log(`    Strength: ${filterInput.strengthCapacity}, Skill: ${filterInput.skillCapacity}`);
-          
-          // Run Phase 1 & 2 using the filter service
-          const filteredResult = await filterService.filterForWorkoutGeneration(filterInput, {
-            userId: user.id, // Keep trainer ID for context
-            businessId: user.businessId
-          });
-          
-          const clientProcessingTime = Date.now() - clientStartTime;
-          
-          console.log(`  ✅ Client ${client.userName}: ${filteredResult.exercises.length} exercises filtered & scored`);
-          
-          // Log client processing data
-          groupWorkoutTestDataLogger.logClientProcessing(
-            input.sessionId,
-            client.userId,
-            {
-              stats: {
-                totalExercises: filteredResult.totalExercises || 1000,
-                afterStrengthFilter: filteredResult.exercises.length,
-                afterSkillFilter: filteredResult.exercises.length,
-                afterJointFilter: filteredResult.exercises.length,
-                afterAvoidFilter: filteredResult.exercises.length,
-                finalCount: filteredResult.exercises.length
-              },
-              muscleTarget: prefs?.muscleTargets || [],
-              muscleLessen: prefs?.muscleLessens || [],
-              includeExercises: prefs?.includeExercises || [],
-              avoidExercises: prefs?.avoidExercises || [],
-              avoidJoints: prefs?.avoidJoints || []
-            },
-            filteredResult.exercises
-          );
-          
-          // Create ClientContext for group processing
-          const clientContext: ClientContext = {
-            user_id: client.userId,
-            name: client.userName || client.userEmail,
-            strength_capacity: filterInput.strengthCapacity,
-            skill_capacity: filterInput.skillCapacity,
-            intensity: filterInput.intensity,
-            primary_goal: filterInput.sessionGoal,
-            muscle_target: filterInput.muscleTarget,
-            muscle_lessen: filterInput.muscleLessen,
-            exercise_requests: {
-              include: filterInput.includeExercises,
-              avoid: filterInput.avoidExercises
-            },
-            avoid_joints: filterInput.avoidJoints,
-          };
-          
-          return {
-            clientContext,
-            filteredExercises: filteredResult.exercises, // These are already scored
-          };
-        })
-      );
+      const { clientContexts, preScoredExercises, exercisePool, groupContext } = 
+        await WorkoutBlueprintService.prepareClientsForBlueprint(
+          input.sessionId,
+          user.businessId,
+          user.id
+        );
       
       const phase1_2Time = Date.now() - phase1_2StartTime;
+      
+      // Initialize test data logging
+      groupWorkoutTestDataLogger.initSession(input.sessionId, groupContext);
       groupWorkoutTestDataLogger.updateTiming(input.sessionId, 'phase1_2', phase1_2Time);
-      
-      // Extract client contexts and create pre-scored exercise map
-      const clientContexts = clientProcessingResults.map(r => r.clientContext);
-      const preScoredExercises = new Map<string, ScoredExercise[]>();
-      
-      // Build the pre-scored exercises map and collect unique exercises WITHOUT scores
-      const allFilteredExercises = new Map<string, any>();
-      for (const result of clientProcessingResults) {
-        preScoredExercises.set(result.clientContext.user_id, result.filteredExercises);
-        for (const exercise of result.filteredExercises) {
-          // Only add the exercise if we haven't seen it before
-          // This prevents overwriting with different client's scores
-          if (!allFilteredExercises.has(exercise.id)) {
-            // Strip the score to create a clean exercise for the pool
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars
-            const { score, scoreBreakdown, ...cleanExercise } = exercise;
-            allFilteredExercises.set(exercise.id, cleanExercise as Exercise);
-          }
-        }
-      }
-      const exercisePool = Array.from(allFilteredExercises.values());
       
       console.log(`✅ Total unique exercises across all clients: ${exercisePool.length}`);
       
@@ -1241,14 +1112,6 @@ export const trainingSessionRouter = {
           }
         }
       }
-      
-      // Create GroupContext with dynamic template type from existing session
-      const groupContext: GroupContext = {
-        clients: clientContexts,
-        sessionId: input.sessionId,
-        businessId: user.businessId,
-        templateType: (session.templateType ?? 'workout') as 'workout' | 'circuit_training' | 'full_body' | 'full_body_bmf', // Use session's template or default
-      };
       
       // Run Phase A & B to generate blueprint
       console.log('🚀 Running Phase A & B with GroupContext:', {
@@ -1440,37 +1303,65 @@ export const trainingSessionRouter = {
         
         // We'll create workouts after LLM generation
         
-        // Extract top exercise for each client from Round 1
+        // Extract top exercise for each client from Round 1, checking for overrides
         const round1Assignments = clientsWithPreferences.map(client => {
           const clientData = round1Block.individualCandidates[client.user_id];
-          const topExercise = clientData?.exercises?.[0]; // Get top candidate
+          let selectedExercise = clientData?.exercises?.[0]; // Default to top candidate
           
-          if (!topExercise) {
+          // Check if client has an override for Round1
+          if (client.preferences?.includeExercises && client.preferences.includeExercises.length > 0) {
+            // Look for a lower body exercise in their includes
+            const lowerBodyOverride = clientData?.exercises?.find(ex => 
+              client.preferences.includeExercises.some(included => 
+                included.toLowerCase() === ex.name.toLowerCase()
+              ) && ['squat', 'hinge', 'lunge'].includes(ex.movementPattern || '')
+            );
+            
+            if (lowerBodyOverride) {
+              selectedExercise = lowerBodyOverride;
+            }
+          }
+          
+          if (!selectedExercise) {
             throw new Error(`No Round 1 exercise found for client ${client.name}`);
           }
           
           return {
             clientId: client.user_id,
             clientName: client.name,
-            exercise: topExercise.name,
-            equipment: getEquipmentFromExercise(topExercise.name)
+            exercise: selectedExercise.name,
+            equipment: getEquipmentFromExercise(selectedExercise.name)
           };
         });
         
-        // Extract top exercise for each client from Round 2
+        // Extract top exercise for each client from Round 2, checking for overrides
         const round2Assignments = clientsWithPreferences.map(client => {
           const clientData = round2Block.individualCandidates[client.user_id];
-          const topExercise = clientData?.exercises?.[0]; // Get top candidate
+          let selectedExercise = clientData?.exercises?.[0]; // Default to top candidate
           
-          if (!topExercise) {
+          // Check if client has an override for Round2
+          if (client.preferences?.includeExercises && client.preferences.includeExercises.length > 0) {
+            // Look for a pull exercise in their includes
+            const pullOverride = clientData?.exercises?.find(ex => 
+              client.preferences.includeExercises.some(included => 
+                included.toLowerCase() === ex.name.toLowerCase()
+              ) && ['vertical_pull', 'horizontal_pull'].includes(ex.movementPattern || '')
+            );
+            
+            if (pullOverride) {
+              selectedExercise = pullOverride;
+            }
+          }
+          
+          if (!selectedExercise) {
             throw new Error(`No Round 2 exercise found for client ${client.name}`);
           }
           
           return {
             clientId: client.user_id,
             clientName: client.name,
-            exercise: topExercise.name,
-            equipment: getEquipmentFromExercise(topExercise.name)
+            exercise: selectedExercise.name,
+            equipment: getEquipmentFromExercise(selectedExercise.name)
           };
         });
         
@@ -2073,5 +1964,853 @@ export const trainingSessionRouter = {
           message: "Failed to fetch active session",
         });
       }
+    }),
+
+  sendSessionStartMessages: protectedProcedure
+    .input(
+      z.object({
+        sessionId: z.string(),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      try {
+        // Verify trainer has access to this session
+        const [session] = await db
+          .select()
+          .from(TrainingSession)
+          .where(
+            and(
+              eq(TrainingSession.id, input.sessionId),
+              eq(TrainingSession.businessId, ctx.session.user.businessId!)
+            )
+          )
+          .limit(1);
+
+        if (!session) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Session not found",
+          });
+        }
+
+        // Get all checked-in clients with their phone numbers
+        const checkedInClients = await db
+          .select({
+            userId: UserTrainingSession.userId,
+            userName: userTable.name,
+            userPhone: userTable.phone,
+            status: UserTrainingSession.status,
+          })
+          .from(UserTrainingSession)
+          .innerJoin(userTable, eq(UserTrainingSession.userId, userTable.id))
+          .where(
+            and(
+              eq(UserTrainingSession.trainingSessionId, input.sessionId),
+              eq(UserTrainingSession.status, "checked_in")
+            )
+          );
+
+        if (checkedInClients.length === 0) {
+          return {
+            success: true,
+            sentCount: 0,
+            message: "No checked-in clients to send messages to",
+          };
+        }
+
+        // Import required services
+        const { WorkoutBlueprintService } = await import("../services/workout-blueprint-service");
+        const { twilioClient } = await import("../services/twilio");
+        const { getWorkoutTemplate } = await import("@acme/ai");
+        const { messages } = await import("@acme/db/schema");
+        const { WorkoutPreferenceService } = await import("../services/workoutPreferenceService");
+
+        // Get template configuration
+        const template = session.templateType ? getWorkoutTemplate(session.templateType) : null;
+        const showDeterministicSelections = template?.smsConfig?.showDeterministicSelections;
+        
+        console.log("[sendSessionStartMessages] Template check:", {
+          sessionId: input.sessionId,
+          templateType: session.templateType,
+          hasTemplate: !!template,
+          showDeterministicSelections,
+          smsConfig: template?.smsConfig,
+          checkedInClientsCount: checkedInClients.length
+        });
+
+        // For BMF templates, auto-populate includeExercises with deterministic selections
+        console.log("[sendSessionStartMessages] Checking auto-population conditions:", {
+          showDeterministicSelections,
+          templateType: session.templateType,
+          shouldAutoPopulate: showDeterministicSelections && session.templateType
+        });
+        
+        if (showDeterministicSelections && session.templateType) {
+          try {
+            console.log("[sendSessionStartMessages] Starting auto-population for BMF template", {
+              sessionId: session.id,
+              timestamp: new Date().toISOString(),
+              checkedInClientsCount: checkedInClients.length
+            });
+            
+            // Generate blueprint using shared service
+            const blueprintStart = Date.now();
+            const blueprint = await WorkoutBlueprintService.generateBlueprintWithCache(
+              input.sessionId,
+              session.businessId,
+              ctx.session.user.id
+            );
+            const blueprintTime = Date.now() - blueprintStart;
+            
+            console.log("[sendSessionStartMessages] Blueprint generation completed", {
+              sessionId: session.id,
+              timeMs: blueprintTime,
+              hasBlueprint: !!blueprint,
+              blockCount: blueprint?.blocks?.length || 0
+            });
+            
+            if (!blueprint) {
+              console.error("[sendSessionStartMessages] Blueprint generation failed");
+              // Continue anyway - we'll still send messages even if blueprint generation fails
+            } else {
+              console.log("[sendSessionStartMessages] Blueprint generated successfully:", {
+                blockCount: blueprint.blocks?.length || 0,
+                blockIds: blueprint.blocks?.map((b: any) => b.blockId) || []
+              });
+              
+              // Find Round1 and Round2 blocks
+              const round1Block = blueprint.blocks.find((b: any) => b.blockId === 'Round1');
+              const round2Block = blueprint.blocks.find((b: any) => b.blockId === 'Round2');
+              
+              // Get all checked-in clients
+              const clientsToProcess = await db
+                .select({
+                  userId: UserTrainingSession.userId
+                })
+                .from(UserTrainingSession)
+                .where(
+                  and(
+                    eq(UserTrainingSession.trainingSessionId, input.sessionId),
+                    eq(UserTrainingSession.status, "checked_in")
+                  )
+                );
+
+              // For each client, create/update WorkoutPreferences with includeExercises
+              for (const client of clientsToProcess) {
+                try {
+                  const exercisesToInclude: string[] = [];
+                  
+                  // Extract Round 1 exercise from blueprint
+                  const round1Exercises = round1Block?.individualCandidates?.[client.userId]?.exercises;
+                  if (round1Exercises && round1Exercises.length > 0) {
+                    const exerciseName = round1Exercises[0].name;
+                    exercisesToInclude.push(exerciseName);
+                    console.log(`Found Round1 exercise for ${client.userId}:`, exerciseName);
+                  }
+                  
+                  // Extract Round 2 exercise from blueprint
+                  const round2Exercises = round2Block?.individualCandidates?.[client.userId]?.exercises;
+                  if (round2Exercises && round2Exercises.length > 0) {
+                    const exerciseName = round2Exercises[0].name;
+                    exercisesToInclude.push(exerciseName);
+                    console.log(`Found Round2 exercise for ${client.userId}:`, exerciseName);
+                  }
+
+                  if (exercisesToInclude.length > 0) {
+                    // Save these exercises to includeExercises
+                    try {
+                      console.log(`[sendSessionStartMessages] Attempting to save preferences for ${client.userId}`, {
+                        userId: client.userId,
+                        sessionId: input.sessionId,
+                        businessId: session.businessId,
+                        exercisesToInclude
+                      });
+                      
+                      await WorkoutPreferenceService.savePreferences(
+                        client.userId,
+                        input.sessionId,
+                        session.businessId,
+                        {
+                          includeExercises: exercisesToInclude
+                        },
+                        "preferences_active"
+                      );
+                      
+                      console.log(`[sendSessionStartMessages] Successfully auto-populated includeExercises for ${client.userId}:`, exercisesToInclude);
+                    } catch (saveError) {
+                      console.error(`[sendSessionStartMessages] Failed to save preferences for ${client.userId}:`, saveError);
+                      throw saveError; // Re-throw to be caught by outer try-catch
+                    }
+                    
+                    // Verify the preferences were saved
+                    const [savedPrefs] = await db
+                      .select()
+                      .from(WorkoutPreferences)
+                      .where(
+                        and(
+                          eq(WorkoutPreferences.userId, client.userId),
+                          eq(WorkoutPreferences.trainingSessionId, input.sessionId)
+                        )
+                      )
+                      .limit(1);
+                    
+                    console.log(`[sendSessionStartMessages] Verified saved preferences for ${client.userId}:`, {
+                      exists: !!savedPrefs,
+                      includeExercises: savedPrefs?.includeExercises
+                    });
+                  } else {
+                    console.warn(`No exercises found to auto-populate for ${client.userId}`);
+                  }
+                } catch (error) {
+                  console.error(`Error auto-populating preferences for ${client.userId}:`, error);
+                }
+              }
+            }
+          } catch (error) {
+            console.error("Error auto-populating includeExercises:", error);
+          }
+        }
+
+        // Send messages to all checked-in clients
+        const sendPromises = checkedInClients.map(async (client) => {
+          try {
+            // Generate preference link with network IP for mobile access
+            const baseUrl = process.env.NEXTAUTH_URL || 'http://192.168.68.133:3000';
+            const preferenceLink = `${baseUrl}/preferences/client/${session.id}/${client.userId}`;
+            
+            // Simple message for all templates
+            const messageBody = `Your workout preferences are ready to customize: 
+${preferenceLink}
+
+Set your goals and preferences for today's session.`;
+
+            // Create message record in database for all clients
+            await db.insert(messages).values({
+              userId: client.userId,
+              businessId: session.businessId,
+              direction: 'outbound' as const,
+              channel: client.userPhone ? 'sms' : 'in_app',
+              content: messageBody,
+              phoneNumber: client.userPhone || null,
+              metadata: {
+                sentBy: ctx.session.user.id,
+                sessionId: session.id,
+                isSessionStart: true,
+              },
+              status: 'sent',
+            });
+
+            // Send via Twilio if phone number exists
+            if (client.userPhone) {
+              await twilioClient.messages.create({
+                body: messageBody,
+                to: client.userPhone,
+                from: process.env.TWILIO_PHONE_NUMBER,
+              });
+              console.log(`Sent SMS to ${client.userName} (${client.userPhone})`);
+            } else {
+              console.log(`Created in-app message for ${client.userName} (no phone)`);
+            }
+
+            return { success: true, userId: client.userId, channel: client.userPhone ? 'sms' : 'in_app' };
+          } catch (error) {
+            console.error(`Failed to send to ${client.userId}:`, error);
+            return { success: false, userId: client.userId, error: error instanceof Error ? error.message : "Unknown error" };
+          }
+        });
+
+        const results = await Promise.all(sendPromises);
+        const successCount = results.filter(r => r.success).length;
+
+        return {
+          success: true,
+          sentCount: successCount,
+          totalClients: checkedInClients.length,
+          results,
+          message: `Sent messages to ${successCount} out of ${checkedInClients.length} clients`,
+        };
+
+      } catch (error) {
+        console.error("Error in sendSessionStartMessages:", error);
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to send session start messages",
+        });
+      }
+    }),
+
+  updateClientPreferences: protectedProcedure
+    .input(
+      z.object({
+        sessionId: z.string(),
+        userId: z.string(),
+        preferences: z.object({
+          confirmedExercises: z.array(z.object({
+            name: z.string(),
+            confirmed: z.boolean()
+          })).optional(),
+          muscleFocus: z.array(z.string()).optional(),
+          muscleAvoidance: z.array(z.string()).optional(),
+          otherNotes: z.string().optional(),
+        })
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      try {
+        // For MVP, we'll store preferences in the WorkoutPreferences table
+        // In the future, this should validate that the user owns this preference
+        
+        // Find existing preferences
+        const [existingPref] = await db
+          .select()
+          .from(WorkoutPreferences)
+          .where(
+            and(
+              eq(WorkoutPreferences.userId, input.userId),
+              eq(WorkoutPreferences.trainingSessionId, input.sessionId)
+            )
+          )
+          .limit(1);
+
+        if (existingPref) {
+          // Update existing preferences
+          await db
+            .update(WorkoutPreferences)
+            .set({
+              muscleTargets: input.preferences.muscleFocus,
+              muscleLessens: input.preferences.muscleAvoidance,
+              notes: input.preferences.otherNotes,
+              updatedAt: new Date()
+            })
+            .where(eq(WorkoutPreferences.id, existingPref.id));
+        } else {
+          // Create new preferences
+          await db.insert(WorkoutPreferences).values({
+            userId: input.userId,
+            trainingSessionId: input.sessionId,
+            muscleTargets: input.preferences.muscleFocus || [],
+            muscleLessens: input.preferences.muscleAvoidance || [],
+            notes: input.preferences.otherNotes,
+          });
+        }
+
+        // Invalidate blueprint cache
+        const { WorkoutBlueprintService } = await import("../services/workout-blueprint-service");
+        await WorkoutBlueprintService.invalidateCache(input.sessionId);
+        
+        // Broadcast update via SSE
+        try {
+          const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
+          const broadcastUrl = new URL('/api/internal/broadcast-preference', baseUrl);
+          
+          await fetch(broadcastUrl.toString(), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              sessionId: input.sessionId,
+              userId: input.userId,
+              preferences: input.preferences
+            })
+          });
+        } catch (error) {
+          console.error('Failed to broadcast preference update:', error);
+          // Don't fail the mutation if broadcast fails
+        }
+
+        return { success: true };
+      } catch (error) {
+        console.error("Error updating client preferences:", error);
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to update preferences",
+        });
+      }
+    }),
+
+  // Public procedures for client preferences (no auth required)
+  getClientPreferenceData: publicProcedure
+    .input(z.object({
+      sessionId: z.string().uuid(),
+      userId: z.string()
+    }))
+    .query(async ({ ctx, input }) => {
+      // Verify that the user belongs to this session
+      const userSession = await ctx.db.query.UserTrainingSession.findFirst({
+        where: and(
+          eq(UserTrainingSession.userId, input.userId),
+          eq(UserTrainingSession.trainingSessionId, input.sessionId),
+          eq(UserTrainingSession.status, 'checked_in')
+        ),
+      });
+
+      if (!userSession) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Invalid session or user not checked in',
+        });
+      }
+
+      // Get user info
+      const [user] = await ctx.db
+        .select({
+          id: userTable.id,
+          name: userTable.name,
+          email: userTable.email,
+        })
+        .from(userTable)
+        .where(eq(userTable.id, input.userId))
+        .limit(1);
+
+      if (!user) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'User not found',
+        });
+      }
+
+      // Get existing preferences if any
+      const [preferences] = await ctx.db
+        .select()
+        .from(WorkoutPreferences)
+        .where(and(
+          eq(WorkoutPreferences.userId, input.userId),
+          eq(WorkoutPreferences.trainingSessionId, input.sessionId)
+        ))
+        .limit(1);
+
+      return {
+        user: {
+          userId: user.id,
+          userName: user.name,
+          userEmail: user.email,
+          checkedInAt: userSession.checkedInAt,
+          preferences: preferences ? {
+            intensity: preferences.intensity,
+            muscleTargets: preferences.muscleTargets,
+            muscleLessens: preferences.muscleLessens,
+            includeExercises: preferences.includeExercises,
+            avoidExercises: preferences.avoidExercises,
+            avoidJoints: preferences.avoidJoints,
+            sessionGoal: preferences.sessionGoal,
+          } : null,
+        }
+      };
+    }),
+
+  getClientDeterministicSelections: publicProcedure
+    .input(z.object({
+      sessionId: z.string().uuid(),
+      userId: z.string()
+    }))
+    .query(async ({ ctx, input }) => {
+      // Verify user belongs to session
+      const userSession = await ctx.db.query.UserTrainingSession.findFirst({
+        where: and(
+          eq(UserTrainingSession.userId, input.userId),
+          eq(UserTrainingSession.trainingSessionId, input.sessionId),
+          eq(UserTrainingSession.status, 'checked_in')
+        ),
+      });
+
+      if (!userSession) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Invalid session or user not checked in',
+        });
+      }
+
+      // Get session with business ID
+      const session = await ctx.db.query.TrainingSession.findFirst({
+        where: eq(TrainingSession.id, input.sessionId),
+      });
+
+      if (!session) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Session not found',
+        });
+      }
+
+      // For BMF template, get exercises from preferences or generate blueprint
+      if (session.templateType === 'full_body_bmf') {
+        try {
+          // Get user preferences
+          const [preferences] = await ctx.db
+            .select()
+            .from(WorkoutPreferences)
+            .where(and(
+              eq(WorkoutPreferences.userId, input.userId),
+              eq(WorkoutPreferences.trainingSessionId, input.sessionId)
+            ))
+            .limit(1);
+
+          // If includeExercises is populated, use those directly
+          if (preferences?.includeExercises && preferences.includeExercises.length >= 2) {
+            const selections = [];
+            const recommendations = [];
+            
+            // Get exercise details from database
+            const exerciseDetails = await ctx.db
+              .select()
+              .from(exercises)
+              .where(inArray(exercises.name, preferences.includeExercises));
+            
+            // First exercise is Round1
+            const round1Exercise = exerciseDetails.find(e => e.name === preferences.includeExercises[0]);
+            if (round1Exercise) {
+              selections.push({
+                roundId: 'Round1',
+                roundName: 'Round 1',
+                exercise: {
+                  name: round1Exercise.name,
+                  movementPattern: round1Exercise.movementPattern,
+                  primaryMuscle: round1Exercise.primaryMuscle
+                }
+              });
+            }
+            
+            // Second exercise is Round2
+            const round2Exercise = exerciseDetails.find(e => e.name === preferences.includeExercises[1]);
+            if (round2Exercise) {
+              selections.push({
+                roundId: 'Round2',
+                roundName: 'Round 2',
+                exercise: {
+                  name: round2Exercise.name,
+                  movementPattern: round2Exercise.movementPattern,
+                  primaryMuscle: round2Exercise.primaryMuscle
+                }
+              });
+            }
+            
+            // For recommendations, we'll need to generate a blueprint
+            // This is handled below in the else block
+            return {
+              exercises: selections,
+              recommendations: recommendations
+            };
+          }
+
+          // Get user profile
+          const [userProfile] = await ctx.db
+            .select()
+            .from(UserProfile)
+            .where(and(
+              eq(UserProfile.userId, input.userId),
+              eq(UserProfile.businessId, session.businessId)
+            ))
+            .limit(1);
+
+          // Get user info
+          const [user] = await ctx.db
+            .select({
+              name: userTable.name,
+            })
+            .from(userTable)
+            .where(eq(userTable.id, input.userId))
+            .limit(1);
+
+          // Create minimal client context for blueprint generation
+          const clientContext = {
+            user_id: input.userId,
+            name: user?.name ?? 'Unknown',
+            strength_capacity: (userProfile?.strengthLevel ?? 'moderate') as "very_low" | "low" | "moderate" | "high",
+            skill_capacity: (userProfile?.skillLevel ?? 'moderate') as "very_low" | "low" | "moderate" | "high",
+            primary_goal: preferences?.sessionGoal === 'strength' ? 'strength' as const : 'general_fitness' as const,
+            intensity: (preferences?.intensity ?? 'moderate') as "low" | "moderate" | "high",
+            muscle_target: preferences?.muscleTargets ?? [],
+            muscle_lessen: preferences?.muscleLessens ?? [],
+            exercise_requests: {
+              include: preferences?.includeExercises ?? [],
+              avoid: preferences?.avoidExercises ?? []
+            },
+            avoid_joints: preferences?.avoidJoints ?? [],
+            business_id: session.businessId,
+            templateType: session.templateType as "standard" | "circuit" | "full_body_bmf" | undefined,
+            default_sets: userProfile?.defaultSets ?? 20
+          };
+
+          // Generate blueprint using shared service
+          const { WorkoutBlueprintService } = await import("../services/workout-blueprint-service");
+          
+          const blueprint = await WorkoutBlueprintService.generateBlueprintWithCache(
+            input.sessionId,
+            session.businessId,
+            input.userId  // Use the client's userId for this single-client context
+          );
+
+          // Extract exercises from Round1 and Round2
+          const selections = [];
+          const recommendations = [];
+          const round1Block = blueprint.blocks.find(b => b.blockId === 'Round1');
+          const round2Block = blueprint.blocks.find(b => b.blockId === 'Round2');
+          
+          if (round1Block?.individualCandidates?.[input.userId]?.exercises?.[0]) {
+            selections.push({
+              roundId: 'Round1',
+              roundName: 'Round 1',
+              exercise: {
+                name: round1Block.individualCandidates[input.userId].exercises[0].name,
+                movementPattern: round1Block.individualCandidates[input.userId].exercises[0].movementPattern,
+                primaryMuscle: round1Block.individualCandidates[input.userId].exercises[0].primaryMuscle
+              }
+            });
+          }
+          
+          if (round2Block?.individualCandidates?.[input.userId]?.exercises?.[0]) {
+            selections.push({
+              roundId: 'Round2',
+              roundName: 'Round 2',
+              exercise: {
+                name: round2Block.individualCandidates[input.userId].exercises[0].name,
+                movementPattern: round2Block.individualCandidates[input.userId].exercises[0].movementPattern,
+                primaryMuscle: round2Block.individualCandidates[input.userId].exercises[0].primaryMuscle
+              }
+            });
+          }
+          
+          // Collect all candidate exercises from Round1 and Round2 for recommendations
+          // Use allFilteredExercises to get the full list, not just top 6
+          const selectedExerciseNames = selections.map(s => s.exercise.name);
+          
+          if (round1Block?.individualCandidates?.[input.userId]) {
+            const candidateData = round1Block.individualCandidates[input.userId];
+            // Use allFilteredExercises if available, otherwise fall back to exercises
+            const exerciseList = candidateData.allFilteredExercises || candidateData.exercises || [];
+            
+            exerciseList.forEach(exercise => {
+              if (!selectedExerciseNames.includes(exercise.name)) {
+                recommendations.push({
+                  ...exercise,
+                  roundId: 'Round1',
+                  roundName: 'Round 1'
+                });
+              }
+            });
+          }
+          
+          if (round2Block?.individualCandidates?.[input.userId]) {
+            const candidateData = round2Block.individualCandidates[input.userId];
+            // Use allFilteredExercises if available, otherwise fall back to exercises
+            const exerciseList = candidateData.allFilteredExercises || candidateData.exercises || [];
+            
+            exerciseList.forEach(exercise => {
+              if (!selectedExerciseNames.includes(exercise.name)) {
+                recommendations.push({
+                  ...exercise,
+                  roundId: 'Round2',
+                  roundName: 'Round 2'
+                });
+              }
+            });
+          }
+          
+          // Sort recommendations by score (highest first)
+          // Don't limit here - let the frontend handle display limits
+          recommendations.sort((a, b) => b.score - a.score);
+          
+          return { selections, recommendations };
+        } catch (error) {
+          console.error('Error generating blueprint for client:', error);
+          return { selections: [], recommendations: [] };
+        }
+      }
+
+      // For non-BMF templates, return empty
+      return { selections: [], recommendations: [] };
+    }),
+
+  // Public mutation for replacing client exercise selection
+  replaceClientExercisePublic: publicProcedure
+    .input(z.object({
+      sessionId: z.string().uuid(),
+      userId: z.string(),
+      round: z.enum(['Round1', 'Round2']),
+      newExerciseName: z.string()
+    }))
+    .mutation(async ({ ctx, input }) => {
+      // Verify user belongs to session
+      const userSession = await ctx.db.query.UserTrainingSession.findFirst({
+        where: and(
+          eq(UserTrainingSession.userId, input.userId),
+          eq(UserTrainingSession.trainingSessionId, input.sessionId),
+          eq(UserTrainingSession.status, 'checked_in')
+        ),
+      });
+
+      if (!userSession) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Invalid session or user not checked in',
+        });
+      }
+
+      // Get session to get business ID
+      const session = await ctx.db.query.TrainingSession.findFirst({
+        where: eq(TrainingSession.id, input.sessionId),
+      });
+
+      if (!session) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Session not found',
+        });
+      }
+
+      // Get or create workout preferences
+      const existingPrefs = await ctx.db.query.WorkoutPreferences.findFirst({
+        where: and(
+          eq(WorkoutPreferences.userId, input.userId),
+          eq(WorkoutPreferences.trainingSessionId, input.sessionId)
+        ),
+      });
+
+      if (existingPrefs) {
+        // Update existing preferences - replace the exercise for the specific round
+        const currentIncludes = existingPrefs.includeExercises || [];
+        const updatedIncludes = [...currentIncludes];
+        
+        // Round1 = index 0, Round2 = index 1
+        const roundIndex = input.round === 'Round1' ? 0 : 1;
+        updatedIncludes[roundIndex] = input.newExerciseName;
+        
+        await ctx.db
+          .update(WorkoutPreferences)
+          .set({ 
+            includeExercises: updatedIncludes,
+            updatedAt: new Date()
+          })
+          .where(and(
+            eq(WorkoutPreferences.userId, input.userId),
+            eq(WorkoutPreferences.trainingSessionId, input.sessionId)
+          ));
+      } else {
+        // Create new preferences with the exercise
+        const includeArray = input.round === 'Round1' 
+          ? [input.newExerciseName, ''] 
+          : ['', input.newExerciseName];
+          
+        await ctx.db.insert(WorkoutPreferences).values({
+          userId: input.userId,
+          trainingSessionId: input.sessionId,
+          businessId: session.businessId,
+          includeExercises: includeArray,
+          intensity: 'moderate',
+          muscleTargets: [],
+          muscleLessens: [],
+          avoidJoints: [],
+          avoidExercises: [],
+        });
+      }
+
+      return { success: true };
+    }),
+
+  updateClientPreferencesPublic: publicProcedure
+    .input(
+      z.object({
+        sessionId: z.string(),
+        userId: z.string(),
+        preferences: z.object({
+          confirmedExercises: z.array(z.object({
+            name: z.string(),
+            confirmed: z.boolean()
+          })).optional(),
+          muscleFocus: z.array(z.string()).optional(),
+          muscleAvoidance: z.array(z.string()).optional(),
+          otherNotes: z.string().optional(),
+        })
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      // Verify user belongs to session
+      const userSession = await ctx.db.query.UserTrainingSession.findFirst({
+        where: and(
+          eq(UserTrainingSession.userId, input.userId),
+          eq(UserTrainingSession.trainingSessionId, input.sessionId),
+          eq(UserTrainingSession.status, 'checked_in')
+        ),
+      });
+
+      if (!userSession) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Invalid session or user not checked in',
+        });
+      }
+
+      // Get session to find businessId
+      const [session] = await ctx.db
+        .select({ businessId: TrainingSession.businessId })
+        .from(TrainingSession)
+        .where(eq(TrainingSession.id, input.sessionId))
+        .limit(1);
+
+      if (!session) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Session not found',
+        });
+      }
+
+      // Find or create preferences
+      const [existingPref] = await ctx.db
+        .select()
+        .from(WorkoutPreferences)
+        .where(
+          and(
+            eq(WorkoutPreferences.userId, input.userId),
+            eq(WorkoutPreferences.trainingSessionId, input.sessionId)
+          )
+        )
+        .limit(1);
+
+      if (existingPref) {
+        // Update existing preferences
+        await ctx.db
+          .update(WorkoutPreferences)
+          .set({
+            muscleTargets: input.preferences.muscleFocus,
+            muscleLessens: input.preferences.muscleAvoidance,
+            notes: input.preferences.otherNotes,
+            updatedAt: new Date()
+          })
+          .where(eq(WorkoutPreferences.id, existingPref.id));
+      } else {
+        // Create new preferences
+        await ctx.db.insert(WorkoutPreferences).values({
+          userId: input.userId,
+          trainingSessionId: input.sessionId,
+          businessId: session.businessId,
+          muscleTargets: input.preferences.muscleFocus || [],
+          muscleLessens: input.preferences.muscleAvoidance || [],
+          notes: input.preferences.otherNotes,
+        });
+      }
+
+      // Invalidate blueprint cache
+      const { WorkoutBlueprintService } = await import("../services/workout-blueprint-service");
+      await WorkoutBlueprintService.invalidateCache(input.sessionId);
+      
+      // Broadcast update via SSE
+      try {
+        const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
+        const broadcastUrl = new URL('/api/internal/broadcast-preference', baseUrl);
+        
+        await fetch(broadcastUrl.toString(), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sessionId: input.sessionId,
+            userId: input.userId,
+            preferences: input.preferences
+          })
+        });
+      } catch (error) {
+        console.error('Failed to broadcast preference update:', error);
+        // Don't fail the mutation if broadcast fails
+      }
+
+      return { success: true };
     }),
 } satisfies TRPCRouterRecord;

@@ -86,7 +86,8 @@ export class CheckInHandler {
               });
               
               // Try to generate blueprint first
-              const blueprintExists = await BlueprintGenerationService.ensureBlueprintExists(checkInResult.sessionId);
+              const blueprint = await BlueprintGenerationService.generateBlueprint(checkInResult.sessionId);
+              const blueprintExists = !!blueprint;
               
               let selections: any[] = [];
               

@@ -1,17 +1,17 @@
 {
-  "timestamp": "2025-07-27T04:04:51.560Z",
+  "timestamp": "2025-07-28T22:01:29.775Z",
   "filters": {
-    "clientName": "Tony Lee",
+    "clientName": "Curtis Yu",
     "strengthCapacity": "moderate",
     "skillCapacity": "moderate",
-    "intensity": "high",
-    "muscleTarget": [
-      "adductors",
-      "glutes"
-    ],
+    "intensity": "moderate",
+    "muscleTarget": [],
     "muscleLessen": [],
     "avoidJoints": [],
-    "includeExercises": [],
+    "includeExercises": [
+      "Lunge with Biceps Curl",
+      "Landmine T Bar Row"
+    ],
     "avoidExercises": [],
     "sessionGoal": "strength",
     "isFullBody": true

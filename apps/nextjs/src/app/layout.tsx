@@ -71,12 +71,7 @@ export default function RootLayout(props: { children: React.ReactNode }) {
             <DebugInitializer />
             <SessionTestDataInitializer />
             <GroupTestDataInitializer />
-            <div className="flex flex-col h-screen overflow-hidden">
-              <Navigation />
-              <div className="flex-1">
-                {props.children}
-              </div>
-            </div>
+            {props.children}
           </TRPCReactProvider>
           <div className="fixed bottom-4 right-4 z-50">
             <ThemeToggle />

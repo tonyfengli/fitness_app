@@ -201,6 +201,15 @@ export class WorkoutPreferenceService {
     preferences: ParsedPreferences,
     step: "initial_collected" | "disambiguation_pending" | "disambiguation_clarifying" | "disambiguation_resolved" | "followup_sent" | "preferences_active" = "initial_collected"
   ): Promise<void> {
+    console.log("[WorkoutPreferenceService.savePreferences] START", {
+      userId,
+      sessionId,
+      businessId,
+      step,
+      preferencesKeys: Object.keys(preferences),
+      includeExercisesCount: preferences.includeExercises?.length || 0
+    });
+
     try {
       // Check if preferences already exist
       const [existing] = await db
@@ -213,6 +222,13 @@ export class WorkoutPreferenceService {
           )
         )
         .limit(1);
+      
+      console.log("[WorkoutPreferenceService.savePreferences] Existing check:", {
+        userId,
+        sessionId,
+        existingFound: !!existing,
+        existingId: existing?.id
+      });
 
       if (existing) {
         // Update existing preferences (intelligent merge)
@@ -289,6 +305,8 @@ export class WorkoutPreferenceService {
           collectionMethod: "sms",
         };
         
+        console.log("[WorkoutPreferenceService.savePreferences] About to INSERT new preferences");
+        
         logger.info("Inserting new preferences", {
           userId,
           sessionId,
@@ -300,6 +318,8 @@ export class WorkoutPreferenceService {
         });
         
         await db.insert(WorkoutPreferences).values(valuesToInsert);
+        
+        console.log("[WorkoutPreferenceService.savePreferences] INSERT completed successfully");
       }
 
       // Update check-in to mark preferences collection step
@@ -313,7 +333,20 @@ export class WorkoutPreferenceService {
           )
         );
 
+      console.log("[WorkoutPreferenceService.savePreferences] SUCCESS - Preferences saved", {
+        userId,
+        sessionId,
+        step,
+        wasUpdate: !!existing,
+        includeExercisesCount: preferences.includeExercises?.length || 0
+      });
+      
       logger.info("Preferences saved successfully", { userId, sessionId, step, isUpdate: !!existing });
+      
+      // Invalidate blueprint cache when preferences change
+      const { WorkoutBlueprintService } = await import("./workout-blueprint-service");
+      await WorkoutBlueprintService.invalidateCache(sessionId);
+      logger.info("Blueprint cache invalidated for session", { sessionId });
       
       // Broadcast preference update if broadcast function is available
       if (broadcastPreferenceUpdate) {
@@ -347,6 +380,14 @@ export class WorkoutPreferenceService {
         });
       }
     } catch (error) {
+      console.error("[WorkoutPreferenceService.savePreferences] ERROR:", {
+        error,
+        errorMessage: error instanceof Error ? error.message : "Unknown error",
+        errorStack: error instanceof Error ? error.stack : undefined,
+        userId,
+        sessionId
+      });
+      
       logger.error("Error saving preferences:", error);
       throw error;
     }

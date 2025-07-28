@@ -1,17 +1,17 @@
 {
-  "timestamp": "2025-07-27T04:04:51.558Z",
+  "timestamp": "2025-07-28T22:01:29.774Z",
   "filters": {
-    "clientName": "Tony Lee",
+    "clientName": "Curtis Yu",
     "strengthCapacity": "moderate",
     "skillCapacity": "moderate",
-    "intensity": "high",
-    "muscleTarget": [
-      "adductors",
-      "glutes"
-    ],
+    "intensity": "moderate",
+    "muscleTarget": [],
     "muscleLessen": [],
     "avoidJoints": [],
-    "includeExercises": [],
+    "includeExercises": [
+      "Lunge with Biceps Curl",
+      "Landmine T Bar Row"
+    ],
     "avoidExercises": [],
     "sessionGoal": "strength",
     "isFullBody": true
@@ -117,1592 +117,830 @@
   },
   "constraintAnalysis": {},
   "scoreBreakdowns": {
-    "698adb88-ad38-4e98-9735-489f5b7d0c45": {
-      "name": "Curtsy Lunge",
+    "49bc7005-5179-4d96-be77-ac790cf00759": {
+      "name": "Landmine T Bar Row",
       "baseScore": 5,
-      "bonuses": [
-        {
-          "reason": "Muscle Target Match",
-          "value": 3
-        },
-        {
-          "reason": "Intensity Match",
-          "value": 0.75
-        }
-      ],
+      "bonuses": [],
       "penalties": [],
-      "finalScore": 8.75
-    },
-    "b16c277f-9a95-4d94-a039-88686bcf263d": {
-      "name": "Kettlebell Swings",
-      "baseScore": 5,
-      "bonuses": [
-        {
-          "reason": "Muscle Target Match",
-          "value": 3
-        },
-        {
-          "reason": "Intensity Match",
-          "value": 0.75
-        }
-      ],
-      "penalties": [],
-      "finalScore": 8.75
-    },
-    "904c2b74-944f-49af-8324-22b1b1ea7b9a": {
-      "name": "Jump Squat",
-      "baseScore": 5,
-      "bonuses": [
-        {
-          "reason": "Muscle Target Match",
-          "value": 1.5
-        },
-        {
-          "reason": "Intensity Match",
-          "value": 1.5
-        }
-      ],
-      "penalties": [],
-      "finalScore": 8
-    },
-    "7a6a7db5-8e05-4e60-9292-8004dac927db": {
-      "name": "In-and-Out Squat Jumps",
-      "baseScore": 5,
-      "bonuses": [
-        {
-          "reason": "Muscle Target Match",
-          "value": 1.5
-        },
-        {
-          "reason": "Intensity Match",
-          "value": 1.5
-        }
-      ],
-      "penalties": [],
-      "finalScore": 8
-    },
-    "7ed3976c-c9f3-4672-966c-424778e1cd8c": {
-      "name": "Goblet Squat Pulse",
-      "baseScore": 5,
-      "bonuses": [
-        {
-          "reason": "Muscle Target Match",
-          "value": 1.5
-        },
-        {
-          "reason": "Intensity Match",
-          "value": 1.5
-        }
-      ],
-      "penalties": [],
-      "finalScore": 8
-    },
-    "9d50d2f2-0eda-48c4-9f7d-7a1fcff879b1": {
-      "name": "Dumbbell Thruster",
-      "baseScore": 5,
-      "bonuses": [
-        {
-          "reason": "Muscle Target Match",
-          "value": 1.5
-        },
-        {
-          "reason": "Intensity Match",
-          "value": 1.5
-        }
-      ],
-      "penalties": [],
-      "finalScore": 8
-    },
-    "71aee1c7-b87e-48fb-a28f-7a5c251b0808": {
-      "name": "Plank Jack",
-      "baseScore": 5,
-      "bonuses": [
-        {
-          "reason": "Muscle Target Match",
-          "value": 1.5
-        },
-        {
-          "reason": "Intensity Match",
-          "value": 1.5
-        }
-      ],
-      "penalties": [],
-      "finalScore": 8
-    },
-    "a5d09b5a-d62f-477b-8b71-216f35a20291": {
-      "name": "Wall Squat Hold",
-      "baseScore": 5,
-      "bonuses": [
-        {
-          "reason": "Muscle Target Match",
-          "value": 1.5
-        },
-        {
-          "reason": "Intensity Match",
-          "value": 1.5
-        }
-      ],
-      "penalties": [],
-      "finalScore": 8
-    },
-    "dabd605d-42d5-4c18-bbf8-856eb175a78c": {
-      "name": "Goblet Pause Squat (3 Seconds)",
-      "baseScore": 5,
-      "bonuses": [
-        {
-          "reason": "Muscle Target Match",
-          "value": 1.5
-        },
-        {
-          "reason": "Intensity Match",
-          "value": 1.5
-        }
-      ],
-      "penalties": [],
-      "finalScore": 8
-    },
-    "9468e3e6-3912-47de-95be-b5218789b4d6": {
-      "name": "Barbell Reverse Lunges",
-      "baseScore": 5,
-      "bonuses": [
-        {
-          "reason": "Muscle Target Match",
-          "value": 1.5
-        },
-        {
-          "reason": "Intensity Match",
-          "value": 1.5
-        }
-      ],
-      "penalties": [],
-      "finalScore": 8
-    },
-    "bec554f5-b080-409d-ba41-b93a51a56836": {
-      "name": "Barbell Back Squat",
-      "baseScore": 5,
-      "bonuses": [
-        {
-          "reason": "Muscle Target Match",
-          "value": 1.5
-        },
-        {
-          "reason": "Intensity Match",
-          "value": 1.5
-        }
-      ],
-      "penalties": [],
-      "finalScore": 8
-    },
-    "e943357b-3ac8-4e43-948f-b4a15901561a": {
-      "name": "Deadlift",
-      "baseScore": 5,
-      "bonuses": [
-        {
-          "reason": "Muscle Target Match",
-          "value": 1.5
-        },
-        {
-          "reason": "Intensity Match",
-          "value": 1.5
-        }
-      ],
-      "penalties": [],
-      "finalScore": 8
+      "finalScore": 6
     },
     "ca004a9f-5bb3-4749-acb8-55872fc58be2": {
       "name": "Lunge with Biceps Curl",
       "baseScore": 5,
-      "bonuses": [
-        {
-          "reason": "Muscle Target Match",
-          "value": 1.5
-        },
-        {
-          "reason": "Intensity Match",
-          "value": 0.75
-        }
-      ],
+      "bonuses": [],
       "penalties": [],
-      "finalScore": 7.25
-    },
-    "dce44ce1-9f79-4c98-80ba-d4cc6d2bb9a6": {
-      "name": "Lateral Step-Up with Goblet Hold",
-      "baseScore": 5,
-      "bonuses": [
-        {
-          "reason": "Muscle Target Match",
-          "value": 1.5
-        },
-        {
-          "reason": "Intensity Match",
-          "value": 0.75
-        }
-      ],
-      "penalties": [],
-      "finalScore": 7.25
-    },
-    "5a75f68d-4d30-4211-a98c-a74c71f70f8d": {
-      "name": "Glute Bridge Thrust with Dumbbell",
-      "baseScore": 5,
-      "bonuses": [
-        {
-          "reason": "Muscle Target Match",
-          "value": 3
-        }
-      ],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -0.75
-        }
-      ],
-      "finalScore": 7.25
-    },
-    "050e52d0-5f3a-491c-b424-24c5dad31a62": {
-      "name": "Farmer's Carry Step-Up",
-      "baseScore": 5,
-      "bonuses": [
-        {
-          "reason": "Muscle Target Match",
-          "value": 1.5
-        },
-        {
-          "reason": "Intensity Match",
-          "value": 0.75
-        }
-      ],
-      "penalties": [],
-      "finalScore": 7.25
-    },
-    "f3887428-47ba-4d81-8916-acc4c7c05fa9": {
-      "name": "Offset Lateral Lunge",
-      "baseScore": 5,
-      "bonuses": [
-        {
-          "reason": "Muscle Target Match",
-          "value": 1.5
-        },
-        {
-          "reason": "Intensity Match",
-          "value": 0.75
-        }
-      ],
-      "penalties": [],
-      "finalScore": 7.25
-    },
-    "11611e20-e723-4cfe-9276-7ab4eb73f829": {
-      "name": "Landmine Reverse Lunge",
-      "baseScore": 5,
-      "bonuses": [
-        {
-          "reason": "Muscle Target Match",
-          "value": 1.5
-        },
-        {
-          "reason": "Intensity Match",
-          "value": 0.75
-        }
-      ],
-      "penalties": [],
-      "finalScore": 7.25
-    },
-    "e3cd89af-a339-49ec-b5eb-5438d1227a0f": {
-      "name": "Suitcase Kettlebell Lunge",
-      "baseScore": 5,
-      "bonuses": [
-        {
-          "reason": "Muscle Target Match",
-          "value": 1.5
-        },
-        {
-          "reason": "Intensity Match",
-          "value": 0.75
-        }
-      ],
-      "penalties": [],
-      "finalScore": 7.25
-    },
-    "8442a047-e5a7-49d7-a40e-fce4812b40ce": {
-      "name": "Single-Leg Glute Bridge with Band",
-      "baseScore": 5,
-      "bonuses": [
-        {
-          "reason": "Muscle Target Match",
-          "value": 3
-        }
-      ],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -0.75
-        }
-      ],
-      "finalScore": 7.25
-    },
-    "aed8cfc3-3405-440e-8249-3e646de7e9c5": {
-      "name": "Copenhagen Plank",
-      "baseScore": 5,
-      "bonuses": [
-        {
-          "reason": "Muscle Target Match",
-          "value": 3
-        }
-      ],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -0.75
-        }
-      ],
-      "finalScore": 7.25
-    },
-    "03b163dc-ac95-4ba7-938c-5de8b27f0972": {
-      "name": "Glute Kickbacks",
-      "baseScore": 5,
-      "bonuses": [
-        {
-          "reason": "Muscle Target Match",
-          "value": 3
-        }
-      ],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -0.75
-        }
-      ],
-      "finalScore": 7.25
-    },
-    "cdd9c4a6-4048-4ee2-9292-aa36e7a2a9ae": {
-      "name": "Barbell Glute Bridge on Bench",
-      "baseScore": 5,
-      "bonuses": [
-        {
-          "reason": "Muscle Target Match",
-          "value": 3
-        }
-      ],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -0.75
-        }
-      ],
-      "finalScore": 7.25
-    },
-    "f18f0a95-f622-495c-bdd4-eae6425acb0d": {
-      "name": "Lateral Lunge",
-      "baseScore": 5,
-      "bonuses": [
-        {
-          "reason": "Muscle Target Match",
-          "value": 1.5
-        },
-        {
-          "reason": "Intensity Match",
-          "value": 0.75
-        }
-      ],
-      "penalties": [],
-      "finalScore": 7.25
-    },
-    "ed0ee454-b40b-403a-bc20-cff5647fa683": {
-      "name": "Farmer's Carry Reverse Lunge",
-      "baseScore": 5,
-      "bonuses": [
-        {
-          "reason": "Muscle Target Match",
-          "value": 1.5
-        },
-        {
-          "reason": "Intensity Match",
-          "value": 0.75
-        }
-      ],
-      "penalties": [],
-      "finalScore": 7.25
-    },
-    "144e1124-e7d7-4594-8c75-f9522081060e": {
-      "name": "Kettlebell Deadlift",
-      "baseScore": 5,
-      "bonuses": [
-        {
-          "reason": "Muscle Target Match",
-          "value": 1.5
-        },
-        {
-          "reason": "Intensity Match",
-          "value": 0.75
-        }
-      ],
-      "penalties": [],
-      "finalScore": 7.25
-    },
-    "6712600b-d4a2-4708-962e-fa6b1c3eb9cc": {
-      "name": "Goblet Squat",
-      "baseScore": 5,
-      "bonuses": [
-        {
-          "reason": "Muscle Target Match",
-          "value": 1.5
-        },
-        {
-          "reason": "Intensity Match",
-          "value": 0.75
-        }
-      ],
-      "penalties": [],
-      "finalScore": 7.25
-    },
-    "ac8126a5-92ea-42b5-9955-6d0ae38dd70a": {
-      "name": "Bulgarian Split Squat",
-      "baseScore": 5,
-      "bonuses": [
-        {
-          "reason": "Muscle Target Match",
-          "value": 1.5
-        },
-        {
-          "reason": "Intensity Match",
-          "value": 0.75
-        }
-      ],
-      "penalties": [],
-      "finalScore": 7.25
-    },
-    "e824764c-7860-4254-a2c5-9eca52db2e5d": {
-      "name": "Medicine Ball Slam",
-      "baseScore": 5,
-      "bonuses": [
-        {
-          "reason": "Intensity Match",
-          "value": 1.5
-        }
-      ],
-      "penalties": [],
-      "finalScore": 6.5
-    },
-    "5eaede2f-c9d5-41ef-8942-9d74a95ded1e": {
-      "name": "Twisting Pistons",
-      "baseScore": 5,
-      "bonuses": [
-        {
-          "reason": "Intensity Match",
-          "value": 1.5
-        }
-      ],
-      "penalties": [],
-      "finalScore": 6.5
-    },
-    "49bc7005-5179-4d96-be77-ac790cf00759": {
-      "name": "Landmine T Bar Row",
-      "baseScore": 5,
-      "bonuses": [
-        {
-          "reason": "Intensity Match",
-          "value": 0.75
-        }
-      ],
-      "penalties": [],
-      "finalScore": 5.75
-    },
-    "840aedec-f2a7-47cb-935c-9ffc43cedde6": {
-      "name": "Quadruped Fire Hydrant (Peeing Dog)",
-      "baseScore": 5,
-      "bonuses": [
-        {
-          "reason": "Muscle Target Match",
-          "value": 1.5
-        }
-      ],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -0.75
-        }
-      ],
-      "finalScore": 5.75
-    },
-    "df27f104-414a-4e16-a392-45a1b9254e58": {
-      "name": "Monster Walk (Banded Lateral Walk)",
-      "baseScore": 5,
-      "bonuses": [
-        {
-          "reason": "Muscle Target Match",
-          "value": 1.5
-        }
-      ],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -0.75
-        }
-      ],
-      "finalScore": 5.75
-    },
-    "9a20f880-861a-4d2d-b412-bbcf71260d89": {
-      "name": "Face Pull to Overhead Press",
-      "baseScore": 5,
-      "bonuses": [
-        {
-          "reason": "Intensity Match",
-          "value": 0.75
-        }
-      ],
-      "penalties": [],
-      "finalScore": 5.75
-    },
-    "fb5bf2ce-611c-4a2f-ae16-8d21d28280c1": {
-      "name": "Side Plank Hip Raise",
-      "baseScore": 5,
-      "bonuses": [
-        {
-          "reason": "Muscle Target Match",
-          "value": 1.5
-        }
-      ],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -0.75
-        }
-      ],
-      "finalScore": 5.75
-    },
-    "0975bd35-a1fd-4ea7-acc4-dd9c05d4a982": {
-      "name": "Bosu Plank Jack",
-      "baseScore": 5,
-      "bonuses": [
-        {
-          "reason": "Muscle Target Match",
-          "value": 1.5
-        }
-      ],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -0.75
-        }
-      ],
-      "finalScore": 5.75
-    },
-    "c0e353d1-5ffe-4340-ac6f-2ee03af6c2fc": {
-      "name": "Bear Crawl (Forward and Back)",
-      "baseScore": 5,
-      "bonuses": [
-        {
-          "reason": "Intensity Match",
-          "value": 0.75
-        }
-      ],
-      "penalties": [],
-      "finalScore": 5.75
-    },
-    "620165b8-278c-48cd-a8a1-9f9aa1f37e80": {
-      "name": "Flutter Kicks",
-      "baseScore": 5,
-      "bonuses": [
-        {
-          "reason": "Muscle Target Match",
-          "value": 1.5
-        }
-      ],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -0.75
-        }
-      ],
-      "finalScore": 5.75
-    },
-    "ce18afb8-3b1f-4183-9cdc-833da34574b3": {
-      "name": "Single-Leg Banded Kettlebell Suitcase Hold",
-      "baseScore": 5,
-      "bonuses": [
-        {
-          "reason": "Muscle Target Match",
-          "value": 1.5
-        }
-      ],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -0.75
-        }
-      ],
-      "finalScore": 5.75
-    },
-    "8d628b77-b0bd-4104-b7d0-5e91802d785b": {
-      "name": "Banded Side Plank Clamshell",
-      "baseScore": 5,
-      "bonuses": [
-        {
-          "reason": "Muscle Target Match",
-          "value": 1.5
-        }
-      ],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -0.75
-        }
-      ],
-      "finalScore": 5.75
-    },
-    "53febb99-c0d1-4fb6-90e8-856dc4a7827b": {
-      "name": "Hanging Knee Raise",
-      "baseScore": 5,
-      "bonuses": [
-        {
-          "reason": "Muscle Target Match",
-          "value": 1.5
-        }
-      ],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -0.75
-        }
-      ],
-      "finalScore": 5.75
-    },
-    "c9916c21-2e2f-44d0-9aa3-d94b5e35c65c": {
-      "name": "BOSU Bird Dog",
-      "baseScore": 5,
-      "bonuses": [
-        {
-          "reason": "Muscle Target Match",
-          "value": 1.5
-        }
-      ],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -0.75
-        }
-      ],
-      "finalScore": 5.75
-    },
-    "d0752a4c-668e-431d-989f-1099e4e7d8a9": {
-      "name": "Renegade Row",
-      "baseScore": 5,
-      "bonuses": [
-        {
-          "reason": "Intensity Match",
-          "value": 0.75
-        }
-      ],
-      "penalties": [],
-      "finalScore": 5.75
-    },
-    "b10fc80a-3bc6-4d31-8a1d-d653d55dccc3": {
-      "name": "Dumbbell Bridge Chest Press",
-      "baseScore": 5,
-      "bonuses": [
-        {
-          "reason": "Intensity Match",
-          "value": 0.75
-        }
-      ],
-      "penalties": [],
-      "finalScore": 5.75
-    },
-    "77a15368-7d0a-4abb-ae11-cee40c73889d": {
-      "name": "Banded Suitcase Marches",
-      "baseScore": 5,
-      "bonuses": [
-        {
-          "reason": "Muscle Target Match",
-          "value": 1.5
-        }
-      ],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -0.75
-        }
-      ],
-      "finalScore": 5.75
-    },
-    "8050aa27-29fd-43f8-a647-8828e484d28b": {
-      "name": "Incline Dumbbell Press",
-      "baseScore": 5,
-      "bonuses": [
-        {
-          "reason": "Intensity Match",
-          "value": 0.75
-        }
-      ],
-      "penalties": [],
-      "finalScore": 5.75
-    },
-    "478e1c94-85af-4522-9490-e6d8907e1b1a": {
-      "name": "Hollow Body Hold",
-      "baseScore": 5,
-      "bonuses": [
-        {
-          "reason": "Muscle Target Match",
-          "value": 1.5
-        }
-      ],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -0.75
-        }
-      ],
-      "finalScore": 5.75
-    },
-    "2443e54e-6ab2-4779-aa8b-b892dfc635cf": {
-      "name": "Farmer's Carry",
-      "baseScore": 5,
-      "bonuses": [
-        {
-          "reason": "Intensity Match",
-          "value": 0.75
-        }
-      ],
-      "penalties": [],
-      "finalScore": 5.75
-    },
-    "2d073f4f-070d-479b-9214-b7d6701b23e2": {
-      "name": "Dumbbell Press",
-      "baseScore": 5,
-      "bonuses": [
-        {
-          "reason": "Intensity Match",
-          "value": 0.75
-        }
-      ],
-      "penalties": [],
-      "finalScore": 5.75
-    },
-    "53141345-2351-436a-9b1c-21bc273ba554": {
-      "name": "Spanish Lunge",
-      "baseScore": 5,
-      "bonuses": [
-        {
-          "reason": "Muscle Target Match",
-          "value": 1.5
-        }
-      ],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -1.5
-        }
-      ],
-      "finalScore": 5
+      "finalScore": 6
     },
     "dc085fdb-b6c4-4942-9eb5-3dbf04d7161e": {
       "name": "TRX Mid Row",
       "baseScore": 5,
       "bonuses": [],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -0.75
-        }
-      ],
-      "finalScore": 4.25
-    },
-    "3d44886e-896b-4059-a4db-506923ea3b58": {
-      "name": "Batwing Chest-Supported Row",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -0.75
-        }
-      ],
-      "finalScore": 4.25
-    },
-    "ebfd61ba-7bbc-470d-8b9b-c5bc66da2430": {
-      "name": "Dumbbell Pullover",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -0.75
-        }
-      ],
-      "finalScore": 4.25
-    },
-    "02a4b661-036e-4446-91b1-635d495cecdc": {
-      "name": "Face Pulls",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -0.75
-        }
-      ],
-      "finalScore": 4.25
-    },
-    "1503a525-aa1c-483b-a121-183d00397919": {
-      "name": "Lateral Shoulder Raise",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -0.75
-        }
-      ],
-      "finalScore": 4.25
-    },
-    "ed8cddc4-0a55-440a-8ee6-2f5f6024adbf": {
-      "name": "Dumbbell Bent-Over Reverse Fly",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -0.75
-        }
-      ],
-      "finalScore": 4.25
-    },
-    "5964f471-9fd5-4ead-b070-088093d29eaf": {
-      "name": "Side Plank Press-Out",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -0.75
-        }
-      ],
-      "finalScore": 4.25
-    },
-    "44401878-7665-4db0-8532-0e2bf568d955": {
-      "name": "Cable Side Plank Row",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -0.75
-        }
-      ],
-      "finalScore": 4.25
-    },
-    "1e2240ed-388b-463b-96aa-2ca72ddb9cd7": {
-      "name": "Side Plank Reverse Fly",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -0.75
-        }
-      ],
-      "finalScore": 4.25
-    },
-    "64ed80bf-f9b5-424c-99a2-c3aaadf3d210": {
-      "name": "Single-Arm Cable Row",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -0.75
-        }
-      ],
-      "finalScore": 4.25
-    },
-    "57c24380-6ee2-4242-84b5-0cf299ae8369": {
-      "name": "Landmine Shoulder Press",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -0.75
-        }
-      ],
-      "finalScore": 4.25
-    },
-    "48d38fe4-1074-4de8-8513-c0a8c8f1aa32": {
-      "name": "Straight-Arm Pull-Down",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -0.75
-        }
-      ],
-      "finalScore": 4.25
-    },
-    "60150518-b0a8-4f69-9a7d-bc48c84fe55b": {
-      "name": "Stir-the-Pot Plank",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -0.75
-        }
-      ],
-      "finalScore": 4.25
-    },
-    "b1f3e3ae-fe25-4a85-b58a-b9803ceff658": {
-      "name": "Swiss Ball Forearm Plank",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -0.75
-        }
-      ],
-      "finalScore": 4.25
-    },
-    "d1767911-0405-4c19-a20c-d4dcf5af6e33": {
-      "name": "Plank Up-Down (Elbow to Hand)",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -0.75
-        }
-      ],
-      "finalScore": 4.25
-    },
-    "c4755d77-e9a6-4dd8-971f-b41a326c0cfa": {
-      "name": "Russian Twist",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -0.75
-        }
-      ],
-      "finalScore": 4.25
-    },
-    "80c543b0-16fe-4821-9d04-0aadfe1b0082": {
-      "name": "Incline Bicep Curl",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -0.75
-        }
-      ],
-      "finalScore": 4.25
-    },
-    "141589ed-ffb0-48eb-aab5-02cd568e287e": {
-      "name": "Bodyweight Triceps Extension",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -0.75
-        }
-      ],
-      "finalScore": 4.25
-    },
-    "7daaffc6-8b01-4c9d-88cb-484e8d671d0b": {
-      "name": "Dumbbell Overhead Tricep Extension",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -0.75
-        }
-      ],
-      "finalScore": 4.25
-    },
-    "a9f42881-6062-448d-9c24-7b3d4f5ef7b7": {
-      "name": "TRX Y Raise",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -0.75
-        }
-      ],
-      "finalScore": 4.25
-    },
-    "dd47414b-bca2-4fa8-a200-c159632e31d6": {
-      "name": "Box Pike Walkout",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -0.75
-        }
-      ],
-      "finalScore": 4.25
-    },
-    "40e201e6-bb65-406f-911f-685368d6fd22": {
-      "name": "Cable Chest Press (variations)",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -0.75
-        }
-      ],
-      "finalScore": 4.25
-    },
-    "bdb4c362-96eb-4349-b908-8526dcb2db96": {
-      "name": "Skull Crusher",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -0.75
-        }
-      ],
-      "finalScore": 4.25
-    },
-    "3932c675-8175-4303-9835-74e8271c7036": {
-      "name": "Incline Shoulder Raises (three-ways)",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -0.75
-        }
-      ],
-      "finalScore": 4.25
-    },
-    "7bf7a9ec-a4e0-47bb-8119-3edd102721b7": {
-      "name": "Dumbbell Hammer Curls",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -0.75
-        }
-      ],
-      "finalScore": 4.25
-    },
-    "d96150dd-844f-4885-8149-fdea2d484bf0": {
-      "name": "Rope Tricep Pressdown",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -0.75
-        }
-      ],
-      "finalScore": 4.25
-    },
-    "2d7ab434-16a7-4171-bd70-ada8666d7d35": {
-      "name": "Alternating Isometric Dumbbell Curl Hold",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -0.75
-        }
-      ],
-      "finalScore": 4.25
-    },
-    "587b21f3-e9d5-4c54-a2a7-8ed1f6adabcd": {
-      "name": "Elevated Calf Raises",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -0.75
-        }
-      ],
-      "finalScore": 4.25
-    },
-    "b600c65f-091f-47cf-82c5-8b919de7a942": {
-      "name": "Anterior Tibialis Raises",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -0.75
-        }
-      ],
-      "finalScore": 4.25
-    },
-    "bfbd0203-524f-4e78-8b7d-df634ddcecc2": {
-      "name": "Plank Reach",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -0.75
-        }
-      ],
-      "finalScore": 4.25
-    },
-    "1f0a2bb1-fcfa-4a87-9a21-6333d060c2ca": {
-      "name": "Hollow Body One-Arm Press",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -0.75
-        }
-      ],
-      "finalScore": 4.25
-    },
-    "4f4134ab-71e2-48cc-ab6c-1a41c5af6240": {
-      "name": "TRX Bicep Curls",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -0.75
-        }
-      ],
-      "finalScore": 4.25
-    },
-    "2c4c295b-24a1-4dc2-b67d-96951b66f516": {
-      "name": "Plank with Weight Drag",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -0.75
-        }
-      ],
-      "finalScore": 4.25
-    },
-    "d64ae36f-de53-492e-8e0e-71c9629f93ed": {
-      "name": "Alternating Incline Dumbbell Chest Press",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -0.75
-        }
-      ],
-      "finalScore": 4.25
-    },
-    "8a67e6ae-936d-4911-8812-2a2713b9ced1": {
-      "name": "Single-Arm Shoulder Press",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -0.75
-        }
-      ],
-      "finalScore": 4.25
-    },
-    "8a08ffdd-2998-4795-8030-ccd357613f7b": {
-      "name": "Elevated Push-Ups",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -0.75
-        }
-      ],
-      "finalScore": 4.25
-    },
-    "b0736db8-79e4-493d-93da-fcc0af33ab17": {
-      "name": "Bird Dog Row",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -0.75
-        }
-      ],
-      "finalScore": 4.25
-    },
-    "4faeab78-16bd-4d71-b935-226bc691531d": {
-      "name": "Hollow Body Dumbbell Press",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -0.75
-        }
-      ],
-      "finalScore": 4.25
-    },
-    "c502e5ac-7fdb-4051-8b68-5cff392e6032": {
-      "name": "Single-Leg Calf Raise",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -0.75
-        }
-      ],
-      "finalScore": 4.25
-    },
-    "eedaeba8-8676-43db-9d23-4bc9354cb9af": {
-      "name": "Diamond Push-Ups",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -0.75
-        }
-      ],
-      "finalScore": 4.25
-    },
-    "0694ead8-3203-412d-ba86-38e07af88ff9": {
-      "name": "Dumbbell Shrugs",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -0.75
-        }
-      ],
-      "finalScore": 4.25
-    },
-    "165c411d-5d80-4d7f-9620-0352b0a38f7c": {
-      "name": "Cross Cable Rear Delt Fly",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -0.75
-        }
-      ],
-      "finalScore": 4.25
-    },
-    "bf6651b1-d18c-4135-9517-a3e141f0a341": {
-      "name": "Swiss Ball Plank on Bench",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -0.75
-        }
-      ],
-      "finalScore": 4.25
-    },
-    "ad4bbbd7-5e61-443d-b163-588cc9d48596": {
-      "name": "Single-Arm Kettlebell Overhead Press",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -0.75
-        }
-      ],
-      "finalScore": 4.25
-    },
-    "307bf988-adf0-4459-80d7-ed097585069e": {
-      "name": "Upright Row",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -0.75
-        }
-      ],
-      "finalScore": 4.25
-    },
-    "ea5a5588-be0b-4e5e-b109-c3ca7b7609db": {
-      "name": "Plank Shoulder Taps",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -0.75
-        }
-      ],
-      "finalScore": 4.25
-    },
-    "aaa30b49-9d13-43c0-ac73-0ec76160fd3b": {
-      "name": "Upside-Down Kettlebell Press (single arm)",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -0.75
-        }
-      ],
-      "finalScore": 4.25
-    },
-    "27bddaac-3ee7-4767-95a9-fbda6f40ff84": {
-      "name": "Bent-Over Single Arm Kettlebell Row (Gorilla Row)",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -0.75
-        }
-      ],
-      "finalScore": 4.25
-    },
-    "cf620cdf-70a6-4999-adab-4993b9408c2b": {
-      "name": "Australian Pull-Up",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -0.75
-        }
-      ],
-      "finalScore": 4.25
-    },
-    "0a8afe6e-e564-49c1-bb51-deb232049ba3": {
-      "name": "Incline Barbell Bench Press",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -0.75
-        }
-      ],
-      "finalScore": 4.25
-    },
-    "aa31461d-234c-4706-a54e-2b585ebae5bf": {
-      "name": "Pull-Ups (assisted with bands)",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -0.75
-        }
-      ],
-      "finalScore": 4.25
-    },
-    "5d821105-e33e-4956-9b6f-e47966952e8b": {
-      "name": "Single-Arm Kettlebell Suitcase Carry",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -0.75
-        }
-      ],
-      "finalScore": 4.25
-    },
-    "ade4b3a1-169c-417d-b3bc-631f141d4526": {
-      "name": "Barbell Bench Press",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -0.75
-        }
-      ],
-      "finalScore": 4.25
-    },
-    "fcef4310-6e73-41f7-addf-8c474c8ec781": {
-      "name": "Dumbbell Bench Row",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -0.75
-        }
-      ],
-      "finalScore": 4.25
-    },
-    "e922ce7d-d596-4f62-9d0b-78f624ae4102": {
-      "name": "Lat Pulldown",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -0.75
-        }
-      ],
-      "finalScore": 4.25
-    },
-    "42ee950e-7afb-4657-b5d1-54569eab8c5a": {
-      "name": "Band-Assisted Push-Ups",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -0.75
-        }
-      ],
-      "finalScore": 4.25
-    },
-    "0ed8d787-caff-4e43-b04b-45dc9b93117d": {
-      "name": "3-Point Dumbbell Row",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -0.75
-        }
-      ],
-      "finalScore": 4.25
-    },
-    "d0fbe3a3-a122-46c7-a3ee-4ec5b2acd602": {
-      "name": "Two-Arm Cable Row",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -0.75
-        }
-      ],
-      "finalScore": 4.25
-    },
-    "fa7d732e-418e-47fe-ab3a-6ba270e0b9ac": {
-      "name": "Pendlay Row",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -0.75
-        }
-      ],
-      "finalScore": 4.25
-    },
-    "68b71b3b-3b30-48f0-acd1-73441bff8bea": {
-      "name": "Dumbbell Shoulder Press",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -0.75
-        }
-      ],
-      "finalScore": 4.25
-    },
-    "c0fb46fd-9b4e-4115-b830-279f81ddbc10": {
-      "name": "Push-Ups",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -0.75
-        }
-      ],
-      "finalScore": 4.25
-    },
-    "4daa20f6-b441-4ba2-b735-2f8e08280226": {
-      "name": "Cable Low-to-High Chest Fly",
-      "baseScore": 5,
-      "bonuses": [],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -0.75
-        }
-      ],
-      "finalScore": 4.25
+      "penalties": [],
+      "finalScore": 5
     },
     "617f0ccf-e9ec-494a-9608-1a3402a57cab": {
       "name": "Band Pull-Apart",
       "baseScore": 5,
       "bonuses": [],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -1.5
-        }
-      ],
-      "finalScore": 3.5
+      "penalties": [],
+      "finalScore": 5
     },
     "aa66d8b3-907a-42ec-ac9b-bbaa347a88b8": {
       "name": "Y/W Raises",
       "baseScore": 5,
       "bonuses": [],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -1.5
-        }
-      ],
-      "finalScore": 3.5
+      "penalties": [],
+      "finalScore": 5
+    },
+    "dce44ce1-9f79-4c98-80ba-d4cc6d2bb9a6": {
+      "name": "Lateral Step-Up with Goblet Hold",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "5a75f68d-4d30-4211-a98c-a74c71f70f8d": {
+      "name": "Glute Bridge Thrust with Dumbbell",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "904c2b74-944f-49af-8324-22b1b1ea7b9a": {
+      "name": "Jump Squat",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "3d44886e-896b-4059-a4db-506923ea3b58": {
+      "name": "Batwing Chest-Supported Row",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "050e52d0-5f3a-491c-b424-24c5dad31a62": {
+      "name": "Farmer's Carry Step-Up",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "ebfd61ba-7bbc-470d-8b9b-c5bc66da2430": {
+      "name": "Dumbbell Pullover",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "02a4b661-036e-4446-91b1-635d495cecdc": {
+      "name": "Face Pulls",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "1503a525-aa1c-483b-a121-183d00397919": {
+      "name": "Lateral Shoulder Raise",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
     },
     "9ec47c63-1d15-42d4-9885-a95701610f87": {
       "name": "Dead Bug",
       "baseScore": 5,
       "bonuses": [],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -1.5
-        }
-      ],
-      "finalScore": 3.5
+      "penalties": [],
+      "finalScore": 5
     },
     "4e40b3f0-cf13-4998-8ec0-61a9b5dd5239": {
       "name": "Banded Prone Overhead Press",
       "baseScore": 5,
       "bonuses": [],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -1.5
-        }
-      ],
-      "finalScore": 3.5
+      "penalties": [],
+      "finalScore": 5
+    },
+    "840aedec-f2a7-47cb-935c-9ffc43cedde6": {
+      "name": "Quadruped Fire Hydrant (Peeing Dog)",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "e824764c-7860-4254-a2c5-9eca52db2e5d": {
+      "name": "Medicine Ball Slam",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "ed8cddc4-0a55-440a-8ee6-2f5f6024adbf": {
+      "name": "Dumbbell Bent-Over Reverse Fly",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "5964f471-9fd5-4ead-b070-088093d29eaf": {
+      "name": "Side Plank Press-Out",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "44401878-7665-4db0-8532-0e2bf568d955": {
+      "name": "Cable Side Plank Row",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "1e2240ed-388b-463b-96aa-2ca72ddb9cd7": {
+      "name": "Side Plank Reverse Fly",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "f3887428-47ba-4d81-8916-acc4c7c05fa9": {
+      "name": "Offset Lateral Lunge",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "64ed80bf-f9b5-424c-99a2-c3aaadf3d210": {
+      "name": "Single-Arm Cable Row",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "57c24380-6ee2-4242-84b5-0cf299ae8369": {
+      "name": "Landmine Shoulder Press",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "df27f104-414a-4e16-a392-45a1b9254e58": {
+      "name": "Monster Walk (Banded Lateral Walk)",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "698adb88-ad38-4e98-9735-489f5b7d0c45": {
+      "name": "Curtsy Lunge",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "11611e20-e723-4cfe-9276-7ab4eb73f829": {
+      "name": "Landmine Reverse Lunge",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "48d38fe4-1074-4de8-8513-c0a8c8f1aa32": {
+      "name": "Straight-Arm Pull-Down",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "60150518-b0a8-4f69-9a7d-bc48c84fe55b": {
+      "name": "Stir-the-Pot Plank",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "b1f3e3ae-fe25-4a85-b58a-b9803ceff658": {
+      "name": "Swiss Ball Forearm Plank",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "d1767911-0405-4c19-a20c-d4dcf5af6e33": {
+      "name": "Plank Up-Down (Elbow to Hand)",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "c4755d77-e9a6-4dd8-971f-b41a326c0cfa": {
+      "name": "Russian Twist",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "9a20f880-861a-4d2d-b412-bbcf71260d89": {
+      "name": "Face Pull to Overhead Press",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "fb5bf2ce-611c-4a2f-ae16-8d21d28280c1": {
+      "name": "Side Plank Hip Raise",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "80c543b0-16fe-4821-9d04-0aadfe1b0082": {
+      "name": "Incline Bicep Curl",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "e3cd89af-a339-49ec-b5eb-5438d1227a0f": {
+      "name": "Suitcase Kettlebell Lunge",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "0975bd35-a1fd-4ea7-acc4-dd9c05d4a982": {
+      "name": "Bosu Plank Jack",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "141589ed-ffb0-48eb-aab5-02cd568e287e": {
+      "name": "Bodyweight Triceps Extension",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "8442a047-e5a7-49d7-a40e-fce4812b40ce": {
+      "name": "Single-Leg Glute Bridge with Band",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "7daaffc6-8b01-4c9d-88cb-484e8d671d0b": {
+      "name": "Dumbbell Overhead Tricep Extension",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "a9f42881-6062-448d-9c24-7b3d4f5ef7b7": {
+      "name": "TRX Y Raise",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "c0e353d1-5ffe-4340-ac6f-2ee03af6c2fc": {
+      "name": "Bear Crawl (Forward and Back)",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "7a6a7db5-8e05-4e60-9292-8004dac927db": {
+      "name": "In-and-Out Squat Jumps",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "dd47414b-bca2-4fa8-a200-c159632e31d6": {
+      "name": "Box Pike Walkout",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "7ed3976c-c9f3-4672-966c-424778e1cd8c": {
+      "name": "Goblet Squat Pulse",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "40e201e6-bb65-406f-911f-685368d6fd22": {
+      "name": "Cable Chest Press (variations)",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "bdb4c362-96eb-4349-b908-8526dcb2db96": {
+      "name": "Skull Crusher",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "9d50d2f2-0eda-48c4-9f7d-7a1fcff879b1": {
+      "name": "Dumbbell Thruster",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "3932c675-8175-4303-9835-74e8271c7036": {
+      "name": "Incline Shoulder Raises (three-ways)",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "7bf7a9ec-a4e0-47bb-8119-3edd102721b7": {
+      "name": "Dumbbell Hammer Curls",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "d96150dd-844f-4885-8149-fdea2d484bf0": {
+      "name": "Rope Tricep Pressdown",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "71aee1c7-b87e-48fb-a28f-7a5c251b0808": {
+      "name": "Plank Jack",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "2d7ab434-16a7-4171-bd70-ada8666d7d35": {
+      "name": "Alternating Isometric Dumbbell Curl Hold",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "587b21f3-e9d5-4c54-a2a7-8ed1f6adabcd": {
+      "name": "Elevated Calf Raises",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "b600c65f-091f-47cf-82c5-8b919de7a942": {
+      "name": "Anterior Tibialis Raises",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "bfbd0203-524f-4e78-8b7d-df634ddcecc2": {
+      "name": "Plank Reach",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "620165b8-278c-48cd-a8a1-9f9aa1f37e80": {
+      "name": "Flutter Kicks",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "1f0a2bb1-fcfa-4a87-9a21-6333d060c2ca": {
+      "name": "Hollow Body One-Arm Press",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "4f4134ab-71e2-48cc-ab6c-1a41c5af6240": {
+      "name": "TRX Bicep Curls",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "aed8cfc3-3405-440e-8249-3e646de7e9c5": {
+      "name": "Copenhagen Plank",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "2c4c295b-24a1-4dc2-b67d-96951b66f516": {
+      "name": "Plank with Weight Drag",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "d64ae36f-de53-492e-8e0e-71c9629f93ed": {
+      "name": "Alternating Incline Dumbbell Chest Press",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "8a67e6ae-936d-4911-8812-2a2713b9ced1": {
+      "name": "Single-Arm Shoulder Press",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "03b163dc-ac95-4ba7-938c-5de8b27f0972": {
+      "name": "Glute Kickbacks",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "8a08ffdd-2998-4795-8030-ccd357613f7b": {
+      "name": "Elevated Push-Ups",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "b0736db8-79e4-493d-93da-fcc0af33ab17": {
+      "name": "Bird Dog Row",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "cdd9c4a6-4048-4ee2-9292-aa36e7a2a9ae": {
+      "name": "Barbell Glute Bridge on Bench",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "4faeab78-16bd-4d71-b935-226bc691531d": {
+      "name": "Hollow Body Dumbbell Press",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "a5d09b5a-d62f-477b-8b71-216f35a20291": {
+      "name": "Wall Squat Hold",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "ce18afb8-3b1f-4183-9cdc-833da34574b3": {
+      "name": "Single-Leg Banded Kettlebell Suitcase Hold",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "c502e5ac-7fdb-4051-8b68-5cff392e6032": {
+      "name": "Single-Leg Calf Raise",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "8d628b77-b0bd-4104-b7d0-5e91802d785b": {
+      "name": "Banded Side Plank Clamshell",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "53febb99-c0d1-4fb6-90e8-856dc4a7827b": {
+      "name": "Hanging Knee Raise",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "eedaeba8-8676-43db-9d23-4bc9354cb9af": {
+      "name": "Diamond Push-Ups",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "c9916c21-2e2f-44d0-9aa3-d94b5e35c65c": {
+      "name": "BOSU Bird Dog",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "d0752a4c-668e-431d-989f-1099e4e7d8a9": {
+      "name": "Renegade Row",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "5eaede2f-c9d5-41ef-8942-9d74a95ded1e": {
+      "name": "Twisting Pistons",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "0694ead8-3203-412d-ba86-38e07af88ff9": {
+      "name": "Dumbbell Shrugs",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "b10fc80a-3bc6-4d31-8a1d-d653d55dccc3": {
+      "name": "Dumbbell Bridge Chest Press",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "53141345-2351-436a-9b1c-21bc273ba554": {
+      "name": "Spanish Lunge",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "165c411d-5d80-4d7f-9620-0352b0a38f7c": {
+      "name": "Cross Cable Rear Delt Fly",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "bf6651b1-d18c-4135-9517-a3e141f0a341": {
+      "name": "Swiss Ball Plank on Bench",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "ad4bbbd7-5e61-443d-b163-588cc9d48596": {
+      "name": "Single-Arm Kettlebell Overhead Press",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "307bf988-adf0-4459-80d7-ed097585069e": {
+      "name": "Upright Row",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
     },
     "8596d22e-6349-45e6-83f1-835e3360771f": {
       "name": "Plank",
       "baseScore": 5,
       "bonuses": [],
-      "penalties": [
-        {
-          "reason": "Intensity Mismatch",
-          "value": -1.5
-        }
-      ],
-      "finalScore": 3.5
+      "penalties": [],
+      "finalScore": 5
+    },
+    "ea5a5588-be0b-4e5e-b109-c3ca7b7609db": {
+      "name": "Plank Shoulder Taps",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "aaa30b49-9d13-43c0-ac73-0ec76160fd3b": {
+      "name": "Upside-Down Kettlebell Press (single arm)",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "77a15368-7d0a-4abb-ae11-cee40c73889d": {
+      "name": "Banded Suitcase Marches",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "8050aa27-29fd-43f8-a647-8828e484d28b": {
+      "name": "Incline Dumbbell Press",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "27bddaac-3ee7-4767-95a9-fbda6f40ff84": {
+      "name": "Bent-Over Single Arm Kettlebell Row (Gorilla Row)",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "cf620cdf-70a6-4999-adab-4993b9408c2b": {
+      "name": "Australian Pull-Up",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "f18f0a95-f622-495c-bdd4-eae6425acb0d": {
+      "name": "Lateral Lunge",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "0a8afe6e-e564-49c1-bb51-deb232049ba3": {
+      "name": "Incline Barbell Bench Press",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "aa31461d-234c-4706-a54e-2b585ebae5bf": {
+      "name": "Pull-Ups (assisted with bands)",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "5d821105-e33e-4956-9b6f-e47966952e8b": {
+      "name": "Single-Arm Kettlebell Suitcase Carry",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "ed0ee454-b40b-403a-bc20-cff5647fa683": {
+      "name": "Farmer's Carry Reverse Lunge",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "ade4b3a1-169c-417d-b3bc-631f141d4526": {
+      "name": "Barbell Bench Press",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "478e1c94-85af-4522-9490-e6d8907e1b1a": {
+      "name": "Hollow Body Hold",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "144e1124-e7d7-4594-8c75-f9522081060e": {
+      "name": "Kettlebell Deadlift",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "fcef4310-6e73-41f7-addf-8c474c8ec781": {
+      "name": "Dumbbell Bench Row",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "2443e54e-6ab2-4779-aa8b-b892dfc635cf": {
+      "name": "Farmer's Carry",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "e922ce7d-d596-4f62-9d0b-78f624ae4102": {
+      "name": "Lat Pulldown",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "42ee950e-7afb-4657-b5d1-54569eab8c5a": {
+      "name": "Band-Assisted Push-Ups",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "dabd605d-42d5-4c18-bbf8-856eb175a78c": {
+      "name": "Goblet Pause Squat (3 Seconds)",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "0ed8d787-caff-4e43-b04b-45dc9b93117d": {
+      "name": "3-Point Dumbbell Row",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "d0fbe3a3-a122-46c7-a3ee-4ec5b2acd602": {
+      "name": "Two-Arm Cable Row",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "fa7d732e-418e-47fe-ab3a-6ba270e0b9ac": {
+      "name": "Pendlay Row",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "9468e3e6-3912-47de-95be-b5218789b4d6": {
+      "name": "Barbell Reverse Lunges",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "2d073f4f-070d-479b-9214-b7d6701b23e2": {
+      "name": "Dumbbell Press",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "bec554f5-b080-409d-ba41-b93a51a56836": {
+      "name": "Barbell Back Squat",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "6712600b-d4a2-4708-962e-fa6b1c3eb9cc": {
+      "name": "Goblet Squat",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "e943357b-3ac8-4e43-948f-b4a15901561a": {
+      "name": "Deadlift",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "68b71b3b-3b30-48f0-acd1-73441bff8bea": {
+      "name": "Dumbbell Shoulder Press",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "c0fb46fd-9b4e-4115-b830-279f81ddbc10": {
+      "name": "Push-Ups",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "ac8126a5-92ea-42b5-9955-6d0ae38dd70a": {
+      "name": "Bulgarian Split Squat",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "4daa20f6-b441-4ba2-b735-2f8e08280226": {
+      "name": "Cable Low-to-High Chest Fly",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
+    },
+    "b16c277f-9a95-4d94-a039-88686bcf263d": {
+      "name": "Kettlebell Swings",
+      "baseScore": 5,
+      "bonuses": [],
+      "penalties": [],
+      "finalScore": 5
     }
   },
   "debugLog": [
     {
       "step": 1,
-      "timestamp": "2025-07-27T04:04:51.557Z",
+      "timestamp": "2025-07-28T22:01:29.773Z",
       "phase": "filtering",
       "action": "Starting enhanced filtering",
       "details": {
@@ -1710,7 +948,10 @@
         "filters": {
           "strength": "moderate",
           "skill": "moderate",
-          "include": [],
+          "include": [
+            "Lunge with Biceps Curl",
+            "Landmine T Bar Row"
+          ],
           "avoid": [],
           "avoidJoints": []
         }
@@ -1719,7 +960,31 @@
     },
     {
       "step": 2,
-      "timestamp": "2025-07-27T04:04:51.557Z",
+      "timestamp": "2025-07-28T22:01:29.773Z",
+      "phase": "filtering",
+      "action": "Processing include list",
+      "details": {
+        "includeList": [
+          "Lunge with Biceps Curl",
+          "Landmine T Bar Row"
+        ]
+      },
+      "performanceMs": 0
+    },
+    {
+      "step": 3,
+      "timestamp": "2025-07-28T22:01:29.773Z",
+      "phase": "filtering",
+      "action": "Include list processed",
+      "details": {
+        "includedCount": 2,
+        "remainingCount": 128
+      },
+      "performanceMs": 0
+    },
+    {
+      "step": 4,
+      "timestamp": "2025-07-28T22:01:29.773Z",
       "phase": "filtering",
       "action": "Filtering by strength: moderate",
       "details": {
@@ -1728,25 +993,25 @@
           "low",
           "moderate"
         ],
-        "inputCount": 130
+        "inputCount": 128
       },
       "performanceMs": 0
     },
     {
-      "step": 3,
-      "timestamp": "2025-07-27T04:04:51.557Z",
+      "step": 5,
+      "timestamp": "2025-07-28T22:01:29.773Z",
       "phase": "filtering",
       "action": "Strength filtering complete",
       "details": {
         "excluded": 10,
-        "remaining": 120
+        "remaining": 118
       },
       "exercisesAffected": 10,
-      "performanceMs": 0.05007999949157238
+      "performanceMs": 0.09581299999263138
     },
     {
-      "step": 4,
-      "timestamp": "2025-07-27T04:04:51.557Z",
+      "step": 6,
+      "timestamp": "2025-07-28T22:01:29.773Z",
       "phase": "filtering",
       "action": "Filtering by skill: moderate",
       "details": {
@@ -1755,25 +1020,25 @@
           "low",
           "moderate"
         ],
-        "inputCount": 120
+        "inputCount": 118
       },
       "performanceMs": 0
     },
     {
-      "step": 5,
-      "timestamp": "2025-07-27T04:04:51.557Z",
+      "step": 7,
+      "timestamp": "2025-07-28T22:01:29.773Z",
       "phase": "filtering",
       "action": "Skill filtering complete",
       "details": {
         "excluded": 3,
-        "remaining": 117
+        "remaining": 115
       },
       "exercisesAffected": 3,
-      "performanceMs": 0.025081999599933624
+      "performanceMs": 0.02665999997407198
     },
     {
-      "step": 6,
-      "timestamp": "2025-07-27T04:04:51.557Z",
+      "step": 8,
+      "timestamp": "2025-07-28T22:01:29.773Z",
       "phase": "filtering",
       "action": "Combined included and filtered exercises",
       "details": {
@@ -1782,8 +1047,8 @@
       "performanceMs": 0
     },
     {
-      "step": 7,
-      "timestamp": "2025-07-27T04:04:51.557Z",
+      "step": 9,
+      "timestamp": "2025-07-28T22:01:29.773Z",
       "phase": "filtering",
       "action": "Filtering complete",
       "details": {

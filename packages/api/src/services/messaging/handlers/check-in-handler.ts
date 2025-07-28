@@ -9,6 +9,17 @@ import { TemplateSMSService } from '../../sms/template-sms-service';
 import { BlueprintGenerationService } from '../../blueprint-generation-service';
 import { ExerciseSelectionService } from '../../sms/template-services/exercise-selection-service';
 
+// Type for the broadcast function - will be injected from the API layer
+let broadcastCheckInEvent: ((sessionId: string, clientData: {
+  userId: string;
+  name: string;
+  checkedInAt: string;
+}) => void) | null = null;
+
+export function setBroadcastFunction(fn: typeof broadcastCheckInEvent) {
+  broadcastCheckInEvent = fn;
+}
+
 export class CheckInHandler extends BaseMessageHandler {
   async handle(message: UnifiedMessage, intent: MessageIntent): Promise<MessageResponse> {
     try {
@@ -76,6 +87,43 @@ export class CheckInHandler extends BaseMessageHandler {
         checkInId = existingCheckIn.id;
         isNewCheckIn = true;
         console.log(`[${new Date().toISOString()}] Updated registration to checked in`);
+        
+        // Broadcast check-in event for SSE
+        if (broadcastCheckInEvent) {
+          console.log(`[${new Date().toISOString()}] Broadcasting check-in event via function`);
+          broadcastCheckInEvent(openSession.id, {
+            userId: message.userId,
+            name: message.userName || "Unknown",
+            checkedInAt: now.toISOString()
+          });
+        } else if (message.channel === 'web') {
+          // For web messages, call the broadcast endpoint directly
+          console.log(`[${new Date().toISOString()}] Broadcasting check-in event via HTTP for web channel`);
+          try {
+            // Use localhost for development
+            const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
+            const broadcastUrl = new URL('/api/internal/broadcast-check-in', baseUrl);
+            
+            const response = await fetch(broadcastUrl.toString(), {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                sessionId: openSession.id,
+                userId: message.userId,
+                name: message.userName || "Unknown",
+                checkedInAt: now.toISOString()
+              })
+            });
+            
+            if (!response.ok) {
+              console.error(`[${new Date().toISOString()}] Broadcast HTTP response not ok:`, response.status);
+            } else {
+              console.log(`[${new Date().toISOString()}] Broadcast check-in event via HTTP successful`);
+            }
+          } catch (error) {
+            console.error(`[${new Date().toISOString()}] Failed to broadcast check-in via HTTP:`, error);
+          }
+        }
       } else {
         // Create new check-in
         const [newCheckIn] = await db
@@ -95,65 +143,47 @@ export class CheckInHandler extends BaseMessageHandler {
         checkInId = newCheckIn.id;
         isNewCheckIn = true;
         console.log(`[${new Date().toISOString()}] Created new check-in`);
-      }
-
-      // Build response based on template
-      let responseMessage = `Hello ${this.formatClientName(message.userName)}! You're ${isNewCheckIn ? 'checked in for' : 'already checked in for'} the session. Welcome!`;
-      
-      // Check for BMF template deterministic selections
-      if (openSession.templateType) {
-        const template = getWorkoutTemplate(openSession.templateType);
         
-        console.log(`[${new Date().toISOString()}] Checking for template selections:`, {
-          templateType: openSession.templateType,
-          hasSmsConfig: !!template?.smsConfig,
-          showDeterministicSelections: template?.smsConfig?.showDeterministicSelections
-        });
-        
-        if (template?.smsConfig?.showDeterministicSelections) {
+        // Broadcast check-in event for SSE
+        if (broadcastCheckInEvent) {
+          console.log(`[${new Date().toISOString()}] Broadcasting check-in event via function`);
+          broadcastCheckInEvent(openSession.id, {
+            userId: message.userId,
+            name: message.userName || "Unknown",
+            checkedInAt: now.toISOString()
+          });
+        } else if (message.channel === 'web') {
+          // For web messages, call the broadcast endpoint directly
+          console.log(`[${new Date().toISOString()}] Broadcasting check-in event via HTTP for web channel`);
           try {
-            // Try to get blueprint selections
-            const blueprintExists = await BlueprintGenerationService.ensureBlueprintExists(openSession.id);
+            // Use localhost for development
+            const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
+            const broadcastUrl = new URL('/api/internal/broadcast-check-in', baseUrl);
             
-            let selections: any[] = [];
+            const response = await fetch(broadcastUrl.toString(), {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                sessionId: openSession.id,
+                userId: message.userId,
+                name: message.userName || "Unknown",
+                checkedInAt: now.toISOString()
+              })
+            });
             
-            if (blueprintExists) {
-              selections = await ExerciseSelectionService.getDeterministicSelections(openSession.id);
-              console.log(`[${new Date().toISOString()}] Got ${selections.length} selections from blueprint`);
+            if (!response.ok) {
+              console.error(`[${new Date().toISOString()}] Broadcast HTTP response not ok:`, response.status);
             } else {
-              // Use preview
-              console.log(`[${new Date().toISOString()}] Blueprint not available, using preview`);
-              selections = await ExerciseSelectionService.getDeterministicPreview(openSession.templateType);
-            }
-            
-            if (selections.length > 0) {
-              const clientName = ExerciseSelectionService.formatClientName(message.userName);
-              responseMessage = ExerciseSelectionService.formatSelectionsForSMS(selections, clientName);
-              console.log(`[${new Date().toISOString()}] Using deterministic selections in response`);
+              console.log(`[${new Date().toISOString()}] Broadcast check-in event via HTTP successful`);
             }
           } catch (error) {
-            console.error(`[${new Date().toISOString()}] Error getting deterministic selections:`, error);
-            // Fall back to standard response
+            console.error(`[${new Date().toISOString()}] Failed to broadcast check-in via HTTP:`, error);
           }
         }
       }
-      
-      // Add preference prompt if needed
-      const shouldStartPreferences = isNewCheckIn || 
-        (existingCheckIn && existingCheckIn.preferenceCollectionStep === "not_started");
-      
-      if (shouldStartPreferences) {
-        const smsConfig = openSession.id 
-          ? await TemplateSMSService.getSMSConfigForSession(openSession.id)
-          : null;
-        
-        const preferencePrompt = TemplateSMSService.getPreferencePrompt(
-          smsConfig, 
-          message.userName
-        );
-        
-        responseMessage = `${responseMessage}\n\n${preferencePrompt}`;
-      }
+
+      // Build simple check-in response
+      const responseMessage = `Welcome, ${this.formatClientName(message.userName)}! You're checked in. We'll get started once everyone joins.`;
 
       return {
         success: true,
@@ -163,8 +193,7 @@ export class CheckInHandler extends BaseMessageHandler {
           businessId: message.businessId,
           sessionId: openSession.id,
           checkInId,
-          checkInSuccess: true,
-          shouldStartPreferences
+          checkInSuccess: true
         }
       };
 

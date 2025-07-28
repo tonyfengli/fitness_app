@@ -84,6 +84,32 @@ export default function SessionLobby() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isAddingTestClients, setIsAddingTestClients] = useState(false);
+  const [configureMode, setConfigureMode] = useState(true); // Default to true for configure mode
+  const [isStartingSession, setIsStartingSession] = useState(false);
+  
+  // Send session start messages mutation
+  const sendStartMessagesMutation = useMutation({
+    ...trpc.trainingSession.sendSessionStartMessages.mutationOptions(),
+    onSuccess: (data) => {
+      console.log('[SessionLobby] SMS send result:', data);
+    },
+    onError: (error: any) => {
+      console.error('[SessionLobby] Failed to send start messages:', error);
+      console.error('[SessionLobby] Error details:', {
+        message: error.message,
+        data: error.data,
+        shape: error.shape
+      });
+      // Don't block navigation on error
+    }
+  });
+  
+  // Debug: Log mutation state
+  useEffect(() => {
+    if (sendStartMessagesMutation.error) {
+      console.error('[SessionLobby] Mutation error state:', sendStartMessagesMutation.error);
+    }
+  }, [sendStartMessagesMutation.error]);
   
   // Fetch initial checked-in clients
   const { data: initialClients, isLoading } = useQuery(
@@ -305,15 +331,60 @@ export default function SessionLobby() {
           </div>
           
           <div className="text-center mb-8 space-y-4">
+            {/* Configure Mode Toggle */}
+            <div className="flex items-center justify-center gap-3 mb-4">
+              <label htmlFor="configure-mode" className="text-sm font-medium text-gray-700">
+                Enable Configure Mode
+              </label>
+              <button
+                id="configure-mode"
+                role="switch"
+                aria-checked={configureMode}
+                onClick={() => setConfigureMode(!configureMode)}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                  configureMode ? 'bg-indigo-600' : 'bg-gray-200'
+                }`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    configureMode ? 'translate-x-6' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </div>
+            
             <button 
-              onClick={() => {
+              onClick={async () => {
                 if (sessionId) {
-                  router.push(`/session-lobby/group-visualization?sessionId=${sessionId}`);
+                  setIsStartingSession(true);
+                  
+                  // Always send start messages to auto-populate includeExercises for BMF templates
+                  console.log('[SessionLobby] Sending session start messages...');
+                  // Fire and forget - don't await
+                  sendStartMessagesMutation.mutate({ sessionId });
+                  
+                  // Navigate immediately
+                  if (configureMode) {
+                    router.push(`/session-lobby/group-visualization?sessionId=${sessionId}`);
+                  } else {
+                    router.push(`/preferences?sessionId=${sessionId}`);
+                  }
                 }
               }}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 px-12 rounded-full shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 text-lg inline-flex items-center justify-center"
+              disabled={isStartingSession || checkedInClients.length === 0}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 px-12 rounded-full shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 text-lg inline-flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
             >
-              Start Session
+              {isStartingSession ? (
+                <>
+                  <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Starting Session...
+                </>
+              ) : (
+                'Start Session'
+              )}
             </button>
             
             {/* Add Test Clients Button */}

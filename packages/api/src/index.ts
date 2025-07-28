@@ -34,6 +34,9 @@ export { ExerciseValidationService } from "./services/exerciseValidationService"
 export { ExerciseMatchingLLMService } from "./services/exerciseMatchingLLMService";
 export { TargetedFollowupService } from "./services/targetedFollowupService";
 
+// Export new check-in handler broadcast function
+export { setBroadcastFunction as setCheckInBroadcastFunction } from "./services/messaging/handlers/check-in-handler";
+
 // Export new SMS handler components
 export { SMSWebhookHandler } from "./services/sms";
 
