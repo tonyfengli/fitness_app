@@ -66,7 +66,8 @@ export default function PreferencesPage() {
     console.log('[Preferences] Received preference update:', event);
     // Refetch data to show updated preferences
     refetchClients();
-  }, [refetchClients]);
+    refetchWorkout();
+  }, [refetchClients, refetchWorkout]);
   
   // Set up SSE connection for real-time updates
   const { isConnected } = usePreferenceStream({
@@ -116,7 +117,11 @@ export default function PreferencesPage() {
   const getClientExercisesForRounds = (clientId: string, rounds: string[]) => {
     if (!workoutData?.blueprint) return [];
     
-    const exercises: { name: string; confirmed: boolean }[] = [];
+    // Get the client's preferences to check for excluded exercises
+    const clientData = checkedInClients?.find(c => c.userId === clientId);
+    const avoidedExercises = clientData?.preferences?.avoidExercises || [];
+    
+    const exercises: { name: string; confirmed: boolean; isExcluded: boolean }[] = [];
     
     for (const round of rounds) {
       const block = workoutData.blueprint.blocks.find(b => b.blockId === round);
@@ -124,9 +129,11 @@ export default function PreferencesPage() {
         const clientExercises = block.individualCandidates[clientId].exercises;
         if (clientExercises && clientExercises.length > 0) {
           // Get the top exercise for this round (deterministically selected)
+          const exerciseName = clientExercises[0].name;
           exercises.push({
-            name: clientExercises[0].name,
-            confirmed: false
+            name: exerciseName,
+            confirmed: false,
+            isExcluded: avoidedExercises.includes(exerciseName)
           });
         }
       }
@@ -192,9 +199,24 @@ export default function PreferencesPage() {
                 </div>
                 <div className="space-y-3">
                   {client.confirmedExercises.map((exercise, idx) => (
-                    <div key={idx} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                      <span className="text-gray-700">{exercise.name}</span>
-                      <button className="w-6 h-6 rounded-full border-2 border-gray-300 bg-white hover:border-gray-400 transition-colors">
+                    <div key={idx} className={`flex items-center justify-between p-3 rounded-lg ${
+                      exercise.isExcluded ? 'bg-gray-100' : 'bg-gray-50'
+                    }`}>
+                      <div className="flex items-center gap-2">
+                        <span className={`${
+                          exercise.isExcluded 
+                            ? 'text-gray-400 line-through decoration-2' 
+                            : 'text-gray-700'
+                        }`}>{exercise.name}</span>
+                        {exercise.isExcluded && (
+                          <span className="text-xs text-gray-500 italic">(Replaced)</span>
+                        )}
+                      </div>
+                      <button className={`w-6 h-6 rounded-full border-2 bg-white transition-colors ${
+                        exercise.isExcluded 
+                          ? 'border-gray-300 cursor-not-allowed opacity-50' 
+                          : 'border-gray-300 hover:border-gray-400'
+                      }`} disabled={exercise.isExcluded}>
                         {/* Empty circle for unselected state */}
                       </button>
                     </div>

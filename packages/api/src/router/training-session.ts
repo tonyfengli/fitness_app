@@ -2447,7 +2447,6 @@ Set your goals and preferences for today's session.`;
           // If includeExercises is populated, use those directly
           if (preferences?.includeExercises && preferences.includeExercises.length >= 2) {
             const selections = [];
-            const recommendations = [];
             
             // Get exercise details from database
             const exerciseDetails = await ctx.db
@@ -2483,12 +2482,68 @@ Set your goals and preferences for today's session.`;
               });
             }
             
-            // For recommendations, we'll need to generate a blueprint
-            // This is handled below in the else block
-            return {
-              exercises: selections,
-              recommendations: recommendations
-            };
+            // Generate blueprint to get recommendations
+            try {
+              const { WorkoutBlueprintService } = await import("../services/workout-blueprint-service");
+              const blueprint = await WorkoutBlueprintService.generateBlueprintWithCache(
+                input.sessionId,
+                session.businessId,
+                input.userId
+              );
+              
+              // Extract recommendations from blueprint
+              const recommendations = [];
+              if (blueprint?.blocks) {
+                const round1Block = blueprint.blocks.find((b: any) => b.blockId === 'Round1');
+                const round2Block = blueprint.blocks.find((b: any) => b.blockId === 'Round2');
+                
+                // Get ALL Round1 candidates
+                if (round1Block?.individualCandidates?.[input.userId]) {
+                  const candidateData = round1Block.individualCandidates[input.userId];
+                  // Use allFilteredExercises if available, otherwise fall back to exercises
+                  const exerciseList = candidateData.allFilteredExercises || candidateData.exercises || [];
+                  
+                  exerciseList.forEach((exercise: any) => {
+                    if (exercise.name !== preferences.includeExercises[0]) {
+                      recommendations.push({
+                        ...exercise,
+                        roundId: 'Round1',
+                        roundName: 'Round 1'
+                      });
+                    }
+                  });
+                }
+                
+                // Get ALL Round2 candidates
+                if (round2Block?.individualCandidates?.[input.userId]) {
+                  const candidateData = round2Block.individualCandidates[input.userId];
+                  // Use allFilteredExercises if available, otherwise fall back to exercises
+                  const exerciseList = candidateData.allFilteredExercises || candidateData.exercises || [];
+                  
+                  exerciseList.forEach((exercise: any) => {
+                    if (exercise.name !== preferences.includeExercises[1]) {
+                      recommendations.push({
+                        ...exercise,
+                        roundId: 'Round2',
+                        roundName: 'Round 2'
+                      });
+                    }
+                  });
+                }
+              }
+              
+              return {
+                exercises: selections,
+                recommendations: recommendations
+              };
+            } catch (error) {
+              console.error('Failed to get recommendations:', error);
+              // Return without recommendations if blueprint generation fails
+              return {
+                exercises: selections,
+                recommendations: []
+              };
+            }
           }
 
           // Get user profile
@@ -2668,17 +2723,40 @@ Set your goals and preferences for today's session.`;
       if (existingPrefs) {
         // Update existing preferences - replace the exercise for the specific round
         const currentIncludes = existingPrefs.includeExercises || [];
+        const currentExcludes = existingPrefs.avoidExercises || [];
         const updatedIncludes = [...currentIncludes];
         
         // Round1 = index 0, Round2 = index 1
         const roundIndex = input.round === 'Round1' ? 0 : 1;
+        const oldExerciseName = updatedIncludes[roundIndex];
+        
+        // Update the include array with the new exercise
         updatedIncludes[roundIndex] = input.newExerciseName;
+        
+        // Add the old exercise to the exclude array if it exists and isn't already excluded
+        const updatedExcludes = [...currentExcludes];
+        if (oldExerciseName && !updatedExcludes.includes(oldExerciseName)) {
+          updatedExcludes.push(oldExerciseName);
+        }
+        
+        console.log('[replaceClientExercisePublic] Updating preferences:', {
+          userId: input.userId,
+          sessionId: input.sessionId,
+          round: input.round,
+          roundIndex,
+          oldExercise: oldExerciseName,
+          newExercise: input.newExerciseName,
+          currentIncludes,
+          updatedIncludes,
+          currentExcludes,
+          updatedExcludes
+        });
         
         await ctx.db
           .update(WorkoutPreferences)
           .set({ 
             includeExercises: updatedIncludes,
-            updatedAt: new Date()
+            avoidExercises: updatedExcludes
           })
           .where(and(
             eq(WorkoutPreferences.userId, input.userId),
@@ -2701,6 +2779,32 @@ Set your goals and preferences for today's session.`;
           avoidJoints: [],
           avoidExercises: [],
         });
+      }
+
+      // Invalidate blueprint cache when exercise is changed
+      const { WorkoutBlueprintService } = await import("../services/workout-blueprint-service");
+      await WorkoutBlueprintService.invalidateCache(input.sessionId);
+
+      // Broadcast update via SSE
+      try {
+        const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
+        const broadcastUrl = new URL('/api/internal/broadcast-preference', baseUrl);
+        
+        await fetch(broadcastUrl.toString(), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sessionId: input.sessionId,
+            userId: input.userId,
+            exerciseChange: {
+              round: input.round,
+              newExercise: input.newExerciseName
+            }
+          })
+        });
+      } catch (error) {
+        console.error('Failed to broadcast preference update:', error);
+        // Don't fail the mutation if broadcast fails
       }
 
       return { success: true };

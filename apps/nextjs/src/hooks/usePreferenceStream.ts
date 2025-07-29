@@ -34,10 +34,6 @@ export function usePreferenceStream({
   const reconnectAttemptsRef = useRef(0);
 
   useEffect(() => {
-    // SSE temporarily disabled
-    return;
-    
-    /*
     if (!sessionId) return;
 
     const connect = () => {
@@ -111,7 +107,6 @@ export function usePreferenceStream({
       setIsConnected(false);
       setIsReconnecting(false);
     };
-    */
   }, [sessionId, onPreferenceUpdate, onConnect, onDisconnect, onError]);
 
   return { isConnected, isReconnecting };
