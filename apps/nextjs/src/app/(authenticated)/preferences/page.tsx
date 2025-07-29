@@ -4,8 +4,6 @@ import React, { useState, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useTRPC } from "~/trpc/react";
 import { useQuery } from "@tanstack/react-query";
-import { usePreferenceStream } from "~/hooks/usePreferenceStream";
-import type { PreferenceUpdateEvent } from "~/hooks/usePreferenceStream";
 
 // Icon components as inline SVGs
 const Check = () => (
@@ -61,22 +59,7 @@ export default function PreferencesPage() {
 
   const isLoading = clientsLoading || workoutLoading;
   
-  // Handle real-time preference updates
-  const handlePreferenceUpdate = useCallback((event: PreferenceUpdateEvent) => {
-    console.log('[Preferences] Received preference update:', event);
-    // Refetch data to show updated preferences
-    refetchClients();
-    refetchWorkout();
-  }, [refetchClients, refetchWorkout]);
-  
-  // Set up SSE connection for real-time updates
-  const { isConnected } = usePreferenceStream({
-    sessionId: sessionId || '',
-    onPreferenceUpdate: handlePreferenceUpdate,
-    onConnect: () => console.log('[Preferences] SSE connected'),
-    onDisconnect: () => console.log('[Preferences] SSE disconnected'),
-    onError: (err) => console.error('[Preferences] SSE error:', err)
-  });
+  // SSE removed - will be replaced with Supabase Realtime
   
   // Debug logging
   React.useEffect(() => {
@@ -87,9 +70,9 @@ export default function PreferencesPage() {
       workoutLoading,
       checkedInClientsCount: checkedInClients?.length || 0,
       hasWorkoutData: !!workoutData,
-      sseConnected: isConnected
+      sseConnected: false // SSE removed
     });
-  }, [sessionId, isLoading, clientsLoading, workoutLoading, checkedInClients, workoutData, isConnected]);
+  }, [sessionId, isLoading, clientsLoading, workoutLoading, checkedInClients, workoutData]);
 
   if (!sessionId) {
     return (

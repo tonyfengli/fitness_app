@@ -24,18 +24,17 @@ export { createTRPCContext, appRouter };
 export type { AppRouter, RouterInputs, RouterOutputs };
 
 // Export services for SMS webhook
-export { processCheckIn, setBroadcastFunction } from "./services/checkInService";
+export { processCheckIn } from "./services/checkInService";
 export { saveMessage } from "./services/messageService";
 export { getUserByPhone } from "./services/userService";
 export { twilioClient, normalizePhoneNumber } from "./services/twilio";
 export { createLogger } from "./utils/logger";
-export { WorkoutPreferenceService, setPreferenceBroadcastFunction } from "./services/workoutPreferenceService";
+export { WorkoutPreferenceService } from "./services/workoutPreferenceService";
 export { ExerciseValidationService } from "./services/exerciseValidationService";
 export { ExerciseMatchingLLMService } from "./services/exerciseMatchingLLMService";
 export { TargetedFollowupService } from "./services/targetedFollowupService";
 
-// Export new check-in handler broadcast function
-export { setBroadcastFunction as setCheckInBroadcastFunction } from "./services/messaging/handlers/check-in-handler";
+// SSE broadcast functions removed - will be replaced with Supabase Realtime
 
 // Export new SMS handler components
 export { SMSWebhookHandler } from "./services/sms";

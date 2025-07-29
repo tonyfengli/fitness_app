@@ -6,8 +6,7 @@ import { PlayerListItem } from "@acme/ui-desktop";
 import type { PlayerStatus } from "@acme/ui-desktop";
 import { useTRPC } from "~/trpc/react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useCheckInStream } from "~/hooks/useCheckInStream";
-import type { CheckInEvent, PreferenceUpdateEvent } from "~/hooks/useCheckInStream";
+import { useRealtimeCheckIns } from "~/hooks/useRealtimeCheckIns";
 
 // Helper to format muscle names for display (convert underscore to space and capitalize)
 function formatMuscleName(muscle: string): string {
@@ -207,63 +206,20 @@ export default function SessionLobby() {
     }, 1000);
   }, []);
   
-  // Handle preference updates from SSE
-  const handlePreferenceUpdate = useCallback((event: PreferenceUpdateEvent) => {
-    setCheckedInClients(prev => 
-      prev.map(client => {
-        if (client.userId === event.userId) {
-          return {
-            ...client,
-            preferences: {
-              // Replace all fields with incoming values
-              // Backend sends complete state, not incremental updates
-              intensity: event.preferences.intensity,
-              sessionGoal: event.preferences.sessionGoal,
-              muscleTargets: event.preferences.muscleTargets,
-              muscleLessens: event.preferences.muscleLessens,
-              includeExercises: event.preferences.includeExercises,
-              avoidExercises: event.preferences.avoidExercises,
-              avoidJoints: event.preferences.avoidJoints,
-            },
-            preferencesUpdated: true
-          };
-        }
-        return client;
-      })
-    );
-    
-    // Remove the "updated" flag after animation completes
-    setTimeout(() => {
-      setCheckedInClients(prev => 
-        prev.map(client => ({ ...client, preferencesUpdated: false }))
-      );
-    }, 1500);
-  }, []);
+    // TODO: Add preference updates via Supabase Realtime when implementing preference page
   
-  // Set up SSE connection only if we have a sessionId
-  const { isConnected, isReconnecting, error: streamError } = useCheckInStream(
-    sessionId ? {
-      sessionId,
-      onCheckIn: handleCheckIn,
-      onPreferenceUpdate: handlePreferenceUpdate,
-      onConnect: () => setConnectionStatus("connected"),
-      onDisconnect: () => setConnectionStatus("disconnected"),
-      onError: (err) => setError(err.message)
-    } : {
-      sessionId: "",
-      onCheckIn: () => {},
-      onPreferenceUpdate: () => {},
-      onConnect: () => {},
-      onDisconnect: () => {},
-      onError: () => {}
-    }
-  );
+  // Set up Supabase Realtime for check-ins
+  const { isConnected, error: realtimeError } = useRealtimeCheckIns({
+    sessionId: sessionId || '',
+    onCheckIn: handleCheckIn,
+    onError: (err) => setError(err.message)
+  });
   
   useEffect(() => {
     if (isConnected) setConnectionStatus("connected");
-    else if (isReconnecting) setConnectionStatus("reconnecting");
     else setConnectionStatus("disconnected");
-  }, [isConnected, isReconnecting]);
+  }, [isConnected]);
+  
   
   if (!sessionId) {
     return (
@@ -286,6 +242,17 @@ export default function SessionLobby() {
           {error && (
             <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-800">
               {error}
+            </div>
+          )}
+          {/* Realtime Connection Warning */}
+          {realtimeError && !error && (
+            <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-800">
+              <div className="flex items-center gap-2">
+                <svg className="w-5 h-5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+                </svg>
+                <span>Real-time updates are temporarily unavailable. Check-ins will still be recorded but may not appear instantly.</span>
+              </div>
             </div>
           )}
         </div>

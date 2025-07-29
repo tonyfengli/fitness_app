@@ -19,25 +19,7 @@ interface ParsedPreferences {
   sessionGoalSource?: "explicit" | "default" | "inherited";
 }
 
-// Type for the broadcast function - will be injected from the API layer
-let broadcastPreferenceUpdate: ((sessionId: string, preferenceData: {
-  userId: string;
-  preferences: {
-    intensity?: string | null;
-    intensitySource?: string | null;
-    muscleTargets?: string[] | null;
-    muscleLessens?: string[] | null;
-    includeExercises?: string[] | null;
-    avoidExercises?: string[] | null;
-    avoidJoints?: string[] | null;
-    sessionGoal?: string | null;
-    sessionGoalSource?: string | null;
-  };
-}) => void) | null = null;
-
-export function setPreferenceBroadcastFunction(fn: typeof broadcastPreferenceUpdate) {
-  broadcastPreferenceUpdate = fn;
-}
+// SSE broadcast function removed - will be replaced with Supabase Realtime
 
 export class WorkoutPreferenceService {
   static getPreferencePrompt(userName?: string): string {
@@ -175,19 +157,7 @@ export class WorkoutPreferenceService {
         });
       }
 
-      // Broadcast update if available
-      if (broadcastPreferenceUpdate) {
-        broadcastPreferenceUpdate(sessionId, {
-          userId,
-          preferences: {
-            intensity: preferences.intensity || null,
-            muscleTargets: preferences.muscleTargets || [],
-            muscleLessens: preferences.muscleLessens || [],
-            avoidJoints: preferences.avoidJoints || [],
-            sessionGoal: preferences.sessionGoal || null,
-          }
-        });
-      }
+      // SSE broadcast removed - will be replaced with Supabase Realtime
     } catch (error) {
       logger.error("Error saving simple preferences (non-blocking):", error);
       // Don't throw - this is fire-and-forget
@@ -348,37 +318,11 @@ export class WorkoutPreferenceService {
       await WorkoutBlueprintService.invalidateCache(sessionId);
       logger.info("Blueprint cache invalidated for session", { sessionId });
       
-      // Broadcast preference update if broadcast function is available
-      if (broadcastPreferenceUpdate) {
-        // Get the final saved preferences to broadcast (with sources)
-        const savedPrefs = await this.getPreferences(sessionId);
-        if (savedPrefs) {
-          broadcastPreferenceUpdate(sessionId, {
-            userId,
-            preferences: {
-              intensity: savedPrefs.intensity || null,
-              intensitySource: savedPrefs.intensitySource || null,
-              muscleTargets: savedPrefs.muscleTargets || [],
-              muscleLessens: savedPrefs.muscleLessens || [],
-              includeExercises: savedPrefs.includeExercises || [],
-              avoidExercises: savedPrefs.avoidExercises || [],
-              avoidJoints: savedPrefs.avoidJoints || [],
-              sessionGoal: savedPrefs.sessionGoal || null,
-              sessionGoalSource: savedPrefs.sessionGoalSource || null,
-            }
-          });
-        }
-        logger.info("Broadcasted preference update", { 
-          userId, 
-          sessionId,
-          includeExercisesCount: savedPrefs?.includeExercises?.length || 0,
-          avoidExercisesCount: savedPrefs?.avoidExercises?.length || 0,
-          broadcastData: {
-            includeExercises: savedPrefs?.includeExercises || [],
-            avoidExercises: savedPrefs?.avoidExercises || []
-          }
-        });
-      }
+      // SSE broadcast removed - will be replaced with Supabase Realtime
+      logger.info("Preference update completed (real-time updates temporarily disabled)", { 
+        userId, 
+        sessionId
+      });
     } catch (error) {
       console.error("[WorkoutPreferenceService.savePreferences] ERROR:", {
         error,

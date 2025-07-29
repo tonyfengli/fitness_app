@@ -8,8 +8,6 @@ import {
 } from "@acme/ui-desktop";
 import { useTRPC } from "~/trpc/react";
 import { useRouter } from "next/navigation";
-import { useMessageStream } from "~/hooks/useMessageStream";
-import type { MessageEvent } from "~/hooks/useMessageStream";
 
 // Constants
 const AVATAR_API_URL = "https://api.dicebear.com/7.x/avataaars/svg";
@@ -454,23 +452,8 @@ export default function MessagesPage() {
     enabled: !!selectedClientId && selectedClientId !== "",
   });
 
-  // Set up real-time message updates
-  const { isConnected } = useMessageStream({
-    sessionId: activeSession?.id,
-    enabled: !!activeSession?.id,
-    onMessage: (event: MessageEvent) => {
-      // Only refetch if the message is for the selected client
-      if (event.userId === selectedClientId) {
-        refetchMessages();
-      }
-    },
-    onConnect: () => {
-      console.log("Message stream connected");
-    },
-    onDisconnect: () => {
-      console.log("Message stream disconnected");
-    },
-  });
+  // SSE removed - will be replaced with Supabase Realtime
+  const isConnected = false;
 
   // Scroll to bottom when messages change or selected client changes
   const scrollToBottom = () => {

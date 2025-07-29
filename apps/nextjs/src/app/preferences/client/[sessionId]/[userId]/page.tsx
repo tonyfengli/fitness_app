@@ -4,8 +4,6 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useParams } from "next/navigation";
 import { useTRPC } from "~/trpc/react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { usePreferenceStream } from "~/hooks/usePreferenceStream";
-import type { PreferenceUpdateEvent } from "~/hooks/usePreferenceStream";
 
 // Icon components as inline SVGs
 const X = () => (
@@ -383,26 +381,7 @@ export default function ClientPreferencePage() {
   // Get query client for cache invalidation
   const queryClient = useQueryClient();
   
-  // Handle real-time preference updates
-  const handlePreferenceUpdate = useCallback((event: PreferenceUpdateEvent) => {
-    console.log('[ClientPreferences] Received preference update:', event);
-    // Refetch data to show updated preferences
-    queryClient.invalidateQueries({
-      queryKey: ['trainingSession', 'getClientPreferenceData']
-    });
-    queryClient.invalidateQueries({
-      queryKey: ['trainingSession', 'getClientDeterministicSelections']
-    });
-  }, [queryClient]);
-  
-  // Set up SSE connection for real-time updates
-  const { isConnected } = usePreferenceStream({
-    sessionId,
-    onPreferenceUpdate: handlePreferenceUpdate,
-    onConnect: () => console.log('[ClientPreferences] SSE connected'),
-    onDisconnect: () => console.log('[ClientPreferences] SSE disconnected'),
-    onError: (error) => console.error('[ClientPreferences] SSE error:', error)
-  });
+  // SSE removed - will be replaced with Supabase Realtime
 
   // Exercise replacement mutation
   const replaceExerciseMutation = useMutation({
@@ -538,9 +517,9 @@ export default function ClientPreferencePage() {
       includeExercises: clientData?.user?.preferences?.includeExercises,
       avoidExercises: clientData?.user?.preferences?.avoidExercises,
       exercisesWithStatus: exercises,
-      sseConnected: isConnected
+      sseConnected: false // SSE removed
     });
-  }, [sessionId, userId, isLoading, clientData, selectionsData, clientError, selectionsError, exercises, isConnected]);
+  }, [sessionId, userId, isLoading, clientData, selectionsData, clientError, selectionsError, exercises]);
   
 
   if (isLoading) {

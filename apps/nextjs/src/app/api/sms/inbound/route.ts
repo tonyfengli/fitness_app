@@ -1,15 +1,11 @@
 import { NextRequest } from "next/server";
-import { SMSWebhookHandler, setBroadcastFunction, setPreferenceBroadcastFunction, setCheckInBroadcastFunction } from "@acme/api";
-import { broadcastCheckIn, broadcastPreferenceUpdate } from "../../sse/connections";
+import { SMSWebhookHandler } from "@acme/api";
 
 // Initialize the webhook handler
 const webhookHandler = new SMSWebhookHandler();
 
 export async function POST(request: NextRequest) {
-  // Set up the broadcast functions for real-time updates
-  setBroadcastFunction(broadcastCheckIn); // For old check-in service
-  setCheckInBroadcastFunction(broadcastCheckIn); // For new unified handler
-  setPreferenceBroadcastFunction(broadcastPreferenceUpdate);
+  // SSE broadcast functions removed - will be replaced with Supabase Realtime
   
   // Delegate to the webhook handler
   return webhookHandler.handleWebhook(request);

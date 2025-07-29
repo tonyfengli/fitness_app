@@ -6,16 +6,7 @@ import { createLogger } from "../utils/logger";
 
 const logger = createLogger("CheckInService");
 
-// Type for the broadcast function - will be injected from the API layer
-let broadcastCheckInEvent: ((sessionId: string, clientData: {
-  userId: string;
-  name: string;
-  checkedInAt: string;
-}) => void) | null = null;
-
-export function setBroadcastFunction(fn: typeof broadcastCheckInEvent) {
-  broadcastCheckInEvent = fn;
-}
+// SSE broadcast function removed - will be replaced with Supabase Realtime
 
 export interface CheckInResult {
   success: boolean;
@@ -173,21 +164,12 @@ export async function processCheckIn(phoneNumber: string): Promise<CheckInResult
         checkInId: existingCheckIn[0].id 
       });
       
-      // Broadcast check-in event if broadcast function is available
-      if (broadcastCheckInEvent) {
-        logger.info("Broadcasting check-in event", {
-          sessionId: session.id,
-          userId: clientUser.id,
-          name: clientUser.name
-        });
-        broadcastCheckInEvent(session.id, {
-          userId: clientUser.id,
-          name: clientUser.name || "Unknown",
-          checkedInAt: now.toISOString()
-        });
-      } else {
-        logger.warn("Broadcast function not available");
-      }
+      // SSE broadcast removed - will be replaced with Supabase Realtime
+      logger.info("Check-in completed (real-time updates temporarily disabled)", {
+        sessionId: session.id,
+        userId: clientUser.id,
+        name: clientUser.name
+      });
       
       return {
         success: true,
@@ -223,21 +205,12 @@ export async function processCheckIn(phoneNumber: string): Promise<CheckInResult
         checkInId: newCheckIn.id 
       });
       
-      // Broadcast check-in event if broadcast function is available
-      if (broadcastCheckInEvent) {
-        logger.info("Broadcasting check-in event", {
-          sessionId: session.id,
-          userId: clientUser.id,
-          name: clientUser.name
-        });
-        broadcastCheckInEvent(session.id, {
-          userId: clientUser.id,
-          name: clientUser.name || "Unknown",
-          checkedInAt: now.toISOString()
-        });
-      } else {
-        logger.warn("Broadcast function not available");
-      }
+      // SSE broadcast removed - will be replaced with Supabase Realtime
+      logger.info("Check-in completed (real-time updates temporarily disabled)", {
+        sessionId: session.id,
+        userId: clientUser.id,
+        name: clientUser.name
+      });
       
       return {
         success: true,
