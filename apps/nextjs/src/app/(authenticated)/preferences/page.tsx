@@ -3,7 +3,8 @@
 import React, { useState, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useTRPC } from "~/trpc/react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useRealtimePreferences } from "~/hooks/useRealtimePreferences";
 
 // Icon components as inline SVGs
 const Check = () => (
@@ -29,6 +30,7 @@ export default function PreferencesPage() {
   const searchParams = useSearchParams();
   const sessionId = searchParams.get("sessionId");
   const trpc = useTRPC();
+  const queryClient = useQueryClient();
 
   // Fetch checked-in clients for the session
   const { data: checkedInClients, isLoading: clientsLoading, refetch: refetchClients } = useQuery(
@@ -59,7 +61,25 @@ export default function PreferencesPage() {
 
   const isLoading = clientsLoading || workoutLoading;
   
-  // SSE removed - will be replaced with Supabase Realtime
+  // Handle realtime preference updates
+  const handlePreferenceUpdate = useCallback((update: any) => {
+    console.log('[Preferences] Realtime preference update received:', update);
+    
+    // Invalidate queries to refetch the latest data
+    queryClient.invalidateQueries({
+      queryKey: [['trainingSession', 'getCheckedInClients'], { input: { sessionId } }]
+    });
+    queryClient.invalidateQueries({
+      queryKey: [['trainingSession', 'visualizeGroupWorkout'], { input: { sessionId } }]
+    });
+  }, [sessionId, queryClient]);
+  
+  // Subscribe to realtime preference updates
+  const { isConnected: preferencesConnected, error: preferencesError } = useRealtimePreferences({
+    sessionId: sessionId || '',
+    onPreferenceUpdate: handlePreferenceUpdate,
+    onError: (err) => console.error('[Preferences] Realtime error:', err)
+  });
   
   // Debug logging
   React.useEffect(() => {
@@ -70,9 +90,9 @@ export default function PreferencesPage() {
       workoutLoading,
       checkedInClientsCount: checkedInClients?.length || 0,
       hasWorkoutData: !!workoutData,
-      sseConnected: false // SSE removed
+      realtimeConnected: preferencesConnected
     });
-  }, [sessionId, isLoading, clientsLoading, workoutLoading, checkedInClients, workoutData]);
+  }, [sessionId, isLoading, clientsLoading, workoutLoading, checkedInClients, workoutData, preferencesConnected]);
 
   if (!sessionId) {
     return (
@@ -103,6 +123,7 @@ export default function PreferencesPage() {
     // Get the client's preferences to check for excluded exercises
     const clientData = checkedInClients?.find(c => c.userId === clientId);
     const avoidedExercises = clientData?.preferences?.avoidExercises || [];
+    const includedExercises = clientData?.preferences?.includeExercises || [];
     
     const exercises: { name: string; confirmed: boolean; isExcluded: boolean }[] = [];
     
@@ -113,6 +134,12 @@ export default function PreferencesPage() {
         if (clientExercises && clientExercises.length > 0) {
           // Get the top exercise for this round (deterministically selected)
           const exerciseName = clientExercises[0].name;
+          // Check if this exercise has been replaced (it would be in includeExercises)
+          const replacementExercise = includedExercises.find((ex: string) => {
+            // For BMF templates, includeExercises contains the replacements
+            return true; // We'll use the last exercise in includeExercises as the current selection
+          });
+          
           exercises.push({
             name: exerciseName,
             confirmed: false,

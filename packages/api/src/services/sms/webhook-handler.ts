@@ -22,7 +22,11 @@ export class SMSWebhookHandler {
       const validation = await this.validator.validateWebhook(request, signature);
       
       if (!validation.valid) {
-        logger.warn("Webhook validation failed", { error: validation.error });
+        logger.warn("Webhook validation failed", { 
+          error: validation.error,
+          skipValidation: process.env.SKIP_TWILIO_VALIDATION,
+          nodeEnv: process.env.NODE_ENV
+        });
         return new Response(validation.error || "Unauthorized", { status: 401 });
       }
 

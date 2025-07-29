@@ -2298,24 +2298,7 @@ Set your goals and preferences for today's session.`;
         const { WorkoutBlueprintService } = await import("../services/workout-blueprint-service");
         await WorkoutBlueprintService.invalidateCache(input.sessionId);
         
-        // Broadcast update via SSE
-        try {
-          const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
-          const broadcastUrl = new URL('/api/internal/broadcast-preference', baseUrl);
-          
-          await fetch(broadcastUrl.toString(), {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              sessionId: input.sessionId,
-              userId: input.userId,
-              preferences: input.preferences
-            })
-          });
-        } catch (error) {
-          console.error('Failed to broadcast preference update:', error);
-          // Don't fail the mutation if broadcast fails
-        }
+        // Real-time updates will be handled by Supabase Realtime
 
         return { success: true };
       } catch (error) {
@@ -2785,27 +2768,7 @@ Set your goals and preferences for today's session.`;
       const { WorkoutBlueprintService } = await import("../services/workout-blueprint-service");
       await WorkoutBlueprintService.invalidateCache(input.sessionId);
 
-      // Broadcast update via SSE
-      try {
-        const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
-        const broadcastUrl = new URL('/api/internal/broadcast-preference', baseUrl);
-        
-        await fetch(broadcastUrl.toString(), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            sessionId: input.sessionId,
-            userId: input.userId,
-            exerciseChange: {
-              round: input.round,
-              newExercise: input.newExerciseName
-            }
-          })
-        });
-      } catch (error) {
-        console.error('Failed to broadcast preference update:', error);
-        // Don't fail the mutation if broadcast fails
-      }
+      // Real-time updates will be handled by Supabase Realtime
 
       return { success: true };
     }),
@@ -2896,24 +2859,7 @@ Set your goals and preferences for today's session.`;
       const { WorkoutBlueprintService } = await import("../services/workout-blueprint-service");
       await WorkoutBlueprintService.invalidateCache(input.sessionId);
       
-      // Broadcast update via SSE
-      try {
-        const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
-        const broadcastUrl = new URL('/api/internal/broadcast-preference', baseUrl);
-        
-        await fetch(broadcastUrl.toString(), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            sessionId: input.sessionId,
-            userId: input.userId,
-            preferences: input.preferences
-          })
-        });
-      } catch (error) {
-        console.error('Failed to broadcast preference update:', error);
-        // Don't fail the mutation if broadcast fails
-      }
+      // Real-time updates will be handled by Supabase Realtime
 
       return { success: true };
     }),

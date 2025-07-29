@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useParams } from "next/navigation";
 import { useTRPC } from "~/trpc/react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useRealtimePreferences } from "~/hooks/useRealtimePreferences";
 
 // Icon components as inline SVGs
 const X = () => (
@@ -367,8 +368,9 @@ export default function ClientPreferencePage() {
   );
 
   // Fetch deterministic selections using public endpoint
+  const selectionsQueryOptions = trpc.trainingSession.getClientDeterministicSelections.queryOptions({ sessionId, userId });
   const { data: selectionsData, isLoading: selectionsLoading, error: selectionsError } = useQuery(
-    trpc.trainingSession.getClientDeterministicSelections.queryOptions({ sessionId, userId })
+    selectionsQueryOptions
   );
 
   // Fetch all available exercises (public endpoint, no auth required)
@@ -378,61 +380,122 @@ export default function ClientPreferencePage() {
 
   const isLoading = clientLoading || selectionsLoading || exercisesLoading;
 
-  // Get query client for cache invalidation
+  // Get query client for optimistic updates
   const queryClient = useQueryClient();
   
-  // SSE removed - will be replaced with Supabase Realtime
+  // Handle realtime preference updates (from other sources like trainer)
+  const handlePreferenceUpdate = useCallback((update: any) => {
+    // Only update if it's for this user
+    if (update.userId === userId) {
+      // Update the preferences cache
+      const prefsQueryKey = trpc.trainingSession.getClientPreferenceData.queryOptions({ sessionId, userId }).queryKey;
+      const currentPrefs = queryClient.getQueryData(prefsQueryKey) as any;
+      
+      if (currentPrefs) {
+        queryClient.setQueryData(prefsQueryKey, {
+          ...currentPrefs,
+          user: {
+            ...currentPrefs.user,
+            preferences: update.preferences
+          }
+        });
+      }
+    }
+  }, [userId, sessionId, queryClient]);
+  
+  // Subscribe to realtime preference updates
+  useRealtimePreferences({
+    sessionId: sessionId || '',
+    onPreferenceUpdate: handlePreferenceUpdate
+  });
 
-  // Exercise replacement mutation
+  // Exercise replacement mutation with optimistic updates
   const replaceExerciseMutation = useMutation({
     ...trpc.trainingSession.replaceClientExercisePublic.mutationOptions(),
-    onMutate: () => {
+    onMutate: async (variables) => {
       // Start loading state when mutation begins
       setIsProcessingChange(true);
-    },
-    onSuccess: async (data, variables) => {
-      console.log('[ClientPreferences] Exercise replacement successful', {
-        data,
-        variables,
-        oldExercise: selectedExerciseForChange?.name,
-        newExercise: variables.newExerciseName
-      });
       
-      // Don't close modal yet - wait for data to update
+      // IMPORTANT: Use the exact same query key that tRPC generates
+      // This ensures our optimistic update targets the same cache entry that useQuery is watching
+      const queryKey = selectionsQueryOptions.queryKey;
       
-      // Force immediate refetch with a small delay to ensure backend has processed the change
-      setTimeout(async () => {
-        console.log('[ClientPreferences] Refetching data after delay');
+      // Cancel any outgoing refetches to prevent race conditions
+      await queryClient.cancelQueries({ queryKey });
+      
+      // Snapshot the previous value for potential rollback
+      const previousSelections = queryClient.getQueryData(queryKey);
+      
+      // Perform optimistic update - this makes the UI update instantly
+      if (previousSelections && selectedExerciseForChange) {
+        const newSelections = { ...previousSelections } as any;
+        const exercises = newSelections.exercises || newSelections.selections || [];
         
-        // Invalidate and refetch all relevant queries
-        await queryClient.invalidateQueries({
-          queryKey: [['trainingSession', 'getClientPreferenceData'], { input: { sessionId, userId } }]
+        // Update the exercise for the specific round
+        const updatedExercises = exercises.map((sel: any) => {
+          if (sel.roundId === variables.round) {
+            return {
+              ...sel,
+              exercise: {
+                ...sel.exercise,
+                name: variables.newExerciseName
+              }
+            };
+          }
+          return sel;
         });
         
-        await queryClient.invalidateQueries({
-          queryKey: [['trainingSession', 'getClientDeterministicSelections'], { input: { sessionId, userId } }]
-        });
+        // Update both properties for compatibility
+        newSelections.exercises = updatedExercises;
+        newSelections.selections = updatedExercises;
         
-        // Force refetch
-        await queryClient.refetchQueries({
-          queryKey: [['trainingSession', 'getClientPreferenceData'], { input: { sessionId, userId } }],
-          exact: true
-        });
+        // Update the query cache - this triggers an immediate re-render
+        queryClient.setQueryData(queryKey, newSelections);
         
-        await queryClient.refetchQueries({
-          queryKey: [['trainingSession', 'getClientDeterministicSelections'], { input: { sessionId, userId } }],
-          exact: true
-        });
+        // Update preferences to mark the old exercise as avoided
+        const prefsQueryKey = trpc.trainingSession.getClientPreferenceData.queryOptions({ sessionId, userId }).queryKey;
+        const previousPrefs = queryClient.getQueryData(prefsQueryKey) as any;
         
-        // Close modal and stop loading after data is refreshed
-        setModalOpen(false);
-        setSelectedExerciseForChange(null);
-        setIsProcessingChange(false);
-      }, 500);
+        if (previousPrefs && selectedExerciseForChange) {
+          const avoidExercises = previousPrefs.user?.preferences?.avoidExercises || [];
+          if (!avoidExercises.includes(selectedExerciseForChange.name)) {
+            queryClient.setQueryData(prefsQueryKey, {
+              ...previousPrefs,
+              user: {
+                ...previousPrefs.user,
+                preferences: {
+                  ...previousPrefs.user.preferences,
+                  avoidExercises: [...avoidExercises, selectedExerciseForChange.name]
+                }
+              }
+            });
+          }
+        }
+      }
+      
+      // Return snapshot for potential rollback on error
+      return { previousSelections };
     },
-    onError: (error) => {
+    onSuccess: () => {
+      // Clean up state and close modal
+      setModalOpen(false);
+      setSelectedExerciseForChange(null);
+      setIsProcessingChange(false);
+      // Note: We don't need to invalidate queries here because:
+      // 1. The optimistic update already updated the UI
+      // 2. Realtime subscriptions will sync any server-side changes
+    },
+    onError: (error, variables, context) => {
       console.error('[ClientPreferences] Exercise replacement failed:', error);
       setIsProcessingChange(false);
+      
+      // Revert the optimistic update on error
+      if (context?.previousSelections) {
+        queryClient.setQueryData(
+          selectionsQueryOptions.queryKey,
+          context.previousSelections
+        );
+      }
     }
   });
 
@@ -440,16 +503,12 @@ export default function ClientPreferencePage() {
   const handleExerciseReplacement = async (newExerciseName: string) => {
     if (!selectedExerciseForChange?.round) return;
 
-    try {
-      await replaceExerciseMutation.mutateAsync({
-        sessionId,
-        userId,
-        round: selectedExerciseForChange.round as 'Round1' | 'Round2',
-        newExerciseName
-      });
-    } catch (error) {
-      console.error('Failed to replace exercise:', error);
-    }
+    await replaceExerciseMutation.mutateAsync({
+      sessionId,
+      userId,
+      round: selectedExerciseForChange.round as 'Round1' | 'Round2',
+      newExerciseName
+    });
   };
 
   // Get exercises from deterministic selections or workout preferences
@@ -464,11 +523,6 @@ export default function ClientPreferencePage() {
     const avoidedExercises = clientData?.user?.preferences?.avoidExercises || [];
     const includeExercises = clientData?.user?.preferences?.includeExercises || [];
     
-    console.log('[getClientExercises] Mapping exercises:', {
-      exercisesList: exercisesList.map(e => ({ name: e.exercise.name, round: e.roundId })),
-      avoidedExercises,
-      includeExercises
-    });
     
     const exercises = [];
     
@@ -502,24 +556,6 @@ export default function ClientPreferencePage() {
 
   // Transform client data for display
   const exercises = getClientExercises();
-  
-  // Debug logging
-  useEffect(() => {
-    console.log('[ClientPreferences] Component state:', {
-      sessionId,
-      userId,
-      isLoading,
-      hasClientData: !!clientData,
-      hasSelectionsData: !!selectionsData,
-      clientError,
-      selectionsError,
-      exercises: selectionsData ? (selectionsData.exercises || selectionsData.selections) : null,
-      includeExercises: clientData?.user?.preferences?.includeExercises,
-      avoidExercises: clientData?.user?.preferences?.avoidExercises,
-      exercisesWithStatus: exercises,
-      sseConnected: false // SSE removed
-    });
-  }, [sessionId, userId, isLoading, clientData, selectionsData, clientError, selectionsError, exercises]);
   
 
   if (isLoading) {
@@ -611,9 +647,8 @@ export default function ClientPreferencePage() {
                               ? 'bg-gray-200 text-gray-500 hover:bg-gray-300'
                               : 'bg-green-100 text-green-700 hover:bg-green-200'
                           }`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            // Open modal directly when clicking confirmed button
+                          onClick={() => {
+                            // Open modal to change exercise
                             setSelectedExerciseForChange({name: exercise.name, index: idx, round: exercise.round});
                             setModalOpen(true);
                           }}

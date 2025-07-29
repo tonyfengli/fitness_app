@@ -5,8 +5,9 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { PlayerListItem } from "@acme/ui-desktop";
 import type { PlayerStatus } from "@acme/ui-desktop";
 import { useTRPC } from "~/trpc/react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRealtimeCheckIns } from "~/hooks/useRealtimeCheckIns";
+import { useRealtimePreferences } from "~/hooks/useRealtimePreferences";
 
 // Helper to format muscle names for display (convert underscore to space and capitalize)
 function formatMuscleName(muscle: string): string {
@@ -76,6 +77,7 @@ export default function SessionLobby() {
   const sessionId = searchParams.get("sessionId");
   const router = useRouter();
   const trpc = useTRPC();
+  const queryClient = useQueryClient();
   
   const [checkedInClients, setCheckedInClients] = useState<CheckedInClient[]>([]);
   const [connectionStatus, setConnectionStatus] = useState<"connected" | "disconnected" | "reconnecting">("disconnected");
@@ -206,7 +208,30 @@ export default function SessionLobby() {
     }, 1000);
   }, []);
   
-    // TODO: Add preference updates via Supabase Realtime when implementing preference page
+  // Handle preference updates from realtime
+  const handlePreferenceUpdate = useCallback((update: any) => {
+    console.log('[SessionLobby] Preference update received:', update);
+    
+    setCheckedInClients(prev => {
+      return prev.map(client => {
+        if (client.userId === update.userId) {
+          return {
+            ...client,
+            preferences: update.preferences,
+            preferencesUpdated: true
+          };
+        }
+        return client;
+      });
+    });
+    
+    // Remove the update flag after animation
+    setTimeout(() => {
+      setCheckedInClients(prev => 
+        prev.map(client => ({ ...client, preferencesUpdated: false }))
+      );
+    }, 1000);
+  }, []);
   
   // Set up Supabase Realtime for check-ins
   const { isConnected, error: realtimeError } = useRealtimeCheckIns({
@@ -215,10 +240,17 @@ export default function SessionLobby() {
     onError: (err) => setError(err.message)
   });
   
+  // Set up Supabase Realtime for preferences
+  const { isConnected: preferencesConnected } = useRealtimePreferences({
+    sessionId: sessionId || '',
+    onPreferenceUpdate: handlePreferenceUpdate,
+    onError: (err) => console.error('[SessionLobby] Preference realtime error:', err)
+  });
+  
   useEffect(() => {
-    if (isConnected) setConnectionStatus("connected");
-    else setConnectionStatus("disconnected");
-  }, [isConnected]);
+    if (isConnected && preferencesConnected) setConnectionStatus("connected");
+    else if (!isConnected || !preferencesConnected) setConnectionStatus("disconnected");
+  }, [isConnected, preferencesConnected]);
   
   
   if (!sessionId) {
