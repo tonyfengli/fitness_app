@@ -17,6 +17,9 @@ interface TRPCClient {
     replaceClientExercisePublic: {
       mutationOptions: () => any;
     };
+    addClientExercise: {
+      mutationOptions: () => any;
+    };
   };
   exercise: {
     all: {
@@ -48,6 +51,8 @@ export function useClientPreferences({ sessionId, userId, trpc }: UseClientPrefe
     round?: string;
   } | null>(null);
   const [isProcessingChange, setIsProcessingChange] = useState(false);
+  const [addModalOpen, setAddModalOpen] = useState(false);
+  const [isAddingExercise, setIsAddingExercise] = useState(false);
 
   // Fetch client data using public endpoint
   const { data: clientData, isLoading: clientLoading, error: clientError } = useQuery(
@@ -97,6 +102,20 @@ export function useClientPreferences({ sessionId, userId, trpc }: UseClientPrefe
           round: null,
           isExcluded: true,
           isActive: false
+        });
+      }
+    });
+    
+    // Add manually included exercises from preferences
+    includeExercises.forEach((includedExercise: string) => {
+      // Only add if not already in the list
+      if (!exercises.find(ex => ex.name === includedExercise)) {
+        exercises.push({
+          name: includedExercise,
+          confirmed: true,
+          round: null,
+          isExcluded: false,
+          isActive: true
         });
       }
     });
@@ -221,6 +240,75 @@ export function useClientPreferences({ sessionId, userId, trpc }: UseClientPrefe
     }
   }, [userId, sessionId, queryClient, trpc]);
 
+  // Add exercise mutation with optimistic updates
+  const addExerciseMutation = useMutation({
+    ...trpc.trainingSession.addClientExercise.mutationOptions(),
+    onMutate: async (variables: any) => {
+      setIsAddingExercise(true);
+      
+      // Cancel any outgoing refetches
+      const prefsQueryKey = trpc.trainingSession.getClientPreferenceData.queryOptions({ sessionId, userId }).queryKey;
+      await queryClient.cancelQueries({ queryKey: prefsQueryKey });
+      
+      // Snapshot the previous value
+      const previousPrefs = queryClient.getQueryData(prefsQueryKey) as any;
+      
+      // Perform optimistic update
+      if (previousPrefs) {
+        const currentIncludeExercises = previousPrefs.user?.preferences?.includeExercises || [];
+        
+        queryClient.setQueryData(prefsQueryKey, {
+          ...previousPrefs,
+          user: {
+            ...previousPrefs.user,
+            preferences: {
+              ...previousPrefs.user.preferences,
+              includeExercises: [...currentIncludeExercises, variables.exerciseName]
+            }
+          }
+        });
+      }
+      
+      // Return snapshot for potential rollback on error
+      return { previousPrefs };
+    },
+    onSuccess: () => {
+      // Clean up state and close modal
+      setAddModalOpen(false);
+      setIsAddingExercise(false);
+      
+      // Invalidate preferences query to ensure fresh data
+      const prefsQueryKey = trpc.trainingSession.getClientPreferenceData.queryOptions({ sessionId, userId }).queryKey;
+      queryClient.invalidateQueries({ queryKey: prefsQueryKey });
+    },
+    onError: (error: any, variables: any, context: any) => {
+      console.error('[ClientPreferences] Add exercise failed:', error);
+      setIsAddingExercise(false);
+      
+      // Revert the optimistic update on error
+      if (context?.previousPrefs) {
+        const prefsQueryKey = trpc.trainingSession.getClientPreferenceData.queryOptions({ sessionId, userId }).queryKey;
+        queryClient.setQueryData(prefsQueryKey, context.previousPrefs);
+      }
+    }
+  });
+
+  // Handle adding exercise
+  const handleAddExercise = async (exerciseName: string) => {
+    console.log('[useClientPreferences] Adding exercise:', exerciseName);
+    try {
+      await addExerciseMutation.mutateAsync({
+        sessionId,
+        userId,
+        exerciseName
+      });
+      console.log('[useClientPreferences] Exercise added successfully');
+    } catch (error) {
+      console.error('[useClientPreferences] Failed to add exercise:', error);
+      throw error;
+    }
+  };
+
   const exercises = getClientExercises();
 
   return {
@@ -233,16 +321,24 @@ export function useClientPreferences({ sessionId, userId, trpc }: UseClientPrefe
     clientError,
     selectionsError,
     
-    // Modal state
+    // Modal state - Exercise Change
     modalOpen,
     setModalOpen,
     selectedExerciseForChange,
     setSelectedExerciseForChange,
     
+    // Modal state - Add Exercise
+    addModalOpen,
+    setAddModalOpen,
+    
     // Actions
     handleExerciseReplacement,
+    handleAddExercise,
     handlePreferenceUpdate,
+    
+    // State
     isProcessingChange,
+    isAddingExercise,
     
     // Utils
     getClientExercises

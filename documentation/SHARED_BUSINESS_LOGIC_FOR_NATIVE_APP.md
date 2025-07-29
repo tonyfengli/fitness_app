@@ -6,6 +6,14 @@ This document outlines the business logic that has been extracted from the Next.
 
 The shared business logic architecture enables code reuse between the Next.js web application and React Native mobile applications. This approach ensures consistency in data handling, state management, and business rules across all platforms.
 
+## Latest Updates
+
+### Add Exercise Feature (Added: 2025-01-29)
+- New mutation: `addClientExercise` - allows clients to add exercises to their includeExercises preferences
+- Modal state management for Add Exercise modal
+- Optimistic updates when adding exercises
+- Real-time synchronization across all clients
+
 ## Architecture
 
 ### Package Structure
@@ -67,11 +75,32 @@ interface UseClientPreferencesOptions {
 }
 
 interface UseClientPreferencesReturn {
+  // Data
   selections: ClientDeterministicSelections | undefined;
+  availableExercises: Exercise[] | undefined;
+  exercises: Exercise[];
   isLoading: boolean;
   error: Error | null;
-  isTogglingExercise: boolean;
+  
+  // Modal state - Exercise Change
+  modalOpen: boolean;
+  setModalOpen: (open: boolean) => void;
+  selectedExerciseForChange: { name: string; index: number; round?: string } | null;
+  setSelectedExerciseForChange: (exercise: { name: string; index: number; round?: string } | null) => void;
+  
+  // Modal state - Add Exercise
+  addModalOpen: boolean;
+  setAddModalOpen: (open: boolean) => void;
+  
+  // Actions
   handleToggleExercise: (blockId: string, exerciseName: string) => Promise<void>;
+  handleExerciseReplacement: (newExerciseName: string) => Promise<void>;
+  handleAddExercise: (exerciseName: string) => Promise<void>;
+  
+  // State
+  isTogglingExercise: boolean;
+  isProcessingChange: boolean;
+  isAddingExercise: boolean;
 }
 ```
 
@@ -277,6 +306,61 @@ describe('useClientPreferences', () => {
     // Test implementation
   });
 });
+```
+
+## Add Exercise Feature Implementation
+
+### Overview
+The Add Exercise feature allows clients to add new exercises to their workout preferences. This is implemented through:
+
+1. **Shared Hook Updates** (`useClientPreferences`):
+   - Added modal state management (`addModalOpen`, `setAddModalOpen`)
+   - Created `addExerciseMutation` with optimistic updates
+   - Added `handleAddExercise` function
+   - Tracks loading state with `isAddingExercise`
+
+2. **API Mutation** (`addClientExercise`):
+   - Verifies user belongs to session
+   - Adds exercise to `includeExercises` array
+   - Creates preferences if they don't exist
+   - Prevents duplicate exercises
+   - Invalidates blueprint cache for real-time updates
+
+3. **Usage in Web App**:
+```typescript
+const {
+  addModalOpen,
+  setAddModalOpen,
+  handleAddExercise,
+  isAddingExercise,
+  availableExercises,
+  exercises
+} = useClientPreferences({ sessionId, userId, trpc });
+
+// In your UI
+<button onClick={() => setAddModalOpen(true)}>
+  Add Exercise
+</button>
+
+<AddExerciseModal
+  isOpen={addModalOpen}
+  onClose={() => setAddModalOpen(false)}
+  availableExercises={availableExercises}
+  existingExercises={exercises.filter(ex => ex.isActive).map(ex => ex.name)}
+  onConfirm={handleAddExercise}
+  isLoading={isAddingExercise}
+/>
+```
+
+4. **Usage in Native App**:
+```typescript
+// Same hook usage, different UI implementation
+const { addModalOpen, setAddModalOpen, handleAddExercise } = useClientPreferences({ sessionId, userId, trpc });
+
+// React Native modal implementation
+<Modal visible={addModalOpen} onRequestClose={() => setAddModalOpen(false)}>
+  {/* Native UI components */}
+</Modal>
 ```
 
 ## Technical Implementation Details

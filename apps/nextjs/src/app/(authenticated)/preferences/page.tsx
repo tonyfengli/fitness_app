@@ -161,6 +161,19 @@ export default function PreferencesPage() {
       }
     });
     
+    // Add manually included exercises that aren't in the template
+    includeExercises.forEach(includedExercise => {
+      // Only add if not already in the list
+      if (!exercises.find(ex => ex.name === includedExercise)) {
+        exercises.push({
+          name: includedExercise,
+          confirmed: true,
+          isExcluded: false,
+          isActive: true
+        });
+      }
+    });
+    
     return exercises;
   };
 

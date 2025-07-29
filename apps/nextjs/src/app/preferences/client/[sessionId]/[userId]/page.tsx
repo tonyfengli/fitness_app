@@ -339,6 +339,188 @@ const ExerciseChangeModal = ({
   );
 };
 
+// Add Exercise Modal Component
+const AddExerciseModal = ({ 
+  isOpen, 
+  onClose, 
+  availableExercises = [],
+  existingExercises = [],
+  onConfirm,
+  isLoading = false
+}: { 
+  isOpen: boolean; 
+  onClose: () => void; 
+  availableExercises?: any[];
+  existingExercises?: string[];
+  onConfirm?: (exerciseName: string) => void;
+  isLoading?: boolean;
+}) => {
+  const [selectedExercise, setSelectedExercise] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  
+  // Reset selection and search when modal closes
+  useEffect(() => {
+    if (!isOpen) {
+      setSelectedExercise(null);
+      setSearchQuery('');
+    }
+  }, [isOpen]);
+  
+  // Filter exercises - hide already active exercises
+  const filteredExercises = React.useMemo(() => {
+    if (!availableExercises || availableExercises.length === 0) return [];
+    
+    return availableExercises.filter(exercise => {
+      // Keep the selected exercise visible during loading
+      if (isLoading && selectedExercise === exercise.name) {
+        return true;
+      }
+      
+      // Hide already active exercises
+      if (existingExercises.includes(exercise.name)) return false;
+      
+      // Apply search filter
+      if (searchQuery.trim()) {
+        return exercise.name.toLowerCase().includes(searchQuery.toLowerCase().trim());
+      }
+      
+      return true;
+    });
+  }, [availableExercises, existingExercises, searchQuery, isLoading, selectedExercise]);
+  
+  if (!isOpen) return null;
+
+  return (
+    <>
+      {/* Background overlay */}
+      <div 
+        className="fixed inset-0 bg-black/30 backdrop-blur-sm z-40 animate-fadeIn"
+        onClick={onClose}
+      />
+      
+      {/* Modal */}
+      <div className="fixed inset-x-4 top-1/2 -translate-y-1/2 max-w-lg mx-auto bg-white rounded-2xl shadow-2xl z-50 max-h-[80vh] flex flex-col animate-slideUp">
+            {/* Header */}
+            <div className="px-6 py-4 border-b border-gray-200 flex-shrink-0">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-bold text-gray-900">Add Exercise</h2>
+                <button
+                  onClick={onClose}
+                  className="p-2 text-gray-400 hover:text-gray-600 transition-colors rounded-lg hover:bg-gray-100"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 overflow-y-auto">
+              {/* Search Bar */}
+              <div className="px-6 py-4 bg-gray-50 border-b sticky top-0 z-10">
+                <div className="relative">
+                  <svg 
+                    className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" 
+                    fill="none" 
+                    stroke="currentColor" 
+                    viewBox="0 0 24 24"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                  <input
+                    type="text"
+                    placeholder="Search exercises..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  />
+                </div>
+              </div>
+              
+              <div className="p-6">
+              {/* No results message */}
+              {searchQuery.trim() && filteredExercises.length === 0 && (
+                <div className="text-center py-8">
+                  <p className="text-gray-500">No exercises found matching "{searchQuery}"</p>
+                </div>
+              )}
+              
+              {/* All Exercises */}
+              {filteredExercises.length > 0 && (
+                <div className="space-y-2">
+                  {filteredExercises.map((exercise, idx) => (
+                    <button 
+                      key={exercise.id || idx}
+                      className={`w-full p-3 rounded-lg text-left transition-all ${
+                        selectedExercise === exercise.name 
+                          ? 'bg-indigo-100 border-2 border-indigo-500 shadow-sm' 
+                          : 'bg-gray-50 hover:bg-gray-100 border-2 border-transparent'
+                      } ${isLoading && selectedExercise === exercise.name ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      onClick={() => !isLoading && setSelectedExercise(exercise.name)}
+                      disabled={isLoading && selectedExercise === exercise.name}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          {selectedExercise === exercise.name && (
+                            <div className="w-5 h-5 bg-indigo-600 rounded-full flex items-center justify-center">
+                              <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                              </svg>
+                            </div>
+                          )}
+                          <span className={`font-medium ${
+                            selectedExercise === exercise.name ? 'text-indigo-900' : 'text-gray-900'
+                          }`}>{exercise.name}</span>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-4 border-t bg-gray-50 flex justify-end gap-3 flex-shrink-0">
+              <button 
+                onClick={onClose}
+                disabled={isLoading}
+                className="px-4 py-2 text-gray-700 hover:text-gray-900 transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={() => {
+                  if (selectedExercise && onConfirm) {
+                    onConfirm(selectedExercise);
+                  }
+                }}
+                disabled={!selectedExercise || isLoading}
+                className={`px-4 py-2 rounded-lg transition-colors flex items-center gap-2 ${
+                  selectedExercise && !isLoading
+                    ? 'bg-indigo-600 hover:bg-indigo-700 text-white' 
+                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                }`}
+              >
+                {isLoading ? (
+                  <>
+                    <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Adding...
+                  </>
+                ) : (
+                  'Add Exercise'
+                )}
+              </button>
+            </div>
+      </div>
+    </>
+  );
+};
+
 export default function ClientPreferencePage() {
   const params = useParams();
   const sessionId = params.sessionId as string;
@@ -358,9 +540,13 @@ export default function ClientPreferencePage() {
     setModalOpen,
     selectedExerciseForChange,
     setSelectedExerciseForChange,
+    addModalOpen,
+    setAddModalOpen,
     handleExerciseReplacement,
+    handleAddExercise,
     handlePreferenceUpdate,
-    isProcessingChange
+    isProcessingChange,
+    isAddingExercise
   } = useClientPreferences({ sessionId, userId, trpc });
   
   // Subscribe to realtime preference updates
@@ -480,6 +666,15 @@ export default function ClientPreferencePage() {
                     </div>
                   </div>
               ))}
+              
+              {/* Add Exercise Button */}
+              <button 
+                onClick={() => setAddModalOpen(true)}
+                className="w-full p-3 border border-gray-300 rounded-lg text-gray-700 bg-white hover:bg-gray-50 hover:border-gray-400 transition-colors flex items-center justify-center gap-2 font-medium shadow-sm"
+              >
+                <Plus />
+                Add Exercise
+              </button>
             </div>
           </div>
 
@@ -563,6 +758,18 @@ export default function ClientPreferencePage() {
         currentRound={selectedExerciseForChange?.round}
         onConfirm={handleExerciseReplacement}
         isLoading={isProcessingChange}
+      />
+      
+      {/* Add Exercise Modal */}
+      <AddExerciseModal
+        isOpen={addModalOpen}
+        onClose={() => {
+          setAddModalOpen(false);
+        }}
+        availableExercises={availableExercises || []}
+        existingExercises={exercises.filter(ex => ex.isActive).map(ex => ex.name)}
+        onConfirm={handleAddExercise}
+        isLoading={isAddingExercise}
       />
     </div>
   );

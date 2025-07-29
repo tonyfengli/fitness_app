@@ -2863,4 +2863,88 @@ Set your goals and preferences for today's session.`;
 
       return { success: true };
     }),
+
+  // Add exercise to client's include list
+  addClientExercise: publicProcedure
+    .input(z.object({
+      sessionId: z.string().uuid(),
+      userId: z.string(),
+      exerciseName: z.string()
+    }))
+    .mutation(async ({ ctx, input }) => {
+      // Verify user belongs to session
+      const userSession = await ctx.db.query.UserTrainingSession.findFirst({
+        where: and(
+          eq(UserTrainingSession.userId, input.userId),
+          eq(UserTrainingSession.trainingSessionId, input.sessionId),
+          eq(UserTrainingSession.status, 'checked_in')
+        ),
+      });
+
+      if (!userSession) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Invalid session or user not checked in',
+        });
+      }
+
+      // Get session to get business ID
+      const session = await ctx.db.query.TrainingSession.findFirst({
+        where: eq(TrainingSession.id, input.sessionId),
+      });
+
+      if (!session) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Session not found',
+        });
+      }
+
+      // Find or create preferences
+      const [existingPref] = await ctx.db
+        .select()
+        .from(WorkoutPreferences)
+        .where(
+          and(
+            eq(WorkoutPreferences.userId, input.userId),
+            eq(WorkoutPreferences.trainingSessionId, input.sessionId)
+          )
+        )
+        .limit(1);
+
+      if (existingPref) {
+        // Get current includeExercises
+        const currentIncludeExercises = existingPref.includeExercises || [];
+        
+        // Check if exercise already exists
+        if (currentIncludeExercises.includes(input.exerciseName)) {
+          return { success: true }; // Already included
+        }
+
+        // Update existing preferences
+        await ctx.db
+          .update(WorkoutPreferences)
+          .set({
+            includeExercises: [...currentIncludeExercises, input.exerciseName],
+            updatedAt: new Date()
+          })
+          .where(eq(WorkoutPreferences.id, existingPref.id));
+      } else {
+        // Create new preferences with the exercise
+        await ctx.db.insert(WorkoutPreferences).values({
+          userId: input.userId,
+          trainingSessionId: input.sessionId,
+          businessId: session.businessId,
+          includeExercises: [input.exerciseName],
+        });
+      }
+
+      // Invalidate blueprint cache
+      const { WorkoutBlueprintService } = await import("../services/workout-blueprint-service");
+      await WorkoutBlueprintService.invalidateCache(input.sessionId);
+      
+      // Real-time updates will be handled by Supabase Realtime
+
+      return { success: true };
+    }),
 } satisfies TRPCRouterRecord;
