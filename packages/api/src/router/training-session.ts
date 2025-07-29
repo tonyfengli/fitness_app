@@ -2174,8 +2174,8 @@ export const trainingSessionRouter = {
         // Send messages to all checked-in clients
         const sendPromises = checkedInClients.map(async (client) => {
           try {
-            // Generate preference link with network IP for mobile access
-            const baseUrl = process.env.NEXTAUTH_URL || 'http://192.168.68.133:3000';
+            // Generate preference link - use SMS_BASE_URL for mobile access (e.g., ngrok URL)
+            const baseUrl = process.env.SMS_BASE_URL || process.env.NEXTAUTH_URL || 'http://192.168.68.133:3000';
             const preferenceLink = `${baseUrl}/preferences/client/${session.id}/${client.userId}`;
             
             // Simple message for all templates

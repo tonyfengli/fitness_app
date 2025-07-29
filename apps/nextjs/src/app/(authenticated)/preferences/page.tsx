@@ -1,29 +1,19 @@
 "use client";
 
-import React, { useState, useCallback } from "react";
+import React, { useCallback, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useTRPC } from "~/trpc/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useRealtimePreferences } from "~/hooks/useRealtimePreferences";
+import { useRealtimePreferences } from "@acme/ui-shared";
+import { supabase } from "~/lib/supabase";
 
 // Icon components as inline SVGs
 const Check = () => (
-  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+  <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
   </svg>
 );
 
-const X = () => (
-  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-  </svg>
-);
-
-const Plus = () => (
-  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-  </svg>
-);
 
 export default function PreferencesPage() {
   const router = useRouter();
@@ -31,10 +21,18 @@ export default function PreferencesPage() {
   const sessionId = searchParams.get("sessionId");
   const trpc = useTRPC();
   const queryClient = useQueryClient();
+  
+  // This page shows a read-only view of all client preferences
+  // Real-time updates are handled via Supabase subscriptions
+  // When clients update their preferences, this view updates automatically
 
   // Fetch checked-in clients for the session
   const { data: checkedInClients, isLoading: clientsLoading, refetch: refetchClients } = useQuery(
-    sessionId ? trpc.trainingSession.getCheckedInClients.queryOptions({ sessionId }) : {
+    sessionId ? {
+      ...trpc.trainingSession.getCheckedInClients.queryOptions({ sessionId }),
+      staleTime: 5000, // Consider data fresh for 5 seconds
+      refetchOnMount: 'always', // Always refetch on mount to ensure fresh data
+    } : {
       enabled: false,
       queryKey: ["disabled"],
       queryFn: () => Promise.resolve([])
@@ -49,50 +47,29 @@ export default function PreferencesPage() {
       queryFn: () => Promise.resolve(null)
     }
   );
-  
-  // Refetch data on mount to ensure fresh data
-  React.useEffect(() => {
-    if (sessionId) {
-      console.log('[Preferences] Refetching data for session:', sessionId);
-      refetchClients();
-      refetchWorkout();
-    }
-  }, [sessionId, refetchClients, refetchWorkout]);
 
   const isLoading = clientsLoading || workoutLoading;
   
   // Handle realtime preference updates
   const handlePreferenceUpdate = useCallback((update: any) => {
-    console.log('[Preferences] Realtime preference update received:', update);
-    
-    // Invalidate queries to refetch the latest data
+    // Invalidate both queries at once to refetch the latest data
     queryClient.invalidateQueries({
-      queryKey: [['trainingSession', 'getCheckedInClients'], { input: { sessionId } }]
-    });
-    queryClient.invalidateQueries({
-      queryKey: [['trainingSession', 'visualizeGroupWorkout'], { input: { sessionId } }]
+      predicate: (query) => {
+        const queryKey = query.queryKey as any[];
+        return queryKey[0]?.[0] === 'trainingSession' && 
+               (queryKey[0]?.[1] === 'getCheckedInClients' || queryKey[0]?.[1] === 'visualizeGroupWorkout') &&
+               queryKey[1]?.input?.sessionId === sessionId;
+      }
     });
   }, [sessionId, queryClient]);
   
   // Subscribe to realtime preference updates
-  const { isConnected: preferencesConnected, error: preferencesError } = useRealtimePreferences({
+  useRealtimePreferences({
     sessionId: sessionId || '',
-    onPreferenceUpdate: handlePreferenceUpdate,
-    onError: (err) => console.error('[Preferences] Realtime error:', err)
+    supabase,
+    onPreferenceUpdate: handlePreferenceUpdate
   });
   
-  // Debug logging
-  React.useEffect(() => {
-    console.log('[Preferences] Component state:', {
-      sessionId,
-      isLoading,
-      clientsLoading,
-      workoutLoading,
-      checkedInClientsCount: checkedInClients?.length || 0,
-      hasWorkoutData: !!workoutData,
-      realtimeConnected: preferencesConnected
-    });
-  }, [sessionId, isLoading, clientsLoading, workoutLoading, checkedInClients, workoutData, preferencesConnected]);
 
   if (!sessionId) {
     return (
@@ -116,38 +93,73 @@ export default function PreferencesPage() {
     );
   }
 
-  // Helper function to get exercises for a client from specific rounds
-  const getClientExercisesForRounds = (clientId: string, rounds: string[]) => {
-    if (!workoutData?.blueprint) return [];
-    
-    // Get the client's preferences to check for excluded exercises
+  // Helper function to get exercises for a client - matches client view exactly
+  const getClientExercisesForRounds = (clientId: string) => {
+    // This should match the logic from the client preferences page
     const clientData = checkedInClients?.find(c => c.userId === clientId);
-    const avoidedExercises = clientData?.preferences?.avoidExercises || [];
-    const includedExercises = clientData?.preferences?.includeExercises || [];
+    if (!clientData) return [];
     
-    const exercises: { name: string; confirmed: boolean; isExcluded: boolean }[] = [];
+    const avoidedExercises = clientData.preferences?.avoidExercises || [];
+    const includeExercises = clientData.preferences?.includeExercises || [];
     
-    for (const round of rounds) {
-      const block = workoutData.blueprint.blocks.find(b => b.blockId === round);
-      if (block && block.individualCandidates && block.individualCandidates[clientId]) {
-        const clientExercises = block.individualCandidates[clientId].exercises;
-        if (clientExercises && clientExercises.length > 0) {
-          // Get the top exercise for this round (deterministically selected)
-          const exerciseName = clientExercises[0].name;
-          // Check if this exercise has been replaced (it would be in includeExercises)
-          const replacementExercise = includedExercises.find((ex: string) => {
-            // For BMF templates, includeExercises contains the replacements
-            return true; // We'll use the last exercise in includeExercises as the current selection
-          });
-          
-          exercises.push({
-            name: exerciseName,
-            confirmed: false,
-            isExcluded: avoidedExercises.includes(exerciseName)
-          });
+    const exercises: { name: string; confirmed: boolean; isExcluded: boolean; isActive: boolean }[] = [];
+    
+    // For BMF templates, includeExercises contains the current selections
+    // Round1 = index 0, Round2 = index 1
+    const round1Exercise = includeExercises[0];
+    const round2Exercise = includeExercises[1];
+    
+    // Add active exercises from includeExercises
+    if (round1Exercise) {
+      exercises.push({
+        name: round1Exercise,
+        confirmed: true,
+        isExcluded: false,
+        isActive: true
+      });
+    }
+    
+    if (round2Exercise) {
+      exercises.push({
+        name: round2Exercise,
+        confirmed: true,
+        isExcluded: false,
+        isActive: true
+      });
+    }
+    
+    // If no includeExercises, fall back to blueprint exercises
+    if (exercises.length === 0 && workoutData?.blueprint) {
+      const rounds = ['Round1', 'Round2'];
+      for (const round of rounds) {
+        const block = workoutData.blueprint.blocks.find(b => b.blockId === round);
+        if (block && block.individualCandidates && block.individualCandidates[clientId]) {
+          const clientExercises = block.individualCandidates[clientId].exercises;
+          if (clientExercises && clientExercises.length > 0) {
+            const exerciseName = clientExercises[0].name;
+            exercises.push({
+              name: exerciseName,
+              confirmed: !avoidedExercises.includes(exerciseName),
+              isExcluded: avoidedExercises.includes(exerciseName),
+              isActive: !avoidedExercises.includes(exerciseName)
+            });
+          }
         }
       }
     }
+    
+    // Add excluded exercises that were replaced
+    avoidedExercises.forEach(excludedExercise => {
+      // Only add if it's not already in the active list
+      if (!exercises.find(ex => ex.name === excludedExercise)) {
+        exercises.push({
+          name: excludedExercise,
+          confirmed: false,
+          isExcluded: true,
+          isActive: false
+        });
+      }
+    });
     
     return exercises;
   };
@@ -158,9 +170,9 @@ export default function PreferencesPage() {
     name: client.userName || "Unknown Client",
     avatar: client.userId,
     exerciseCount: workoutData?.groupContext?.clients?.find(c => c.user_id === client.userId)?.exercises?.length || 0,
-    confirmedExercises: getClientExercisesForRounds(client.userId, ['Round1', 'Round2']),
-    muscleFocus: [],
-    avoidance: []
+    confirmedExercises: getClientExercisesForRounds(client.userId),
+    muscleFocus: client.preferences?.muscleTargets || [],
+    avoidance: client.preferences?.muscleLessens || []
   })) || [];
 
   return (
@@ -218,17 +230,16 @@ export default function PreferencesPage() {
                             ? 'text-gray-400 line-through decoration-2' 
                             : 'text-gray-700'
                         }`}>{exercise.name}</span>
-                        {exercise.isExcluded && (
-                          <span className="text-xs text-gray-500 italic">(Replaced)</span>
+                      </div>
+                      <div className={`w-6 h-6 rounded-full border-2 transition-colors flex items-center justify-center ${
+                        exercise.isActive 
+                          ? 'border-green-500 bg-green-500'
+                          : 'border-gray-300 bg-gray-100 opacity-50' 
+                      }`}>
+                        {exercise.isActive && (
+                          <Check />
                         )}
                       </div>
-                      <button className={`w-6 h-6 rounded-full border-2 bg-white transition-colors ${
-                        exercise.isExcluded 
-                          ? 'border-gray-300 cursor-not-allowed opacity-50' 
-                          : 'border-gray-300 hover:border-gray-400'
-                      }`} disabled={exercise.isExcluded}>
-                        {/* Empty circle for unselected state */}
-                      </button>
                     </div>
                   ))}
                 </div>
@@ -247,9 +258,6 @@ export default function PreferencesPage() {
                   {client.muscleFocus.map((muscle, idx) => (
                     <div key={`focus-${idx}`} className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
                       <span className="text-blue-700 font-medium">Focus: {muscle}</span>
-                      <button className="text-gray-400 hover:text-gray-600">
-                        <X />
-                      </button>
                     </div>
                   ))}
                   
@@ -257,23 +265,14 @@ export default function PreferencesPage() {
                   {client.avoidance.map((item, idx) => (
                     <div key={`avoid-${idx}`} className="flex items-center justify-between p-3 bg-red-50 rounded-lg">
                       <span className="text-red-700 font-medium">Avoid: {item}</span>
-                      <button className="text-gray-400 hover:text-gray-600">
-                        <X />
-                      </button>
                     </div>
                   ))}
                   
-                  {/* Add button if no items or has items */}
-                  {(client.muscleFocus.length === 0 && client.avoidance.length === 0) ? (
-                    <button className="w-full p-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 hover:border-gray-400 hover:text-gray-600 flex items-center justify-center gap-2">
-                      <Plus />
-                      Add Focus or Avoidance
-                    </button>
-                  ) : (
-                    <button className="w-full p-3 bg-gray-100 rounded-lg text-gray-600 hover:bg-gray-200 flex items-center justify-center gap-2">
-                      <Plus />
-                      Add More
-                    </button>
+                  {/* Empty state */}
+                  {client.muscleFocus.length === 0 && client.avoidance.length === 0 && (
+                    <div className="text-center py-6 text-gray-400">
+                      <p className="text-sm">No muscle preferences set</p>
+                    </div>
                   )}
                 </div>
               </div>
@@ -287,10 +286,9 @@ export default function PreferencesPage() {
                   <h4 className="font-medium text-gray-900">Other Notes</h4>
                 </div>
                 <div className="space-y-3">
-                  <button className="w-full p-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 hover:border-gray-400 hover:text-gray-600 flex items-center justify-center gap-2">
-                    <Plus />
-                    Add Note
-                  </button>
+                  <div className="text-center py-6 text-gray-400">
+                    <p className="text-sm">No notes added</p>
+                  </div>
                 </div>
               </div>
             </div>

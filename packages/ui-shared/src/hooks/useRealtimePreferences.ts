@@ -1,8 +1,9 @@
-import { useEffect, useState, useRef } from 'react';
-import { supabase } from '~/lib/supabase';
-import type { RealtimeChannel } from '@supabase/supabase-js';
+'use client';
 
-interface PreferenceUpdate {
+import { useEffect, useState, useRef } from 'react';
+import type { RealtimeChannel, SupabaseClient } from '@supabase/supabase-js';
+
+export interface PreferenceUpdate {
   userId: string;
   preferences: {
     intensity?: string | null;
@@ -16,14 +17,16 @@ interface PreferenceUpdate {
   updatedAt: string;
 }
 
-interface UseRealtimePreferencesOptions {
+export interface UseRealtimePreferencesOptions {
   sessionId: string;
+  supabase: SupabaseClient;
   onPreferenceUpdate: (data: PreferenceUpdate) => void;
   onError?: (error: Error) => void;
 }
 
 export function useRealtimePreferences({ 
   sessionId, 
+  supabase,
   onPreferenceUpdate,
   onError 
 }: UseRealtimePreferencesOptions) {

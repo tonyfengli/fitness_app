@@ -1,10 +1,10 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import { useTRPC } from "~/trpc/react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useRealtimePreferences } from "~/hooks/useRealtimePreferences";
+import { useClientPreferences, useRealtimePreferences } from "@acme/ui-shared";
+import { supabase } from "~/lib/supabase";
 
 // Icon components as inline SVGs
 const X = () => (
@@ -132,17 +132,8 @@ const ExerciseChangeModal = ({
 
   return (
     <>
-      {/* Backdrop */}
-      <div 
-        className="fixed inset-0 bg-black bg-opacity-50 z-50"
-        onClick={onClose}
-      >
-        {/* Modal */}
-        <div className="flex items-center justify-center h-full p-4">
-          <div 
-            className="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden"
-            onClick={(e) => e.stopPropagation()}
-          >
+      {/* Full Screen Modal */}
+      <div className="fixed inset-0 bg-white z-50 flex flex-col">
             {/* Header */}
             <div className="px-6 py-4 border-b flex-shrink-0">
               <div className="flex items-center justify-between">
@@ -343,8 +334,6 @@ const ExerciseChangeModal = ({
                 )}
               </button>
             </div>
-          </div>
-        </div>
       </div>
     </>
   );
@@ -356,206 +345,30 @@ export default function ClientPreferencePage() {
   const userId = params.userId as string;
   const trpc = useTRPC();
   
-  
-  // State for modal
-  const [modalOpen, setModalOpen] = useState(false);
-  const [selectedExerciseForChange, setSelectedExerciseForChange] = useState<{name: string; index: number; round?: string} | null>(null);
-  const [isProcessingChange, setIsProcessingChange] = useState(false);
-
-  // Fetch client data using public endpoint (no auth required)
-  const { data: clientData, isLoading: clientLoading, error: clientError } = useQuery(
-    trpc.trainingSession.getClientPreferenceData.queryOptions({ sessionId, userId })
-  );
-
-  // Fetch deterministic selections using public endpoint
-  const selectionsQueryOptions = trpc.trainingSession.getClientDeterministicSelections.queryOptions({ sessionId, userId });
-  const { data: selectionsData, isLoading: selectionsLoading, error: selectionsError } = useQuery(
-    selectionsQueryOptions
-  );
-
-  // Fetch all available exercises (public endpoint, no auth required)
-  const { data: availableExercises, isLoading: exercisesLoading } = useQuery(
-    trpc.exercise.all.queryOptions({ limit: 1000 })
-  );
-
-  const isLoading = clientLoading || selectionsLoading || exercisesLoading;
-
-  // Get query client for optimistic updates
-  const queryClient = useQueryClient();
-  
-  // Handle realtime preference updates (from other sources like trainer)
-  const handlePreferenceUpdate = useCallback((update: any) => {
-    // Only update if it's for this user
-    if (update.userId === userId) {
-      // Update the preferences cache
-      const prefsQueryKey = trpc.trainingSession.getClientPreferenceData.queryOptions({ sessionId, userId }).queryKey;
-      const currentPrefs = queryClient.getQueryData(prefsQueryKey) as any;
-      
-      if (currentPrefs) {
-        queryClient.setQueryData(prefsQueryKey, {
-          ...currentPrefs,
-          user: {
-            ...currentPrefs.user,
-            preferences: update.preferences
-          }
-        });
-      }
-    }
-  }, [userId, sessionId, queryClient]);
+  // Use the shared hook for all business logic
+  const {
+    clientData,
+    selectionsData,
+    availableExercises,
+    exercises,
+    isLoading,
+    clientError,
+    selectionsError,
+    modalOpen,
+    setModalOpen,
+    selectedExerciseForChange,
+    setSelectedExerciseForChange,
+    handleExerciseReplacement,
+    handlePreferenceUpdate,
+    isProcessingChange
+  } = useClientPreferences({ sessionId, userId, trpc });
   
   // Subscribe to realtime preference updates
   useRealtimePreferences({
     sessionId: sessionId || '',
+    supabase,
     onPreferenceUpdate: handlePreferenceUpdate
   });
-
-  // Exercise replacement mutation with optimistic updates
-  const replaceExerciseMutation = useMutation({
-    ...trpc.trainingSession.replaceClientExercisePublic.mutationOptions(),
-    onMutate: async (variables) => {
-      // Start loading state when mutation begins
-      setIsProcessingChange(true);
-      
-      // IMPORTANT: Use the exact same query key that tRPC generates
-      // This ensures our optimistic update targets the same cache entry that useQuery is watching
-      const queryKey = selectionsQueryOptions.queryKey;
-      
-      // Cancel any outgoing refetches to prevent race conditions
-      await queryClient.cancelQueries({ queryKey });
-      
-      // Snapshot the previous value for potential rollback
-      const previousSelections = queryClient.getQueryData(queryKey);
-      
-      // Perform optimistic update - this makes the UI update instantly
-      if (previousSelections && selectedExerciseForChange) {
-        const newSelections = { ...previousSelections } as any;
-        const exercises = newSelections.exercises || newSelections.selections || [];
-        
-        // Update the exercise for the specific round
-        const updatedExercises = exercises.map((sel: any) => {
-          if (sel.roundId === variables.round) {
-            return {
-              ...sel,
-              exercise: {
-                ...sel.exercise,
-                name: variables.newExerciseName
-              }
-            };
-          }
-          return sel;
-        });
-        
-        // Update both properties for compatibility
-        newSelections.exercises = updatedExercises;
-        newSelections.selections = updatedExercises;
-        
-        // Update the query cache - this triggers an immediate re-render
-        queryClient.setQueryData(queryKey, newSelections);
-        
-        // Update preferences to mark the old exercise as avoided
-        const prefsQueryKey = trpc.trainingSession.getClientPreferenceData.queryOptions({ sessionId, userId }).queryKey;
-        const previousPrefs = queryClient.getQueryData(prefsQueryKey) as any;
-        
-        if (previousPrefs && selectedExerciseForChange) {
-          const avoidExercises = previousPrefs.user?.preferences?.avoidExercises || [];
-          if (!avoidExercises.includes(selectedExerciseForChange.name)) {
-            queryClient.setQueryData(prefsQueryKey, {
-              ...previousPrefs,
-              user: {
-                ...previousPrefs.user,
-                preferences: {
-                  ...previousPrefs.user.preferences,
-                  avoidExercises: [...avoidExercises, selectedExerciseForChange.name]
-                }
-              }
-            });
-          }
-        }
-      }
-      
-      // Return snapshot for potential rollback on error
-      return { previousSelections };
-    },
-    onSuccess: () => {
-      // Clean up state and close modal
-      setModalOpen(false);
-      setSelectedExerciseForChange(null);
-      setIsProcessingChange(false);
-      // Note: We don't need to invalidate queries here because:
-      // 1. The optimistic update already updated the UI
-      // 2. Realtime subscriptions will sync any server-side changes
-    },
-    onError: (error, variables, context) => {
-      console.error('[ClientPreferences] Exercise replacement failed:', error);
-      setIsProcessingChange(false);
-      
-      // Revert the optimistic update on error
-      if (context?.previousSelections) {
-        queryClient.setQueryData(
-          selectionsQueryOptions.queryKey,
-          context.previousSelections
-        );
-      }
-    }
-  });
-
-  // Handle exercise replacement
-  const handleExerciseReplacement = async (newExerciseName: string) => {
-    if (!selectedExerciseForChange?.round) return;
-
-    await replaceExerciseMutation.mutateAsync({
-      sessionId,
-      userId,
-      round: selectedExerciseForChange.round as 'Round1' | 'Round2',
-      newExerciseName
-    });
-  };
-
-  // Get exercises from deterministic selections or workout preferences
-  const getClientExercises = () => {
-    // Check if we have exercises data from the API
-    if (!selectionsData) return [];
-    
-    // For the new implementation, selections will be under `exercises` key
-    const exercisesList = selectionsData.exercises || selectionsData.selections || [];
-    
-    // Get the list of avoided exercises from preferences
-    const avoidedExercises = clientData?.user?.preferences?.avoidExercises || [];
-    const includeExercises = clientData?.user?.preferences?.includeExercises || [];
-    
-    
-    const exercises = [];
-    
-    // First, add current active exercises
-    exercisesList.forEach(sel => {
-      exercises.push({
-        name: sel.exercise.name,
-        confirmed: false,
-        round: sel.roundId,
-        isExcluded: false,
-        isActive: true
-      });
-    });
-    
-    // Then, add excluded exercises that were previously replaced
-    avoidedExercises.forEach(excludedExercise => {
-      // Only add if it's not already in the active list
-      if (!exercises.find(ex => ex.name === excludedExercise)) {
-        exercises.push({
-          name: excludedExercise,
-          confirmed: false,
-          round: null, // We don't know which round it was from
-          isExcluded: true,
-          isActive: false
-        });
-      }
-    });
-    
-    return exercises;
-  };
-
-  // Transform client data for display
-  const exercises = getClientExercises();
   
 
   if (isLoading) {
@@ -701,12 +514,12 @@ export default function ClientPreferencePage() {
               
               {/* Add button */}
               {(displayData.muscleFocus.length === 0 && displayData.avoidance.length === 0) ? (
-                <button className="w-full p-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 hover:border-gray-400 hover:text-gray-600 flex items-center justify-center gap-2">
+                <button className="w-full p-3 border border-gray-300 rounded-lg text-gray-700 bg-white hover:bg-gray-50 hover:border-gray-400 transition-colors flex items-center justify-center gap-2 font-medium shadow-sm">
                   <Plus />
                   Add Focus or Avoidance
                 </button>
               ) : (
-                <button className="w-full p-3 bg-gray-100 rounded-lg text-gray-600 hover:bg-gray-200 flex items-center justify-center gap-2">
+                <button className="w-full p-3 border border-gray-300 rounded-lg text-gray-700 bg-white hover:bg-gray-50 hover:border-gray-400 transition-colors flex items-center justify-center gap-2 font-medium shadow-sm">
                   <Plus />
                   Add More
                 </button>
@@ -723,7 +536,7 @@ export default function ClientPreferencePage() {
               <h4 className="font-medium text-gray-900">Other Notes</h4>
             </div>
             <div className="space-y-3">
-              <button className="w-full p-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 hover:border-gray-400 hover:text-gray-600 flex items-center justify-center gap-2">
+              <button className="w-full p-3 border border-gray-300 rounded-lg text-gray-700 bg-white hover:bg-gray-50 hover:border-gray-400 transition-colors flex items-center justify-center gap-2 font-medium shadow-sm">
                 <Plus />
                 Add Note
               </button>

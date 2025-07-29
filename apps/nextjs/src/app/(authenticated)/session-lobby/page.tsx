@@ -7,7 +7,8 @@ import type { PlayerStatus } from "@acme/ui-desktop";
 import { useTRPC } from "~/trpc/react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRealtimeCheckIns } from "~/hooks/useRealtimeCheckIns";
-import { useRealtimePreferences } from "~/hooks/useRealtimePreferences";
+import { useRealtimePreferences } from "@acme/ui-shared";
+import { supabase } from "~/lib/supabase";
 
 // Helper to format muscle names for display (convert underscore to space and capitalize)
 function formatMuscleName(muscle: string): string {
@@ -243,6 +244,7 @@ export default function SessionLobby() {
   // Set up Supabase Realtime for preferences
   const { isConnected: preferencesConnected } = useRealtimePreferences({
     sessionId: sessionId || '',
+    supabase,
     onPreferenceUpdate: handlePreferenceUpdate,
     onError: (err) => console.error('[SessionLobby] Preference realtime error:', err)
   });
