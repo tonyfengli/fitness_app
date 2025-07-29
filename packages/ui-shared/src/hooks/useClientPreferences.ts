@@ -26,6 +26,23 @@ interface TRPCClient {
       queryOptions: (input: { limit: number }) => any;
     };
   };
+  workoutPreferences: {
+    addMuscleTargetPublic: {
+      mutationOptions: () => any;
+    };
+    addMuscleLessenPublic: {
+      mutationOptions: () => any;
+    };
+    removeMuscleTargetPublic: {
+      mutationOptions: () => any;
+    };
+    removeMuscleLessenPublic: {
+      mutationOptions: () => any;
+    };
+    getForUserSessionPublic: {
+      queryOptions: (input: { sessionId: string; userId: string }) => any;
+    };
+  };
 }
 
 interface UseClientPreferencesProps {
@@ -309,7 +326,208 @@ export function useClientPreferences({ sessionId, userId, trpc }: UseClientPrefe
     }
   };
 
+  // Fetch workout preferences for muscle data
+  const { data: workoutPreferences } = useQuery(
+    trpc.workoutPreferences.getForUserSessionPublic.queryOptions({ sessionId, userId })
+  );
+
+  // Add muscle target mutation
+  const addMuscleTargetMutation = useMutation({
+    ...trpc.workoutPreferences.addMuscleTargetPublic.mutationOptions(),
+    onMutate: async ({ muscle }) => {
+      console.log('[useClientPreferences] Adding muscle target:', muscle);
+      // Optimistic update
+      const queryKey = trpc.workoutPreferences.getForUserSessionPublic.queryOptions({ sessionId, userId }).queryKey;
+      const previousData = queryClient.getQueryData(queryKey);
+      
+      queryClient.setQueryData(queryKey, (old: any) => {
+        if (!old) {
+          return {
+            muscleTargets: [muscle],
+            muscleLessens: []
+          };
+        }
+        return {
+          ...old,
+          muscleTargets: [...(old.muscleTargets || []), muscle]
+        };
+      });
+      
+      return { previousData };
+    },
+    onError: (err, variables, context) => {
+      console.error('[useClientPreferences] Failed to add muscle target:', err);
+      if (context?.previousData) {
+        const queryKey = trpc.workoutPreferences.getForUserSessionPublic.queryOptions({ sessionId, userId }).queryKey;
+        queryClient.setQueryData(queryKey, context.previousData);
+      }
+    },
+    onSettled: () => {
+      // Invalidate client data to refresh the view
+      queryClient.invalidateQueries({ 
+        queryKey: trpc.trainingSession.getClientPreferenceData.queryOptions({ sessionId, userId }).queryKey 
+      });
+    }
+  });
+
+  // Add muscle lessen mutation
+  const addMuscleLessenMutation = useMutation({
+    ...trpc.workoutPreferences.addMuscleLessenPublic.mutationOptions(),
+    onMutate: async ({ muscle }) => {
+      console.log('[useClientPreferences] Adding muscle lessen:', muscle);
+      // Optimistic update
+      const queryKey = trpc.workoutPreferences.getForUserSessionPublic.queryOptions({ sessionId, userId }).queryKey;
+      const previousData = queryClient.getQueryData(queryKey);
+      
+      queryClient.setQueryData(queryKey, (old: any) => {
+        if (!old) {
+          return {
+            muscleTargets: [],
+            muscleLessens: [muscle]
+          };
+        }
+        return {
+          ...old,
+          muscleLessens: [...(old.muscleLessens || []), muscle]
+        };
+      });
+      
+      return { previousData };
+    },
+    onError: (err, variables, context) => {
+      console.error('[useClientPreferences] Failed to add muscle lessen:', err);
+      if (context?.previousData) {
+        const queryKey = trpc.workoutPreferences.getForUserSessionPublic.queryOptions({ sessionId, userId }).queryKey;
+        queryClient.setQueryData(queryKey, context.previousData);
+      }
+    },
+    onSettled: () => {
+      // Invalidate client data to refresh the view
+      queryClient.invalidateQueries({ 
+        queryKey: trpc.trainingSession.getClientPreferenceData.queryOptions({ sessionId, userId }).queryKey 
+      });
+    }
+  });
+
+  // Handle adding muscle preference
+  const handleAddMusclePreference = async (muscle: string, type: 'target' | 'limit') => {
+    try {
+      if (type === 'target') {
+        await addMuscleTargetMutation.mutateAsync({
+          sessionId,
+          userId,
+          muscle
+        });
+        console.log('[useClientPreferences] Muscle target added successfully');
+      } else {
+        await addMuscleLessenMutation.mutateAsync({
+          sessionId,
+          userId,
+          muscle
+        });
+        console.log('[useClientPreferences] Muscle limit added successfully');
+      }
+    } catch (error) {
+      console.error('[useClientPreferences] Failed to add muscle preference:', error);
+      throw error;
+    }
+  };
+
+  // Remove muscle target mutation
+  const removeMuscleTargetMutation = useMutation({
+    ...trpc.workoutPreferences.removeMuscleTargetPublic.mutationOptions(),
+    onMutate: async ({ muscle }) => {
+      console.log('[useClientPreferences] Removing muscle target:', muscle);
+      // Optimistic update
+      const queryKey = trpc.workoutPreferences.getForUserSessionPublic.queryOptions({ sessionId, userId }).queryKey;
+      const previousData = queryClient.getQueryData(queryKey);
+      
+      queryClient.setQueryData(queryKey, (old: any) => {
+        if (!old) return old;
+        return {
+          ...old,
+          muscleTargets: (old.muscleTargets || []).filter((m: string) => m !== muscle)
+        };
+      });
+      
+      return { previousData };
+    },
+    onError: (err, variables, context) => {
+      console.error('[useClientPreferences] Failed to remove muscle target:', err);
+      if (context?.previousData) {
+        const queryKey = trpc.workoutPreferences.getForUserSessionPublic.queryOptions({ sessionId, userId }).queryKey;
+        queryClient.setQueryData(queryKey, context.previousData);
+      }
+    },
+    onSettled: () => {
+      // Invalidate client data to refresh the view
+      queryClient.invalidateQueries({ 
+        queryKey: trpc.trainingSession.getClientPreferenceData.queryOptions({ sessionId, userId }).queryKey 
+      });
+    }
+  });
+
+  // Remove muscle lessen mutation
+  const removeMuscleLessenMutation = useMutation({
+    ...trpc.workoutPreferences.removeMuscleLessenPublic.mutationOptions(),
+    onMutate: async ({ muscle }) => {
+      console.log('[useClientPreferences] Removing muscle lessen:', muscle);
+      // Optimistic update
+      const queryKey = trpc.workoutPreferences.getForUserSessionPublic.queryOptions({ sessionId, userId }).queryKey;
+      const previousData = queryClient.getQueryData(queryKey);
+      
+      queryClient.setQueryData(queryKey, (old: any) => {
+        if (!old) return old;
+        return {
+          ...old,
+          muscleLessens: (old.muscleLessens || []).filter((m: string) => m !== muscle)
+        };
+      });
+      
+      return { previousData };
+    },
+    onError: (err, variables, context) => {
+      console.error('[useClientPreferences] Failed to remove muscle lessen:', err);
+      if (context?.previousData) {
+        const queryKey = trpc.workoutPreferences.getForUserSessionPublic.queryOptions({ sessionId, userId }).queryKey;
+        queryClient.setQueryData(queryKey, context.previousData);
+      }
+    },
+    onSettled: () => {
+      // Invalidate client data to refresh the view
+      queryClient.invalidateQueries({ 
+        queryKey: trpc.trainingSession.getClientPreferenceData.queryOptions({ sessionId, userId }).queryKey 
+      });
+    }
+  });
+
+  // Handle removing muscle preference
+  const handleRemoveMusclePreference = async (muscle: string, type: 'target' | 'limit') => {
+    try {
+      if (type === 'target') {
+        await removeMuscleTargetMutation.mutateAsync({
+          sessionId,
+          userId,
+          muscle
+        });
+        console.log('[useClientPreferences] Muscle target removed successfully');
+      } else {
+        await removeMuscleLessenMutation.mutateAsync({
+          sessionId,
+          userId,
+          muscle
+        });
+        console.log('[useClientPreferences] Muscle limit removed successfully');
+      }
+    } catch (error) {
+      console.error('[useClientPreferences] Failed to remove muscle preference:', error);
+      throw error;
+    }
+  };
+
   const exercises = getClientExercises();
+  const isAddingMuscle = addMuscleTargetMutation.isPending || addMuscleLessenMutation.isPending;
+  const isRemovingMuscle = removeMuscleTargetMutation.isPending || removeMuscleLessenMutation.isPending;
 
   return {
     // Data
@@ -339,6 +557,13 @@ export function useClientPreferences({ sessionId, userId, trpc }: UseClientPrefe
     // State
     isProcessingChange,
     isAddingExercise,
+    isAddingMuscle,
+    
+    // Muscle preferences
+    handleAddMusclePreference,
+    handleRemoveMusclePreference,
+    workoutPreferences,
+    isRemovingMuscle,
     
     // Utils
     getClientExercises

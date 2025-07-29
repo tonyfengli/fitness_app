@@ -7,6 +7,40 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRealtimePreferences } from "@acme/ui-shared";
 import { supabase } from "~/lib/supabase";
 
+// Helper function to format muscle values to display labels
+const formatMuscleLabel = (muscleValue: string): string => {
+  const muscleMap: Record<string, string> = {
+    // Lower Body
+    'glutes': 'Glutes',
+    'quads': 'Quads',
+    'hamstrings': 'Hamstrings',
+    'calves': 'Calves',
+    'adductors': 'Adductors',
+    'abductors': 'Abductors',
+    'shins': 'Shins',
+    'tibialis_anterior': 'Tibialis Anterior',
+    // Core
+    'core': 'Core',
+    'lower_abs': 'Lower Abs',
+    'upper_abs': 'Upper Abs',
+    'obliques': 'Obliques',
+    // Upper Body - Push
+    'chest': 'Chest',
+    'upper_chest': 'Upper Chest',
+    'lower_chest': 'Lower Chest',
+    'shoulders': 'Shoulders',
+    'delts': 'Delts',
+    'triceps': 'Triceps',
+    // Upper Body - Pull
+    'lats': 'Lats',
+    'upper_back': 'Upper Back',
+    'lower_back': 'Lower Back',
+    'traps': 'Traps',
+    'biceps': 'Biceps'
+  };
+  return muscleMap[muscleValue] || muscleValue;
+};
+
 // Icon components as inline SVGs
 const Check = () => (
   <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -264,20 +298,20 @@ export default function PreferencesPage() {
                   <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-sm font-semibold">
                     2
                   </div>
-                  <h4 className="font-medium text-gray-900">Muscle Focus & Avoidance</h4>
+                  <h4 className="font-medium text-gray-900">Muscle Target & Limit</h4>
                 </div>
                 <div className="space-y-3">
-                  {/* Muscle Focus Items */}
+                  {/* Muscle Target Items */}
                   {client.muscleFocus.map((muscle, idx) => (
                     <div key={`focus-${idx}`} className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
-                      <span className="text-blue-700 font-medium">Focus: {muscle}</span>
+                      <span className="text-blue-700 font-medium">Target: {formatMuscleLabel(muscle)}</span>
                     </div>
                   ))}
                   
-                  {/* Avoidance Items */}
+                  {/* Limit Items */}
                   {client.avoidance.map((item, idx) => (
                     <div key={`avoid-${idx}`} className="flex items-center justify-between p-3 bg-red-50 rounded-lg">
-                      <span className="text-red-700 font-medium">Avoid: {item}</span>
+                      <span className="text-red-700 font-medium">Limit: {formatMuscleLabel(item)}</span>
                     </div>
                   ))}
                   

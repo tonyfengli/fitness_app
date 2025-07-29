@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { createTRPCRouter, protectedProcedure } from "../trpc";
+import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
 import { db } from "@acme/db/client";
 import { WorkoutPreferences, CreateWorkoutPreferencesSchema, UserTrainingSession } from "@acme/db/schema";
 import { eq, and, desc } from "@acme/db";
@@ -124,5 +124,412 @@ export const workoutPreferencesRouter = createTRPCRouter({
         .limit(1);
 
       return preference || null;
+    }),
+
+  addMuscleTarget: protectedProcedure
+    .input(z.object({
+      sessionId: z.string().uuid(),
+      userId: z.string(),
+      muscle: z.string()
+    }))
+    .mutation(async ({ ctx, input }) => {
+      // Verify user has checked in to this session
+      const checkIn = await db
+        .select()
+        .from(UserTrainingSession)
+        .where(
+          and(
+            eq(UserTrainingSession.userId, input.userId),
+            eq(UserTrainingSession.trainingSessionId, input.sessionId)
+          )
+        )
+        .limit(1);
+
+      if (!checkIn.length) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "User must be checked in to this session",
+        });
+      }
+
+      // Get or create preferences
+      let preference = await db
+        .select()
+        .from(WorkoutPreferences)
+        .where(
+          and(
+            eq(WorkoutPreferences.userId, input.userId),
+            eq(WorkoutPreferences.trainingSessionId, input.sessionId)
+          )
+        )
+        .limit(1)
+        .then(res => res[0]);
+
+      if (!preference) {
+        // Create new preferences if they don't exist
+        [preference] = await db
+          .insert(WorkoutPreferences)
+          .values({
+            userId: input.userId,
+            trainingSessionId: input.sessionId,
+            intensity: "moderate",
+            muscleTargets: [input.muscle]
+          })
+          .returning();
+      } else {
+        // Append to existing muscle targets (avoid duplicates)
+        const currentTargets = preference.muscleTargets || [];
+        if (!currentTargets.includes(input.muscle)) {
+          const updatedTargets = [...currentTargets, input.muscle];
+          
+          [preference] = await db
+            .update(WorkoutPreferences)
+            .set({ muscleTargets: updatedTargets })
+            .where(eq(WorkoutPreferences.id, preference.id))
+            .returning();
+        }
+      }
+
+      return preference;
+    }),
+
+  addMuscleLessen: protectedProcedure
+    .input(z.object({
+      sessionId: z.string().uuid(),
+      userId: z.string(),
+      muscle: z.string()
+    }))
+    .mutation(async ({ ctx, input }) => {
+      // Verify user has checked in to this session
+      const checkIn = await db
+        .select()
+        .from(UserTrainingSession)
+        .where(
+          and(
+            eq(UserTrainingSession.userId, input.userId),
+            eq(UserTrainingSession.trainingSessionId, input.sessionId)
+          )
+        )
+        .limit(1);
+
+      if (!checkIn.length) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "User must be checked in to this session",
+        });
+      }
+
+      // Get or create preferences
+      let preference = await db
+        .select()
+        .from(WorkoutPreferences)
+        .where(
+          and(
+            eq(WorkoutPreferences.userId, input.userId),
+            eq(WorkoutPreferences.trainingSessionId, input.sessionId)
+          )
+        )
+        .limit(1)
+        .then(res => res[0]);
+
+      if (!preference) {
+        // Create new preferences if they don't exist
+        [preference] = await db
+          .insert(WorkoutPreferences)
+          .values({
+            userId: input.userId,
+            trainingSessionId: input.sessionId,
+            intensity: "moderate",
+            muscleLessens: [input.muscle]
+          })
+          .returning();
+      } else {
+        // Append to existing muscle lessens (avoid duplicates)
+        const currentLessens = preference.muscleLessens || [];
+        if (!currentLessens.includes(input.muscle)) {
+          const updatedLessens = [...currentLessens, input.muscle];
+          
+          [preference] = await db
+            .update(WorkoutPreferences)
+            .set({ muscleLessens: updatedLessens })
+            .where(eq(WorkoutPreferences.id, preference.id))
+            .returning();
+        }
+      }
+
+      return preference;
+    }),
+
+  // Public versions for client preferences page
+  getForUserSessionPublic: publicProcedure
+    .input(z.object({ 
+      userId: z.string(),
+      sessionId: z.string().uuid()
+    }))
+    .query(async ({ ctx, input }) => {
+      const [preference] = await db
+        .select()
+        .from(WorkoutPreferences)
+        .where(
+          and(
+            eq(WorkoutPreferences.userId, input.userId),
+            eq(WorkoutPreferences.trainingSessionId, input.sessionId)
+          )
+        )
+        .limit(1);
+
+      return preference || null;
+    }),
+
+  addMuscleTargetPublic: publicProcedure
+    .input(z.object({
+      sessionId: z.string().uuid(),
+      userId: z.string(),
+      muscle: z.string()
+    }))
+    .mutation(async ({ ctx, input }) => {
+      // Verify user has checked in to this session
+      const checkIn = await db
+        .select()
+        .from(UserTrainingSession)
+        .where(
+          and(
+            eq(UserTrainingSession.userId, input.userId),
+            eq(UserTrainingSession.trainingSessionId, input.sessionId)
+          )
+        )
+        .limit(1);
+
+      if (!checkIn.length) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "User must be checked in to this session",
+        });
+      }
+
+      // Get or create preferences
+      let preference = await db
+        .select()
+        .from(WorkoutPreferences)
+        .where(
+          and(
+            eq(WorkoutPreferences.userId, input.userId),
+            eq(WorkoutPreferences.trainingSessionId, input.sessionId)
+          )
+        )
+        .limit(1)
+        .then(res => res[0]);
+
+      if (!preference) {
+        // Create new preferences if they don't exist
+        [preference] = await db
+          .insert(WorkoutPreferences)
+          .values({
+            userId: input.userId,
+            trainingSessionId: input.sessionId,
+            intensity: "moderate",
+            muscleTargets: [input.muscle]
+          })
+          .returning();
+      } else {
+        // Append to existing muscle targets (avoid duplicates)
+        const currentTargets = preference.muscleTargets || [];
+        if (!currentTargets.includes(input.muscle)) {
+          const updatedTargets = [...currentTargets, input.muscle];
+          
+          [preference] = await db
+            .update(WorkoutPreferences)
+            .set({ muscleTargets: updatedTargets })
+            .where(eq(WorkoutPreferences.id, preference.id))
+            .returning();
+        }
+      }
+
+      return preference;
+    }),
+
+  addMuscleLessenPublic: publicProcedure
+    .input(z.object({
+      sessionId: z.string().uuid(),
+      userId: z.string(),
+      muscle: z.string()
+    }))
+    .mutation(async ({ ctx, input }) => {
+      // Verify user has checked in to this session
+      const checkIn = await db
+        .select()
+        .from(UserTrainingSession)
+        .where(
+          and(
+            eq(UserTrainingSession.userId, input.userId),
+            eq(UserTrainingSession.trainingSessionId, input.sessionId)
+          )
+        )
+        .limit(1);
+
+      if (!checkIn.length) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "User must be checked in to this session",
+        });
+      }
+
+      // Get or create preferences
+      let preference = await db
+        .select()
+        .from(WorkoutPreferences)
+        .where(
+          and(
+            eq(WorkoutPreferences.userId, input.userId),
+            eq(WorkoutPreferences.trainingSessionId, input.sessionId)
+          )
+        )
+        .limit(1)
+        .then(res => res[0]);
+
+      if (!preference) {
+        // Create new preferences if they don't exist
+        [preference] = await db
+          .insert(WorkoutPreferences)
+          .values({
+            userId: input.userId,
+            trainingSessionId: input.sessionId,
+            intensity: "moderate",
+            muscleLessens: [input.muscle]
+          })
+          .returning();
+      } else {
+        // Append to existing muscle lessens (avoid duplicates)
+        const currentLessens = preference.muscleLessens || [];
+        if (!currentLessens.includes(input.muscle)) {
+          const updatedLessens = [...currentLessens, input.muscle];
+          
+          [preference] = await db
+            .update(WorkoutPreferences)
+            .set({ muscleLessens: updatedLessens })
+            .where(eq(WorkoutPreferences.id, preference.id))
+            .returning();
+        }
+      }
+
+      return preference;
+    }),
+
+  removeMuscleTargetPublic: publicProcedure
+    .input(z.object({
+      sessionId: z.string().uuid(),
+      userId: z.string(),
+      muscle: z.string()
+    }))
+    .mutation(async ({ ctx, input }) => {
+      // Verify user has checked in to this session
+      const checkIn = await db
+        .select()
+        .from(UserTrainingSession)
+        .where(
+          and(
+            eq(UserTrainingSession.userId, input.userId),
+            eq(UserTrainingSession.trainingSessionId, input.sessionId)
+          )
+        )
+        .limit(1);
+
+      if (!checkIn.length) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "User must be checked in to this session",
+        });
+      }
+
+      // Get preferences
+      const preference = await db
+        .select()
+        .from(WorkoutPreferences)
+        .where(
+          and(
+            eq(WorkoutPreferences.userId, input.userId),
+            eq(WorkoutPreferences.trainingSessionId, input.sessionId)
+          )
+        )
+        .limit(1)
+        .then(res => res[0]);
+
+      if (!preference) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Preferences not found",
+        });
+      }
+
+      // Remove muscle from targets
+      const currentTargets = preference.muscleTargets || [];
+      const updatedTargets = currentTargets.filter(m => m !== input.muscle);
+      
+      const [updated] = await db
+        .update(WorkoutPreferences)
+        .set({ muscleTargets: updatedTargets })
+        .where(eq(WorkoutPreferences.id, preference.id))
+        .returning();
+
+      return updated;
+    }),
+
+  removeMuscleLessenPublic: publicProcedure
+    .input(z.object({
+      sessionId: z.string().uuid(),
+      userId: z.string(),
+      muscle: z.string()
+    }))
+    .mutation(async ({ ctx, input }) => {
+      // Verify user has checked in to this session
+      const checkIn = await db
+        .select()
+        .from(UserTrainingSession)
+        .where(
+          and(
+            eq(UserTrainingSession.userId, input.userId),
+            eq(UserTrainingSession.trainingSessionId, input.sessionId)
+          )
+        )
+        .limit(1);
+
+      if (!checkIn.length) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "User must be checked in to this session",
+        });
+      }
+
+      // Get preferences
+      const preference = await db
+        .select()
+        .from(WorkoutPreferences)
+        .where(
+          and(
+            eq(WorkoutPreferences.userId, input.userId),
+            eq(WorkoutPreferences.trainingSessionId, input.sessionId)
+          )
+        )
+        .limit(1)
+        .then(res => res[0]);
+
+      if (!preference) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Preferences not found",
+        });
+      }
+
+      // Remove muscle from lessens
+      const currentLessens = preference.muscleLessens || [];
+      const updatedLessens = currentLessens.filter(m => m !== input.muscle);
+      
+      const [updated] = await db
+        .update(WorkoutPreferences)
+        .set({ muscleLessens: updatedLessens })
+        .where(eq(WorkoutPreferences.id, preference.id))
+        .returning();
+
+      return updated;
     }),
 });

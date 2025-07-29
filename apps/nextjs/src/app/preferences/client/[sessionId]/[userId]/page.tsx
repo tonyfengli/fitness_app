@@ -3,7 +3,13 @@
 import React, { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import { useTRPC } from "~/trpc/react";
-import { useClientPreferences, useRealtimePreferences } from "@acme/ui-shared";
+import { 
+  useClientPreferences, 
+  useRealtimePreferences,
+  categorizeExercisesByRecommendation,
+  filterExercisesBySearch,
+  getFilteredExercises
+} from "@acme/ui-shared";
 import { supabase } from "~/lib/supabase";
 
 // Icon components as inline SVGs
@@ -52,120 +58,55 @@ const ExerciseChangeModal = ({
   
   // Categorize exercises into Recommended and Other
   const categorizedExercises = React.useMemo(() => {
-    // Start with blueprint recommendations if available
-    let recommended = [];
-    let other = [];
-    
-    if (blueprintRecommendations && blueprintRecommendations.length > 0) {
-      // Use blueprint recommendations - they're already sorted by score
-      // Filter to only show recommendations from the same round if currentRound is specified
-      const relevantRecommendations = currentRound 
-        ? blueprintRecommendations.filter(rec => rec.roundId === currentRound)
-        : blueprintRecommendations;
-      
-      // Get ALL candidates for the round, not just top 5
-      recommended = relevantRecommendations.map(rec => ({
-        ...rec.exercise || rec,
-        name: rec.exercise?.name || rec.name,
-        score: rec.score,
-        reason: rec.score >= 8.0 ? 'Perfect match' : 
-                rec.score >= 7.0 ? 'Excellent choice' :
-                rec.score >= 6.0 ? 'Very compatible' : 
-                null // No tag for lower scores
-      }));
-      
-      // Add remaining exercises to "other" category
-      const recommendedNames = recommended.map(r => r.name);
-      other = availableExercises.filter(exercise => 
-        !recommendedNames.includes(exercise.name) && 
-        exercise.name !== exerciseName
-      );
-    } else if (availableExercises && availableExercises.length > 0) {
-      // Fallback to similarity-based recommendations if no blueprint data
-      const currentExercise = availableExercises.find(ex => ex.name === exerciseName);
-      
-      availableExercises.forEach(exercise => {
-        if (exercise.name === exerciseName) return; // Skip current exercise
-        
-        if (currentExercise) {
-          const isSameMovementPattern = exercise.movementPattern === currentExercise.movementPattern;
-          const isSamePrimaryMuscle = exercise.primaryMuscle === currentExercise.primaryMuscle;
-          
-          if (isSameMovementPattern || isSamePrimaryMuscle) {
-            recommended.push({
-              ...exercise,
-              reason: isSameMovementPattern ? 'Similar movement' : 'Same muscle group'
-            });
-          } else {
-            other.push(exercise);
-          }
-        } else {
-          other.push(exercise);
-        }
-      });
-      
-      // Sort and limit fallback recommendations
-      recommended.sort((a, b) => {
-        if (a.reason === 'Similar movement' && b.reason !== 'Similar movement') return -1;
-        if (b.reason === 'Similar movement' && a.reason !== 'Similar movement') return 1;
-        return 0;
-      });
-      recommended = recommended.slice(0, 5);
-    }
+    // Use shared categorization logic
+    const categorized = categorizeExercisesByRecommendation(
+      availableExercises || [],
+      blueprintRecommendations,
+      {
+        currentExerciseName: exerciseName,
+        currentRound,
+        maxRecommendations: undefined // Don't limit in modal, show all recommendations
+      }
+    );
     
     // Apply search filter to both categories
     if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      const filterFn = (exercise) => 
-        exercise.name.toLowerCase().includes(query) ||
-        exercise.primaryMuscle?.toLowerCase().includes(query) ||
-        exercise.movementPattern?.toLowerCase().includes(query);
-      
-      recommended = recommended.filter(filterFn);
-      other = other.filter(filterFn);
+      return {
+        recommended: filterExercisesBySearch(categorized.recommended, searchQuery),
+        other: filterExercisesBySearch(categorized.other, searchQuery)
+      };
     }
     
-    return { recommended, other };
+    return categorized;
   }, [availableExercises, blueprintRecommendations, exerciseName, searchQuery, currentRound]);
   
   if (!isOpen) return null;
 
   return (
     <>
-      {/* Full Screen Modal */}
-      <div className="fixed inset-0 bg-white z-50 flex flex-col">
+      {/* Background overlay */}
+      <div 
+        className="fixed inset-0 bg-black/30 backdrop-blur-sm z-40"
+        onClick={onClose}
+      />
+      
+      {/* Modal */}
+      <div className="fixed inset-x-4 top-1/2 -translate-y-1/2 max-w-lg mx-auto bg-white rounded-2xl shadow-2xl z-50 max-h-[80vh] flex flex-col">
             {/* Header */}
-            <div className="px-6 py-4 border-b flex-shrink-0">
+            <div className="px-6 py-4 border-b border-gray-200 flex-shrink-0">
               <div className="flex items-center justify-between">
                 <div>
-                  <h2 className="text-xl font-bold text-gray-900">Change Exercise</h2>
-                  <p className="text-gray-500 mt-1 text-sm">
-                    {currentRound ? `Select a replacement for ${currentRound === 'Round1' ? 'Round 1' : 'Round 2'}` : 'Select a replacement exercise'}
-                  </p>
+                  <h2 className="text-lg font-bold text-gray-900">Change Exercise</h2>
+                  <p className="text-sm text-gray-500 mt-1">Replacing: {exerciseName}</p>
                 </div>
                 <button
                   onClick={onClose}
-                  className="text-gray-400 hover:text-gray-600 transition-colors p-1"
+                  className="p-2 text-gray-400 hover:text-gray-600 transition-colors rounded-lg hover:bg-gray-100"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                   </svg>
                 </button>
-              </div>
-            </div>
-
-            {/* Selected Exercise Box */}
-            <div className="px-6 py-5 bg-gradient-to-r from-blue-50 to-indigo-50 border-b flex-shrink-0">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-indigo-600 font-semibold uppercase tracking-wide">Currently Selected</p>
-                  <p className="text-xl font-bold text-gray-900 mt-1">{exerciseName}</p>
-                </div>
-                <div className="w-14 h-14 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-xl flex items-center justify-center shadow-sm">
-                  <svg className="w-7 h-7 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                  </svg>
-                </div>
               </div>
             </div>
 
@@ -202,13 +143,8 @@ const ExerciseChangeModal = ({
               
               {/* Recommended Section */}
               {categorizedExercises.recommended.length > 0 && (
-                <div className="mb-8">
-                  <div className="flex items-center mb-4">
-                    <div className="flex-1">
-                      <h3 className="text-base font-bold text-gray-900">Recommended Exercises</h3>
-                      <p className="text-xs text-gray-500 mt-0.5">Based on your workout preferences and goals</p>
-                    </div>
-                  </div>
+                <div className="mb-6">
+                  <h3 className="text-sm font-semibold text-gray-600 uppercase tracking-wider mb-3">Recommended</h3>
                   <div className="space-y-2">
                     {categorizedExercises.recommended.map((exercise, idx) => (
                       <button 
@@ -252,22 +188,12 @@ const ExerciseChangeModal = ({
                 </div>
               )}
 
-              {/* Separator */}
-              {categorizedExercises.recommended.length > 0 && categorizedExercises.other.length > 0 && (
-                <div className="my-6 border-t border-gray-200"></div>
-              )}
-
-              {/* Other Section */}
-              <div>
-                <div className="flex items-center mb-4">
-                  <div className="flex-1">
-                    <h3 className="text-base font-bold text-gray-900">Other Exercises</h3>
-                    <p className="text-xs text-gray-500 mt-0.5">Additional options from your exercise library</p>
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  {categorizedExercises.other.length > 0 ? (
-                    categorizedExercises.other.map((exercise, idx) => (
+              {/* All other exercises */}
+              {categorizedExercises.other.length > 0 && (
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-600 uppercase tracking-wider mb-3">Other Exercises</h3>
+                  <div className="space-y-2">
+                  {categorizedExercises.other.map((exercise, idx) => (
                       <button 
                         key={exercise.id || idx}
                         className={`w-full p-3 rounded-lg text-left transition-all ${
@@ -290,12 +216,10 @@ const ExerciseChangeModal = ({
                           }`}>{exercise.name}</span>
                         </div>
                       </button>
-                    ))
-                  ) : (
-                    <p className="text-gray-500 text-sm">No other exercises available</p>
-                  )}
+                  ))}
+                  </div>
                 </div>
-              </div>
+              )}
               </div>
             </div>
 
@@ -339,6 +263,230 @@ const ExerciseChangeModal = ({
   );
 };
 
+// Muscle Target/Limit Modal Component
+const MuscleModal = ({ 
+  isOpen, 
+  onClose,
+  onConfirm,
+  isLoading = false,
+  existingTargets = [],
+  existingLimits = []
+}: { 
+  isOpen: boolean; 
+  onClose: () => void;
+  onConfirm?: (muscle: string, type: 'target' | 'limit') => void;
+  isLoading?: boolean;
+  existingTargets?: string[];
+  existingLimits?: string[];
+}) => {
+  const [activeTab, setActiveTab] = useState<'target' | 'limit'>('target');
+  const [selectedMuscle, setSelectedMuscle] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  
+  // Reset state when modal closes
+  useEffect(() => {
+    if (!isOpen) {
+      setActiveTab('target');
+      setSelectedMuscle(null);
+      setSearchQuery('');
+    }
+  }, [isOpen]);
+  
+  // Complete muscle list from exercise metadata
+  const muscleGroups = [
+    // Lower Body
+    { value: 'glutes', label: 'Glutes' },
+    { value: 'quads', label: 'Quads' },
+    { value: 'hamstrings', label: 'Hamstrings' },
+    { value: 'calves', label: 'Calves' },
+    { value: 'adductors', label: 'Adductors' },
+    { value: 'abductors', label: 'Abductors' },
+    { value: 'shins', label: 'Shins' },
+    { value: 'tibialis_anterior', label: 'Tibialis Anterior' },
+    // Core
+    { value: 'core', label: 'Core' },
+    { value: 'lower_abs', label: 'Lower Abs' },
+    { value: 'upper_abs', label: 'Upper Abs' },
+    { value: 'obliques', label: 'Obliques' },
+    // Upper Body - Push
+    { value: 'chest', label: 'Chest' },
+    { value: 'upper_chest', label: 'Upper Chest' },
+    { value: 'lower_chest', label: 'Lower Chest' },
+    { value: 'shoulders', label: 'Shoulders' },
+    { value: 'delts', label: 'Delts' },
+    { value: 'triceps', label: 'Triceps' },
+    // Upper Body - Pull
+    { value: 'lats', label: 'Lats' },
+    { value: 'upper_back', label: 'Upper Back' },
+    { value: 'lower_back', label: 'Lower Back' },
+    { value: 'traps', label: 'Traps' },
+    { value: 'biceps', label: 'Biceps' }
+  ].sort((a, b) => a.label.localeCompare(b.label)); // Sort alphabetically by label
+  
+  // Get already selected muscles based on active tab
+  const alreadySelected = activeTab === 'target' ? existingTargets : existingLimits;
+  
+  // Filter muscles by search and remove already selected
+  const filteredMuscles = muscleGroups.filter(muscle => {
+    const matchesSearch = muscle.label.toLowerCase().includes(searchQuery.toLowerCase());
+    const notAlreadySelected = !alreadySelected.includes(muscle.value);
+    return matchesSearch && notAlreadySelected;
+  });
+  
+  if (!isOpen) return null;
+
+  return (
+    <>
+      {/* Background overlay */}
+      <div 
+        className="fixed inset-0 bg-black/30 backdrop-blur-sm z-40"
+        onClick={onClose}
+      />
+      
+      {/* Modal */}
+      <div className="fixed inset-x-4 top-1/2 -translate-y-1/2 max-w-lg mx-auto bg-white rounded-2xl shadow-2xl z-50 max-h-[80vh] flex flex-col">
+            {/* Header */}
+            <div className="px-6 py-4 border-b border-gray-200 flex-shrink-0">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-bold text-gray-900">Add Muscle Group</h2>
+                <button
+                  onClick={onClose}
+                  className="p-2 text-gray-400 hover:text-gray-600 transition-colors rounded-lg hover:bg-gray-100"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+            
+            {/* Tab Selector */}
+            <div className="px-6 py-4 border-b border-gray-200">
+              <div className="flex gap-2 p-1 bg-gray-100 rounded-lg">
+                <button
+                  onClick={() => setActiveTab('target')}
+                  className={`flex-1 py-2 px-4 rounded-md font-medium transition-colors ${
+                    activeTab === 'target'
+                      ? 'bg-blue-500 text-white'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  Target
+                </button>
+                <button
+                  onClick={() => setActiveTab('limit')}
+                  className={`flex-1 py-2 px-4 rounded-md font-medium transition-colors ${
+                    activeTab === 'limit'
+                      ? 'bg-blue-500 text-white'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  Limit
+                </button>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 overflow-y-auto">
+              {/* Search Bar */}
+              <div className="px-6 py-4 bg-gray-50 border-b sticky top-0 z-10">
+                <div className="relative">
+                  <svg 
+                    className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" 
+                    fill="none" 
+                    stroke="currentColor" 
+                    viewBox="0 0 24 24"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                  <input
+                    type="text"
+                    placeholder="Search muscle group"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  />
+                </div>
+              </div>
+              
+              <div className="p-6">
+              {/* No results message */}
+              {searchQuery.trim() && filteredMuscles.length === 0 && (
+                <div className="text-center py-8">
+                  <p className="text-gray-500">No muscle groups found matching "{searchQuery}"</p>
+                </div>
+              )}
+              
+              {/* Muscle List */}
+              {filteredMuscles.length > 0 && (
+                <div className="space-y-2">
+                  {filteredMuscles.map((muscle) => (
+                    <button 
+                      key={muscle.value}
+                      className={`w-full p-3 rounded-lg text-left transition-all flex items-center justify-between ${
+                        selectedMuscle === muscle.value 
+                          ? 'bg-indigo-100 border-2 border-indigo-500 shadow-sm' 
+                          : 'bg-gray-50 hover:bg-gray-100 border-2 border-transparent'
+                      }`}
+                      onClick={() => setSelectedMuscle(muscle.value)}
+                    >
+                      <span className={`font-medium ${
+                        selectedMuscle === muscle.value ? 'text-indigo-900' : 'text-gray-900'
+                      }`}>{muscle.label}</span>
+                      {selectedMuscle === muscle.value && (
+                        <div className="w-5 h-5 bg-indigo-600 rounded-full flex items-center justify-center">
+                          <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                          </svg>
+                        </div>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-4 border-t bg-gray-50 flex justify-end gap-3 flex-shrink-0">
+              <button 
+                onClick={onClose}
+                disabled={isLoading}
+                className="px-4 py-2 text-gray-700 hover:text-gray-900 transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={() => {
+                  if (selectedMuscle && onConfirm) {
+                    onConfirm(selectedMuscle, activeTab);
+                  }
+                }}
+                disabled={!selectedMuscle || isLoading}
+                className={`px-4 py-2 rounded-lg transition-colors flex items-center gap-2 ${
+                  selectedMuscle && !isLoading
+                    ? 'bg-indigo-600 hover:bg-indigo-700 text-white' 
+                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                }`}
+              >
+                {isLoading ? (
+                  <>
+                    <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Adding...
+                  </>
+                ) : (
+                  'Add'
+                )}
+              </button>
+            </div>
+      </div>
+    </>
+  );
+};
+
 // Add Exercise Modal Component
 const AddExerciseModal = ({ 
   isOpen, 
@@ -366,25 +514,25 @@ const AddExerciseModal = ({
     }
   }, [isOpen]);
   
-  // Filter exercises - hide already active exercises
+  // Filter exercises using shared utilities
   const filteredExercises = React.useMemo(() => {
     if (!availableExercises || availableExercises.length === 0) return [];
     
-    return availableExercises.filter(exercise => {
-      // Keep the selected exercise visible during loading
-      if (isLoading && selectedExercise === exercise.name) {
-        return true;
-      }
+    // During loading, keep selected exercise visible but filter out other active exercises
+    if (isLoading && selectedExercise) {
+      // Filter out active exercises except the selected one
+      const activeExercisesExceptSelected = existingExercises.filter(name => name !== selectedExercise);
       
-      // Hide already active exercises
-      if (existingExercises.includes(exercise.name)) return false;
-      
-      // Apply search filter
-      if (searchQuery.trim()) {
-        return exercise.name.toLowerCase().includes(searchQuery.toLowerCase().trim());
-      }
-      
-      return true;
+      return getFilteredExercises(availableExercises, {
+        searchQuery,
+        activeExerciseNames: activeExercisesExceptSelected
+      });
+    }
+    
+    // Normal filtering
+    return getFilteredExercises(availableExercises, {
+      searchQuery,
+      activeExerciseNames: existingExercises
     });
   }, [availableExercises, existingExercises, searchQuery, isLoading, selectedExercise]);
   
@@ -394,12 +542,12 @@ const AddExerciseModal = ({
     <>
       {/* Background overlay */}
       <div 
-        className="fixed inset-0 bg-black/30 backdrop-blur-sm z-40 animate-fadeIn"
+        className="fixed inset-0 bg-black/30 backdrop-blur-sm z-40"
         onClick={onClose}
       />
       
       {/* Modal */}
-      <div className="fixed inset-x-4 top-1/2 -translate-y-1/2 max-w-lg mx-auto bg-white rounded-2xl shadow-2xl z-50 max-h-[80vh] flex flex-col animate-slideUp">
+      <div className="fixed inset-x-4 top-1/2 -translate-y-1/2 max-w-lg mx-auto bg-white rounded-2xl shadow-2xl z-50 max-h-[80vh] flex flex-col">
             {/* Header */}
             <div className="px-6 py-4 border-b border-gray-200 flex-shrink-0">
               <div className="flex items-center justify-between">
@@ -521,6 +669,40 @@ const AddExerciseModal = ({
   );
 };
 
+// Helper function to format muscle values to display labels
+const formatMuscleLabel = (muscleValue: string): string => {
+  const muscleMap: Record<string, string> = {
+    // Lower Body
+    'glutes': 'Glutes',
+    'quads': 'Quads',
+    'hamstrings': 'Hamstrings',
+    'calves': 'Calves',
+    'adductors': 'Adductors',
+    'abductors': 'Abductors',
+    'shins': 'Shins',
+    'tibialis_anterior': 'Tibialis Anterior',
+    // Core
+    'core': 'Core',
+    'lower_abs': 'Lower Abs',
+    'upper_abs': 'Upper Abs',
+    'obliques': 'Obliques',
+    // Upper Body - Push
+    'chest': 'Chest',
+    'upper_chest': 'Upper Chest',
+    'lower_chest': 'Lower Chest',
+    'shoulders': 'Shoulders',
+    'delts': 'Delts',
+    'triceps': 'Triceps',
+    // Upper Body - Pull
+    'lats': 'Lats',
+    'upper_back': 'Upper Back',
+    'lower_back': 'Lower Back',
+    'traps': 'Traps',
+    'biceps': 'Biceps'
+  };
+  return muscleMap[muscleValue] || muscleValue;
+};
+
 export default function ClientPreferencePage() {
   const params = useParams();
   const sessionId = params.sessionId as string;
@@ -546,8 +728,16 @@ export default function ClientPreferencePage() {
     handleAddExercise,
     handlePreferenceUpdate,
     isProcessingChange,
-    isAddingExercise
+    isAddingExercise,
+    isAddingMuscle,
+    handleAddMusclePreference,
+    handleRemoveMusclePreference,
+    workoutPreferences,
+    isRemovingMuscle
   } = useClientPreferences({ sessionId, userId, trpc });
+  
+  // Local state for muscle modal
+  const [muscleModalOpen, setMuscleModalOpen] = useState(false);
   
   // Subscribe to realtime preference updates
   useRealtimePreferences({
@@ -684,24 +874,32 @@ export default function ClientPreferencePage() {
               <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-sm font-semibold">
                 2
               </div>
-              <h4 className="font-medium text-gray-900">Muscle Focus & Avoidance</h4>
+              <h4 className="font-medium text-gray-900">Muscle Target & Limit</h4>
             </div>
             <div className="space-y-3">
-              {/* Muscle Focus Items */}
+              {/* Muscle Target Items */}
               {displayData.muscleFocus.map((muscle, idx) => (
                 <div key={`focus-${idx}`} className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
-                  <span className="text-blue-700 font-medium">Focus: {muscle}</span>
-                  <button className="text-gray-400 hover:text-gray-600">
+                  <span className="text-blue-700 font-medium">Target: {formatMuscleLabel(muscle)}</span>
+                  <button 
+                    onClick={() => handleRemoveMusclePreference(muscle, 'target')}
+                    disabled={isRemovingMuscle}
+                    className="text-gray-400 hover:text-gray-600 disabled:opacity-50 transition-colors p-1"
+                  >
                     <X />
                   </button>
                 </div>
               ))}
               
-              {/* Avoidance Items */}
+              {/* Limit Items */}
               {displayData.avoidance.map((item, idx) => (
                 <div key={`avoid-${idx}`} className="flex items-center justify-between p-3 bg-red-50 rounded-lg">
-                  <span className="text-red-700 font-medium">Avoid: {item}</span>
-                  <button className="text-gray-400 hover:text-gray-600">
+                  <span className="text-red-700 font-medium">Limit: {formatMuscleLabel(item)}</span>
+                  <button 
+                    onClick={() => handleRemoveMusclePreference(item, 'limit')}
+                    disabled={isRemovingMuscle}
+                    className="text-gray-400 hover:text-gray-600 disabled:opacity-50 transition-colors p-1"
+                  >
                     <X />
                   </button>
                 </div>
@@ -709,12 +907,16 @@ export default function ClientPreferencePage() {
               
               {/* Add button */}
               {(displayData.muscleFocus.length === 0 && displayData.avoidance.length === 0) ? (
-                <button className="w-full p-3 border border-gray-300 rounded-lg text-gray-700 bg-white hover:bg-gray-50 hover:border-gray-400 transition-colors flex items-center justify-center gap-2 font-medium shadow-sm">
+                <button 
+                  onClick={() => setMuscleModalOpen(true)}
+                  className="w-full p-3 border border-gray-300 rounded-lg text-gray-700 bg-white hover:bg-gray-50 hover:border-gray-400 transition-colors flex items-center justify-center gap-2 font-medium shadow-sm">
                   <Plus />
-                  Add Focus or Avoidance
+                  Add Target or Limit
                 </button>
               ) : (
-                <button className="w-full p-3 border border-gray-300 rounded-lg text-gray-700 bg-white hover:bg-gray-50 hover:border-gray-400 transition-colors flex items-center justify-center gap-2 font-medium shadow-sm">
+                <button 
+                  onClick={() => setMuscleModalOpen(true)}
+                  className="w-full p-3 border border-gray-300 rounded-lg text-gray-700 bg-white hover:bg-gray-50 hover:border-gray-400 transition-colors flex items-center justify-center gap-2 font-medium shadow-sm">
                   <Plus />
                   Add More
                 </button>
@@ -770,6 +972,21 @@ export default function ClientPreferencePage() {
         existingExercises={exercises.filter(ex => ex.isActive).map(ex => ex.name)}
         onConfirm={handleAddExercise}
         isLoading={isAddingExercise}
+      />
+      
+      {/* Muscle Target/Limit Modal */}
+      <MuscleModal
+        isOpen={muscleModalOpen}
+        onClose={() => {
+          setMuscleModalOpen(false);
+        }}
+        onConfirm={async (muscle, type) => {
+          await handleAddMusclePreference(muscle, type);
+          setMuscleModalOpen(false);
+        }}
+        isLoading={isAddingMuscle}
+        existingTargets={clientData?.user?.preferences?.muscleTargets || []}
+        existingLimits={clientData?.user?.preferences?.muscleLessens || []}
       />
     </div>
   );

@@ -14,6 +14,13 @@ The shared business logic architecture enables code reuse between the Next.js we
 - Optimistic updates when adding exercises
 - Real-time synchronization across all clients
 
+### Muscle Target/Limit Feature (Added: 2025-01-29)
+- New mutations: `addMuscleTarget` and `addMuscleLessen` - allows clients to add muscle preferences
+- Handles both muscle targets (muscles to focus on) and limits (muscles to avoid)
+- Filters out already selected muscles from available options
+- Optimistic updates for immediate UI feedback
+- Follows same pattern as exercise modals for consistency
+
 ## Architecture
 
 ### Package Structure
@@ -101,6 +108,11 @@ interface UseClientPreferencesReturn {
   isTogglingExercise: boolean;
   isProcessingChange: boolean;
   isAddingExercise: boolean;
+  isAddingMuscle: boolean;
+  
+  // Muscle preferences
+  handleAddMusclePreference: (muscle: string, type: 'target' | 'limit') => Promise<void>;
+  workoutPreferences: WorkoutPreferences | null;
 }
 ```
 
@@ -363,6 +375,94 @@ const { addModalOpen, setAddModalOpen, handleAddExercise } = useClientPreference
 </Modal>
 ```
 
+## Muscle Target/Limit Feature Implementation
+
+### Overview
+The Muscle Target/Limit feature allows clients to specify muscles they want to target or limit during their workout. This affects exercise scoring in the workout generation algorithm.
+
+### 1. API Mutations
+
+**addMuscleTarget** and **addMuscleLessen** mutations in the workout preferences router:
+- Verify user is checked into the session
+- Create preferences if they don't exist
+- Append muscle to appropriate array (avoiding duplicates)
+- Return updated preferences
+
+### 2. Shared Hook Updates
+
+Added to `useClientPreferences`:
+```typescript
+// Fetch current workout preferences
+const { data: workoutPreferences } = useQuery(
+  trpc.workoutPreferences.getForUserSession.queryOptions({ sessionId, userId })
+);
+
+// Handle muscle preference updates
+const handleAddMusclePreference = async (muscle: string, type: 'target' | 'limit') => {
+  if (type === 'target') {
+    await addMuscleTargetMutation.mutateAsync({ sessionId, userId, muscle });
+  } else {
+    await addMuscleLessenMutation.mutateAsync({ sessionId, userId, muscle });
+  }
+};
+```
+
+### 3. Usage in Web App
+
+```typescript
+const {
+  handleAddMusclePreference,
+  isAddingMuscle,
+  workoutPreferences
+} = useClientPreferences({ sessionId, userId, trpc });
+
+// In your UI
+<MuscleModal
+  isOpen={muscleModalOpen}
+  onClose={() => setMuscleModalOpen(false)}
+  onConfirm={async (muscle, type) => {
+    await handleAddMusclePreference(muscle, type);
+    setMuscleModalOpen(false);
+  }}
+  isLoading={isAddingMuscle}
+  existingTargets={workoutPreferences?.muscleTargets || []}
+  existingLimits={workoutPreferences?.muscleLessens || []}
+/>
+```
+
+### 4. Usage in Native App
+
+```typescript
+// Same hook usage, different UI implementation
+const { handleAddMusclePreference, isAddingMuscle } = useClientPreferences({ sessionId, userId, trpc });
+
+// React Native implementation with tab navigation
+<Modal visible={muscleModalOpen}>
+  <TabView
+    navigationState={{ index: activeTab, routes }}
+    onIndexChange={setActiveTab}
+  >
+    {/* Tab content with muscle selection */}
+  </TabView>
+</Modal>
+```
+
+### 5. Valid Muscle Values
+
+The system accepts 24 muscle values that match the exercise metadata:
+- Lower Body: `glutes`, `quads`, `hamstrings`, `calves`, `adductors`, `abductors`, `shins`, `tibialis_anterior`
+- Core: `core`, `lower_abs`, `upper_abs`, `obliques`
+- Upper Push: `chest`, `upper_chest`, `lower_chest`, `shoulders`, `delts`, `triceps`
+- Upper Pull: `lats`, `upper_back`, `lower_back`, `traps`, `biceps`
+
+### 6. Scoring Impact
+
+Muscle preferences affect exercise scoring during workout generation:
+- **Target match (primary muscle)**: +3.0 points
+- **Target match (secondary muscle)**: +1.5 points
+- **Limit match (primary muscle)**: -3.0 points
+- **Limit match (secondary muscle)**: -1.5 points
+
 ## Technical Implementation Details
 
 ### useClientPreferences Implementation
@@ -542,6 +642,61 @@ export function useSharedHook() { /* ... */ }
 3. **Stale Time Configuration**
    - Set appropriate `staleTime` to reduce unnecessary refetches
    - Use `refetchOnMount: 'always'` for critical data
+
+## Exercise Filtering Utilities
+
+The `ui-shared` package now includes shared exercise filtering utilities that can be used across both web and native applications. These utilities provide consistent filtering logic for exercise selection modals.
+
+### Available Functions
+
+1. **filterExercisesBySearch**: Filter exercises by search query (case-insensitive)
+2. **filterOutActiveExercises**: Remove already selected exercises from the list
+3. **categorizeExercisesByRecommendation**: Group exercises into recommended/other categories based on blueprint recommendations or similarity
+4. **categorizeExercisesBySimilarity**: Fallback categorization based on movement patterns and muscle groups
+5. **getRecommendationReason**: Get human-readable labels for recommendation scores
+6. **sortExercisesByScore**: Sort exercises by their recommendation score
+7. **getFilteredExercises**: Combined filtering for common use cases
+
+### Usage Example
+
+```typescript
+import { 
+  getFilteredExercises, 
+  categorizeExercisesByRecommendation,
+  filterExercisesBySearch
+} from '@acme/ui-shared';
+
+// Simple filtering for Add Exercise modal
+const filtered = getFilteredExercises(allExercises, {
+  searchQuery: 'bench',
+  activeExerciseNames: ['Bench Press', 'Squat'],
+  excludeExerciseName: 'Deadlift' // Optional: exclude specific exercise
+});
+
+// Categorization for Change Exercise modal
+const categorized = categorizeExercisesByRecommendation(
+  availableExercises,
+  blueprintRecommendations,
+  {
+    currentExerciseName: 'Bench Press',
+    currentRound: 'Round1',
+    maxRecommendations: 5 // Optional: limit number of recommendations
+  }
+);
+
+// Apply search to categorized results
+if (searchQuery) {
+  categorized.recommended = filterExercisesBySearch(categorized.recommended, searchQuery);
+  categorized.other = filterExercisesBySearch(categorized.other, searchQuery);
+}
+```
+
+### Implementation Notes
+
+- Both `ExerciseChangeModal` and `AddExerciseModal` use these shared utilities
+- The utilities handle edge cases like empty arrays and missing data gracefully
+- When blueprint recommendations aren't available, the system falls back to similarity-based recommendations
+- Special handling in `AddExerciseModal` keeps the selected exercise visible during loading state
 
 ## Conclusion
 

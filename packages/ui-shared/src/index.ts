@@ -21,6 +21,7 @@ export * from "./styles";
 
 // Utilities
 export { cn } from "./utils/cn";
+export * from "./utils/exercise-filters";
 
 // Responsive utilities
 export * from "./utils/responsive";
