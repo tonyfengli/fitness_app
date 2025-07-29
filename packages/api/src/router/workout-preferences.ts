@@ -532,4 +532,128 @@ export const workoutPreferencesRouter = createTRPCRouter({
 
       return updated;
     }),
+
+  addNotePublic: publicProcedure
+    .input(z.object({
+      sessionId: z.string().uuid(),
+      userId: z.string(),
+      note: z.string().min(1).trim()
+    }))
+    .mutation(async ({ ctx, input }) => {
+      // Verify user has checked in to this session
+      const checkIn = await db
+        .select()
+        .from(UserTrainingSession)
+        .where(
+          and(
+            eq(UserTrainingSession.userId, input.userId),
+            eq(UserTrainingSession.trainingSessionId, input.sessionId)
+          )
+        )
+        .limit(1);
+
+      if (!checkIn.length) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "User must be checked in to this session",
+        });
+      }
+
+      // Get or create preferences
+      let preference = await db
+        .select()
+        .from(WorkoutPreferences)
+        .where(
+          and(
+            eq(WorkoutPreferences.userId, input.userId),
+            eq(WorkoutPreferences.trainingSessionId, input.sessionId)
+          )
+        )
+        .limit(1)
+        .then(res => res[0]);
+
+      if (!preference) {
+        // Create new preferences if they don't exist
+        [preference] = await db
+          .insert(WorkoutPreferences)
+          .values({
+            userId: input.userId,
+            trainingSessionId: input.sessionId,
+            intensity: "moderate",
+            notes: [input.note]
+          })
+          .returning();
+      } else {
+        // Append to existing notes
+        const currentNotes = preference.notes || [];
+        const updatedNotes = [...currentNotes, input.note];
+        
+        [preference] = await db
+          .update(WorkoutPreferences)
+          .set({ notes: updatedNotes })
+          .where(eq(WorkoutPreferences.id, preference.id))
+          .returning();
+      }
+
+      return preference;
+    }),
+
+  removeNotePublic: publicProcedure
+    .input(z.object({
+      sessionId: z.string().uuid(),
+      userId: z.string(),
+      noteIndex: z.number().int().min(0)
+    }))
+    .mutation(async ({ ctx, input }) => {
+      // Verify user has checked in to this session
+      const checkIn = await db
+        .select()
+        .from(UserTrainingSession)
+        .where(
+          and(
+            eq(UserTrainingSession.userId, input.userId),
+            eq(UserTrainingSession.trainingSessionId, input.sessionId)
+          )
+        )
+        .limit(1);
+
+      if (!checkIn.length) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "User must be checked in to this session",
+        });
+      }
+
+      // Get preferences
+      const preference = await db
+        .select()
+        .from(WorkoutPreferences)
+        .where(
+          and(
+            eq(WorkoutPreferences.userId, input.userId),
+            eq(WorkoutPreferences.trainingSessionId, input.sessionId)
+          )
+        )
+        .limit(1)
+        .then(res => res[0]);
+
+      if (!preference) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Preferences not found",
+        });
+      }
+
+      // Remove note at specified index
+      const currentNotes = preference.notes || [];
+      const updatedNotes = currentNotes.filter((_, index) => index !== input.noteIndex);
+      
+      const [updated] = await db
+        .update(WorkoutPreferences)
+        .set({ notes: updatedNotes })
+        .where(eq(WorkoutPreferences.id, preference.id))
+        .returning();
+
+      return updated;
+    }),
 });

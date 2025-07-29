@@ -157,6 +157,9 @@ export const WorkoutPreferences = pgTable("workout_preferences", (t) => ({
   // Session goal
   sessionGoal: t.text(), // 'strength', 'stability', etc.
   
+  // Additional notes
+  notes: t.text().array(), // Array of additional notes/preferences
+  
   // Source tracking for fields (to differentiate explicit, default, inherited)
   intensitySource: t.text().default('default'), // 'explicit', 'default', 'inherited'
   sessionGoalSource: t.text().default('default'), // 'explicit', 'default', 'inherited'

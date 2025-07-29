@@ -219,7 +219,8 @@ export default function PreferencesPage() {
     exerciseCount: workoutData?.groupContext?.clients?.find(c => c.user_id === client.userId)?.exercises?.length || 0,
     confirmedExercises: getClientExercisesForRounds(client.userId),
     muscleFocus: client.preferences?.muscleTargets || [],
-    avoidance: client.preferences?.muscleLessens || []
+    avoidance: client.preferences?.muscleLessens || [],
+    notes: client.preferences?.notes || []
   })) || [];
 
   return (
@@ -333,9 +334,19 @@ export default function PreferencesPage() {
                   <h4 className="font-medium text-gray-900">Other Notes</h4>
                 </div>
                 <div className="space-y-3">
-                  <div className="text-center py-6 text-gray-400">
-                    <p className="text-sm">No notes added</p>
-                  </div>
+                  {/* Display notes */}
+                  {client.notes.map((note, idx) => (
+                    <div key={`note-${idx}`} className="p-3 bg-gray-50 rounded-lg">
+                      <span className="text-gray-700">{note}</span>
+                    </div>
+                  ))}
+                  
+                  {/* Empty state */}
+                  {client.notes.length === 0 && (
+                    <div className="text-center py-6 text-gray-400">
+                      <p className="text-sm">No notes added</p>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

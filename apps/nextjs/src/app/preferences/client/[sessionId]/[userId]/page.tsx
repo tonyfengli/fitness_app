@@ -487,6 +487,108 @@ const MuscleModal = ({
   );
 };
 
+// Notes Modal Component
+const NotesModal = ({ 
+  isOpen, 
+  onClose,
+  onConfirm,
+  isLoading = false
+}: { 
+  isOpen: boolean; 
+  onClose: () => void;
+  onConfirm?: (note: string) => void;
+  isLoading?: boolean;
+}) => {
+  const [noteText, setNoteText] = useState<string>('');
+  
+  // Reset state when modal closes
+  useEffect(() => {
+    if (!isOpen) {
+      setNoteText('');
+    }
+  }, [isOpen]);
+  
+  const isValidNote = noteText.trim().length > 0;
+  
+  if (!isOpen) return null;
+
+  return (
+    <>
+      {/* Background overlay */}
+      <div 
+        className="fixed inset-0 bg-black/30 backdrop-blur-sm z-40"
+        onClick={onClose}
+      />
+      
+      {/* Modal */}
+      <div className="fixed inset-x-4 top-1/2 -translate-y-1/2 max-w-lg mx-auto bg-white rounded-2xl shadow-2xl z-50 max-h-[80vh] flex flex-col">
+            {/* Header */}
+            <div className="px-6 py-4 border-b border-gray-200 flex-shrink-0">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-bold text-gray-900">Add Note</h2>
+                <button
+                  onClick={onClose}
+                  className="p-2 text-gray-400 hover:text-gray-600 transition-colors rounded-lg hover:bg-gray-100"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="p-6">
+              <textarea
+                value={noteText}
+                onChange={(e) => setNoteText(e.target.value)}
+                placeholder="Add your note here..."
+                className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none"
+                rows={4}
+                disabled={isLoading}
+              />
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-4 border-t bg-gray-50 flex justify-end gap-3 flex-shrink-0">
+              <button 
+                onClick={onClose}
+                disabled={isLoading}
+                className="px-4 py-2 text-gray-700 hover:text-gray-900 transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={() => {
+                  if (isValidNote && onConfirm) {
+                    onConfirm(noteText.trim());
+                  }
+                }}
+                disabled={!isValidNote || isLoading}
+                className={`px-4 py-2 rounded-lg transition-colors flex items-center gap-2 ${
+                  isValidNote && !isLoading
+                    ? 'bg-indigo-600 hover:bg-indigo-700 text-white' 
+                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                }`}
+              >
+                {isLoading ? (
+                  <>
+                    <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Adding...
+                  </>
+                ) : (
+                  'Add'
+                )}
+              </button>
+            </div>
+      </div>
+    </>
+  );
+};
+
 // Add Exercise Modal Component
 const AddExerciseModal = ({ 
   isOpen, 
@@ -733,11 +835,16 @@ export default function ClientPreferencePage() {
     handleAddMusclePreference,
     handleRemoveMusclePreference,
     workoutPreferences,
-    isRemovingMuscle
+    isRemovingMuscle,
+    handleAddNote,
+    handleRemoveNote,
+    isAddingNote,
+    isRemovingNote
   } = useClientPreferences({ sessionId, userId, trpc });
   
-  // Local state for muscle modal
+  // Local state for modals
   const [muscleModalOpen, setMuscleModalOpen] = useState(false);
+  const [notesModalOpen, setNotesModalOpen] = useState(false);
   
   // Subscribe to realtime preference updates
   useRealtimePreferences({
@@ -933,7 +1040,25 @@ export default function ClientPreferencePage() {
               <h4 className="font-medium text-gray-900">Other Notes</h4>
             </div>
             <div className="space-y-3">
-              <button className="w-full p-3 border border-gray-300 rounded-lg text-gray-700 bg-white hover:bg-gray-50 hover:border-gray-400 transition-colors flex items-center justify-center gap-2 font-medium shadow-sm">
+              {/* Display existing notes */}
+              {(workoutPreferences?.notes || []).map((note, idx) => (
+                <div key={`note-${idx}`} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <span className="text-gray-700">{note}</span>
+                  <button 
+                    onClick={() => handleRemoveNote(idx)}
+                    disabled={isRemovingNote}
+                    className="text-gray-400 hover:text-gray-600 disabled:opacity-50 transition-colors p-1"
+                  >
+                    <X />
+                  </button>
+                </div>
+              ))}
+              
+              {/* Add Note button */}
+              <button 
+                onClick={() => setNotesModalOpen(true)}
+                className="w-full p-3 border border-gray-300 rounded-lg text-gray-700 bg-white hover:bg-gray-50 hover:border-gray-400 transition-colors flex items-center justify-center gap-2 font-medium shadow-sm"
+              >
                 <Plus />
                 Add Note
               </button>
@@ -987,6 +1112,19 @@ export default function ClientPreferencePage() {
         isLoading={isAddingMuscle}
         existingTargets={clientData?.user?.preferences?.muscleTargets || []}
         existingLimits={clientData?.user?.preferences?.muscleLessens || []}
+      />
+      
+      {/* Notes Modal */}
+      <NotesModal
+        isOpen={notesModalOpen}
+        onClose={() => {
+          setNotesModalOpen(false);
+        }}
+        onConfirm={async (note) => {
+          await handleAddNote(note);
+          setNotesModalOpen(false);
+        }}
+        isLoading={isAddingNote}
       />
     </div>
   );

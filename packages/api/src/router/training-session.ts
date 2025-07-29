@@ -334,7 +334,8 @@ export const trainingSessionRouter = {
               includeExercises: preferences.includeExercises,
               avoidExercises: preferences.avoidExercises,
               avoidJoints: preferences.avoidJoints,
-              sessionGoal: preferences.sessionGoal
+              sessionGoal: preferences.sessionGoal,
+              notes: preferences.notes
             } : null
           };
         })
@@ -2375,6 +2376,7 @@ Set your goals and preferences for today's session.`;
             avoidExercises: preferences.avoidExercises,
             avoidJoints: preferences.avoidJoints,
             sessionGoal: preferences.sessionGoal,
+            notes: preferences.notes,
           } : null,
         }
       };

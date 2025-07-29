@@ -39,6 +39,12 @@ interface TRPCClient {
     removeMuscleLessenPublic: {
       mutationOptions: () => any;
     };
+    addNotePublic: {
+      mutationOptions: () => any;
+    };
+    removeNotePublic: {
+      mutationOptions: () => any;
+    };
     getForUserSessionPublic: {
       queryOptions: (input: { sessionId: string; userId: string }) => any;
     };
@@ -525,9 +531,113 @@ export function useClientPreferences({ sessionId, userId, trpc }: UseClientPrefe
     }
   };
 
+  // Add note mutation
+  const addNoteMutation = useMutation({
+    ...trpc.workoutPreferences.addNotePublic.mutationOptions(),
+    onMutate: async ({ note }) => {
+      console.log('[useClientPreferences] Adding note:', note);
+      // Optimistic update
+      const queryKey = trpc.workoutPreferences.getForUserSessionPublic.queryOptions({ sessionId, userId }).queryKey;
+      const previousData = queryClient.getQueryData(queryKey);
+      
+      queryClient.setQueryData(queryKey, (old: any) => {
+        if (!old) {
+          return {
+            notes: [note]
+          };
+        }
+        return {
+          ...old,
+          notes: [...(old.notes || []), note]
+        };
+      });
+      
+      return { previousData };
+    },
+    onError: (err, variables, context) => {
+      console.error('[useClientPreferences] Failed to add note:', err);
+      if (context?.previousData) {
+        const queryKey = trpc.workoutPreferences.getForUserSessionPublic.queryOptions({ sessionId, userId }).queryKey;
+        queryClient.setQueryData(queryKey, context.previousData);
+      }
+    },
+    onSettled: () => {
+      // Invalidate client data to refresh the view
+      queryClient.invalidateQueries({ 
+        queryKey: trpc.trainingSession.getClientPreferenceData.queryOptions({ sessionId, userId }).queryKey 
+      });
+    }
+  });
+
+  // Remove note mutation
+  const removeNoteMutation = useMutation({
+    ...trpc.workoutPreferences.removeNotePublic.mutationOptions(),
+    onMutate: async ({ noteIndex }) => {
+      console.log('[useClientPreferences] Removing note at index:', noteIndex);
+      // Optimistic update
+      const queryKey = trpc.workoutPreferences.getForUserSessionPublic.queryOptions({ sessionId, userId }).queryKey;
+      const previousData = queryClient.getQueryData(queryKey);
+      
+      queryClient.setQueryData(queryKey, (old: any) => {
+        if (!old || !old.notes) return old;
+        return {
+          ...old,
+          notes: old.notes.filter((_: string, index: number) => index !== noteIndex)
+        };
+      });
+      
+      return { previousData };
+    },
+    onError: (err, variables, context) => {
+      console.error('[useClientPreferences] Failed to remove note:', err);
+      if (context?.previousData) {
+        const queryKey = trpc.workoutPreferences.getForUserSessionPublic.queryOptions({ sessionId, userId }).queryKey;
+        queryClient.setQueryData(queryKey, context.previousData);
+      }
+    },
+    onSettled: () => {
+      // Invalidate client data to refresh the view
+      queryClient.invalidateQueries({ 
+        queryKey: trpc.trainingSession.getClientPreferenceData.queryOptions({ sessionId, userId }).queryKey 
+      });
+    }
+  });
+
+  // Handle adding note
+  const handleAddNote = async (note: string) => {
+    try {
+      await addNoteMutation.mutateAsync({
+        sessionId,
+        userId,
+        note
+      });
+      console.log('[useClientPreferences] Note added successfully');
+    } catch (error) {
+      console.error('[useClientPreferences] Failed to add note:', error);
+      throw error;
+    }
+  };
+
+  // Handle removing note
+  const handleRemoveNote = async (noteIndex: number) => {
+    try {
+      await removeNoteMutation.mutateAsync({
+        sessionId,
+        userId,
+        noteIndex
+      });
+      console.log('[useClientPreferences] Note removed successfully');
+    } catch (error) {
+      console.error('[useClientPreferences] Failed to remove note:', error);
+      throw error;
+    }
+  };
+
   const exercises = getClientExercises();
   const isAddingMuscle = addMuscleTargetMutation.isPending || addMuscleLessenMutation.isPending;
   const isRemovingMuscle = removeMuscleTargetMutation.isPending || removeMuscleLessenMutation.isPending;
+  const isAddingNote = addNoteMutation.isPending;
+  const isRemovingNote = removeNoteMutation.isPending;
 
   return {
     // Data
@@ -564,6 +674,12 @@ export function useClientPreferences({ sessionId, userId, trpc }: UseClientPrefe
     handleRemoveMusclePreference,
     workoutPreferences,
     isRemovingMuscle,
+    
+    // Notes
+    handleAddNote,
+    handleRemoveNote,
+    isAddingNote,
+    isRemovingNote,
     
     // Utils
     getClientExercises
