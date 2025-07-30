@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import { useTRPC } from "~/trpc/react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { 
   useClientPreferences, 
   useRealtimePreferences,
@@ -674,6 +675,20 @@ export default function ClientPreferencePage() {
     isRemovingNote
   } = useClientPreferences({ sessionId, userId, trpc });
   
+  const queryClient = useQueryClient();
+  
+  // Add intensity update mutation
+  const updateIntensityMutation = useMutation({
+    ...trpc.workoutPreferences.updateIntensityPublic.mutationOptions(),
+    onSuccess: () => {
+      // Invalidate queries to refresh data in global preferences
+      queryClient.invalidateQueries();
+    },
+    onError: (error) => {
+      console.error('Failed to update intensity:', error);
+    }
+  });
+  
   // Use shared modal state hook
   const muscleModal = useModalState();
   const notesModal = useModalState();
@@ -726,8 +741,8 @@ export default function ClientPreferencePage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4">
-      <div className="max-w-md mx-auto">
+    <div className="min-h-screen bg-gray-50 overflow-y-auto">
+      <div className="max-w-md mx-auto p-4 pb-20">
         {/* Client Card - Single card view */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 mt-4">
           {/* Client Header */}
@@ -850,11 +865,53 @@ export default function ClientPreferencePage() {
             </div>
           </div>
 
-          {/* Section 3: Other Notes */}
-          <div className="p-6">
+          {/* Section 3: Intensity */}
+          <div className="p-6 border-b border-gray-100">
             <div className="flex items-center gap-2 mb-4">
               <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-sm font-semibold">
                 3
+              </div>
+              <h4 className="font-medium text-gray-900">Intensity</h4>
+            </div>
+            <div className="space-y-3">
+              <div className="relative">
+                <select
+                  value={workoutPreferences?.intensity || 'moderate'}
+                  onChange={(e) => {
+                    const newIntensity = e.target.value as 'low' | 'moderate' | 'high';
+                    // Update local state immediately
+                    handlePreferenceUpdate({
+                      ...workoutPreferences,
+                      intensity: newIntensity
+                    });
+                    // Update in database for global preferences
+                    updateIntensityMutation.mutate({
+                      sessionId,
+                      userId,
+                      intensity: newIntensity
+                    });
+                  }}
+                  disabled={updateIntensityMutation.isPending}
+                  className="w-full appearance-none px-4 py-3 pr-10 bg-white border border-gray-300 rounded-lg shadow-sm text-gray-900 font-medium hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <option value="low">Low (3-4 exercises)</option>
+                  <option value="moderate" selected>Moderate (4-6 exercises)</option>
+                  <option value="high">High (5-7 exercises)</option>
+                </select>
+                <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                  <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Section 4: Other Notes */}
+          <div className="p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-sm font-semibold">
+                4
               </div>
               <h4 className="font-medium text-gray-900">Other Notes</h4>
             </div>

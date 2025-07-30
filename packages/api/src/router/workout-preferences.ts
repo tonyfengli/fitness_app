@@ -672,4 +672,72 @@ export const workoutPreferencesRouter = createTRPCRouter({
 
       return updated;
     }),
+
+  updateIntensityPublic: publicProcedure
+    .input(z.object({
+      sessionId: z.string().uuid(),
+      userId: z.string(),
+      intensity: z.enum(["low", "moderate", "high"])
+    }))
+    .mutation(async ({ ctx, input }) => {
+      // Verify user has checked in to this session
+      const checkIn = await db
+        .select()
+        .from(UserTrainingSession)
+        .where(
+          and(
+            eq(UserTrainingSession.userId, input.userId),
+            eq(UserTrainingSession.trainingSessionId, input.sessionId)
+          )
+        )
+        .limit(1);
+
+      if (!checkIn.length) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "User must be checked in to this session",
+        });
+      }
+
+      // Get or create preferences
+      let preference = await db
+        .select()
+        .from(WorkoutPreferences)
+        .where(
+          and(
+            eq(WorkoutPreferences.userId, input.userId),
+            eq(WorkoutPreferences.trainingSessionId, input.sessionId)
+          )
+        )
+        .limit(1)
+        .then(res => res[0]);
+
+      if (!preference) {
+        // Create new preferences with intensity
+        const [newPref] = await db
+          .insert(WorkoutPreferences)
+          .values({
+            userId: input.userId,
+            trainingSessionId: input.sessionId,
+            businessId: checkIn[0].businessId,
+            intensity: input.intensity,
+            intensitySource: 'explicit'
+          })
+          .returning();
+        
+        return newPref;
+      }
+
+      // Update existing preferences
+      const [updated] = await db
+        .update(WorkoutPreferences)
+        .set({ 
+          intensity: input.intensity,
+          intensitySource: 'explicit'
+        })
+        .where(eq(WorkoutPreferences.id, preference.id))
+        .returning();
+
+      return updated;
+    }),
 });

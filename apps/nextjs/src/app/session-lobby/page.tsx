@@ -93,9 +93,9 @@ export default function SessionLobby() {
   const [error, setError] = useState<string | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [isAddingTestClients, setIsAddingTestClients] = useState(false);
-  const [configureMode, setConfigureMode] = useState(true); // Default to true for configure mode
+  const [configureMode, setConfigureMode] = useState(false); // Default to false for configure mode
   const [isStartingSession, setIsStartingSession] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
   
   // Send session start messages mutation
   const sendStartMessagesMutation = useMutation({
@@ -145,39 +145,6 @@ export default function SessionLobby() {
     }
   });
   
-  // Add test clients mutation
-  const addTestClientsMutation = useMutation({
-    ...trpc.trainingSession.addTestClients.mutationOptions(),
-    onMutate: () => {
-      setIsAddingTestClients(true);
-    },
-    onSuccess: (data) => {
-      // Add the new clients to the state
-      const newClients: CheckedInClient[] = data.clients.map(client => ({
-        userId: client.userId,
-        userName: client.name,
-        userEmail: client.email,
-        checkedInAt: client.checkedInAt,
-        preferences: null,
-        isNew: true,
-      }));
-      
-      setCheckedInClients(prev => [...newClients, ...prev]);
-      
-      // Remove the "new" flag after animation completes
-      setTimeout(() => {
-        setCheckedInClients(prev => 
-          prev.map(client => ({ ...client, isNew: false }))
-        );
-      }, 1000);
-      
-      setIsAddingTestClients(false);
-    },
-    onError: (error: any) => {
-      setError(`Failed to add test clients: ${error.message}`);
-      setIsAddingTestClients(false);
-    }
-  });
   
   // Set initial clients when data loads
   useEffect(() => {
@@ -258,8 +225,12 @@ export default function SessionLobby() {
   });
   
   useEffect(() => {
-    if (isConnected && preferencesConnected) setConnectionStatus("connected");
-    else if (!isConnected || !preferencesConnected) setConnectionStatus("disconnected");
+    console.log('[SessionLobby] Connection status:', { isConnected, preferencesConnected });
+    if (isConnected && preferencesConnected) {
+      setConnectionStatus("connected");
+    } else if (!isConnected || !preferencesConnected) {
+      setConnectionStatus("disconnected");
+    }
   }, [isConnected, preferencesConnected]);
   
   
@@ -299,69 +270,71 @@ export default function SessionLobby() {
           )}
         </div>
         
-        <main className="mt-4">
-          <div className="text-center mb-8 relative">
-            {/* Delete button in top right */}
+        <main className="mt-4 relative">
+          {/* Menu Button - Top Right */}
+          <div className="fixed top-4 right-4 z-10">
+            {/* Menu Toggle Button */}
             <button
-              onClick={() => setShowDeleteModal(true)}
-              className="absolute right-0 top-0 p-2 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors duration-200 group"
-              title="Delete session"
+              onClick={() => setShowMenu(!showMenu)}
+              className="bg-white rounded-lg shadow-lg p-3 hover:bg-gray-50 transition-colors"
             >
-              <svg className="h-5 w-5 group-hover:scale-110 transition-transform duration-200" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              <svg className="w-5 h-5 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
               </svg>
             </button>
             
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Session Lobby</h1>
-            <p className="text-gray-600">
-              {checkedInClients.length} client{checkedInClients.length !== 1 ? 's' : ''} checked in
-            </p>
-            <div className="mt-2 h-6 flex items-center justify-center">
-              {connectionStatus === "connected" ? (
-                <span className="text-green-600 text-xl">✓</span>
-              ) : connectionStatus === "disconnected" && !error ? (
-                <div className="flex items-center gap-2">
-                  <svg className="animate-spin h-4 w-4 text-gray-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            {/* Dropdown Menu */}
+            {showMenu && (
+              <div className="absolute right-0 mt-2 bg-white rounded-lg shadow-lg p-2 space-y-1 min-w-[200px]">
+                <button
+                  onClick={() => {
+                    router.push('/sessions');
+                    setShowMenu(false);
+                  }}
+                  className="w-full px-4 py-2 text-left text-gray-700 hover:bg-gray-100 rounded-md transition-colors flex items-center gap-2"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
                   </svg>
-                  <span className="text-sm text-gray-600">Connecting...</span>
-                </div>
-              ) : connectionStatus === "reconnecting" ? (
-                <div className="flex items-center gap-2">
-                  <svg className="animate-spin h-4 w-4 text-yellow-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  Back to Sessions
+                </button>
+                
+                <button
+                  onClick={() => {
+                    setConfigureMode(!configureMode);
+                    setShowMenu(false);
+                  }}
+                  className="w-full px-4 py-2 text-left text-gray-700 hover:bg-gray-100 rounded-md transition-colors flex items-center justify-between"
+                >
+                  <div className="flex items-center gap-2">
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    Configure Mode
+                  </div>
+                  <span className={`text-xs ${configureMode ? 'text-green-600' : 'text-gray-400'}`}>
+                    {configureMode ? 'ON' : 'OFF'}
+                  </span>
+                </button>
+                
+                <button
+                  onClick={() => {
+                    setShowDeleteModal(true);
+                    setShowMenu(false);
+                  }}
+                  className="w-full px-4 py-2 text-left text-red-600 hover:bg-red-50 rounded-md transition-colors flex items-center gap-2"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                   </svg>
-                  <span className="text-sm text-yellow-600">Reconnecting...</span>
-                </div>
-              ) : null}
-            </div>
+                  Delete Session
+                </button>
+              </div>
+            )}
           </div>
           
-          <div className="text-center mb-8 space-y-4">
-            {/* Configure Mode Toggle */}
-            <div className="flex items-center justify-center gap-3 mb-4">
-              <label htmlFor="configure-mode" className="text-sm font-medium text-gray-700">
-                Enable Configure Mode
-              </label>
-              <button
-                id="configure-mode"
-                role="switch"
-                aria-checked={configureMode}
-                onClick={() => setConfigureMode(!configureMode)}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                  configureMode ? 'bg-indigo-600' : 'bg-gray-200'
-                }`}
-              >
-                <span
-                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                    configureMode ? 'translate-x-6' : 'translate-x-1'
-                  }`}
-                />
-              </button>
-            </div>
-            
+          <div className="text-center mb-8">
             <button 
               onClick={async () => {
                 if (sessionId) {
@@ -380,46 +353,25 @@ export default function SessionLobby() {
                 }
               }}
               disabled={isStartingSession || checkedInClients.length === 0}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 px-12 rounded-full shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 text-lg inline-flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+              className="bg-white text-gray-900 font-medium py-3 px-8 rounded-lg border border-gray-200 shadow-sm hover:shadow-md hover:border-gray-300 transition-all duration-200 text-base inline-flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none disabled:hover:border-gray-200"
             >
               {isStartingSession ? (
                 <>
-                  <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-gray-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
-                  Starting Session...
+                  Starting...
                 </>
               ) : (
-                'Start Session'
+                <>
+                  Start Session
+                  <svg className="ml-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                  </svg>
+                </>
               )}
             </button>
-            
-            {/* Add Test Clients Button */}
-            <div>
-              <button
-                onClick={() => sessionId && addTestClientsMutation.mutate({ sessionId })}
-                disabled={isAddingTestClients}
-                className="bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium py-2 px-6 rounded-full shadow-sm hover:shadow-md transition-all duration-200 text-sm inline-flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isAddingTestClients ? (
-                  <>
-                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-gray-700" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    Adding...
-                  </>
-                ) : (
-                  <>
-                    <svg className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-                    </svg>
-                    Add 3 Test Clients
-                  </>
-                )}
-              </button>
-            </div>
           </div>
           
           <div className="mt-16 max-w-3xl mx-auto">
@@ -428,11 +380,35 @@ export default function SessionLobby() {
                 <p className="text-gray-500">Loading checked-in clients...</p>
               </div>
             ) : checkedInClients.length === 0 ? (
-              <div className="text-center py-12">
-                <p className="text-gray-500">No clients have checked in yet.</p>
-                <p className="text-4xl font-bold text-gray-800 mt-4">
-                  Text "here" to 562-608-1666
-                </p>
+              <div className="text-center py-16">
+                <div className="max-w-md mx-auto">
+                  {/* Simple text */}
+                  <p className="text-gray-500 mb-1">Text "here" to</p>
+                  <p className="text-xl font-semibold text-gray-700">562-608-1666</p>
+                  
+                  {/* Connection status indicator */}
+                  <div className="mt-8 flex items-center justify-center">
+                    {connectionStatus === "connected" ? (
+                      <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                    ) : connectionStatus === "disconnected" && !error ? (
+                      <div className="flex items-center gap-2 text-sm text-gray-500">
+                        <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <span>Connecting...</span>
+                      </div>
+                    ) : connectionStatus === "reconnecting" ? (
+                      <div className="flex items-center gap-2 text-sm text-yellow-600">
+                        <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <span>Reconnecting...</span>
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
               </div>
             ) : (
               <div className="space-y-6">
