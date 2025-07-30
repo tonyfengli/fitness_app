@@ -2,9 +2,18 @@
 
 import React, { useState, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { useQuery, useMutation } from "@tanstack/react-query";
-import { useTRPC } from "~/trpc/react";
+import Link from "next/link";
+import { useGenerateGroupWorkout } from "~/hooks/useGenerateGroupWorkout";
+import { useGroupWorkoutBlueprint } from "~/hooks/useGroupWorkoutBlueprint";
 import type { GroupScoredExercise } from "@acme/ai";
+
+// Constants
+const SCORE_THRESHOLDS = {
+  TARGET_PRIMARY: 3.0,
+  TARGET_SECONDARY: 1.5,
+  INTENSITY_HIGH: 1.5,
+  INTENSITY_MODERATE: 0.75,
+} as const;
 
 // Helper to format muscle names for display (convert underscore to space and capitalize)
 function formatMuscleName(muscle: string): string {
@@ -26,7 +35,7 @@ function getScoreAdjustmentLabels(score: number, scoreBreakdown?: any): React.Re
     }
     
     if (scoreBreakdown.muscleTargetBonus > 0) {
-      const isPrimary = scoreBreakdown.muscleTargetBonus >= 3.0;
+      const isPrimary = scoreBreakdown.muscleTargetBonus >= SCORE_THRESHOLDS.TARGET_PRIMARY;
       labels.push(
         <span key="target" className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
           Target {isPrimary ? '' : '(2nd)'} +{scoreBreakdown.muscleTargetBonus.toFixed(1)}
@@ -142,7 +151,6 @@ export default function GroupVisualizationPage() {
   const searchParams = useSearchParams();
   const sessionId = searchParams.get("sessionId");
   const router = useRouter();
-  const trpc = useTRPC();
   
   const [selectedBlock, setSelectedBlock] = useState<string>("");
   const [showRawData, setShowRawData] = useState(false);
@@ -152,64 +160,46 @@ export default function GroupVisualizationPage() {
     llmOutput: string | null;
   }>({ systemPrompt: null, userMessage: null, llmOutput: null });
   
-  // Fetch visualization data using new blueprint endpoint
-  const { data, isLoading, error } = useQuery({
-    ...trpc.trainingSession.generateGroupWorkoutBlueprint.queryOptions({ 
-      sessionId: sessionId!,
-      options: {
-        useCache: true,
-        includeDiagnostics: true
-      }
-    }),
-    enabled: !!sessionId,
+  // Use the blueprint hook for fetching visualization data
+  const blueprintQuery = useGroupWorkoutBlueprint({
+    sessionId,
+    useCache: true,
+    includeDiagnostics: true,
+    enabled: !!sessionId
   });
   
-  // Generate group workout mutation - using new consolidated endpoint
-  const generateWorkoutMutation = useMutation(
-    trpc.trainingSession.generateAndCreateGroupWorkouts.mutationOptions({
-      onSuccess: (data) => {
-        console.log('Group workout generation result:', data);
-        
-        // Update the debug data
-        if (data.debug) {
-          setLlmDebugData({
-            systemPrompt: data.debug.systemPrompt,
-            userMessage: data.debug.userMessage,
-            llmOutput: data.debug.llmOutput
-          });
-        }
-
-        // Don't navigate away - stay on visualization page to see the results
-      },
-      onError: (error) => {
-        console.error('Error generating workout:', error);
-        // Log more details about the error
-        if (error.data) {
-          console.error('Error data:', error.data);
-        }
-        if (error.message) {
-          console.error('Error message:', error.message);
-        }
-        // Check if it's a serialization error
-        if (error.message?.includes('toISOString')) {
-          console.error('This appears to be a Date serialization error');
-        }
+  // Use the generation hook for creating workouts
+  const { 
+    generateWorkout, 
+    isGenerating, 
+    data: generationData 
+  } = useGenerateGroupWorkout({
+    sessionId: sessionId || '',
+    navigateOnSuccess: false, // Stay on visualization page
+    includeDiagnostics: true,
+    showToasts: true,
+    onSuccess: (data) => {
+      // Update the debug data
+      if (data.debug) {
+        setLlmDebugData({
+          systemPrompt: data.debug.systemPrompt,
+          userMessage: data.debug.userMessage,
+          llmOutput: data.debug.llmOutput
+        });
       }
-    })
-  );
-
-  const isGenerating = generateWorkoutMutation.isPending;
+    }
+  });
   
-  // Function to trigger workout generation
-  const generateWorkout = () => {
-    generateWorkoutMutation.mutate({ 
-      sessionId: sessionId!,
-      options: {
-        skipBlueprintCache: false,
-        includeDiagnostics: true
-      }
-    });
-  };
+  // Extract data for easier access
+  const isLoading = blueprintQuery.isLoading;
+  const error = blueprintQuery.error;
+  const data = blueprintQuery.blueprint && blueprintQuery.groupContext && blueprintQuery.summary 
+    ? { 
+        blueprint: blueprintQuery.blueprint, 
+        groupContext: blueprintQuery.groupContext, 
+        summary: blueprintQuery.summary 
+      } 
+    : null;
   
   // Set default selected block when data loads
   useEffect(() => {
@@ -280,18 +270,18 @@ export default function GroupVisualizationPage() {
                 {isGenerating ? 'Generating...' : 'Test LLM Generation'}
               </button>
               <div className="flex gap-2">
-                <button
-                  onClick={() => router.push(`/workout-overview?sessionId=${sessionId}`)}
-                  className="px-3 py-1 text-sm bg-blue-600 text-white hover:bg-blue-700 rounded-md transition-colors"
+                <Link
+                  href={`/workout-overview?sessionId=${sessionId}`}
+                  className="px-3 py-1 text-sm bg-blue-600 text-white hover:bg-blue-700 rounded-md transition-colors inline-block"
                 >
                   View Workouts
-                </button>
-                <button
-                  onClick={() => router.push(`/preferences?sessionId=${sessionId}`)}
-                  className="px-3 py-1 text-sm bg-purple-600 text-white hover:bg-purple-700 rounded-md transition-colors"
+                </Link>
+                <Link
+                  href={`/preferences?sessionId=${sessionId}`}
+                  className="px-3 py-1 text-sm bg-purple-600 text-white hover:bg-purple-700 rounded-md transition-colors inline-block"
                 >
                   View Preferences
-                </button>
+                </Link>
                 <button
                   onClick={() => router.back()}
                   className="px-3 py-1 text-sm text-gray-600 hover:text-gray-900"
@@ -610,40 +600,3 @@ export default function GroupVisualizationPage() {
   );
 }
 
-// Component for displaying shared exercises
-function SharedExerciseCard({ exercise, rank }: { exercise: GroupScoredExercise; rank: number }) {
-  return (
-    <div className="border border-gray-200 rounded p-3">
-      <div className="flex items-start justify-between">
-        <div className="flex-1">
-          <div className="flex items-center space-x-2">
-            <span className="text-sm font-medium text-gray-900">#{rank}</span>
-            <h4 className="text-sm font-medium text-gray-900">{exercise.name}</h4>
-          </div>
-          <div className="mt-1 flex items-center space-x-3 text-xs">
-            <span className="text-gray-500">
-              Score: <span className="font-medium text-gray-900">{exercise.groupScore.toFixed(2)}</span>
-            </span>
-            <span className="text-blue-600">
-              {exercise.clientsSharing.length} clients
-            </span>
-          </div>
-        </div>
-      </div>
-      <div className="mt-2 flex flex-wrap gap-1">
-        {exercise.clientScores.map((cs) => (
-          <div
-            key={cs.clientId}
-            className={`text-xs px-1 py-0.5 rounded ${
-              cs.hasExercise ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"
-            }`}
-          >
-            {cs.clientId.slice(0, 6)}: {cs.individualScore.toFixed(2)}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// CohesionTrackingCard component removed - cohesion tracking no longer used

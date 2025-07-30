@@ -4,6 +4,8 @@ import React, { useCallback, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useTRPC } from "~/trpc/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useGroupWorkoutBlueprint } from "~/hooks/useGroupWorkoutBlueprint";
+import { useGenerateGroupWorkout } from "~/hooks/useGenerateGroupWorkout";
 import { 
   useRealtimePreferences,
   PreferenceListItem,
@@ -41,14 +43,21 @@ export default function PreferencesPage() {
   );
 
   // Fetch workout blueprint to get exercise selections
-  const { data: workoutData, isLoading: workoutLoading, refetch: refetchWorkout } = useQuery(
-    sessionId ? trpc.trainingSession.visualizeGroupWorkout.queryOptions({ sessionId }) : {
-      enabled: false,
-      queryKey: ["disabled"],
-      queryFn: () => Promise.resolve(null)
-    }
-  );
+  const { 
+    blueprint,
+    groupContext,
+    isLoading: workoutLoading, 
+    refetch: refetchWorkout 
+  } = useGroupWorkoutBlueprint({
+    sessionId,
+    useCache: true,
+    includeDiagnostics: false,
+    enabled: !!sessionId
+  });
 
+  // Combine for backward compatibility
+  const workoutData = blueprint && groupContext ? { blueprint, groupContext } : null;
+  
   const isLoading = clientsLoading || workoutLoading;
   
   // Handle realtime preference updates
@@ -58,7 +67,7 @@ export default function PreferencesPage() {
       predicate: (query) => {
         const queryKey = query.queryKey as any[];
         return queryKey[0]?.[0] === 'trainingSession' && 
-               (queryKey[0]?.[1] === 'getCheckedInClients' || queryKey[0]?.[1] === 'visualizeGroupWorkout') &&
+               (queryKey[0]?.[1] === 'getCheckedInClients' || queryKey[0]?.[1] === 'generateGroupWorkoutBlueprint') &&
                queryKey[1]?.input?.sessionId === sessionId;
       }
     });
@@ -69,6 +78,14 @@ export default function PreferencesPage() {
     sessionId: sessionId || '',
     supabase,
     onPreferenceUpdate: handlePreferenceUpdate
+  });
+
+  // Generate workout hook
+  const { generateWorkout, isGenerating } = useGenerateGroupWorkout({
+    sessionId: sessionId || '',
+    navigateOnSuccess: true,
+    includeDiagnostics: false,
+    showToasts: true
   });
   
 
@@ -194,17 +211,6 @@ export default function PreferencesPage() {
     <div className="h-screen bg-gray-50 flex flex-col overflow-hidden">
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-7xl mx-auto p-8">
-          {/* Header */}
-          <div className="mb-8">
-            <div className="flex items-center justify-between">
-              <div>
-                <h1 className="text-3xl font-bold text-gray-900">Workout Preferences</h1>
-                <p className="mt-2 text-gray-600">
-                  {clients.length} client{clients.length !== 1 ? 's' : ''} in session
-                </p>
-              </div>
-            </div>
-          </div>
 
           {/* Client Cards Grid */}
           {clients.length > 0 ? (
@@ -329,12 +335,26 @@ export default function PreferencesPage() {
 
         {/* Action Buttons */}
         <div className="mt-8 mb-24 flex justify-between">
-          <button
-            onClick={() => router.push(`/session-lobby/group-visualization?sessionId=${sessionId}`)}
-            className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
-          >
-            View Visualization
-          </button>
+          <div className="flex gap-4">
+            <button
+              onClick={() => router.push(`/session-lobby/group-visualization?sessionId=${sessionId}`)}
+              className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+            >
+              View Visualization
+            </button>
+            
+            <button
+              onClick={() => generateWorkout()}
+              disabled={isGenerating || !sessionId}
+              className={`px-6 py-2 rounded-lg transition-colors ${
+                isGenerating || !sessionId
+                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  : 'bg-green-600 text-white hover:bg-green-700'
+              }`}
+            >
+              {isGenerating ? 'Generating...' : 'Generate Workouts'}
+            </button>
+          </div>
           
           <button
             onClick={() => router.back()}

@@ -2,13 +2,21 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { PlayerListItem } from "@acme/ui-desktop";
-import type { PlayerStatus } from "@acme/ui-desktop";
 import { useTRPC } from "~/trpc/react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRealtimeCheckIns } from "~/hooks/useRealtimeCheckIns";
 import { useRealtimePreferences } from "@acme/ui-shared";
 import { supabase } from "~/lib/supabase";
+
+// Types
+interface CheckInEvent {
+  user_id: string;
+  training_session_id: string;
+  user_name?: string;
+  user_email?: string;
+  checked_in_at?: string;
+  preferences?: any;
+}
 
 // Helper to format muscle names for display (convert underscore to space and capitalize)
 function formatMuscleName(muscle: string): string {
@@ -360,7 +368,6 @@ export default function SessionLobby() {
                   setIsStartingSession(true);
                   
                   // Always send start messages to auto-populate includeExercises for BMF templates
-                  console.log('[SessionLobby] Sending session start messages...');
                   // Fire and forget - don't await
                   sendStartMessagesMutation.mutate({ sessionId });
                   
