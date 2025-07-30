@@ -168,7 +168,7 @@ Please interpret these exercises according to the system instructions.`;
       },
       {
         outputStructure: structuredOutput ? Object.keys(structuredOutput) : [],
-        hasError: structuredOutput && 'error' in structuredOutput,
+        hasError: structuredOutput && typeof structuredOutput === 'object' && 'error' in structuredOutput,
         timing: timing
       }
     );

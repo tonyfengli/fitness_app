@@ -220,10 +220,17 @@ export class GroupWorkoutTestDataLogger {
       score: exercise.score,
       movementPattern: exercise.movementPattern,
       primaryMuscle: exercise.primaryMuscle,
-      secondaryMuscles: exercise.secondaryMuscles,
-      loadedJoints: exercise.loadedJoints,
-      functionTags: exercise.functionTags,
-      scoreBreakdown: exercise.scoreBreakdown
+      secondaryMuscles: exercise.secondaryMuscles || undefined,
+      loadedJoints: exercise.loadedJoints || undefined,
+      functionTags: exercise.functionTags || undefined,
+      scoreBreakdown: exercise.scoreBreakdown ? {
+        baseScore: exercise.scoreBreakdown.base || 0,
+        muscleTargetBonus: exercise.scoreBreakdown.muscleTargetBonus || 0,
+        muscleLessenPenalty: exercise.scoreBreakdown.muscleLessenPenalty || 0,
+        intensityAdjustment: exercise.scoreBreakdown.intensityAdjustment || 0,
+        includeBoost: exercise.scoreBreakdown.includeExerciseBoost || 0,
+        foundationalBoost: 0 // This doesn't exist in the type, setting to 0
+      } : undefined
     };
   }
   
@@ -342,11 +349,17 @@ export class GroupWorkoutTestDataLogger {
     ];
     
     exercises.forEach(ex => {
-      if (ex.score < 2) ranges[0].count++;
-      else if (ex.score < 4) ranges[1].count++;
-      else if (ex.score < 6) ranges[2].count++;
-      else if (ex.score < 8) ranges[3].count++;
-      else ranges[4].count++;
+      const range0 = ranges[0];
+      const range1 = ranges[1];
+      const range2 = ranges[2];
+      const range3 = ranges[3];
+      const range4 = ranges[4];
+      
+      if (range0 && ex.score < 2) range0.count++;
+      else if (range1 && ex.score < 4) range1.count++;
+      else if (range2 && ex.score < 6) range2.count++;
+      else if (range3 && ex.score < 8) range3.count++;
+      else if (range4) range4.count++;
     });
     
     return ranges.filter(r => r.count > 0);

@@ -34,6 +34,7 @@ export interface GenerateBlueprintOptions {
 export interface GenerateAndCreateOptions {
   skipBlueprintCache?: boolean;
   dryRun?: boolean;
+  includeDiagnostics?: boolean;
 }
 
 export interface WorkoutGenerationContext {
@@ -236,8 +237,8 @@ export class WorkoutGenerationService {
       llmAssignments: parsedResponse,
       systemPrompt,
       userMessage,
-      llmOutput,
-      exercisePool
+      llmOutput
+      // Removed exercisePool to avoid Date serialization issues
     };
   }
 
@@ -247,26 +248,15 @@ export class WorkoutGenerationService {
   async createWorkouts(
     sessionId: string,
     generationResult: any,
-    groupContext: GroupContext
+    groupContext: GroupContext,
+    exercisePool: Exercise[]
   ) {
     const user = this.ctx.session?.user;
     
     logger.info("Creating workout records", { sessionId });
 
     return await this.ctx.db.transaction(async (tx) => {
-      // Store blueprint summary at session level
-      const blueprintSummary = {
-        blockCount: generationResult.blueprint?.blocks?.length || 4,
-        blockIds: generationResult.blueprint?.blocks?.map((b: any) => b.blockId) || ['Round1', 'Round2', 'Round3', 'FinalRound'],
-        validationWarnings: generationResult.blueprint?.validationWarnings || [],
-        generatedAt: new Date().toISOString(),
-        llmModel: 'gpt-4o'
-      };
-
-      await tx
-        .update(TrainingSession)
-        .set({ templateConfig: blueprintSummary })
-        .where(eq(TrainingSession.id, sessionId));
+      // Skip storing blueprint summary - not needed
 
       // Create workout records for each client
       const workoutValues = groupContext.clients.map(client => ({
@@ -291,7 +281,7 @@ export class WorkoutGenerationService {
       const createdWorkouts = await tx
         .insert(Workout)
         .values(workoutValues)
-        .returning();
+        .returning({ id: Workout.id }); // Only return the ID field
 
       // Map client IDs to workout IDs
       const clientWorkouts = new Map<string, string>();
@@ -307,7 +297,8 @@ export class WorkoutGenerationService {
         tx,
         clientWorkouts,
         generationResult,
-        groupContext
+        groupContext,
+        exercisePool
       );
 
       await tx.insert(WorkoutExercise).values(allExercises);
@@ -326,13 +317,13 @@ export class WorkoutGenerationService {
       // Step 1: Generate blueprint (including exercise pool)
       const user = this.ctx.session?.user;
       
-      // Get full blueprint data including exercise pool
-      const { clientContexts, preScoredExercises, exercisePool, groupContext } = 
-        await WorkoutBlueprintService.prepareClientsForBlueprint(
-          sessionId,
-          user.businessId,
-          user.id
-        );
+      const blueprintData = await WorkoutBlueprintService.prepareClientsForBlueprint(
+        sessionId,
+        user.businessId,
+        user.id
+      );
+      
+      const { clientContexts, preScoredExercises, exercisePool, groupContext } = blueprintData;
 
       const blueprint = await generateGroupWorkoutBlueprint(
         groupContext, 
@@ -360,8 +351,9 @@ export class WorkoutGenerationService {
       // Step 3: Create workouts
       const workoutIds = await this.createWorkouts(
         sessionId,
-        { ...generationResult, blueprint },
-        groupContext
+        generationResult,
+        groupContext,
+        exercisePool
       );
 
       logger.info("Workout generation completed", { 
@@ -369,11 +361,27 @@ export class WorkoutGenerationService {
         workoutCount: workoutIds.length 
       });
 
-      return { 
+      // Ensure we're not returning any Date objects or complex types
+      const result: any = { 
         success: true, 
         workoutIds, 
-        blueprint 
+        // Don't include the full blueprint in the response to avoid serialization issues
+        blueprintSummary: {
+          blockCount: blueprint.blocks.length,
+          warnings: blueprint.validationWarnings || []
+        }
       };
+
+      // Include debug information if requested
+      if (options?.includeDiagnostics && generationResult.systemPrompt) {
+        result.debug = {
+          systemPrompt: generationResult.systemPrompt,
+          userMessage: generationResult.userMessage,
+          llmOutput: generationResult.llmOutput
+        };
+      }
+
+      return result;
 
     } catch (error) {
       logger.error("Error in workout generation", { sessionId, error });
@@ -477,10 +485,11 @@ export class WorkoutGenerationService {
     tx: any,
     clientWorkouts: Map<string, string>,
     generationResult: any,
-    groupContext: GroupContext
+    groupContext: GroupContext,
+    exercisePool: Exercise[]
   ) {
     const allExercises = [];
-    const { deterministicAssignments, llmAssignments, exercisePool } = generationResult;
+    const { deterministicAssignments, llmAssignments } = generationResult;
     
     for (const client of groupContext.clients) {
       const workoutId = clientWorkouts.get(client.user_id);

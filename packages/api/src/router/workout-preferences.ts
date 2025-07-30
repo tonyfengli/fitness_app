@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
 import { db } from "@acme/db/client";
-import { WorkoutPreferences, CreateWorkoutPreferencesSchema, UserTrainingSession } from "@acme/db/schema";
+import { WorkoutPreferences, CreateWorkoutPreferencesSchema, UserTrainingSession, TrainingSession } from "@acme/db/schema";
 import { eq, and, desc } from "@acme/db";
 import { TRPCError } from "@trpc/server";
 
@@ -166,12 +166,28 @@ export const workoutPreferencesRouter = createTRPCRouter({
         .then(res => res[0]);
 
       if (!preference) {
+        // Get session to retrieve businessId
+        const session = await db
+          .select()
+          .from(TrainingSession)
+          .where(eq(TrainingSession.id, input.sessionId))
+          .limit(1)
+          .then(res => res[0]);
+
+        if (!session) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Training session not found"
+          });
+        }
+
         // Create new preferences if they don't exist
         [preference] = await db
           .insert(WorkoutPreferences)
           .values({
             userId: input.userId,
             trainingSessionId: input.sessionId,
+            businessId: session.businessId,
             intensity: "moderate",
             muscleTargets: [input.muscle]
           })

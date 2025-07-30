@@ -1,4 +1,4 @@
-import { setBroadcastFunction as setCheckInBroadcast } from './handlers/check-in-handler';
+// import { setBroadcastFunction as setCheckInBroadcast } from './handlers/check-in-handler';
 
 export function initializePipeline(
   broadcastCheckIn?: (sessionId: string, clientData: {
@@ -12,7 +12,7 @@ export function initializePipeline(
   }) => void
 ) {
   if (broadcastCheckIn) {
-    setCheckInBroadcast(broadcastCheckIn);
+    // setCheckInBroadcast(broadcastCheckIn);
   }
   
   // TODO: Set preference broadcast when preference handler is implemented

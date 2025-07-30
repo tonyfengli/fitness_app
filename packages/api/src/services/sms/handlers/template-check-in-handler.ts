@@ -6,7 +6,6 @@ import { createLogger } from "../../../utils/logger";
 import { saveMessage } from "../../messageService";
 import { ExerciseSelectionService } from "../template-services/exercise-selection-service";
 import { TemplateSMSService } from "../template-sms-service";
-import { BlueprintGenerationService } from "../../blueprint-generation-service";
 import type { SMSResponse } from "../types";
 
 const logger = createLogger("TemplateCheckInHandler");
@@ -132,18 +131,16 @@ export class TemplateCheckInHandler {
           );
       });
 
-      // Generate blueprint if it doesn't exist (for templates that support it)
+      // Get deterministic preview selections for BMF templates
+      let selections: any[] = [];
       if (session.templateType === 'full_body_bmf' || template?.smsConfig?.showDeterministicSelections) {
-        logger.info("Ensuring blueprint exists", {
+        logger.info("Getting exercise preview for template", {
           sessionId: session.id,
           templateType: session.templateType,
           showDeterministicSelections: template?.smsConfig?.showDeterministicSelections
         });
-        await BlueprintGenerationService.generateBlueprint(session.id);
+        selections = await ExerciseSelectionService.getDeterministicPreview(session.templateType);
       }
-
-      // Get deterministic selections if available
-      const selections = await ExerciseSelectionService.getDeterministicSelections(session.id);
       
       // Format client name
       const clientName = ExerciseSelectionService.formatClientName(userInfo.userName);

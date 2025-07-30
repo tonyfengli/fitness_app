@@ -3,7 +3,6 @@ import { saveMessage } from "../../messageService";
 import { createLogger } from "../../../utils/logger";
 import { WorkoutPreferenceService } from "../../workoutPreferenceService";
 import { TemplateSMSService } from "../template-sms-service";
-import { BlueprintGenerationService } from "../../blueprint-generation-service";
 import { ExerciseSelectionService } from "../template-services/exercise-selection-service";
 import { SMSResponse } from "../types";
 import { db } from "@acme/db/client";
@@ -77,55 +76,35 @@ export class CheckInHandler {
             isBMF: session?.templateType === 'full_body_bmf'
           });
           
-          // Generate blueprint and get deterministic selections for BMF
+          // Show deterministic exercise preview for BMF templates
           if (session?.templateType === 'full_body_bmf' || template?.smsConfig?.showDeterministicSelections) {
             try {
-              logger.info("Attempting to generate blueprint and get selections", {
+              logger.info("Getting exercise preview for BMF template", {
                 sessionId: checkInResult.sessionId,
                 templateType: session?.templateType
               });
               
-              // Try to generate blueprint first
-              const blueprint = await BlueprintGenerationService.generateBlueprint(checkInResult.sessionId);
-              const blueprintExists = !!blueprint;
-              
-              let selections: any[] = [];
-              
-              if (blueprintExists) {
-                // Get selections from existing blueprint
-                selections = await ExerciseSelectionService.getDeterministicSelections(checkInResult.sessionId);
-                logger.info("Got selections from blueprint", {
-                  sessionId: checkInResult.sessionId,
-                  selectionCount: selections.length
-                });
-              } else {
-                // Use preview for check-in message
-                logger.info("Blueprint not available, using preview", {
-                  sessionId: checkInResult.sessionId,
-                  templateType: session?.templateType
-                });
-                selections = await ExerciseSelectionService.getDeterministicPreview(session.templateType);
-              }
+              // Always use preview selections for check-in message
+              const selections = await ExerciseSelectionService.getDeterministicPreview(session.templateType);
               
               if (selections.length > 0) {
                 const clientName = ExerciseSelectionService.formatClientName(userName);
                 responseMessage = ExerciseSelectionService.formatSelectionsForSMS(selections, clientName);
                 
-                logger.info("Using deterministic selections in check-in", {
+                logger.info("Using exercise preview in check-in", {
                   sessionId: checkInResult.sessionId,
-                  selectionCount: selections.length,
-                  usedPreview: !blueprintExists
+                  selectionCount: selections.length
                 });
               } else {
                 // Fall back to template response
-                logger.info("No deterministic selections found, using template response");
+                logger.info("No preview selections found, using template response");
                 responseMessage = TemplateSMSService.getCheckInResponse(smsConfig, userName);
                 const preferencePrompt = TemplateSMSService.getPreferencePrompt(smsConfig, userName);
                 responseMessage = `${responseMessage}\n\n${preferencePrompt}`;
               }
-            } catch (bmfError) {
-              logger.error("Error handling BMF template in check-in", {
-                error: bmfError,
+            } catch (previewError) {
+              logger.error("Error getting exercise preview", {
+                error: previewError,
                 sessionId: checkInResult.sessionId,
                 templateType: session?.templateType
               });

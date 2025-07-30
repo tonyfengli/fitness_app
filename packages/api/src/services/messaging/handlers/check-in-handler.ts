@@ -6,7 +6,6 @@ import { eq, and } from "@acme/db";
 import { user, TrainingSession, UserTrainingSession } from "@acme/db/schema";
 import { getWorkoutTemplate } from "@acme/ai";
 import { TemplateSMSService } from '../../sms/template-sms-service';
-import { BlueprintGenerationService } from '../../blueprint-generation-service';
 import { ExerciseSelectionService } from '../../sms/template-services/exercise-selection-service';
 
 // SSE broadcast function removed - will be replaced with Supabase Realtime

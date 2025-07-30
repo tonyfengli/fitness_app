@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { useTRPC } from "~/trpc/react";
 import type { GroupScoredExercise } from "@acme/ai";
 
@@ -164,11 +164,52 @@ export default function GroupVisualizationPage() {
     enabled: !!sessionId,
   });
   
-  // Generate group workout query
-  const { data: workoutData, isLoading: isGenerating, refetch: generateWorkout } = useQuery({
-    ...trpc.trainingSession.generateGroupWorkout.queryOptions({ sessionId: sessionId! }),
-    enabled: false, // Manual trigger only
-  });
+  // Generate group workout mutation - using new consolidated endpoint
+  const generateWorkoutMutation = useMutation(
+    trpc.trainingSession.generateAndCreateGroupWorkouts.mutationOptions({
+      onSuccess: (data) => {
+        console.log('Group workout generation result:', data);
+        
+        // Update the debug data
+        if (data.debug) {
+          setLlmDebugData({
+            systemPrompt: data.debug.systemPrompt,
+            userMessage: data.debug.userMessage,
+            llmOutput: data.debug.llmOutput
+          });
+        }
+
+        // Don't navigate away - stay on visualization page to see the results
+      },
+      onError: (error) => {
+        console.error('Error generating workout:', error);
+        // Log more details about the error
+        if (error.data) {
+          console.error('Error data:', error.data);
+        }
+        if (error.message) {
+          console.error('Error message:', error.message);
+        }
+        // Check if it's a serialization error
+        if (error.message?.includes('toISOString')) {
+          console.error('This appears to be a Date serialization error');
+        }
+      }
+    })
+  );
+
+  const isGenerating = generateWorkoutMutation.isPending;
+  
+  // Function to trigger workout generation
+  const generateWorkout = () => {
+    generateWorkoutMutation.mutate({ 
+      sessionId: sessionId!,
+      options: {
+        skipBlueprintCache: false,
+        includeDiagnostics: true
+      }
+    });
+  };
   
   // Set default selected block when data loads
   useEffect(() => {
@@ -177,21 +218,6 @@ export default function GroupVisualizationPage() {
     }
   }, [data, selectedBlock]);
   
-  // Handle workout generation result
-  useEffect(() => {
-    if (workoutData) {
-      console.log('Group workout generation result:', workoutData);
-      
-      // Update the debug data
-      if (workoutData.debug) {
-        setLlmDebugData({
-          systemPrompt: workoutData.debug.systemPrompt,
-          userMessage: workoutData.debug.userMessage,
-          llmOutput: workoutData.debug.llmOutput
-        });
-      }
-    }
-  }, [workoutData]);
   
   if (!sessionId) {
     return (

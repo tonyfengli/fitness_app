@@ -1170,704 +1170,6 @@ export const trainingSessionRouter = {
       }
     }),
     
-  /**
-   * Generate complete group workout with LLM
-   * This builds on visualizeGroupWorkout but adds the LLM generation step
-   */
-  generateGroupWorkout: protectedProcedure
-    .input(z.object({
-      sessionId: z.string().uuid()
-    }))
-    .query(async ({ ctx, input }) => {
-      console.log('🎯 generateGroupWorkout called with:', { sessionId: input.sessionId });
-      
-      const user = ctx.session?.user as SessionUser;
-      
-      // Only trainers can generate group workouts
-      if (user.role !== 'trainer') {
-        throw new TRPCError({
-          code: 'FORBIDDEN',
-          message: 'Only trainers can generate group workouts',
-        });
-      }
-      
-      try {
-        // Get the actual session data by running the same logic as visualizeGroupWorkout
-        const session = await ctx.db
-          .select()
-          .from(TrainingSession)
-          .where(eq(TrainingSession.id, input.sessionId))
-          .leftJoin(UserTrainingSession, eq(UserTrainingSession.trainingSessionId, TrainingSession.id))
-          .then(rows => {
-            if (rows.length === 0) return null;
-            const session = rows[0]!.training_session;
-            const trainees = rows
-              .filter(row => row.user_training_session?.userId)
-              .map(row => ({ userId: row.user_training_session!.userId, checkedInAt: row.user_training_session!.checkedInAt }));
-            return { ...session, trainees };
-          });
-        
-        if (!session) {
-          throw new TRPCError({
-            code: 'NOT_FOUND',
-            message: 'Session not found',
-          });
-        }
-        
-        if (session.trainerId !== user.id) {
-          throw new TRPCError({
-            code: 'FORBIDDEN',
-            message: 'You can only view your own sessions',
-          });
-        }
-        
-        const clientIds = session.trainees.map(t => t.userId);
-        
-        // Get client details and preferences
-        const [clientsData, preferencesData] = await Promise.all([
-          ctx.db
-            .select()
-            .from(User)
-            .leftJoin(UserProfile, eq(UserProfile.userId, User.id))
-            .where(inArray(User.id, clientIds))
-            .then(rows => rows.map(row => ({
-              ...row.user,
-              userProfile: row.user_profile
-            }))),
-          ctx.db
-            .select()
-            .from(WorkoutPreferences)
-            .where(and(
-              eq(WorkoutPreferences.trainingSessionId, input.sessionId),
-              inArray(WorkoutPreferences.userId, clientIds)
-            ))
-        ]);
-        
-        // Map preferences by userId
-        const preferencesByUserId = Object.fromEntries(
-          preferencesData.map(p => [p.userId, p])
-        );
-        
-        // Create ClientContext for each client
-        const clientsWithPreferences = clientsData.map(client => {
-          const prefs = preferencesByUserId[client.id];
-          const profile = client.userProfile;
-          
-          return {
-            user_id: client.id,
-            name: client.name || 'Unknown',
-            strength_capacity: (profile?.strengthLevel ?? 'moderate') as 'very_low' | 'low' | 'moderate' | 'high',
-            skill_capacity: (profile?.skillLevel ?? 'moderate') as 'very_low' | 'low' | 'moderate' | 'high',
-            primary_goal: (prefs?.sessionGoal || 'strength') as 'mobility' | 'strength' | 'general_fitness' | 'hypertrophy' | 'burn_fat',
-            intensity: (prefs?.intensity || 'moderate') as 'low' | 'moderate' | 'high',
-            muscle_target: prefs?.muscleTargets || [],
-            muscle_lessen: prefs?.muscleLessens || [],
-            exercise_requests: {
-              include: prefs?.includeExercises || [],
-              avoid: prefs?.avoidExercises || []
-            },
-            avoid_joints: prefs?.avoidJoints || [],
-            default_sets: profile?.defaultSets ?? 20
-          };
-        });
-        
-        // Import what we need
-        const { generateGroupWorkoutBlueprint, createLLM, WorkoutPromptBuilder } = await import("@acme/ai");
-        const { ExerciseFilterService } = await import("../services/exercise-filter-service");
-        const { HumanMessage, SystemMessage } = await import("@langchain/core/messages");
-        
-        // Get exercises for this business
-        const filterService = new ExerciseFilterService(ctx.db);
-        const exercisePool = await filterService.fetchBusinessExercises(user.businessId);
-        
-        // Create GroupContext
-        const groupContext = {
-          clients: clientsWithPreferences,
-          sessionId: input.sessionId,
-          businessId: user.businessId,
-          templateType: 'full_body_bmf' as const // Using BMF template for testing
-        };
-        
-        // Generate the blueprint
-        const blueprint = await generateGroupWorkoutBlueprint(
-          groupContext as GroupContext,
-          exercisePool
-        );
-        
-        // Get actual exercise selections for rounds 1-2 from the blueprint
-        const round1Block = blueprint.blocks.find(b => b.blockId === 'Round1');
-        const round2Block = blueprint.blocks.find(b => b.blockId === 'Round2');
-        
-        if (!round1Block || !round2Block) {
-          throw new Error('Round1 and Round2 blocks are required');
-        }
-        
-        // We'll create workouts after LLM generation
-        
-        // Extract top exercise for each client from Round 1, checking for overrides
-        const round1Assignments = clientsWithPreferences.map(client => {
-          const clientData = round1Block.individualCandidates[client.user_id];
-          let selectedExercise = clientData?.exercises?.[0]; // Default to top candidate
-          
-          // Check if client has an override for Round1
-          if (client.preferences?.includeExercises && client.preferences.includeExercises.length > 0) {
-            // Look for a lower body exercise in their includes
-            const lowerBodyOverride = clientData?.exercises?.find(ex => 
-              client.preferences.includeExercises.some(included => 
-                included.toLowerCase() === ex.name.toLowerCase()
-              ) && ['squat', 'hinge', 'lunge'].includes(ex.movementPattern || '')
-            );
-            
-            if (lowerBodyOverride) {
-              selectedExercise = lowerBodyOverride;
-            }
-          }
-          
-          if (!selectedExercise) {
-            throw new Error(`No Round 1 exercise found for client ${client.name}`);
-          }
-          
-          return {
-            clientId: client.user_id,
-            clientName: client.name,
-            exercise: selectedExercise.name,
-            equipment: getEquipmentFromExercise(selectedExercise.name)
-          };
-        });
-        
-        // Extract top exercise for each client from Round 2, checking for overrides
-        const round2Assignments = clientsWithPreferences.map(client => {
-          const clientData = round2Block.individualCandidates[client.user_id];
-          let selectedExercise = clientData?.exercises?.[0]; // Default to top candidate
-          
-          // Check if client has an override for Round2
-          if (client.preferences?.includeExercises && client.preferences.includeExercises.length > 0) {
-            // Look for a pull exercise in their includes
-            const pullOverride = clientData?.exercises?.find(ex => 
-              client.preferences.includeExercises.some(included => 
-                included.toLowerCase() === ex.name.toLowerCase()
-              ) && ['vertical_pull', 'horizontal_pull'].includes(ex.movementPattern || '')
-            );
-            
-            if (pullOverride) {
-              selectedExercise = pullOverride;
-            }
-          }
-          
-          if (!selectedExercise) {
-            throw new Error(`No Round 2 exercise found for client ${client.name}`);
-          }
-          
-          return {
-            clientId: client.user_id,
-            clientName: client.name,
-            exercise: selectedExercise.name,
-            equipment: getEquipmentFromExercise(selectedExercise.name)
-          };
-        });
-        
-        
-        // Process client-requested exercises and muscle targets deterministically
-        const clientRequestAssignments: Record<string, Array<{
-          clientId: string;
-          clientName: string;
-          exercise: string;
-          equipment: string[];
-          roundAssigned: string;
-          reason: 'client_request' | 'muscle_target';
-        }>> = {};
-        
-        // Track which exercises have been used per client
-        const usedExercisesPerClient = new Map<string, Set<string>>();
-        
-        // Initialize with Round 1 and 2 exercises
-        clientsWithPreferences.forEach(client => {
-          const used = new Set<string>();
-          const r1 = round1Assignments.find(a => a.clientId === client.user_id);
-          const r2 = round2Assignments.find(a => a.clientId === client.user_id);
-          if (r1) used.add(r1.exercise.toLowerCase());
-          if (r2) used.add(r2.exercise.toLowerCase());
-          usedExercisesPerClient.set(client.user_id, used);
-        });
-        
-        // Check Round 3 and 4 for client requests
-        const round3Block = blueprint.blocks.find(b => b.blockId === 'Round3');
-        const round4Block = blueprint.blocks.find(b => b.blockId === 'FinalRound');
-        
-        clientsWithPreferences.forEach(client => {
-          if (!client.exercise_requests?.include || client.exercise_requests.include.length === 0) return;
-          
-          const usedExercises = usedExercisesPerClient.get(client.user_id) || new Set();
-          const requestedExercises = client.exercise_requests.include;
-          
-          requestedExercises.forEach(requestedName => {
-            // Skip if already used
-            if (usedExercises.has(requestedName.toLowerCase())) return;
-            
-            // Try to find in Round 3 first
-            const r3Exercises = round3Block?.individualCandidates[client.user_id]?.exercises || [];
-            const r3Match = r3Exercises.find(ex => 
-              ex.name.toLowerCase() === requestedName.toLowerCase() && 
-              ex.scoreBreakdown?.includeExerciseBoost > 0
-            );
-            
-            if (r3Match) {
-              if (!clientRequestAssignments.Round3) clientRequestAssignments.Round3 = [];
-              clientRequestAssignments.Round3.push({
-                clientId: client.user_id,
-                clientName: client.name,
-                exercise: r3Match.name,
-                equipment: getEquipmentFromExercise(r3Match.name),
-                roundAssigned: 'Round3',
-                reason: 'client_request'
-              });
-              usedExercises.add(r3Match.name.toLowerCase());
-              return;
-            }
-            
-            // Try Round 4 if not found in Round 3
-            const r4Exercises = round4Block?.individualCandidates[client.user_id]?.exercises || [];
-            const r4Match = r4Exercises.find(ex => 
-              ex.name.toLowerCase() === requestedName.toLowerCase() && 
-              ex.scoreBreakdown?.includeExerciseBoost > 0
-            );
-            
-            if (r4Match) {
-              if (!clientRequestAssignments.FinalRound) clientRequestAssignments.FinalRound = [];
-              clientRequestAssignments.FinalRound.push({
-                clientId: client.user_id,
-                clientName: client.name,
-                exercise: r4Match.name,
-                equipment: getEquipmentFromExercise(r4Match.name),
-                roundAssigned: 'FinalRound',
-                reason: 'client_request'
-              });
-              usedExercises.add(r4Match.name.toLowerCase());
-            }
-          });
-        });
-        
-        // Process muscle targets deterministically (BMF template only)
-        if (session.templateType === 'full_body_bmf') {
-          clientsWithPreferences.forEach(client => {
-          if (!client.muscle_target || client.muscle_target.length === 0) return;
-          
-          const usedExercises = usedExercisesPerClient.get(client.user_id) || new Set();
-          const muscleTargets = client.muscle_target;
-          
-          // Check if any muscle targets are already covered
-          const uncoveredTargets = muscleTargets.filter(target => {
-            // Check R1-R4 exercises for this muscle target
-            const r1Exercise = round1Assignments.find(a => a.clientId === client.user_id)?.exercise;
-            const r2Exercise = round2Assignments.find(a => a.clientId === client.user_id)?.exercise;
-            
-            // Simple check - in production, would check actual exercise muscle groups
-            return true; // For now, assume target not covered
-          });
-          
-          // Try to assign uncovered muscle targets
-          uncoveredTargets.forEach(muscleTarget => {
-            // Look for highest scoring exercise targeting this muscle in R3/R4
-            const r3Exercises = round3Block?.individualCandidates[client.user_id]?.exercises || [];
-            const r4Exercises = round4Block?.individualCandidates[client.user_id]?.exercises || [];
-            
-            // Find exercise with muscle target boost
-            const r3Match = r3Exercises.find(ex => 
-              !usedExercises.has(ex.name.toLowerCase()) &&
-              ex.scoreBreakdown?.muscleTargetBonus > 0
-            );
-            
-            if (r3Match) {
-              if (!clientRequestAssignments.Round3) clientRequestAssignments.Round3 = [];
-              // Check if client already has assignment in R3
-              const existingR3 = clientRequestAssignments.Round3.filter(a => a.clientId === client.user_id).length;
-              if (existingR3 === 0) { // Only assign if slot available
-                clientRequestAssignments.Round3.push({
-                  clientId: client.user_id,
-                  clientName: client.name,
-                  exercise: r3Match.name,
-                  equipment: getEquipmentFromExercise(r3Match.name),
-                  roundAssigned: 'Round3',
-                  reason: 'muscle_target'
-                });
-                usedExercises.add(r3Match.name.toLowerCase());
-                return;
-              }
-            }
-            
-            // Try R4 if R3 is full or no match
-            const r4Match = r4Exercises.find(ex => 
-              !usedExercises.has(ex.name.toLowerCase()) &&
-              ex.scoreBreakdown?.muscleTargetBonus > 0
-            );
-            
-            if (r4Match) {
-              if (!clientRequestAssignments.FinalRound) clientRequestAssignments.FinalRound = [];
-              const existingR4 = clientRequestAssignments.FinalRound.filter(a => a.clientId === client.user_id).length;
-              if (existingR4 === 0) {
-                clientRequestAssignments.FinalRound.push({
-                  clientId: client.user_id,
-                  clientName: client.name,
-                  exercise: r4Match.name,
-                  equipment: getEquipmentFromExercise(r4Match.name),
-                  roundAssigned: 'FinalRound',
-                  reason: 'muscle_target'
-                });
-                usedExercises.add(r4Match.name.toLowerCase());
-              }
-            }
-          });
-        });
-        }
-        
-        // Build the dynamic prompt using new prompt builder
-        const promptBuilder = new WorkoutPromptBuilder({
-          workoutType: 'group',
-          groupConfig: {
-            clients: clientsWithPreferences,
-            blueprint: blueprint.blocks,
-            deterministicAssignments: {
-              Round1: round1Assignments,
-              Round2: round2Assignments,
-              ...clientRequestAssignments
-            },
-            equipment: {
-              barbells: 2,
-              benches: 2,
-              cable_machine: 1,
-              row_machine: 1,
-              ab_wheel: 1,
-              bands: 3,
-              bosu_ball: 1,
-              kettlebells: 2,
-              landmine: 1,
-              swiss_ball: 1,
-              deadlift_stations: 2,
-              medicine_balls: 2,
-              dumbbells: "unlimited"
-            },
-            templateType: 'full_body_bmf'
-          }
-        });
-        
-        const systemPrompt = promptBuilder.build();
-        
-        // Create LLM instance and make the call
-        let llmOutput = "Click 'Generate' to see the actual LLM response";
-        
-        // Initialize workout storage for each client (declare here for proper scope)
-        const clientWorkouts = new Map<string, string>(); // clientId -> workoutId
-        
-        try {
-          const llm = createLLM();
-          const userMessage = "Generate the group workout assignments for rounds 3 and 4.";
-          
-          console.log('🤖 Calling LLM for group workout generation...');
-          const startTime = Date.now();
-          
-          const response = await llm.invoke([
-            new SystemMessage(systemPrompt),
-            new HumanMessage(userMessage)
-          ]);
-          
-          const llmTime = Date.now() - startTime;
-          console.log(`✅ LLM response received in ${llmTime}ms`);
-          
-          llmOutput = response.content.toString();
-          
-          // Parse the JSON from the LLM response
-          const jsonMatch = llmOutput.match(/```json\n([\s\S]*?)\n```/);
-          if (jsonMatch?.[1]) {
-            const parsedResponse = JSON.parse(jsonMatch[1]) as {
-              round3: {
-                exercises: Array<{
-                  type: 'shared' | 'individual';
-                  name?: string;
-                  client?: string;
-                  exercise?: string;
-                  clients?: string[];
-                  equipment: string[];
-                }>;
-                reasoning: string;
-              };
-              round4: {
-                exercises: Array<{
-                  type: 'shared' | 'individual';
-                  name?: string;
-                  client?: string;
-                  exercise?: string;
-                  clients?: string[];
-                  equipment: string[];
-                }>;
-                reasoning: string;
-              };
-              finalSlots: Record<string, { used: number; total: number }>;
-            };
-            console.log('📊 Parsed LLM response:', parsedResponse);
-            
-            // Save complete workout to database (all rounds together)
-            console.log('💾 Saving complete group workout to database...');
-            
-            await ctx.db.transaction(async (tx) => {
-              // First, store the blueprint at the session level
-              try {
-                // Create a minimal blueprint summary instead of storing the entire blueprint
-                // This avoids serialization issues and reduces storage
-                const blueprintSummary = {
-                  blockCount: blueprint.blocks.length,
-                  blockIds: blueprint.blocks.map(b => b.blockId),
-                  validationWarnings: blueprint.validationWarnings || [],
-                  generatedAt: new Date().toISOString(),
-                  llmModel: 'gpt-4o'
-                };
-                
-                await tx
-                  .update(TrainingSession)
-                  .set({
-                    templateConfig: blueprintSummary
-                  })
-                  .where(eq(TrainingSession.id, input.sessionId));
-              } catch (error) {
-                console.error('Error storing blueprint summary:', error);
-                // Continue without storing blueprint rather than failing entire transaction
-              }
-              // Prepare all workout records
-              const workoutValues = clientsWithPreferences.map(client => ({
-                trainingSessionId: input.sessionId,
-                userId: client.user_id,
-                businessId: user.businessId,
-                createdByTrainerId: user.id,
-                notes: `${session.templateType || 'BMF'} - ${new Date().toLocaleDateString()}`,
-                workoutType: session.templateType || 'full_body_bmf',
-                totalPlannedSets: 99,
-                llmOutput: JSON.parse(JSON.stringify({
-                  systemPrompt,
-                  userMessage: "Generate the group workout assignments for rounds 3 and 4.",
-                  rawResponse: llmOutput,
-                  parsedResponse,
-                  llmModel: 'gpt-4o',
-                  timestamp: new Date().toISOString()
-                })),
-                // Blueprint now stored at session level, not in individual workouts
-                context: 'group',
-              }));
-              
-              // Bulk insert all workouts at once
-              const createdWorkouts = await tx
-                .insert(Workout)
-                .values(workoutValues)
-                .returning();
-              
-              // Map client IDs to workout IDs
-              createdWorkouts.forEach((workout, index) => {
-                const client = clientsWithPreferences[index];
-                if (client) {
-                  clientWorkouts.set(client.user_id, workout.id);
-                }
-              });
-              
-              // Now prepare all exercises for all clients
-              const allExercises = [];
-              
-              for (const client of clientsWithPreferences) {
-                const workoutId = clientWorkouts.get(client.user_id);
-                if (!workoutId) continue;
-                
-                // Now create all exercises for this client
-                const clientExercises = [];
-                
-                // Round 1
-                const r1Assignment = round1Assignments.find(a => a.clientId === client.user_id);
-                if (r1Assignment) {
-                  const r1Exercise = exercisePool.find(ex => ex.name === r1Assignment.exercise);
-                  if (r1Exercise) {
-                    clientExercises.push({
-                      workoutId: workoutId,
-                      exerciseId: r1Exercise.id,
-                      orderIndex: 1,
-                      setsCompleted: 99,
-                      groupName: 'Round 1',
-                    });
-                  }
-                }
-                
-                // Round 2
-                const r2Assignment = round2Assignments.find(a => a.clientId === client.user_id);
-                if (r2Assignment) {
-                  const r2Exercise = exercisePool.find(ex => ex.name === r2Assignment.exercise);
-                  if (r2Exercise) {
-                    clientExercises.push({
-                      workoutId: workoutId,
-                      exerciseId: r2Exercise.id,
-                      orderIndex: 2,
-                      setsCompleted: 99,
-                      groupName: 'Round 2',
-                    });
-                  }
-                }
-                
-                // Round 3 - merge pre-assigned and LLM-assigned
-                const clientR3Exercises = new Set<string>();
-                
-                // First add pre-assigned R3 exercises
-                if (clientRequestAssignments.Round3) {
-                  const preAssigned = clientRequestAssignments.Round3.filter(a => a.clientId === client.user_id);
-                  for (const assignment of preAssigned) {
-                    const exercise = exercisePool.find(ex => ex.name === assignment.exercise);
-                    if (exercise) {
-                      clientExercises.push({
-                        workoutId: workoutId,
-                        exerciseId: exercise.id,
-                        orderIndex: 3,
-                        setsCompleted: 99,
-                        groupName: 'Round 3',
-                        notes: `Pre-assigned: ${assignment.reason}`,
-                      });
-                      clientR3Exercises.add(exercise.name.toLowerCase());
-                    }
-                  }
-                }
-                
-                // Then add LLM-assigned R3 exercises (skip if already pre-assigned)
-                for (const exercise of parsedResponse.round3.exercises) {
-                  if (exercise.type === 'individual' && exercise.client === client.name) {
-                    // Skip if already pre-assigned
-                    if (!clientR3Exercises.has((exercise.exercise || '').toLowerCase())) {
-                      const dbExercise = exercisePool.find(ex => 
-                        ex.name.toLowerCase() === (exercise.exercise || '').toLowerCase()
-                      );
-                      
-                      if (dbExercise) {
-                        clientExercises.push({
-                          workoutId: workoutId,
-                          exerciseId: dbExercise.id,
-                          orderIndex: 3,
-                          setsCompleted: 99,
-                          groupName: 'Round 3',
-                        });
-                      }
-                    }
-                  } else if (exercise.type === 'shared' && exercise.clients?.includes(client.name)) {
-                    // Skip if already pre-assigned
-                    if (!clientR3Exercises.has((exercise.name || '').toLowerCase())) {
-                      const dbExercise = exercisePool.find(ex => 
-                        ex.name.toLowerCase() === (exercise.name || '').toLowerCase()
-                      );
-                      
-                      if (dbExercise) {
-                        clientExercises.push({
-                          workoutId: workoutId,
-                          exerciseId: dbExercise.id,
-                          orderIndex: 3,
-                          setsCompleted: 99,
-                          groupName: 'Round 3',
-                        });
-                      }
-                    }
-                  }
-                }
-                
-                // Round 4 - merge pre-assigned and LLM-assigned
-                const clientR4Exercises = new Set<string>();
-                
-                // First add pre-assigned R4 exercises
-                if (clientRequestAssignments.FinalRound) {
-                  const preAssigned = clientRequestAssignments.FinalRound.filter(a => a.clientId === client.user_id);
-                  for (const assignment of preAssigned) {
-                    const exercise = exercisePool.find(ex => ex.name === assignment.exercise);
-                    if (exercise) {
-                      clientExercises.push({
-                        workoutId: workoutId,
-                        exerciseId: exercise.id,
-                        orderIndex: 4,
-                        setsCompleted: 99,
-                        groupName: 'Round 4',
-                        notes: `Pre-assigned: ${assignment.reason}`,
-                      });
-                      clientR4Exercises.add(exercise.name.toLowerCase());
-                    }
-                  }
-                }
-                
-                // Then add LLM-assigned R4 exercises (skip if already pre-assigned)
-                for (const exercise of parsedResponse.round4.exercises) {
-                  if (exercise.type === 'individual' && exercise.client === client.name) {
-                    // Skip if already pre-assigned
-                    if (!clientR4Exercises.has((exercise.exercise || '').toLowerCase())) {
-                      const dbExercise = exercisePool.find(ex => 
-                        ex.name.toLowerCase() === (exercise.exercise || '').toLowerCase()
-                      );
-                      
-                      if (dbExercise) {
-                        clientExercises.push({
-                          workoutId: workoutId,
-                          exerciseId: dbExercise.id,
-                          orderIndex: 4,
-                          setsCompleted: 99,
-                          groupName: 'Round 4',
-                        });
-                      }
-                    }
-                  } else if (exercise.type === 'shared' && exercise.clients?.includes(client.name)) {
-                    // Skip if already pre-assigned
-                    if (!clientR4Exercises.has((exercise.name || '').toLowerCase())) {
-                      const dbExercise = exercisePool.find(ex => 
-                        ex.name.toLowerCase() === (exercise.name || '').toLowerCase()
-                      );
-                      
-                      if (dbExercise) {
-                        clientExercises.push({
-                          workoutId: workoutId,
-                          exerciseId: dbExercise.id,
-                          orderIndex: 4,
-                          setsCompleted: 99,
-                          groupName: 'Round 4',
-                        });
-                      }
-                    }
-                  }
-                }
-                
-                // Add to all exercises array instead of inserting
-                allExercises.push(...clientExercises);
-              }
-              
-              // Bulk insert all exercises for all clients at once
-              if (allExercises.length > 0) {
-                await tx.insert(WorkoutExercise).values(allExercises);
-              }
-            });
-            
-            console.log('✅ Complete group workout saved successfully');
-          }
-          
-        } catch (error) {
-          console.error('❌ Error calling LLM:', error);
-          llmOutput = `Error calling LLM: ${error instanceof Error ? error.message : 'Unknown error'}`;
-        }
-        
-        return {
-          success: true,
-          debug: {
-            systemPrompt,
-            userMessage: "Generate the group workout assignments for rounds 3 and 4.",
-            llmOutput
-          },
-          sessionId: input.sessionId,
-          workoutIds: Array.from(clientWorkouts.entries()).map(([clientId, workoutId]) => ({
-            clientId,
-            workoutId
-          })),
-          // Blueprint now stored at session level, not returned in response
-        };
-      } catch (error) {
-        console.error('❌ Error in generateGroupWorkout:', error);
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: error instanceof Error ? error.message : 'Failed to generate group workout',
-        });
-      }
-    }),
 
   /**
    * Generate group workout blueprint only (for visualization/testing)
@@ -1900,7 +1202,6 @@ export const trainingSessionRouter = {
         const result = await service.generateBlueprint(input.sessionId, input.options);
         return result;
       } catch (error) {
-        console.error('Error generating blueprint:', error);
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: error instanceof Error ? error.message : 'Failed to generate blueprint',
@@ -1918,6 +1219,7 @@ export const trainingSessionRouter = {
       options: z.object({
         skipBlueprintCache: z.boolean().default(false),
         dryRun: z.boolean().default(false),
+        includeDiagnostics: z.boolean().default(false),
       }).optional()
     }))
     .mutation(async ({ ctx, input }) => {
@@ -1939,7 +1241,6 @@ export const trainingSessionRouter = {
         const result = await service.generateAndCreateWorkouts(input.sessionId, input.options);
         return result;
       } catch (error) {
-        console.error('Error generating and creating workouts:', error);
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: error instanceof Error ? error.message : 'Failed to generate and create workouts',
@@ -2001,7 +1302,7 @@ export const trainingSessionRouter = {
           .select({
             id: TrainingSession.id,
             name: TrainingSession.name,
-            date: TrainingSession.date,
+            date: TrainingSession.scheduledAt,
             templateType: TrainingSession.templateType,
             businessId: TrainingSession.businessId,
           })
@@ -2013,7 +1314,7 @@ export const trainingSessionRouter = {
           .where(
             and(
               eq(UserTrainingSession.userId, input.userId),
-              gte(TrainingSession.date, today)
+              gte(TrainingSession.scheduledAt, today)
             )
           )
           .orderBy(desc(TrainingSession.createdAt))
@@ -2273,14 +1574,16 @@ Set your goals and preferences for today's session.`;
               phoneNumber: client.userPhone || null,
               metadata: {
                 sentBy: ctx.session.user.id,
-                sessionId: session.id,
-                isSessionStart: true,
+                checkInResult: {
+                  success: true,
+                  sessionId: session.id
+                }
               },
               status: 'sent',
             });
 
             // Send via Twilio if phone number exists
-            if (client.userPhone) {
+            if (client.userPhone && twilioClient) {
               await twilioClient.messages.create({
                 body: messageBody,
                 to: client.userPhone,
@@ -2339,6 +1642,20 @@ Set your goals and preferences for today's session.`;
         // For MVP, we'll store preferences in the WorkoutPreferences table
         // In the future, this should validate that the user owns this preference
         
+        // Get session for businessId
+        const [session] = await db
+          .select()
+          .from(TrainingSession)
+          .where(eq(TrainingSession.id, input.sessionId))
+          .limit(1);
+          
+        if (!session) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Session not found'
+          });
+        }
+        
         // Find existing preferences
         const [existingPref] = await db
           .select()
@@ -2358,8 +1675,7 @@ Set your goals and preferences for today's session.`;
             .set({
               muscleTargets: input.preferences.muscleFocus,
               muscleLessens: input.preferences.muscleAvoidance,
-              notes: input.preferences.otherNotes,
-              updatedAt: new Date()
+              notes: input.preferences.otherNotes ? [input.preferences.otherNotes] : []
             })
             .where(eq(WorkoutPreferences.id, existingPref.id));
         } else {
@@ -2367,9 +1683,10 @@ Set your goals and preferences for today's session.`;
           await db.insert(WorkoutPreferences).values({
             userId: input.userId,
             trainingSessionId: input.sessionId,
+            businessId: session.businessId,
             muscleTargets: input.preferences.muscleFocus || [],
             muscleLessens: input.preferences.muscleAvoidance || [],
-            notes: input.preferences.otherNotes,
+            notes: input.preferences.otherNotes ? [input.preferences.otherNotes] : [],
           });
         }
 
@@ -2515,10 +1832,10 @@ Set your goals and preferences for today's session.`;
             const exerciseDetails = await ctx.db
               .select()
               .from(exercises)
-              .where(inArray(exercises.name, preferences.includeExercises));
+              .where(inArray(exercises.name, preferences.includeExercises || []));
             
             // First exercise is Round1
-            const round1Exercise = exerciseDetails.find(e => e.name === preferences.includeExercises[0]);
+            const round1Exercise = exerciseDetails.find(e => e.name === preferences.includeExercises?.[0]);
             if (round1Exercise) {
               selections.push({
                 roundId: 'Round1',
@@ -2532,7 +1849,7 @@ Set your goals and preferences for today's session.`;
             }
             
             // Second exercise is Round2
-            const round2Exercise = exerciseDetails.find(e => e.name === preferences.includeExercises[1]);
+            const round2Exercise = exerciseDetails.find(e => e.name === preferences.includeExercises?.[1]);
             if (round2Exercise) {
               selections.push({
                 roundId: 'Round2',
@@ -2555,7 +1872,7 @@ Set your goals and preferences for today's session.`;
               );
               
               // Extract recommendations from blueprint
-              const recommendations = [];
+              const recommendations: any[] = [];
               if (blueprint?.blocks) {
                 const round1Block = blueprint.blocks.find((b: any) => b.blockId === 'Round1');
                 const round2Block = blueprint.blocks.find((b: any) => b.blockId === 'Round2');
@@ -2567,7 +1884,7 @@ Set your goals and preferences for today's session.`;
                   const exerciseList = candidateData.allFilteredExercises || candidateData.exercises || [];
                   
                   exerciseList.forEach((exercise: any) => {
-                    if (exercise.name !== preferences.includeExercises[0]) {
+                    if (exercise.name !== preferences.includeExercises?.[0]) {
                       recommendations.push({
                         ...exercise,
                         roundId: 'Round1',
@@ -2584,7 +1901,7 @@ Set your goals and preferences for today's session.`;
                   const exerciseList = candidateData.allFilteredExercises || candidateData.exercises || [];
                   
                   exerciseList.forEach((exercise: any) => {
-                    if (exercise.name !== preferences.includeExercises[1]) {
+                    if (exercise.name !== preferences.includeExercises?.[1]) {
                       recommendations.push({
                         ...exercise,
                         roundId: 'Round2',
@@ -2658,10 +1975,10 @@ Set your goals and preferences for today's session.`;
           );
 
           // Extract exercises from Round1 and Round2
-          const selections = [];
-          const recommendations = [];
-          const round1Block = blueprint.blocks.find(b => b.blockId === 'Round1');
-          const round2Block = blueprint.blocks.find(b => b.blockId === 'Round2');
+          const selections: any[] = [];
+          const recommendations: any[] = [];
+          const round1Block = blueprint.blocks.find((b: any) => b.blockId === 'Round1');
+          const round2Block = blueprint.blocks.find((b: any) => b.blockId === 'Round2');
           
           if (round1Block?.individualCandidates?.[input.userId]?.exercises?.[0]) {
             selections.push({
@@ -2696,7 +2013,7 @@ Set your goals and preferences for today's session.`;
             // Use allFilteredExercises if available, otherwise fall back to exercises
             const exerciseList = candidateData.allFilteredExercises || candidateData.exercises || [];
             
-            exerciseList.forEach(exercise => {
+            exerciseList.forEach((exercise: any) => {
               if (!selectedExerciseNames.includes(exercise.name)) {
                 recommendations.push({
                   ...exercise,
@@ -2712,7 +2029,7 @@ Set your goals and preferences for today's session.`;
             // Use allFilteredExercises if available, otherwise fall back to exercises
             const exerciseList = candidateData.allFilteredExercises || candidateData.exercises || [];
             
-            exerciseList.forEach(exercise => {
+            exerciseList.forEach((exercise: any) => {
               if (!selectedExerciseNames.includes(exercise.name)) {
                 recommendations.push({
                   ...exercise,
@@ -2919,8 +2236,7 @@ Set your goals and preferences for today's session.`;
           .set({
             muscleTargets: input.preferences.muscleFocus,
             muscleLessens: input.preferences.muscleAvoidance,
-            notes: input.preferences.otherNotes,
-            updatedAt: new Date()
+            notes: input.preferences.otherNotes ? [input.preferences.otherNotes] : []
           })
           .where(eq(WorkoutPreferences.id, existingPref.id));
       } else {
@@ -2931,7 +2247,7 @@ Set your goals and preferences for today's session.`;
           businessId: session.businessId,
           muscleTargets: input.preferences.muscleFocus || [],
           muscleLessens: input.preferences.muscleAvoidance || [],
-          notes: input.preferences.otherNotes,
+          notes: input.preferences.otherNotes ? [input.preferences.otherNotes] : [],
         });
       }
 
@@ -3005,8 +2321,7 @@ Set your goals and preferences for today's session.`;
         await ctx.db
           .update(WorkoutPreferences)
           .set({
-            includeExercises: [...currentIncludeExercises, input.exerciseName],
-            updatedAt: new Date()
+            includeExercises: [...currentIncludeExercises, input.exerciseName]
           })
           .where(eq(WorkoutPreferences.id, existingPref.id));
       } else {
