@@ -6,7 +6,6 @@ import { useTRPC } from "~/trpc/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { 
   useRealtimePreferences,
-  useGroupWorkoutGeneration,
   PreferenceListItem,
   ExerciseListItem,
   CheckIcon,
@@ -70,20 +69,6 @@ export default function PreferencesPage() {
     sessionId: sessionId || '',
     supabase,
     onPreferenceUpdate: handlePreferenceUpdate
-  });
-  
-  // Use the shared hook for workout generation
-  const { generate: generateWorkout, isGenerating } = useGroupWorkoutGeneration({
-    sessionId: sessionId || '',
-    trpc,
-    onSuccess: () => {
-      // Navigate to workouts page on successful generation
-      router.push(`/workout-overview?sessionId=${sessionId}`);
-    },
-    onError: (error) => {
-      console.error('Failed to generate workout:', error);
-      // TODO: Add toast notification for error
-    }
   });
   
 
@@ -344,33 +329,12 @@ export default function PreferencesPage() {
 
         {/* Action Buttons */}
         <div className="mt-8 mb-24 flex justify-between">
-          <div className="flex gap-3">
-            <button
-              onClick={() => generateWorkout()}
-              disabled={isGenerating || clients.length === 0}
-              className={`px-6 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 ${
-                isGenerating || clients.length === 0
-                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                  : 'bg-green-600 text-white hover:bg-green-700'
-              }`}
-            >
-              {isGenerating ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                  Generating Workout...
-                </>
-              ) : (
-                'Generate Workout'
-              )}
-            </button>
-            
-            <button
-              onClick={() => router.push(`/session-lobby/group-visualization?sessionId=${sessionId}`)}
-              className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
-            >
-              View Visualization
-            </button>
-          </div>
+          <button
+            onClick={() => router.push(`/session-lobby/group-visualization?sessionId=${sessionId}`)}
+            className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+          >
+            View Visualization
+          </button>
           
           <button
             onClick={() => router.back()}
