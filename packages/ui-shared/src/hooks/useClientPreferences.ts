@@ -6,47 +6,92 @@ import type { QueryClient } from '@tanstack/react-query';
 
 // We'll need to import these from the app that uses this hook
 // For now, we'll define the interface
+interface QueryOptions<TData = any> {
+  queryKey: readonly unknown[];
+  queryFn: () => Promise<TData>;
+}
+
+interface MutationOptions<TVariables = any, TData = any> {
+  mutationFn: (variables: TVariables) => Promise<TData>;
+}
+
 interface TRPCClient {
   trainingSession: {
     getClientPreferenceData: {
-      queryOptions: (input: { sessionId: string; userId: string }) => any;
+      queryOptions: (input: { sessionId: string; userId: string }) => QueryOptions;
     };
     getClientDeterministicSelections: {
-      queryOptions: (input: { sessionId: string; userId: string }) => any;
+      queryOptions: (input: { sessionId: string; userId: string }) => QueryOptions;
+    };
+    getClientExerciseRecommendations: {
+      queryOptions: (input: { sessionId: string; userId: string }) => QueryOptions;
     };
     replaceClientExercisePublic: {
-      mutationOptions: () => any;
+      mutationOptions: () => MutationOptions<{
+        sessionId: string;
+        userId: string;
+        round: 'Round1' | 'Round2';
+        newExerciseName: string;
+      }>;
     };
     addClientExercise: {
-      mutationOptions: () => any;
+      mutationOptions: () => MutationOptions<{
+        sessionId: string;
+        userId: string;
+        exerciseName: string;
+      }>;
     };
   };
   exercise: {
     all: {
-      queryOptions: (input: { limit: number }) => any;
+      queryOptions: (input: { limit: number }) => QueryOptions;
     };
   };
   workoutPreferences: {
     addMuscleTargetPublic: {
-      mutationOptions: () => any;
+      mutationOptions: () => MutationOptions<{
+        sessionId: string;
+        userId: string;
+        muscle: string;
+      }>;
     };
     addMuscleLessenPublic: {
-      mutationOptions: () => any;
+      mutationOptions: () => MutationOptions<{
+        sessionId: string;
+        userId: string;
+        muscle: string;
+      }>;
     };
     removeMuscleTargetPublic: {
-      mutationOptions: () => any;
+      mutationOptions: () => MutationOptions<{
+        sessionId: string;
+        userId: string;
+        muscle: string;
+      }>;
     };
     removeMuscleLessenPublic: {
-      mutationOptions: () => any;
+      mutationOptions: () => MutationOptions<{
+        sessionId: string;
+        userId: string;
+        muscle: string;
+      }>;
     };
     addNotePublic: {
-      mutationOptions: () => any;
+      mutationOptions: () => MutationOptions<{
+        sessionId: string;
+        userId: string;
+        note: string;
+      }>;
     };
     removeNotePublic: {
-      mutationOptions: () => any;
+      mutationOptions: () => MutationOptions<{
+        sessionId: string;
+        userId: string;
+        noteIndex: number;
+      }>;
     };
     getForUserSessionPublic: {
-      queryOptions: (input: { sessionId: string; userId: string }) => any;
+      queryOptions: (input: { sessionId: string; userId: string }) => QueryOptions;
     };
   };
 }
@@ -88,12 +133,32 @@ export function useClientPreferences({ sessionId, userId, trpc }: UseClientPrefe
     selectionsQueryOptions
   );
 
+  // Fetch exercise recommendations for this client
+  const { data: recommendationsData, isLoading: recommendationsLoading } = useQuery(
+    sessionId && userId
+      ? trpc.trainingSession.getClientExerciseRecommendations.queryOptions({ sessionId, userId })
+      : {
+          enabled: false,
+          queryKey: ["disabled-recommendations"],
+          queryFn: () => Promise.resolve({ recommendations: [] })
+        }
+  );
+  
+  // Log recommendations data for debugging
+  if (recommendationsData) {
+    console.log('[useClientPreferences] Recommendations data received:', {
+      hasData: !!recommendationsData,
+      recommendations: recommendationsData.recommendations?.length || 0,
+      sample: recommendationsData.recommendations?.slice(0, 2).map((r: any) => r.name)
+    });
+  }
+
   // Fetch all available exercises
   const { data: availableExercises, isLoading: exercisesLoading } = useQuery(
     trpc.exercise.all.queryOptions({ limit: 1000 })
   );
 
-  const isLoading = clientLoading || selectionsLoading || exercisesLoading;
+  const isLoading = clientLoading || selectionsLoading || exercisesLoading || recommendationsLoading;
 
   // Get exercises from deterministic selections or workout preferences
   const getClientExercises = (): Exercise[] => {
@@ -643,6 +708,7 @@ export function useClientPreferences({ sessionId, userId, trpc }: UseClientPrefe
     // Data
     clientData,
     selectionsData,
+    recommendationsData,
     availableExercises,
     exercises,
     isLoading,

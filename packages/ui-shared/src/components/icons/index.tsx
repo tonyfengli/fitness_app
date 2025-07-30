@@ -1,11 +1,11 @@
 import React from 'react';
 
-export interface IconProps {
+interface SimpleIconProps {
   className?: string;
   size?: number;
 }
 
-export const XIcon: React.FC<IconProps> = ({ className = "w-4 h-4", size }) => {
+export const XIcon: React.FC<SimpleIconProps> = ({ className = "w-4 h-4", size }) => {
   const sizeClass = size ? `w-${size} h-${size}` : className;
   return (
     <svg className={sizeClass} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -14,7 +14,7 @@ export const XIcon: React.FC<IconProps> = ({ className = "w-4 h-4", size }) => {
   );
 };
 
-export const PlusIcon: React.FC<IconProps> = ({ className = "w-4 h-4", size }) => {
+export const PlusIcon: React.FC<SimpleIconProps> = ({ className = "w-4 h-4", size }) => {
   const sizeClass = size ? `w-${size} h-${size}` : className;
   return (
     <svg className={sizeClass} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -23,7 +23,7 @@ export const PlusIcon: React.FC<IconProps> = ({ className = "w-4 h-4", size }) =
   );
 };
 
-export const CheckIcon: React.FC<IconProps> = ({ className = "w-4 h-4", size }) => {
+export const CheckIcon: React.FC<SimpleIconProps> = ({ className = "w-4 h-4", size }) => {
   const sizeClass = size ? `w-${size} h-${size}` : className;
   return (
     <svg className={sizeClass} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -32,7 +32,7 @@ export const CheckIcon: React.FC<IconProps> = ({ className = "w-4 h-4", size }) 
   );
 };
 
-export const ChevronDownIcon: React.FC<IconProps> = ({ className = "w-4 h-4", size }) => {
+export const ChevronDownIcon: React.FC<SimpleIconProps> = ({ className = "w-4 h-4", size }) => {
   const sizeClass = size ? `w-${size} h-${size}` : className;
   return (
     <svg className={sizeClass} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -41,7 +41,7 @@ export const ChevronDownIcon: React.FC<IconProps> = ({ className = "w-4 h-4", si
   );
 };
 
-export const SearchIcon: React.FC<IconProps> = ({ className = "w-5 h-5", size }) => {
+export const SearchIcon: React.FC<SimpleIconProps> = ({ className = "w-5 h-5", size }) => {
   const sizeClass = size ? `w-${size} h-${size}` : className;
   return (
     <svg className={sizeClass} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -50,7 +50,7 @@ export const SearchIcon: React.FC<IconProps> = ({ className = "w-5 h-5", size })
   );
 };
 
-export const SpinnerIcon: React.FC<IconProps> = ({ className = "animate-spin h-4 w-4", size }) => {
+export const SpinnerIcon: React.FC<SimpleIconProps> = ({ className = "animate-spin h-4 w-4", size }) => {
   const sizeClass = size ? `animate-spin w-${size} h-${size}` : className;
   return (
     <svg className={sizeClass} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">

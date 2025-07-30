@@ -1,19 +1,23 @@
 // Exercise filtering utilities for cross-platform use
 
-export interface Exercise {
-  id?: string;
-  name: string;
-  movementPattern?: string;
-  primaryMuscle?: string;
-  equipment?: string;
-  [key: string]: any; // Allow additional properties
-}
+import type { Exercise } from '../hooks/useExerciseSelection';
 
 export interface BlueprintRecommendation {
-  exercise?: Exercise;
+  // Exercise fields (the recommendation includes all exercise data)
+  id?: string;
   name?: string;
+  equipment?: string[];
+  primaryMuscle?: string;
+  secondaryMuscles?: string[];
+  movementPattern?: string;
+  category?: string;
+  force?: string;
+  level?: string;
+  mechanic?: string;
+  // Recommendation-specific fields
   score: number;
   roundId?: string;
+  roundName?: string;
   reason?: string;
 }
 
@@ -76,12 +80,24 @@ export function categorizeExercisesByRecommendation(
       ? blueprintRecommendations.filter(rec => rec.roundId === currentRound)
       : blueprintRecommendations;
     
-    recommended = relevantRecommendations.map(rec => ({
-      ...rec.exercise || rec,
-      name: rec.exercise?.name || rec.name || '',
-      score: rec.score,
-      reason: getRecommendationReason(rec.score)
-    }));
+    recommended = relevantRecommendations
+      .filter(rec => rec.name) // Recommendations have exercise data directly on them
+      .map(rec => ({
+        // The recommendation IS the exercise data with added fields
+        id: rec.id || '',
+        name: rec.name || '',
+        equipment: rec.equipment || [],
+        primaryMuscle: rec.primaryMuscle || '',
+        secondaryMuscles: rec.secondaryMuscles || [],
+        movementPattern: rec.movementPattern || '',
+        category: rec.category || '',
+        force: rec.force || '',
+        level: rec.level || '',
+        mechanic: rec.mechanic || '',
+        // Add the extra fields
+        score: rec.score,
+        reason: getRecommendationReason(rec.score)
+      }));
     
     // Add remaining exercises to "other" category
     const recommendedNames = recommended.map(r => r.name);
@@ -159,11 +175,10 @@ export function categorizeExercisesBySimilarity(
 /**
  * Get human-readable reason for recommendation score
  */
-export function getRecommendationReason(score: number): string | null {
+export function getRecommendationReason(score: number): string | undefined {
   if (score >= 8.0) return 'Perfect match';
   if (score >= 7.0) return 'Excellent choice';
-  if (score >= 6.0) return 'Very compatible';
-  return null; // No tag for lower scores
+  return undefined; // No tag for scores below 7.0
 }
 
 /**

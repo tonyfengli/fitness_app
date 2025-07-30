@@ -54,25 +54,25 @@ export function useExerciseSelection(api: ExerciseAPI, options?: UseExerciseSele
     if (options?.filterByEquipment && options.filterByEquipment.length > 0) {
       filtered = filtered.filter((exercise) =>
         exercise.equipment?.some((eq) =>
-          options.filterByEquipment!.includes(eq)
-        )
+          options.filterByEquipment?.includes(eq)
+        ) ?? false
       );
     }
 
     // Muscle filter
     if (options?.filterByMuscle && options.filterByMuscle.length > 0) {
       filtered = filtered.filter((exercise) =>
-        options.filterByMuscle!.includes(exercise.primaryMuscle) ||
+        options.filterByMuscle?.includes(exercise.primaryMuscle) ||
         exercise.secondaryMuscles?.some((muscle) =>
-          options.filterByMuscle!.includes(muscle)
-        )
+          options.filterByMuscle?.includes(muscle)
+        ) || false
       );
     }
 
     // Modality filter
     if (options?.filterByModality && options.filterByModality.length > 0) {
       filtered = filtered.filter((exercise) =>
-        options.filterByModality!.includes(exercise.modality)
+        options.filterByModality?.includes(exercise.modality) ?? false
       );
     }
 
@@ -94,7 +94,7 @@ export function useExerciseSelection(api: ExerciseAPI, options?: UseExerciseSele
     return Object.keys(grouped)
       .sort()
       .reduce((acc, key) => {
-        acc[key] = grouped[key];
+        acc[key] = grouped[key] ?? [];
         return acc;
       }, {} as Record<string, Exercise[]>);
   }, [filteredExercises]);
@@ -118,7 +118,7 @@ export function useExerciseSelection(api: ExerciseAPI, options?: UseExerciseSele
     return Object.keys(grouped)
       .sort()
       .reduce((acc, key) => {
-        acc[key] = grouped[key];
+        acc[key] = grouped[key] ?? [];
         return acc;
       }, {} as Record<string, Exercise[]>);
   }, [filteredExercises]);

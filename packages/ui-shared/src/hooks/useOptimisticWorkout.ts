@@ -105,6 +105,7 @@ export function useOptimisticWorkout(workoutId: string, api: OptimisticAPI) {
       if (currentIndex === -1) return;
 
       const currentExercise = exercises[currentIndex];
+      if (!currentExercise) return;
       
       // Find exercises in the same group
       const groupExercises = exercises
@@ -123,6 +124,7 @@ export function useOptimisticWorkout(workoutId: string, api: OptimisticAPI) {
       }
 
       const targetExercise = groupExercises[targetGroupIndex];
+      if (!targetExercise) return;
 
       // Swap orderIndex values
       const updatedExercises = exercises.map((ex) => {
@@ -226,7 +228,9 @@ export function useOptimisticWorkout(workoutId: string, api: OptimisticAPI) {
       let updatedExercises: typeof exercises;
 
       if (position === 'beginning' && groupExercises.length > 0) {
-        newOrderIndex = groupExercises[0].orderIndex;
+        const firstExercise = groupExercises[0];
+        if (!firstExercise) return;
+        newOrderIndex = firstExercise.orderIndex;
         // Increment all exercises at or after this position
         updatedExercises = exercises.map((ex) => {
           if (ex.orderIndex >= newOrderIndex) {
@@ -237,9 +241,13 @@ export function useOptimisticWorkout(workoutId: string, api: OptimisticAPI) {
       } else {
         // Add at end
         if (groupExercises.length > 0) {
-          newOrderIndex = groupExercises[groupExercises.length - 1].orderIndex + 1;
+          const lastGroupExercise = groupExercises[groupExercises.length - 1];
+          if (!lastGroupExercise) return;
+          newOrderIndex = lastGroupExercise.orderIndex + 1;
         } else if (exercises.length > 0) {
-          newOrderIndex = exercises[exercises.length - 1].orderIndex + 1;
+          const lastExercise = exercises[exercises.length - 1];
+          if (!lastExercise) return;
+          newOrderIndex = lastExercise.orderIndex + 1;
         } else {
           newOrderIndex = 1;
         }
@@ -281,7 +289,8 @@ export function useOptimisticWorkout(workoutId: string, api: OptimisticAPI) {
   // Rollback function
   const rollback = useCallback(() => {
     if (previousDataRef.current) {
-      utils.workout.getById.setData({ id: workoutId }, previousDataRef.current);
+      const previousData = previousDataRef.current;
+      utils.workout.getById.setData({ id: workoutId }, () => previousData);
       previousDataRef.current = null;
     }
   }, [workoutId, utils]);

@@ -33,7 +33,7 @@ export function useWorkoutBlocks(workout?: WorkoutDetail) {
 
     // Convert to block objects with metadata
     return blockNames.map((name, index) => {
-      const exercises = blockMap[name].sort((a, b) => a.orderIndex - b.orderIndex);
+      const exercises = (blockMap[name] ?? []).sort((a, b) => a.orderIndex - b.orderIndex);
       const totalSets = exercises.reduce((sum, ex) => sum + ex.setsCompleted, 0);
 
       return {
@@ -82,8 +82,8 @@ export function useWorkoutBlocks(workout?: WorkoutDetail) {
 
   // Calculate workout statistics
   const workoutStats = useMemo(() => {
-    const totalExercises = workout?.exercises.length || 0;
-    const totalSets = workout?.exercises.reduce(
+    const totalExercises = workout?.exercises?.length || 0;
+    const totalSets = workout?.exercises?.reduce(
       (sum, ex) => sum + ex.setsCompleted,
       0
     ) || 0;

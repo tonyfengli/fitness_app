@@ -1688,6 +1688,7 @@ Set your goals and preferences for today's session.`;
                 input.userId
               );
               
+              
               // Extract recommendations from blueprint
               const recommendations: any[] = [];
               if (blueprint?.blocks) {
@@ -1730,14 +1731,14 @@ Set your goals and preferences for today's session.`;
               }
               
               return {
-                exercises: selections,
+                selections: selections,
                 recommendations: recommendations
               };
             } catch (error) {
               console.error('Failed to get recommendations:', error);
               // Return without recommendations if blueprint generation fails
               return {
-                exercises: selections,
+                selections: selections,
                 recommendations: []
               };
             }
@@ -1870,6 +1871,180 @@ Set your goals and preferences for today's session.`;
 
       // For non-BMF templates, return empty
       return { selections: [], recommendations: [] };
+    }),
+
+  // Get exercise recommendations for a specific client
+  getClientExerciseRecommendations: publicProcedure
+    .input(z.object({
+      sessionId: z.string().uuid(),
+      userId: z.string(),
+    }))
+    .query(async ({ ctx, input }) => {
+      // Verify user belongs to session and get session data
+      const userSessionData = await ctx.db
+        .select({
+          userId: UserTrainingSession.userId,
+          sessionId: UserTrainingSession.trainingSessionId,
+          templateType: TrainingSession.templateType,
+          businessId: TrainingSession.businessId
+        })
+        .from(UserTrainingSession)
+        .innerJoin(
+          TrainingSession,
+          eq(UserTrainingSession.trainingSessionId, TrainingSession.id)
+        )
+        .where(
+          and(
+            eq(UserTrainingSession.userId, input.userId),
+            eq(UserTrainingSession.trainingSessionId, input.sessionId),
+            eq(UserTrainingSession.status, 'checked_in')
+          )
+        )
+        .limit(1);
+
+      if (!userSessionData || userSessionData.length === 0) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Invalid session or user not checked in',
+        });
+      }
+
+      const sessionData = userSessionData[0];
+
+      // Only process for BMF templates
+      if (sessionData.templateType !== 'full_body_bmf') {
+        return { recommendations: [] };
+      }
+
+      try {
+        // Get the cached blueprint
+        const { WorkoutBlueprintService } = await import("../services/workout-blueprint-service");
+        
+        // Try to get cached blueprint first, but generate if not available
+        // This ensures clients can see recommendations even before session starts
+        const blueprint = await WorkoutBlueprintService.generateBlueprintWithCache(
+          input.sessionId,
+          sessionData.businessId,
+          input.userId,
+          false // Don't force regenerate - will generate if not cached
+        );
+        
+        console.log('[getClientExerciseRecommendations] Blueprint check:', {
+          sessionId: input.sessionId,
+          hasBlueprint: !!blueprint,
+          hasBlocks: !!blueprint?.blocks,
+          blockCount: blueprint?.blocks?.length || 0
+        });
+        
+        if (!blueprint?.blocks) {
+          console.log('[getClientExerciseRecommendations] No blueprint available yet for session:', input.sessionId);
+          return { recommendations: [] };
+        }
+        
+        console.log('[getClientExerciseRecommendations] Blueprint blocks found:', blueprint.blocks.length);
+
+        // Extract recommendations from blueprint
+        const recommendations: any[] = [];
+        const round1Block = blueprint.blocks.find((b: any) => b.blockId === 'Round1');
+        const round2Block = blueprint.blocks.find((b: any) => b.blockId === 'Round2');
+        
+        console.log('[getClientExerciseRecommendations] Debugging blueprint structure:', {
+          hasRound1Block: !!round1Block,
+          hasRound2Block: !!round2Block,
+          round1HasIndividualCandidates: !!round1Block?.individualCandidates,
+          round2HasIndividualCandidates: !!round2Block?.individualCandidates,
+          round1CandidateKeys: round1Block?.individualCandidates ? Object.keys(round1Block.individualCandidates) : [],
+          round2CandidateKeys: round2Block?.individualCandidates ? Object.keys(round2Block.individualCandidates) : [],
+          requestedUserId: input.userId,
+          round1SharedCandidatesCount: round1Block?.sharedCandidates?.length || 0,
+          round2SharedCandidatesCount: round2Block?.sharedCandidates?.length || 0
+        });
+        
+        // Get Round1 candidates - check both individual and shared
+        if (round1Block) {
+          if (round1Block.individualCandidates?.[input.userId]) {
+            const candidateData = round1Block.individualCandidates[input.userId];
+            const exerciseList = candidateData.allFilteredExercises || candidateData.exercises || [];
+            
+            console.log('[getClientExerciseRecommendations] Round1 individual exercises found:', exerciseList.length);
+            
+            exerciseList.forEach((exercise: any) => {
+              recommendations.push({
+                ...exercise,
+                roundId: 'Round1',
+                roundName: 'Round 1'
+              });
+            });
+          } else if (round1Block.sharedCandidates?.length > 0) {
+            // Fall back to shared candidates if no individual candidates
+            console.log('[getClientExerciseRecommendations] Using Round1 shared candidates:', round1Block.sharedCandidates.length);
+            
+            round1Block.sharedCandidates.forEach((exercise: any) => {
+              recommendations.push({
+                ...exercise,
+                roundId: 'Round1',
+                roundName: 'Round 1'
+              });
+            });
+          } else {
+            console.log('[getClientExerciseRecommendations] No Round1 candidates (individual or shared) for user:', input.userId);
+          }
+        }
+        
+        // Get Round2 candidates - check both individual and shared
+        if (round2Block) {
+          if (round2Block.individualCandidates?.[input.userId]) {
+            const candidateData = round2Block.individualCandidates[input.userId];
+            const exerciseList = candidateData.allFilteredExercises || candidateData.exercises || [];
+            
+            console.log('[getClientExerciseRecommendations] Round2 individual exercises found:', exerciseList.length);
+            
+            exerciseList.forEach((exercise: any) => {
+              recommendations.push({
+                ...exercise,
+                roundId: 'Round2',
+                roundName: 'Round 2'
+              });
+            });
+          } else if (round2Block.sharedCandidates?.length > 0) {
+            // Fall back to shared candidates if no individual candidates
+            console.log('[getClientExerciseRecommendations] Using Round2 shared candidates:', round2Block.sharedCandidates.length);
+            
+            round2Block.sharedCandidates.forEach((exercise: any) => {
+              recommendations.push({
+                ...exercise,
+                roundId: 'Round2',
+                roundName: 'Round 2'
+              });
+            });
+          } else {
+            console.log('[getClientExerciseRecommendations] No Round2 candidates (individual or shared) for user:', input.userId);
+          }
+        }
+        
+        // Sort by score (highest first)
+        recommendations.sort((a, b) => (b.score || 0) - (a.score || 0));
+        
+        console.log('[getClientExerciseRecommendations] Final recommendations:', {
+          count: recommendations.length,
+          sampleRecommendations: recommendations.slice(0, 3).map(r => ({
+            name: r.name,
+            score: r.score,
+            roundId: r.roundId
+          }))
+        });
+        
+        return { recommendations };
+      } catch (error) {
+        console.error('[getClientExerciseRecommendations] Error:', {
+          sessionId: input.sessionId,
+          userId: input.userId,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        });
+        // Return empty recommendations if blueprint generation fails
+        // This can happen if the session hasn't been started yet
+        return { recommendations: [] };
+      }
     }),
 
   // Public mutation for replacing client exercise selection

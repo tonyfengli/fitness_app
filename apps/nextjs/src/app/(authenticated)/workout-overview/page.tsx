@@ -148,6 +148,26 @@ function WorkoutOverviewContent() {
   );
 }
 
+// Start Workout Button Component
+function StartWorkoutButton() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const sessionId = searchParams.get("sessionId");
+  
+  if (!sessionId) return null;
+  
+  return (
+    <Button
+      onClick={() => router.push(`/workout-live?sessionId=${sessionId}&round=1`)}
+      size="lg"
+      className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 text-lg font-semibold"
+    >
+      <Icon name="play_arrow" size={24} className="mr-2" />
+      Start Workout
+    </Button>
+  );
+}
+
 export default function WorkoutOverview() {
   const router = useRouter();
   
@@ -167,7 +187,12 @@ export default function WorkoutOverview() {
         </div>
 
         <main>
-          <h1 className="text-5xl font-bold mb-12 text-gray-900">Workout Overview</h1>
+          <div className="flex justify-between items-center mb-12">
+            <h1 className="text-5xl font-bold text-gray-900">Workout Overview</h1>
+            <Suspense fallback={null}>
+              <StartWorkoutButton />
+            </Suspense>
+          </div>
           
           <Suspense fallback={
             <div className="flex items-center justify-center min-h-[400px]">

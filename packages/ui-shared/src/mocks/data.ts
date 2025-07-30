@@ -2,12 +2,12 @@ import type { Client, Exercise, Workout } from "../context/AppContext";
 
 // Mock Exercises
 export const mockExercises: Exercise[] = [
-  { id: "1", name: "Barbell Back Squat", sets: "5", reps: "5", weight: "225 lbs" },
-  { id: "2", name: "Romanian Deadlift", sets: "4", reps: "8", weight: "185 lbs" },
-  { id: "3", name: "Walking Lunges", sets: "3", reps: "12 each leg", weight: "Body weight" },
-  { id: "4", name: "Bench Press", sets: "4", reps: "8", weight: "185 lbs" },
-  { id: "5", name: "Pull-ups", sets: "3", reps: "10", weight: "Body weight" },
-  { id: "6", name: "Dumbbell Shoulder Press", sets: "3", reps: "12", weight: "40 lbs" },
+  { id: "1", name: "Barbell Back Squat", sets: 5, reps: "5" },
+  { id: "2", name: "Romanian Deadlift", sets: 4, reps: "8" },
+  { id: "3", name: "Walking Lunges", sets: 3, reps: "12 each leg" },
+  { id: "4", name: "Bench Press", sets: 4, reps: "8" },
+  { id: "5", name: "Pull-ups", sets: 3, reps: "10" },
+  { id: "6", name: "Dumbbell Shoulder Press", sets: 3, reps: "12" },
 ];
 
 // Mock Clients
@@ -169,19 +169,17 @@ export const mockSessionUsers: SessionUser[] = [
 export const mockWorkouts: Workout[] = [
   {
     id: "1",
-    name: "Full Body Strength",
+    title: "Full Body Strength",
     clientId: "1",
     exercises: mockExercises.slice(0, 3),
-    duration: "45 min",
-    completedAt: "2024-01-15",
+    date: "2024-01-15",
   },
   {
     id: "2",
-    name: "Upper Body Focus",
+    title: "Upper Body Focus",
     clientId: "2",
     exercises: mockExercises.slice(3, 6),
-    duration: "60 min",
-    completedAt: "2024-01-14",
+    date: "2024-01-14",
   },
 ];
 

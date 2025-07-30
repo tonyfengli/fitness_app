@@ -34,8 +34,8 @@ export function useWorkoutActions({
     setActionState((prev) => ({
       ...prev,
       [key]: {
-        ...prev[key],
-        ...state,
+        status: state.status ?? prev[key]?.status ?? 'idle',
+        error: state.error ?? prev[key]?.error ?? null,
       },
     }));
   }, []);
@@ -305,8 +305,8 @@ export function useWorkoutActions({
           }
         );
         
-        if (result.workoutId) {
-          onDuplicateSuccess?.(result.workoutId);
+        if (result && typeof result === 'object' && 'workoutId' in result) {
+          onDuplicateSuccess?.(result.workoutId as string);
         }
         
         return result;

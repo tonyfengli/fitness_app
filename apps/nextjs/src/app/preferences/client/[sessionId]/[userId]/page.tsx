@@ -646,6 +646,7 @@ export default function ClientPreferencePage() {
   const {
     clientData,
     selectionsData,
+    recommendationsData,
     availableExercises,
     exercises,
     isLoading,
@@ -896,7 +897,18 @@ export default function ClientPreferencePage() {
         }}
         exerciseName={selectedExerciseForChange?.name || ''}
         availableExercises={availableExercises || []}
-        blueprintRecommendations={selectionsData?.recommendations || []}
+        blueprintRecommendations={(() => {
+          const recommendations = recommendationsData?.recommendations || [];
+          console.log('[ClientPreferencePage] Passing recommendations to modal:', {
+            hasRecommendationsData: !!recommendationsData,
+            recommendationsCount: recommendations.length,
+            sampleRecommendations: recommendations.slice(0, 3).map((r: any) => ({
+              name: r.name,
+              roundId: r.roundId
+            }))
+          });
+          return recommendations;
+        })()}
         currentRound={selectedExerciseForChange?.round}
         onConfirm={handleExerciseReplacement}
         isLoading={isProcessingChange}
