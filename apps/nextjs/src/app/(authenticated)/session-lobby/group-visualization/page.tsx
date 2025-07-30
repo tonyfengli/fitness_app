@@ -152,9 +152,15 @@ export default function GroupVisualizationPage() {
     llmOutput: string | null;
   }>({ systemPrompt: null, userMessage: null, llmOutput: null });
   
-  // Fetch visualization data
+  // Fetch visualization data using new blueprint endpoint
   const { data, isLoading, error } = useQuery({
-    ...trpc.trainingSession.visualizeGroupWorkout.queryOptions({ sessionId: sessionId! }),
+    ...trpc.trainingSession.generateGroupWorkoutBlueprint.queryOptions({ 
+      sessionId: sessionId!,
+      options: {
+        useCache: true,
+        includeDiagnostics: true
+      }
+    }),
     enabled: !!sessionId,
   });
   

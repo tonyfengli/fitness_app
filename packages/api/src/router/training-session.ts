@@ -1869,6 +1869,84 @@ export const trainingSessionRouter = {
       }
     }),
 
+  /**
+   * Generate group workout blueprint only (for visualization/testing)
+   * This is the modular endpoint that just generates the blueprint without side effects
+   */
+  generateGroupWorkoutBlueprint: protectedProcedure
+    .input(z.object({
+      sessionId: z.string().uuid(),
+      options: z.object({
+        useCache: z.boolean().default(true),
+        includeDiagnostics: z.boolean().default(false),
+      }).optional()
+    }))
+    .query(async ({ ctx, input }) => {
+      const user = ctx.session?.user as SessionUser;
+      
+      // Only trainers can generate blueprints
+      if (user.role !== 'trainer') {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'Only trainers can generate group workout blueprints',
+        });
+      }
+
+      // Import and use the new service
+      const { WorkoutGenerationService } = await import("../services/workout-generation-service");
+      const service = new WorkoutGenerationService(ctx);
+      
+      try {
+        const result = await service.generateBlueprint(input.sessionId, input.options);
+        return result;
+      } catch (error) {
+        console.error('Error generating blueprint:', error);
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: error instanceof Error ? error.message : 'Failed to generate blueprint',
+        });
+      }
+    }),
+
+  /**
+   * Generate and create group workouts (full orchestration)
+   * This is the production endpoint that generates blueprint + LLM + creates workouts
+   */
+  generateAndCreateGroupWorkouts: protectedProcedure
+    .input(z.object({
+      sessionId: z.string().uuid(),
+      options: z.object({
+        skipBlueprintCache: z.boolean().default(false),
+        dryRun: z.boolean().default(false),
+      }).optional()
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const user = ctx.session?.user as SessionUser;
+      
+      // Only trainers can generate workouts
+      if (user.role !== 'trainer') {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'Only trainers can generate group workouts',
+        });
+      }
+
+      // Import and use the new service
+      const { WorkoutGenerationService } = await import("../services/workout-generation-service");
+      const service = new WorkoutGenerationService(ctx);
+      
+      try {
+        const result = await service.generateAndCreateWorkouts(input.sessionId, input.options);
+        return result;
+      } catch (error) {
+        console.error('Error generating and creating workouts:', error);
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: error instanceof Error ? error.message : 'Failed to generate and create workouts',
+        });
+      }
+    }),
+
   // Get active training session for a user
   getActiveSessionForUser: protectedProcedure
     .input(
