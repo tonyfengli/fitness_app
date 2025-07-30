@@ -4,49 +4,16 @@ import React, { useCallback, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useTRPC } from "~/trpc/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useRealtimePreferences } from "@acme/ui-shared";
+import { 
+  useRealtimePreferences,
+  PreferenceListItem,
+  ExerciseListItem,
+  CheckIcon,
+  formatMuscleLabel
+} from "@acme/ui-shared";
 import { supabase } from "~/lib/supabase";
 
-// Helper function to format muscle values to display labels
-const formatMuscleLabel = (muscleValue: string): string => {
-  const muscleMap: Record<string, string> = {
-    // Lower Body
-    'glutes': 'Glutes',
-    'quads': 'Quads',
-    'hamstrings': 'Hamstrings',
-    'calves': 'Calves',
-    'adductors': 'Adductors',
-    'abductors': 'Abductors',
-    'shins': 'Shins',
-    'tibialis_anterior': 'Tibialis Anterior',
-    // Core
-    'core': 'Core',
-    'lower_abs': 'Lower Abs',
-    'upper_abs': 'Upper Abs',
-    'obliques': 'Obliques',
-    // Upper Body - Push
-    'chest': 'Chest',
-    'upper_chest': 'Upper Chest',
-    'lower_chest': 'Lower Chest',
-    'shoulders': 'Shoulders',
-    'delts': 'Delts',
-    'triceps': 'Triceps',
-    // Upper Body - Pull
-    'lats': 'Lats',
-    'upper_back': 'Upper Back',
-    'lower_back': 'Lower Back',
-    'traps': 'Traps',
-    'biceps': 'Biceps'
-  };
-  return muscleMap[muscleValue] || muscleValue;
-};
 
-// Icon components as inline SVGs
-const Check = () => (
-  <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-  </svg>
-);
 
 
 export default function PreferencesPage() {
@@ -269,26 +236,22 @@ export default function PreferencesPage() {
                 </div>
                 <div className="space-y-3">
                   {client.confirmedExercises.map((exercise, idx) => (
-                    <div key={idx} className={`flex items-center justify-between p-3 rounded-lg ${
-                      exercise.isExcluded ? 'bg-gray-100' : 'bg-gray-50'
-                    }`}>
-                      <div className="flex items-center gap-2">
-                        <span className={`${
-                          exercise.isExcluded 
-                            ? 'text-gray-400 line-through decoration-2' 
-                            : 'text-gray-700'
-                        }`}>{exercise.name}</span>
-                      </div>
-                      <div className={`w-6 h-6 rounded-full border-2 transition-colors flex items-center justify-center ${
-                        exercise.isActive 
-                          ? 'border-green-500 bg-green-500'
-                          : 'border-gray-300 bg-gray-100 opacity-50' 
-                      }`}>
-                        {exercise.isActive && (
-                          <Check />
-                        )}
-                      </div>
-                    </div>
+                    <ExerciseListItem
+                      key={idx}
+                      name={exercise.name}
+                      isExcluded={exercise.isExcluded}
+                      actionButton={
+                        <div className={`w-6 h-6 rounded-full border-2 transition-colors flex items-center justify-center ${
+                          exercise.isActive 
+                            ? 'border-green-500 bg-green-500'
+                            : 'border-gray-300 bg-gray-100 opacity-50' 
+                        }`}>
+                          {exercise.isActive && (
+                            <CheckIcon className="w-4 h-4 text-white" />
+                          )}
+                        </div>
+                      }
+                    />
                   ))}
                 </div>
               </div>
@@ -304,16 +267,20 @@ export default function PreferencesPage() {
                 <div className="space-y-3">
                   {/* Muscle Target Items */}
                   {client.muscleFocus.map((muscle, idx) => (
-                    <div key={`focus-${idx}`} className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
-                      <span className="text-blue-700 font-medium">Target: {formatMuscleLabel(muscle)}</span>
-                    </div>
+                    <PreferenceListItem
+                      key={`focus-${idx}`}
+                      label={formatMuscleLabel(muscle)}
+                      type="target"
+                    />
                   ))}
                   
                   {/* Limit Items */}
                   {client.avoidance.map((item, idx) => (
-                    <div key={`avoid-${idx}`} className="flex items-center justify-between p-3 bg-red-50 rounded-lg">
-                      <span className="text-red-700 font-medium">Limit: {formatMuscleLabel(item)}</span>
-                    </div>
+                    <PreferenceListItem
+                      key={`avoid-${idx}`}
+                      label={formatMuscleLabel(item)}
+                      type="limit"
+                    />
                   ))}
                   
                   {/* Empty state */}
@@ -336,9 +303,11 @@ export default function PreferencesPage() {
                 <div className="space-y-3">
                   {/* Display notes */}
                   {client.notes.map((note, idx) => (
-                    <div key={`note-${idx}`} className="p-3 bg-gray-50 rounded-lg">
-                      <span className="text-gray-700">{note}</span>
-                    </div>
+                    <PreferenceListItem
+                      key={`note-${idx}`}
+                      label={note}
+                      type="note"
+                    />
                   ))}
                   
                   {/* Empty state */}

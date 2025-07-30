@@ -8,22 +8,20 @@ import {
   useRealtimePreferences,
   categorizeExercisesByRecommendation,
   filterExercisesBySearch,
-  getFilteredExercises
+  getFilteredExercises,
+  useModalState,
+  XIcon,
+  PlusIcon,
+  CheckIcon,
+  SearchIcon,
+  SpinnerIcon,
+  ChevronDownIcon,
+  MUSCLE_GROUPS_ALPHABETICAL,
+  formatMuscleLabel,
+  PreferenceListItem,
+  ExerciseListItem
 } from "@acme/ui-shared";
 import { supabase } from "~/lib/supabase";
-
-// Icon components as inline SVGs
-const X = () => (
-  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-  </svg>
-);
-
-const Plus = () => (
-  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-  </svg>
-);
 
 // Exercise Change Modal Component
 const ExerciseChangeModal = ({ 
@@ -103,9 +101,7 @@ const ExerciseChangeModal = ({
                   onClick={onClose}
                   className="p-2 text-gray-400 hover:text-gray-600 transition-colors rounded-lg hover:bg-gray-100"
                 >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
+                  <XIcon />
                 </button>
               </div>
             </div>
@@ -115,14 +111,7 @@ const ExerciseChangeModal = ({
               {/* Search Bar */}
               <div className="px-6 py-4 bg-gray-50 border-b sticky top-0 z-10">
                 <div className="relative">
-                  <svg 
-                    className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" 
-                    fill="none" 
-                    stroke="currentColor" 
-                    viewBox="0 0 24 24"
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                  </svg>
+                  <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                   <input
                     type="text"
                     placeholder="Search exercises..."
@@ -147,42 +136,13 @@ const ExerciseChangeModal = ({
                   <h3 className="text-sm font-semibold text-gray-600 uppercase tracking-wider mb-3">Recommended</h3>
                   <div className="space-y-2">
                     {categorizedExercises.recommended.map((exercise, idx) => (
-                      <button 
+                      <ExerciseListItem
                         key={exercise.id || idx}
-                        className={`w-full p-3 rounded-lg text-left transition-all ${
-                          selectedExercise === exercise.name 
-                            ? 'bg-indigo-100 border-2 border-indigo-500 shadow-sm' 
-                            : 'bg-gray-50 hover:bg-gray-100 border-2 border-transparent'
-                        }`}
+                        name={exercise.name}
+                        isSelected={selectedExercise === exercise.name}
+                        reason={exercise.reason}
                         onClick={() => setSelectedExercise(exercise.name)}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            {selectedExercise === exercise.name && (
-                              <div className="w-5 h-5 bg-indigo-600 rounded-full flex items-center justify-center">
-                                <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                                </svg>
-                              </div>
-                            )}
-                            <span className={`font-medium ${
-                              selectedExercise === exercise.name ? 'text-indigo-900' : 'text-gray-900'
-                            }`}>{exercise.name}</span>
-                          </div>
-                          {exercise.reason && (
-                            <span className={`text-xs px-2 py-1 rounded ${
-                              exercise.reason === 'Perfect match' ? 'bg-purple-100 text-purple-700' :
-                              exercise.reason === 'Excellent choice' ? 'bg-indigo-100 text-indigo-700' :
-                              exercise.reason === 'Very compatible' ? 'bg-green-100 text-green-700' :
-                              exercise.reason === 'Similar movement' ? 'bg-green-100 text-green-700' : 
-                              exercise.reason === 'Same muscle group' ? 'bg-blue-100 text-blue-700' :
-                              'bg-gray-100 text-gray-700'
-                            }`}>
-                              {exercise.reason}
-                            </span>
-                          )}
-                        </div>
-                      </button>
+                      />
                     ))}
                   </div>
                 </div>
@@ -194,28 +154,12 @@ const ExerciseChangeModal = ({
                   <h3 className="text-sm font-semibold text-gray-600 uppercase tracking-wider mb-3">Other Exercises</h3>
                   <div className="space-y-2">
                   {categorizedExercises.other.map((exercise, idx) => (
-                      <button 
+                      <ExerciseListItem
                         key={exercise.id || idx}
-                        className={`w-full p-3 rounded-lg text-left transition-all ${
-                          selectedExercise === exercise.name 
-                            ? 'bg-indigo-100 border-2 border-indigo-500 shadow-sm' 
-                            : 'bg-gray-50 hover:bg-gray-100 border-2 border-transparent'
-                        }`}
+                        name={exercise.name}
+                        isSelected={selectedExercise === exercise.name}
                         onClick={() => setSelectedExercise(exercise.name)}
-                      >
-                        <div className="flex items-center gap-3">
-                          {selectedExercise === exercise.name && (
-                            <div className="w-5 h-5 bg-indigo-600 rounded-full flex items-center justify-center">
-                              <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                              </svg>
-                            </div>
-                          )}
-                          <span className={`font-medium ${
-                            selectedExercise === exercise.name ? 'text-indigo-900' : 'text-gray-900'
-                          }`}>{exercise.name}</span>
-                        </div>
-                      </button>
+                      />
                   ))}
                   </div>
                 </div>
@@ -247,10 +191,7 @@ const ExerciseChangeModal = ({
               >
                 {isLoading ? (
                   <>
-                    <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
+                    <SpinnerIcon className="animate-spin h-4 w-4 text-white" />
                     Changing...
                   </>
                 ) : (
@@ -292,36 +233,8 @@ const MuscleModal = ({
     }
   }, [isOpen]);
   
-  // Complete muscle list from exercise metadata
-  const muscleGroups = [
-    // Lower Body
-    { value: 'glutes', label: 'Glutes' },
-    { value: 'quads', label: 'Quads' },
-    { value: 'hamstrings', label: 'Hamstrings' },
-    { value: 'calves', label: 'Calves' },
-    { value: 'adductors', label: 'Adductors' },
-    { value: 'abductors', label: 'Abductors' },
-    { value: 'shins', label: 'Shins' },
-    { value: 'tibialis_anterior', label: 'Tibialis Anterior' },
-    // Core
-    { value: 'core', label: 'Core' },
-    { value: 'lower_abs', label: 'Lower Abs' },
-    { value: 'upper_abs', label: 'Upper Abs' },
-    { value: 'obliques', label: 'Obliques' },
-    // Upper Body - Push
-    { value: 'chest', label: 'Chest' },
-    { value: 'upper_chest', label: 'Upper Chest' },
-    { value: 'lower_chest', label: 'Lower Chest' },
-    { value: 'shoulders', label: 'Shoulders' },
-    { value: 'delts', label: 'Delts' },
-    { value: 'triceps', label: 'Triceps' },
-    // Upper Body - Pull
-    { value: 'lats', label: 'Lats' },
-    { value: 'upper_back', label: 'Upper Back' },
-    { value: 'lower_back', label: 'Lower Back' },
-    { value: 'traps', label: 'Traps' },
-    { value: 'biceps', label: 'Biceps' }
-  ].sort((a, b) => a.label.localeCompare(b.label)); // Sort alphabetically by label
+  // Use shared muscle groups constant
+  const muscleGroups = MUSCLE_GROUPS_ALPHABETICAL;
   
   // Get already selected muscles based on active tab
   const alreadySelected = activeTab === 'target' ? existingTargets : existingLimits;
@@ -353,9 +266,7 @@ const MuscleModal = ({
                   onClick={onClose}
                   className="p-2 text-gray-400 hover:text-gray-600 transition-colors rounded-lg hover:bg-gray-100"
                 >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
+                  <XIcon />
                 </button>
               </div>
             </div>
@@ -391,14 +302,7 @@ const MuscleModal = ({
               {/* Search Bar */}
               <div className="px-6 py-4 bg-gray-50 border-b sticky top-0 z-10">
                 <div className="relative">
-                  <svg 
-                    className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" 
-                    fill="none" 
-                    stroke="currentColor" 
-                    viewBox="0 0 24 24"
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                  </svg>
+                  <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                   <input
                     type="text"
                     placeholder="Search muscle group"
@@ -435,9 +339,7 @@ const MuscleModal = ({
                       }`}>{muscle.label}</span>
                       {selectedMuscle === muscle.value && (
                         <div className="w-5 h-5 bg-indigo-600 rounded-full flex items-center justify-center">
-                          <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                          </svg>
+                          <CheckIcon className="w-3 h-3 text-white" />
                         </div>
                       )}
                     </button>
@@ -471,10 +373,7 @@ const MuscleModal = ({
               >
                 {isLoading ? (
                   <>
-                    <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
+                    <SpinnerIcon className="animate-spin h-4 w-4 text-white" />
                     Adding...
                   </>
                 ) : (
@@ -530,9 +429,7 @@ const NotesModal = ({
                   onClick={onClose}
                   className="p-2 text-gray-400 hover:text-gray-600 transition-colors rounded-lg hover:bg-gray-100"
                 >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
+                  <XIcon />
                 </button>
               </div>
             </div>
@@ -573,10 +470,7 @@ const NotesModal = ({
               >
                 {isLoading ? (
                   <>
-                    <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
+                    <SpinnerIcon className="animate-spin h-4 w-4 text-white" />
                     Adding...
                   </>
                 ) : (
@@ -658,9 +552,7 @@ const AddExerciseModal = ({
                   onClick={onClose}
                   className="p-2 text-gray-400 hover:text-gray-600 transition-colors rounded-lg hover:bg-gray-100"
                 >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
+                  <XIcon />
                 </button>
               </div>
             </div>
@@ -670,14 +562,7 @@ const AddExerciseModal = ({
               {/* Search Bar */}
               <div className="px-6 py-4 bg-gray-50 border-b sticky top-0 z-10">
                 <div className="relative">
-                  <svg 
-                    className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" 
-                    fill="none" 
-                    stroke="currentColor" 
-                    viewBox="0 0 24 24"
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                  </svg>
+                  <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                   <input
                     type="text"
                     placeholder="Search exercises..."
@@ -700,31 +585,13 @@ const AddExerciseModal = ({
               {filteredExercises.length > 0 && (
                 <div className="space-y-2">
                   {filteredExercises.map((exercise, idx) => (
-                    <button 
+                    <ExerciseListItem
                       key={exercise.id || idx}
-                      className={`w-full p-3 rounded-lg text-left transition-all ${
-                        selectedExercise === exercise.name 
-                          ? 'bg-indigo-100 border-2 border-indigo-500 shadow-sm' 
-                          : 'bg-gray-50 hover:bg-gray-100 border-2 border-transparent'
-                      } ${isLoading && selectedExercise === exercise.name ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      name={exercise.name}
+                      isSelected={selectedExercise === exercise.name}
+                      isLoading={isLoading && selectedExercise === exercise.name}
                       onClick={() => !isLoading && setSelectedExercise(exercise.name)}
-                      disabled={isLoading && selectedExercise === exercise.name}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          {selectedExercise === exercise.name && (
-                            <div className="w-5 h-5 bg-indigo-600 rounded-full flex items-center justify-center">
-                              <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                              </svg>
-                            </div>
-                          )}
-                          <span className={`font-medium ${
-                            selectedExercise === exercise.name ? 'text-indigo-900' : 'text-gray-900'
-                          }`}>{exercise.name}</span>
-                        </div>
-                      </div>
-                    </button>
+                    />
                   ))}
                 </div>
               )}
@@ -755,10 +622,7 @@ const AddExerciseModal = ({
               >
                 {isLoading ? (
                   <>
-                    <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
+                    <SpinnerIcon className="animate-spin h-4 w-4 text-white" />
                     Adding...
                   </>
                 ) : (
@@ -771,39 +635,6 @@ const AddExerciseModal = ({
   );
 };
 
-// Helper function to format muscle values to display labels
-const formatMuscleLabel = (muscleValue: string): string => {
-  const muscleMap: Record<string, string> = {
-    // Lower Body
-    'glutes': 'Glutes',
-    'quads': 'Quads',
-    'hamstrings': 'Hamstrings',
-    'calves': 'Calves',
-    'adductors': 'Adductors',
-    'abductors': 'Abductors',
-    'shins': 'Shins',
-    'tibialis_anterior': 'Tibialis Anterior',
-    // Core
-    'core': 'Core',
-    'lower_abs': 'Lower Abs',
-    'upper_abs': 'Upper Abs',
-    'obliques': 'Obliques',
-    // Upper Body - Push
-    'chest': 'Chest',
-    'upper_chest': 'Upper Chest',
-    'lower_chest': 'Lower Chest',
-    'shoulders': 'Shoulders',
-    'delts': 'Delts',
-    'triceps': 'Triceps',
-    // Upper Body - Pull
-    'lats': 'Lats',
-    'upper_back': 'Upper Back',
-    'lower_back': 'Lower Back',
-    'traps': 'Traps',
-    'biceps': 'Biceps'
-  };
-  return muscleMap[muscleValue] || muscleValue;
-};
 
 export default function ClientPreferencePage() {
   const params = useParams();
@@ -842,9 +673,9 @@ export default function ClientPreferencePage() {
     isRemovingNote
   } = useClientPreferences({ sessionId, userId, trpc });
   
-  // Local state for modals
-  const [muscleModalOpen, setMuscleModalOpen] = useState(false);
-  const [notesModalOpen, setNotesModalOpen] = useState(false);
+  // Use shared modal state hook
+  const muscleModal = useModalState();
+  const notesModal = useModalState();
   
   // Subscribe to realtime preference updates
   useRealtimePreferences({
@@ -925,18 +756,13 @@ export default function ClientPreferencePage() {
             </div>
             <div className="space-y-3">
               {displayData.confirmedExercises.map((exercise, idx) => (
-                  <div key={idx} className={`flex items-center justify-between p-3 rounded-lg ${
-                    exercise.isExcluded ? 'bg-gray-100' : 'bg-gray-50'
-                  }`}>
-                    <div className="flex items-center gap-2">
-                      <span className={`font-medium ${
-                        exercise.isExcluded 
-                          ? 'text-gray-400 line-through decoration-2' 
-                          : 'text-gray-700'
-                      }`}>{exercise.name}</span>
-                    </div>
-                    <div className="relative">
-                      {exercise.isActive ? (
+                <ExerciseListItem
+                  key={idx}
+                  name={exercise.name}
+                  isExcluded={exercise.isExcluded}
+                  actionButton={
+                    exercise.isActive ? (
+                      exercise.round ? (
                         <button
                           className={`flex items-center gap-1 px-3 py-1.5 rounded-md transition-colors text-sm font-medium ${
                             exercise.isExcluded 
@@ -950,18 +776,16 @@ export default function ClientPreferencePage() {
                           }}
                         >
                           {exercise.isExcluded ? 'Replaced' : 'Confirmed'}
-                          <svg 
-                            className="w-4 h-4 transform transition-transform" 
-                            fill="none" 
-                            stroke="currentColor" 
-                            viewBox="0 0 24 24"
-                          >
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                          </svg>
+                          <ChevronDownIcon className="w-4 h-4 transform transition-transform" />
                         </button>
-                      ) : null}
-                    </div>
-                  </div>
+                      ) : (
+                        <div className="px-3 py-1.5 rounded-md bg-green-100 text-green-700 text-sm font-medium">
+                          Added
+                        </div>
+                      )
+                    ) : null
+                  }
+                />
               ))}
               
               {/* Add Exercise Button */}
@@ -969,7 +793,7 @@ export default function ClientPreferencePage() {
                 onClick={() => setAddModalOpen(true)}
                 className="w-full p-3 border border-gray-300 rounded-lg text-gray-700 bg-white hover:bg-gray-50 hover:border-gray-400 transition-colors flex items-center justify-center gap-2 font-medium shadow-sm"
               >
-                <Plus />
+                <PlusIcon />
                 Add Exercise
               </button>
             </div>
@@ -986,45 +810,39 @@ export default function ClientPreferencePage() {
             <div className="space-y-3">
               {/* Muscle Target Items */}
               {displayData.muscleFocus.map((muscle, idx) => (
-                <div key={`focus-${idx}`} className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
-                  <span className="text-blue-700 font-medium">Target: {formatMuscleLabel(muscle)}</span>
-                  <button 
-                    onClick={() => handleRemoveMusclePreference(muscle, 'target')}
-                    disabled={isRemovingMuscle}
-                    className="text-gray-400 hover:text-gray-600 disabled:opacity-50 transition-colors p-1"
-                  >
-                    <X />
-                  </button>
-                </div>
+                <PreferenceListItem
+                  key={`focus-${idx}`}
+                  label={formatMuscleLabel(muscle)}
+                  type="target"
+                  onRemove={() => handleRemoveMusclePreference(muscle, 'target')}
+                  isRemoving={isRemovingMuscle}
+                />
               ))}
               
               {/* Limit Items */}
               {displayData.avoidance.map((item, idx) => (
-                <div key={`avoid-${idx}`} className="flex items-center justify-between p-3 bg-red-50 rounded-lg">
-                  <span className="text-red-700 font-medium">Limit: {formatMuscleLabel(item)}</span>
-                  <button 
-                    onClick={() => handleRemoveMusclePreference(item, 'limit')}
-                    disabled={isRemovingMuscle}
-                    className="text-gray-400 hover:text-gray-600 disabled:opacity-50 transition-colors p-1"
-                  >
-                    <X />
-                  </button>
-                </div>
+                <PreferenceListItem
+                  key={`avoid-${idx}`}
+                  label={formatMuscleLabel(item)}
+                  type="limit"
+                  onRemove={() => handleRemoveMusclePreference(item, 'limit')}
+                  isRemoving={isRemovingMuscle}
+                />
               ))}
               
               {/* Add button */}
               {(displayData.muscleFocus.length === 0 && displayData.avoidance.length === 0) ? (
                 <button 
-                  onClick={() => setMuscleModalOpen(true)}
+                  onClick={muscleModal.open}
                   className="w-full p-3 border border-gray-300 rounded-lg text-gray-700 bg-white hover:bg-gray-50 hover:border-gray-400 transition-colors flex items-center justify-center gap-2 font-medium shadow-sm">
-                  <Plus />
+                  <PlusIcon />
                   Add Target or Limit
                 </button>
               ) : (
                 <button 
-                  onClick={() => setMuscleModalOpen(true)}
+                  onClick={muscleModal.open}
                   className="w-full p-3 border border-gray-300 rounded-lg text-gray-700 bg-white hover:bg-gray-50 hover:border-gray-400 transition-colors flex items-center justify-center gap-2 font-medium shadow-sm">
-                  <Plus />
+                  <PlusIcon />
                   Add More
                 </button>
               )}
@@ -1042,24 +860,21 @@ export default function ClientPreferencePage() {
             <div className="space-y-3">
               {/* Display existing notes */}
               {(workoutPreferences?.notes || []).map((note, idx) => (
-                <div key={`note-${idx}`} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                  <span className="text-gray-700">{note}</span>
-                  <button 
-                    onClick={() => handleRemoveNote(idx)}
-                    disabled={isRemovingNote}
-                    className="text-gray-400 hover:text-gray-600 disabled:opacity-50 transition-colors p-1"
-                  >
-                    <X />
-                  </button>
-                </div>
+                <PreferenceListItem
+                  key={`note-${idx}`}
+                  label={note}
+                  type="note"
+                  onRemove={() => handleRemoveNote(idx)}
+                  isRemoving={isRemovingNote}
+                />
               ))}
               
               {/* Add Note button */}
               <button 
-                onClick={() => setNotesModalOpen(true)}
+                onClick={notesModal.open}
                 className="w-full p-3 border border-gray-300 rounded-lg text-gray-700 bg-white hover:bg-gray-50 hover:border-gray-400 transition-colors flex items-center justify-center gap-2 font-medium shadow-sm"
               >
-                <Plus />
+                <PlusIcon />
                 Add Note
               </button>
             </div>
@@ -1101,13 +916,11 @@ export default function ClientPreferencePage() {
       
       {/* Muscle Target/Limit Modal */}
       <MuscleModal
-        isOpen={muscleModalOpen}
-        onClose={() => {
-          setMuscleModalOpen(false);
-        }}
+        isOpen={muscleModal.isOpen}
+        onClose={muscleModal.close}
         onConfirm={async (muscle, type) => {
           await handleAddMusclePreference(muscle, type);
-          setMuscleModalOpen(false);
+          muscleModal.close();
         }}
         isLoading={isAddingMuscle}
         existingTargets={clientData?.user?.preferences?.muscleTargets || []}
@@ -1116,16 +929,15 @@ export default function ClientPreferencePage() {
       
       {/* Notes Modal */}
       <NotesModal
-        isOpen={notesModalOpen}
-        onClose={() => {
-          setNotesModalOpen(false);
-        }}
+        isOpen={notesModal.isOpen}
+        onClose={notesModal.close}
         onConfirm={async (note) => {
           await handleAddNote(note);
-          setNotesModalOpen(false);
+          notesModal.close();
         }}
         isLoading={isAddingNote}
       />
     </div>
   );
 }
+

@@ -12,6 +12,9 @@ export * from "./components/Label";
 export * from "./components/Theme";
 export * from "./components/Toast";
 export * from "./components/Icon";
+export * from "./components/icons";
+export * from "./components/lists";
+export * from "./components/modals";
 export * from "./components/UserAvatar";
 export * from "./components/OnlineStatusBadge";
 export * from "./components/FeedbackSection";
@@ -22,6 +25,9 @@ export * from "./styles";
 // Utilities
 export { cn } from "./utils/cn";
 export * from "./utils/exercise-filters";
+
+// Constants
+export * from "./constants";
 
 // Responsive utilities
 export * from "./utils/responsive";

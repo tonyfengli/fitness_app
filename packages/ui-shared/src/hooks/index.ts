@@ -13,6 +13,10 @@ export { useWorkoutBlocks } from './useWorkoutBlocks';
 export { useClientPreferences } from './useClientPreferences';
 export { useRealtimePreferences } from './useRealtimePreferences';
 
+// UI state hooks
+export { useModalState, useMultipleModals } from './useModalState';
+export type { UseModalStateReturn } from './useModalState';
+
 // Types
 export type {
   WorkoutMutationOptions,
