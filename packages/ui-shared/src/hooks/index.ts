@@ -13,6 +13,9 @@ export { useWorkoutBlocks } from './useWorkoutBlocks';
 export { useClientPreferences } from './useClientPreferences';
 export { useRealtimePreferences } from './useRealtimePreferences';
 
+// Workout generation hooks
+export { useGroupWorkoutGeneration } from './useGroupWorkoutGeneration';
+
 // UI state hooks
 export { useModalState, useMultipleModals } from './useModalState';
 export type { UseModalStateReturn } from './useModalState';

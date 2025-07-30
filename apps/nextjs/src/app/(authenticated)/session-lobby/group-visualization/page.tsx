@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { useTRPC } from "~/trpc/react";
+import { useGroupWorkoutGeneration } from "@acme/ui-shared";
 import type { GroupScoredExercise } from "@acme/ai";
 
 // Helper to format muscle names for display (convert underscore to space and capitalize)
@@ -158,10 +159,22 @@ export default function GroupVisualizationPage() {
     enabled: !!sessionId,
   });
   
-  // Generate group workout query
-  const { data: workoutData, isLoading: isGenerating, refetch: generateWorkout } = useQuery({
-    ...trpc.trainingSession.generateGroupWorkout.queryOptions({ sessionId: sessionId! }),
-    enabled: false, // Manual trigger only
+  // Use the shared hook for workout generation
+  const { generate: generateWorkout, isGenerating, workoutData } = useGroupWorkoutGeneration({
+    sessionId: sessionId!,
+    trpc,
+    onSuccess: (data) => {
+      console.log('Group workout generation result:', data);
+      
+      // Update the debug data
+      if (data.debug) {
+        setLlmDebugData({
+          systemPrompt: data.debug.systemPrompt,
+          userMessage: data.debug.userMessage,
+          llmOutput: data.debug.llmOutput
+        });
+      }
+    }
   });
   
   // Set default selected block when data loads
@@ -170,22 +183,6 @@ export default function GroupVisualizationPage() {
       setSelectedBlock(data.blueprint.blocks[0].blockId);
     }
   }, [data, selectedBlock]);
-  
-  // Handle workout generation result
-  useEffect(() => {
-    if (workoutData) {
-      console.log('Group workout generation result:', workoutData);
-      
-      // Update the debug data
-      if (workoutData.debug) {
-        setLlmDebugData({
-          systemPrompt: workoutData.debug.systemPrompt,
-          userMessage: workoutData.debug.userMessage,
-          llmOutput: workoutData.debug.llmOutput
-        });
-      }
-    }
-  }, [workoutData]);
   
   if (!sessionId) {
     return (
