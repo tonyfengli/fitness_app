@@ -220,7 +220,7 @@ export class WorkoutBlueprintService {
       clients: clientContexts,
       sessionId,
       businessId,
-      templateType: (session.templateType || 'workout') as 'workout' | 'circuit_training' | 'full_body' | 'full_body_bmf'
+      templateType: (session.templateType || 'full_body_bmf') as 'full_body_bmf'
     };
 
     logger.info("Client preparation completed", {

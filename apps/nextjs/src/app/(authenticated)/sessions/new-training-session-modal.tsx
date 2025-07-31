@@ -22,10 +22,8 @@ const STEPS = [
   { number: 2, label: 'Session Details' }
 ];
 
-// Template options (matching workout templates)
+// Template options - currently only BMF, but new templates coming soon
 const WORKOUT_TEMPLATES = [
-  { value: 'workout', label: 'Standard', description: 'Traditional workout structure' },
-  { value: 'circuit_training', label: 'Circuit', description: 'Circuit-style training' },
   { value: 'full_body_bmf', label: 'Full Body BMF', description: 'Bold Movement Fitness full body workout with 4 sequential rounds' }
 ];
 
@@ -251,6 +249,7 @@ export default function NewTrainingSessionModal({
                 </div>
               )}
 
+
               {currentStep === 2 && (
                 <div className="space-y-6">
                   <div>
@@ -333,12 +332,20 @@ export default function NewTrainingSessionModal({
                 >
                   Cancel
                 </Button>
+                {currentStep === 1 && (
+                  <Button
+                    onClick={() => setCurrentStep(2)}
+                    disabled={!formData.selectedTemplate}
+                  >
+                    Next
+                  </Button>
+                )}
                 {currentStep === 2 && (
                   <Button
                     onClick={handleConfirm}
                     disabled={isLoading || !formData.sessionName.trim()}
                   >
-                    {isLoading ? 'Creating...' : 'Confirm & Create Session'}
+                    {isLoading ? 'Creating...' : 'Create Session'}
                   </Button>
                 )}
               </div>
