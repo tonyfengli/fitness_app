@@ -55,21 +55,74 @@ function ExerciseStation({
       </div>
       
       {/* Names */}
-      <h3 className="text-xl font-semibold text-gray-800 mb-4">
-        {participants.map(p => p.name).join(" & ")}
-      </h3>
+      <div className="flex items-center justify-center gap-4 mb-4 h-16">
+        {participants.length <= 3 ? (
+          // For 1-3 participants, stack vertically
+          <div className="flex flex-col items-center justify-center gap-1">
+            {participants.map((p, idx) => (
+              <h3 key={idx} className="text-xl font-semibold text-gray-800">
+                {p.name}
+              </h3>
+            ))}
+          </div>
+        ) : participants.length === 4 ? (
+          // For 4 participants, 2 groups side by side
+          <>
+            <div className="flex flex-col items-center gap-1">
+              {participants.slice(0, 2).map((p, idx) => (
+                <h3 key={idx} className="text-lg font-semibold text-gray-800">
+                  {p.name}
+                </h3>
+              ))}
+            </div>
+            <div className="flex flex-col items-center gap-1">
+              {participants.slice(2, 4).map((p, idx) => (
+                <h3 key={idx + 2} className="text-lg font-semibold text-gray-800">
+                  {p.name}
+                </h3>
+              ))}
+            </div>
+          </>
+        ) : (
+          // For 5+ participants, groups of 2 with max 4 side by side
+          <div className="flex gap-3">
+            {Array.from({ length: Math.ceil(participants.length / 2) }, (_, groupIdx) => {
+              const startIdx = groupIdx * 2;
+              const group = participants.slice(startIdx, startIdx + 2);
+              return (
+                <div key={groupIdx} className="flex flex-col items-center gap-0.5">
+                  {group.map((p, idx) => (
+                    <h3 key={startIdx + idx} className="text-sm font-semibold text-gray-800">
+                      {p.name}
+                    </h3>
+                  ))}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
 
       {/* Exercise Card */}
-      <div className={`bg-white rounded-2xl border-4 ${borderColors[color as keyof typeof borderColors]} p-8 w-80 shadow-sm ${isComplete ? 'opacity-75' : ''}`}>
-        <h2 className="text-3xl font-bold text-center mb-8">{exercise}</h2>
+      <div className={`bg-white rounded-2xl border-4 ${borderColors[color as keyof typeof borderColors]} p-8 w-80 h-80 shadow-sm flex flex-col ${isComplete ? 'opacity-75' : ''}`}>
+        <h2 className="text-3xl font-bold text-center mb-8 break-words" style={{
+          display: '-webkit-box',
+          WebkitLineClamp: 2,
+          WebkitBoxOrient: 'vertical',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          minHeight: '2.4em',
+          maxHeight: '2.4em',
+          lineHeight: '1.2em'
+        }}>{exercise}</h2>
         
         {/* Exercise Icon */}
-        <div className="flex justify-center mb-8">
+        <div className="flex justify-center flex-1 items-center">
           {icon}
         </div>
 
         {/* Progress Bar */}
-        <div className="relative">
+        <div className="relative mt-auto pt-4">
           <div className="h-6 bg-gray-200 rounded-full overflow-hidden">
             <div 
               className={`h-full ${progressColors[color as keyof typeof progressColors]} transition-all duration-300`}
@@ -339,20 +392,21 @@ export default function WorkoutLivePage() {
       </div>
 
       {/* Navigation */}
-      <div className="mt-12 flex justify-between items-center">
+      <div className="mt-32 flex justify-between items-center">
         <button
           onClick={() => {
-            const prevRound = Math.max(1, parseInt(round) - 1);
-            window.location.href = `/workout-live?sessionId=${sessionId}&round=${prevRound}`;
+            if (parseInt(round) <= 1) {
+              // Navigate back to workout overview for Round 1
+              window.location.href = `/workout-overview?sessionId=${sessionId}`;
+            } else {
+              // Navigate to previous round
+              const prevRound = parseInt(round) - 1;
+              window.location.href = `/workout-live?sessionId=${sessionId}&round=${prevRound}`;
+            }
           }}
-          disabled={parseInt(round) <= 1}
-          className={`px-6 py-2 rounded-lg ${
-            parseInt(round) <= 1
-              ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-              : 'bg-blue-600 text-white hover:bg-blue-700'
-          }`}
+          className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
         >
-          Previous Round
+          {parseInt(round) <= 1 ? 'Back to Overview' : 'Previous Round'}
         </button>
         
         <div className="text-gray-600">

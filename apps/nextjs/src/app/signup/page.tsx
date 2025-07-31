@@ -82,21 +82,28 @@ export default function SignupPage() {
     try {
       // If trainer is creating a user, use the special API endpoint
       if (isTrainerCreatingClient) {
-        setIsRedirecting(true);
-        
-        await createUserAsTrainer.mutateAsync({
-          email: formData.email,
-          password: formData.password,
-          name: formData.name,
-          phone: formData.phone,
-          role: formData.role as "client" | "trainer",
-          strengthLevel: formData.role === "client" ? (formData.strengthLevel as "very_low" | "low" | "moderate" | "high") : undefined,
-          skillLevel: formData.role === "client" ? (formData.skillLevel as "very_low" | "low" | "moderate" | "high") : undefined,
-        });
-        
-        // Navigate back to trainer dashboard
-        router.push("/trainer-dashboard");
-        router.refresh();
+        try {
+          await createUserAsTrainer.mutateAsync({
+            email: formData.email,
+            password: formData.password,
+            name: formData.name,
+            phone: formData.phone,
+            role: formData.role as "client" | "trainer",
+            strengthLevel: formData.role === "client" ? (formData.strengthLevel as "very_low" | "low" | "moderate" | "high") : undefined,
+            skillLevel: formData.role === "client" ? (formData.skillLevel as "very_low" | "low" | "moderate" | "high") : undefined,
+          });
+          
+          // Set redirecting state only after success
+          setIsRedirecting(true);
+          
+          // Important: Do NOT sign in as the new user - trainer should remain logged in
+          // Just navigate back to trainer dashboard
+          router.push("/trainer-dashboard");
+          router.refresh();
+        } catch (error) {
+          // Error is already handled by the mutation's onError
+          setIsLoading(false);
+        }
       } else {
         // Normal signup flow - normalize phone number
         const result = await authClient.signUp.email({
@@ -121,16 +128,10 @@ export default function SignupPage() {
             setError("Account created but failed to sign in. Please try logging in.");
             router.push("/login");
           } else {
-            // Set redirecting state
-            setIsRedirecting(true);
-            
-            // Invalidate auth cache to force refetch
-            await queryClient.invalidateQueries({ queryKey: ["auth-session"] });
-            
             // Get fresh session data
             const session = await authClient.getSession();
             
-            // Create user profile for clients
+            // Create user profile for clients BEFORE redirecting
             if (formData.role === "client" && session?.user?.id) {
               try {
                 await createProfile.mutateAsync({
@@ -139,11 +140,25 @@ export default function SignupPage() {
                   strengthLevel: formData.strengthLevel as "very_low" | "low" | "moderate" | "high",
                   skillLevel: formData.skillLevel as "very_low" | "low" | "moderate" | "high",
                 });
-              } catch (profileError) {
+              } catch (profileError: any) {
                 console.error("Failed to create user profile:", profileError);
-                // Continue with redirect even if profile creation fails
+                // If profile already exists, that's okay - continue
+                if (profileError?.message?.includes("already exists")) {
+                  console.log("User profile already exists, continuing...");
+                } else {
+                  // For other errors, show error and stop
+                  setError("Account created but failed to set up profile. Please contact support.");
+                  setIsLoading(false);
+                  return;
+                }
               }
             }
+            
+            // Only set redirecting state after everything succeeds
+            setIsRedirecting(true);
+            
+            // Invalidate auth cache to force refetch
+            await queryClient.invalidateQueries({ queryKey: ["auth-session"] });
             
             // Redirect based on user role
             if (session?.user?.role === "trainer") {
