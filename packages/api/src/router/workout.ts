@@ -15,7 +15,7 @@ import {
   user
 } from "@acme/db/schema";
 
-import { protectedProcedure } from "../trpc";
+import { protectedProcedure, publicProcedure } from "../trpc";
 import type { SessionUser } from "../types/auth";
 import { type LLMWorkoutOutput } from "@acme/ai";
 import { WorkoutService } from "../services/workout-service";
@@ -1078,6 +1078,54 @@ export const workoutRouter = {
       return { 
         success: true,
         workoutId: result.id
+      };
+    }),
+
+  // Public endpoint for clients to view their workout
+  getClientWorkoutPublic: publicProcedure
+    .input(z.object({
+      sessionId: z.string().uuid(),
+      userId: z.string(),
+    }))
+    .query(async ({ ctx, input }) => {
+      // Find the workout for this user and session
+      const workout = await ctx.db.query.Workout.findFirst({
+        where: and(
+          eq(Workout.trainingSessionId, input.sessionId),
+          eq(Workout.userId, input.userId)
+        ),
+      });
+
+      if (!workout) {
+        // Return empty result if no workout found
+        return {
+          workout: null,
+          exercises: [],
+        };
+      }
+
+      // Get exercises for this workout
+      const workoutExercises = await ctx.db
+        .select({
+          id: WorkoutExercise.id,
+          orderIndex: WorkoutExercise.orderIndex,
+          setsCompleted: WorkoutExercise.setsCompleted,
+          groupName: WorkoutExercise.groupName,
+          exercise: {
+            id: exercises.id,
+            name: exercises.name,
+            primaryMuscle: exercises.primaryMuscle,
+            equipment: exercises.equipment,
+          },
+        })
+        .from(WorkoutExercise)
+        .innerJoin(exercises, eq(WorkoutExercise.exerciseId, exercises.id))
+        .where(eq(WorkoutExercise.workoutId, workout.id))
+        .orderBy(WorkoutExercise.orderIndex);
+
+      return {
+        workout,
+        exercises: workoutExercises,
       };
     }),
 } satisfies TRPCRouterRecord;

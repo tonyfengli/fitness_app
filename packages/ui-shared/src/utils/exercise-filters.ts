@@ -14,6 +14,7 @@ export interface BlueprintRecommendation {
   force?: string;
   level?: string;
   mechanic?: string;
+  modality?: string;
   // Recommendation-specific fields
   score: number;
   roundId?: string;
@@ -94,6 +95,7 @@ export function categorizeExercisesByRecommendation(
         force: rec.force || '',
         level: rec.level || '',
         mechanic: rec.mechanic || '',
+        modality: rec.modality || '',
         // Add the extra fields
         score: rec.score,
         reason: getRecommendationReason(rec.score)

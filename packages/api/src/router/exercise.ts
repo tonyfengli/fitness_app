@@ -3,7 +3,7 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod/v4";
 
 import { desc, eq, ilike, and } from "@acme/db";
-import { exercises, BusinessExercise } from "@acme/db/schema";
+import { exercises, BusinessExercise, TrainingSession } from "@acme/db/schema";
 
 import { protectedProcedure, publicProcedure } from "../trpc";
 import type { SessionUser } from "../types/auth";
@@ -270,5 +270,42 @@ export const exerciseRouter = {
         userId: sessionUser.id,
         businessId
       });
+    }),
+
+  // Public endpoint for clients to get available exercises
+  getAvailablePublic: publicProcedure
+    .input(z.object({
+      sessionId: z.string().uuid(),
+      userId: z.string(),
+    }))
+    .query(async ({ ctx, input }) => {
+      // Get the user's business from their training session
+      const session = await ctx.db.query.TrainingSession.findFirst({
+        where: and(
+          eq(TrainingSession.id, input.sessionId),
+        ),
+      });
+
+      if (!session) {
+        return { exercises: [] };
+      }
+
+      // Get exercises for this business
+      const businessExercises = await ctx.db
+        .select({
+          id: exercises.id,
+          name: exercises.name,
+          primaryMuscle: exercises.primaryMuscle,
+          secondaryMuscles: exercises.secondaryMuscles,
+          equipment: exercises.equipment,
+          movementPattern: exercises.movementPattern,
+          modality: exercises.modality,
+        })
+        .from(exercises)
+        .innerJoin(BusinessExercise, eq(exercises.id, BusinessExercise.exerciseId))
+        .where(eq(BusinessExercise.businessId, session.businessId))
+        .orderBy(exercises.name);
+
+      return { exercises: businessExercises };
     }),
 } satisfies TRPCRouterRecord;

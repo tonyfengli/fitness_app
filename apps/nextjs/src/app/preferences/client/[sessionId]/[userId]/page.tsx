@@ -940,8 +940,21 @@ export default function ClientPreferencePage() {
         </div>
 
         {/* Success feedback will appear here */}
-        <div className="mt-6 text-center text-sm text-gray-500">
-          Changes save automatically
+        <div className="mt-6 text-center">
+          <p className="text-sm text-gray-500 mb-4">Changes save automatically</p>
+          
+          {/* Navigation to workout overview */}
+          <button
+            onClick={() => {
+              window.location.href = `/client-workout-overview?sessionId=${sessionId}&userId=${userId}`;
+            }}
+            className="inline-flex items-center px-6 py-3 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 transition-colors shadow-sm"
+          >
+            View Your Workout
+            <svg className="ml-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
         </div>
       </div>
       
