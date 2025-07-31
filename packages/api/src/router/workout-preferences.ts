@@ -53,7 +53,7 @@ export const workoutPreferencesRouter = createTRPCRouter({
     .input(
       z.object({
         id: z.string().uuid(),
-        intensity: z.enum(["low", "moderate", "high"]).optional(),
+        intensity: z.enum(["low", "moderate", "high", "intense"]).optional(),
         muscleTargets: z.array(z.string()).optional(),
         muscleLessens: z.array(z.string()).optional(),
         includeExercises: z.array(z.string()).optional(),
@@ -337,12 +337,28 @@ export const workoutPreferencesRouter = createTRPCRouter({
         .then(res => res[0]);
 
       if (!preference) {
+        // Get session to retrieve businessId
+        const session = await db
+          .select()
+          .from(TrainingSession)
+          .where(eq(TrainingSession.id, input.sessionId))
+          .limit(1)
+          .then(res => res[0]);
+
+        if (!session) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Training session not found"
+          });
+        }
+
         // Create new preferences if they don't exist
         [preference] = await db
           .insert(WorkoutPreferences)
           .values({
             userId: input.userId,
             trainingSessionId: input.sessionId,
+            businessId: session.businessId,
             intensity: "moderate",
             muscleTargets: [input.muscle]
           })
@@ -677,7 +693,7 @@ export const workoutPreferencesRouter = createTRPCRouter({
     .input(z.object({
       sessionId: z.string().uuid(),
       userId: z.string(),
-      intensity: z.enum(["low", "moderate", "high"])
+      intensity: z.enum(["low", "moderate", "high", "intense"])
     }))
     .mutation(async ({ ctx, input }) => {
       // Verify user has checked in to this session
@@ -713,13 +729,28 @@ export const workoutPreferencesRouter = createTRPCRouter({
         .then(res => res[0]);
 
       if (!preference) {
+        // Get session to retrieve businessId
+        const session = await db
+          .select()
+          .from(TrainingSession)
+          .where(eq(TrainingSession.id, input.sessionId))
+          .limit(1)
+          .then(res => res[0]);
+
+        if (!session) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Training session not found"
+          });
+        }
+
         // Create new preferences with intensity
         const [newPref] = await db
           .insert(WorkoutPreferences)
           .values({
             userId: input.userId,
             trainingSessionId: input.sessionId,
-            businessId: checkIn[0].businessId,
+            businessId: session.businessId,
             intensity: input.intensity,
             intensitySource: 'explicit'
           })

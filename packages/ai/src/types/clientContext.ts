@@ -14,7 +14,7 @@ export interface ClientContext {
   strength_capacity: "very_low" | "low" | "moderate" | "high";
   skill_capacity: "very_low" | "low" | "moderate" | "high";
   primary_goal?: "mobility" | "strength" | "general_fitness" | "hypertrophy" | "burn_fat";
-  intensity?: "low" | "moderate" | "high"; // Workout intensity level (not fatigue profile)
+  intensity?: "low" | "moderate" | "high" | "intense"; // Workout intensity level (not fatigue profile)
   muscle_target?: string[]; // Array of muscles to target more in programming
   muscle_lessen?: string[]; // Array of muscles to work less in programming
   exercise_requests?: ExerciseRequests;

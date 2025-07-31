@@ -212,7 +212,8 @@ const MuscleModal = ({
   onConfirm,
   isLoading = false,
   existingTargets = [],
-  existingLimits = []
+  existingLimits = [],
+  initialTab = 'target'
 }: { 
   isOpen: boolean; 
   onClose: () => void;
@@ -220,19 +221,20 @@ const MuscleModal = ({
   isLoading?: boolean;
   existingTargets?: string[];
   existingLimits?: string[];
+  initialTab?: 'target' | 'limit';
 }) => {
-  const [activeTab, setActiveTab] = useState<'target' | 'limit'>('target');
+  const [activeTab, setActiveTab] = useState<'target' | 'limit'>(initialTab);
   const [selectedMuscle, setSelectedMuscle] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>('');
   
   // Reset state when modal closes
   useEffect(() => {
     if (!isOpen) {
-      setActiveTab('target');
+      setActiveTab(initialTab);
       setSelectedMuscle(null);
       setSearchQuery('');
     }
-  }, [isOpen]);
+  }, [isOpen, initialTab]);
   
   // Use shared muscle groups constant
   const muscleGroups = MUSCLE_GROUPS_ALPHABETICAL;
@@ -271,32 +273,6 @@ const MuscleModal = ({
                 </button>
               </div>
             </div>
-            
-            {/* Tab Selector */}
-            <div className="px-6 py-4 border-b border-gray-200">
-              <div className="flex gap-2 p-1 bg-gray-100 rounded-lg">
-                <button
-                  onClick={() => setActiveTab('target')}
-                  className={`flex-1 py-2 px-4 rounded-md font-medium transition-colors ${
-                    activeTab === 'target'
-                      ? 'bg-blue-500 text-white'
-                      : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                >
-                  Target
-                </button>
-                <button
-                  onClick={() => setActiveTab('limit')}
-                  className={`flex-1 py-2 px-4 rounded-md font-medium transition-colors ${
-                    activeTab === 'limit'
-                      ? 'bg-blue-500 text-white'
-                      : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                >
-                  Limit
-                </button>
-              </div>
-            </div>
 
             {/* Content */}
             <div className="flex-1 overflow-y-auto">
@@ -309,7 +285,7 @@ const MuscleModal = ({
                     placeholder="Search muscle group"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    className="w-full pl-10 pr-4 py-2 bg-white text-gray-900 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent placeholder-gray-400"
                   />
                 </div>
               </div>
@@ -441,7 +417,7 @@ const NotesModal = ({
                 value={noteText}
                 onChange={(e) => setNoteText(e.target.value)}
                 placeholder="Add your note here..."
-                className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none"
+                className="w-full p-3 bg-white text-gray-900 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none placeholder-gray-400"
                 rows={4}
                 disabled={isLoading}
               />
@@ -642,6 +618,7 @@ export default function ClientPreferencePage() {
   const sessionId = params.sessionId as string;
   const userId = params.userId as string;
   const trpc = useTRPC();
+  const [currentStep, setCurrentStep] = useState(1); // 1: Workout Style, 2: Muscle Target, 3: Muscle Limit, 4: Intensity, 5: Other Notes
   
   // Use the shared hook for all business logic
   const {
@@ -743,218 +720,363 @@ export default function ClientPreferencePage() {
   return (
     <div className="min-h-screen bg-gray-50 overflow-y-auto">
       <div className="max-w-md mx-auto p-4 pb-20">
+        {/* Client info outside card */}
+        <div className="flex items-center justify-center mb-6 mt-4">
+          <img
+            src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${displayData.avatar}`}
+            alt={displayData.name}
+            className="w-10 h-10 rounded-full mr-3"
+          />
+          <h2 className="font-semibold text-gray-900 text-lg">{displayData.name}</h2>
+        </div>
+        
         {/* Client Card - Single card view */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 mt-4">
-          {/* Client Header */}
-          <div className="p-6 border-b border-gray-200">
-            <div className="flex items-center gap-3">
-              <img
-                src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${displayData.avatar}`}
-                alt={displayData.name}
-                className="w-12 h-12 rounded-full"
-              />
-              <div>
-                <h3 className="font-semibold text-gray-900">{displayData.name}</h3>
-                <p className="text-sm text-gray-500">{displayData.exerciseCount} exercises</p>
-              </div>
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+          {/* Progress indicator */}
+          <div className="p-4 border-b border-gray-200">
+            <div className="flex items-center justify-center space-x-2">
+              {[1, 2, 3, 4, 5].map((step) => (
+                <div
+                  key={step}
+                  className={`h-2 w-8 rounded-full transition-colors ${
+                    step === currentStep
+                      ? 'bg-indigo-600'
+                      : step < currentStep
+                      ? 'bg-indigo-300'
+                      : 'bg-gray-200'
+                  }`}
+                />
+              ))}
             </div>
+            <p className="text-center text-sm text-gray-500 mt-2">
+              Step {currentStep} of 5
+            </p>
           </div>
 
-          {/* Section 1: Confirm Exercises */}
-          <div className="p-6 border-b border-gray-200">
-            <div className="mb-4">
-              <div className="flex items-center gap-2">
+          {/* Step 1: Workout Focus */}
+          {currentStep === 1 && (
+            <div className="p-6">
+              <div className="flex items-center gap-2 mb-6">
                 <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-sm font-semibold">
                   1
                 </div>
-                <h4 className="font-medium text-gray-900">Confirm Exercises</h4>
+                <h4 className="font-medium text-gray-900">Workout Focus</h4>
               </div>
-            </div>
-            <div className="space-y-3">
-              {displayData.confirmedExercises.map((exercise, idx) => (
-                <ExerciseListItem
-                  key={idx}
-                  name={exercise.name}
-                  isExcluded={exercise.isExcluded}
-                  actionButton={
-                    exercise.isActive ? (
-                      exercise.round ? (
-                        <button
-                          className={`flex items-center gap-1 px-3 py-1.5 rounded-md transition-colors text-sm font-medium ${
-                            exercise.isExcluded 
-                              ? 'bg-gray-200 text-gray-500 hover:bg-gray-300'
-                              : 'bg-green-100 text-green-700 hover:bg-green-200'
-                          }`}
-                          onClick={() => {
-                            // Open modal to change exercise
-                            setSelectedExerciseForChange({name: exercise.name, index: idx, round: exercise.round});
-                            setModalOpen(true);
-                          }}
-                        >
-                          {exercise.isExcluded ? 'Replaced' : 'Confirmed'}
-                          <ChevronDownIcon className="w-4 h-4 transform transition-transform" />
-                        </button>
-                      ) : (
-                        <div className="px-3 py-1.5 rounded-md bg-green-100 text-green-700 text-sm font-medium">
-                          Added
-                        </div>
-                      )
-                    ) : null
-                  }
-                />
-              ))}
               
-              {/* Add Exercise Button */}
-              <button 
-                onClick={() => setAddModalOpen(true)}
-                className="w-full p-3 border border-gray-300 rounded-lg text-gray-700 bg-white hover:bg-gray-50 hover:border-gray-400 transition-colors flex items-center justify-center gap-2 font-medium shadow-sm"
-              >
-                <PlusIcon />
-                Add Exercise
-              </button>
-            </div>
-          </div>
-
-          {/* Section 2: Muscle Focus & Avoidance */}
-          <div className="p-6 border-b border-gray-200">
-            <div className="flex items-center gap-2 mb-4">
-              <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-sm font-semibold">
-                2
-              </div>
-              <h4 className="font-medium text-gray-900">Muscle Target & Limit</h4>
-            </div>
-            <div className="space-y-3">
-              {/* Muscle Target Items */}
-              {displayData.muscleFocus.map((muscle, idx) => (
-                <PreferenceListItem
-                  key={`focus-${idx}`}
-                  label={formatMuscleLabel(muscle)}
-                  type="target"
-                  onRemove={() => handleRemoveMusclePreference(muscle, 'target')}
-                  isRemoving={isRemovingMuscle}
-                />
-              ))}
-              
-              {/* Limit Items */}
-              {displayData.avoidance.map((item, idx) => (
-                <PreferenceListItem
-                  key={`avoid-${idx}`}
-                  label={formatMuscleLabel(item)}
-                  type="limit"
-                  onRemove={() => handleRemoveMusclePreference(item, 'limit')}
-                  isRemoving={isRemovingMuscle}
-                />
-              ))}
-              
-              {/* Add button */}
-              {(displayData.muscleFocus.length === 0 && displayData.avoidance.length === 0) ? (
-                <button 
-                  onClick={muscleModal.open}
-                  className="w-full p-3 border border-gray-300 rounded-lg text-gray-700 bg-white hover:bg-gray-50 hover:border-gray-400 transition-colors flex items-center justify-center gap-2 font-medium shadow-sm">
-                  <PlusIcon />
-                  Add Target or Limit
-                </button>
-              ) : (
-                <button 
-                  onClick={muscleModal.open}
-                  className="w-full p-3 border border-gray-300 rounded-lg text-gray-700 bg-white hover:bg-gray-50 hover:border-gray-400 transition-colors flex items-center justify-center gap-2 font-medium shadow-sm">
-                  <PlusIcon />
-                  Add More
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Section 3: Intensity */}
-          <div className="p-6 border-b border-gray-100">
-            <div className="flex items-center gap-2 mb-4">
-              <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-sm font-semibold">
-                3
-              </div>
-              <h4 className="font-medium text-gray-900">Intensity</h4>
-            </div>
-            <div className="space-y-3">
-              <div className="relative">
-                <select
-                  value={workoutPreferences?.intensity || 'moderate'}
-                  onChange={(e) => {
-                    const newIntensity = e.target.value as 'low' | 'moderate' | 'high';
-                    // Update local state immediately
-                    handlePreferenceUpdate({
-                      ...workoutPreferences,
-                      intensity: newIntensity
-                    });
-                    // Update in database for global preferences
-                    updateIntensityMutation.mutate({
-                      sessionId,
-                      userId,
-                      intensity: newIntensity
-                    });
-                  }}
-                  disabled={updateIntensityMutation.isPending}
-                  className="w-full appearance-none px-4 py-3 pr-10 bg-white border border-gray-300 rounded-lg shadow-sm text-gray-900 font-medium hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <option value="low">Low (3-4 exercises)</option>
-                  <option value="moderate" selected>Moderate (4-6 exercises)</option>
-                  <option value="high">High (5-7 exercises)</option>
-                </select>
-                <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-                  <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-                  </svg>
+              {/* Workout Type */}
+              <div className="mb-8">
+                <p className="text-sm font-medium text-gray-700 mb-3">Workout Type</p>
+                <div className="space-y-2">
+                  <label className="flex items-center p-3 border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors">
+                    <input
+                      type="radio"
+                      name="workoutType"
+                      value="full_body"
+                      checked={workoutPreferences?.sessionGoal === 'full_body' || !workoutPreferences?.sessionGoal}
+                      onChange={(e) => {
+                        handlePreferenceUpdate({
+                          ...workoutPreferences,
+                          sessionGoal: 'full_body'
+                        });
+                      }}
+                      className="w-4 h-4 text-indigo-600 border-gray-300 focus:ring-indigo-500"
+                    />
+                    <span className="ml-3 text-gray-700">Full Body</span>
+                  </label>
+                  <label className="flex items-center p-3 border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors">
+                    <input
+                      type="radio"
+                      name="workoutType"
+                      value="targeted"
+                      checked={workoutPreferences?.sessionGoal === 'targeted'}
+                      onChange={(e) => {
+                        handlePreferenceUpdate({
+                          ...workoutPreferences,
+                          sessionGoal: 'targeted'
+                        });
+                      }}
+                      className="w-4 h-4 text-indigo-600 border-gray-300 focus:ring-indigo-500"
+                    />
+                    <span className="ml-3 text-gray-700">Targeted</span>
+                  </label>
                 </div>
               </div>
-            </div>
-          </div>
 
-          {/* Section 4: Other Notes */}
-          <div className="p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-sm font-semibold">
-                4
+              {/* Include Finisher */}
+              <div className="mb-8">
+                <p className="text-sm font-medium text-gray-700 mb-3">Include Finisher?</p>
+                <div className="space-y-2">
+                  <label className="flex items-center p-3 border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors">
+                    <input
+                      type="radio"
+                      name="includeFinisher"
+                      value="no"
+                      checked={!workoutPreferences?.notes?.includes('include_finisher')}
+                      onChange={(e) => {
+                        const currentNotes = workoutPreferences?.notes || [];
+                        const filteredNotes = currentNotes.filter(n => n !== 'include_finisher');
+                        handlePreferenceUpdate({
+                          ...workoutPreferences,
+                          notes: filteredNotes
+                        });
+                      }}
+                      className="w-4 h-4 text-indigo-600 border-gray-300 focus:ring-indigo-500"
+                    />
+                    <span className="ml-3 text-gray-700">No</span>
+                  </label>
+                  <label className="flex items-center p-3 border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors">
+                    <input
+                      type="radio"
+                      name="includeFinisher"
+                      value="yes"
+                      checked={workoutPreferences?.notes?.includes('include_finisher')}
+                      onChange={(e) => {
+                        const currentNotes = workoutPreferences?.notes || [];
+                        const filteredNotes = currentNotes.filter(n => n !== 'include_finisher');
+                        handlePreferenceUpdate({
+                          ...workoutPreferences,
+                          notes: [...filteredNotes, 'include_finisher']
+                        });
+                      }}
+                      className="w-4 h-4 text-indigo-600 border-gray-300 focus:ring-indigo-500"
+                    />
+                    <span className="ml-3 text-gray-700">Yes</span>
+                  </label>
+                </div>
               </div>
-              <h4 className="font-medium text-gray-900">Other Notes</h4>
-            </div>
-            <div className="space-y-3">
-              {/* Display existing notes */}
-              {(workoutPreferences?.notes || []).map((note, idx) => (
-                <PreferenceListItem
-                  key={`note-${idx}`}
-                  label={note}
-                  type="note"
-                  onRemove={() => handleRemoveNote(idx)}
-                  isRemoving={isRemovingNote}
-                />
-              ))}
               
-              {/* Add Note button */}
-              <button 
-                onClick={notesModal.open}
-                className="w-full p-3 border border-gray-300 rounded-lg text-gray-700 bg-white hover:bg-gray-50 hover:border-gray-400 transition-colors flex items-center justify-center gap-2 font-medium shadow-sm"
-              >
-                <PlusIcon />
-                Add Note
-              </button>
+              {/* Navigation */}
+              <div className="mt-8 flex justify-end">
+                <button
+                  onClick={() => setCurrentStep(2)}
+                  className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium"
+                >
+                  Next
+                </button>
+              </div>
             </div>
-          </div>
-        </div>
+          )}
 
-        {/* Success feedback will appear here */}
-        <div className="mt-6 text-center">
-          <p className="text-sm text-gray-500 mb-4">Changes save automatically</p>
-          
-          {/* Navigation to workout overview */}
-          <button
-            onClick={() => {
-              window.location.href = `/client-workout-overview?sessionId=${sessionId}&userId=${userId}`;
-            }}
-            className="inline-flex items-center px-6 py-3 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 transition-colors shadow-sm"
-          >
-            View Your Workout
-            <svg className="ml-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-            </svg>
-          </button>
+          {/* Step 2: Muscle Target */}
+          {currentStep === 2 && (
+            <div className="p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-sm font-semibold">
+                  2
+                </div>
+                <h4 className="font-medium text-gray-900">Muscle Target</h4>
+              </div>
+              <p className="text-sm text-gray-600 mb-4">Select muscles you want to focus on during the workout</p>
+              <div className="space-y-3">
+                {/* Muscle Target Items */}
+                {displayData.muscleFocus.map((muscle, idx) => (
+                  <PreferenceListItem
+                    key={`focus-${idx}`}
+                    label={formatMuscleLabel(muscle)}
+                    type="target"
+                    onRemove={() => handleRemoveMusclePreference(muscle, 'target')}
+                    isRemoving={isRemovingMuscle}
+                  />
+                ))}
+                
+                {/* Add button */}
+                <button 
+                  onClick={() => {
+                    muscleModal.open();
+                    // Set muscle modal to target mode
+                  }}
+                  className="w-full p-3 border border-gray-300 rounded-lg text-gray-700 bg-white hover:bg-gray-50 hover:border-gray-400 transition-colors flex items-center justify-center gap-2 font-medium shadow-sm">
+                  <PlusIcon />
+                  {displayData.muscleFocus.length === 0 ? 'Add Target Muscle' : 'Add More'}
+                </button>
+              </div>
+              
+              {/* Navigation buttons */}
+              <div className="mt-8 flex justify-between">
+                <button
+                  onClick={() => setCurrentStep(1)}
+                  className="px-6 py-2 text-gray-700 hover:text-gray-900 transition-colors font-medium"
+                >
+                  Back
+                </button>
+                <button
+                  onClick={() => setCurrentStep(3)}
+                  className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium"
+                >
+                  {displayData.muscleFocus.length === 0 ? 'Skip' : 'Next'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Step 3: Muscle Limit */}
+          {currentStep === 3 && (
+            <div className="p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-sm font-semibold">
+                  3
+                </div>
+                <h4 className="font-medium text-gray-900">Muscle Limit</h4>
+              </div>
+              <p className="text-sm text-gray-600 mb-4">Select muscles to avoid or limit during the workout</p>
+              <div className="space-y-3">
+                {/* Limit Items */}
+                {displayData.avoidance.map((item, idx) => (
+                  <PreferenceListItem
+                    key={`avoid-${idx}`}
+                    label={formatMuscleLabel(item)}
+                    type="limit"
+                    onRemove={() => handleRemoveMusclePreference(item, 'limit')}
+                    isRemoving={isRemovingMuscle}
+                  />
+                ))}
+                
+                {/* Add button */}
+                <button 
+                  onClick={() => {
+                    muscleModal.open();
+                    // Set muscle modal to limit mode
+                  }}
+                  className="w-full p-3 border border-gray-300 rounded-lg text-gray-700 bg-white hover:bg-gray-50 hover:border-gray-400 transition-colors flex items-center justify-center gap-2 font-medium shadow-sm">
+                  <PlusIcon />
+                  {displayData.avoidance.length === 0 ? 'Add Muscle Limit' : 'Add More'}
+                </button>
+              </div>
+              
+              {/* Navigation buttons */}
+              <div className="mt-8 flex justify-between">
+                <button
+                  onClick={() => setCurrentStep(2)}
+                  className="px-6 py-2 text-gray-700 hover:text-gray-900 transition-colors font-medium"
+                >
+                  Back
+                </button>
+                <button
+                  onClick={() => setCurrentStep(4)}
+                  className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium"
+                >
+                  {displayData.avoidance.length === 0 ? 'Skip' : 'Next'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Step 4: Intensity */}
+          {currentStep === 4 && (
+            <div className="p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-sm font-semibold">
+                  4
+                </div>
+                <h4 className="font-medium text-gray-900">Intensity</h4>
+              </div>
+              <p className="text-sm text-gray-600 mb-4">Select your preferred workout intensity</p>
+              <div className="space-y-3">
+                <div className="relative">
+                  <select
+                    value={workoutPreferences?.intensity || 'moderate'}
+                    onChange={(e) => {
+                      const newIntensity = e.target.value as 'low' | 'moderate' | 'high';
+                      // Update local state immediately
+                      handlePreferenceUpdate({
+                        ...workoutPreferences,
+                        intensity: newIntensity
+                      });
+                      // Update in database for global preferences
+                      updateIntensityMutation.mutate({
+                        sessionId,
+                        userId,
+                        intensity: newIntensity
+                      });
+                    }}
+                    disabled={updateIntensityMutation.isPending}
+                    className="w-full appearance-none px-4 py-3 pr-10 bg-white border border-gray-300 rounded-lg shadow-sm text-gray-900 font-medium hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <option value="low">Low (4 exercises)</option>
+                    <option value="moderate">Moderate (5 exercises)</option>
+                    <option value="high">High (6 exercises)</option>
+                    <option value="intense">Intense (7 exercises)</option>
+                  </select>
+                  <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                    <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Navigation buttons */}
+              <div className="mt-8 flex justify-between">
+                <button
+                  onClick={() => setCurrentStep(3)}
+                  className="px-6 py-2 text-gray-700 hover:text-gray-900 transition-colors font-medium"
+                >
+                  Back
+                </button>
+                <button
+                  onClick={() => setCurrentStep(5)}
+                  className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Step 5: Other Notes */}
+          {currentStep === 5 && (
+            <div className="p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-sm font-semibold">
+                  5
+                </div>
+                <h4 className="font-medium text-gray-900">Other Notes</h4>
+              </div>
+              <p className="text-sm text-gray-600 mb-4">Add any additional notes or preferences</p>
+              <div className="space-y-3">
+                {/* Display existing notes */}
+                {(workoutPreferences?.notes || []).map((note, idx) => (
+                  <PreferenceListItem
+                    key={`note-${idx}`}
+                    label={note}
+                    type="note"
+                    onRemove={() => handleRemoveNote(idx)}
+                    isRemoving={isRemovingNote}
+                  />
+                ))}
+                
+                {/* Add Note button */}
+                <button 
+                  onClick={notesModal.open}
+                  className="w-full p-3 border border-gray-300 rounded-lg text-gray-700 bg-white hover:bg-gray-50 hover:border-gray-400 transition-colors flex items-center justify-center gap-2 font-medium shadow-sm"
+                >
+                  <PlusIcon />
+                  Add Note
+                </button>
+              </div>
+              
+              {/* Navigation buttons */}
+              <div className="mt-8 flex justify-between">
+                <button
+                  onClick={() => setCurrentStep(4)}
+                  className="px-6 py-2 text-gray-700 hover:text-gray-900 transition-colors font-medium"
+                >
+                  Back
+                </button>
+                <button
+                  onClick={() => {
+                    window.location.href = `/client-workout-overview?sessionId=${sessionId}&userId=${userId}`;
+                  }}
+                  className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium flex items-center gap-2"
+                >
+                  {(workoutPreferences?.notes || []).length === 0 ? 'Skip & Complete' : 'Complete'}
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
       
@@ -1007,6 +1129,7 @@ export default function ClientPreferencePage() {
         isLoading={isAddingMuscle}
         existingTargets={clientData?.user?.preferences?.muscleTargets || []}
         existingLimits={clientData?.user?.preferences?.muscleLessens || []}
+        initialTab={currentStep === 2 ? 'target' : 'limit'}
       />
       
       {/* Notes Modal */}

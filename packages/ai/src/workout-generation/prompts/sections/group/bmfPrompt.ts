@@ -2,6 +2,7 @@ import type { GroupBlockBlueprint } from '../../../../types';
 import type { DeterministicAssignment, GroupWorkoutConfig } from '../../types';
 import { generateClientProfiles } from './clientProfiles';
 import { generateEquipmentConstraints } from './equipmentConstraints';
+import { getExerciseCountFromIntensity } from '../../../../utils/exerciseCount';
 
 // Helper to get equipment from exercise name
 function getEquipmentFromExercise(exerciseName: string): string[] {
@@ -171,7 +172,7 @@ export function generateBMFGroupPrompt(config: GroupWorkoutConfig): string {
   // Remaining slots
   sections.push('## Remaining Slots:');
   clients.forEach(client => {
-    const capacity = client.strength_capacity === 'low' || client.skill_capacity === 'low' ? 5 : 6;
+    const capacity = getExerciseCountFromIntensity(client.intensity);
     const used = slotsUsedPerClient.get(client.user_id) || 2;
     const remaining = capacity - used;
     
@@ -325,7 +326,7 @@ export function generateBMFGroupPrompt(config: GroupWorkoutConfig): string {
   
   // Dynamic client slots
   clients.forEach(client => {
-    const capacity = client.strength_capacity === 'low' || client.skill_capacity === 'low' ? 5 : 6;
+    const capacity = getExerciseCountFromIntensity(client.intensity);
     sections.push(`    "${client.name}": {"used": X, "total": ${capacity}},`);
   });
   

@@ -176,7 +176,7 @@ export const CreateWorkoutPreferencesSchema = createInsertSchema(WorkoutPreferen
   userId: z.string(),
   trainingSessionId: z.string().uuid(),
   businessId: z.string().uuid(),
-  intensity: z.enum(["low", "moderate", "high"]).optional(),
+  intensity: z.enum(["low", "moderate", "high", "intense"]).optional(),
   muscleTargets: z.array(z.string()).optional(),
   muscleLessens: z.array(z.string()).optional(),
   includeExercises: z.array(z.string()).optional(),

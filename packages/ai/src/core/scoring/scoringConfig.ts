@@ -40,5 +40,13 @@ export const SCORING_CONFIG = {
       high_systemic: 1.5,
       metabolic: 1.5,
     },
+    intense: {
+      low_local: -1.5,
+      moderate_local: -0.75,
+      high_local: 1.5,
+      moderate_systemic: 0.75,
+      high_systemic: 1.5,
+      metabolic: 1.5,
+    },
   },
 } as const;

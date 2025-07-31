@@ -46,6 +46,9 @@ interface TRPCClient {
     all: {
       queryOptions: (input: { limit: number }) => QueryOptions;
     };
+    getAvailablePublic: {
+      queryOptions: (input: { sessionId: string; userId: string }) => QueryOptions;
+    };
   };
   workoutPreferences: {
     addMuscleTargetPublic: {
@@ -153,10 +156,17 @@ export function useClientPreferences({ sessionId, userId, trpc }: UseClientPrefe
     });
   }
 
-  // Fetch all available exercises
-  const { data: availableExercises, isLoading: exercisesLoading } = useQuery(
-    trpc.exercise.all.queryOptions({ limit: 1000 })
+  // Fetch business-specific exercises only
+  const { data: exercisesData, isLoading: exercisesLoading } = useQuery(
+    sessionId && userId
+      ? trpc.exercise.getAvailablePublic.queryOptions({ sessionId, userId })
+      : {
+          queryKey: ['empty'],
+          queryFn: () => Promise.resolve({ exercises: [] }),
+          enabled: false
+        }
   );
+  const availableExercises = exercisesData?.exercises || [];
 
   const isLoading = clientLoading || selectionsLoading || exercisesLoading || recommendationsLoading;
 

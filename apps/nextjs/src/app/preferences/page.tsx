@@ -197,7 +197,9 @@ export default function PreferencesPage() {
     muscleFocus: client.preferences?.muscleTargets || [],
     avoidance: client.preferences?.muscleLessens || [],
     notes: client.preferences?.notes || [],
-    intensity: client.preferences?.intensity || 'moderate'
+    intensity: client.preferences?.intensity || 'moderate',
+    workoutType: client.preferences?.sessionGoal || 'full_body',
+    includeFinisher: client.preferences?.notes?.includes('include_finisher') || false
   })) || [];
 
   return (
@@ -362,17 +364,31 @@ export default function PreferencesPage() {
                     </div>
                   </div>
 
-                  {/* Section 3: Intensity */}
-                  <div className="p-3 flex gap-3">
+                  {/* Section 3: Workout Focus */}
+                  <div className="p-3 border-b border-gray-200 flex gap-3">
                     <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-sm font-semibold flex-shrink-0 mt-0.5">
                       3
                     </div>
                     <div className="flex-1 flex items-center">
                       <span className="text-sm text-gray-700">
-                        {client.intensity === 'low' && 'Low (3-4 exercises)'}
-                        {client.intensity === 'moderate' && 'Moderate (4-6 exercises)'}
-                        {client.intensity === 'high' && 'High (5-7 exercises)'}
-                        {!client.intensity && 'Moderate (4-6 exercises)'}
+                        {client.workoutType === 'targeted' ? 'Targeted' : 'Full Body'}
+                        {client.includeFinisher && ' • Finisher'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Section 4: Intensity */}
+                  <div className="p-3 flex gap-3">
+                    <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-sm font-semibold flex-shrink-0 mt-0.5">
+                      4
+                    </div>
+                    <div className="flex-1 flex items-center">
+                      <span className="text-sm text-gray-700">
+                        {client.intensity === 'low' && 'Low (4 exercises)'}
+                        {client.intensity === 'moderate' && 'Moderate (5 exercises)'}
+                        {client.intensity === 'high' && 'High (6 exercises)'}
+                        {client.intensity === 'intense' && 'Intense (7 exercises)'}
+                        {!client.intensity && 'Moderate (5 exercises)'}
                       </span>
                     </div>
                   </div>
