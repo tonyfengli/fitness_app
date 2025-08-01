@@ -187,7 +187,7 @@ export class WorkoutBlueprintService {
         clientId: client.userId,
         sessionGoal: (clientContext.primary_goal === 'strength' ? 'strength' : 'stability') as "strength" | "stability",
         intensity: clientContext.intensity || 'moderate',
-        template: (session.templateType === 'full_body_bmf' ? 'full_body' : 'standard') as "standard" | "circuit" | "full_body",
+        template: 'full_body' as "standard" | "circuit" | "full_body", // Always use full_body for BMF
         includeExercises: clientContext.exercise_requests?.include || [],
         avoidExercises: clientContext.exercise_requests?.avoid || [],
         muscleTarget: clientContext.muscle_target || [],

@@ -55,7 +55,7 @@ export class DummyHandler {
    */
   static shouldUseDummyHandler(templateType: string | null): boolean {
     // Use dummy handler if no template or unknown template
-    const knownTemplates = ['workout', 'full_body', 'circuit_training', 'full_body_bmf'];
+    const knownTemplates = ['full_body_bmf'];
     
     if (!templateType) {
       logger.info("No template type - using dummy handler");

@@ -95,7 +95,7 @@ export async function generateGroupWorkoutBlueprint(
     }
     
     // Get template configuration
-    const templateId = groupContext.templateType || 'workout';
+    const templateId = groupContext.templateType || 'full_body_bmf';
     console.log(`📋 Loading template: ${templateId}`);
     const template = getWorkoutTemplate(templateId);
     

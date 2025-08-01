@@ -34,7 +34,7 @@ export class TemplateSMSService {
       }
 
       // Get template based on type
-      const templateType = session.templateType || 'workout';
+      const templateType = session.templateType || 'full_body_bmf';
       const template = getWorkoutTemplate(templateType);
 
       logger.info("Getting SMS config for session", {

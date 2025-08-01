@@ -116,13 +116,7 @@ function formatGroupName(blockKey: string, templateType: string): string {
     }
   }
   
-  if (templateType === 'standard' || templateType === 'full_body') {
-    // Convert blocka, blockb, etc. to "Block A", "Block B"
-    if (key.startsWith('block')) {
-      const blockLetter = key.replace('block', '').toUpperCase();
-      return `Block ${blockLetter}`;
-    }
-  }
+  // BMF templates don't use block naming, only round naming
 
   // Fallback: just capitalize first letter
   return blockKey.charAt(0).toUpperCase() + blockKey.slice(1);
@@ -159,8 +153,6 @@ function generateWorkoutName(templateType: string): string {
   switch (templateType) {
     case 'circuit':
       return `Circuit Training - ${date}`;
-    case 'full_body':
-      return `Full Body Workout - ${date}`;
     default:
       return `Strength Training - ${date}`;
   }
@@ -176,12 +168,6 @@ function getTemplateConfig(templateType: string): Record<string, any> {
         rounds: 3,
         workRestRatio: '45s/15s',
         format: 'time-based'
-      };
-    case 'full_body':
-      return {
-        muscleBalance: true,
-        minUpperBody: 2,
-        minLowerBody: 2
       };
     default:
       return {

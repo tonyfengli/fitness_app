@@ -98,7 +98,7 @@ export interface StateMachineFlow {
  * Defines a complete workout template
  */
 export interface WorkoutTemplate {
-  id: string;                    // "workout", "full_body", "circuit_training"
+  id: string;                    // template identifier (e.g. "full_body_bmf")
   name: string;                  // "Standard Workout", "Circuit Training"
   description?: string;
   blocks: BlockDefinition[];

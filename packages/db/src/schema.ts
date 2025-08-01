@@ -198,7 +198,7 @@ export const Workout = pgTable("workout", (t) => ({
   userId: t.text().notNull().references(() => user.id, { onDelete: "cascade" }),
   completedAt: t.timestamp(), // Nullable - workouts aren't completed when created
   notes: t.text(),
-  workoutType: t.text(), // "standard", "circuit", "full_body", etc.
+  workoutType: t.text(), // workout type identifier
   totalPlannedSets: t.integer(), // Total sets the LLM planned
   llmOutput: t.jsonb(), // Raw LLM response for reference
   templateConfig: t.jsonb(), // Template-specific configuration
