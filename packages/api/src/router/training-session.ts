@@ -145,7 +145,38 @@ export const trainingSessionRouter = {
       const templateConfig = session.templateConfig as any;
       const blueprint = templateConfig?.blueprint;
       
-      if (!blueprint?.blocks) {
+      if (!blueprint) {
+        return { selections: [] };
+      }
+
+      // Handle Standard blueprints (two-phase)
+      if (blueprint.clientExercisePools) {
+        const clientPool = blueprint.clientExercisePools[user.id];
+        if (!clientPool) {
+          return { selections: [] };
+        }
+
+        // Return pre-assigned exercises from Standard blueprint
+        const selections = clientPool.preAssigned.map((preAssigned: any, index: number) => ({
+          roundId: `Round${index + 1}`,
+          roundName: preAssigned.source || `Round ${index + 1}`,
+          exercise: {
+            name: preAssigned.exercise.name,
+            movementPattern: preAssigned.exercise.movementPattern,
+            primaryMuscle: preAssigned.exercise.primaryMuscle
+          }
+        }));
+
+        return {
+          selections,
+          templateType: session.templateType,
+          hasBlueprint: true,
+          blueprintType: 'standard'
+        };
+      }
+
+      // Handle BMF blueprints (original logic)
+      if (!blueprint.blocks) {
         return { selections: [] };
       }
 
@@ -184,7 +215,8 @@ export const trainingSessionRouter = {
       return { 
         selections,
         templateType: session.templateType,
-        hasBlueprint: !!blueprint
+        hasBlueprint: !!blueprint,
+        blueprintType: 'bmf'
       };
     }),
   // Create a new training session (trainers only)

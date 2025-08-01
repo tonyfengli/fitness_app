@@ -32,6 +32,8 @@ export interface BlockDefinition {
   selectionStrategy: 'deterministic' | 'randomized';
   movementPatternFilter?: MovementPatternFilter;  // Filter exercises by movement patterns
   equipmentFilter?: EquipmentFilter;              // Filter exercises by equipment
+  constraints?: Record<string, any>;  // For compatibility with standard template
+  metadata?: Record<string, any>;     // Block-specific metadata
 }
 
 /**
@@ -107,6 +109,17 @@ export interface WorkoutTemplate {
   smsFlowType?: 'legacy' | 'linear' | 'stateMachine'; // Flow type
   smsLinearFlow?: LinearFlow;    // Linear flow definition
   smsStateMachine?: StateMachineFlow; // State machine flow definition
+  cohesionTargets?: {            // Cohesion settings for group workouts
+    groupTarget: number;
+    strategy: string;
+  };
+  metadata?: {                   // Template-specific metadata
+    llmStrategy?: 'single-phase' | 'two-phase';
+    totalExercisesPerClient?: number;
+    preAssignedCount?: number;
+    workoutFlow?: 'strength-metabolic' | 'pure-strength';
+    exerciseRoles?: Record<string, number>;
+  };
 }
 
 // Export aliases for compatibility

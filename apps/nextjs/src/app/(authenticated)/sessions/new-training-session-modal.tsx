@@ -24,7 +24,8 @@ const STEPS = [
 
 // Template options - currently only BMF, but new templates coming soon
 const WORKOUT_TEMPLATES = [
-  { value: 'full_body_bmf', label: 'Full Body BMF', description: 'Bold Movement Fitness full body workout with 4 sequential rounds' }
+  { value: 'full_body_bmf', label: 'Full Body BMF', description: 'Bold Movement Fitness full body workout with 4 sequential rounds' },
+  { value: 'standard', label: 'Standard Group Workout', description: 'Two-phase workout generation: exercise selection followed by round programming' }
 ];
 
 // Duration options in minutes

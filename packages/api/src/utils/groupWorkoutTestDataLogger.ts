@@ -271,7 +271,7 @@ export class GroupWorkoutTestDataLogger {
    */
   logBlueprint(
     sessionId: string,
-    blueprint: GroupWorkoutBlueprint,
+    blueprint: any, // Can be GroupWorkoutBlueprint or StandardGroupWorkoutBlueprint
     cohesionAnalysis: any, // Ignored - will be removed
     slotAllocationDetails: any[]
   ) {
@@ -280,10 +280,29 @@ export class GroupWorkoutTestDataLogger {
     const session = this.sessionData.get(sessionId);
     if (!session) return;
     
-    session.phases.blueprint = {
-      blocks: blueprint.blocks.map(block => this.extractBlockDebugData(block, session)),
-      validationWarnings: blueprint.validationWarnings || []
-    };
+    // Handle both BMF blueprints (with blocks) and Standard blueprints (with clientExercisePools)
+    if (blueprint.blocks) {
+      // BMF blueprint
+      session.phases.blueprint = {
+        type: 'bmf',
+        blocks: blueprint.blocks.map((block: any) => this.extractBlockDebugData(block, session)),
+        validationWarnings: blueprint.validationWarnings || []
+      };
+    } else if (blueprint.clientExercisePools) {
+      // Standard blueprint
+      session.phases.blueprint = {
+        type: 'standard',
+        metadata: blueprint.metadata,
+        clientPools: Object.keys(blueprint.clientExercisePools).map(clientId => ({
+          clientId,
+          preAssigned: blueprint.clientExercisePools[clientId].preAssigned.length,
+          availableCandidates: blueprint.clientExercisePools[clientId].availableCandidates.length,
+          totalNeeded: blueprint.clientExercisePools[clientId].totalExercisesNeeded
+        })),
+        sharedExerciseCount: blueprint.sharedExercisePool?.length || 0,
+        validationWarnings: blueprint.validationWarnings || []
+      };
+    }
   }
   
   /**

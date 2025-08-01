@@ -27,6 +27,7 @@ export * from "./sms/smsInterpretationGraph";
 // Workout generation graph
 export * from "./workout-generation";
 export * from "./workout-generation/group";
+export * from "./workout-generation/standard";
 
 
 // Formatting utilities

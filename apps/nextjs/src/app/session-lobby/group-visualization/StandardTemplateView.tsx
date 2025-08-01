@@ -2,10 +2,12 @@
 
 import React from "react";
 import Link from "next/link";
+import type { StandardGroupWorkoutBlueprint } from "@acme/ai";
+import type { GroupContext } from "@acme/ai";
 
 interface StandardTemplateViewProps {
-  groupContext: any;
-  blueprint: any;
+  groupContext: GroupContext;
+  blueprint: StandardGroupWorkoutBlueprint;
   summary: any;
   generateWorkout: () => void;
   isGenerating: boolean;
@@ -13,6 +15,11 @@ interface StandardTemplateViewProps {
   activeTab: 'overview' | 'stage1' | 'stage2';
   setActiveTab: (tab: 'overview' | 'stage1' | 'stage2') => void;
   llmDebugData: any;
+}
+
+// Helper to format muscle names
+function formatMuscleName(muscle: string): string {
+  return muscle.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
 }
 
 export default function StandardTemplateView({
@@ -112,46 +119,156 @@ export default function StandardTemplateView({
 
           <div className="p-6">
             {activeTab === 'overview' && (
-              <div>
-                <h3 className="text-lg font-semibold mb-4">Template Configuration</h3>
-                <pre className="bg-gray-100 p-4 rounded text-sm">
-                  {JSON.stringify({
-                    template: 'standard',
-                    strategy: 'two-stage',
-                    clients: groupContext.clients.map(c => ({
-                      name: c.name,
-                      intensity: c.intensity,
-                      targets: c.muscle_target
-                    }))
-                  }, null, 2)}
-                </pre>
-              </div>
-            )}
+              <div className="space-y-6">
+                <div>
+                  <h3 className="text-lg font-semibold mb-4">Blueprint Metadata</h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-gray-50 p-4 rounded">
+                      <p className="text-sm font-medium text-gray-700">Template Type</p>
+                      <p className="text-lg">{blueprint.metadata.templateType}</p>
+                    </div>
+                    <div className="bg-gray-50 p-4 rounded">
+                      <p className="text-sm font-medium text-gray-700">Workout Flow</p>
+                      <p className="text-lg">{blueprint.metadata.workoutFlow}</p>
+                    </div>
+                    <div className="bg-gray-50 p-4 rounded">
+                      <p className="text-sm font-medium text-gray-700">Total Exercises/Client</p>
+                      <p className="text-lg">{blueprint.metadata.totalExercisesPerClient}</p>
+                    </div>
+                    <div className="bg-gray-50 p-4 rounded">
+                      <p className="text-sm font-medium text-gray-700">Pre-assigned Count</p>
+                      <p className="text-lg">{blueprint.metadata.preAssignedCount}</p>
+                    </div>
+                  </div>
+                </div>
 
-            {activeTab === 'stage1' && (
-              <div>
-                <h3 className="text-lg font-semibold mb-4">Stage 1: Exercise Selection</h3>
-                <div className="bg-gray-100 p-4 rounded">
-                  <p className="text-gray-600">
-                    Stage 1 prompt will appear here when generated...
-                  </p>
-                  {llmDebugData?.stage1Prompt && (
-                    <pre className="mt-4 text-sm">{llmDebugData.stage1Prompt}</pre>
-                  )}
+                <div>
+                  <h3 className="text-lg font-semibold mb-4">Client Exercise Pools</h3>
+                  <div className="space-y-4">
+                    {groupContext.clients.map((client) => {
+                      const pool = blueprint.clientExercisePools[client.user_id];
+                      if (!pool) return null;
+
+                      return (
+                        <div key={client.user_id} className="border rounded-lg p-4">
+                          <div className="flex items-center gap-3 mb-3">
+                            <img
+                              src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${client.user_id}`}
+                              alt={client.name}
+                              className="w-10 h-10 rounded-full"
+                            />
+                            <div>
+                              <h4 className="font-medium">{client.name}</h4>
+                              <p className="text-sm text-gray-600">
+                                {pool.preAssigned.length} pre-assigned, {pool.additionalNeeded} to select
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <h5 className="text-sm font-medium mb-2">Pre-assigned Exercises</h5>
+                              <ul className="text-sm space-y-1">
+                                {pool.preAssigned.map((pre, idx) => (
+                                  <li key={idx} className="text-gray-700">
+                                    • {pre.exercise.name} ({pre.source})
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                            <div>
+                              <h5 className="text-sm font-medium mb-2">Available Candidates ({pool.availableCandidates.length})</h5>
+                              <p className="text-sm text-gray-600">
+                                Top scoring: {pool.availableCandidates[0]?.name} ({pool.availableCandidates[0]?.score.toFixed(1)})
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div>
+                  <h3 className="text-lg font-semibold mb-4">Shared Exercise Pool ({blueprint.sharedExercisePool.length} exercises)</h3>
+                  <div className="grid grid-cols-2 gap-3">
+                    {blueprint.sharedExercisePool.slice(0, 6).map((exercise, idx) => (
+                      <div key={exercise.id} className="bg-gray-50 p-3 rounded">
+                        <div className="flex justify-between items-start">
+                          <h4 className="font-medium text-sm">{exercise.name}</h4>
+                          <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
+                            {exercise.clientsSharing.length} clients
+                          </span>
+                        </div>
+                        <p className="text-xs text-gray-600 mt-1">
+                          Score: {exercise.groupScore.toFixed(1)} | {exercise.movementPattern}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
             )}
 
+            {activeTab === 'stage1' && (
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold mb-4">Stage 1: Exercise Selection</h3>
+                
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <h4 className="font-medium text-blue-900 mb-2">Phase 1 Purpose</h4>
+                  <p className="text-sm text-blue-800">
+                    Select {blueprint.metadata.totalExercisesPerClient - blueprint.metadata.preAssignedCount} additional exercises 
+                    for each client from their available candidate pool. The LLM will consider:
+                  </p>
+                  <ul className="text-sm text-blue-800 mt-2 list-disc list-inside">
+                    <li>Muscle targets and avoidances</li>
+                    <li>Exercise variety and movement patterns</li>
+                    <li>Shared exercise opportunities</li>
+                    <li>Individual fitness goals</li>
+                  </ul>
+                </div>
+
+                {llmDebugData?.systemPrompt && (
+                  <details className="border rounded-lg p-3">
+                    <summary className="cursor-pointer font-medium">View Phase 1 Prompt</summary>
+                    <pre className="mt-3 text-xs bg-gray-50 p-3 rounded overflow-x-auto">
+                      {llmDebugData.systemPrompt}
+                    </pre>
+                  </details>
+                )}
+
+                {llmDebugData?.llmOutput && (
+                  <details className="border rounded-lg p-3">
+                    <summary className="cursor-pointer font-medium">View Phase 1 Output</summary>
+                    <pre className="mt-3 text-xs bg-gray-50 p-3 rounded overflow-x-auto">
+                      {llmDebugData.llmOutput}
+                    </pre>
+                  </details>
+                )}
+              </div>
+            )}
+
             {activeTab === 'stage2' && (
-              <div>
+              <div className="space-y-4">
                 <h3 className="text-lg font-semibold mb-4">Stage 2: Workout Programming</h3>
+                
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                  <h4 className="font-medium text-green-900 mb-2">Phase 2 Purpose</h4>
+                  <p className="text-sm text-green-800">
+                    Organize the selected exercises into rounds with appropriate programming. The LLM will determine:
+                  </p>
+                  <ul className="text-sm text-green-800 mt-2 list-disc list-inside">
+                    <li>Exercise order and round assignment</li>
+                    <li>Sets, reps, and tempo for each exercise</li>
+                    <li>Equipment management and flow</li>
+                    <li>Rest periods and timing</li>
+                  </ul>
+                </div>
+
                 <div className="bg-gray-100 p-4 rounded">
                   <p className="text-gray-600">
-                    Stage 2 prompt will appear here when generated...
+                    Phase 2 will execute after Phase 1 completes successfully.
                   </p>
-                  {llmDebugData?.stage2Prompt && (
-                    <pre className="mt-4 text-sm">{llmDebugData.stage2Prompt}</pre>
-                  )}
                 </div>
               </div>
             )}

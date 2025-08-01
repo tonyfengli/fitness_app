@@ -4,6 +4,7 @@
  */
 
 import type { WorkoutTemplate, BlockDefinition, SMSConfig } from "../types/dynamicBlockTypes";
+import { standardTemplate, standardStrengthTemplate } from "./templates/standard";
 
 // Removed non-BMF templates - only BMF template remains
 
@@ -76,7 +77,9 @@ export const FULL_BODY_BMF_TEMPLATE: WorkoutTemplate = {
  * Template registry
  */
 export const WORKOUT_TEMPLATES: Record<string, WorkoutTemplate> = {
-  'full_body_bmf': FULL_BODY_BMF_TEMPLATE
+  'full_body_bmf': FULL_BODY_BMF_TEMPLATE,
+  'standard': standardTemplate,
+  'standard_strength': standardStrengthTemplate
 };
 
 /**
@@ -91,4 +94,21 @@ export function getWorkoutTemplate(templateId: string): WorkoutTemplate | null {
  */
 export function getDefaultWorkoutTemplate(): WorkoutTemplate {
   return FULL_BODY_BMF_TEMPLATE;
+}
+
+/**
+ * Get all templates
+ */
+export function getAllTemplates(): WorkoutTemplate[] {
+  return Object.values(WORKOUT_TEMPLATES);
+}
+
+/**
+ * Get templates by LLM strategy
+ */
+export function getTemplatesByStrategy(strategy: 'single-phase' | 'two-phase'): WorkoutTemplate[] {
+  return getAllTemplates().filter(t => 
+    t.metadata?.llmStrategy === strategy || 
+    (strategy === 'single-phase' && !t.metadata?.llmStrategy)
+  );
 }

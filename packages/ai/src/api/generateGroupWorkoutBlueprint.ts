@@ -1,5 +1,7 @@
 import type { GroupContext } from "../types/groupContext";
 import type { GroupWorkoutBlueprint } from "../types/groupBlueprint";
+import type { StandardGroupWorkoutBlueprint } from "../types/standardBlueprint";
+import type { AnyGroupWorkoutBlueprint } from "../types";
 import type { ScoredExercise } from "../types/scoredExercise";
 import type { Exercise } from "../types/exercise";
 import { filterExercises } from "../core/filtering/filterExercises";
@@ -15,7 +17,7 @@ export async function generateGroupWorkoutBlueprint(
   groupContext: GroupContext,
   exercises: Exercise[],
   preScoredExercises?: Map<string, ScoredExercise[]>
-): Promise<GroupWorkoutBlueprint> {
+): Promise<AnyGroupWorkoutBlueprint> {
   const startTime = Date.now();
   
   console.log('🎯 generateGroupWorkoutBlueprint called with:', {
@@ -114,11 +116,28 @@ export async function generateGroupWorkoutBlueprint(
     
     try {
       const processor = new TemplateProcessor(template);
-      const blueprint = processor.processForGroup(clientScoredExercises);
+      
+      // Check if this is a standard template (two-phase LLM)
+      let blueprint: AnyGroupWorkoutBlueprint;
+      if (template.metadata?.llmStrategy === 'two-phase') {
+        console.log('📋 Using standard template processor (client-pooled)');
+        blueprint = processor.processForStandardGroup(clientScoredExercises);
+      } else {
+        console.log('📋 Using BMF template processor (block-based)');
+        blueprint = processor.processForGroup(clientScoredExercises);
+      }
       
       const phase3Time = Date.now() - phase3StartTime;
       console.log(`✅ Phase 3 complete in ${phase3Time}ms`);
-      console.log(`📊 Blueprint created with ${blueprint.blocks.length} blocks`);
+      
+      // Log based on blueprint type
+      if ('blocks' in blueprint) {
+        console.log(`📊 Blueprint created with ${blueprint.blocks.length} blocks`);
+      } else {
+        const clientCount = Object.keys(blueprint.clientExercisePools).length;
+        console.log(`📊 Standard blueprint created for ${clientCount} clients`);
+        console.log(`  Shared exercises: ${blueprint.sharedExercisePool.length}`);
+      }
       
       // Log warnings if any
       if (blueprint.validationWarnings && blueprint.validationWarnings.length > 0) {
@@ -131,8 +150,12 @@ export async function generateGroupWorkoutBlueprint(
       
       // Log Phase 3 data to test data logger
       if (groupWorkoutTestDataLogger && groupContext.sessionId) {
-        // Create slot allocation details
-        const slotAllocationDetails = blueprint.blocks.map(block => ({
+        // Create slot allocation details based on blueprint type
+        let slotAllocationDetails: any[] = [];
+        
+        if ('blocks' in blueprint) {
+          // BMF blueprint logging
+          slotAllocationDetails = blueprint.blocks.map(block => ({
           blockId: block.blockId,
           blockConfig: {
             maxExercises: block.slots.total,
@@ -157,6 +180,22 @@ export async function generateGroupWorkoutBlueprint(
           },
           selectionStrategy: 'balanced'
         }));
+        } else {
+          // Standard blueprint logging
+          slotAllocationDetails = [{
+            templateType: blueprint.metadata.templateType,
+            workoutFlow: blueprint.metadata.workoutFlow,
+            totalExercisesPerClient: blueprint.metadata.totalExercisesPerClient,
+            preAssignedCount: blueprint.metadata.preAssignedCount,
+            sharedExerciseCount: blueprint.sharedExercisePool.length,
+            clientPools: Object.entries(blueprint.clientExercisePools).map(([clientId, pool]) => ({
+              clientId,
+              preAssigned: pool.preAssigned.length,
+              availableCandidates: pool.availableCandidates.length,
+              totalNeeded: pool.totalExercisesNeeded
+            }))
+          }];
+        }
         
         groupWorkoutTestDataLogger.logBlueprint(
           groupContext.sessionId,

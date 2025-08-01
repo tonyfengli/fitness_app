@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useGenerateGroupWorkout } from "~/hooks/useGenerateGroupWorkout";
 import { useGroupWorkoutBlueprint } from "~/hooks/useGroupWorkoutBlueprint";
 import type { GroupScoredExercise } from "@acme/ai";
+import StandardTemplateView from "./StandardTemplateView";
 
 // Constants
 const SCORE_THRESHOLDS = {
@@ -159,6 +160,7 @@ export default function GroupVisualizationPage() {
     userMessage: string | null;
     llmOutput: string | null;
   }>({ systemPrompt: null, userMessage: null, llmOutput: null });
+  const [activeTab, setActiveTab] = useState<'overview' | 'stage1' | 'stage2'>('overview');
   
   // Use the blueprint hook for fetching visualization data
   const blueprintQuery = useGroupWorkoutBlueprint({
@@ -201,9 +203,9 @@ export default function GroupVisualizationPage() {
       } 
     : null;
   
-  // Set default selected block when data loads
+  // Set default selected block when data loads (only for BMF blueprints)
   useEffect(() => {
-    if (data && data.blueprint.blocks.length > 0 && !selectedBlock) {
+    if (data && data.blueprint.blocks && data.blueprint.blocks.length > 0 && !selectedBlock) {
       setSelectedBlock(data.blueprint.blocks[0].blockId);
     }
   }, [data, selectedBlock]);
@@ -249,8 +251,29 @@ export default function GroupVisualizationPage() {
   }
   
   const { groupContext, blueprint, summary } = data;
-  const selectedBlockData = blueprint.blocks.find(b => b.blockId === selectedBlock);
+  const selectedBlockData = blueprint.blocks?.find(b => b.blockId === selectedBlock);
   
+  // Detect blueprint type
+  const isStandardBlueprint = !!(blueprint as any).clientExercisePools;
+  
+  // For standard blueprints, use the StandardTemplateView
+  if (isStandardBlueprint) {
+    return (
+      <StandardTemplateView
+        groupContext={groupContext}
+        blueprint={blueprint}
+        summary={summary}
+        generateWorkout={generateWorkout}
+        isGenerating={isGenerating}
+        router={router}
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        llmDebugData={llmDebugData}
+      />
+    );
+  }
+  
+  // For BMF blueprints, use the existing view
   return (
     <div className="h-screen bg-gray-50 p-4 flex flex-col">
       <div className="max-w-7xl mx-auto w-full flex flex-col h-full">

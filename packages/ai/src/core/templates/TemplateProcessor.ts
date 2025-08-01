@@ -2,6 +2,7 @@ import type { ScoredExercise } from "../../types/scoredExercise";
 import type { WorkoutTemplate, BlockDefinition } from "./types/dynamicBlockTypes";
 import type { GroupWorkoutBlueprint, GroupBlockBlueprint } from "../../types/groupBlueprint";
 import type { GroupScoredExercise } from "../../types/groupContext";
+import type { StandardGroupWorkoutBlueprint, ClientExercisePool, PreAssignedExercise } from "../../types/standardBlueprint";
 
 /**
  * Simple, clean template processor for organizing exercises into blocks
@@ -350,6 +351,223 @@ export class TemplateProcessor {
         if (data.exercises.length < data.slotsToFill) {
           warnings.push(
             `Block ${block.blockId}: Client ${clientId} only has ${data.exercises.length} exercises (needs ${data.slotsToFill})`
+          );
+        }
+      }
+    }
+
+    return warnings;
+  }
+
+  /**
+   * Process exercises for standard template (client-pooled approach)
+   * Two-phase LLM strategy: exercise selection then round organization
+   */
+  processForStandardGroup(
+    clientExercises: Map<string, ScoredExercise[]>
+  ): StandardGroupWorkoutBlueprint {
+    console.log('🎯 TemplateProcessor.processForStandardGroup', {
+      template: this.template.id,
+      clientCount: clientExercises.size,
+      totalExercisesPerClient: this.template.metadata?.totalExercisesPerClient || 8
+    });
+
+    // Step 1: Extract pre-assigned exercises from deterministic blocks
+    const preAssignedByClient = this.extractPreAssignedExercises(clientExercises);
+
+    // Step 2: Create available exercise pools (excluding pre-assigned)
+    const clientPools = new Map<string, ScoredExercise[]>();
+    
+    for (const [clientId, exercises] of clientExercises) {
+      const preAssigned = preAssignedByClient.get(clientId) || [];
+      const preAssignedIds = new Set(preAssigned.map(p => p.exercise.id));
+      
+      // Filter out pre-assigned exercises
+      const availableExercises = exercises.filter(ex => !preAssignedIds.has(ex.id));
+      clientPools.set(clientId, availableExercises);
+      
+      console.log(`  Client ${clientId}: ${availableExercises.length} available exercises (${preAssigned.length} pre-assigned)`);
+    }
+
+    // Step 3: Find ALL shared exercises across the entire pool
+    const sharedExercisePool = this.findAllSharedExercises(clientPools);
+
+    // Step 4: Build the standard blueprint
+    const clientExercisePools: Record<string, ClientExercisePool> = {};
+    const totalExercisesPerClient = this.template.metadata?.totalExercisesPerClient || 8;
+    const preAssignedCount = this.template.metadata?.preAssignedCount || 2;
+
+    for (const [clientId, exercises] of clientPools) {
+      const preAssigned = preAssignedByClient.get(clientId) || [];
+      
+      clientExercisePools[clientId] = {
+        preAssigned,
+        availableCandidates: exercises,
+        totalExercisesNeeded: totalExercisesPerClient,
+        additionalNeeded: totalExercisesPerClient - preAssigned.length
+      };
+    }
+
+    return {
+      clientExercisePools,
+      sharedExercisePool,
+      metadata: {
+        templateType: this.template.id,
+        workoutFlow: this.template.metadata?.workoutFlow || 'strength-metabolic',
+        totalExercisesPerClient,
+        preAssignedCount
+      },
+      validationWarnings: this.validateStandardBlueprint(clientExercisePools, sharedExercisePool)
+    };
+  }
+
+  /**
+   * Extract pre-assigned exercises from deterministic blocks
+   */
+  private extractPreAssignedExercises(
+    clientExercises: Map<string, ScoredExercise[]>
+  ): Map<string, PreAssignedExercise[]> {
+    const preAssignedByClient = new Map<string, PreAssignedExercise[]>();
+
+    // Only process deterministic blocks with candidateCount = 1
+    const deterministicBlocks = this.template.blocks.filter(
+      block => block.selectionStrategy === 'deterministic' && (block.candidateCount || 1) === 1
+    );
+
+    for (const blockDef of deterministicBlocks) {
+      for (const [clientId, exercises] of clientExercises) {
+        // Filter exercises for this block
+        const filtered = this.filterExercisesForBlock(exercises, blockDef, clientId);
+        
+        if (filtered.length > 0) {
+          // Take the top exercise
+          const topExercise = filtered[0];
+          if (topExercise) {
+            const preAssigned = preAssignedByClient.get(clientId) || [];
+            preAssigned.push({
+              exercise: topExercise,
+              source: blockDef.metadata?.round || blockDef.id
+            });
+            preAssignedByClient.set(clientId, preAssigned);
+            
+            console.log(`  Pre-assigned for ${clientId} in ${blockDef.id}: ${topExercise.name}`);
+          }
+        }
+      }
+    }
+
+    return preAssignedByClient;
+  }
+
+  /**
+   * Find ALL shared exercises across the entire exercise pool
+   * Not limited to specific blocks - for standard template
+   */
+  private findAllSharedExercises(
+    clientPools: Map<string, ScoredExercise[]>
+  ): GroupScoredExercise[] {
+    const exerciseClientMap = new Map<string, Set<string>>();
+    const exerciseMap = new Map<string, ScoredExercise>();
+    const exerciseScoreMap = new Map<string, Map<string, number>>();
+
+    // Build map of exercise ID to client IDs
+    for (const [clientId, exercises] of clientPools) {
+      for (const exercise of exercises) {
+        // Only include if score >= 5.0 (quality threshold)
+        if (exercise.score < 5.0) {
+          continue;
+        }
+        
+        if (!exerciseClientMap.has(exercise.id)) {
+          exerciseClientMap.set(exercise.id, new Set());
+          exerciseMap.set(exercise.id, exercise);
+          exerciseScoreMap.set(exercise.id, new Map());
+        }
+        exerciseClientMap.get(exercise.id)!.add(clientId);
+        exerciseScoreMap.get(exercise.id)!.set(clientId, exercise.score);
+      }
+    }
+
+    // Convert to GroupScoredExercise for exercises with 2+ clients
+    const sharedExercises: GroupScoredExercise[] = [];
+    
+    for (const [exerciseId, clientIds] of exerciseClientMap) {
+      if (clientIds.size >= 2) {
+        const exercise = exerciseMap.get(exerciseId)!;
+        const clientsArray = Array.from(clientIds);
+        
+        // Calculate group score
+        let totalScore = 0;
+        const scoreMap = exerciseScoreMap.get(exerciseId)!;
+        const clientScores = clientsArray.map(clientId => {
+          const score = scoreMap.get(clientId) ?? 5;
+          totalScore += score;
+          
+          return {
+            clientId,
+            individualScore: score,
+            hasExercise: true
+          };
+        });
+
+        sharedExercises.push({
+          ...exercise,
+          groupScore: totalScore / clientsArray.length,
+          clientScores,
+          clientsSharing: clientsArray
+        });
+      }
+    }
+
+    // Sort by number of clients sharing (descending), then by group score
+    sharedExercises.sort((a, b) => {
+      const clientDiff = b.clientsSharing.length - a.clientsSharing.length;
+      if (clientDiff !== 0) return clientDiff;
+      return b.groupScore - a.groupScore;
+    });
+
+    console.log(`  Found ${sharedExercises.length} shared exercises across entire pool`);
+    if (sharedExercises.length > 0) {
+      console.log(`  Top shared: ${sharedExercises[0]!.name} (${sharedExercises[0]!.clientsSharing.length} clients, score: ${sharedExercises[0]!.groupScore.toFixed(1)})`);
+    }
+
+    return sharedExercises;
+  }
+
+  /**
+   * Validate standard blueprint and generate warnings
+   */
+  private validateStandardBlueprint(
+    clientPools: Record<string, ClientExercisePool>,
+    sharedExercises: GroupScoredExercise[]
+  ): string[] {
+    const warnings: string[] = [];
+
+    // Check if we have enough exercises for each client
+    for (const [clientId, pool] of Object.entries(clientPools)) {
+      const totalAvailable = pool.preAssigned.length + pool.availableCandidates.length;
+      if (totalAvailable < pool.totalExercisesNeeded) {
+        warnings.push(
+          `Client ${clientId}: Only ${totalAvailable} exercises available (needs ${pool.totalExercisesNeeded})`
+        );
+      }
+    }
+
+    // Check if we have any shared exercises
+    if (sharedExercises.length === 0) {
+      warnings.push('No shared exercises found - all clients will have individual workouts');
+    }
+
+    // Check if pre-assigned exercises are properly set
+    const clientCount = Object.keys(clientPools).length;
+    const expectedPreAssigned = this.template.metadata?.preAssignedCount || 0;
+    
+    // Only warn if we expect pre-assigned exercises but don't have them
+    if (expectedPreAssigned > 0) {
+      for (const [clientId, pool] of Object.entries(clientPools)) {
+        if (pool.preAssigned.length !== expectedPreAssigned) {
+          warnings.push(
+            `Client ${clientId}: ${pool.preAssigned.length} pre-assigned exercises (expected ${expectedPreAssigned})`
           );
         }
       }

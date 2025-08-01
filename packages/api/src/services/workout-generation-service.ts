@@ -14,9 +14,15 @@ import {
   type GroupContext,
   type ClientContext,
   type GroupWorkoutBlueprint,
+  type StandardGroupWorkoutBlueprint,
+  type AnyGroupWorkoutBlueprint,
+  isStandardBlueprint,
+  isBMFBlueprint,
   type Exercise,
   createLLM,
-  WorkoutPromptBuilder
+  WorkoutPromptBuilder,
+  StandardWorkoutGenerator,
+  getWorkoutTemplate
 } from "@acme/ai";
 import { WorkoutBlueprintService } from "./workout-blueprint-service";
 import { SystemMessage, HumanMessage } from "@langchain/core/messages";
@@ -122,9 +128,13 @@ export class WorkoutGenerationService {
       preScoredExercises
     );
 
+    // Check blueprint type
+    const isBMFBlueprint = 'blocks' in blueprint;
+    
     logger.info("Blueprint generated successfully", {
       sessionId,
-      blockCount: blueprint.blocks.length,
+      blueprintType: isBMFBlueprint ? 'bmf' : 'standard',
+      blockCount: isBMFBlueprint ? (blueprint as any).blocks.length : 0,
       warnings: blueprint.validationWarnings
     });
 
@@ -138,7 +148,7 @@ export class WorkoutGenerationService {
       blueprint,
       summary: {
         totalClients: clientContexts.length,
-        totalBlocks: blueprint.blocks.length,
+        totalBlocks: isBMFBlueprint ? (blueprint as any).blocks.length : 0,
         cohesionWarnings: blueprint.validationWarnings || [],
       },
     };
@@ -148,23 +158,31 @@ export class WorkoutGenerationService {
    * Generate workouts using LLM based on blueprint
    */
   async generateWithLLM(
-    blueprint: GroupWorkoutBlueprint, 
+    blueprint: AnyGroupWorkoutBlueprint, 
     groupContext: GroupContext, 
     exercisePool: Exercise[],
     sessionId: string
   ) {
     logger.info("Starting LLM generation", { 
-      blockCount: blueprint.blocks.length,
+      templateType: groupContext.templateType,
       clientCount: groupContext.clients.length 
     });
 
-    // For BMF template, handle deterministic assignments
-    if (groupContext.templateType === 'full_body_bmf') {
+    // Route based on blueprint type
+    if (isStandardBlueprint(blueprint)) {
+      // Standard template with two-phase LLM
+      logger.info("Using standard workout generator (two-phase)");
+      return this.generateStandardWorkouts(blueprint, groupContext, sessionId);
+    }
+
+    // BMF template with single-phase LLM
+    if (groupContext.templateType === 'full_body_bmf' && isBMFBlueprint(blueprint)) {
+      logger.info("Using BMF workout generator (single-phase)");
       return this.generateBMFWorkouts(blueprint, groupContext, exercisePool, sessionId);
     }
 
-    // For other templates, use standard LLM generation
-    throw new Error("Non-BMF templates not yet implemented");
+    // Other templates not yet implemented
+    throw new Error(`Template ${groupContext.templateType} not yet implemented`);
   }
 
   /**
@@ -240,6 +258,55 @@ export class WorkoutGenerationService {
       llmOutput
       // Removed exercisePool to avoid Date serialization issues
     };
+  }
+
+  /**
+   * Standard template workout generation with two-phase LLM
+   */
+  private async generateStandardWorkouts(
+    blueprint: StandardGroupWorkoutBlueprint,
+    groupContext: GroupContext,
+    sessionId: string
+  ) {
+    logger.info("Generating standard workouts with two-phase LLM");
+    
+    // Get template
+    const template = getWorkoutTemplate(groupContext.templateType || 'standard');
+    if (!template) {
+      throw new Error(`Template ${groupContext.templateType} not found`);
+    }
+    
+    // Initialize generator
+    const generator = new StandardWorkoutGenerator();
+    
+    try {
+      // Generate workout plan using two-phase approach
+      const workoutPlan = await generator.generate(
+        blueprint,
+        groupContext,
+        template,
+        sessionId
+      );
+      
+      logger.info("Standard workout plan generated successfully", {
+        sharedExercises: workoutPlan.exerciseSelection.sharedExercises.length,
+        rounds: workoutPlan.roundOrganization.rounds.length
+      });
+      
+      // Return in format compatible with createWorkouts
+      return {
+        exerciseSelection: workoutPlan.exerciseSelection,
+        roundOrganization: workoutPlan.roundOrganization,
+        systemPrompt: "Two-phase generation - prompts in individual phases",
+        userMessage: "Two-phase generation - see individual phases",
+        llmOutput: JSON.stringify(workoutPlan, null, 2),
+        metadata: workoutPlan.metadata
+      };
+      
+    } catch (error) {
+      logger.error("Error generating standard workouts:", error);
+      throw new Error(`Standard workout generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
   }
 
   /**
@@ -361,13 +428,17 @@ export class WorkoutGenerationService {
         workoutCount: workoutIds.length 
       });
 
+      // Check blueprint type
+      const isBMFBlueprint = 'blocks' in blueprint;
+      
       // Ensure we're not returning any Date objects or complex types
       const result: any = { 
         success: true, 
         workoutIds, 
         // Don't include the full blueprint in the response to avoid serialization issues
         blueprintSummary: {
-          blockCount: blueprint.blocks.length,
+          blueprintType: isBMFBlueprint ? 'bmf' : 'standard',
+          blockCount: isBMFBlueprint ? (blueprint as any).blocks.length : 0,
           warnings: blueprint.validationWarnings || []
         }
       };
@@ -489,6 +560,19 @@ export class WorkoutGenerationService {
     exercisePool: Exercise[]
   ) {
     const allExercises = [];
+    
+    // Check if this is standard template result
+    if (generationResult.exerciseSelection && generationResult.roundOrganization) {
+      return this.createStandardExerciseRecords(
+        tx,
+        clientWorkouts,
+        generationResult,
+        groupContext,
+        exercisePool
+      );
+    }
+    
+    // BMF template processing
     const { deterministicAssignments, llmAssignments } = generationResult;
     
     for (const client of groupContext.clients) {
@@ -680,5 +764,70 @@ export class WorkoutGenerationService {
       medicine_balls: 2,
       dumbbells: "unlimited"
     };
+  }
+
+  /**
+   * Create exercise records for standard template workouts
+   */
+  private async createStandardExerciseRecords(
+    tx: any,
+    clientWorkouts: Map<string, string>,
+    generationResult: any,
+    groupContext: GroupContext,
+    exercisePool: Exercise[]
+  ) {
+    const allExercises = [];
+    const { exerciseSelection, roundOrganization } = generationResult;
+    
+    // Process each round
+    for (const round of roundOrganization.rounds) {
+      // Process each client's exercises in this round
+      for (const client of groupContext.clients) {
+        const workoutId = clientWorkouts.get(client.user_id);
+        if (!workoutId) continue;
+        
+        const clientExercisesInRound = round.exercises[client.user_id] || [];
+        
+        // Add each exercise in the round
+        for (let i = 0; i < clientExercisesInRound.length; i++) {
+          const exercise = clientExercisesInRound[i];
+          
+          // Find the exercise in the pool
+          const dbExercise = exercisePool.find((ex: Exercise) => 
+            ex.id === exercise.exerciseId || 
+            ex.name.toLowerCase() === exercise.exerciseName.toLowerCase()
+          );
+          
+          if (dbExercise) {
+            allExercises.push({
+              workoutId: workoutId,
+              exerciseId: dbExercise.id,
+              orderIndex: this.getRoundOrderIndex(round.id) + i,
+              setsCompleted: exercise.sets || 3,
+              groupName: round.name,
+            });
+          } else {
+            logger.warn(`Exercise not found in pool: ${exercise.exerciseName}`);
+          }
+        }
+      }
+    }
+    
+    return allExercises;
+  }
+  
+  /**
+   * Get order index based on round ID
+   */
+  private getRoundOrderIndex(roundId: string): number {
+    const roundMap: Record<string, number> = {
+      'Round1': 1,
+      'Round2': 10,
+      'Round3': 20,
+      'Round4': 30,
+      'FinalRound': 30
+    };
+    
+    return roundMap[roundId] || 40;
   }
 }

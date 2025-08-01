@@ -1,6 +1,9 @@
 import type { ClientContext } from "./clientContext";
 import type { ScoredExercise } from "./scoredExercise";
 
+// Re-export ClientContext for convenience
+export type { ClientContext } from "./clientContext";
+
 /**
  * Exercise scored for group selection with overlap tracking
  */
