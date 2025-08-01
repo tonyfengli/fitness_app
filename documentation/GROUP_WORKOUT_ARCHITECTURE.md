@@ -189,24 +189,24 @@ Output: Map<clientId, ScoredExercise[]> sorted by score (highest first)
 - Secondary muscle match: **-1.5**
 - Only highest penalty applies (no stacking for multiple matches)
 
-**Intensity Adjustments**:
+**Intensity Adjustments** (Positive-Only Scoring):
 Maps workout intensity to exercise fatigue profiles:
 
 | Workout Intensity | Exercise Fatigue Type | Adjustment |
 |------------------|----------------------|------------|
-| **Low** | low_local | +1.5 |
-| **Low** | moderate_local | +0.75 |
-| **Low** | high_local | -1.5 |
-| **Low** | moderate_systemic | -0.75 |
-| **Low** | high_systemic | -1.5 |
-| **Low** | metabolic | -1.5 |
+| **Low** | low_local | +1.0 |
+| **Low** | moderate_local | +0.5 |
+| **Low** | high_local | 0 |
+| **Low** | moderate_systemic | 0 |
+| **Low** | high_systemic | 0 |
+| **Low** | metabolic | 0 |
 | **Moderate** | All types | 0 |
-| **High** | low_local | -1.5 |
-| **High** | moderate_local | -0.75 |
-| **High** | high_local | +1.5 |
-| **High** | moderate_systemic | +0.75 |
-| **High** | high_systemic | +1.5 |
-| **High** | metabolic | +1.5 |
+| **High** | low_local | 0 |
+| **High** | moderate_local | 0 |
+| **High** | high_local | +1.0 |
+| **High** | moderate_systemic | +0.5 |
+| **High** | high_systemic | +1.0 |
+| **High** | metabolic | +1.0 |
 
 **Include Exercise Priority Boost**:
 - Applied in Pass 2

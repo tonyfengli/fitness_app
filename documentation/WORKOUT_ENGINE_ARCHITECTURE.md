@@ -162,14 +162,14 @@ Assigns preference scores to filtered exercises based on client goals and workou
 - Secondary muscle match: -1.5
 - Only highest penalty applies (no stacking for multiple muscle matches)
 
-#### 2.4 Intensity Adjustments
+#### 2.4 Intensity Adjustments (Positive-Only Scoring)
 - Maps workout intensity (low/moderate/high) to exercise fatigue profiles
 - Fatigue profile types: `low_local`, `moderate_local`, `high_local`, `moderate_systemic`, `high_systemic`, `metabolic`
 - No cascading - these represent different types of fatigue, not levels
-- Adjustment values:
-  - **Low intensity workout**: Prefers low fatigue (+1.5 low_local, +0.75 moderate_local, -1.5 for high/metabolic)
+- Adjustment values (no penalties, only bonuses):
+  - **Low intensity workout**: Prefers low fatigue (+1.0 low_local, +0.5 moderate_local, 0 for others)
   - **Moderate intensity workout**: Neutral (0 for all fatigue types)
-  - **High intensity workout**: Prefers high fatigue (+1.5 high/systemic/metabolic, -1.5 low_local)
+  - **High intensity workout**: Prefers high fatigue (+1.0 high_local/high_systemic/metabolic, +0.5 moderate_systemic, 0 for others)
 
 #### 2.5 Include Exercise Priority Boost
 - Included exercises guaranteed to score highest

@@ -49,9 +49,9 @@ export function ExerciseTable({ exercises, workoutParams }: ExerciseTableProps) 
                 // Extract base fatigue level from profile (e.g. "low_local" -> "low")
                 const fatigueLevel = exercise.fatigueProfile.split('_')[0];
                 const intensityMap: Record<string, Record<string, number>> = {
-                  low: { low: 1.5, moderate: 0.75, high: -1.5 },
+                  low: { low: 1.0, moderate: 0.5, high: 0 },
                   moderate: { low: 0, moderate: 0, high: 0 },
-                  high: { low: -1.5, moderate: -0.75, high: 1.5 }
+                  high: { low: 0, moderate: 0, high: 1.0 }
                 };
                 intensityAdjustment = intensityMap[workoutParams.intensity]?.[fatigueLevel] || 0;
               }
@@ -125,11 +125,6 @@ export function ExerciseTable({ exercises, workoutParams }: ExerciseTableProps) 
                       {intensityAdjustment > 0 && (
                         <div className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
                           +{intensityAdjustment}
-                        </div>
-                      )}
-                      {intensityAdjustment < 0 && (
-                        <div className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded">
-                          {intensityAdjustment}
                         </div>
                       )}
                     </div>

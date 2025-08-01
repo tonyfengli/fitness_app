@@ -149,24 +149,42 @@ export default function PreferencesPage() {
     
     // If no includeExercises, fall back to blueprint exercises
     if (exercises.length === 0 && workoutData?.blueprint) {
-      const rounds = ['Round1', 'Round2'];
-      for (const round of rounds) {
-        const block = workoutData.blueprint.blocks.find(b => b.blockId === round);
-        if (block && block.individualCandidates && block.individualCandidates[clientId]) {
-          const clientExercises = block.individualCandidates[clientId].exercises;
-          if (clientExercises && clientExercises.length > 0) {
-            const exerciseName = clientExercises[0].name;
-            // Only add if not in avoided exercises
-            if (!avoidedExercises.includes(exerciseName)) {
-              exercises.push({
-                name: exerciseName,
-                confirmed: true,
-                isExcluded: false,
-                isActive: true
-              });
+      // Check if it's a BMF blueprint (has blocks) or Standard blueprint (has clientExercisePools)
+      if (workoutData.blueprint.blocks) {
+        // BMF blueprint
+        const rounds = ['Round1', 'Round2'];
+        for (const round of rounds) {
+          const block = workoutData.blueprint.blocks.find(b => b.blockId === round);
+          if (block && block.individualCandidates && block.individualCandidates[clientId]) {
+            const clientExercises = block.individualCandidates[clientId].exercises;
+            if (clientExercises && clientExercises.length > 0) {
+              const exerciseName = clientExercises[0].name;
+              // Only add if not in avoided exercises
+              if (!avoidedExercises.includes(exerciseName)) {
+                exercises.push({
+                  name: exerciseName,
+                  confirmed: true,
+                  isExcluded: false,
+                  isActive: true
+                });
+              }
             }
           }
         }
+      } else if (workoutData.blueprint.clientExercisePools) {
+        // Standard blueprint - for now, just show the placeholder exercises
+        // In the future, this would use the actual pre-assigned exercises
+        const placeholderExercises = ['Barbell Back Squat', 'Pull-ups'];
+        placeholderExercises.forEach(exerciseName => {
+          if (!avoidedExercises.includes(exerciseName)) {
+            exercises.push({
+              name: exerciseName,
+              confirmed: true,
+              isExcluded: false,
+              isActive: true
+            });
+          }
+        });
       }
     }
     

@@ -12,8 +12,8 @@ import StandardTemplateView from "./StandardTemplateView";
 const SCORE_THRESHOLDS = {
   TARGET_PRIMARY: 3.0,
   TARGET_SECONDARY: 1.5,
-  INTENSITY_HIGH: 1.5,
-  INTENSITY_MODERATE: 0.75,
+  INTENSITY_HIGH: 1.0,      // was 1.5
+  INTENSITY_MODERATE: 0.5,  // was 0.75
 } as const;
 
 // Helper to format muscle names for display (convert underscore to space and capitalize)
@@ -55,14 +55,8 @@ function getScoreAdjustmentLabels(score: number, scoreBreakdown?: any): React.Re
     
     if (scoreBreakdown.intensityAdjustment > 0) {
       labels.push(
-        <span key="intensity-pos" className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+        <span key="intensity" className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
           Intensity +{scoreBreakdown.intensityAdjustment.toFixed(2)}
-        </span>
-      );
-    } else if (scoreBreakdown.intensityAdjustment < 0) {
-      labels.push(
-        <span key="intensity-neg" className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-800">
-          Intensity {scoreBreakdown.intensityAdjustment.toFixed(2)}
         </span>
       );
     }
@@ -79,20 +73,20 @@ function getScoreAdjustmentLabels(score: number, scoreBreakdown?: any): React.Re
   
   if (diff > 0) {
     // Positive adjustments
-    if (isClose(absDiff, 4.5)) {
-      // 3.0 (target primary) + 1.5 (intensity)
+    if (isClose(absDiff, 4.0)) {
+      // 3.0 (target primary) + 1.0 (intensity)
       return (
         <>
           <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">Target +3.0</span>
-          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">Intensity +1.5</span>
+          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">Intensity +1.0</span>
         </>
       );
-    } else if (isClose(absDiff, 3.75)) {
-      // 3.0 (target primary) + 0.75 (intensity)
+    } else if (isClose(absDiff, 3.5)) {
+      // 3.0 (target primary) + 0.5 (intensity)
       return (
         <>
           <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">Target +3.0</span>
-          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">Intensity +0.75</span>
+          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">Intensity +0.5</span>
         </>
       );
     } else if (isClose(absDiff, 3.0)) {
@@ -101,45 +95,29 @@ function getScoreAdjustmentLabels(score: number, scoreBreakdown?: any): React.Re
         return <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800">Include +{diff.toFixed(1)}</span>;
       }
       return <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">Target +3.0</span>;
-    } else if (isClose(absDiff, 2.25)) {
-      // 1.5 (target secondary) + 0.75 (intensity)
+    } else if (isClose(absDiff, 2.0)) {
+      // 1.5 (target secondary) + 0.5 (intensity)
       return (
         <>
           <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">Target +1.5</span>
-          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">Intensity +0.75</span>
+          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">Intensity +0.5</span>
         </>
       );
     } else if (isClose(absDiff, 1.5)) {
       return <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">Target +1.5</span>;
-    } else if (isClose(absDiff, 0.75)) {
-      return <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">Intensity +0.75</span>;
+    } else if (isClose(absDiff, 0.5)) {
+      return <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">Intensity +0.5</span>;
+    } else if (isClose(absDiff, 1.0)) {
+      return <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">Intensity +1.0</span>;
     } else {
       return <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800">+{diff.toFixed(2)}</span>;
     }
   } else if (diff < 0) {
-    // Negative adjustments
-    if (isClose(absDiff, 4.5)) {
-      // -3.0 (lessen primary) + -1.5 (intensity)
-      return (
-        <>
-          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">Lessen -3.0</span>
-          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-800">Intensity -1.5</span>
-        </>
-      );
-    } else if (isClose(absDiff, 3.0)) {
+    // Negative adjustments (only from muscle lessen now, no negative intensity)
+    if (isClose(absDiff, 3.0)) {
       return <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">Lessen -3.0</span>;
-    } else if (isClose(absDiff, 2.25)) {
-      // -1.5 (lessen secondary) + -0.75 (intensity)
-      return (
-        <>
-          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">Lessen -1.5</span>
-          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-800">Intensity -0.75</span>
-        </>
-      );
     } else if (isClose(absDiff, 1.5)) {
-      return <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-800">Intensity -1.5</span>;
-    } else if (isClose(absDiff, 0.75)) {
-      return <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-800">Intensity -0.75</span>;
+      return <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">Lessen -1.5</span>;
     } else {
       return <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800">{diff.toFixed(2)}</span>;
     }
@@ -160,7 +138,7 @@ export default function GroupVisualizationPage() {
     userMessage: string | null;
     llmOutput: string | null;
   }>({ systemPrompt: null, userMessage: null, llmOutput: null });
-  const [activeTab, setActiveTab] = useState<'overview' | 'stage1' | 'stage2'>('overview');
+  const [activeTab, setActiveTab] = useState<string>('');
   
   // Use the blueprint hook for fetching visualization data
   const blueprintQuery = useGroupWorkoutBlueprint({

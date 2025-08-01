@@ -15,14 +15,15 @@ export const SCORING_CONFIG = {
   MUSCLE_LESSEN_SECONDARY: -1.5,
 
   // Intensity scoring - kept nested due to complexity
+  // Updated to positive-only scoring (no penalties)
   INTENSITY_SCORING: {
     low: {
-      low_local: 1.5,
-      moderate_local: 0.75,
-      high_local: -1.5,
-      moderate_systemic: -0.75,
-      high_systemic: -1.5,
-      metabolic: -1.5,
+      low_local: 1.0,        // was 1.5
+      moderate_local: 0.5,   // was 0.75
+      high_local: 0,         // was -1.5
+      moderate_systemic: 0,  // was -0.75
+      high_systemic: 0,      // was -1.5
+      metabolic: 0,          // was -1.5
     },
     moderate: {
       low_local: 0,
@@ -33,20 +34,20 @@ export const SCORING_CONFIG = {
       metabolic: 0,
     },
     high: {
-      low_local: -1.5,
-      moderate_local: -0.75,
-      high_local: 1.5,
-      moderate_systemic: 0.75,
-      high_systemic: 1.5,
-      metabolic: 1.5,
+      low_local: 0,          // was -1.5
+      moderate_local: 0,     // was -0.75
+      high_local: 1.0,       // was 1.5
+      moderate_systemic: 0.5, // was 0.75
+      high_systemic: 1.0,    // was 1.5
+      metabolic: 1.0,        // was 1.5
     },
     intense: {
-      low_local: -1.5,
-      moderate_local: -0.75,
-      high_local: 1.5,
-      moderate_systemic: 0.75,
-      high_systemic: 1.5,
-      metabolic: 1.5,
+      low_local: 0,          // was -1.5
+      moderate_local: 0,     // was -0.75
+      high_local: 1.0,       // was 1.5
+      moderate_systemic: 0.5, // was 0.75
+      high_systemic: 1.0,    // was 1.5
+      metabolic: 1.0,        // was 1.5
     },
   },
 } as const;
