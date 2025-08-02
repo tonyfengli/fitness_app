@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, pgEnum, unique } from "drizzle-orm/pg-core";
+import { pgTable, pgEnum, unique, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -9,6 +9,7 @@ export * from "./auth-schema";
 export * from "./exercise";
 export * from "./schema/messages";
 export * from "./schema/conversation-state";
+export * from "./types/exerciseRatings";
 import { exercises } from "./exercise";
 
 export const Business = pgTable("business", (t) => ({
@@ -253,6 +254,30 @@ export const CreateWorkoutExerciseSchema = createInsertSchema(WorkoutExercise, {
 }).omit({
   id: true,
   createdAt: true,
+});
+
+// Create rating type enum
+export const exerciseRatingTypeEnum = pgEnum("exercise_rating_type", ["favorite"]);
+
+// User exercise ratings (simplified - just favorites for now)
+export const UserExerciseRatings = pgTable("user_exercise_ratings", (t) => ({
+  id: t.uuid().notNull().primaryKey().defaultRandom(),
+  userId: t.text().notNull().references(() => user.id, { onDelete: "cascade" }),
+  exerciseId: t.uuid().notNull().references(() => exercises.id, { onDelete: "cascade" }),
+  businessId: t.uuid().notNull().references(() => Business.id, { onDelete: "cascade" }),
+  ratingType: exerciseRatingTypeEnum("rating_type").notNull().default("favorite"),
+}), (table) => ({
+  // Unique constraint: one rating per user per exercise per business
+  userExerciseBusinessUnique: unique().on(table.userId, table.exerciseId, table.businessId),
+}));
+
+export const CreateUserExerciseRatingsSchema = createInsertSchema(UserExerciseRatings, {
+  userId: z.string(),
+  exerciseId: z.string().uuid(),
+  businessId: z.string().uuid(),
+  ratingType: z.enum(['favorite']).default('favorite'),
+}).omit({
+  id: true,
 });
 
 // Export all relations from the relations file
