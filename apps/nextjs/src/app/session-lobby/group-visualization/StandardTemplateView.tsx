@@ -272,7 +272,14 @@ export default function StandardTemplateView({
                                     )}
                                   </td>
                                   <td className="px-4 py-2 text-sm text-gray-600">
-                                    {formatMuscleName(exercise.movementPattern || '')}
+                                    <div className="flex flex-col gap-0.5">
+                                      <span>{formatMuscleName(exercise.movementPattern || '')}</span>
+                                      {exercise.functionTags?.includes('capacity') && (
+                                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 w-fit">
+                                          capacity
+                                        </span>
+                                      )}
+                                    </div>
                                   </td>
                                   <td className="px-4 py-2 text-sm text-gray-600">
                                     {formatMuscleName(exercise.primaryMuscle || '')}
@@ -285,15 +292,22 @@ export default function StandardTemplateView({
                                   </td>
                                   <td className="px-4 py-2 text-sm">
                                     {assignment && (
-                                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
-                                        assignment.bucketType === 'movement_pattern' 
-                                          ? 'bg-purple-100 text-purple-800'
-                                          : assignment.bucketType === 'functional'
-                                          ? 'bg-indigo-100 text-indigo-800'
-                                          : 'bg-gray-100 text-gray-800'
-                                      }`}>
-                                        {assignment.constraint.replace(/_/g, ' ')}
-                                      </span>
+                                      <div className="flex items-center gap-1">
+                                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                                          assignment.bucketType === 'movement_pattern' 
+                                            ? 'bg-purple-100 text-purple-800'
+                                            : assignment.bucketType === 'functional'
+                                            ? 'bg-indigo-100 text-indigo-800'
+                                            : 'bg-gray-100 text-gray-800'
+                                        }`}>
+                                          {assignment.constraint.replace(/_/g, ' ')}
+                                        </span>
+                                        {assignment.tiedCount && assignment.tiedCount > 1 && (
+                                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">
+                                            Selected from {assignment.tiedCount} tied
+                                          </span>
+                                        )}
+                                      </div>
                                     )}
                                   </td>
                                 </tr>
@@ -360,7 +374,14 @@ export default function StandardTemplateView({
                                 {exercise.name}
                               </td>
                               <td className="px-4 py-2 text-sm text-gray-600">
-                                {formatMuscleName(exercise.movementPattern || '')}
+                                <div className="flex flex-col gap-0.5">
+                                  <span>{formatMuscleName(exercise.movementPattern || '')}</span>
+                                  {exercise.functionTags?.includes('capacity') && (
+                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 w-fit">
+                                      capacity
+                                    </span>
+                                  )}
+                                </div>
                               </td>
                               <td className="px-4 py-2 text-sm text-gray-600">
                                 {formatMuscleName(exercise.primaryMuscle || '')}
@@ -699,9 +720,18 @@ export default function StandardTemplateView({
                                   <td className="px-4 py-2 text-sm text-gray-900">{pool.preAssigned.length + idx + 1}</td>
                                   <td className="px-4 py-2 text-sm font-medium text-gray-900">{exercise.name}</td>
                                   <td className="px-4 py-2 text-sm text-gray-600">
-                                    {exercise.functionTags && exercise.functionTags.length > 0
-                                      ? exercise.functionTags.map(tag => tag.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())).join(', ')
-                                      : 'Accessory'}
+                                    <div className="flex flex-col gap-1">
+                                      <span>
+                                        {exercise.functionTags && exercise.functionTags.length > 0
+                                          ? exercise.functionTags.map(tag => tag.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())).join(', ')
+                                          : 'Accessory'}
+                                      </span>
+                                      {assignment?.tiedCount && assignment.tiedCount > 1 && (
+                                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800 w-fit">
+                                          From {assignment.tiedCount} tied
+                                        </span>
+                                      )}
+                                    </div>
                                   </td>
                                   <td className="px-4 py-2 text-sm text-gray-600">
                                     {formatMuscleName(exercise.movementPattern || '')}

@@ -18,6 +18,7 @@ export interface BucketedSelection {
     [exerciseId: string]: {
       bucketType: 'movement_pattern' | 'functional' | 'flex';
       constraint: string; // e.g., 'horizontal_push', 'capacity'
+      tiedCount?: number; // Number of exercises tied at the same score
     };
   };
 }

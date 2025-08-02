@@ -2,9 +2,14 @@ import type { ScoredExercise } from '../../types/scoredExercise';
 import type { Exercise } from '../../types/exercise';
 import type { ClientContext } from '../../types/clientContext';
 import { WorkoutType, BUCKET_CONFIGS, type BucketConstraints } from '../types/workoutTypes';
+import { randomSelect } from '../../utils/exerciseSelection';
 
 export class SmartBucketingService {
-  private static bucketAssignments: Map<string, { bucketType: 'movement_pattern' | 'functional' | 'flex'; constraint: string }> = new Map();
+  private static bucketAssignments: Map<string, { 
+    bucketType: 'movement_pattern' | 'functional' | 'flex'; 
+    constraint: string;
+    tiedCount?: number; // Number of exercises that were tied at the same score
+  }> = new Map();
 
   /**
    * Smart bucket exercises based on workout type and constraints
@@ -105,14 +110,20 @@ export class SmartBucketingService {
       
       if (needed > 0 && maxToAdd > 0) {
         const patternExercises = byPattern.get(pattern) || [];
-        const toAdd = patternExercises.slice(0, Math.min(needed, maxToAdd));
         
-        toAdd.forEach(ex => {
-          selected.push(ex);
-          usedIds.add(ex.id);
-          this.bucketAssignments.set(ex.id, {
+        // Select exercises with randomization for ties
+        const selectedForPattern = this.selectWithTieBreaking(
+          patternExercises, 
+          Math.min(needed, maxToAdd)
+        );
+        
+        selectedForPattern.forEach(({ exercise, tiedCount }) => {
+          selected.push(exercise);
+          usedIds.add(exercise.id);
+          this.bucketAssignments.set(exercise.id, {
             bucketType: 'movement_pattern',
-            constraint: pattern
+            constraint: pattern,
+            tiedCount
           });
         });
       }
@@ -185,10 +196,69 @@ export class SmartBucketingService {
   }
 
   /**
+   * Select exercises with randomization for ties
+   */
+  private static selectWithTieBreaking(
+    exercises: ScoredExercise[], 
+    count: number
+  ): Array<{ exercise: ScoredExercise; tiedCount?: number }> {
+    if (exercises.length === 0 || count <= 0) return [];
+    if (exercises.length <= count) {
+      return exercises.map(ex => ({ exercise: ex }));
+    }
+
+    const selected: Array<{ exercise: ScoredExercise; tiedCount?: number }> = [];
+    const used = new Set<string>();
+
+    while (selected.length < count && exercises.length > used.size) {
+      // Find the highest score among unused exercises
+      let highestScore = -Infinity;
+      for (const ex of exercises) {
+        if (!used.has(ex.id) && ex.score > highestScore) {
+          highestScore = ex.score;
+        }
+      }
+
+      // Get all exercises with the highest score
+      const tied = exercises.filter(ex => 
+        !used.has(ex.id) && ex.score === highestScore
+      );
+
+      if (tied.length === 0) break;
+
+      // If we need more exercises than tied, take all tied
+      const remaining = count - selected.length;
+      if (tied.length <= remaining) {
+        tied.forEach(ex => {
+          selected.push({ 
+            exercise: ex, 
+            tiedCount: tied.length > 1 ? tied.length : undefined 
+          });
+          used.add(ex.id);
+        });
+      } else {
+        // Randomly select from tied exercises
+        for (let i = 0; i < remaining; i++) {
+          const randomEx = randomSelect(tied.filter(ex => !used.has(ex.id)));
+          if (randomEx) {
+            selected.push({ 
+              exercise: randomEx, 
+              tiedCount: tied.length 
+            });
+            used.add(randomEx.id);
+          }
+        }
+      }
+    }
+
+    return selected;
+  }
+
+  /**
    * Get bucket assignments for the last bucketing operation
    */
-  static getBucketAssignments(): Record<string, { bucketType: 'movement_pattern' | 'functional' | 'flex'; constraint: string }> {
-    const assignments: Record<string, { bucketType: 'movement_pattern' | 'functional' | 'flex'; constraint: string }> = {};
+  static getBucketAssignments(): Record<string, { bucketType: 'movement_pattern' | 'functional' | 'flex'; constraint: string; tiedCount?: number }> {
+    const assignments: Record<string, { bucketType: 'movement_pattern' | 'functional' | 'flex'; constraint: string; tiedCount?: number }> = {};
     this.bucketAssignments.forEach((value, key) => {
       assignments[key] = value;
     });
