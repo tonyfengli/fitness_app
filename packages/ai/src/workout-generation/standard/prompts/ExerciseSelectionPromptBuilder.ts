@@ -6,7 +6,6 @@ import type { StandardGroupWorkoutBlueprint } from "../../../types/standardBluep
 import type { GroupContext, ClientContext } from "../../../types/groupContext";
 import type { GroupScoredExercise } from "../../../types/groupContext";
 import type { ScoredExercise } from "../../../types/scoredExercise";
-import { SmartBucketingService } from "../../utils/smartBucketing";
 import { WorkoutType } from "../../types/workoutTypes";
 
 export class ExerciseSelectionPromptBuilder {
@@ -214,17 +213,10 @@ Each exercise has a score (0-10) indicating fit for that client. Scores start at
       
       output += `**${client.name}:**\n\n`;
       
-      // Use smart bucketing to select diverse exercises
-      const preAssigned = pool.preAssigned || [];
-      const bucketedExercises = SmartBucketingService.bucketExercises(
-        pool.availableCandidates,
-        client,
-        this.workoutType,
-        preAssigned.map(p => p.exercise)
-      );
+      // Show top available exercises
+      const topExercises = pool.availableCandidates.slice(0, 15);
       
-      // Show bucketed exercises
-      bucketedExercises.forEach((ex, idx) => {
+      topExercises.forEach((ex, idx) => {
         output += `${idx + 1}. ${ex.name} (${ex.score.toFixed(1)})\n`;
         output += `   - Movement: ${ex.movementPattern}, Primary: ${this.formatMuscle(ex.primaryMuscle)}\n`;
         
@@ -237,12 +229,8 @@ Each exercise has a score (0-10) indicating fit for that client. Scores start at
         output += '\n';
       });
       
-      // Add bucketing summary for transparency
-      const summary = SmartBucketingService.getBucketingSummary(
-        bucketedExercises,
-        { totalExercises: 10, movementPatterns: {}, functionalRequirements: {}, flexSlots: 0 }
-      );
-      output += `_${summary}_\n`;
+      // Add summary of available exercises
+      output += `_Showing top ${topExercises.length} of ${pool.availableCandidates.length} available exercises_\n`;
       
       output += '\n';
     }

@@ -164,37 +164,279 @@ export default function StandardTemplateView({
                     </div>
                   </div>
 
-                  {/* Client Exercise Tabs */}
-                  <div className="mb-4">
-                    <div className="border-b border-gray-200">
-                      <nav className="flex -mb-px">
-                        <button
-                          onClick={() => setClientSubTab(clientTab.id, 'all')}
-                          className={`px-4 py-2 text-sm font-medium ${
-                            (clientSubTabs[clientTab.id] || 'all') === 'all'
-                              ? 'border-b-2 border-indigo-500 text-indigo-600'
-                              : 'text-gray-500 hover:text-gray-700'
-                          }`}
-                        >
-                          All Exercises
-                        </button>
-                        <button
-                          onClick={() => setClientSubTab(clientTab.id, 'selected')}
-                          className={`px-4 py-2 text-sm font-medium ${
-                            clientSubTabs[clientTab.id] === 'selected'
-                              ? 'border-b-2 border-indigo-500 text-indigo-600'
-                              : 'text-gray-500 hover:text-gray-700'
-                          }`}
-                        >
-                          Selected Exercises (Top 8)
-                        </button>
-                      </nav>
+                  {/* Constraint Analysis for Selected Exercises - Moved above tabs */}
+                  <div className="mb-6 bg-gray-50 rounded-lg p-4">
+                    <h4 className="text-sm font-semibold text-gray-900 mb-4">Constraint Analysis for Selected Exercises</h4>
+                    
+                    <div className="space-y-4">
+                      {/* Muscle Coverage */}
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <button
+                            onClick={() => toggleSection(`${clientTab.id}-muscle`)}
+                            className="flex items-center gap-1 text-xs font-medium text-gray-700 hover:text-gray-900"
+                          >
+                            <span className={`transition-transform ${expandedSections[`${clientTab.id}-muscle`] ? 'rotate-90' : ''}`}>▶</span>
+                            Muscle
+                          </button>
+                          {(() => {
+                            const selectedExercises = pool.bucketedSelection?.exercises || [];
+                            const patternCounts = selectedExercises.reduce((acc, ex) => {
+                              const pattern = ex.movementPattern || 'unknown';
+                              acc[pattern] = (acc[pattern] || 0) + 1;
+                              return acc;
+                            }, {} as Record<string, number>);
+                            const uniquePatterns = Object.keys(patternCounts).length;
+                            const varietyScore = Math.round((uniquePatterns / 8) * 100); // Target 8 unique patterns
+                            
+                            return (
+                              <span className={`text-xs font-medium ${uniquePatterns >= 6 ? 'text-green-600' : uniquePatterns >= 4 ? 'text-yellow-600' : 'text-red-600'}`}>
+                                {uniquePatterns} unique patterns
+                              </span>
+                            );
+                          })()}
+                        </div>
+                        {expandedSections[`${clientTab.id}-muscle`] && (
+                          <div className="space-y-2 mt-2">
+                            {(() => {
+                              const muscleGroups = ['chest', 'back', 'legs', 'biceps', 'triceps', 'shoulders', 'core'];
+                              const selectedExercises = pool.bucketedSelection?.exercises || [];
+                              
+                              return muscleGroups.map(muscle => {
+                                const muscleMapping: Record<string, string[]> = {
+                                  'chest': ['chest', 'pectorals'],
+                                  'back': ['lats', 'middle_back', 'upper_back', 'lower_back', 'rhomboids', 'traps'],
+                                  'legs': ['quads', 'hamstrings', 'glutes', 'calves', 'hip_flexors', 'adductors', 'abductors'],
+                                  'biceps': ['biceps'],
+                                  'triceps': ['triceps'],
+                                  'shoulders': ['shoulders', 'delts', 'deltoids', 'anterior_delts', 'lateral_delts', 'posterior_delts'],
+                                  'core': ['abs', 'core', 'obliques', 'transverse_abs']
+                                };
+                                
+                                const targetMuscles = muscleMapping[muscle] || [muscle];
+                                const coverageExercises = selectedExercises.filter(ex => 
+                                  targetMuscles.some(target => 
+                                    ex.primaryMuscle === target || 
+                                    (ex.secondaryMuscles && ex.secondaryMuscles.includes(target))
+                                  )
+                                );
+                                
+                                const coverageCount = coverageExercises.length;
+                                const maxExpected = 3;
+                                const percentage = Math.min(100, (coverageCount / maxExpected) * 100);
+                                
+                                return (
+                                  <div key={muscle}>
+                                    <div className="flex items-center justify-between text-xs mb-1">
+                                      <span className="text-gray-600">{muscle.charAt(0).toUpperCase() + muscle.slice(1)}</span>
+                                      <span className={`font-medium ${coverageCount >= 1 ? 'text-green-600' : 'text-red-600'}`}>
+                                        {coverageCount} exercise{coverageCount !== 1 ? 's' : ''}
+                                      </span>
+                                    </div>
+                                    <div className="w-full bg-gray-200 rounded-full h-2">
+                                      <div 
+                                        className={`h-2 rounded-full transition-all duration-300 ${
+                                          coverageCount === 0 ? 'bg-red-500' : 
+                                          coverageCount === 1 ? 'bg-yellow-500' : 
+                                          'bg-green-500'
+                                        }`}
+                                        style={{ width: `${percentage}%` }}
+                                      />
+                                    </div>
+                                  </div>
+                                );
+                              });
+                            })()}
+                          </div>
+                        )}
+                      </div>
+                      
+                      {/* Smart Bucketing Constraint Compliance */}
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <button
+                            onClick={() => toggleSection(`${clientTab.id}-compliance`)}
+                            className="flex items-center gap-1 text-xs font-medium text-gray-700 hover:text-gray-900"
+                          >
+                            <span className={`transition-transform ${expandedSections[`${clientTab.id}-compliance`] ? 'rotate-90' : ''}`}>▶</span>
+                            Smart Bucketing Compliance
+                          </button>
+                          {(() => {
+                            if (!groupContext.workoutType || !BUCKET_CONFIGS[groupContext.workoutType]) {
+                              return <span className="text-xs text-gray-500">No constraints defined</span>;
+                            }
+                            
+                            const selectedExercises = pool.bucketedSelection?.exercises || [];
+                            
+                            const config = BUCKET_CONFIGS[groupContext.workoutType];
+                            let violations = 0;
+                            let warnings = 0;
+                            
+                            // Check movement pattern constraints
+                            const patternCounts: Record<string, number> = {};
+                            selectedExercises.forEach(ex => {
+                              if (ex.movementPattern) {
+                                patternCounts[ex.movementPattern] = (patternCounts[ex.movementPattern] || 0) + 1;
+                              }
+                            });
+                            
+                            Object.entries(config.movementPatterns).forEach(([pattern, { min, max }]) => {
+                              const count = patternCounts[pattern] || 0;
+                              if (count < min) violations++;
+                              // Don't count exceeding max as a warning - it's fine to have more
+                            });
+                            
+                            // Check functional requirements
+                            Object.entries(config.functionalRequirements).forEach(([funcType, required]) => {
+                              let count = 0;
+                              
+                              if (funcType === 'muscle_target') {
+                                const targetMuscles = client.muscle_target || [];
+                                count = selectedExercises.filter(ex => 
+                                  targetMuscles.some(muscle => 
+                                    ex.primaryMuscle === muscle || 
+                                    (ex.secondaryMuscles && ex.secondaryMuscles.includes(muscle))
+                                  )
+                                ).length;
+                              } else if (funcType === 'favorites') {
+                                count = selectedExercises.filter(ex => 
+                                  ex.scoreBreakdown?.favoriteExerciseBoost && 
+                                  ex.scoreBreakdown.favoriteExerciseBoost > 0
+                                ).length;
+                              } else {
+                                count = selectedExercises.filter(ex => 
+                                  ex.functionTags?.includes(funcType)
+                                ).length;
+                              }
+                              
+                              if (count < required) violations++;
+                            });
+                            
+                            if (violations > 0) {
+                              return <span className="text-xs font-medium text-red-600">{violations} violation{violations > 1 ? 's' : ''}</span>;
+                            } else if (warnings > 0) {
+                              return <span className="text-xs font-medium text-yellow-600">{warnings} warning{warnings > 1 ? 's' : ''}</span>;
+                            } else {
+                              return <span className="text-xs font-medium text-green-600">All constraints met</span>;
+                            }
+                          })()}
+                        </div>
+                        {expandedSections[`${clientTab.id}-compliance`] && groupContext.workoutType && BUCKET_CONFIGS[groupContext.workoutType] && (
+                          <div className="mt-3 space-y-2">
+                                {(() => {
+                                  const selectedExercises = pool.bucketedSelection?.exercises || [];
+                                  
+                                  const patternCounts: Record<string, number> = {};
+                                  selectedExercises.forEach(ex => {
+                                    if (ex.movementPattern) {
+                                      patternCounts[ex.movementPattern] = (patternCounts[ex.movementPattern] || 0) + 1;
+                                    }
+                                  });
+                                  
+                                  return Object.entries(BUCKET_CONFIGS[groupContext.workoutType].movementPatterns).map(([pattern, { min, max }]) => {
+                                    const count = patternCounts[pattern] || 0;
+                                    const status = count < min ? 'fail' : 'pass'; // Always pass if >= min
+                                    
+                                    return (
+                                      <div key={pattern} className="flex items-center justify-between p-2 bg-white rounded border border-gray-200">
+                                        <div className="flex items-center gap-2">
+                                          <div className={`w-4 h-4 rounded-full flex items-center justify-center ${
+                                            status === 'pass' ? 'bg-green-100' : 
+                                            status === 'warning' ? 'bg-yellow-100' : 
+                                            'bg-red-100'
+                                          }`}>
+                                            {status === 'pass' ? (
+                                              <span className="text-green-600 text-xs">✓</span>
+                                            ) : status === 'warning' ? (
+                                              <span className="text-yellow-600 text-xs">!</span>
+                                            ) : (
+                                              <span className="text-red-600 text-xs">✗</span>
+                                            )}
+                                          </div>
+                                          <span className="text-xs text-gray-700">{pattern.replace(/_/g, ' ')}</span>
+                                        </div>
+                                        <span className={`text-xs ${
+                                          status === 'pass' ? 'text-gray-600' : 
+                                          status === 'warning' ? 'text-yellow-600' : 
+                                          'text-red-600'
+                                        }`}>
+                                          {count} / {min === max ? min : `${min}-${max}`}
+                                        </span>
+                                      </div>
+                                    );
+                                  });
+                                })()}
+                                
+                                {/* Functional Requirements without label */}
+                                {(() => {
+                                  const selectedExercises = pool.bucketedSelection?.exercises || [];
+                                  
+                                  return Object.entries(BUCKET_CONFIGS[groupContext.workoutType].functionalRequirements).map(([funcType, required]) => {
+                                    let count = 0;
+                                    
+                                    if (funcType === 'muscle_target') {
+                                      // Count exercises that target the client's muscle targets
+                                      const targetMuscles = client.muscle_target || [];
+                                      count = selectedExercises.filter(ex => 
+                                        targetMuscles.some(muscle => 
+                                          ex.primaryMuscle === muscle || 
+                                          (ex.secondaryMuscles && ex.secondaryMuscles.includes(muscle))
+                                        )
+                                      ).length;
+                                    } else if (funcType === 'favorites') {
+                                      // Count exercises that are favorites
+                                      count = selectedExercises.filter(ex => 
+                                        ex.scoreBreakdown?.favoriteExerciseBoost && 
+                                        ex.scoreBreakdown.favoriteExerciseBoost > 0
+                                      ).length;
+                                    } else {
+                                      // Standard function tag check (capacity, strength)
+                                      count = selectedExercises.filter(ex => 
+                                        ex.functionTags?.includes(funcType)
+                                      ).length;
+                                    }
+                                    
+                                    const status = count >= required ? 'pass' : 'fail';
+                                    
+                                    return (
+                                      <div key={funcType} className="flex items-center justify-between p-2 bg-white rounded border border-gray-200">
+                                        <div className="flex items-center gap-2">
+                                          <div className={`w-4 h-4 rounded-full flex items-center justify-center ${
+                                            status === 'pass' ? 'bg-green-100' : 'bg-red-100'
+                                          }`}>
+                                            {status === 'pass' ? (
+                                              <span className="text-green-600 text-xs">✓</span>
+                                            ) : (
+                                              <span className="text-red-600 text-xs">✗</span>
+                                            )}
+                                          </div>
+                                          <span className="text-xs text-gray-700">{funcType.replace(/_/g, ' ')}</span>
+                                        </div>
+                                        <span className={`text-xs ${
+                                          status === 'pass' ? 'text-gray-600' : 'text-red-600'
+                                        }`}>
+                                          {count} / {required}
+                                        </span>
+                                      </div>
+                                    );
+                                  });
+                                })()}
+                            
+                            {/* Summary Info */}
+                            <div className="text-xs text-gray-600 pt-2 border-t">
+                              <p>Total exercises: {BUCKET_CONFIGS[groupContext.workoutType].totalExercises}</p>
+                              <p>Flex slots: {BUCKET_CONFIGS[groupContext.workoutType].flexSlots} (for highest-scoring exercises)</p>
+                              <p>Pre-assigned: 2 (deterministic)</p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
 
-                  {/* All Exercises Tab */}
-                  {(clientSubTabs[clientTab.id] || 'all') === 'all' && (
-                    <>
+                  {/* All Exercises */}
+                  <h4 className="text-sm font-semibold text-gray-900 mb-4">All Exercises</h4>
+                  <>
                       <div className="overflow-x-auto">
                         <table className="min-w-full divide-y divide-gray-200">
                           <thead className="bg-gray-50">
@@ -432,7 +674,7 @@ export default function StandardTemplateView({
                           // Intensity adjustment removed - no longer affects scores
                           
                           return (
-                            <tr key={exercise.id} className={idx < 6 ? 'bg-blue-50' : ''}>
+                            <tr key={exercise.id}>
                               <td className="px-4 py-2 text-sm text-gray-900">
                                 {pool.preAssigned.length + idx + 1}
                               </td>
@@ -475,359 +717,10 @@ export default function StandardTemplateView({
                       </div>
                       <div className="mt-2 space-y-1 text-sm text-gray-500">
                         <p>* Purple rows: Pre-assigned exercises ({pool.preAssigned.length})</p>
-                        <p>* Green rows: Smart bucketed selection ({pool.bucketedSelection?.exercises.length || 0})</p>
+                        <p>* Green rows: Smart bucketed selection ({pool.totalExercisesNeeded - pool.preAssigned.length})</p>
                         <p>* Total needed: {pool.totalExercisesNeeded} exercises</p>
                       </div>
                     </>
-                  )}
-
-                  {/* Selected Exercises Tab - Constraint Analysis */}
-                  {clientSubTabs[clientTab.id] === 'selected' && (
-                    <div>
-                      {/* Constraint Summary */}
-                      <div className="mb-6 bg-gray-50 rounded-lg p-4">
-                        <h4 className="text-sm font-semibold text-gray-900 mb-4">Constraint Analysis for Selected Exercises</h4>
-                        
-                        <div className="space-y-4">
-                          {/* Muscle Coverage */}
-                          <div>
-                            <div className="flex items-center justify-between mb-2">
-                              <button
-                                onClick={() => toggleSection(`${clientTab.id}-muscle`)}
-                                className="flex items-center gap-1 text-xs font-medium text-gray-700 hover:text-gray-900"
-                              >
-                                <span className={`transition-transform ${expandedSections[`${clientTab.id}-muscle`] ? 'rotate-90' : ''}`}>▶</span>
-                                Muscle
-                              </button>
-                              {(() => {
-                                const selectedExercises = pool.bucketedSelection?.exercises || [];
-                                const patternCounts = selectedExercises.reduce((acc, ex) => {
-                                  const pattern = ex.movementPattern || 'unknown';
-                                  acc[pattern] = (acc[pattern] || 0) + 1;
-                                  return acc;
-                                }, {} as Record<string, number>);
-                                const uniquePatterns = Object.keys(patternCounts).length;
-                                const varietyScore = Math.round((uniquePatterns / 8) * 100); // Target 8 unique patterns
-                                
-                                return (
-                                  <span className={`text-xs font-medium ${uniquePatterns >= 6 ? 'text-green-600' : uniquePatterns >= 4 ? 'text-yellow-600' : 'text-red-600'}`}>
-                                    {uniquePatterns} unique patterns
-                                  </span>
-                                );
-                              })()}
-                            </div>
-                            {expandedSections[`${clientTab.id}-muscle`] && (
-                              <div className="space-y-2 mt-2">
-                                {(() => {
-                                  const muscleGroups = ['chest', 'back', 'legs', 'biceps', 'triceps', 'shoulders', 'core'];
-                                  const selectedExercises = pool.bucketedSelection?.exercises || [];
-                                  
-                                  return muscleGroups.map(muscle => {
-                                    const muscleMapping: Record<string, string[]> = {
-                                      'chest': ['chest', 'pectorals'],
-                                      'back': ['lats', 'middle_back', 'upper_back', 'lower_back', 'rhomboids', 'traps'],
-                                      'legs': ['quads', 'hamstrings', 'glutes', 'calves', 'hip_flexors', 'adductors', 'abductors'],
-                                      'biceps': ['biceps'],
-                                      'triceps': ['triceps'],
-                                      'shoulders': ['shoulders', 'delts', 'deltoids', 'anterior_delts', 'lateral_delts', 'posterior_delts'],
-                                      'core': ['abs', 'core', 'obliques', 'transverse_abs']
-                                    };
-                                    
-                                    const targetMuscles = muscleMapping[muscle] || [muscle];
-                                    const coverageExercises = selectedExercises.filter(ex => 
-                                      targetMuscles.some(target => 
-                                        ex.primaryMuscle === target || 
-                                        (ex.secondaryMuscles && ex.secondaryMuscles.includes(target))
-                                      )
-                                    );
-                                    
-                                    const coverageCount = coverageExercises.length;
-                                    const maxExpected = 3;
-                                    const percentage = Math.min(100, (coverageCount / maxExpected) * 100);
-                                    
-                                    return (
-                                      <div key={muscle}>
-                                        <div className="flex items-center justify-between text-xs mb-1">
-                                          <span className="text-gray-600">{muscle.charAt(0).toUpperCase() + muscle.slice(1)}</span>
-                                          <span className={`font-medium ${coverageCount >= 1 ? 'text-green-600' : 'text-red-600'}`}>
-                                            {coverageCount} exercise{coverageCount !== 1 ? 's' : ''}
-                                          </span>
-                                        </div>
-                                        <div className="w-full bg-gray-200 rounded-full h-2">
-                                          <div 
-                                            className={`h-2 rounded-full transition-all duration-300 ${
-                                              coverageCount === 0 ? 'bg-red-500' : 
-                                              coverageCount === 1 ? 'bg-yellow-500' : 
-                                              'bg-green-500'
-                                            }`}
-                                            style={{ width: `${percentage}%` }}
-                                          />
-                                        </div>
-                                      </div>
-                                    );
-                                  });
-                                })()}
-                              </div>
-                            )}
-                          </div>
-                          
-                          {/* Smart Bucketing Constraint Compliance */}
-                          <div>
-                            <div className="flex items-center justify-between mb-2">
-                              <button
-                                onClick={() => toggleSection(`${clientTab.id}-compliance`)}
-                                className="flex items-center gap-1 text-xs font-medium text-gray-700 hover:text-gray-900"
-                              >
-                                <span className={`transition-transform ${expandedSections[`${clientTab.id}-compliance`] ? 'rotate-90' : ''}`}>▶</span>
-                                Smart Bucketing Compliance
-                              </button>
-                              {(() => {
-                                if (!groupContext.workoutType || !BUCKET_CONFIGS[groupContext.workoutType]) {
-                                  return <span className="text-xs text-gray-500">No constraints defined</span>;
-                                }
-                                
-                                const selectedExercises = pool.bucketedSelection?.exercises || [];
-                                
-                                const config = BUCKET_CONFIGS[groupContext.workoutType];
-                                let violations = 0;
-                                let warnings = 0;
-                                
-                                // Check movement pattern constraints
-                                const patternCounts: Record<string, number> = {};
-                                selectedExercises.forEach(ex => {
-                                  if (ex.movementPattern) {
-                                    patternCounts[ex.movementPattern] = (patternCounts[ex.movementPattern] || 0) + 1;
-                                  }
-                                });
-                                
-                                Object.entries(config.movementPatterns).forEach(([pattern, { min, max }]) => {
-                                  const count = patternCounts[pattern] || 0;
-                                  if (count < min) violations++;
-                                  // Don't count exceeding max as a warning - it's fine to have more
-                                });
-                                
-                                // Check functional requirements
-                                Object.entries(config.functionalRequirements).forEach(([funcType, required]) => {
-                                  const count = selectedExercises.filter(ex => 
-                                    ex.functionTags?.includes(funcType)
-                                  ).length;
-                                  if (count < required) violations++;
-                                });
-                                
-                                if (violations > 0) {
-                                  return <span className="text-xs font-medium text-red-600">{violations} violation{violations > 1 ? 's' : ''}</span>;
-                                } else if (warnings > 0) {
-                                  return <span className="text-xs font-medium text-yellow-600">{warnings} warning{warnings > 1 ? 's' : ''}</span>;
-                                } else {
-                                  return <span className="text-xs font-medium text-green-600">All constraints met</span>;
-                                }
-                              })()}
-                            </div>
-                            {expandedSections[`${clientTab.id}-compliance`] && groupContext.workoutType && BUCKET_CONFIGS[groupContext.workoutType] && (
-                              <div className="mt-3 space-y-2">
-                                    {(() => {
-                                      const selectedExercises = pool.bucketedSelection?.exercises || [];
-                                      
-                                      const patternCounts: Record<string, number> = {};
-                                      selectedExercises.forEach(ex => {
-                                        if (ex.movementPattern) {
-                                          patternCounts[ex.movementPattern] = (patternCounts[ex.movementPattern] || 0) + 1;
-                                        }
-                                      });
-                                      
-                                      return Object.entries(BUCKET_CONFIGS[groupContext.workoutType].movementPatterns).map(([pattern, { min, max }]) => {
-                                        const count = patternCounts[pattern] || 0;
-                                        const status = count < min ? 'fail' : 'pass'; // Always pass if >= min
-                                        
-                                        return (
-                                          <div key={pattern} className="flex items-center justify-between p-2 bg-white rounded border border-gray-200">
-                                            <div className="flex items-center gap-2">
-                                              <div className={`w-4 h-4 rounded-full flex items-center justify-center ${
-                                                status === 'pass' ? 'bg-green-100' : 
-                                                status === 'warning' ? 'bg-yellow-100' : 
-                                                'bg-red-100'
-                                              }`}>
-                                                {status === 'pass' ? (
-                                                  <span className="text-green-600 text-xs">✓</span>
-                                                ) : status === 'warning' ? (
-                                                  <span className="text-yellow-600 text-xs">!</span>
-                                                ) : (
-                                                  <span className="text-red-600 text-xs">✗</span>
-                                                )}
-                                              </div>
-                                              <span className="text-xs text-gray-700">{pattern.replace(/_/g, ' ')}</span>
-                                            </div>
-                                            <span className={`text-xs ${
-                                              status === 'pass' ? 'text-gray-600' : 
-                                              status === 'warning' ? 'text-yellow-600' : 
-                                              'text-red-600'
-                                            }`}>
-                                              {count} / {min === max ? min : `${min}-${max}`}
-                                            </span>
-                                          </div>
-                                        );
-                                      });
-                                    })()}
-                                    
-                                    {/* Functional Requirements without label */}
-                                    {(() => {
-                                      const selectedExercises = pool.bucketedSelection?.exercises || [];
-                                      
-                                      return Object.entries(BUCKET_CONFIGS[groupContext.workoutType].functionalRequirements).map(([funcType, required]) => {
-                                        const count = selectedExercises.filter(ex => 
-                                          ex.functionTags?.includes(funcType)
-                                        ).length;
-                                        const status = count >= required ? 'pass' : 'fail';
-                                        
-                                        return (
-                                          <div key={funcType} className="flex items-center justify-between p-2 bg-white rounded border border-gray-200">
-                                            <div className="flex items-center gap-2">
-                                              <div className={`w-4 h-4 rounded-full flex items-center justify-center ${
-                                                status === 'pass' ? 'bg-green-100' : 'bg-red-100'
-                                              }`}>
-                                                {status === 'pass' ? (
-                                                  <span className="text-green-600 text-xs">✓</span>
-                                                ) : (
-                                                  <span className="text-red-600 text-xs">✗</span>
-                                                )}
-                                              </div>
-                                              <span className="text-xs text-gray-700">{funcType}</span>
-                                            </div>
-                                            <span className={`text-xs ${
-                                              status === 'pass' ? 'text-gray-600' : 'text-red-600'
-                                            }`}>
-                                              {count} / {required}
-                                            </span>
-                                          </div>
-                                        );
-                                      });
-                                    })()}
-                                
-                                {/* Summary Info */}
-                                <div className="text-xs text-gray-600 pt-2 border-t">
-                                  <p>Total exercises: {BUCKET_CONFIGS[groupContext.workoutType].totalExercises}</p>
-                                  <p>Flex slots: {BUCKET_CONFIGS[groupContext.workoutType].flexSlots} (for highest-scoring exercises)</p>
-                                  <p>Pre-assigned: 2 (deterministic)</p>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                      
-                      {/* Selected Exercises Table */}
-                      <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-200">
-                          <thead className="bg-gray-50">
-                            <tr>
-                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                Order
-                              </th>
-                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                Exercise Name
-                              </th>
-                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                Function Tag
-                              </th>
-                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                Pattern
-                              </th>
-                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                Primary Muscle
-                              </th>
-                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                Secondary Muscles
-                              </th>
-                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                Shared?
-                              </th>
-                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                Score
-                              </th>
-                            </tr>
-                          </thead>
-                          <tbody className="bg-white divide-y divide-gray-200">
-                            {/* Pre-assigned exercises */}
-                            {pool.preAssigned.map((preAssigned, idx) => (
-                              <tr key={preAssigned.exercise.id} className="bg-purple-50">
-                                <td className="px-4 py-2 text-sm text-gray-900">{idx + 1}</td>
-                                <td className="px-4 py-2 text-sm font-medium text-gray-900">{preAssigned.exercise.name}</td>
-                                <td className="px-4 py-2 text-sm text-gray-600">
-                                  {preAssigned.exercise.functionTags?.map(tag => tag.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())).join(', ') || 'Primary Strength'}
-                                </td>
-                                <td className="px-4 py-2 text-sm text-gray-600">
-                                  {formatMuscleName(preAssigned.exercise.movementPattern || '')}
-                                </td>
-                                <td className="px-4 py-2 text-sm text-gray-600">
-                                  {formatMuscleName(preAssigned.exercise.primaryMuscle || '')}
-                                </td>
-                                <td className="px-4 py-2 text-sm text-gray-600">
-                                  {preAssigned.exercise.secondaryMuscles?.map(formatMuscleName).join(', ') || '-'}
-                                </td>
-                                <td className="px-4 py-2 text-sm">
-                                  <span className="text-gray-400 text-xs">-</span>
-                                </td>
-                                <td className="px-4 py-2 text-sm text-gray-900">-</td>
-                              </tr>
-                            ))}
-                            
-                            {/* Selected exercises */}
-                            {(pool.bucketedSelection?.exercises || []).map((exercise, idx) => {
-                              const isShared = blueprint.sharedExercisePool.some(
-                                shared => shared.id === exercise.id
-                              );
-                              const assignment = pool.bucketedSelection?.bucketAssignments[exercise.id];
-                              const bucketColor = assignment?.bucketType === 'movement_pattern' ? 'bg-purple-50' : 
-                                                 assignment?.bucketType === 'functional' ? 'bg-indigo-50' : 
-                                                 'bg-blue-50';
-                              
-                              return (
-                                <tr key={exercise.id} className={bucketColor}>
-                                  <td className="px-4 py-2 text-sm text-gray-900">{pool.preAssigned.length + idx + 1}</td>
-                                  <td className="px-4 py-2 text-sm font-medium text-gray-900">{exercise.name}</td>
-                                  <td className="px-4 py-2 text-sm text-gray-600">
-                                    <div className="flex flex-col gap-1">
-                                      <span>
-                                        {exercise.functionTags && exercise.functionTags.length > 0
-                                          ? exercise.functionTags.map(tag => tag.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())).join(', ')
-                                          : 'Accessory'}
-                                      </span>
-                                      {assignment?.tiedCount && assignment.tiedCount > 1 && (
-                                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800 w-fit">
-                                          From {assignment.tiedCount} tied
-                                        </span>
-                                      )}
-                                    </div>
-                                  </td>
-                                  <td className="px-4 py-2 text-sm text-gray-600">
-                                    {formatMuscleName(exercise.movementPattern || '')}
-                                  </td>
-                                  <td className="px-4 py-2 text-sm text-gray-600">
-                                    {formatMuscleName(exercise.primaryMuscle || '')}
-                                  </td>
-                                  <td className="px-4 py-2 text-sm text-gray-600">
-                                    {exercise.secondaryMuscles && exercise.secondaryMuscles.length > 0 
-                                      ? exercise.secondaryMuscles.map(formatMuscleName).join(', ')
-                                      : '-'}
-                                  </td>
-                                  <td className="px-4 py-2 text-sm">
-                                    {isShared ? (
-                                      <span className="text-green-600 text-xs">✓ Shared</span>
-                                    ) : (
-                                      <span className="text-gray-400 text-xs">Individual</span>
-                                    )}
-                                  </td>
-                                  <td className="px-4 py-2 text-sm text-gray-900 font-medium">
-                                    {exercise.score.toFixed(1)}
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  )}
                 </div>
               );
             })}

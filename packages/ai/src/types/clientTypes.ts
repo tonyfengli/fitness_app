@@ -17,7 +17,7 @@ export interface BucketConstraints {
   totalExercises: number;
 }
 
-// Since all 4 categories have the same constraints for now
+// Default constraints for other workout types
 const DEFAULT_CONSTRAINTS: Omit<BucketConstraints, 'functionalRequirements'> = {
   movementPatterns: {
     'horizontal_push': { min: 1, max: 1 },
@@ -35,10 +35,23 @@ const DEFAULT_CONSTRAINTS: Omit<BucketConstraints, 'functionalRequirements'> = {
 
 export const BUCKET_CONFIGS: Record<WorkoutType, BucketConstraints> = {
   [WorkoutType.FULL_BODY_WITH_FINISHER]: {
-    ...DEFAULT_CONSTRAINTS,
+    movementPatterns: {
+      'horizontal_push': { min: 1, max: 1 },
+      'horizontal_pull': { min: 1, max: 1 },
+      'vertical_push': { min: 1, max: 1 },
+      'vertical_pull': { min: 1, max: 1 },
+      'squat': { min: 1, max: 1 },
+      'hinge': { min: 1, max: 1 },
+      'lunge': { min: 1, max: 1 },
+      'core': { min: 1, max: 1 }
+    },
     functionalRequirements: {
-      'capacity': 2
-    }
+      'capacity': 1,
+      'muscle_target': 4,
+      'favorites': 2
+    },
+    flexSlots: 0,
+    totalExercises: 15 // 8 movement patterns + 1 capacity + 4 muscle target + 2 favorites = 15
   },
   
   [WorkoutType.FULL_BODY_WITHOUT_FINISHER]: {
