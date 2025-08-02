@@ -118,32 +118,53 @@ export function applyFullBodyBucketing(
   const requiredMuscleTargetCount = updatedAnalysis.functionalRequirements.muscle_target?.required || 0;
   const muscleTargetNeeded = Math.max(0, requiredMuscleTargetCount - currentMuscleTargetCount);
   
+  // Debug: Show which exercises already count towards muscle_target
+  const existingMuscleTargets = [...preAssignedExercises, ...selected].filter(ex => {
+    const targets = client.muscle_target || [];
+    return targets.some(muscle => 
+      ex.primaryMuscle?.toLowerCase() === muscle.toLowerCase()
+    );
+  });
+  
   console.log(`  Muscle target status: ${currentMuscleTargetCount}/${requiredMuscleTargetCount} (need ${muscleTargetNeeded} more)`);
+  console.log(`  Existing muscle target exercises:`, existingMuscleTargets.map(ex => 
+    `${ex.name} (${ex.primaryMuscle})`
+  ));
   
   if (muscleTargetNeeded > 0 && client.muscle_target && client.muscle_target.length > 0) {
     const targetMuscles = client.muscle_target;
     
-    // Determine distribution based on number of target muscles
-    let distribution: { muscle: string; count: number }[] = [];
-    if (targetMuscles.length === 1 && targetMuscles[0]) {
-      // All 4 for single muscle
-      distribution = [{ muscle: targetMuscles[0], count: muscleTargetNeeded }];
-    } else if (targetMuscles.length === 2 && targetMuscles[0] && targetMuscles[1]) {
-      // Split evenly between 2 muscles
-      const perMuscle = Math.floor(muscleTargetNeeded / 2);
-      const remainder = muscleTargetNeeded % 2;
-      distribution = [
-        { muscle: targetMuscles[0], count: perMuscle + remainder },
-        { muscle: targetMuscles[1], count: perMuscle }
-      ];
+    // Count how many of each target muscle we already have
+    const muscleCountMap = new Map<string, number>();
+    for (const muscle of targetMuscles) {
+      const count = existingMuscleTargets.filter(ex => 
+        ex.primaryMuscle?.toLowerCase() === muscle.toLowerCase()
+      ).length;
+      muscleCountMap.set(muscle.toLowerCase(), count);
     }
+    
+    console.log(`  Current muscle counts:`, Array.from(muscleCountMap.entries()));
+    
+    // Determine how many more we need for each muscle to reach equal distribution
+    const targetPerMuscle = 2; // For 2 muscles, we want 2 of each (total 4)
+    let distribution: { muscle: string; count: number }[] = [];
+    
+    for (const muscle of targetMuscles) {
+      const currentCount = muscleCountMap.get(muscle.toLowerCase()) || 0;
+      const needed = Math.max(0, targetPerMuscle - currentCount);
+      if (needed > 0) {
+        distribution.push({ muscle, count: needed });
+      }
+    }
+    
+    console.log(`  Muscle target distribution needed:`, distribution);
     
     // Select exercises for each target muscle
     for (const { muscle, count } of distribution) {
       // Get candidates for this specific muscle (including favorites)
       const muscleCandidates = availableExercises.filter(ex => 
         !usedIds.has(ex.id) && 
-        ex.primaryMuscle === muscle
+        ex.primaryMuscle?.toLowerCase() === muscle.toLowerCase()
       );
       
       console.log(`  Finding ${count} exercises for ${muscle}: ${muscleCandidates.length} candidates`);

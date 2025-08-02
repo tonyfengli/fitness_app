@@ -83,7 +83,9 @@ function countFunctionalRequirements(
   if (client.muscle_target && client.muscle_target.length > 0) {
     const muscleTargetCount = exercises.filter(ex => {
       const targets = client.muscle_target || [];
-      return targets.some(muscle => ex.primaryMuscle === muscle);
+      return targets.some(muscle => 
+        ex.primaryMuscle?.toLowerCase() === muscle.toLowerCase()
+      );
     }).length;
     
     counts.set('muscle_target', muscleTargetCount);
