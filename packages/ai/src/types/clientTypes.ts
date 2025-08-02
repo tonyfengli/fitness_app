@@ -17,22 +17,8 @@ export interface BucketConstraints {
   totalExercises: number;
 }
 
-// Default constraints for other workout types
-const DEFAULT_CONSTRAINTS: Omit<BucketConstraints, 'functionalRequirements'> = {
-  movementPatterns: {
-    'horizontal_push': { min: 1, max: 1 },
-    'horizontal_pull': { min: 1, max: 1 },
-    'vertical_push': { min: 1, max: 1 },
-    'vertical_pull': { min: 1, max: 1 },
-    'squat': { min: 1, max: 1 },
-    'hinge': { min: 1, max: 1 },
-    'lunge': { min: 1, max: 1 },
-    'core': { min: 2, max: 2 }
-  },
-  flexSlots: 3,
-  totalExercises: 13 // Updated to match total: 1+1+1+1+1+1+1+2+2+3 = 13
-};
-
+// Temporarily define BUCKET_CONFIGS here to avoid circular dependency
+// This will be the source of truth for constraints
 export const BUCKET_CONFIGS: Record<WorkoutType, BucketConstraints> = {
   [WorkoutType.FULL_BODY_WITH_FINISHER]: {
     movementPatterns: {
@@ -47,31 +33,63 @@ export const BUCKET_CONFIGS: Record<WorkoutType, BucketConstraints> = {
     },
     functionalRequirements: {
       'capacity': 1,
-      'muscle_target': 4,
-      'favorites': 2
+      'muscle_target': 4
     },
-    flexSlots: 0,
-    totalExercises: 15 // 8 movement patterns + 1 capacity + 4 muscle target + 2 favorites = 15
+    flexSlots: 2,
+    totalExercises: 15
   },
   
   [WorkoutType.FULL_BODY_WITHOUT_FINISHER]: {
-    ...DEFAULT_CONSTRAINTS,
+    movementPatterns: {
+      'horizontal_push': { min: 1, max: 1 },
+      'horizontal_pull': { min: 1, max: 1 },
+      'vertical_push': { min: 1, max: 1 },
+      'vertical_pull': { min: 1, max: 1 },
+      'squat': { min: 1, max: 1 },
+      'hinge': { min: 1, max: 1 },
+      'lunge': { min: 1, max: 1 },
+      'core': { min: 2, max: 2 }
+    },
     functionalRequirements: {
       'strength': 2
-    }
+    },
+    flexSlots: 3,
+    totalExercises: 13
   },
   
   [WorkoutType.TARGETED_WITH_FINISHER]: {
-    ...DEFAULT_CONSTRAINTS,
+    movementPatterns: {
+      'horizontal_push': { min: 1, max: 1 },
+      'horizontal_pull': { min: 1, max: 1 },
+      'vertical_push': { min: 1, max: 1 },
+      'vertical_pull': { min: 1, max: 1 },
+      'squat': { min: 1, max: 1 },
+      'hinge': { min: 1, max: 1 },
+      'lunge': { min: 1, max: 1 },
+      'core': { min: 2, max: 2 }
+    },
     functionalRequirements: {
       'capacity': 2
-    }
+    },
+    flexSlots: 3,
+    totalExercises: 13
   },
   
   [WorkoutType.TARGETED_WITHOUT_FINISHER]: {
-    ...DEFAULT_CONSTRAINTS,
+    movementPatterns: {
+      'horizontal_push': { min: 1, max: 1 },
+      'horizontal_pull': { min: 1, max: 1 },
+      'vertical_push': { min: 1, max: 1 },
+      'vertical_pull': { min: 1, max: 1 },
+      'squat': { min: 1, max: 1 },
+      'hinge': { min: 1, max: 1 },
+      'lunge': { min: 1, max: 1 },
+      'core': { min: 2, max: 2 }
+    },
     functionalRequirements: {
       'strength': 2
-    }
+    },
+    flexSlots: 3,
+    totalExercises: 13
   }
 };

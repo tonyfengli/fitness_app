@@ -4,6 +4,8 @@ import type { GroupWorkoutBlueprint, GroupBlockBlueprint } from "../../types/gro
 import type { GroupScoredExercise, GroupContext } from "../../types/groupContext";
 import type { StandardGroupWorkoutBlueprint, ClientExercisePool, PreAssignedExercise } from "../../types/standardBlueprint";
 import { PreAssignmentService } from "./preAssignmentService";
+import { processPreAssignments, getPreAssignmentTieInfo } from "../../workout-generation/strategies/workoutTypeStrategies";
+import { WorkoutType } from "../../types/clientTypes";
 
 /**
  * Simple, clean template processor for organizing exercises into blocks
@@ -375,22 +377,55 @@ export class TemplateProcessor {
       totalExercisesPerClient: this.template.metadata?.totalExercisesPerClient || 8
     });
 
-    // Step 1: Determine pre-assigned exercises using includes and favorites
+    // Step 1: Determine pre-assigned exercises using new strategy-based system
     const preAssignedByClient = new Map<string, PreAssignedExercise[]>();
     
     // Only process pre-assignment for standard templates
-    if (groupContext && favoritesByClient) {
+    if (groupContext && favoritesByClient && groupContext.workoutType) {
       for (const [clientId, exercises] of clientExercises) {
         const client = groupContext.clients.find(c => c.user_id === clientId);
         if (!client) continue;
         
+        // Get include and favorite IDs
+        const includeNames = client.exercise_requests?.include || [];
+        const includeIds = exercises
+          .filter(ex => includeNames.includes(ex.name))
+          .map(ex => ex.id);
         const favoriteIds = favoritesByClient.get(clientId) || [];
-        const preAssigned = PreAssignmentService.determinePreAssignedExercises(
-          client,
+        
+        // Use new strategy-based pre-assignment
+        const selectedExercises = processPreAssignments(
           exercises,
-          favoriteIds,
-          groupContext.workoutType
+          client,
+          groupContext.workoutType as WorkoutType,
+          includeIds,
+          favoriteIds
         );
+        
+        // Get tie information from the pre-assignment process
+        const tieInfo = getPreAssignmentTieInfo();
+        
+        // Convert to PreAssignedExercise format with source tracking
+        const preAssigned: PreAssignedExercise[] = selectedExercises.map(exercise => {
+          // Determine source based on what matched
+          let source = 'Round1'; // Default
+          if (includeIds.includes(exercise.id)) {
+            source = 'Include';
+          } else if (favoriteIds.includes(exercise.id)) {
+            source = 'Favorite';
+          } else if (exercise.functionTags?.includes('capacity')) {
+            source = 'Constraint';
+          }
+          
+          // Get tie count if this exercise was selected via tie-breaking
+          const tiedCount = tieInfo?.get(exercise.id);
+          
+          return {
+            exercise,
+            source,
+            tiedCount
+          };
+        });
         
         preAssignedByClient.set(clientId, preAssigned);
       }

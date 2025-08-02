@@ -164,9 +164,9 @@ export default function StandardTemplateView({
                     </div>
                   </div>
 
-                  {/* Constraint Analysis for Selected Exercises - Moved above tabs */}
+                  {/* Constraint Analysis for Pre-Assigned Exercises */}
                   <div className="mb-6 bg-gray-50 rounded-lg p-4">
-                    <h4 className="text-sm font-semibold text-gray-900 mb-4">Constraint Analysis for Selected Exercises</h4>
+                    <h4 className="text-sm font-semibold text-gray-900 mb-4">Constraint Analysis for Pre-Assigned Exercises</h4>
                     
                     <div className="space-y-4">
                       {/* Muscle Coverage */}
@@ -180,18 +180,17 @@ export default function StandardTemplateView({
                             Muscle
                           </button>
                           {(() => {
-                            const selectedExercises = pool.bucketedSelection?.exercises || [];
-                            const patternCounts = selectedExercises.reduce((acc, ex) => {
-                              const pattern = ex.movementPattern || 'unknown';
+                            const preAssignedExercises = pool.preAssigned.map(p => p.exercise);
+                            const patternCounts = preAssignedExercises.reduce((acc, ex) => {
+                              const pattern = ex.movementPattern?.toLowerCase() || 'unknown';
                               acc[pattern] = (acc[pattern] || 0) + 1;
                               return acc;
                             }, {} as Record<string, number>);
-                            const uniquePatterns = Object.keys(patternCounts).length;
-                            const varietyScore = Math.round((uniquePatterns / 8) * 100); // Target 8 unique patterns
+                            const uniquePatterns = Object.keys(patternCounts).filter(p => p !== 'unknown').length;
                             
                             return (
-                              <span className={`text-xs font-medium ${uniquePatterns >= 6 ? 'text-green-600' : uniquePatterns >= 4 ? 'text-yellow-600' : 'text-red-600'}`}>
-                                {uniquePatterns} unique patterns
+                              <span className={`text-xs font-medium ${uniquePatterns >= 2 ? 'text-green-600' : uniquePatterns >= 1 ? 'text-yellow-600' : 'text-red-600'}`}>
+                                {uniquePatterns} unique patterns (of {preAssignedExercises.length} exercises)
                               </span>
                             );
                           })()}
@@ -200,7 +199,7 @@ export default function StandardTemplateView({
                           <div className="space-y-2 mt-2">
                             {(() => {
                               const muscleGroups = ['chest', 'back', 'legs', 'biceps', 'triceps', 'shoulders', 'core'];
-                              const selectedExercises = pool.bucketedSelection?.exercises || [];
+                              const selectedExercises = pool.preAssigned.map(p => p.exercise);
                               
                               return muscleGroups.map(muscle => {
                                 const muscleMapping: Record<string, string[]> = {
@@ -259,7 +258,7 @@ export default function StandardTemplateView({
                             className="flex items-center gap-1 text-xs font-medium text-gray-700 hover:text-gray-900"
                           >
                             <span className={`transition-transform ${expandedSections[`${clientTab.id}-compliance`] ? 'rotate-90' : ''}`}>▶</span>
-                            Smart Bucketing Compliance
+                            Constraint Details
                           </button>
                           {(() => {
                             if (!groupContext.workoutType || !BUCKET_CONFIGS[groupContext.workoutType]) {
@@ -276,7 +275,9 @@ export default function StandardTemplateView({
                             const patternCounts: Record<string, number> = {};
                             selectedExercises.forEach(ex => {
                               if (ex.movementPattern) {
-                                patternCounts[ex.movementPattern] = (patternCounts[ex.movementPattern] || 0) + 1;
+                                // Normalize to lowercase to match constraint keys
+                                const pattern = ex.movementPattern.toLowerCase();
+                                patternCounts[pattern] = (patternCounts[pattern] || 0) + 1;
                               }
                             });
                             
@@ -297,11 +298,6 @@ export default function StandardTemplateView({
                                     ex.primaryMuscle === muscle || 
                                     (ex.secondaryMuscles && ex.secondaryMuscles.includes(muscle))
                                   )
-                                ).length;
-                              } else if (funcType === 'favorites') {
-                                count = selectedExercises.filter(ex => 
-                                  ex.scoreBreakdown?.favoriteExerciseBoost && 
-                                  ex.scoreBreakdown.favoriteExerciseBoost > 0
                                 ).length;
                               } else {
                                 count = selectedExercises.filter(ex => 
@@ -324,12 +320,14 @@ export default function StandardTemplateView({
                         {expandedSections[`${clientTab.id}-compliance`] && groupContext.workoutType && BUCKET_CONFIGS[groupContext.workoutType] && (
                           <div className="mt-3 space-y-2">
                                 {(() => {
-                                  const selectedExercises = pool.bucketedSelection?.exercises || [];
+                                  const selectedExercises = pool.preAssigned.map(p => p.exercise);
                                   
                                   const patternCounts: Record<string, number> = {};
                                   selectedExercises.forEach(ex => {
                                     if (ex.movementPattern) {
-                                      patternCounts[ex.movementPattern] = (patternCounts[ex.movementPattern] || 0) + 1;
+                                      // Normalize to lowercase to match constraint keys
+                                      const pattern = ex.movementPattern.toLowerCase();
+                                      patternCounts[pattern] = (patternCounts[pattern] || 0) + 1;
                                     }
                                   });
                                   
@@ -346,11 +344,11 @@ export default function StandardTemplateView({
                                             'bg-red-100'
                                           }`}>
                                             {status === 'pass' ? (
-                                              <span className="text-green-600 text-xs">✓</span>
+                                              <span className="text-green-600 text-xs"></span>
                                             ) : status === 'warning' ? (
                                               <span className="text-yellow-600 text-xs">!</span>
                                             ) : (
-                                              <span className="text-red-600 text-xs">✗</span>
+                                              <span className="text-red-600 text-xs"></span>
                                             )}
                                           </div>
                                           <span className="text-xs text-gray-700">{pattern.replace(/_/g, ' ')}</span>
@@ -369,7 +367,7 @@ export default function StandardTemplateView({
                                 
                                 {/* Functional Requirements without label */}
                                 {(() => {
-                                  const selectedExercises = pool.bucketedSelection?.exercises || [];
+                                  const selectedExercises = pool.preAssigned.map(p => p.exercise);
                                   
                                   return Object.entries(BUCKET_CONFIGS[groupContext.workoutType].functionalRequirements).map(([funcType, required]) => {
                                     let count = 0;
@@ -424,9 +422,21 @@ export default function StandardTemplateView({
                             
                             {/* Summary Info */}
                             <div className="text-xs text-gray-600 pt-2 border-t">
-                              <p>Total exercises: {BUCKET_CONFIGS[groupContext.workoutType].totalExercises}</p>
-                              <p>Flex slots: {BUCKET_CONFIGS[groupContext.workoutType].flexSlots} (for highest-scoring exercises)</p>
-                              <p>Pre-assigned: 2 (deterministic)</p>
+                              <p>Total exercises needed: {BUCKET_CONFIGS[groupContext.workoutType].totalExercises}</p>
+                              <p>Pre-assigned: {pool.preAssigned.length}</p>
+                              <p>Remaining to select: {BUCKET_CONFIGS[groupContext.workoutType].totalExercises - pool.preAssigned.length}</p>
+                              
+                              {/* Pre-assignment Requirements */}
+                              {groupContext.workoutType === WorkoutType.FULL_BODY_WITH_FINISHER && (
+                                <div className="mt-2 pt-2 border-t">
+                                  <p className="font-medium text-gray-700 mb-1">Pre-assignment requirements:</p>
+                                  <div className="text-xs text-gray-600 mb-2">
+                                    <p>• 2 favorites (MUST be 1 upper body + 1 lower body)</p>
+                                    <p>• Plus any include requests</p>
+                                  </div>
+                                </div>
+                              )}
+                              
                             </div>
                           </div>
                         )}
