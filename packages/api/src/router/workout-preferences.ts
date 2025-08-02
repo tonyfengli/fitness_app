@@ -60,6 +60,7 @@ export const workoutPreferencesRouter = createTRPCRouter({
         avoidExercises: z.array(z.string()).optional(),
         avoidJoints: z.array(z.string()).optional(),
         sessionGoal: z.string().optional(),
+        workoutType: z.enum(["full_body_with_finisher", "full_body_without_finisher", "targeted_with_finisher", "targeted_without_finisher"]).optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -766,6 +767,72 @@ export const workoutPreferencesRouter = createTRPCRouter({
           intensity: input.intensity,
           intensitySource: 'explicit'
         })
+        .where(eq(WorkoutPreferences.id, preference.id))
+        .returning();
+
+      return updated;
+    }),
+
+  updateWorkoutTypePublic: publicProcedure
+    .input(z.object({
+      sessionId: z.string().uuid(),
+      userId: z.string(),
+      workoutType: z.enum(["full_body_with_finisher", "full_body_without_finisher", "targeted_with_finisher", "targeted_without_finisher"])
+    }))
+    .mutation(async ({ ctx, input }) => {
+      // Verify user has checked in to this session
+      const checkIn = await db
+        .select()
+        .from(UserTrainingSession)
+        .where(
+          and(
+            eq(UserTrainingSession.userId, input.userId),
+            eq(UserTrainingSession.trainingSessionId, input.sessionId),
+            eq(UserTrainingSession.status, "checked_in")
+          )
+        )
+        .limit(1);
+
+      if (!checkIn.length) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "User must be checked in to this session",
+        });
+      }
+
+      // Get existing preferences
+      const preference = await db
+        .select()
+        .from(WorkoutPreferences)
+        .where(
+          and(
+            eq(WorkoutPreferences.userId, input.userId),
+            eq(WorkoutPreferences.trainingSessionId, input.sessionId)
+          )
+        )
+        .limit(1)
+        .then(res => res[0]);
+
+      if (!preference) {
+        // Create new preference with workoutType
+        const [newPref] = await db
+          .insert(WorkoutPreferences)
+          .values({
+            userId: input.userId,
+            trainingSessionId: input.sessionId,
+            businessId: checkIn[0].businessId,
+            workoutType: input.workoutType,
+            collectionMethod: 'web'
+          })
+          .returning();
+
+        return newPref;
+      }
+
+      // Update existing preferences
+      const [updated] = await db
+        .update(WorkoutPreferences)
+        .set({ workoutType: input.workoutType })
         .where(eq(WorkoutPreferences.id, preference.id))
         .returning();
 

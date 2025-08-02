@@ -1,5 +1,6 @@
 import type { ClientContext } from "./clientContext";
 import type { ScoredExercise } from "./scoredExercise";
+import type { WorkoutType } from "./clientTypes";
 
 // Re-export ClientContext for convenience
 export type { ClientContext } from "./clientContext";
@@ -35,4 +36,7 @@ export interface GroupContext {
   // Metadata
   businessId: string;
   templateType?: string;
+  
+  // Workout configuration
+  workoutType?: WorkoutType;
 }

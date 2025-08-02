@@ -5,6 +5,7 @@ export * from "./types";
 export * from "./types/scoredExercise";
 export * from "./types/groupContext";
 export * from "./types/groupBlueprint";
+export * from "./types/clientTypes";
 
 // API functions
 export * from "./api/filterExercisesFromInput";
@@ -28,6 +29,7 @@ export * from "./sms/smsInterpretationGraph";
 export * from "./workout-generation";
 export * from "./workout-generation/group";
 export * from "./workout-generation/standard";
+export { WorkoutType, BUCKET_CONFIGS } from "./workout-generation/types/workoutTypes";
 
 
 // Formatting utilities

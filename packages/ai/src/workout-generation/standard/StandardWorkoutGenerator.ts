@@ -75,7 +75,7 @@ export class StandardWorkoutGenerator {
     });
     
     // Build prompt
-    const promptBuilder = new ExerciseSelectionPromptBuilder(blueprint, groupContext);
+    const promptBuilder = new ExerciseSelectionPromptBuilder(blueprint, groupContext, groupContext.workoutType);
     const systemPrompt = promptBuilder.build();
     
     // Call LLM

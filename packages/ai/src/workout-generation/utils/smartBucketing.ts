@@ -1,0 +1,170 @@
+import type { ScoredExercise } from '../../types/scoredExercise';
+import type { Exercise } from '@acme/db';
+import type { ClientContext } from '../../types/clientContext';
+import { WorkoutType, BUCKET_CONFIGS, type BucketConstraints } from '../types/workoutTypes';
+
+export class SmartBucketingService {
+  /**
+   * Smart bucket exercises based on workout type and constraints
+   */
+  static bucketExercises(
+    exercises: ScoredExercise[],
+    clientContext: ClientContext,
+    workoutType: WorkoutType,
+    preAssigned: Exercise[]
+  ): ScoredExercise[] {
+    const config = BUCKET_CONFIGS[workoutType];
+    const selected: ScoredExercise[] = [];
+    const usedExerciseIds = new Set<string>();
+    
+    // 1. Analyze what pre-assigned exercises already cover
+    const coveredPatterns = this.analyzeCoverage(preAssigned);
+    
+    // 2. Fill movement pattern requirements
+    selected.push(...this.fillMovementPatterns(
+      exercises,
+      config.movementPatterns,
+      coveredPatterns,
+      usedExerciseIds
+    ));
+    
+    // 3. Fill functional requirements (capacity/strength)
+    selected.push(...this.fillFunctionalRequirements(
+      exercises,
+      config.functionalRequirements,
+      usedExerciseIds
+    ));
+    
+    // 4. Fill flex slots with highest scoring remaining
+    const remaining = config.flexSlots;
+    const flexExercises = exercises
+      .filter(ex => !usedExerciseIds.has(ex.id))
+      .slice(0, remaining);
+    
+    flexExercises.forEach(ex => {
+      selected.push(ex);
+      usedExerciseIds.add(ex.id);
+    });
+    
+    // 5. Ensure we don't exceed total limit
+    return selected.slice(0, config.totalExercises);
+  }
+  
+  /**
+   * Analyze what movement patterns are already covered by pre-assigned exercises
+   */
+  private static analyzeCoverage(preAssigned: Exercise[]): Map<string, number> {
+    const coverage = new Map<string, number>();
+    
+    preAssigned.forEach(exercise => {
+      if (exercise.movementPattern) {
+        const count = coverage.get(exercise.movementPattern) || 0;
+        coverage.set(exercise.movementPattern, count + 1);
+      }
+    });
+    
+    return coverage;
+  }
+  
+  /**
+   * Fill movement pattern buckets based on constraints
+   */
+  private static fillMovementPatterns(
+    exercises: ScoredExercise[],
+    patternConstraints: Record<string, { min: number; max: number }>,
+    coveredPatterns: Map<string, number>,
+    usedIds: Set<string>
+  ): ScoredExercise[] {
+    const selected: ScoredExercise[] = [];
+    
+    // Group exercises by movement pattern
+    const byPattern = new Map<string, ScoredExercise[]>();
+    exercises.forEach(ex => {
+      if (ex.movementPattern && !usedIds.has(ex.id)) {
+        const pattern = ex.movementPattern;
+        if (!byPattern.has(pattern)) {
+          byPattern.set(pattern, []);
+        }
+        byPattern.get(pattern)!.push(ex);
+      }
+    });
+    
+    // Fill each pattern bucket
+    for (const [pattern, constraints] of Object.entries(patternConstraints)) {
+      const alreadyCovered = coveredPatterns.get(pattern) || 0;
+      const needed = Math.max(0, constraints.min - alreadyCovered);
+      const maxToAdd = Math.max(0, constraints.max - alreadyCovered);
+      
+      if (needed > 0 && maxToAdd > 0) {
+        const patternExercises = byPattern.get(pattern) || [];
+        const toAdd = patternExercises.slice(0, Math.min(needed, maxToAdd));
+        
+        toAdd.forEach(ex => {
+          selected.push(ex);
+          usedIds.add(ex.id);
+        });
+      }
+    }
+    
+    return selected;
+  }
+  
+  /**
+   * Fill functional requirements (capacity/strength exercises)
+   */
+  private static fillFunctionalRequirements(
+    exercises: ScoredExercise[],
+    functionalRequirements: Record<string, number>,
+    usedIds: Set<string>
+  ): ScoredExercise[] {
+    const selected: ScoredExercise[] = [];
+    
+    for (const [functionTag, count] of Object.entries(functionalRequirements)) {
+      const functionalExercises = exercises
+        .filter(ex => 
+          !usedIds.has(ex.id) && 
+          ex.functionTags?.includes(functionTag)
+        )
+        .slice(0, count);
+      
+      functionalExercises.forEach(ex => {
+        selected.push(ex);
+        usedIds.add(ex.id);
+      });
+    }
+    
+    return selected;
+  }
+  
+  /**
+   * Get a descriptive summary of what was bucketed
+   */
+  static getBucketingSummary(
+    selected: ScoredExercise[],
+    config: BucketConstraints
+  ): string {
+    const patternCounts = new Map<string, number>();
+    const functionCounts = new Map<string, number>();
+    
+    selected.forEach(ex => {
+      if (ex.movementPattern) {
+        patternCounts.set(ex.movementPattern, (patternCounts.get(ex.movementPattern) || 0) + 1);
+      }
+      ex.functionTags?.forEach(tag => {
+        functionCounts.set(tag, (functionCounts.get(tag) || 0) + 1);
+      });
+    });
+    
+    let summary = `Selected ${selected.length}/${config.totalExercises} exercises:\n`;
+    summary += 'Movement Patterns: ';
+    summary += Array.from(patternCounts.entries())
+      .map(([pattern, count]) => `${pattern}(${count})`)
+      .join(', ');
+    summary += '\nFunctional Tags: ';
+    summary += Array.from(functionCounts.entries())
+      .map(([tag, count]) => `${tag}(${count})`)
+      .join(', ');
+    
+    return summary;
+  }
+}

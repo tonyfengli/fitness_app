@@ -2,8 +2,8 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import type { StandardGroupWorkoutBlueprint } from "@acme/ai";
-import type { GroupContext } from "@acme/ai";
+import type { StandardGroupWorkoutBlueprint, GroupContext } from "@acme/ai/client";
+import { WorkoutType, BUCKET_CONFIGS } from "@acme/ai/client";
 
 interface StandardTemplateViewProps {
   groupContext: GroupContext;
@@ -76,6 +76,14 @@ export default function StandardTemplateView({
             <p className="text-lg text-gray-600 mt-1">
               Exercise pools for {summary.totalClients} clients
             </p>
+            {groupContext.workoutType && (
+              <div className="mt-2 flex items-center gap-2">
+                <span className="text-sm font-medium text-gray-700">Workout Type:</span>
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
+                  {groupContext.workoutType.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                </span>
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-3">
             <button
@@ -137,7 +145,7 @@ export default function StandardTemplateView({
                       <h3 className="text-xl font-semibold">{client.name}</h3>
                       <div className="mt-2 grid grid-cols-2 gap-4 text-sm">
                         <div>
-                          <span className="font-medium">Goal:</span> {formatMuscleName(client.primary_goal || 'general_fitness')}
+                          <span className="font-medium">Workout Type:</span> {groupContext.workoutType?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) || 'Not Set'}
                         </div>
                         <div>
                           <span className="font-medium">Intensity:</span> {client.intensity}
@@ -338,86 +346,6 @@ export default function StandardTemplateView({
                         <h4 className="text-sm font-semibold text-gray-900 mb-4">Constraint Analysis for Selected Exercises</h4>
                         
                         <div className="space-y-4">
-                          {/* Function Tag Coverage */}
-                          <div>
-                            <div className="flex items-center justify-between mb-2">
-                              <button
-                                onClick={() => toggleSection(`${clientTab.id}-function`)}
-                                className="flex items-center gap-1 text-xs font-medium text-gray-700 hover:text-gray-900"
-                              >
-                                <span className={`transition-transform ${expandedSections[`${clientTab.id}-function`] ? 'rotate-90' : ''}`}>▶</span>
-                                Function Tag
-                              </button>
-                              {(() => {
-                                if (!client.muscle_target || client.muscle_target.length === 0) return null;
-                                const selectedExercises = [
-                                  { name: 'Barbell Back Squat', primaryMuscle: 'glutes', secondaryMuscles: ['quads', 'hamstrings'] },
-                                  { name: 'Pull-ups', primaryMuscle: 'lats', secondaryMuscles: ['biceps', 'middle_back'] },
-                                  ...pool.availableCandidates.slice(0, 6)
-                                ];
-                                const targetsCovered = client.muscle_target.filter(target => 
-                                  selectedExercises.some(ex => 
-                                    ex.primaryMuscle === target || 
-                                    (ex.secondaryMuscles && ex.secondaryMuscles.includes(target))
-                                  )
-                                ).length;
-                                const percentage = Math.round((targetsCovered / client.muscle_target.length) * 100);
-                                return (
-                                  <span className={`text-xs font-medium ${percentage === 100 ? 'text-green-600' : percentage >= 75 ? 'text-yellow-600' : 'text-red-600'}`}>
-                                    {targetsCovered}/{client.muscle_target.length} targets ({percentage}%)
-                                  </span>
-                                );
-                              })()}
-                            </div>
-                            {expandedSections[`${clientTab.id}-function`] && (
-                              <div className="space-y-2 mt-2">
-                                {(() => {
-                                  const functionCategories = [
-                                    { name: 'Strength', tags: ['primary_strength', 'secondary_strength', 'accessory'] },
-                                    { name: 'Core', tags: ['core'] },
-                                    { name: 'Capacity', tags: ['capacity'] }
-                                  ];
-                                  const selectedExercises = [
-                                    { name: 'Barbell Back Squat', functionTags: ['primary_strength'] },
-                                    { name: 'Pull-ups', functionTags: ['primary_strength', 'secondary_strength'] },
-                                    ...pool.availableCandidates.slice(0, 6)
-                                  ];
-                                  
-                                  return functionCategories.map(category => {
-                                    const coverageExercises = selectedExercises.filter(ex => 
-                                      ex.functionTags && ex.functionTags.some(tag => category.tags.includes(tag))
-                                    );
-                                    
-                                    const coverageCount = coverageExercises.length;
-                                    const maxExpected = category.name === 'Strength' ? 6 : 2; // Different expectations per category
-                                    const percentage = Math.min(100, (coverageCount / maxExpected) * 100);
-                                    
-                                    return (
-                                      <div key={category.name}>
-                                        <div className="flex items-center justify-between text-xs mb-1">
-                                          <span className="text-gray-600">{category.name}</span>
-                                          <span className={`font-medium ${coverageCount >= 1 ? 'text-green-600' : 'text-red-600'}`}>
-                                            {coverageCount} exercise{coverageCount !== 1 ? 's' : ''}
-                                          </span>
-                                        </div>
-                                        <div className="w-full bg-gray-200 rounded-full h-2">
-                                          <div 
-                                            className={`h-2 rounded-full transition-all duration-300 ${
-                                              coverageCount === 0 ? 'bg-red-500' : 
-                                              coverageCount < maxExpected ? 'bg-yellow-500' : 
-                                              'bg-green-500'
-                                            }`}
-                                            style={{ width: `${percentage}%` }}
-                                          />
-                                        </div>
-                                      </div>
-                                    );
-                                  });
-                                })()}
-                              </div>
-                            )}
-                          </div>
-                          
                           {/* Muscle Coverage */}
                           <div>
                             <div className="flex items-center justify-between mb-2">
@@ -508,173 +436,158 @@ export default function StandardTemplateView({
                             )}
                           </div>
                           
-                          {/* Movement Pattern */}
+                          {/* Smart Bucketing Constraint Compliance */}
                           <div>
                             <div className="flex items-center justify-between mb-2">
                               <button
-                                onClick={() => toggleSection(`${clientTab.id}-movement`)}
+                                onClick={() => toggleSection(`${clientTab.id}-compliance`)}
                                 className="flex items-center gap-1 text-xs font-medium text-gray-700 hover:text-gray-900"
                               >
-                                <span className={`transition-transform ${expandedSections[`${clientTab.id}-movement`] ? 'rotate-90' : ''}`}>▶</span>
-                                Movement Pattern
+                                <span className={`transition-transform ${expandedSections[`${clientTab.id}-compliance`] ? 'rotate-90' : ''}`}>▶</span>
+                                Smart Bucketing Compliance
                               </button>
                               {(() => {
+                                if (!groupContext.workoutType || !BUCKET_CONFIGS[groupContext.workoutType]) {
+                                  return <span className="text-xs text-gray-500">No constraints defined</span>;
+                                }
+                                
                                 const selectedExercises = [
-                                  { movementPattern: 'squat' },
-                                  { movementPattern: 'vertical_pull' },
+                                  { movementPattern: 'squat', functionTags: ['primary_strength'] },
+                                  { movementPattern: 'vertical_pull', functionTags: ['primary_strength'] },
                                   ...pool.availableCandidates.slice(0, 6)
                                 ];
-                                const patternCounts = selectedExercises.reduce((acc, ex) => {
-                                  const pattern = ex.movementPattern || 'unknown';
-                                  acc[pattern] = (acc[pattern] || 0) + 1;
-                                  return acc;
-                                }, {} as Record<string, number>);
-                                const uniquePatterns = Object.keys(patternCounts).length;
                                 
-                                return (
-                                  <span className={`text-xs font-medium ${uniquePatterns >= 6 ? 'text-green-600' : uniquePatterns >= 4 ? 'text-yellow-600' : 'text-red-600'}`}>
-                                    {uniquePatterns} unique patterns
-                                  </span>
-                                );
+                                const config = BUCKET_CONFIGS[groupContext.workoutType];
+                                let violations = 0;
+                                let warnings = 0;
+                                
+                                // Check movement pattern constraints
+                                const patternCounts: Record<string, number> = {};
+                                selectedExercises.forEach(ex => {
+                                  if (ex.movementPattern) {
+                                    patternCounts[ex.movementPattern] = (patternCounts[ex.movementPattern] || 0) + 1;
+                                  }
+                                });
+                                
+                                Object.entries(config.movementPatterns).forEach(([pattern, { min, max }]) => {
+                                  const count = patternCounts[pattern] || 0;
+                                  if (count < min) violations++;
+                                  // Don't count exceeding max as a warning - it's fine to have more
+                                });
+                                
+                                // Check functional requirements
+                                Object.entries(config.functionalRequirements).forEach(([funcType, required]) => {
+                                  const count = selectedExercises.filter(ex => 
+                                    ex.functionTags?.includes(funcType)
+                                  ).length;
+                                  if (count < required) violations++;
+                                });
+                                
+                                if (violations > 0) {
+                                  return <span className="text-xs font-medium text-red-600">{violations} violation{violations > 1 ? 's' : ''}</span>;
+                                } else if (warnings > 0) {
+                                  return <span className="text-xs font-medium text-yellow-600">{warnings} warning{warnings > 1 ? 's' : ''}</span>;
+                                } else {
+                                  return <span className="text-xs font-medium text-green-600">All constraints met</span>;
+                                }
                               })()}
                             </div>
-                            {expandedSections[`${clientTab.id}-movement`] && (
-                              <div className="space-y-2 mt-2">
-                                {(() => {
-                                  const selectedExercises = [
-                                    { movementPattern: 'squat' },
-                                    { movementPattern: 'vertical_pull' },
-                                    ...pool.availableCandidates.slice(0, 6)
-                                  ];
-                                  
-                                  const patternCounts = selectedExercises.reduce((acc, ex) => {
-                                    const pattern = ex.movementPattern || 'unknown';
-                                    acc[pattern] = (acc[pattern] || 0) + 1;
-                                    return acc;
-                                  }, {} as Record<string, number>);
-                                  
-                                  const maxCount = Math.max(...Object.values(patternCounts));
-                                  
-                                  return Object.entries(patternCounts)
-                                    .sort(([, a], [, b]) => b - a)
-                                    .map(([pattern, count]) => {
-                                      const percentage = (count / maxCount) * 100;
-                                      const isOverused = count > 2;
+                            {expandedSections[`${clientTab.id}-compliance`] && groupContext.workoutType && BUCKET_CONFIGS[groupContext.workoutType] && (
+                              <div className="mt-3 space-y-2">
+                                    {(() => {
+                                      const selectedExercises = [
+                                        { movementPattern: 'squat' },
+                                        { movementPattern: 'vertical_pull' },
+                                        ...pool.availableCandidates.slice(0, 6)
+                                      ];
                                       
-                                      return (
-                                        <div key={pattern}>
-                                          <div className="flex items-center justify-between text-xs mb-1">
-                                            <span className="text-gray-600">{formatMuscleName(pattern)}</span>
-                                            <span className={`font-medium ${isOverused ? 'text-orange-600' : 'text-gray-600'}`}>
-                                              {count}x {isOverused && '⚠️'}
+                                      const patternCounts: Record<string, number> = {};
+                                      selectedExercises.forEach(ex => {
+                                        if (ex.movementPattern) {
+                                          patternCounts[ex.movementPattern] = (patternCounts[ex.movementPattern] || 0) + 1;
+                                        }
+                                      });
+                                      
+                                      return Object.entries(BUCKET_CONFIGS[groupContext.workoutType].movementPatterns).map(([pattern, { min, max }]) => {
+                                        const count = patternCounts[pattern] || 0;
+                                        const status = count < min ? 'fail' : 'pass'; // Always pass if >= min
+                                        
+                                        return (
+                                          <div key={pattern} className="flex items-center justify-between p-2 bg-white rounded border border-gray-200">
+                                            <div className="flex items-center gap-2">
+                                              <div className={`w-4 h-4 rounded-full flex items-center justify-center ${
+                                                status === 'pass' ? 'bg-green-100' : 
+                                                status === 'warning' ? 'bg-yellow-100' : 
+                                                'bg-red-100'
+                                              }`}>
+                                                {status === 'pass' ? (
+                                                  <span className="text-green-600 text-xs">✓</span>
+                                                ) : status === 'warning' ? (
+                                                  <span className="text-yellow-600 text-xs">!</span>
+                                                ) : (
+                                                  <span className="text-red-600 text-xs">✗</span>
+                                                )}
+                                              </div>
+                                              <span className="text-xs text-gray-700">{pattern.replace(/_/g, ' ')}</span>
+                                            </div>
+                                            <span className={`text-xs ${
+                                              status === 'pass' ? 'text-gray-600' : 
+                                              status === 'warning' ? 'text-yellow-600' : 
+                                              'text-red-600'
+                                            }`}>
+                                              {count} / {min === max ? min : `${min}-${max}`}
                                             </span>
                                           </div>
-                                          <div className="w-full bg-gray-200 rounded-full h-2">
-                                            <div 
-                                              className={`h-2 rounded-full transition-all duration-300 ${
-                                                isOverused ? 'bg-orange-500' : 'bg-blue-500'
-                                              }`}
-                                              style={{ width: `${percentage}%` }}
-                                            />
+                                        );
+                                      });
+                                    })()}
+                                    
+                                    {/* Functional Requirements without label */}
+                                    {(() => {
+                                      const selectedExercises = [
+                                        { functionTags: ['primary_strength'] },
+                                        { functionTags: ['primary_strength'] },
+                                        ...pool.availableCandidates.slice(0, 6)
+                                      ];
+                                      
+                                      return Object.entries(BUCKET_CONFIGS[groupContext.workoutType].functionalRequirements).map(([funcType, required]) => {
+                                        const count = selectedExercises.filter(ex => 
+                                          ex.functionTags?.includes(funcType)
+                                        ).length;
+                                        const status = count >= required ? 'pass' : 'fail';
+                                        
+                                        return (
+                                          <div key={funcType} className="flex items-center justify-between p-2 bg-white rounded border border-gray-200">
+                                            <div className="flex items-center gap-2">
+                                              <div className={`w-4 h-4 rounded-full flex items-center justify-center ${
+                                                status === 'pass' ? 'bg-green-100' : 'bg-red-100'
+                                              }`}>
+                                                {status === 'pass' ? (
+                                                  <span className="text-green-600 text-xs">✓</span>
+                                                ) : (
+                                                  <span className="text-red-600 text-xs">✗</span>
+                                                )}
+                                              </div>
+                                              <span className="text-xs text-gray-700">{funcType}</span>
+                                            </div>
+                                            <span className={`text-xs ${
+                                              status === 'pass' ? 'text-gray-600' : 'text-red-600'
+                                            }`}>
+                                              {count} / {required}
+                                            </span>
                                           </div>
-                                        </div>
-                                      );
-                                    });
-                                })()}
+                                        );
+                                      });
+                                    })()}
+                                
+                                {/* Summary Info */}
+                                <div className="text-xs text-gray-600 pt-2 border-t">
+                                  <p>Total exercises: {BUCKET_CONFIGS[groupContext.workoutType].totalExercises}</p>
+                                  <p>Flex slots: {BUCKET_CONFIGS[groupContext.workoutType].flexSlots} (for highest-scoring exercises)</p>
+                                  <p>Pre-assigned: 2 (deterministic)</p>
+                                </div>
                               </div>
                             )}
-                          </div>
-                          
-                          {/* Constraint Compliance */}
-                          <div>
-                            <h5 className="text-xs font-medium text-gray-700 mb-2">Constraint Compliance</h5>
-                            <div className="space-y-2">
-                              {(() => {
-                                const constraints = [];
-                                
-                                // Muscle Lessen Check
-                                if (client.muscle_lessen && client.muscle_lessen.length > 0) {
-                                  const violations = pool.availableCandidates.slice(0, 6).filter(ex => 
-                                    client.muscle_lessen.includes(ex.primaryMuscle) ||
-                                    (ex.secondaryMuscles && ex.secondaryMuscles.some(m => client.muscle_lessen.includes(m)))
-                                  );
-                                  constraints.push({
-                                    name: 'Avoid Muscle Violations',
-                                    status: violations.length === 0 ? 'pass' : 'fail',
-                                    detail: violations.length === 0 ? 'No violations' : `${violations.length} exercise${violations.length > 1 ? 's' : ''} violate constraint`,
-                                    severity: 'high'
-                                  });
-                                }
-                                
-                                // Shared Exercise Check
-                                const hasShared = pool.availableCandidates.slice(0, 6).some(ex => 
-                                  blueprint.sharedExercisePool.some(shared => shared.id === ex.id)
-                                );
-                                constraints.push({
-                                  name: 'Shared Exercise Requirement',
-                                  status: hasShared ? 'pass' : 'warning',
-                                  detail: hasShared ? 'Has shared exercises' : 'Only pre-assigned shared',
-                                  severity: 'medium'
-                                });
-                                
-                                // Muscle Target Coverage
-                                if (client.muscle_target && client.muscle_target.length > 0) {
-                                  const selectedExercises = [
-                                    { primaryMuscle: 'glutes', secondaryMuscles: ['quads', 'hamstrings'] },
-                                    { primaryMuscle: 'lats', secondaryMuscles: ['biceps', 'middle_back'] },
-                                    ...pool.availableCandidates.slice(0, 6)
-                                  ];
-                                  const uncoveredTargets = client.muscle_target.filter(target => 
-                                    !selectedExercises.some(ex => 
-                                      ex.primaryMuscle === target || 
-                                      (ex.secondaryMuscles && ex.secondaryMuscles.includes(target))
-                                    )
-                                  );
-                                  constraints.push({
-                                    name: 'Muscle Coverage',
-                                    status: uncoveredTargets.length === 0 ? 'pass' : 'fail',
-                                    detail: uncoveredTargets.length === 0 ? 'All targets covered' : `Missing: ${uncoveredTargets.map(formatMuscleName).join(', ')}`,
-                                    severity: 'high'
-                                  });
-                                }
-                                
-                                // Workout Flow
-                                constraints.push({
-                                  name: 'Workout Flow',
-                                  status: 'pass',
-                                  detail: 'Strength → Metabolic progression',
-                                  severity: 'low'
-                                });
-                                
-                                return constraints.map(constraint => (
-                                  <div key={constraint.name} className="flex items-center justify-between p-2 bg-white rounded border border-gray-200">
-                                    <div className="flex items-center gap-2">
-                                      <div className={`w-4 h-4 rounded-full flex items-center justify-center ${
-                                        constraint.status === 'pass' ? 'bg-green-100' : 
-                                        constraint.status === 'warning' ? 'bg-yellow-100' : 
-                                        'bg-red-100'
-                                      }`}>
-                                        {constraint.status === 'pass' ? (
-                                          <span className="text-green-600 text-xs">✓</span>
-                                        ) : constraint.status === 'warning' ? (
-                                          <span className="text-yellow-600 text-xs">!</span>
-                                        ) : (
-                                          <span className="text-red-600 text-xs">✗</span>
-                                        )}
-                                      </div>
-                                      <span className="text-xs text-gray-700">{constraint.name}</span>
-                                    </div>
-                                    <span className={`text-xs ${
-                                      constraint.status === 'pass' ? 'text-gray-600' : 
-                                      constraint.status === 'warning' ? 'text-yellow-600' : 
-                                      'text-red-600'
-                                    }`}>
-                                      {constraint.detail}
-                                    </span>
-                                  </div>
-                                ));
-                              })()}
-                            </div>
                           </div>
                         </div>
                       </div>
@@ -779,17 +692,6 @@ export default function StandardTemplateView({
                             })}
                           </tbody>
                         </table>
-                      </div>
-                      
-                      {/* Summary */}
-                      <div className="mt-4 text-sm text-gray-600">
-                        <p className="font-medium">Selection Summary:</p>
-                        <ul className="mt-2 space-y-1 text-xs">
-                          <li>• 2 pre-assigned exercises (lower body + pull)</li>
-                          <li>• 2 primary strength exercises (typically push/hinge patterns)</li>
-                          <li>• 2 conditioning exercises (varied patterns)</li>
-                          <li>• 2 metabolic finishers (high intensity, often shared)</li>
-                        </ul>
                       </div>
                     </div>
                   )}

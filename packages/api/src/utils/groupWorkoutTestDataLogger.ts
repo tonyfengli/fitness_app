@@ -1,5 +1,6 @@
-import { promises as fs } from 'fs';
-import path from 'path';
+// Only import fs and path on server-side
+const fs = typeof window === 'undefined' ? require('fs').promises : null;
+const path = typeof window === 'undefined' ? require('path') : null;
 import { createLogger } from './logger';
 import type { 
   GroupContext, 
@@ -424,7 +425,7 @@ export class GroupWorkoutTestDataLogger {
    * Save session data to multiple focused files
    */
   async saveGroupWorkoutData(sessionId: string): Promise<void> {
-    if (!this.enabled) return;
+    if (!this.enabled || !fs || !path) return;
     
     const session = this.sessionData.get(sessionId);
     if (!session) {
@@ -529,6 +530,7 @@ export class GroupWorkoutTestDataLogger {
    * Helper to save JSON file
    */
   private async saveFile(filepath: string, data: any) {
+    if (!fs) return;
     await fs.writeFile(
       filepath,
       JSON.stringify(data, null, 2),

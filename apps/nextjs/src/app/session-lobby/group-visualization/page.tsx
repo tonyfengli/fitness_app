@@ -5,7 +5,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useGenerateGroupWorkout } from "~/hooks/useGenerateGroupWorkout";
 import { useGroupWorkoutBlueprint } from "~/hooks/useGroupWorkoutBlueprint";
-import type { GroupScoredExercise } from "@acme/ai";
+import type { GroupScoredExercise } from "@acme/ai/client";
 import StandardTemplateView from "./StandardTemplateView";
 
 // Constants
@@ -333,9 +333,9 @@ export default function GroupVisualizationPage() {
                       <div>
                         <h4 className="font-medium text-gray-900 text-[10px] mb-1">{client.name}</h4>
                         <div className="space-y-0">
-                          {client.primary_goal && (
+                          {groupContext.workoutType && (
                             <p className="text-gray-600 leading-tight">
-                              <span className="font-medium">Goal:</span> {client.primary_goal}
+                              <span className="font-medium">Workout Type:</span> {groupContext.workoutType.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
                             </p>
                           )}
                           {client.intensity && (

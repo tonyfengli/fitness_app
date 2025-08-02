@@ -157,6 +157,9 @@ export const WorkoutPreferences = pgTable("workout_preferences", (t) => ({
   // Session goal
   sessionGoal: t.text(), // 'strength', 'stability', etc.
   
+  // Workout type for group workouts
+  workoutType: t.text(), // 'full_body_with_finisher', 'full_body_without_finisher', 'targeted_with_finisher', 'targeted_without_finisher'
+  
   // Additional notes
   notes: t.text().array(), // Array of additional notes/preferences
   
@@ -183,6 +186,7 @@ export const CreateWorkoutPreferencesSchema = createInsertSchema(WorkoutPreferen
   avoidExercises: z.array(z.string()).optional(),
   avoidJoints: z.array(z.string()).optional(),
   sessionGoal: z.string().optional(),
+  workoutType: z.enum(["full_body_with_finisher", "full_body_without_finisher", "targeted_with_finisher", "targeted_without_finisher"]).optional(),
   intensitySource: z.enum(["explicit", "default", "inherited"]).default("default"),
   sessionGoalSource: z.enum(["explicit", "default", "inherited"]).default("default"),
   collectionMethod: z.enum(["sms", "web", "manual"]).default("sms"),

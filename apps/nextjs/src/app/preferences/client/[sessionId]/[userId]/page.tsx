@@ -654,6 +654,18 @@ export default function ClientPreferencePage() {
   
   const queryClient = useQueryClient();
   
+  // Add workout type update mutation
+  const updateWorkoutTypeMutation = useMutation({
+    ...trpc.workoutPreferences.updateWorkoutTypePublic.mutationOptions(),
+    onSuccess: () => {
+      // Invalidate queries to refresh data
+      queryClient.invalidateQueries();
+    },
+    onError: (error) => {
+      console.error('Failed to update workout type:', error);
+    }
+  });
+  
   // Add intensity update mutation
   const updateIntensityMutation = useMutation({
     ...trpc.workoutPreferences.updateIntensityPublic.mutationOptions(),
@@ -718,7 +730,17 @@ export default function ClientPreferencePage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 overflow-y-auto">
+    <div className="min-h-screen bg-gray-50 overflow-y-auto relative">
+      {/* Full screen loading overlay */}
+      {updateWorkoutTypeMutation.isPending && (
+        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center">
+          <div className="bg-white rounded-lg p-6 shadow-xl flex items-center gap-3">
+            <SpinnerIcon className="animate-spin h-5 w-5 text-indigo-600" />
+            <span className="text-gray-700 font-medium">Updating preferences...</span>
+          </div>
+        </div>
+      )}
+      
       <div className="max-w-md mx-auto p-4 pb-20">
         {/* Client info outside card */}
         <div className="flex items-center justify-center mb-6 mt-4">
@@ -772,11 +794,19 @@ export default function ClientPreferencePage() {
                       type="radio"
                       name="workoutType"
                       value="full_body"
-                      checked={workoutPreferences?.sessionGoal === 'full_body' || !workoutPreferences?.sessionGoal}
+                      checked={workoutPreferences?.workoutType?.startsWith('full_body') ?? true}
                       onChange={(e) => {
+                        const includeFinisher = workoutPreferences?.workoutType?.includes('with_finisher') ?? false;
+                        const workoutType = includeFinisher ? 'full_body_with_finisher' : 'full_body_without_finisher';
                         handlePreferenceUpdate({
                           ...workoutPreferences,
-                          sessionGoal: 'full_body'
+                          workoutType: workoutType
+                        });
+                        // Update in database
+                        updateWorkoutTypeMutation.mutate({
+                          sessionId,
+                          userId,
+                          workoutType
                         });
                       }}
                       className="w-4 h-4 text-indigo-600 border-gray-300 focus:ring-indigo-500"
@@ -788,11 +818,19 @@ export default function ClientPreferencePage() {
                       type="radio"
                       name="workoutType"
                       value="targeted"
-                      checked={workoutPreferences?.sessionGoal === 'targeted'}
+                      checked={workoutPreferences?.workoutType?.startsWith('targeted') ?? false}
                       onChange={(e) => {
+                        const includeFinisher = workoutPreferences?.workoutType?.includes('with_finisher') ?? false;
+                        const workoutType = includeFinisher ? 'targeted_with_finisher' : 'targeted_without_finisher';
                         handlePreferenceUpdate({
                           ...workoutPreferences,
-                          sessionGoal: 'targeted'
+                          workoutType: workoutType
+                        });
+                        // Update in database
+                        updateWorkoutTypeMutation.mutate({
+                          sessionId,
+                          userId,
+                          workoutType
                         });
                       }}
                       className="w-4 h-4 text-indigo-600 border-gray-300 focus:ring-indigo-500"
@@ -811,13 +849,19 @@ export default function ClientPreferencePage() {
                       type="radio"
                       name="includeFinisher"
                       value="no"
-                      checked={!workoutPreferences?.notes?.includes('include_finisher')}
+                      checked={!workoutPreferences?.workoutType?.includes('with_finisher') ?? true}
                       onChange={(e) => {
-                        const currentNotes = workoutPreferences?.notes || [];
-                        const filteredNotes = currentNotes.filter(n => n !== 'include_finisher');
+                        const isTargeted = workoutPreferences?.workoutType?.startsWith('targeted') ?? false;
+                        const workoutType = isTargeted ? 'targeted_without_finisher' : 'full_body_without_finisher';
                         handlePreferenceUpdate({
                           ...workoutPreferences,
-                          notes: filteredNotes
+                          workoutType: workoutType
+                        });
+                        // Update in database
+                        updateWorkoutTypeMutation.mutate({
+                          sessionId,
+                          userId,
+                          workoutType
                         });
                       }}
                       className="w-4 h-4 text-indigo-600 border-gray-300 focus:ring-indigo-500"
@@ -829,13 +873,19 @@ export default function ClientPreferencePage() {
                       type="radio"
                       name="includeFinisher"
                       value="yes"
-                      checked={workoutPreferences?.notes?.includes('include_finisher')}
+                      checked={workoutPreferences?.workoutType?.includes('with_finisher') ?? false}
                       onChange={(e) => {
-                        const currentNotes = workoutPreferences?.notes || [];
-                        const filteredNotes = currentNotes.filter(n => n !== 'include_finisher');
+                        const isTargeted = workoutPreferences?.workoutType?.startsWith('targeted') ?? false;
+                        const workoutType = isTargeted ? 'targeted_with_finisher' : 'full_body_with_finisher';
                         handlePreferenceUpdate({
                           ...workoutPreferences,
-                          notes: [...filteredNotes, 'include_finisher']
+                          workoutType: workoutType
+                        });
+                        // Update in database
+                        updateWorkoutTypeMutation.mutate({
+                          sessionId,
+                          userId,
+                          workoutType
                         });
                       }}
                       className="w-4 h-4 text-indigo-600 border-gray-300 focus:ring-indigo-500"

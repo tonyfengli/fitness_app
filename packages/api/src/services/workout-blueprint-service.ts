@@ -215,12 +215,16 @@ export class WorkoutBlueprintService {
       }
     }
 
+    // Get workout type from the first client's preferences (all clients should have the same for group workout)
+    const workoutType = clientsWithData.find(c => c.preferences?.workoutType)?.preferences?.workoutType;
+    
     // Create group context
     const groupContext: GroupContext = {
       clients: clientContexts,
       sessionId,
       businessId,
-      templateType: (session.templateType || 'full_body_bmf') as 'full_body_bmf'
+      templateType: (session.templateType || 'full_body_bmf') as 'full_body_bmf',
+      workoutType: workoutType as any
     };
 
     logger.info("Client preparation completed", {

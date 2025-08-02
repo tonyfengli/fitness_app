@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useTRPC } from "~/trpc/react";
-import type { WorkoutTemplateType } from "@acme/ai";
+// WorkoutTemplateType is not in client.ts, so we'll define it inline for now
+type WorkoutTemplateType = "standard" | "circuit" | "full_body";
 
 interface WorkoutGenerationModalProps {
   isOpen: boolean;
