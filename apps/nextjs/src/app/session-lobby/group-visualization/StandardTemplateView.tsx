@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import type { StandardGroupWorkoutBlueprint, GroupContext } from "@acme/ai/client";
 import { WorkoutType, BUCKET_CONFIGS } from "@acme/ai/client";
@@ -223,33 +223,89 @@ export default function StandardTemplateView({
                             </tr>
                           </thead>
                           <tbody className="bg-white divide-y divide-gray-200">
-                        {/* Placeholder Pre-assigned Exercises */}
-                        <tr className="bg-purple-50">
-                          <td className="px-4 py-2 text-sm text-gray-900">1</td>
-                          <td className="px-4 py-2 text-sm font-medium text-gray-900">Barbell Back Squat</td>
-                          <td className="px-4 py-2 text-sm text-gray-600">Squat</td>
-                          <td className="px-4 py-2 text-sm text-gray-600">Glutes</td>
-                          <td className="px-4 py-2 text-sm text-gray-600">Quads, Hamstrings</td>
-                          <td className="px-4 py-2 text-sm text-gray-900">-</td>
-                          <td className="px-4 py-2 text-sm">
-                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800">
-                              Pre-assigned (deterministic)
-                            </span>
-                          </td>
-                        </tr>
-                        <tr className="bg-purple-50">
-                          <td className="px-4 py-2 text-sm text-gray-900">2</td>
-                          <td className="px-4 py-2 text-sm font-medium text-gray-900">Pull-ups</td>
-                          <td className="px-4 py-2 text-sm text-gray-600">Vertical Pull</td>
-                          <td className="px-4 py-2 text-sm text-gray-600">Lats</td>
-                          <td className="px-4 py-2 text-sm text-gray-600">Biceps, Middle Back</td>
-                          <td className="px-4 py-2 text-sm text-gray-900">-</td>
-                          <td className="px-4 py-2 text-sm">
-                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800">
-                              Pre-assigned (deterministic)
-                            </span>
-                          </td>
-                        </tr>
+                        {/* Pre-assigned Exercises */}
+                        {pool.preAssigned.map((preAssigned, idx) => (
+                          <tr key={preAssigned.exercise.id} className="bg-purple-50">
+                            <td className="px-4 py-2 text-sm text-gray-900">{idx + 1}</td>
+                            <td className="px-4 py-2 text-sm font-medium text-gray-900">{preAssigned.exercise.name}</td>
+                            <td className="px-4 py-2 text-sm text-gray-600">
+                              {formatMuscleName(preAssigned.exercise.movementPattern || '')}
+                            </td>
+                            <td className="px-4 py-2 text-sm text-gray-600">
+                              {formatMuscleName(preAssigned.exercise.primaryMuscle || '')}
+                            </td>
+                            <td className="px-4 py-2 text-sm text-gray-600">
+                              {preAssigned.exercise.secondaryMuscles?.map(formatMuscleName).join(', ') || '-'}
+                            </td>
+                            <td className="px-4 py-2 text-sm text-gray-900">-</td>
+                            <td className="px-4 py-2 text-sm">
+                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800">
+                                Pre-assigned ({preAssigned.source})
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                        
+                        {/* Smart Bucketed Selection */}
+                        {pool.bucketedSelection && (
+                          <>
+                            <tr className="bg-green-50">
+                              <td colSpan={7} className="px-4 py-2 text-sm font-medium text-green-800">
+                                Smart Bucketed Selection ({pool.bucketedSelection.exercises.length} exercises)
+                              </td>
+                            </tr>
+                            {pool.bucketedSelection.exercises.map((exercise, idx) => {
+                              const assignment = pool.bucketedSelection?.bucketAssignments[exercise.id];
+                              const isShared = blueprint.sharedExercisePool.some(
+                                shared => shared.id === exercise.id
+                              );
+                              
+                              return (
+                                <tr key={exercise.id} className="bg-green-50 border-l-4 border-green-500">
+                                  <td className="px-4 py-2 text-sm text-gray-900">{idx + 1}</td>
+                                  <td className="px-4 py-2 text-sm font-medium text-gray-900">
+                                    {exercise.name}
+                                    {isShared && (
+                                      <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                                        Shared
+                                      </span>
+                                    )}
+                                  </td>
+                                  <td className="px-4 py-2 text-sm text-gray-600">
+                                    {formatMuscleName(exercise.movementPattern || '')}
+                                  </td>
+                                  <td className="px-4 py-2 text-sm text-gray-600">
+                                    {formatMuscleName(exercise.primaryMuscle || '')}
+                                  </td>
+                                  <td className="px-4 py-2 text-sm text-gray-600">
+                                    {exercise.secondaryMuscles?.map(formatMuscleName).join(', ') || '-'}
+                                  </td>
+                                  <td className="px-4 py-2 text-sm text-gray-900">
+                                    {exercise.score.toFixed(1)}
+                                  </td>
+                                  <td className="px-4 py-2 text-sm">
+                                    {assignment && (
+                                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                                        assignment.bucketType === 'movement_pattern' 
+                                          ? 'bg-purple-100 text-purple-800'
+                                          : assignment.bucketType === 'functional'
+                                          ? 'bg-indigo-100 text-indigo-800'
+                                          : 'bg-gray-100 text-gray-800'
+                                      }`}>
+                                        {assignment.constraint.replace(/_/g, ' ')}
+                                      </span>
+                                    )}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                            <tr className="bg-gray-50">
+                              <td colSpan={7} className="px-4 py-2 text-sm font-medium text-gray-700">
+                                All Available Candidates ({pool.availableCandidates.length} exercises)
+                              </td>
+                            </tr>
+                          </>
+                        )}
                         
                         {/* Available Candidates */}
                         {pool.availableCandidates.map((exercise, idx) => {
@@ -298,7 +354,7 @@ export default function StandardTemplateView({
                           return (
                             <tr key={exercise.id} className={idx < 6 ? 'bg-blue-50' : ''}>
                               <td className="px-4 py-2 text-sm text-gray-900">
-                                {idx + 3}
+                                {pool.preAssigned.length + idx + 1}
                               </td>
                               <td className="px-4 py-2 text-sm font-medium text-gray-900">
                                 {exercise.name}
@@ -331,9 +387,9 @@ export default function StandardTemplateView({
                     </table>
                       </div>
                       <div className="mt-2 space-y-1 text-sm text-gray-500">
-                        <p>* Purple rows: Pre-assigned exercises (2)</p>
-                        <p>* Blue rows: Top 6 exercises to be selected by LLM</p>
-                        <p>* Total workout: 8 exercises (2 pre-assigned + 6 selected)</p>
+                        <p>* Purple rows: Pre-assigned exercises ({pool.preAssigned.length})</p>
+                        <p>* Green rows: Smart bucketed selection ({pool.bucketedSelection?.exercises.length || 0})</p>
+                        <p>* Total needed: {pool.totalExercisesNeeded} exercises</p>
                       </div>
                     </>
                   )}
@@ -357,11 +413,7 @@ export default function StandardTemplateView({
                                 Muscle
                               </button>
                               {(() => {
-                                const selectedExercises = [
-                                  { movementPattern: 'squat' },
-                                  { movementPattern: 'vertical_pull' },
-                                  ...pool.availableCandidates.slice(0, 6)
-                                ];
+                                const selectedExercises = pool.bucketedSelection?.exercises || [];
                                 const patternCounts = selectedExercises.reduce((acc, ex) => {
                                   const pattern = ex.movementPattern || 'unknown';
                                   acc[pattern] = (acc[pattern] || 0) + 1;
@@ -381,11 +433,7 @@ export default function StandardTemplateView({
                               <div className="space-y-2 mt-2">
                                 {(() => {
                                   const muscleGroups = ['chest', 'back', 'legs', 'biceps', 'triceps', 'shoulders', 'core'];
-                                  const selectedExercises = [
-                                    { name: 'Barbell Back Squat', primaryMuscle: 'glutes', secondaryMuscles: ['quads', 'hamstrings'] },
-                                    { name: 'Pull-ups', primaryMuscle: 'lats', secondaryMuscles: ['biceps', 'middle_back'] },
-                                    ...pool.availableCandidates.slice(0, 6)
-                                  ];
+                                  const selectedExercises = pool.bucketedSelection?.exercises || [];
                                   
                                   return muscleGroups.map(muscle => {
                                     const muscleMapping: Record<string, string[]> = {
@@ -451,11 +499,7 @@ export default function StandardTemplateView({
                                   return <span className="text-xs text-gray-500">No constraints defined</span>;
                                 }
                                 
-                                const selectedExercises = [
-                                  { movementPattern: 'squat', functionTags: ['primary_strength'] },
-                                  { movementPattern: 'vertical_pull', functionTags: ['primary_strength'] },
-                                  ...pool.availableCandidates.slice(0, 6)
-                                ];
+                                const selectedExercises = pool.bucketedSelection?.exercises || [];
                                 
                                 const config = BUCKET_CONFIGS[groupContext.workoutType];
                                 let violations = 0;
@@ -495,11 +539,7 @@ export default function StandardTemplateView({
                             {expandedSections[`${clientTab.id}-compliance`] && groupContext.workoutType && BUCKET_CONFIGS[groupContext.workoutType] && (
                               <div className="mt-3 space-y-2">
                                     {(() => {
-                                      const selectedExercises = [
-                                        { movementPattern: 'squat' },
-                                        { movementPattern: 'vertical_pull' },
-                                        ...pool.availableCandidates.slice(0, 6)
-                                      ];
+                                      const selectedExercises = pool.bucketedSelection?.exercises || [];
                                       
                                       const patternCounts: Record<string, number> = {};
                                       selectedExercises.forEach(ex => {
@@ -544,11 +584,7 @@ export default function StandardTemplateView({
                                     
                                     {/* Functional Requirements without label */}
                                     {(() => {
-                                      const selectedExercises = [
-                                        { functionTags: ['primary_strength'] },
-                                        { functionTags: ['primary_strength'] },
-                                        ...pool.availableCandidates.slice(0, 6)
-                                      ];
+                                      const selectedExercises = pool.bucketedSelection?.exercises || [];
                                       
                                       return Object.entries(BUCKET_CONFIGS[groupContext.workoutType].functionalRequirements).map(([funcType, required]) => {
                                         const count = selectedExercises.filter(ex => 
@@ -625,41 +661,42 @@ export default function StandardTemplateView({
                           </thead>
                           <tbody className="bg-white divide-y divide-gray-200">
                             {/* Pre-assigned exercises */}
-                            <tr className="bg-purple-50">
-                              <td className="px-4 py-2 text-sm text-gray-900">1</td>
-                              <td className="px-4 py-2 text-sm font-medium text-gray-900">Barbell Back Squat</td>
-                              <td className="px-4 py-2 text-sm text-gray-600">Primary Strength</td>
-                              <td className="px-4 py-2 text-sm text-gray-600">Squat</td>
-                              <td className="px-4 py-2 text-sm text-gray-600">Glutes</td>
-                              <td className="px-4 py-2 text-sm text-gray-600">Quads, Hamstrings</td>
-                              <td className="px-4 py-2 text-sm">
-                                <span className="text-gray-400 text-xs">-</span>
-                              </td>
-                              <td className="px-4 py-2 text-sm text-gray-900">-</td>
-                            </tr>
-                            <tr className="bg-purple-50">
-                              <td className="px-4 py-2 text-sm text-gray-900">2</td>
-                              <td className="px-4 py-2 text-sm font-medium text-gray-900">Pull-ups</td>
-                              <td className="px-4 py-2 text-sm text-gray-600">Primary Strength</td>
-                              <td className="px-4 py-2 text-sm text-gray-600">Vertical Pull</td>
-                              <td className="px-4 py-2 text-sm text-gray-600">Lats</td>
-                              <td className="px-4 py-2 text-sm text-gray-600">Biceps, Middle Back</td>
-                              <td className="px-4 py-2 text-sm">
-                                <span className="text-gray-400 text-xs">-</span>
-                              </td>
-                              <td className="px-4 py-2 text-sm text-gray-900">-</td>
-                            </tr>
+                            {pool.preAssigned.map((preAssigned, idx) => (
+                              <tr key={preAssigned.exercise.id} className="bg-purple-50">
+                                <td className="px-4 py-2 text-sm text-gray-900">{idx + 1}</td>
+                                <td className="px-4 py-2 text-sm font-medium text-gray-900">{preAssigned.exercise.name}</td>
+                                <td className="px-4 py-2 text-sm text-gray-600">
+                                  {preAssigned.exercise.functionTags?.map(tag => tag.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())).join(', ') || 'Primary Strength'}
+                                </td>
+                                <td className="px-4 py-2 text-sm text-gray-600">
+                                  {formatMuscleName(preAssigned.exercise.movementPattern || '')}
+                                </td>
+                                <td className="px-4 py-2 text-sm text-gray-600">
+                                  {formatMuscleName(preAssigned.exercise.primaryMuscle || '')}
+                                </td>
+                                <td className="px-4 py-2 text-sm text-gray-600">
+                                  {preAssigned.exercise.secondaryMuscles?.map(formatMuscleName).join(', ') || '-'}
+                                </td>
+                                <td className="px-4 py-2 text-sm">
+                                  <span className="text-gray-400 text-xs">-</span>
+                                </td>
+                                <td className="px-4 py-2 text-sm text-gray-900">-</td>
+                              </tr>
+                            ))}
                             
                             {/* Selected exercises */}
-                            {pool.availableCandidates.slice(0, 6).map((exercise, idx) => {
+                            {(pool.bucketedSelection?.exercises || []).map((exercise, idx) => {
                               const isShared = blueprint.sharedExercisePool.some(
                                 shared => shared.id === exercise.id
                               );
-                              const role = idx < 2 ? 'Primary Strength' : idx < 4 ? 'Conditioning' : 'Metabolic Finisher';
+                              const assignment = pool.bucketedSelection?.bucketAssignments[exercise.id];
+                              const bucketColor = assignment?.bucketType === 'movement_pattern' ? 'bg-purple-50' : 
+                                                 assignment?.bucketType === 'functional' ? 'bg-indigo-50' : 
+                                                 'bg-blue-50';
                               
                               return (
-                                <tr key={exercise.id} className={idx < 4 ? 'bg-blue-50' : ''}>
-                                  <td className="px-4 py-2 text-sm text-gray-900">{idx + 3}</td>
+                                <tr key={exercise.id} className={bucketColor}>
+                                  <td className="px-4 py-2 text-sm text-gray-900">{pool.preAssigned.length + idx + 1}</td>
                                   <td className="px-4 py-2 text-sm font-medium text-gray-900">{exercise.name}</td>
                                   <td className="px-4 py-2 text-sm text-gray-600">
                                     {exercise.functionTags && exercise.functionTags.length > 0

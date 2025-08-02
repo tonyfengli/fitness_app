@@ -1,6 +1,12 @@
 // Only import fs and path on server-side
-const fs = typeof window === 'undefined' ? require('fs').promises : null;
-const path = typeof window === 'undefined' ? require('path') : null;
+let fs: any = null;
+let path: any = null;
+
+// Check if running in Node.js environment
+if (typeof global !== 'undefined' && global.process && global.process.versions && global.process.versions.node) {
+  fs = require('fs').promises;
+  path = require('path');
+}
 import { createLogger } from './logger';
 import type { 
   GroupContext, 

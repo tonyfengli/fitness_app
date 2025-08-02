@@ -8,6 +8,7 @@ import { filterExercises } from "../core/filtering/filterExercises";
 import { scoreAndSortExercises } from "../core/scoring/scoreExercises";
 import { TemplateProcessor } from "../core/templates/TemplateProcessor";
 import { getWorkoutTemplate } from "../core/templates/config/defaultTemplates";
+import { isStandardBlueprint } from "../types/standardBlueprint";
 
 /**
  * Generates a group workout blueprint from pre-scored exercises
@@ -122,6 +123,33 @@ export async function generateGroupWorkoutBlueprint(
       if (template.metadata?.llmStrategy === 'two-phase') {
         console.log('📋 Using standard template processor (client-pooled)');
         blueprint = processor.processForStandardGroup(clientScoredExercises);
+        
+        // Apply smart bucketing for standard templates
+        if (groupContext.workoutType && isStandardBlueprint(blueprint)) {
+          console.log('🪣 Applying smart bucketing to standard blueprint...');
+          const { SmartBucketingService } = await import('../workout-generation/utils/smartBucketing');
+          
+          for (const [clientId, pool] of Object.entries(blueprint.clientExercisePools)) {
+            const client = groupContext.clients.find(c => c.user_id === clientId);
+            if (!client) continue;
+            
+            // Apply smart bucketing
+            const bucketedExercises = SmartBucketingService.bucketExercises(
+              pool.availableCandidates,
+              client,
+              groupContext.workoutType,
+              pool.preAssigned.map(p => p.exercise)
+            );
+            
+            // Add bucket assignments
+            pool.bucketedSelection = {
+              exercises: bucketedExercises,
+              bucketAssignments: SmartBucketingService.getBucketAssignments()
+            };
+            
+            console.log(`  ✓ Bucketed ${bucketedExercises.length} exercises for ${client.name}`);
+          }
+        }
       } else {
         console.log('📋 Using BMF template processor (block-based)');
         blueprint = processor.processForGroup(clientScoredExercises);

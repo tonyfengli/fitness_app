@@ -44,8 +44,6 @@ export class StandardWorkoutGenerator {
     const totalDuration = Date.now() - startTime;
     console.log('[StandardWorkoutGenerator] Two-phase generation complete', {
       totalDurationMs: totalDuration,
-      phase1DurationMs: exerciseSelection.metadata?.durationMs,
-      phase2DurationMs: roundOrganization.metadata?.durationMs,
       sessionId
     });
     

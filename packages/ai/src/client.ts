@@ -5,13 +5,7 @@
 
 // Types that are safe for client-side
 export type { 
-  Exercise,
-  ExerciseCategory,
-  MuscleGroup,
-  Equipment,
-  JointLoadingType,
-  FunctionalTag,
-  MovementPattern
+  Exercise
 } from "./types/exercise";
 
 export type {
@@ -24,17 +18,19 @@ export type {
 } from "./types/groupContext";
 
 export type {
+  ScoredExercise
+} from "./types/scoredExercise";
+
+export type {
   GroupWorkoutBlueprint,
-  GroupBlockBlueprint,
-  SharedCandidates,
-  IndividualCandidates,
-  GroupWorkoutSummary
+  GroupBlockBlueprint
 } from "./types/groupBlueprint";
 
 export type {
   StandardGroupWorkoutBlueprint,
-  StandardClientExercisePool,
-  StandardSharedExercise
+  BucketedSelection,
+  ClientExercisePool,
+  PreAssignedExercise
 } from "./types/standardBlueprint";
 
 // Client-safe constants

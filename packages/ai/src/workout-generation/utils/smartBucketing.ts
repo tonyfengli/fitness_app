@@ -1,9 +1,11 @@
 import type { ScoredExercise } from '../../types/scoredExercise';
-import type { Exercise } from '@acme/db';
+import type { Exercise } from '../../types/exercise';
 import type { ClientContext } from '../../types/clientContext';
 import { WorkoutType, BUCKET_CONFIGS, type BucketConstraints } from '../types/workoutTypes';
 
 export class SmartBucketingService {
+  private static bucketAssignments: Map<string, { bucketType: 'movement_pattern' | 'functional' | 'flex'; constraint: string }> = new Map();
+
   /**
    * Smart bucket exercises based on workout type and constraints
    */
@@ -13,6 +15,8 @@ export class SmartBucketingService {
     workoutType: WorkoutType,
     preAssigned: Exercise[]
   ): ScoredExercise[] {
+    // Clear previous assignments
+    this.bucketAssignments.clear();
     const config = BUCKET_CONFIGS[workoutType];
     const selected: ScoredExercise[] = [];
     const usedExerciseIds = new Set<string>();
@@ -44,6 +48,10 @@ export class SmartBucketingService {
     flexExercises.forEach(ex => {
       selected.push(ex);
       usedExerciseIds.add(ex.id);
+      this.bucketAssignments.set(ex.id, {
+        bucketType: 'flex',
+        constraint: 'highest_score'
+      });
     });
     
     // 5. Ensure we don't exceed total limit
@@ -102,6 +110,10 @@ export class SmartBucketingService {
         toAdd.forEach(ex => {
           selected.push(ex);
           usedIds.add(ex.id);
+          this.bucketAssignments.set(ex.id, {
+            bucketType: 'movement_pattern',
+            constraint: pattern
+          });
         });
       }
     }
@@ -130,6 +142,10 @@ export class SmartBucketingService {
       functionalExercises.forEach(ex => {
         selected.push(ex);
         usedIds.add(ex.id);
+        this.bucketAssignments.set(ex.id, {
+          bucketType: 'functional',
+          constraint: functionTag
+        });
       });
     }
     
@@ -166,5 +182,16 @@ export class SmartBucketingService {
       .join(', ');
     
     return summary;
+  }
+
+  /**
+   * Get bucket assignments for the last bucketing operation
+   */
+  static getBucketAssignments(): Record<string, { bucketType: 'movement_pattern' | 'functional' | 'flex'; constraint: string }> {
+    const assignments: Record<string, { bucketType: 'movement_pattern' | 'functional' | 'flex'; constraint: string }> = {};
+    this.bucketAssignments.forEach((value, key) => {
+      assignments[key] = value;
+    });
+    return assignments;
   }
 }

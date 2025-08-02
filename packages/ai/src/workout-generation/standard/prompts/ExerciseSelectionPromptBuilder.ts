@@ -215,12 +215,12 @@ Each exercise has a score (0-10) indicating fit for that client. Scores start at
       output += `**${client.name}:**\n\n`;
       
       // Use smart bucketing to select diverse exercises
-      const preAssigned = pool.preAssignedExercises || [];
+      const preAssigned = pool.preAssigned || [];
       const bucketedExercises = SmartBucketingService.bucketExercises(
         pool.availableCandidates,
         client,
         this.workoutType,
-        preAssigned
+        preAssigned.map(p => p.exercise)
       );
       
       // Show bucketed exercises
