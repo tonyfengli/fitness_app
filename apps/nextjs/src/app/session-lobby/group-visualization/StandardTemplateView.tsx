@@ -229,7 +229,14 @@ export default function StandardTemplateView({
                             <td className="px-4 py-2 text-sm text-gray-900">{idx + 1}</td>
                             <td className="px-4 py-2 text-sm font-medium text-gray-900">{preAssigned.exercise.name}</td>
                             <td className="px-4 py-2 text-sm text-gray-600">
-                              {formatMuscleName(preAssigned.exercise.movementPattern || '')}
+                              <div className="flex flex-col gap-0.5">
+                                <span>{formatMuscleName(preAssigned.exercise.movementPattern || '')}</span>
+                                {preAssigned.exercise.functionTags?.includes('capacity') && (
+                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 w-fit">
+                                    capacity
+                                  </span>
+                                )}
+                              </div>
                             </td>
                             <td className="px-4 py-2 text-sm text-gray-600">
                               {formatMuscleName(preAssigned.exercise.primaryMuscle || '')}
@@ -237,11 +244,68 @@ export default function StandardTemplateView({
                             <td className="px-4 py-2 text-sm text-gray-600">
                               {preAssigned.exercise.secondaryMuscles?.map(formatMuscleName).join(', ') || '-'}
                             </td>
-                            <td className="px-4 py-2 text-sm text-gray-900">-</td>
+                            <td className="px-4 py-2 text-sm text-gray-900">
+                              {preAssigned.exercise.score.toFixed(1)}
+                            </td>
                             <td className="px-4 py-2 text-sm">
-                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800">
-                                Pre-assigned ({preAssigned.source})
-                              </span>
+                              <div className="flex flex-col gap-1">
+                                <div className="flex items-center gap-1">
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800">
+                                    Pre-assigned ({preAssigned.source})
+                                  </span>
+                                  {preAssigned.tiedCount && preAssigned.tiedCount > 1 && (
+                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">
+                                      Selected from {preAssigned.tiedCount} tied
+                                    </span>
+                                  )}
+                                </div>
+                                {preAssigned.exercise.scoreBreakdown && (
+                                  <div className="flex flex-wrap gap-1 mt-1">
+                                    {(() => {
+                                      const scoreBreakdown = preAssigned.exercise.scoreBreakdown;
+                                      const breakdownBadges = [];
+                                      
+                                      if (scoreBreakdown.includeExerciseBoost > 0) {
+                                        breakdownBadges.push(
+                                          <span key="include" className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800">
+                                            Include +{scoreBreakdown.includeExerciseBoost.toFixed(1)}
+                                          </span>
+                                        );
+                                      }
+                                      
+                                      if (scoreBreakdown.favoriteExerciseBoost > 0) {
+                                        breakdownBadges.push(
+                                          <span key="favorite" className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">
+                                            ⭐ Favorite +{scoreBreakdown.favoriteExerciseBoost.toFixed(1)}
+                                          </span>
+                                        );
+                                      }
+                                      
+                                      if (scoreBreakdown.muscleTargetBonus > 0) {
+                                        const isPrimary = scoreBreakdown.muscleTargetBonus >= 3.0;
+                                        breakdownBadges.push(
+                                          <span key="target" className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
+                                            Target {isPrimary ? '' : '(2nd)'} +{scoreBreakdown.muscleTargetBonus.toFixed(1)}
+                                          </span>
+                                        );
+                                      }
+                                      
+                                      if (scoreBreakdown.muscleLessenPenalty < 0) {
+                                        const isPrimary = scoreBreakdown.muscleLessenPenalty <= -3.0;
+                                        breakdownBadges.push(
+                                          <span key="lessen" className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">
+                                            Lessen {isPrimary ? '' : '(2nd)'} {scoreBreakdown.muscleLessenPenalty.toFixed(1)}
+                                          </span>
+                                        );
+                                      }
+                                      
+                                      // Intensity adjustment removed - no longer affects scores
+                                      
+                                      return breakdownBadges;
+                                    })()}
+                                  </div>
+                                )}
+                              </div>
                             </td>
                           </tr>
                         ))}
@@ -339,6 +403,14 @@ export default function StandardTemplateView({
                             );
                           }
                           
+                          if (scoreBreakdown.favoriteExerciseBoost > 0) {
+                            breakdownBadges.push(
+                              <span key="favorite" className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">
+                                ⭐ Favorite +{scoreBreakdown.favoriteExerciseBoost.toFixed(1)}
+                              </span>
+                            );
+                          }
+                          
                           if (scoreBreakdown.muscleTargetBonus > 0) {
                             const isPrimary = scoreBreakdown.muscleTargetBonus >= 3.0;
                             breakdownBadges.push(
@@ -357,13 +429,7 @@ export default function StandardTemplateView({
                             );
                           }
                           
-                          if (scoreBreakdown.intensityAdjustment > 0) {
-                            breakdownBadges.push(
-                              <span key="intensity" className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
-                                Intensity +{scoreBreakdown.intensityAdjustment.toFixed(2)}
-                              </span>
-                            );
-                          }
+                          // Intensity adjustment removed - no longer affects scores
                           
                           return (
                             <tr key={exercise.id} className={idx < 6 ? 'bg-blue-50' : ''}>

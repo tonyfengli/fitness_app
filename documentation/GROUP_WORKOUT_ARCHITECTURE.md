@@ -189,6 +189,11 @@ Output: Map<clientId, ScoredExercise[]> sorted by score (highest first)
 - Secondary muscle match: **-1.5**
 - Only highest penalty applies (no stacking for multiple matches)
 
+**Favorite Exercise Boost**:
+- User favorite exercises: **+2.0**
+- Applied to exercises in user_exercise_ratings table
+- Stacks with other bonuses (not mutually exclusive)
+
 **Intensity Adjustments** (Positive-Only Scoring):
 Maps workout intensity to exercise fatigue profiles:
 

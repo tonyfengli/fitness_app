@@ -13,17 +13,20 @@ export const SCORING_CONFIG = {
   MUSCLE_TARGET_SECONDARY: 1.5,
   MUSCLE_LESSEN_PRIMARY: -3.0,
   MUSCLE_LESSEN_SECONDARY: -1.5,
+  
+  // Favorite exercise boost
+  FAVORITE_EXERCISE_BOOST: 2.0,
 
-  // Intensity scoring - kept nested due to complexity
-  // Updated to positive-only scoring (no penalties)
+  // Intensity scoring - REMOVED: intensity no longer affects exercise scores
+  // Keeping the structure for backwards compatibility but all values are 0
   INTENSITY_SCORING: {
     low: {
-      low_local: 1.0,        // was 1.5
-      moderate_local: 0.5,   // was 0.75
-      high_local: 0,         // was -1.5
-      moderate_systemic: 0,  // was -0.75
-      high_systemic: 0,      // was -1.5
-      metabolic: 0,          // was -1.5
+      low_local: 0,
+      moderate_local: 0,
+      high_local: 0,
+      moderate_systemic: 0,
+      high_systemic: 0,
+      metabolic: 0,
     },
     moderate: {
       low_local: 0,
@@ -34,20 +37,20 @@ export const SCORING_CONFIG = {
       metabolic: 0,
     },
     high: {
-      low_local: 0,          // was -1.5
-      moderate_local: 0,     // was -0.75
-      high_local: 1.0,       // was 1.5
-      moderate_systemic: 0.5, // was 0.75
-      high_systemic: 1.0,    // was 1.5
-      metabolic: 1.0,        // was 1.5
+      low_local: 0,
+      moderate_local: 0,
+      high_local: 0,
+      moderate_systemic: 0,
+      high_systemic: 0,
+      metabolic: 0,
     },
     intense: {
-      low_local: 0,          // was -1.5
-      moderate_local: 0,     // was -0.75
-      high_local: 1.0,       // was 1.5
-      moderate_systemic: 0.5, // was 0.75
-      high_systemic: 1.0,    // was 1.5
-      metabolic: 1.0,        // was 1.5
+      low_local: 0,
+      moderate_local: 0,
+      high_local: 0,
+      moderate_systemic: 0,
+      high_systemic: 0,
+      metabolic: 0,
     },
   },
 } as const;

@@ -35,6 +35,14 @@ function getScoreAdjustmentLabels(score: number, scoreBreakdown?: any): React.Re
       );
     }
     
+    if (scoreBreakdown.favoriteExerciseBoost > 0) {
+      labels.push(
+        <span key="favorite" className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">
+          ⭐ Favorite +{scoreBreakdown.favoriteExerciseBoost.toFixed(1)}
+        </span>
+      );
+    }
+    
     if (scoreBreakdown.muscleTargetBonus > 0) {
       const isPrimary = scoreBreakdown.muscleTargetBonus >= SCORE_THRESHOLDS.TARGET_PRIMARY;
       labels.push(

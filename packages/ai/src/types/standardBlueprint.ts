@@ -7,6 +7,7 @@ import type { GroupScoredExercise } from "./groupContext";
 export interface PreAssignedExercise {
   exercise: ScoredExercise;
   source: 'Round1' | 'Round2' | string; // Which round it came from
+  tiedCount?: number; // Number of exercises tied at the same score (for favorites)
 }
 
 /**

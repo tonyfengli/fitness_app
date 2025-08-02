@@ -6,6 +6,7 @@ import type { Exercise } from "./exercise";
 export interface ScoreBreakdown {
   base: number;
   includeExerciseBoost: number;
+  favoriteExerciseBoost: number;
   muscleTargetBonus: number;
   muscleLessenPenalty: number;
   intensityAdjustment: number;
@@ -25,6 +26,7 @@ export interface ScoredExercise extends Exercise {
  */
 export interface ScoringCriteria {
   includeExercises?: string[]; // Exercise names from Phase 1 include list
+  favoriteExerciseIds?: string[]; // Exercise IDs marked as favorites
   muscleTarget: string[];
   muscleLessen: string[];
   intensity?: string; // 'low', 'moderate', 'high'

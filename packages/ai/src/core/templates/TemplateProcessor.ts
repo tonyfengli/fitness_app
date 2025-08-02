@@ -1,8 +1,9 @@
 import type { ScoredExercise } from "../../types/scoredExercise";
 import type { WorkoutTemplate, BlockDefinition } from "./types/dynamicBlockTypes";
 import type { GroupWorkoutBlueprint, GroupBlockBlueprint } from "../../types/groupBlueprint";
-import type { GroupScoredExercise } from "../../types/groupContext";
+import type { GroupScoredExercise, GroupContext } from "../../types/groupContext";
 import type { StandardGroupWorkoutBlueprint, ClientExercisePool, PreAssignedExercise } from "../../types/standardBlueprint";
+import { PreAssignmentService } from "./preAssignmentService";
 
 /**
  * Simple, clean template processor for organizing exercises into blocks
@@ -364,7 +365,9 @@ export class TemplateProcessor {
    * Two-phase LLM strategy: exercise selection then round organization
    */
   processForStandardGroup(
-    clientExercises: Map<string, ScoredExercise[]>
+    clientExercises: Map<string, ScoredExercise[]>,
+    groupContext?: GroupContext,
+    favoritesByClient?: Map<string, string[]>
   ): StandardGroupWorkoutBlueprint {
     console.log('🎯 TemplateProcessor.processForStandardGroup', {
       template: this.template.id,
@@ -372,8 +375,26 @@ export class TemplateProcessor {
       totalExercisesPerClient: this.template.metadata?.totalExercisesPerClient || 8
     });
 
-    // Step 1: Extract pre-assigned exercises from deterministic blocks
-    const preAssignedByClient = this.extractPreAssignedExercises(clientExercises);
+    // Step 1: Determine pre-assigned exercises using includes and favorites
+    const preAssignedByClient = new Map<string, PreAssignedExercise[]>();
+    
+    // Only process pre-assignment for standard templates
+    if (groupContext && favoritesByClient) {
+      for (const [clientId, exercises] of clientExercises) {
+        const client = groupContext.clients.find(c => c.user_id === clientId);
+        if (!client) continue;
+        
+        const favoriteIds = favoritesByClient.get(clientId) || [];
+        const preAssigned = PreAssignmentService.determinePreAssignedExercises(
+          client,
+          exercises,
+          favoriteIds,
+          groupContext.workoutType
+        );
+        
+        preAssignedByClient.set(clientId, preAssigned);
+      }
+    }
 
     // Step 2: Create available exercise pools (excluding pre-assigned)
     const clientPools = new Map<string, ScoredExercise[]>();
@@ -423,6 +444,7 @@ export class TemplateProcessor {
 
   /**
    * Extract pre-assigned exercises from deterministic blocks
+   * @deprecated - Now using PreAssignmentService with includes/favorites logic
    */
   private extractPreAssignedExercises(
     clientExercises: Map<string, ScoredExercise[]>

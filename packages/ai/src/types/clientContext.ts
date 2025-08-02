@@ -22,6 +22,7 @@ export interface ClientContext {
   business_id?: string; // UUID of the business this client belongs to
   templateType?: "standard" | "circuit" | "full_body"; // Workout template type
   default_sets?: number; // Default number of sets for this client's workouts
+  favoriteExerciseIds?: string[]; // Array of exercise IDs marked as favorites by the client
 }
 
 /**

@@ -20,5 +20,6 @@ export function buildScoringCriteria(
     intensity: intensityOverride ?? clientContext.intensity, // Use override if provided, otherwise use client's intensity
     skillLevel: clientContext.skill_capacity,
     strengthLevel: clientContext.strength_capacity,
+    favoriteExerciseIds: clientContext.favoriteExerciseIds,
   };
 }

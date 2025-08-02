@@ -64,15 +64,11 @@ function calculateMuscleLessenPenalty(exercise: Exercise, muscleLessen: string[]
 
 /**
  * Calculate intensity adjustment
- * Different fatigue profiles are preferred based on the intensity level
+ * DEPRECATED: Intensity no longer affects exercise scores - always returns 0
+ * Kept for backwards compatibility
  */
 function calculateIntensityAdjustment(exercise: Exercise, intensity?: string): number {
-  if (!intensity || !exercise.fatigueProfile) return 0;
-  
-  const adjustments = SCORING_CONFIG.INTENSITY_SCORING[intensity as keyof typeof SCORING_CONFIG.INTENSITY_SCORING];
-  if (!adjustments) return 0;
-  
-  return adjustments[exercise.fatigueProfile as keyof typeof adjustments] || 0;
+  return 0; // Intensity scoring has been removed - all exercises score equally regardless of intensity
 }
 
 /**
@@ -86,9 +82,16 @@ export function scoreExercise(
   const base = calculateBaseScore(exercise);
   const muscleTargetBonus = calculateMuscleTargetBonus(exercise, criteria.muscleTarget);
   const muscleLessenPenalty = calculateMuscleLessenPenalty(exercise, criteria.muscleLessen);
-  const intensityAdjustment = calculateIntensityAdjustment(exercise, criteria.intensity);
   
-  const total = base + includeExerciseBoost + muscleTargetBonus + muscleLessenPenalty + intensityAdjustment;
+  // Check if this exercise is a favorite
+  const isFavorite = criteria.favoriteExerciseIds?.includes(exercise.id);
+  const favoriteExerciseBoost = isFavorite ? SCORING_CONFIG.FAVORITE_EXERCISE_BOOST : 0;
+  
+  if (isFavorite) {
+    console.log(`⭐ Favorite exercise found: ${exercise.name} (${exercise.id}) - Boost: +${SCORING_CONFIG.FAVORITE_EXERCISE_BOOST}`);
+  }
+  
+  const total = base + includeExerciseBoost + favoriteExerciseBoost + muscleTargetBonus + muscleLessenPenalty;
   
   const scoredExercise: ScoredExercise = {
     ...exercise,
@@ -96,9 +99,10 @@ export function scoreExercise(
     scoreBreakdown: {
       base,
       includeExerciseBoost,
+      favoriteExerciseBoost,
       muscleTargetBonus,
       muscleLessenPenalty,
-      intensityAdjustment,
+      intensityAdjustment: 0, // Deprecated - kept for backwards compatibility
       total: Math.max(0, total),
     },
   };
@@ -114,6 +118,7 @@ export function performFirstPassScoring(
   criteria: ScoringCriteria
 ): { scoredExercises: ScoredExercise[]; maxScore: number } {
   console.log('🎯 First pass: Scoring exercises without include boost');
+  console.log('🎯 Favorite exercise IDs:', criteria.favoriteExerciseIds);
   
   const scoredExercises = exercises.map(exercise => 
     scoreExercise(exercise, criteria, 0)

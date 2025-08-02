@@ -122,7 +122,21 @@ export async function generateGroupWorkoutBlueprint(
       let blueprint: AnyGroupWorkoutBlueprint;
       if (template.metadata?.llmStrategy === 'two-phase') {
         console.log('📋 Using standard template processor (client-pooled)');
-        blueprint = processor.processForStandardGroup(clientScoredExercises);
+        
+        // Prepare favorites map from client contexts
+        const favoritesByClient = new Map<string, string[]>();
+        for (const client of groupContext.clients) {
+          if (client.favoriteExerciseIds && client.favoriteExerciseIds.length > 0) {
+            favoritesByClient.set(client.user_id, client.favoriteExerciseIds);
+            console.log(`📌 Client ${client.name} has ${client.favoriteExerciseIds.length} favorite exercises`);
+          }
+        }
+        
+        blueprint = processor.processForStandardGroup(
+          clientScoredExercises,
+          groupContext,
+          favoritesByClient
+        );
         
         // Apply smart bucketing for standard templates
         if (groupContext.workoutType && isStandardBlueprint(blueprint)) {

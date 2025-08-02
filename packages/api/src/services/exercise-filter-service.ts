@@ -24,6 +24,7 @@ export interface FilterInput {
   isFullBody?: boolean;
   userInput?: string;
   debug?: boolean;
+  favoriteExerciseIds?: string[];
 }
 
 export interface WorkoutGenerationInput {
@@ -37,6 +38,7 @@ export interface WorkoutGenerationInput {
   muscleLessen: string[];
   avoidJoints: string[];
   debug?: boolean;
+  favoriteExerciseIds?: string[];
 }
 
 export interface FilterContext {
@@ -155,7 +157,8 @@ export class ExerciseFilterService {
       intensity: input?.intensity,
       isFullBody: input?.isFullBody || false,
       userInput: input?.userInput,
-      debug: input?.debug || false
+      debug: input?.debug || false,
+      favoriteExerciseIds: input?.favoriteExerciseIds || []
     };
   }
 
@@ -184,6 +187,10 @@ export class ExerciseFilterService {
       
       // Apply AI-based filtering
       const filterStartTime = Date.now();
+      
+      // Debug log favorites
+      console.log(`[ExerciseFilter] Creating clientContext for ${safeInput.clientName} with favorites:`, safeInput.favoriteExerciseIds);
+      
       const result = await filterFunction({
         clientContext: {
           user_id: context.userId,
@@ -199,7 +206,8 @@ export class ExerciseFilterService {
           },
           avoid_joints: safeInput.avoidJoints,
           business_id: context.businessId,
-          templateType: (input as any)?.template // Add for backward compatibility
+          templateType: (input as any)?.template, // Add for backward compatibility
+          favoriteExerciseIds: safeInput.favoriteExerciseIds
         } as any,
         userInput: safeInput.userInput,
         exercises: allExercises,
@@ -355,7 +363,8 @@ export class ExerciseFilterService {
       avoidJoints: input.avoidJoints,
       isFullBody: input.template === "full_body",
       debug: input.debug,
-      template: input.template // Pass template for backward compatibility
+      template: input.template, // Pass template for backward compatibility
+      favoriteExerciseIds: input.favoriteExerciseIds
     };
     
     // Use the main filter method - pass clientId as userId for workout generation

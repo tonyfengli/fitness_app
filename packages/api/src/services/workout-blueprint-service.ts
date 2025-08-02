@@ -5,6 +5,7 @@ import {
   UserTrainingSession, 
   WorkoutPreferences, 
   UserProfile,
+  UserExerciseRatings,
   user
 } from "@acme/db/schema";
 import { 
@@ -146,27 +147,50 @@ export class WorkoutBlueprintService {
           )
           .limit(1);
 
-        return { ...client, preferences, userProfile };
+        // Get favorite exercises for this client
+        const favoriteExercises = await db
+          .select({
+            exerciseId: UserExerciseRatings.exerciseId
+          })
+          .from(UserExerciseRatings)
+          .where(
+            and(
+              eq(UserExerciseRatings.userId, client.userId),
+              eq(UserExerciseRatings.businessId, businessId),
+              eq(UserExerciseRatings.ratingType, 'favorite')
+            )
+          );
+        
+        logger.info(`Fetched ${favoriteExercises.length} favorite exercises for ${client.userName}`, {
+          userId: client.userId,
+          favoriteIds: favoriteExercises.map(f => f.exerciseId)
+        });
+
+        return { ...client, preferences, userProfile, favoriteExerciseIds: favoriteExercises.map(f => f.exerciseId) };
       })
     );
 
-    // Create client contexts
-    const clientContexts: ClientContext[] = clientsWithData.map(client => ({
-      user_id: client.userId,
-      name: client.userName ?? 'Unknown',
-      strength_capacity: (client.userProfile?.strengthLevel ?? 'moderate') as "very_low" | "low" | "moderate" | "high",
-      skill_capacity: (client.userProfile?.skillLevel ?? 'moderate') as "very_low" | "low" | "moderate" | "high",
-      primary_goal: (client.preferences?.sessionGoal ?? 'general_fitness') as any,
-      intensity: (client.preferences?.intensity ?? 'moderate') as "low" | "moderate" | "high",
-      muscle_target: client.preferences?.muscleTargets || [],
-      muscle_lessen: client.preferences?.muscleLessens || [],
-      exercise_requests: {
-        include: client.preferences?.includeExercises || [],
-        avoid: client.preferences?.avoidExercises || []
-      },
-      avoid_joints: client.preferences?.avoidJoints || [],
-      default_sets: 10
-    }));
+    // Create client contexts with favorite exercise IDs
+    const clientContexts: ClientContext[] = clientsWithData.map(client => {
+      logger.info(`Creating context for ${client.userName} with ${client.favoriteExerciseIds?.length || 0} favorites`);
+      return {
+        user_id: client.userId,
+        name: client.userName ?? 'Unknown',
+        strength_capacity: (client.userProfile?.strengthLevel ?? 'moderate') as "very_low" | "low" | "moderate" | "high",
+        skill_capacity: (client.userProfile?.skillLevel ?? 'moderate') as "very_low" | "low" | "moderate" | "high",
+        primary_goal: (client.preferences?.sessionGoal ?? 'general_fitness') as any,
+        intensity: (client.preferences?.intensity ?? 'moderate') as "low" | "moderate" | "high",
+        muscle_target: client.preferences?.muscleTargets || [],
+        muscle_lessen: client.preferences?.muscleLessens || [],
+        exercise_requests: {
+          include: client.preferences?.includeExercises || [],
+          avoid: client.preferences?.avoidExercises || []
+        },
+        avoid_joints: client.preferences?.avoidJoints || [],
+        default_sets: 10,
+        favoriteExerciseIds: client.favoriteExerciseIds
+      };
+    });
 
     // Process exercises for each client using ExerciseFilterService
     const filterService = new ExerciseFilterService(db);
@@ -194,11 +218,13 @@ export class WorkoutBlueprintService {
         muscleLessen: clientContext.muscle_lessen || [],
         avoidJoints: clientContext.avoid_joints || [],
         debug: false,
+        favoriteExerciseIds: clientContext.favoriteExerciseIds || [],
       };
 
       // Run Phase 1 & 2 using the filter service
+      console.log(`[WorkoutBlueprint] Filtering for client ${client.userId} with ${filterInput.favoriteExerciseIds?.length || 0} favorites`);
       const filteredResult = await filterService.filterForWorkoutGeneration(filterInput, {
-        userId,
+        userId: client.userId, // Use client's userId, not the session owner's userId
         businessId
       });
 
