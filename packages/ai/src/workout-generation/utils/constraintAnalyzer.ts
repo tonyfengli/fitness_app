@@ -79,14 +79,11 @@ function countFunctionalRequirements(
     });
   });
   
-  // Count muscle targets
+  // Count muscle targets (PRIMARY MUSCLE ONLY)
   if (client.muscle_target && client.muscle_target.length > 0) {
     const muscleTargetCount = exercises.filter(ex => {
       const targets = client.muscle_target || [];
-      return targets.some(muscle => 
-        ex.primaryMuscle === muscle || 
-        (ex.secondaryMuscles && ex.secondaryMuscles.includes(muscle))
-      );
+      return targets.some(muscle => ex.primaryMuscle === muscle);
     }).length;
     
     counts.set('muscle_target', muscleTargetCount);

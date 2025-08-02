@@ -9,6 +9,7 @@ import { scoreAndSortExercises } from "../core/scoring/scoreExercises";
 import { TemplateProcessor } from "../core/templates/TemplateProcessor";
 import { getWorkoutTemplate } from "../core/templates/config/defaultTemplates";
 import { isStandardBlueprint } from "../types/standardBlueprint";
+import { WorkoutType } from "../types/clientTypes";
 
 /**
  * Generates a group workout blueprint from pre-scored exercises
@@ -137,6 +138,34 @@ export async function generateGroupWorkoutBlueprint(
           groupContext,
           favoritesByClient
         );
+        
+        // Apply bucketing for Full Body With Finisher only
+        if (groupContext.workoutType === WorkoutType.FULL_BODY_WITH_FINISHER && isStandardBlueprint(blueprint)) {
+          console.log('🪣 Applying Full Body With Finisher bucketing...');
+          const { applyFullBodyBucketing } = await import('../workout-generation/bucketing/fullBodyBucketing');
+          
+          for (const [clientId, pool] of Object.entries(blueprint.clientExercisePools)) {
+            const client = groupContext.clients.find(c => c.user_id === clientId);
+            if (!client) continue;
+            
+            // Get favorite IDs for this client
+            const clientFavoriteIds = favoritesByClient.get(clientId) || [];
+            
+            // Apply bucketing to select from available candidates
+            const bucketingResult = applyFullBodyBucketing(
+              pool.availableCandidates,
+              pool.preAssigned,
+              client,
+              groupContext.workoutType,
+              clientFavoriteIds
+            );
+            
+            // Store bucketed selection
+            pool.bucketedSelection = bucketingResult;
+            
+            console.log(`  ✓ Selected ${bucketingResult.exercises.length} additional exercises for ${client.name}`);
+          }
+        }
         
       } else {
         console.log('📋 Using BMF template processor (block-based)');

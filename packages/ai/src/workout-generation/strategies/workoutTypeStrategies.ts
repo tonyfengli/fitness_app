@@ -227,12 +227,15 @@ export function processPreAssignments(
             const primaryMuscle = ex.primaryMuscle?.toLowerCase() || '';
             const pattern = ex.movementPattern?.toLowerCase() || '';
             
-            // Special case: "core" as primary muscle typically means lower body
-            if (primaryMuscle === 'core') return false;
-            
-            // Check primary muscle first
+            // Check primary muscle first (takes precedence)
             if (upperBodyMuscles.includes(primaryMuscle)) return true;
             if (lowerBodyMuscles.includes(primaryMuscle)) return false;
+            
+            // Special case: "core" as primary muscle means lower body
+            if (primaryMuscle === 'core') return false;
+            
+            // If no clear muscle classification, use movement pattern
+            if (pattern === 'core') return false;
             
             // Fallback to movement pattern
             return pattern.includes('push') || pattern.includes('pull') || 
@@ -243,12 +246,15 @@ export function processPreAssignments(
             const primaryMuscle = ex.primaryMuscle?.toLowerCase() || '';
             const pattern = ex.movementPattern?.toLowerCase() || '';
             
-            // Special case: "core" as primary muscle typically means lower body
-            if (primaryMuscle === 'core') return true;
-            
-            // Check primary muscle first
+            // Check primary muscle first (takes precedence)
             if (lowerBodyMuscles.includes(primaryMuscle)) return true;
             if (upperBodyMuscles.includes(primaryMuscle)) return false;
+            
+            // Special case: "core" as primary muscle means lower body
+            if (primaryMuscle === 'core') return true;
+            
+            // If no clear muscle classification, use movement pattern
+            if (pattern === 'core') return true;
             
             // Fallback to movement pattern
             return pattern === 'squat' || pattern === 'hinge' || 
@@ -256,9 +262,16 @@ export function processPreAssignments(
           });
           
           
+          console.log('  All favorite exercises:', favoriteExercises.map(ex => ({ 
+            name: ex.name, 
+            muscle: ex.primaryMuscle, 
+            pattern: ex.movementPattern,
+            score: ex.score 
+          })));
+          
           console.log('  Favorite body part separation:', {
-            upperBody: upperBody.map(ex => ({ name: ex.name, muscle: ex.primaryMuscle, score: ex.score })),
-            lowerBody: lowerBody.map(ex => ({ name: ex.name, muscle: ex.primaryMuscle, score: ex.score }))
+            upperBody: upperBody.map(ex => ({ name: ex.name, muscle: ex.primaryMuscle, pattern: ex.movementPattern, score: ex.score })),
+            lowerBody: lowerBody.map(ex => ({ name: ex.name, muscle: ex.primaryMuscle, pattern: ex.movementPattern, score: ex.score }))
           });
           
           // Select 1 from each category (with tie-breaking if needed)
@@ -267,8 +280,19 @@ export function processPreAssignments(
           
           console.log('  Selected favorites:', {
             upper: selectedUpperWithTies.map(item => item.exercise.name),
-            lower: selectedLowerWithTies.map(item => item.exercise.name)
+            lower: selectedLowerWithTies.map(item => item.exercise.name),
+            upperCount: selectedUpperWithTies.length,
+            lowerCount: selectedLowerWithTies.length
           });
+          
+          // Ensure we have 1 upper and 1 lower (fallback if needed)
+          if (selectedUpperWithTies.length === 0 && selectedLowerWithTies.length === 2) {
+            console.warn('  ⚠️ No upper body favorites available, using 2 lower body');
+          } else if (selectedLowerWithTies.length === 0 && selectedUpperWithTies.length === 2) {
+            console.warn('  ⚠️ No lower body favorites available, using 2 upper body');
+          } else if (selectedUpperWithTies.length === 0 && selectedLowerWithTies.length === 0) {
+            console.warn('  ⚠️ No favorites available for body part balance');
+          }
           
           // Store tie information in global map
           [...selectedUpperWithTies, ...selectedLowerWithTies].forEach(item => {

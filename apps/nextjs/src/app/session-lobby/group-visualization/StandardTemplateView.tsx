@@ -265,7 +265,10 @@ export default function StandardTemplateView({
                               return <span className="text-xs text-gray-500">No constraints defined</span>;
                             }
                             
-                            const selectedExercises = pool.bucketedSelection?.exercises || [];
+                            // Include BOTH pre-assigned and bucketed exercises
+                            const preAssignedExercises = pool.preAssigned.map(p => p.exercise);
+                            const bucketedExercises = pool.bucketedSelection?.exercises || [];
+                            const allSelectedExercises = [...preAssignedExercises, ...bucketedExercises];
                             
                             const config = BUCKET_CONFIGS[groupContext.workoutType];
                             let violations = 0;
@@ -273,7 +276,7 @@ export default function StandardTemplateView({
                             
                             // Check movement pattern constraints
                             const patternCounts: Record<string, number> = {};
-                            selectedExercises.forEach(ex => {
+                            allSelectedExercises.forEach(ex => {
                               if (ex.movementPattern) {
                                 // Normalize to lowercase to match constraint keys
                                 const pattern = ex.movementPattern.toLowerCase();
@@ -293,14 +296,11 @@ export default function StandardTemplateView({
                               
                               if (funcType === 'muscle_target') {
                                 const targetMuscles = client.muscle_target || [];
-                                count = selectedExercises.filter(ex => 
-                                  targetMuscles.some(muscle => 
-                                    ex.primaryMuscle === muscle || 
-                                    (ex.secondaryMuscles && ex.secondaryMuscles.includes(muscle))
-                                  )
+                                count = allSelectedExercises.filter(ex => 
+                                  targetMuscles.some(muscle => ex.primaryMuscle === muscle)
                                 ).length;
                               } else {
-                                count = selectedExercises.filter(ex => 
+                                count = allSelectedExercises.filter(ex => 
                                   ex.functionTags?.includes(funcType)
                                 ).length;
                               }
@@ -320,10 +320,13 @@ export default function StandardTemplateView({
                         {expandedSections[`${clientTab.id}-compliance`] && groupContext.workoutType && BUCKET_CONFIGS[groupContext.workoutType] && (
                           <div className="mt-3 space-y-2">
                                 {(() => {
-                                  const selectedExercises = pool.preAssigned.map(p => p.exercise);
+                                  // Include BOTH pre-assigned and bucketed exercises for complete view
+                                  const preAssignedExercises = pool.preAssigned.map(p => p.exercise);
+                                  const bucketedExercises = pool.bucketedSelection?.exercises || [];
+                                  const allSelectedExercises = [...preAssignedExercises, ...bucketedExercises];
                                   
                                   const patternCounts: Record<string, number> = {};
-                                  selectedExercises.forEach(ex => {
+                                  allSelectedExercises.forEach(ex => {
                                     if (ex.movementPattern) {
                                       // Normalize to lowercase to match constraint keys
                                       const pattern = ex.movementPattern.toLowerCase();
@@ -367,29 +370,23 @@ export default function StandardTemplateView({
                                 
                                 {/* Functional Requirements without label */}
                                 {(() => {
-                                  const selectedExercises = pool.preAssigned.map(p => p.exercise);
+                                  // Use all selected exercises (pre-assigned + bucketed)
+                                  const preAssignedExercises = pool.preAssigned.map(p => p.exercise);
+                                  const bucketedExercises = pool.bucketedSelection?.exercises || [];
+                                  const allSelectedExercises = [...preAssignedExercises, ...bucketedExercises];
                                   
                                   return Object.entries(BUCKET_CONFIGS[groupContext.workoutType].functionalRequirements).map(([funcType, required]) => {
                                     let count = 0;
                                     
                                     if (funcType === 'muscle_target') {
-                                      // Count exercises that target the client's muscle targets
+                                      // Count exercises that target the client's muscle targets (PRIMARY ONLY)
                                       const targetMuscles = client.muscle_target || [];
-                                      count = selectedExercises.filter(ex => 
-                                        targetMuscles.some(muscle => 
-                                          ex.primaryMuscle === muscle || 
-                                          (ex.secondaryMuscles && ex.secondaryMuscles.includes(muscle))
-                                        )
-                                      ).length;
-                                    } else if (funcType === 'favorites') {
-                                      // Count exercises that are favorites
-                                      count = selectedExercises.filter(ex => 
-                                        ex.scoreBreakdown?.favoriteExerciseBoost && 
-                                        ex.scoreBreakdown.favoriteExerciseBoost > 0
+                                      count = allSelectedExercises.filter(ex => 
+                                        targetMuscles.some(muscle => ex.primaryMuscle === muscle)
                                       ).length;
                                     } else {
                                       // Standard function tag check (capacity, strength)
-                                      count = selectedExercises.filter(ex => 
+                                      count = allSelectedExercises.filter(ex => 
                                         ex.functionTags?.includes(funcType)
                                       ).length;
                                     }

@@ -40,7 +40,7 @@ export class PreAssignmentService {
     const lowerBodyPatterns = ['squat', 'lunge', 'hinge', 'calf_raise'];
     const lowerBodyMuscles = ['quads', 'hamstrings', 'glutes', 'calves'];
     
-    return (
+    return Boolean(
       (exercise.movementPattern && lowerBodyPatterns.includes(exercise.movementPattern)) ||
       (exercise.primaryMuscle && lowerBodyMuscles.includes(exercise.primaryMuscle))
     );
@@ -53,7 +53,7 @@ export class PreAssignmentService {
     const upperBodyPatterns = ['horizontal_push', 'horizontal_pull', 'vertical_push', 'vertical_pull'];
     const upperBodyMuscles = ['chest', 'back', 'shoulders', 'lats', 'triceps', 'biceps', 'traps'];
     
-    return (
+    return Boolean(
       (exercise.movementPattern && upperBodyPatterns.includes(exercise.movementPattern)) ||
       (exercise.primaryMuscle && upperBodyMuscles.includes(exercise.primaryMuscle))
     );
@@ -217,7 +217,7 @@ export class PreAssignmentService {
         
         if (lowerBodyFavorites.length > 0) {
           const selected = this.selectTopWithTieBreakingAndCount(lowerBodyFavorites, 1);
-          if (selected.length > 0) {
+          if (selected.length > 0 && selected[0]) {
             preAssigned.push({
               exercise: selected[0].exercise,
               source: 'Favorite',
@@ -234,7 +234,7 @@ export class PreAssignmentService {
           
           if (allLowerBody.length > 0) {
             const selected = this.selectTopWithTieBreakingAndCount(allLowerBody, 1);
-            if (selected.length > 0) {
+            if (selected.length > 0 && selected[0]) {
               preAssigned.push({
                 exercise: selected[0].exercise,
                 source: 'Constraint',
@@ -255,7 +255,7 @@ export class PreAssignmentService {
         
         if (upperBodyFavorites.length > 0) {
           const selected = this.selectTopWithTieBreakingAndCount(upperBodyFavorites, 1);
-          if (selected.length > 0) {
+          if (selected.length > 0 && selected[0]) {
             preAssigned.push({
               exercise: selected[0].exercise,
               source: 'Favorite',
@@ -272,7 +272,7 @@ export class PreAssignmentService {
           
           if (allUpperBody.length > 0) {
             const selected = this.selectTopWithTieBreakingAndCount(allUpperBody, 1);
-            if (selected.length > 0) {
+            if (selected.length > 0 && selected[0]) {
               preAssigned.push({
                 exercise: selected[0].exercise,
                 source: 'Constraint',
@@ -363,8 +363,10 @@ export class PreAssignmentService {
           if (availableTied.length > 0) {
             const randomIndex = Math.floor(Math.random() * availableTied.length);
             const randomEx = availableTied[randomIndex];
-            selected.push({ exercise: randomEx, tiedCount });
-            used.add(randomEx.id);
+            if (randomEx) {
+              selected.push({ exercise: randomEx, tiedCount });
+              used.add(randomEx.id);
+            }
           }
         }
       }
@@ -416,8 +418,10 @@ export class PreAssignmentService {
           if (availableTied.length > 0) {
             const randomIndex = Math.floor(Math.random() * availableTied.length);
             const randomEx = availableTied[randomIndex];
-            selected.push(randomEx);
-            used.add(randomEx.id);
+            if (randomEx) {
+              selected.push(randomEx);
+              used.add(randomEx.id);
+            }
           }
         }
       }

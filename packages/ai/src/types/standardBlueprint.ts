@@ -11,11 +11,25 @@ export interface PreAssignedExercise {
 }
 
 /**
+ * Bucketed selection info
+ */
+export interface BucketedSelection {
+  exercises: ScoredExercise[];
+  bucketAssignments: {
+    [exerciseId: string]: {
+      bucketType: 'movement_pattern' | 'functional' | 'flex';
+      constraint: string;
+    };
+  };
+}
+
+/**
  * Client exercise pool for standard template
  */
 export interface ClientExercisePool {
   preAssigned: PreAssignedExercise[];
   availableCandidates: ScoredExercise[]; // ALL exercises for this client
+  bucketedSelection?: BucketedSelection; // Selected exercises via bucketing
   totalExercisesNeeded: number; // e.g., 8
   additionalNeeded: number; // e.g., 6 (8 total - 2 preassigned)
 }
