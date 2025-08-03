@@ -916,7 +916,15 @@ export default function ClientPreferencePage() {
                 </div>
                 <h4 className="font-medium text-gray-900">Muscle Target</h4>
               </div>
-              <p className="text-sm text-gray-600 mb-4">Select muscles you want to focus on during the workout</p>
+              <p className="text-sm text-gray-600 mb-4">
+                Select muscles you want to focus on during the workout
+                {workoutPreferences?.workoutType?.startsWith('full_body') && (
+                  <span className="block text-xs text-gray-500 mt-1">Full Body workouts: Maximum 2 muscles</span>
+                )}
+                {workoutPreferences?.workoutType?.startsWith('targeted') && (
+                  <span className="block text-xs text-gray-500 mt-1">Targeted workouts: 2-3 muscles required</span>
+                )}
+              </p>
               <div className="space-y-3">
                 {/* Muscle Target Items */}
                 {displayData.muscleFocus.map((muscle, idx) => (
@@ -930,15 +938,32 @@ export default function ClientPreferencePage() {
                 ))}
                 
                 {/* Add button */}
-                <button 
-                  onClick={() => {
-                    muscleModal.open();
-                    // Set muscle modal to target mode
-                  }}
-                  className="w-full p-3 border border-gray-300 rounded-lg text-gray-700 bg-white hover:bg-gray-50 hover:border-gray-400 transition-colors flex items-center justify-center gap-2 font-medium shadow-sm">
-                  <PlusIcon />
-                  {displayData.muscleFocus.length === 0 ? 'Add Target Muscle' : 'Add More'}
-                </button>
+                {(() => {
+                  const isFullBody = workoutPreferences?.workoutType?.startsWith('full_body');
+                  const isTargeted = workoutPreferences?.workoutType?.startsWith('targeted');
+                  const muscleCount = displayData.muscleFocus.length;
+                  const canAddMore = isFullBody ? muscleCount < 2 : muscleCount < 3;
+                  
+                  return (
+                    <button 
+                      onClick={() => {
+                        if (canAddMore) {
+                          muscleModal.open();
+                        }
+                      }}
+                      disabled={!canAddMore}
+                      className={`w-full p-3 border rounded-lg transition-colors flex items-center justify-center gap-2 font-medium shadow-sm ${
+                        canAddMore 
+                          ? 'border-gray-300 text-gray-700 bg-white hover:bg-gray-50 hover:border-gray-400'
+                          : 'border-gray-200 text-gray-400 bg-gray-50 cursor-not-allowed'
+                      }`}>
+                      <PlusIcon />
+                      {muscleCount === 0 ? 'Add Target Muscle' : 
+                       !canAddMore ? `Maximum reached (${muscleCount}/${isFullBody ? 2 : 3})` : 
+                       'Add More'}
+                    </button>
+                  );
+                })()}
               </div>
               
               {/* Navigation buttons */}
@@ -949,12 +974,26 @@ export default function ClientPreferencePage() {
                 >
                   Back
                 </button>
-                <button
-                  onClick={() => setCurrentStep(3)}
-                  className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium"
-                >
-                  {displayData.muscleFocus.length === 0 ? 'Skip' : 'Next'}
-                </button>
+                {(() => {
+                  const isTargeted = workoutPreferences?.workoutType?.startsWith('targeted');
+                  const muscleCount = displayData.muscleFocus.length;
+                  const canProceed = !isTargeted || muscleCount >= 2;
+                  
+                  return (
+                    <button
+                      onClick={() => canProceed && setCurrentStep(3)}
+                      disabled={!canProceed}
+                      className={`px-6 py-2 rounded-lg transition-colors font-medium ${
+                        canProceed
+                          ? 'bg-indigo-600 text-white hover:bg-indigo-700'
+                          : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                      }`}
+                    >
+                      {!canProceed ? `Add ${2 - muscleCount} more muscle${2 - muscleCount > 1 ? 's' : ''}` :
+                       displayData.muscleFocus.length === 0 ? 'Skip' : 'Next'}
+                    </button>
+                  );
+                })()}
               </div>
             </div>
           )}
@@ -1173,6 +1212,18 @@ export default function ClientPreferencePage() {
         isOpen={muscleModal.isOpen}
         onClose={muscleModal.close}
         onConfirm={async (muscle, type) => {
+          // Check constraints before adding
+          if (type === 'target') {
+            const currentTargets = clientData?.user?.preferences?.muscleTargets || [];
+            const isFullBody = workoutPreferences?.workoutType?.startsWith('full_body');
+            const maxAllowed = isFullBody ? 2 : 3;
+            
+            if (currentTargets.length >= maxAllowed) {
+              console.warn(`Cannot add more than ${maxAllowed} muscle targets for ${isFullBody ? 'full body' : 'targeted'} workouts`);
+              return;
+            }
+          }
+          
           await handleAddMusclePreference(muscle, type);
           muscleModal.close();
         }}

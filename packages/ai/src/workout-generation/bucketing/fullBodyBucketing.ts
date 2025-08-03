@@ -1,5 +1,5 @@
 /**
- * Bucketing logic specifically for Full Body With Finisher workout type
+ * Bucketing logic for Full Body workout types (With/Without Finisher)
  */
 
 import type { ScoredExercise } from '../../types/scoredExercise';
@@ -7,6 +7,7 @@ import type { ClientContext } from '../../types/clientContext';
 import { WorkoutType, BUCKET_CONFIGS } from '../../types/clientTypes';
 import { analyzeConstraints, getRemainingNeeds } from '../utils/constraintAnalyzer';
 import type { PreAssignedExercise } from '../../types/standardBlueprint';
+import { exerciseMatchesMusclePreference } from '../../constants/muscleMapping';
 
 export interface BucketingResult {
   exercises: ScoredExercise[];
@@ -49,7 +50,7 @@ function selectWithTieBreaking(
 }
 
 /**
- * Apply bucketing logic for Full Body With Finisher
+ * Apply bucketing logic for Full Body workout types (With/Without Finisher)
  * Fills remaining exercise slots after pre-assignments
  */
 export function applyFullBodyBucketing(
@@ -59,8 +60,9 @@ export function applyFullBodyBucketing(
   workoutType: WorkoutType,
   favoriteIds: string[] = []
 ): BucketingResult {
-  // Only process Full Body With Finisher
-  if (workoutType !== WorkoutType.FULL_BODY_WITH_FINISHER) {
+  // Only process Full Body workout types
+  if (workoutType !== WorkoutType.FULL_BODY_WITH_FINISHER && 
+      workoutType !== WorkoutType.FULL_BODY_WITHOUT_FINISHER) {
     return {
       exercises: [],
       bucketAssignments: {}
@@ -122,7 +124,7 @@ export function applyFullBodyBucketing(
   const existingMuscleTargets = [...preAssignedExercises, ...selected].filter(ex => {
     const targets = client.muscle_target || [];
     return targets.some(muscle => 
-      ex.primaryMuscle?.toLowerCase() === muscle.toLowerCase()
+      exerciseMatchesMusclePreference(ex.primaryMuscle, muscle as any)
     );
   });
   
@@ -138,7 +140,7 @@ export function applyFullBodyBucketing(
     const muscleCountMap = new Map<string, number>();
     for (const muscle of targetMuscles) {
       const count = existingMuscleTargets.filter(ex => 
-        ex.primaryMuscle?.toLowerCase() === muscle.toLowerCase()
+        exerciseMatchesMusclePreference(ex.primaryMuscle, muscle as any)
       ).length;
       muscleCountMap.set(muscle.toLowerCase(), count);
     }
@@ -146,7 +148,10 @@ export function applyFullBodyBucketing(
     console.log(`  Current muscle counts:`, Array.from(muscleCountMap.entries()));
     
     // Determine how many more we need for each muscle to reach equal distribution
-    const targetPerMuscle = 2; // For 2 muscles, we want 2 of each (total 4)
+    // For muscle_target constraint of 4: if 1 muscle selected = 4 exercises, if 2 muscles = 2 each
+    const totalMuscleTargetRequired = 4; // Total muscle_target constraint
+    const targetPerMuscle = Math.floor(totalMuscleTargetRequired / targetMuscles.length);
+    console.log(`  Muscle target calculation: ${totalMuscleTargetRequired} total / ${targetMuscles.length} muscles = ${targetPerMuscle} per muscle`);
     let distribution: { muscle: string; count: number }[] = [];
     
     for (const muscle of targetMuscles) {
@@ -164,7 +169,7 @@ export function applyFullBodyBucketing(
       // Get candidates for this specific muscle (including favorites)
       const muscleCandidates = availableExercises.filter(ex => 
         !usedIds.has(ex.id) && 
-        ex.primaryMuscle?.toLowerCase() === muscle.toLowerCase()
+        exerciseMatchesMusclePreference(ex.primaryMuscle, muscle as any)
       );
       
       console.log(`  Finding ${count} exercises for ${muscle}: ${muscleCandidates.length} candidates`);
@@ -303,6 +308,13 @@ export function applyFullBodyBucketing(
   }
   
   console.log(`  ✓ Bucketed ${selected.length} exercises for ${client.name} (${preAssignedExercises.length} pre-assigned + ${selected.length} bucketed = ${preAssignedExercises.length + selected.length} total)`);
+  
+  // Final constraint check
+  const finalAnalysis = analyzeConstraints([...preAssignedExercises, ...selected], client, workoutType);
+  console.log(`  Final constraint check:`, {
+    muscleTarget: finalAnalysis.functionalRequirements.muscle_target,
+    allConstraintsMet: finalAnalysis.summary.allConstraintsMet
+  });
   
   return {
     exercises: selected,

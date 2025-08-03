@@ -180,8 +180,8 @@ export class WorkoutBlueprintService {
         skill_capacity: (client.userProfile?.skillLevel ?? 'moderate') as "very_low" | "low" | "moderate" | "high",
         primary_goal: (client.preferences?.sessionGoal ?? 'general_fitness') as any,
         intensity: (client.preferences?.intensity ?? 'moderate') as "low" | "moderate" | "high",
-        muscle_target: client.preferences?.muscleTargets || [],
-        muscle_lessen: client.preferences?.muscleLessens || [],
+        muscle_target: client.preferences?.muscleTargets?.map(m => m.toLowerCase()) || [],
+        muscle_lessen: client.preferences?.muscleLessens?.map(m => m.toLowerCase()) || [],
         exercise_requests: {
           include: client.preferences?.includeExercises || [],
           avoid: client.preferences?.avoidExercises || []

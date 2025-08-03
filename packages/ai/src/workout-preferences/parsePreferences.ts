@@ -55,7 +55,7 @@ EXTRACTION FIELDS:
 3. muscleTargets → Muscle groups the client EXPLICITLY wants to target
    - Only add when user says things like "let's work legs", "focus on chest", "target glutes"
    - Do NOT infer from exercise mentions (e.g., "deadlifts" does not mean add legs/glutes)
-   - Valid options: chest, back, shoulders, arms, legs, glutes, core, triceps, biceps, quads, hamstrings, calves
+   - Valid options (13 total): glutes, quads, hamstrings, calves, hips, core, obliques, chest, shoulders, triceps, back, traps, biceps
    
 4. muscleLessens → Muscle groups that are sore or fatigued
    - Valid options: Same as muscleTargets
@@ -119,10 +119,11 @@ Target Indicators (MUST be explicit):
 - "[muscle] day", "train [muscle]", "blast [muscle]" → add to muscleTargets
 - "let's do [muscle]", "target [muscle]" → add to muscleTargets
 Common aliases:
-- "upper body" → [chest, back, shoulders, arms]
-- "lower body" → [legs, glutes]
+- "upper body" → [chest, back, shoulders, biceps, triceps]
+- "lower body" → [glutes, quads, hamstrings, calves, hips]
 - "arms" → [biceps, triceps]
-- "legs" → [quads, hamstrings, calves]
+- "legs" → [quads, hamstrings, glutes, calves]
+- "abs" → [core, obliques]
 
 NOT Target Indicators:
 - Exercise names alone (deadlifts, squats, bench press, etc.)
@@ -134,7 +135,7 @@ Avoidance Indicators:
 - "[muscle] needs rest", "[muscle] is fried" → add to muscleLessens
 - "take it easy on [muscle]", "go light on [muscle]" → add to muscleLessens
 - "slight/minor soreness in [muscle]" → add to muscleLessens
-- When "legs" is mentioned, consider adding relevant leg muscles (hamstrings, quads, glutes)
+- When "legs" is mentioned, consider adding relevant leg muscles (hamstrings, quads, glutes, calves)
 
 JOINT PROTECTION MAPPINGS:
 - "my [joint] hurts/aches" → add to avoidJoints (NOT for muscle soreness)
@@ -212,7 +213,7 @@ const FEW_SHOT_EXAMPLES = [
     output: {
       sessionGoal: "strength",
       intensity: "high",
-      muscleTargets: ["legs", "quads", "hamstrings", "glutes"],
+      muscleTargets: ["quads", "hamstrings", "glutes", "calves"],
       muscleLessens: [],
       includeExercises: [],
       avoidExercises: [],
@@ -251,7 +252,7 @@ const FEW_SHOT_EXAMPLES = [
     output: {
       sessionGoal: "strength",
       intensity: "high",
-      muscleTargets: ["legs", "quads", "hamstrings", "glutes"],
+      muscleTargets: ["quads", "hamstrings", "glutes", "calves"],
       muscleLessens: [],
       includeExercises: [],
       avoidExercises: [],
@@ -262,7 +263,7 @@ const FEW_SHOT_EXAMPLES = [
   {
     input: "Slight soreness in my hamstrings from Tuesday, so maybe take it easy on legs?",
     output: {
-      muscleLessens: ["hamstrings", "legs"],
+      muscleLessens: ["hamstrings", "quads", "glutes"],
       needsFollowUp: false
     }
   },

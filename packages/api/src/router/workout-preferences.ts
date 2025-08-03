@@ -250,12 +250,28 @@ export const workoutPreferencesRouter = createTRPCRouter({
         .then(res => res[0]);
 
       if (!preference) {
+        // Get session to retrieve businessId
+        const session = await db
+          .select()
+          .from(TrainingSession)
+          .where(eq(TrainingSession.id, input.sessionId))
+          .limit(1)
+          .then(res => res[0]);
+
+        if (!session) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Training session not found"
+          });
+        }
+
         // Create new preferences if they don't exist
         [preference] = await db
           .insert(WorkoutPreferences)
           .values({
             userId: input.userId,
             trainingSessionId: input.sessionId,
+            businessId: session.businessId,
             intensity: "moderate",
             muscleLessens: [input.muscle]
           })
@@ -368,6 +384,24 @@ export const workoutPreferencesRouter = createTRPCRouter({
         // Append to existing muscle targets (avoid duplicates)
         const currentTargets = preference.muscleTargets || [];
         if (!currentTargets.includes(input.muscle)) {
+          // Check muscle target constraints based on workout type
+          const isFullBody = preference.workoutType?.startsWith('full_body');
+          const isTargeted = preference.workoutType?.startsWith('targeted');
+          
+          if (isFullBody && currentTargets.length >= 2) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "Full body workouts can have a maximum of 2 muscle targets"
+            });
+          }
+          
+          if (isTargeted && currentTargets.length >= 3) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "Targeted workouts can have a maximum of 3 muscle targets"
+            });
+          }
+          
           const updatedTargets = [...currentTargets, input.muscle];
           
           [preference] = await db
@@ -421,12 +455,28 @@ export const workoutPreferencesRouter = createTRPCRouter({
         .then(res => res[0]);
 
       if (!preference) {
+        // Get session to retrieve businessId
+        const session = await db
+          .select()
+          .from(TrainingSession)
+          .where(eq(TrainingSession.id, input.sessionId))
+          .limit(1)
+          .then(res => res[0]);
+
+        if (!session) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Training session not found"
+          });
+        }
+
         // Create new preferences if they don't exist
         [preference] = await db
           .insert(WorkoutPreferences)
           .values({
             userId: input.userId,
             trainingSessionId: input.sessionId,
+            businessId: session.businessId,
             intensity: "moderate",
             muscleLessens: [input.muscle]
           })
@@ -606,12 +656,28 @@ export const workoutPreferencesRouter = createTRPCRouter({
         .then(res => res[0]);
 
       if (!preference) {
+        // Get session to retrieve businessId
+        const session = await db
+          .select()
+          .from(TrainingSession)
+          .where(eq(TrainingSession.id, input.sessionId))
+          .limit(1)
+          .then(res => res[0]);
+
+        if (!session) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Training session not found"
+          });
+        }
+
         // Create new preferences if they don't exist
         [preference] = await db
           .insert(WorkoutPreferences)
           .values({
             userId: input.userId,
             trainingSessionId: input.sessionId,
+            businessId: session.businessId,
             intensity: "moderate",
             notes: [input.note]
           })
@@ -814,13 +880,28 @@ export const workoutPreferencesRouter = createTRPCRouter({
         .then(res => res[0]);
 
       if (!preference) {
+        // Get session to retrieve businessId
+        const session = await db
+          .select()
+          .from(TrainingSession)
+          .where(eq(TrainingSession.id, input.sessionId))
+          .limit(1)
+          .then(res => res[0]);
+
+        if (!session) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Training session not found"
+          });
+        }
+
         // Create new preference with workoutType
         const [newPref] = await db
           .insert(WorkoutPreferences)
           .values({
             userId: input.userId,
             trainingSessionId: input.sessionId,
-            businessId: checkIn[0].businessId,
+            businessId: session.businessId,
             workoutType: input.workoutType,
             collectionMethod: 'web'
           })

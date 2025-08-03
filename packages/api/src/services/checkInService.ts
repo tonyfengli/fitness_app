@@ -3,6 +3,7 @@ import { eq, and, or, sql } from "@acme/db";
 import { user, TrainingSession, UserTrainingSession } from "@acme/db/schema";
 import { normalizePhoneNumber } from "./twilio";
 import { createLogger } from "../utils/logger";
+import { createDefaultPreferencesIfNeeded } from "./autoPreferenceService";
 
 const logger = createLogger("CheckInService");
 
@@ -171,6 +172,13 @@ export async function processCheckIn(phoneNumber: string): Promise<CheckInResult
         name: clientUser.name
       });
       
+      // Auto-create preferences for standard templates
+      const autoPrefsCreated = await createDefaultPreferencesIfNeeded({
+        userId: clientUser.id,
+        sessionId: session.id,
+        businessId: clientUser.businessId,
+      });
+      
       return {
         success: true,
         message: `Hello ${clientUser.name}! You're checked in for the session. Welcome!`,
@@ -179,7 +187,7 @@ export async function processCheckIn(phoneNumber: string): Promise<CheckInResult
         sessionId: session.id,
         checkInId: existingCheckIn[0].id,
         phoneNumber: normalizedPhone,
-        shouldStartPreferences: true, // Always true for new check-ins
+        shouldStartPreferences: true, // Always show preference prompt
       };
     } else {
       // Create new check-in record
@@ -212,6 +220,13 @@ export async function processCheckIn(phoneNumber: string): Promise<CheckInResult
         name: clientUser.name
       });
       
+      // Auto-create preferences for standard templates
+      const autoPrefsCreated = await createDefaultPreferencesIfNeeded({
+        userId: clientUser.id,
+        sessionId: session.id,
+        businessId: clientUser.businessId,
+      });
+      
       return {
         success: true,
         message: `Hello ${clientUser.name}! You're checked in for the session. Welcome!`,
@@ -220,7 +235,7 @@ export async function processCheckIn(phoneNumber: string): Promise<CheckInResult
         sessionId: session.id,
         checkInId: newCheckIn.id,
         phoneNumber: normalizedPhone,
-        shouldStartPreferences: true, // Always true for new check-ins
+        shouldStartPreferences: true, // Always show preference prompt
       };
     }
   } catch (error) {

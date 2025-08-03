@@ -139,9 +139,11 @@ export async function generateGroupWorkoutBlueprint(
           favoritesByClient
         );
         
-        // Apply bucketing for Full Body With Finisher only
-        if (groupContext.workoutType === WorkoutType.FULL_BODY_WITH_FINISHER && isStandardBlueprint(blueprint)) {
-          console.log('🪣 Applying Full Body With Finisher bucketing...');
+        // Apply bucketing for Full Body workout types
+        if ((groupContext.workoutType === WorkoutType.FULL_BODY_WITH_FINISHER || 
+             groupContext.workoutType === WorkoutType.FULL_BODY_WITHOUT_FINISHER) && 
+            isStandardBlueprint(blueprint)) {
+          console.log(`🪣 Applying ${groupContext.workoutType.replace(/_/g, ' ')} bucketing...`);
           const { applyFullBodyBucketing } = await import('../workout-generation/bucketing/fullBodyBucketing');
           
           for (const [clientId, pool] of Object.entries(blueprint.clientExercisePools)) {

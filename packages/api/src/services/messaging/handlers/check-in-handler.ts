@@ -7,6 +7,7 @@ import { user, TrainingSession, UserTrainingSession } from "@acme/db/schema";
 import { getWorkoutTemplate } from "@acme/ai";
 import { TemplateSMSService } from '../../sms/template-sms-service';
 import { ExerciseSelectionService } from '../../sms/template-services/exercise-selection-service';
+import { createDefaultPreferencesIfNeeded } from '../../autoPreferenceService';
 
 // SSE broadcast function removed - will be replaced with Supabase Realtime
 
@@ -125,6 +126,19 @@ export class CheckInHandler extends BaseMessageHandler {
           }
         }
       }
+
+      // Auto-create preferences for standard templates
+      const autoPrefsCreated = await createDefaultPreferencesIfNeeded({
+        userId: message.userId,
+        sessionId: openSession.id,
+        businessId: message.businessId || openSession.businessId,
+      });
+
+      console.log(`[${new Date().toISOString()}] Auto preference creation result:`, {
+        userId: message.userId,
+        sessionId: openSession.id,
+        autoPrefsCreated
+      });
 
       // Build simple check-in response
       const responseMessage = `Welcome, ${this.formatClientName(message.userName)}! You're checked in. We'll get started once everyone joins.`;

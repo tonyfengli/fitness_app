@@ -64,16 +64,9 @@ export const WORKOUT_TYPE_STRATEGIES: Record<WorkoutType, WorkoutTypeStrategy> =
     constraints: BUCKET_CONFIGS[WorkoutType.FULL_BODY_WITHOUT_FINISHER],
     preAssignmentRules: [
       { type: 'include', count: 10, priority: 1 },
-      { type: 'favorite', count: 2, priority: 2 },
-      // Pre-assign a squat or hinge for strength focus
-      {
-        type: 'movement_pattern',
-        count: 1,
-        priority: 3,
-        filter: (ex) => hasMovementPattern('squat')(ex) || hasMovementPattern('hinge')(ex)
-      }
+      { type: 'favorite', count: 2, priority: 2 }
     ],
-    maxPreAssignments: 3
+    maxPreAssignments: 2
   },
   
   [WorkoutType.TARGETED_WITH_FINISHER]: {
@@ -207,9 +200,10 @@ export function processPreAssignments(
         break;
         
       case 'favorite':
-        // Special handling for Full Body With Finisher favorites
+        // Special handling for Full Body workout types favorites
         // MUST select 1 upper body + 1 lower body (body part balance constraint)
-        if (workoutType === WorkoutType.FULL_BODY_WITH_FINISHER) {
+        if (workoutType === WorkoutType.FULL_BODY_WITH_FINISHER || 
+            workoutType === WorkoutType.FULL_BODY_WITHOUT_FINISHER) {
           requestedIds = favoriteIds.filter(id => !usedIds.has(id));
           const favoriteExercises = exercises.filter(ex => requestedIds.includes(ex.id));
           

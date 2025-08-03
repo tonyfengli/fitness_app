@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import type { StandardGroupWorkoutBlueprint, GroupContext } from "@acme/ai/client";
-import { WorkoutType, BUCKET_CONFIGS } from "@acme/ai/client";
+import { WorkoutType, BUCKET_CONFIGS, getOldMusclesForConsolidated, type ConsolidatedMuscle } from "@acme/ai/client";
 
 interface StandardTemplateViewProps {
   groupContext: GroupContext;
@@ -296,9 +296,13 @@ export default function StandardTemplateView({
                               
                               if (funcType === 'muscle_target') {
                                 const targetMuscles = client.muscle_target || [];
-                                count = allSelectedExercises.filter(ex => 
-                                  targetMuscles.some(muscle => ex.primaryMuscle === muscle)
-                                ).length;
+                                count = allSelectedExercises.filter(ex => {
+                                  if (!ex.primaryMuscle) return false;
+                                  return targetMuscles.some(muscle => {
+                                    const oldMuscles = getOldMusclesForConsolidated(muscle as ConsolidatedMuscle);
+                                    return oldMuscles.includes(ex.primaryMuscle.toLowerCase());
+                                  });
+                                }).length;
                               } else {
                                 count = allSelectedExercises.filter(ex => 
                                   ex.functionTags?.includes(funcType)
@@ -381,9 +385,13 @@ export default function StandardTemplateView({
                                     if (funcType === 'muscle_target') {
                                       // Count exercises that target the client's muscle targets (PRIMARY ONLY)
                                       const targetMuscles = client.muscle_target || [];
-                                      count = allSelectedExercises.filter(ex => 
-                                        targetMuscles.some(muscle => ex.primaryMuscle === muscle)
-                                      ).length;
+                                      count = allSelectedExercises.filter(ex => {
+                                        if (!ex.primaryMuscle) return false;
+                                        return targetMuscles.some(muscle => {
+                                          const oldMuscles = getOldMusclesForConsolidated(muscle as ConsolidatedMuscle);
+                                          return oldMuscles.includes(ex.primaryMuscle.toLowerCase());
+                                        });
+                                      }).length;
                                     } else {
                                       // Standard function tag check (capacity, strength)
                                       count = allSelectedExercises.filter(ex => 

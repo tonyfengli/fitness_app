@@ -8,6 +8,7 @@ import type { ScoredExercise } from '../../types/scoredExercise';
 import type { ClientContext } from '../../types/clientContext';
 import { WorkoutType } from '../../types/clientTypes';
 import { getWorkoutTypeStrategy } from '../strategies/workoutTypeStrategies';
+import { exerciseMatchesMusclePreference } from '../../constants/muscleMapping';
 
 export interface ConstraintAnalysis {
   movementPatterns: {
@@ -81,13 +82,20 @@ function countFunctionalRequirements(
   
   // Count muscle targets (PRIMARY MUSCLE ONLY)
   if (client.muscle_target && client.muscle_target.length > 0) {
+    console.log(`[constraintAnalyzer] Analyzing muscle targets for ${exercises.length} exercises`);
+    console.log(`[constraintAnalyzer] Client muscle targets:`, client.muscle_target);
+    
     const muscleTargetCount = exercises.filter(ex => {
       const targets = client.muscle_target || [];
-      return targets.some(muscle => 
-        ex.primaryMuscle?.toLowerCase() === muscle.toLowerCase()
-      );
+      const matches = targets.some(muscle => {
+        const result = exerciseMatchesMusclePreference(ex.primaryMuscle, muscle as any);
+        console.log(`[constraintAnalyzer] Checking ${ex.name} (${ex.primaryMuscle}) against target "${muscle}": ${result}`);
+        return result;
+      });
+      return matches;
     }).length;
     
+    console.log(`[constraintAnalyzer] Final muscle target count: ${muscleTargetCount}`);
     counts.set('muscle_target', muscleTargetCount);
   }
   

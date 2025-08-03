@@ -41,6 +41,9 @@ export * from "./utils/debugToTest";
 // Workout preferences parsing
 export * from "./workout-preferences/parsePreferences";
 
+// Muscle mapping
+export * from "./constants/muscleMapping";
+
 // LLM configuration
 export { createLLM } from "./config/llm";
 

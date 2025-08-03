@@ -51,10 +51,11 @@ export const BUCKET_CONFIGS: Record<WorkoutType, BucketConstraints> = {
       'core': { min: 2, max: 2 }
     },
     functionalRequirements: {
-      'strength': 2
+      'capacity': 0,
+      'muscle_target': 4
     },
-    flexSlots: 3,
-    totalExercises: 13
+    flexSlots: 2,
+    totalExercises: 15
   },
   
   [WorkoutType.TARGETED_WITH_FINISHER]: {

@@ -39,3 +39,10 @@ export {
   BUCKET_CONFIGS,
   type BucketConstraints
 } from "./types/clientTypes";
+
+// Muscle mapping utilities
+export {
+  CONSOLIDATED_MUSCLES,
+  getOldMusclesForConsolidated,
+  type ConsolidatedMuscle
+} from "./constants/muscleMapping";
