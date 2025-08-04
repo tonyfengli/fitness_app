@@ -167,13 +167,21 @@ export default function GroupVisualizationPage() {
     includeDiagnostics: true,
     showToasts: true,
     onSuccess: (data) => {
+      console.log('Workout generation response:', data);
+      
       // Update the debug data
       if (data.debug) {
+        console.log('=== WORKOUT GENERATION SYSTEM PROMPT ===');
+        console.log(data.debug.systemPrompt);
+        console.log('=== END SYSTEM PROMPT ===');
+        
         setLlmDebugData({
           systemPrompt: data.debug.systemPrompt,
           userMessage: data.debug.userMessage,
           llmOutput: data.debug.llmOutput
         });
+      } else {
+        console.log('No debug data included in response. Make sure includeDiagnostics is set to true.');
       }
     }
   });

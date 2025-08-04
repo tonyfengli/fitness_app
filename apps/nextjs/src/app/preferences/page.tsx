@@ -105,8 +105,19 @@ export default function PreferencesPage() {
   const { generateWorkout, isGenerating } = useGenerateGroupWorkout({
     sessionId: sessionId || '',
     navigateOnSuccess: true,
-    includeDiagnostics: false,
-    showToasts: true
+    includeDiagnostics: true,
+    showToasts: true,
+    onSuccess: (data) => {
+      console.log('Workout generation response from preferences page:', data);
+      
+      if (data.debug) {
+        console.log('=== WORKOUT GENERATION SYSTEM PROMPT (from preferences) ===');
+        console.log(data.debug.systemPrompt);
+        console.log('=== END SYSTEM PROMPT ===');
+      } else {
+        console.log('No debug data included in response. Make sure includeDiagnostics is set to true.');
+      }
+    }
   });
   
 
@@ -307,9 +318,9 @@ export default function PreferencesPage() {
                   markAllReady.mutate({ sessionId });
                 }
               }}
-              disabled={!sessionId || markAllReady.isPending}
+              disabled={!sessionId || markAllReady.isPending || allClientsReady}
               className={`w-full px-4 py-2 text-left rounded-md transition-colors flex items-center gap-2 ${
-                !sessionId || markAllReady.isPending
+                !sessionId || markAllReady.isPending || allClientsReady
                   ? 'text-gray-400 cursor-not-allowed'
                   : 'text-blue-600 hover:bg-blue-50'
               }`}
@@ -317,7 +328,7 @@ export default function PreferencesPage() {
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-              {markAllReady.isPending ? 'Marking Ready...' : 'Mark All Ready'}
+              {markAllReady.isPending ? 'Marking Ready...' : allClientsReady ? 'All Clients Ready' : 'Mark All Ready'}
             </button>
             
             <button

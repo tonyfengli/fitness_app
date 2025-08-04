@@ -32,7 +32,8 @@ export class ClientExerciseSelectionPromptBuilder {
   }
   
   private createStrategy(): PromptStrategy {
-    const exercisesToSelect = this.getExercisesToSelect();
+    // First determine how many exercises to select based on intensity
+    const exercisesToSelect = this.getExercisesToSelectForIntensity(this.config.client.intensity);
     
     const strategyConfig = {
       workoutType: this.config.workoutType,
@@ -41,6 +42,11 @@ export class ClientExerciseSelectionPromptBuilder {
       exercisesToSelect
     };
     
+    // Create the strategy with the full config
+    return this.createStrategyFromConfig(strategyConfig);
+  }
+  
+  private createStrategyFromConfig(strategyConfig: any): PromptStrategy {
     // Add more strategies here as workout types are implemented
     switch (this.config.workoutType) {
       case WorkoutType.FULL_BODY_WITH_FINISHER:
@@ -54,6 +60,22 @@ export class ClientExerciseSelectionPromptBuilder {
         
       default:
         throw new Error(`Unknown workout type: ${this.config.workoutType}`);
+    }
+  }
+  
+  // Standalone method to get exercise count based on intensity
+  private getExercisesToSelectForIntensity(intensity?: 'low' | 'moderate' | 'high' | 'intense'): number {
+    switch (intensity) {
+      case 'low':
+        return 2;  // 4 total - 2 pre-assigned = 2 to select
+      case 'moderate':
+        return 3;  // 5 total - 2 pre-assigned = 3 to select
+      case 'high':
+        return 4;  // 6 total - 2 pre-assigned = 4 to select
+      case 'intense':
+        return 5;  // 7 total - 2 pre-assigned = 5 to select
+      default:
+        return 3;  // Default to moderate
     }
   }
   
@@ -170,7 +192,7 @@ Return a JSON object with exactly ${exercisesToSelect} selected exercises:
 {
   "selectedExercises": [
     {
-      "exerciseId": "uuid-here",
+      "exerciseId": "<copy the exact ID from the exercise list above>",
       "exerciseName": "Exercise Name",
       "reasoning": "Brief explanation of why this exercise was selected",
       "isShared": true,
@@ -187,9 +209,10 @@ Return a JSON object with exactly ${exercisesToSelect} selected exercises:
 }
 \`\`\`
 
-**Important:**
+**CRITICAL:**
 - Select EXACTLY ${exercisesToSelect} exercises
-- Use the exact exercise IDs from the provided options
+- **COPY THE EXACT EXERCISE ID** from the list above (e.g., "0ed8d787-caff-4e43-b04b-45dc9b93117d")
+- Do NOT use placeholder IDs like "uuid-here" or "uuid-1"
 - Prefer shared exercises when they meet constraints
 - Ensure all muscle targets are covered across selected + pre-assigned exercises`;
   }
@@ -201,7 +224,8 @@ Return a JSON object with exactly ${exercisesToSelect} selected exercises:
   }
   
   private formatExerciseDetails(ex: ScoredExercise): string {
-    let details = `   - Movement: ${ex.movementPattern}, Primary: ${ex.primaryMuscle}\n`;
+    let details = `   - ID: ${ex.id}\n`;
+    details += `   - Movement: ${ex.movementPattern}, Primary: ${ex.primaryMuscle}\n`;
     details += `   - Score: ${ex.score.toFixed(1)}`;
     
     if (ex.scoreBreakdown) {

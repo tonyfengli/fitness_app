@@ -117,10 +117,20 @@ export class LLMExerciseSelector {
     
     console.log(`📝 Calling LLM for ${input.client.name} with ${allCandidates.length} candidates`);
     
+    // Log the system prompt for debugging
+    console.log(`\n=== SYSTEM PROMPT FOR ${input.client.name.toUpperCase()} ===`);
+    console.log(prompt);
+    console.log(`=== END SYSTEM PROMPT ===\n`);
+    
     try {
       // Call LLM
       const response = await this.llm.invoke(prompt);
       const content = response.content.toString();
+      
+      // Log LLM response for debugging
+      console.log(`\n=== LLM RESPONSE FOR ${input.client.name.toUpperCase()} ===`);
+      console.log(content);
+      console.log(`=== END LLM RESPONSE ===\n`);
       
       // Extract JSON from response
       const jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/);
@@ -241,17 +251,20 @@ export class LLMExerciseSelector {
   
   /**
    * Get expected exercise count based on intensity
+   * This is the number of exercises to SELECT (not including pre-assigned)
    */
-  private getExpectedExerciseCount(intensity: 'low' | 'moderate' | 'high'): number {
+  private getExpectedExerciseCount(intensity: 'low' | 'moderate' | 'high' | 'intense'): number {
     switch (intensity) {
       case 'low':
-        return 3;
+        return 2;  // 4 total - 2 pre-assigned = 2 to select
       case 'moderate':
-        return 4;
+        return 3;  // 5 total - 2 pre-assigned = 3 to select
       case 'high':
-        return 5;
+        return 4;  // 6 total - 2 pre-assigned = 4 to select
+      case 'intense':
+        return 5;  // 7 total - 2 pre-assigned = 5 to select
       default:
-        return 4;
+        return 3;  // Default to moderate
     }
   }
 }

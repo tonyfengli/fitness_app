@@ -91,19 +91,20 @@ Exercise Selection Guidance:
    - Mix bilateral and unilateral movements when appropriate`;
   }
   
-  getExercisesToSelect(intensity: 'low' | 'moderate' | 'high'): number {
-    // Adjust selection count based on intensity
-    // Low: fewer exercises (more rest/recovery)
-    // High: more exercises (higher volume)
+  getExercisesToSelect(intensity?: 'low' | 'moderate' | 'high' | 'intense'): number {
+    // Adjust selection count based on intensity (assuming 2 pre-assigned)
+    // These counts are for exercises to SELECT, not total exercises
     switch (intensity) {
       case 'low':
-        return 3;  // 2 pre-assigned + 3 = 5 total (lighter day)
+        return 2;  // 2 pre-assigned + 2 = 4 total (lighter day)
       case 'moderate':
-        return 4;  // 2 pre-assigned + 4 = 6 total (standard)
+        return 3;  // 2 pre-assigned + 3 = 5 total (standard)
       case 'high':
-        return 5;  // 2 pre-assigned + 5 = 7 total (higher volume)
+        return 4;  // 2 pre-assigned + 4 = 6 total (higher volume)
+      case 'intense':
+        return 5;  // 2 pre-assigned + 5 = 7 total (max volume)
       default:
-        return 4;
+        return 3;  // Default to moderate
     }
   }
   

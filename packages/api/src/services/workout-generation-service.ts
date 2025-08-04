@@ -427,12 +427,14 @@ export class WorkoutGenerationService {
       );
 
       // Step 3: Create workouts
-      const workoutIds = await this.createWorkouts(
-        sessionId,
-        generationResult,
-        groupContext,
-        exercisePool
-      );
+      // COMMENTED OUT FOR DEBUGGING - Skip saving to database
+      // const workoutIds = await this.createWorkouts(
+      //   sessionId,
+      //   generationResult,
+      //   groupContext,
+      //   exercisePool
+      // );
+      const workoutIds: string[] = [];
 
       logger.info("Workout generation completed", { 
         sessionId, 

@@ -208,6 +208,24 @@ export class StandardWorkoutGenerator {
   }
   
   /**
+   * Get expected total exercises based on intensity
+   */
+  private getExpectedTotalExercises(intensity?: 'low' | 'moderate' | 'high' | 'intense'): number {
+    switch (intensity) {
+      case 'low':
+        return 4;
+      case 'moderate':
+        return 5;
+      case 'high':
+        return 6;
+      case 'intense':
+        return 7;
+      default:
+        return 5; // Default to moderate
+    }
+  }
+
+  /**
    * Validate exercise selection response
    */
   private validateExerciseSelection(
@@ -222,13 +240,17 @@ export class StandardWorkoutGenerator {
       }
       
       const clientSelection = selection.clientSelections[client.user_id];
-      const expectedTotal = blueprint.metadata.totalExercisesPerClient;
+      
+      // Calculate expected total based on client intensity
+      const intensity = client.intensity || 'moderate';
+      const expectedTotal = this.getExpectedTotalExercises(intensity);
+      
       const actualTotal = clientSelection ? 
         clientSelection.preAssigned.length + clientSelection.selected.length : 0;
       
       if (actualTotal !== expectedTotal) {
         throw new Error(
-          `Client ${client.user_id} has ${actualTotal} exercises, expected ${expectedTotal}`
+          `Client ${client.user_id} has ${actualTotal} exercises, expected ${expectedTotal} for ${intensity} intensity`
         );
       }
     }

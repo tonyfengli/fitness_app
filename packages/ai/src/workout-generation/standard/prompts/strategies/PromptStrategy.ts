@@ -9,7 +9,7 @@ import type { GroupScoredExercise } from "../../../../types/groupContext";
 
 export interface PromptStrategyConfig {
   workoutType: string;
-  intensity: 'low' | 'moderate' | 'high';
+  intensity?: 'low' | 'moderate' | 'high' | 'intense';
   totalExercisesNeeded: number;
   exercisesToSelect: number; // How many the LLM should select (2-5 based on intensity)
 }
@@ -33,7 +33,7 @@ export interface PromptStrategy {
   /**
    * Get the number of exercises LLM should select based on intensity
    */
-  getExercisesToSelect(intensity: 'low' | 'moderate' | 'high'): number;
+  getExercisesToSelect(intensity?: 'low' | 'moderate' | 'high' | 'intense'): number;
   
   /**
    * Format pre-assigned exercises for display
