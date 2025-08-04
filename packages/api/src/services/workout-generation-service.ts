@@ -1,5 +1,5 @@
 import { db } from "@acme/db/client";
-import { eq, and } from "@acme/db";
+import { eq, and, or } from "@acme/db";
 import { 
   TrainingSession, 
   UserTrainingSession, 
@@ -84,7 +84,10 @@ export class WorkoutGenerationService {
       .where(
         and(
           eq(UserTrainingSession.trainingSessionId, sessionId),
-          eq(UserTrainingSession.status, 'checked_in')
+          or(
+            eq(UserTrainingSession.status, 'checked_in'),
+            eq(UserTrainingSession.status, 'ready')
+          )
         )
       );
 
@@ -276,8 +279,16 @@ export class WorkoutGenerationService {
       throw new Error(`Template ${groupContext.templateType} not found`);
     }
     
-    // Initialize generator
-    const generator = new StandardWorkoutGenerator();
+    // Prepare favorites map from group context
+    const favoritesByClient = new Map<string, string[]>();
+    for (const client of groupContext.clients) {
+      if (client.favoriteExerciseIds && client.favoriteExerciseIds.length > 0) {
+        favoritesByClient.set(client.user_id, client.favoriteExerciseIds);
+      }
+    }
+    
+    // Initialize generator with favorites
+    const generator = new StandardWorkoutGenerator(favoritesByClient);
     
     try {
       // Generate workout plan using two-phase approach

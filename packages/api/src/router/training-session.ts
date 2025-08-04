@@ -326,13 +326,16 @@ export const trainingSessionRouter = {
         });
       }
       
-      // Get checked-in users
+      // Get checked-in and ready users
       const checkedInUsers = await ctx.db
         .select()
         .from(UserTrainingSession)
         .where(and(
           eq(UserTrainingSession.trainingSessionId, input.sessionId),
-          eq(UserTrainingSession.status, 'checked_in')
+          or(
+            eq(UserTrainingSession.status, 'checked_in'),
+            eq(UserTrainingSession.status, 'ready')
+          )
         ))
         .orderBy(desc(UserTrainingSession.checkedInAt));
       
@@ -355,6 +358,7 @@ export const trainingSessionRouter = {
           
           return {
             userId: checkin.userId,
+            status: checkin.status,
             checkedInAt: checkin.checkedInAt,
             userName: userInfo?.name || null,
             userEmail: userInfo?.email || "",
@@ -1320,7 +1324,10 @@ Set your goals and preferences for today's session.`;
         where: and(
           eq(UserTrainingSession.userId, input.userId),
           eq(UserTrainingSession.trainingSessionId, input.sessionId),
-          eq(UserTrainingSession.status, 'checked_in')
+          or(
+            eq(UserTrainingSession.status, 'checked_in'),
+            eq(UserTrainingSession.status, 'ready')
+          )
         ),
       });
 
@@ -1390,7 +1397,10 @@ Set your goals and preferences for today's session.`;
         where: and(
           eq(UserTrainingSession.userId, input.userId),
           eq(UserTrainingSession.trainingSessionId, input.sessionId),
-          eq(UserTrainingSession.status, 'checked_in')
+          or(
+            eq(UserTrainingSession.status, 'checked_in'),
+            eq(UserTrainingSession.status, 'ready')
+          )
         ),
       });
 
@@ -1682,7 +1692,10 @@ Set your goals and preferences for today's session.`;
           and(
             eq(UserTrainingSession.userId, input.userId),
             eq(UserTrainingSession.trainingSessionId, input.sessionId),
-            eq(UserTrainingSession.status, 'checked_in')
+            or(
+              eq(UserTrainingSession.status, 'checked_in'),
+              eq(UserTrainingSession.status, 'ready')
+            )
           )
         )
         .limit(1);
@@ -2118,5 +2131,129 @@ Set your goals and preferences for today's session.`;
       // Real-time updates will be handled by Supabase Realtime
 
       return { success: true };
+    }),
+    
+  /**
+   * Update client ready status
+   */
+  updateClientReadyStatus: protectedProcedure
+    .input(z.object({
+      sessionId: z.string(),
+      userId: z.string(),
+      isReady: z.boolean()
+    }))
+    .mutation(async ({ ctx, input }) => {
+      // Verify the session exists and user has access
+      const session = await ctx.db.query.TrainingSession.findFirst({
+        where: eq(TrainingSession.id, input.sessionId),
+      });
+      
+      if (!session) {
+        throw new TRPCError({ 
+          code: "NOT_FOUND", 
+          message: "Training session not found" 
+        });
+      }
+      
+      // Check if user is trainer for this business
+      const isTrainer = ctx.session.user.businessId === session.businessId;
+      const isOwnStatus = ctx.session.user.id === input.userId;
+      
+      if (!isTrainer && !isOwnStatus) {
+        throw new TRPCError({ 
+          code: "FORBIDDEN", 
+          message: "Not authorized to update this status" 
+        });
+      }
+      
+      // Get current user training session
+      const userSession = await ctx.db.query.UserTrainingSession.findFirst({
+        where: and(
+          eq(UserTrainingSession.trainingSessionId, input.sessionId),
+          eq(UserTrainingSession.userId, input.userId)
+        ),
+      });
+      
+      if (!userSession) {
+        throw new TRPCError({ 
+          code: "NOT_FOUND", 
+          message: "User not found in this training session" 
+        });
+      }
+      
+      // Only allow ready status if currently checked_in or ready
+      if (userSession.status !== 'checked_in' && userSession.status !== 'ready') {
+        throw new TRPCError({ 
+          code: "BAD_REQUEST", 
+          message: "User must be checked in to mark as ready" 
+        });
+      }
+      
+      // Update status
+      const newStatus = input.isReady ? 'ready' : 'checked_in';
+      await ctx.db
+        .update(UserTrainingSession)
+        .set({ status: newStatus })
+        .where(eq(UserTrainingSession.id, userSession.id));
+      
+      return { 
+        success: true, 
+        newStatus,
+        userId: input.userId 
+      };
+    }),
+    
+  /**
+   * Mark all clients as ready (trainer only)
+   */
+  markAllClientsReady: protectedProcedure
+    .input(z.object({
+      sessionId: z.string()
+    }))
+    .mutation(async ({ ctx, input }) => {
+      // Verify the session exists and user is trainer
+      const session = await ctx.db.query.TrainingSession.findFirst({
+        where: eq(TrainingSession.id, input.sessionId),
+      });
+      
+      if (!session) {
+        throw new TRPCError({ 
+          code: "NOT_FOUND", 
+          message: "Training session not found" 
+        });
+      }
+      
+      // Check if user is trainer for this business
+      if (ctx.session.user.businessId !== session.businessId) {
+        throw new TRPCError({ 
+          code: "FORBIDDEN", 
+          message: "Only trainers can mark all clients as ready" 
+        });
+      }
+      
+      // Update all checked_in clients to ready
+      const result = await ctx.db
+        .update(UserTrainingSession)
+        .set({ status: 'ready' })
+        .where(
+          and(
+            eq(UserTrainingSession.trainingSessionId, input.sessionId),
+            eq(UserTrainingSession.status, 'checked_in')
+          )
+        );
+      
+      // Get count of updated clients
+      const allUserSessions = await ctx.db.query.UserTrainingSession.findMany({
+        where: eq(UserTrainingSession.trainingSessionId, input.sessionId),
+      });
+      
+      const readyCount = allUserSessions.filter(us => us.status === 'ready').length;
+      const totalCount = allUserSessions.length;
+      
+      return { 
+        success: true,
+        readyCount,
+        totalCount
+      };
     }),
 } satisfies TRPCRouterRecord;

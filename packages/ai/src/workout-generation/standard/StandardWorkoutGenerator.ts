@@ -1,5 +1,7 @@
 /**
  * Two-phase workout generator for standard templates
+ * Phase 1: Bucketing + Concurrent LLM calls per client for exercise selection
+ * Phase 2: Single LLM call for round organization
  */
 
 import { SystemMessage, HumanMessage } from "@langchain/core/messages";
@@ -11,9 +13,16 @@ import type { ExerciseSelection, WorkoutRoundOrganization, StandardWorkoutPlan }
 import { ExerciseSelectionPromptBuilder } from "./prompts/ExerciseSelectionPromptBuilder";
 import { RoundOrganizationPromptBuilder } from "./prompts/RoundOrganizationPromptBuilder";
 import { createLLM } from "../../config/llm";
+import { WorkoutType } from "../types/workoutTypes";
+import { applyFullBodyBucketing } from "../bucketing/fullBodyBucketing";
+import { LLMExerciseSelector, type LLMSelectionInput, type LLMSelectionResult } from "./LLMExerciseSelector";
 
 export class StandardWorkoutGenerator {
   private llm = createLLM();
+  
+  constructor(
+    private favoritesByClient?: Map<string, string[]>
+  ) {}
   
   async generate(
     blueprint: StandardGroupWorkoutBlueprint,
@@ -61,55 +70,60 @@ export class StandardWorkoutGenerator {
   }
   
   /**
-   * Phase 1: Select exercises for each client
+   * Phase 1: Select exercises for each client using bucketing + concurrent LLM
    */
   private async selectExercises(
     blueprint: StandardGroupWorkoutBlueprint,
     groupContext: GroupContext,
     retryCount = 0
   ): Promise<ExerciseSelection> {
-    console.log('[StandardWorkoutGenerator] Phase 1: Exercise Selection', {
-      attempt: retryCount + 1
+    console.log('[StandardWorkoutGenerator] Phase 1: Bucketing + Concurrent LLM Selection', {
+      attempt: retryCount + 1,
+      workoutType: groupContext.workoutType
     });
     
-    // Build prompt
-    const promptBuilder = new ExerciseSelectionPromptBuilder(blueprint, groupContext, groupContext.workoutType);
-    const systemPrompt = promptBuilder.build();
-    
-    // Call LLM
     const startTime = Date.now();
+    
     try {
-      const response = await this.llm.invoke([
-        new SystemMessage(systemPrompt),
-        new HumanMessage("Select exercises for each client following the constraints and priorities. Return the result as a JSON object.")
-      ]);
+      // Step 1: Apply bucketing to get candidates for each client
+      const bucketingResults = await this.applyBucketingToAllClients(blueprint, groupContext);
       
-      const duration = Date.now() - startTime;
-      console.log(`[StandardWorkoutGenerator] Phase 1 LLM call completed in ${duration}ms`);
+      // Step 2: Prepare inputs for concurrent LLM calls
+      const llmInputs = this.prepareLLMInputs(blueprint, groupContext, bucketingResults);
       
-      // Parse response
-      const content = response.content.toString();
-      const jsonMatch = content.match(/```json\n([\s\S]*?)\n```/);
-      
-      if (!jsonMatch?.[1]) {
-        console.error('[StandardWorkoutGenerator] Failed to extract JSON from LLM response');
-        throw new Error("Failed to parse exercise selection from LLM response");
-      }
-      
-      const parsed = JSON.parse(jsonMatch[1]) as ExerciseSelection;
-      
-      // Add metadata
-      (parsed as any).metadata = { durationMs: duration };
-      
-      // Validate response
-      this.validateExerciseSelection(parsed, blueprint, groupContext);
-      
-      console.log('[StandardWorkoutGenerator] Exercise selection complete', {
-        sharedExercises: parsed.sharedExercises.length,
-        clients: Object.keys(parsed.clientSelections).length
+      // Step 3: Create LLM selector and make concurrent calls
+      const llmSelector = new LLMExerciseSelector({
+        workoutType: groupContext.workoutType || WorkoutType.FULL_BODY_WITH_FINISHER,
+        sharedExercises: blueprint.sharedExercisePool,
+        groupContext: groupContext.clients.map(c => ({
+          clientId: c.user_id,
+          name: c.name,
+          muscleTargets: c.muscle_target || []
+        }))
       });
       
-      return parsed;
+      const llmSelections = await llmSelector.selectExercisesForAllClients(llmInputs);
+      
+      // Step 4: Convert LLM results to ExerciseSelection format
+      const exerciseSelection = this.buildExerciseSelection(
+        blueprint, 
+        groupContext, 
+        llmSelections
+      );
+      
+      const duration = Date.now() - startTime;
+      console.log(`[StandardWorkoutGenerator] Phase 1 completed in ${duration}ms`, {
+        sharedExercises: exerciseSelection.sharedExercises.length,
+        clientsProcessed: Object.keys(exerciseSelection.clientSelections).length
+      });
+      
+      // Add metadata
+      (exerciseSelection as any).metadata = { durationMs: duration };
+      
+      // Validate response
+      this.validateExerciseSelection(exerciseSelection, blueprint, groupContext);
+      
+      return exerciseSelection;
       
     } catch (error) {
       console.error('[StandardWorkoutGenerator] Error in exercise selection:', error);
@@ -286,5 +300,208 @@ export class StandardWorkoutGenerator {
       'medicine ball',
       'floor space'
     ];
+  }
+  
+  /**
+   * Apply bucketing to all clients to get exercise candidates
+   */
+  private async applyBucketingToAllClients(
+    blueprint: StandardGroupWorkoutBlueprint,
+    groupContext: GroupContext
+  ): Promise<Map<string, ReturnType<typeof applyFullBodyBucketing>>> {
+    const results = new Map();
+    
+    // Only apply bucketing for Full Body workout types
+    if (groupContext.workoutType !== WorkoutType.FULL_BODY_WITH_FINISHER && 
+        groupContext.workoutType !== WorkoutType.FULL_BODY_WITHOUT_FINISHER) {
+      console.log('[StandardWorkoutGenerator] Skipping bucketing for non-Full Body workout type');
+      return results;
+    }
+    
+    for (const [clientId, pool] of Object.entries(blueprint.clientExercisePools)) {
+      const client = groupContext.clients.find(c => c.user_id === clientId);
+      if (!client) continue;
+      
+      // Get favorite IDs for this client
+      const clientFavoriteIds = this.favoritesByClient?.get(clientId) || [];
+      
+      // Apply bucketing
+      const bucketingResult = applyFullBodyBucketing(
+        pool.availableCandidates,
+        pool.preAssigned,
+        client,
+        groupContext.workoutType,
+        clientFavoriteIds
+      );
+      
+      results.set(clientId, bucketingResult);
+      console.log(`✅ Bucketing complete for ${client.name}: ${bucketingResult.exercises.length} candidates`);
+    }
+    
+    return results;
+  }
+  
+  /**
+   * Prepare inputs for LLM selection
+   */
+  private prepareLLMInputs(
+    blueprint: StandardGroupWorkoutBlueprint,
+    groupContext: GroupContext,
+    bucketingResults: Map<string, ReturnType<typeof applyFullBodyBucketing>>
+  ): LLMSelectionInput[] {
+    const inputs: LLMSelectionInput[] = [];
+    
+    for (const [clientId, pool] of Object.entries(blueprint.clientExercisePools)) {
+      const client = groupContext.clients.find(c => c.user_id === clientId);
+      if (!client) continue;
+      
+      const bucketingResult = bucketingResults.get(clientId);
+      
+      if (bucketingResult) {
+        // Use bucketing results
+        const bucketedCandidates = bucketingResult.exercises;
+        
+        // Add 2 more high-scoring exercises to reach 15
+        const bucketedIds = new Set(bucketedCandidates.map(ex => ex.id));
+        const additionalCandidates = pool.availableCandidates
+          .filter(ex => !bucketedIds.has(ex.id))
+          .slice(0, 2);
+        
+        inputs.push({
+          clientId,
+          client,
+          preAssigned: pool.preAssigned,
+          bucketedCandidates,
+          additionalCandidates
+        });
+      } else {
+        // Fallback: use top 15 from available candidates if no bucketing
+        const candidates = pool.availableCandidates.slice(0, 15);
+        inputs.push({
+          clientId,
+          client,
+          preAssigned: pool.preAssigned,
+          bucketedCandidates: candidates.slice(0, 13),
+          additionalCandidates: candidates.slice(13, 15)
+        });
+      }
+    }
+    
+    return inputs;
+  }
+  
+  /**
+   * Build ExerciseSelection from LLM results
+   */
+  private buildExerciseSelection(
+    blueprint: StandardGroupWorkoutBlueprint,
+    groupContext: GroupContext,
+    llmSelections: Map<string, LLMSelectionResult>
+  ): ExerciseSelection {
+    const clientSelections: ExerciseSelection['clientSelections'] = {};
+    const sharedExerciseMap = new Map<string, Set<string>>();
+    
+    // Process each client's selection
+    for (const [clientId, llmResult] of llmSelections) {
+      const pool = blueprint.clientExercisePools[clientId];
+      const client = groupContext.clients.find(c => c.user_id === clientId);
+      
+      if (!pool || !client) continue;
+      
+      // Convert pre-assigned to expected format
+      const preAssigned = pool.preAssigned.map(pa => ({
+        exerciseId: pa.exercise.id,
+        exerciseName: pa.exercise.name,
+        movementPattern: pa.exercise.movementPattern || '',
+        primaryMuscle: pa.exercise.primaryMuscle || '',
+        source: pa.source
+      }));
+      
+      // Convert LLM selections to expected format
+      const selected = llmResult.selectedExercises.map(sel => ({
+        exerciseId: sel.exercise.id,
+        exerciseName: sel.exercise.name,
+        movementPattern: sel.exercise.movementPattern || '',
+        primaryMuscle: sel.exercise.primaryMuscle || '',
+        score: sel.exercise.score,
+        isShared: sel.isShared,
+        sharedWith: [] as string[]  // Will populate below
+      }));
+      
+      clientSelections[clientId] = {
+        clientName: client.name,
+        preAssigned,
+        selected,
+        totalExercises: preAssigned.length + selected.length
+      };
+      
+      // Track shared exercises
+      selected.forEach(ex => {
+        if (ex.isShared) {
+          if (!sharedExerciseMap.has(ex.exerciseId)) {
+            sharedExerciseMap.set(ex.exerciseId, new Set());
+          }
+          sharedExerciseMap.get(ex.exerciseId)!.add(clientId);
+        }
+      });
+    }
+    
+    // Update sharedWith arrays and build shared exercises list
+    const sharedExercises: ExerciseSelection['sharedExercises'] = [];
+    
+    for (const [exerciseId, clientIds] of sharedExerciseMap) {
+      if (clientIds.size >= 2) {
+        const clientIdArray = Array.from(clientIds);
+        
+        // Update sharedWith in client selections
+        clientIdArray.forEach(clientId => {
+          const selection = clientSelections[clientId];
+          const exercise = selection?.selected.find(ex => ex.exerciseId === exerciseId);
+          if (exercise) {
+            exercise.sharedWith = clientIdArray.filter(id => id !== clientId);
+          }
+        });
+        
+        // Add to shared exercises list
+        const firstClient = clientIdArray[0];
+        const exercise = clientSelections[firstClient]?.selected.find(ex => ex.exerciseId === exerciseId);
+        if (exercise) {
+          sharedExercises.push({
+            exerciseId,
+            exerciseName: exercise.exerciseName,
+            clientIds: clientIdArray,
+            averageScore: this.calculateAverageScore(exerciseId, clientIdArray, clientSelections)
+          });
+        }
+      }
+    }
+    
+    return {
+      clientSelections,
+      sharedExercises,
+      selectionReasoning: 'Exercises selected using bucketing candidates + LLM optimization'
+    };
+  }
+  
+  /**
+   * Calculate average score for shared exercise
+   */
+  private calculateAverageScore(
+    exerciseId: string,
+    clientIds: string[],
+    clientSelections: ExerciseSelection['clientSelections']
+  ): number {
+    let total = 0;
+    let count = 0;
+    
+    clientIds.forEach(clientId => {
+      const exercise = clientSelections[clientId]?.selected.find(ex => ex.exerciseId === exerciseId);
+      if (exercise?.score) {
+        total += exercise.score;
+        count++;
+      }
+    });
+    
+    return count > 0 ? total / count : 0;
   }
 }

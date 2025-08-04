@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useTRPC } from "~/trpc/react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { useGroupWorkoutBlueprint } from "~/hooks/useGroupWorkoutBlueprint";
 import { useGenerateGroupWorkout } from "~/hooks/useGenerateGroupWorkout";
 import { 
@@ -26,6 +26,22 @@ export default function PreferencesPage() {
   const queryClient = useQueryClient();
   const [showMenu, setShowMenu] = useState(false);
   
+  // Mutation for marking all clients ready (defined after we have access to refetchClients)
+  const markAllReady = useMutation(
+    trpc.trainingSession.markAllClientsReady.mutationOptions({
+      onSuccess: async (data) => {
+        console.log(`Marked ${data.readyCount} clients as ready`);
+        // Refresh queries to update UI
+        await queryClient.invalidateQueries();
+        setShowMenu(false);
+      },
+      onError: (error) => {
+        console.error('Failed to mark all clients ready:', error);
+        alert('Failed to mark all clients ready. Please try again.');
+      }
+    })
+  );
+  
   // This page shows a read-only view of all client preferences
   // Real-time updates are handled via Supabase subscriptions
   // When clients update their preferences, this view updates automatically
@@ -43,6 +59,10 @@ export default function PreferencesPage() {
     }
   );
 
+  // Check if all clients are ready
+  const allClientsReady = checkedInClients?.length > 0 && 
+    checkedInClients.every(client => client.status === 'ready');
+
   // Fetch workout blueprint to get exercise selections
   const { 
     blueprint,
@@ -53,13 +73,13 @@ export default function PreferencesPage() {
     sessionId,
     useCache: true,
     includeDiagnostics: false,
-    enabled: !!sessionId
+    enabled: !!sessionId && allClientsReady
   });
 
   // Combine for backward compatibility
   const workoutData = blueprint && groupContext ? { blueprint, groupContext } : null;
   
-  const isLoading = clientsLoading || workoutLoading;
+  const isLoading = clientsLoading || (allClientsReady && workoutLoading);
   
   // Handle realtime preference updates
   const handlePreferenceUpdate = useCallback((update: any) => {
@@ -279,12 +299,44 @@ export default function PreferencesPage() {
               {isGenerating ? 'Generating...' : 'Generate Workouts'}
             </button>
             
+            <div className="border-t border-gray-200 my-1"></div>
+            
             <button
               onClick={() => {
+                if (sessionId) {
+                  markAllReady.mutate({ sessionId });
+                }
+              }}
+              disabled={!sessionId || markAllReady.isPending}
+              className={`w-full px-4 py-2 text-left rounded-md transition-colors flex items-center gap-2 ${
+                !sessionId || markAllReady.isPending
+                  ? 'text-gray-400 cursor-not-allowed'
+                  : 'text-blue-600 hover:bg-blue-50'
+              }`}
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              {markAllReady.isPending ? 'Marking Ready...' : 'Mark All Ready'}
+            </button>
+            
+            <button
+              onClick={() => {
+                // Check if all clients are ready
+                const allReady = checkedInClients?.every(client => client.status === 'ready') ?? false;
+                if (!allReady) {
+                  alert('All clients must be marked as ready before viewing visualization');
+                  return;
+                }
                 router.push(`/session-lobby/group-visualization?sessionId=${sessionId}`);
                 setShowMenu(false);
               }}
-              className="w-full px-4 py-2 text-left text-purple-600 hover:bg-purple-50 rounded-md transition-colors flex items-center gap-2"
+              disabled={!checkedInClients?.every(client => client.status === 'ready')}
+              className={`w-full px-4 py-2 text-left rounded-md transition-colors flex items-center gap-2 ${
+                !checkedInClients?.every(client => client.status === 'ready')
+                  ? 'text-gray-400 cursor-not-allowed'
+                  : 'text-purple-600 hover:bg-purple-50'
+              }`}
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />

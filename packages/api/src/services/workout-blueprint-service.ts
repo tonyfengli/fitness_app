@@ -1,5 +1,5 @@
 import { db } from "@acme/db/client";
-import { eq, and } from "@acme/db";
+import { eq, and, or } from "@acme/db";
 import { 
   TrainingSession, 
   UserTrainingSession, 
@@ -114,7 +114,10 @@ export class WorkoutBlueprintService {
       .where(
         and(
           eq(UserTrainingSession.trainingSessionId, sessionId),
-          eq(UserTrainingSession.status, "checked_in")
+          or(
+            eq(UserTrainingSession.status, "checked_in"),
+            eq(UserTrainingSession.status, "ready")
+          )
         )
       );
 

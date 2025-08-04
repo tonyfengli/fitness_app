@@ -1,0 +1,257 @@
+/**
+ * Orchestrates concurrent LLM calls for exercise selection
+ * One call per client, using their bucketed candidates
+ */
+
+import type { ClientContext } from "../../types/clientContext";
+import type { ScoredExercise } from "../../types/scoredExercise";
+import type { PreAssignedExercise, ClientExercisePool } from "../../types/standardBlueprint";
+import type { GroupScoredExercise } from "../../types/groupContext";
+import { WorkoutType } from "../types/workoutTypes";
+import { ClientExerciseSelectionPromptBuilder } from "./prompts/ClientExerciseSelectionPromptBuilder";
+import { createLLM } from "../../config/llm";
+
+export interface LLMSelectionInput {
+  clientId: string;
+  client: ClientContext;
+  preAssigned: PreAssignedExercise[];
+  bucketedCandidates: ScoredExercise[];  // The 13 from bucketing
+  additionalCandidates: ScoredExercise[]; // 2 more to reach 15
+}
+
+export interface LLMSelectionResult {
+  clientId: string;
+  selectedExercises: Array<{
+    exercise: ScoredExercise;
+    reasoning: string;
+    isShared: boolean;
+    llmSelected: true;  // Track that LLM selected this
+  }>;
+  summary: {
+    totalSelected: number;
+    sharedExercises: number;
+    muscleTargetsCovered: string[];
+    movementPatterns: string[];
+    overallReasoning: string;
+  };
+}
+
+export interface LLMSelectionConfig {
+  workoutType: WorkoutType;
+  sharedExercises: GroupScoredExercise[];
+  groupContext: Array<{  // Simplified group info for prompts
+    clientId: string;
+    name: string;
+    muscleTargets: string[];
+  }>;
+}
+
+export class LLMExerciseSelector {
+  private llm = createLLM();
+  
+  constructor(private config: LLMSelectionConfig) {}
+  
+  /**
+   * Process all clients concurrently
+   */
+  async selectExercisesForAllClients(
+    clientInputs: LLMSelectionInput[]
+  ): Promise<Map<string, LLMSelectionResult>> {
+    console.log(`🤖 Starting concurrent LLM exercise selection for ${clientInputs.length} clients`);
+    
+    // Create promises for concurrent execution
+    const selectionPromises = clientInputs.map(input => 
+      this.selectExercisesForClient(input)
+        .catch(error => {
+          console.error(`❌ LLM selection failed for client ${input.client.name}:`, error);
+          // Return a fallback selection using top scored exercises
+          return this.createFallbackSelection(input);
+        })
+    );
+    
+    // Execute all LLM calls concurrently
+    const results = await Promise.all(selectionPromises);
+    
+    // Convert to map for easy lookup
+    const resultMap = new Map<string, LLMSelectionResult>();
+    results.forEach(result => {
+      resultMap.set(result.clientId, result);
+    });
+    
+    console.log(`✅ LLM exercise selection complete for all clients`);
+    
+    return resultMap;
+  }
+  
+  /**
+   * Select exercises for a single client
+   */
+  private async selectExercisesForClient(
+    input: LLMSelectionInput
+  ): Promise<LLMSelectionResult> {
+    // Combine bucketed + additional candidates to get 15 total
+    const allCandidates = [
+      ...input.bucketedCandidates,
+      ...input.additionalCandidates
+    ];
+    
+    // Get other clients info for context (excluding current client)
+    const otherClientsInfo = this.config.groupContext
+      .filter(gc => gc.clientId !== input.clientId)
+      .map(gc => ({
+        name: gc.name,
+        muscleTargets: gc.muscleTargets
+      }));
+    
+    // Build the prompt
+    const promptBuilder = new ClientExerciseSelectionPromptBuilder({
+      client: input.client,
+      workoutType: this.config.workoutType,
+      preAssigned: input.preAssigned,
+      candidates: allCandidates,
+      sharedExercises: this.config.sharedExercises,
+      otherClientsInfo
+    });
+    
+    const prompt = promptBuilder.build();
+    
+    console.log(`📝 Calling LLM for ${input.client.name} with ${allCandidates.length} candidates`);
+    
+    try {
+      // Call LLM
+      const response = await this.llm.invoke(prompt);
+      const content = response.content.toString();
+      
+      // Extract JSON from response
+      const jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/);
+      if (!jsonMatch) {
+        throw new Error('No JSON found in LLM response');
+      }
+      
+      const parsed = JSON.parse(jsonMatch[1]);
+      
+      // Validate and transform response
+      return this.validateAndTransformResponse(parsed, input, allCandidates);
+      
+    } catch (error) {
+      console.error(`❌ Error processing LLM response for ${input.client.name}:`, error);
+      throw error;
+    }
+  }
+  
+  /**
+   * Validate LLM response and transform to expected format
+   */
+  private validateAndTransformResponse(
+    llmResponse: any,
+    input: LLMSelectionInput,
+    candidates: ScoredExercise[]
+  ): LLMSelectionResult {
+    // Create exercise lookup map
+    const exerciseMap = new Map(candidates.map(ex => [ex.id, ex]));
+    const sharedIds = new Set(this.config.sharedExercises.map(s => s.id));
+    
+    // Validate and transform selected exercises
+    const selectedExercises = llmResponse.selectedExercises.map((selection: any) => {
+      const exercise = exerciseMap.get(selection.exerciseId);
+      if (!exercise) {
+        throw new Error(`Exercise ${selection.exerciseId} not found in candidates`);
+      }
+      
+      return {
+        exercise,
+        reasoning: selection.reasoning || 'No reasoning provided',
+        isShared: selection.isShared || sharedIds.has(exercise.id),
+        llmSelected: true as const
+      };
+    });
+    
+    // Extract summary
+    const summary = {
+      totalSelected: selectedExercises.length,
+      sharedExercises: llmResponse.summary?.sharedExercises || 
+        selectedExercises.filter(s => s.isShared).length,
+      muscleTargetsCovered: llmResponse.summary?.muscleTargetsCovered || [],
+      movementPatterns: llmResponse.summary?.movementPatterns || [],
+      overallReasoning: llmResponse.summary?.overallReasoning || 'No summary provided'
+    };
+    
+    // Validate count
+    const expectedCount = this.getExpectedExerciseCount(input.client.intensity);
+    if (selectedExercises.length !== expectedCount) {
+      console.warn(
+        `⚠️ LLM selected ${selectedExercises.length} exercises for ${input.client.name}, ` +
+        `expected ${expectedCount}. Using top ${expectedCount}.`
+      );
+      
+      // Trim or pad as needed
+      if (selectedExercises.length > expectedCount) {
+        selectedExercises.length = expectedCount;
+      }
+    }
+    
+    return {
+      clientId: input.clientId,
+      selectedExercises,
+      summary
+    };
+  }
+  
+  /**
+   * Create fallback selection if LLM fails
+   */
+  private createFallbackSelection(input: LLMSelectionInput): LLMSelectionResult {
+    console.log(`⚠️ Using fallback selection for ${input.client.name}`);
+    
+    const expectedCount = this.getExpectedExerciseCount(input.client.intensity);
+    const allCandidates = [...input.bucketedCandidates, ...input.additionalCandidates];
+    const sharedIds = new Set(this.config.sharedExercises.map(s => s.id));
+    
+    // Take top scored exercises
+    const selectedExercises = allCandidates
+      .slice(0, expectedCount)
+      .map(exercise => ({
+        exercise,
+        reasoning: 'Fallback selection based on score',
+        isShared: sharedIds.has(exercise.id),
+        llmSelected: true as const
+      }));
+    
+    // Build summary
+    const movementPatterns = [...new Set(
+      selectedExercises.map(s => s.exercise.movementPattern).filter(Boolean)
+    )] as string[];
+    
+    const muscleTargets = [...new Set(
+      selectedExercises.map(s => s.exercise.primaryMuscle).filter(Boolean)
+    )] as string[];
+    
+    return {
+      clientId: input.clientId,
+      selectedExercises,
+      summary: {
+        totalSelected: selectedExercises.length,
+        sharedExercises: selectedExercises.filter(s => s.isShared).length,
+        muscleTargetsCovered: muscleTargets,
+        movementPatterns,
+        overallReasoning: 'Fallback selection used due to LLM error'
+      }
+    };
+  }
+  
+  /**
+   * Get expected exercise count based on intensity
+   */
+  private getExpectedExerciseCount(intensity: 'low' | 'moderate' | 'high'): number {
+    switch (intensity) {
+      case 'low':
+        return 3;
+      case 'moderate':
+        return 4;
+      case 'high':
+        return 5;
+      default:
+        return 4;
+    }
+  }
+}
