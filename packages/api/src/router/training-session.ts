@@ -778,6 +778,19 @@ export const trainingSessionRouter = {
 
 
   /**
+   * Check if blueprint exists (without generating)
+   */
+  checkBlueprintExists: protectedProcedure
+    .input(z.object({
+      sessionId: z.string().uuid()
+    }))
+    .query(async ({ ctx, input }) => {
+      // For now, just return false - we're not caching blueprints anymore
+      // This endpoint exists to prevent the preferences page from generating
+      return { exists: false };
+    }),
+
+  /**
    * Generate group workout blueprint only (for visualization/testing)
    * This is the modular endpoint that just generates the blueprint without side effects
    */

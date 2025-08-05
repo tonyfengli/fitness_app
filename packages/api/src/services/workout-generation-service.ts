@@ -54,12 +54,12 @@ export class WorkoutGenerationService {
   constructor(private ctx: WorkoutGenerationContext) {}
 
   /**
-   * Generate blueprint only - for visualization and testing
+   * Generate blueprint and LLM assignments - for visualization
    */
   async generateBlueprint(sessionId: string, options?: GenerateBlueprintOptions) {
     const user = this.ctx.session?.user;
     
-    logger.info("Starting blueprint generation", { sessionId, userId: user.id });
+    logger.info("Starting blueprint generation with LLM", { sessionId, userId: user.id });
 
     // Get session details
     const session = await this.ctx.db.query.TrainingSession.findFirst({
@@ -126,7 +126,7 @@ export class WorkoutGenerationService {
       groupWorkoutTestDataLogger.initSession(sessionId, groupContext);
     }
 
-    // Generate blueprint
+    // Generate blueprint with bucketing
     const blueprint = await generateGroupWorkoutBlueprint(
       groupContext, 
       exercisePool,
@@ -135,6 +135,7 @@ export class WorkoutGenerationService {
 
     // Check blueprint type
     const isBMFBlueprint = 'blocks' in blueprint;
+    const isStandardBlueprint = 'clientExercisePools' in blueprint;
     
     logger.info("Blueprint generated successfully", {
       sessionId,
@@ -142,6 +143,51 @@ export class WorkoutGenerationService {
       blockCount: isBMFBlueprint ? (blueprint as any).blocks.length : 0,
       warnings: blueprint.validationWarnings
     });
+
+    // Generate LLM workout assignments
+    let llmResult = null;
+    try {
+      logger.info("Starting LLM generation");
+      
+      // Enable debug mode if diagnostics requested
+      if (options?.includeDiagnostics) {
+        this.debugMode = true;
+      }
+      
+      const generationResult = await this.generateWithLLM(
+        blueprint,
+        groupContext,
+        exercisePool,
+        sessionId
+      );
+      
+      // Structure the result properly
+      llmResult = {
+        systemPrompt: generationResult.systemPrompt,
+        userMessage: generationResult.userMessage,
+        llmOutput: generationResult.llmOutput,
+        deterministicAssignments: generationResult.deterministicAssignments,
+        llmAssignments: generationResult.llmAssignments || generationResult.roundOrganization,
+        exerciseSelection: generationResult.exerciseSelection,
+        metadata: generationResult.metadata
+      };
+      
+      // Include per-client debug data if available (from standard generator)
+      if (generationResult.debug && options?.includeDiagnostics) {
+        llmResult.systemPromptsByClient = generationResult.debug.systemPromptsByClient;
+        llmResult.llmResponsesByClient = generationResult.debug.llmResponsesByClient;
+      }
+      
+      logger.info("LLM generation completed successfully");
+    } catch (error) {
+      logger.error("LLM generation failed", error);
+      // Don't fail the whole request if LLM fails
+      llmResult = {
+        error: error instanceof Error ? error.message : 'LLM generation failed',
+        deterministicAssignments: null,
+        llmAssignments: null
+      };
+    }
 
     // Save test data if diagnostics enabled
     if (options?.includeDiagnostics) {
@@ -151,10 +197,12 @@ export class WorkoutGenerationService {
     return {
       groupContext,
       blueprint,
+      llmResult,
       summary: {
         totalClients: clientContexts.length,
         totalBlocks: isBMFBlueprint ? (blueprint as any).blocks.length : 0,
         cohesionWarnings: blueprint.validationWarnings || [],
+        llmGenerated: !!llmResult && !llmResult.error
       },
     };
   }
@@ -183,7 +231,7 @@ export class WorkoutGenerationService {
     // BMF template with single-phase LLM
     if (groupContext.templateType === 'full_body_bmf' && isBMFBlueprint(blueprint)) {
       logger.info("Using BMF workout generator (single-phase)");
-      return this.generateBMFWorkouts(blueprint, groupContext, exercisePool, sessionId);
+      return this.generateBMFWorkouts(blueprint, groupContext, sessionId);
     }
 
     // Other templates not yet implemented
@@ -196,7 +244,6 @@ export class WorkoutGenerationService {
   private async generateBMFWorkouts(
     blueprint: GroupWorkoutBlueprint, 
     groupContext: GroupContext,
-    exercisePool: Exercise[],
     sessionId: string
   ) {
     const round1Block = blueprint.blocks.find(b => b.blockId === 'Round1');

@@ -191,15 +191,29 @@ export default function GroupVisualizationPage() {
   });
   
   // Extract data for easier access
-  const isLoading = blueprintQuery.isLoading;
+  const isLoading = blueprintQuery.isLoading || blueprintQuery.isFetching;
   const error = blueprintQuery.error;
   const data = blueprintQuery.blueprint && blueprintQuery.groupContext && blueprintQuery.summary 
     ? { 
         blueprint: blueprintQuery.blueprint, 
         groupContext: blueprintQuery.groupContext, 
-        summary: blueprintQuery.summary 
+        summary: blueprintQuery.summary,
+        llmResult: blueprintQuery.llmResult
       } 
     : null;
+
+  // Update LLM debug data when blueprint loads with LLM result
+  useEffect(() => {
+    if (data?.llmResult && !data.llmResult.error) {
+      setLlmDebugData({
+        systemPrompt: data.llmResult.systemPrompt || null,
+        userMessage: data.llmResult.userMessage || null,
+        llmOutput: data.llmResult.llmOutput || null,
+        systemPromptsByClient: data.llmResult.systemPromptsByClient,
+        llmResponsesByClient: data.llmResult.llmResponsesByClient
+      });
+    }
+  }, [data?.llmResult]);
   
   // Set default selected block when data loads (only for BMF blueprints)
   useEffect(() => {
@@ -225,7 +239,8 @@ export default function GroupVisualizationPage() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading group workout data...</p>
+          <p className="mt-4 text-lg font-medium text-gray-900">Generating Workout Blueprint</p>
+          <p className="text-sm text-gray-500 mt-1">This includes exercise selection and AI organization</p>
         </div>
       </div>
     );
@@ -267,6 +282,7 @@ export default function GroupVisualizationPage() {
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         llmDebugData={llmDebugData}
+        llmResult={data.llmResult}
       />
     );
   }

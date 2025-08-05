@@ -4,8 +4,6 @@ import React, { useCallback, useEffect, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useTRPC } from "~/trpc/react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
-import { useGroupWorkoutBlueprint } from "~/hooks/useGroupWorkoutBlueprint";
-import { useGenerateGroupWorkout } from "~/hooks/useGenerateGroupWorkout";
 import { 
   useRealtimePreferences,
   PreferenceListItem,
@@ -62,33 +60,17 @@ export default function PreferencesPage() {
   // Check if all clients are ready
   const allClientsReady = checkedInClients?.length > 0 && 
     checkedInClients.every(client => client.status === 'ready');
-
-  // Fetch workout blueprint to get exercise selections
-  const { 
-    blueprint,
-    groupContext,
-    isLoading: workoutLoading, 
-    refetch: refetchWorkout 
-  } = useGroupWorkoutBlueprint({
-    sessionId,
-    useCache: true,
-    includeDiagnostics: false,
-    enabled: !!sessionId && allClientsReady
-  });
-
-  // Combine for backward compatibility
-  const workoutData = blueprint && groupContext ? { blueprint, groupContext } : null;
   
-  const isLoading = clientsLoading || (allClientsReady && workoutLoading);
+  const isLoading = clientsLoading;
   
   // Handle realtime preference updates
   const handlePreferenceUpdate = useCallback((update: any) => {
-    // Invalidate both queries at once to refetch the latest data
+    // Invalidate the checked-in clients query to refetch the latest data
     queryClient.invalidateQueries({
       predicate: (query) => {
         const queryKey = query.queryKey as any[];
         return queryKey[0]?.[0] === 'trainingSession' && 
-               (queryKey[0]?.[1] === 'getCheckedInClients' || queryKey[0]?.[1] === 'generateGroupWorkoutBlueprint') &&
+               queryKey[0]?.[1] === 'getCheckedInClients' &&
                queryKey[1]?.input?.sessionId === sessionId;
       }
     });
@@ -99,25 +81,6 @@ export default function PreferencesPage() {
     sessionId: sessionId || '',
     supabase,
     onPreferenceUpdate: handlePreferenceUpdate
-  });
-
-  // Generate workout hook
-  const { generateWorkout, isGenerating } = useGenerateGroupWorkout({
-    sessionId: sessionId || '',
-    navigateOnSuccess: true,
-    includeDiagnostics: true,
-    showToasts: true,
-    onSuccess: (data) => {
-      console.log('Workout generation response from preferences page:', data);
-      
-      if (data.debug) {
-        console.log('=== WORKOUT GENERATION SYSTEM PROMPT (from preferences) ===');
-        console.log(data.debug.systemPrompt);
-        console.log('=== END SYSTEM PROMPT ===');
-      } else {
-        console.log('No debug data included in response. Make sure includeDiagnostics is set to true.');
-      }
-    }
   });
   
 
@@ -178,47 +141,6 @@ export default function PreferencesPage() {
       });
     }
     
-    // If no includeExercises, fall back to blueprint exercises
-    if (exercises.length === 0 && workoutData?.blueprint) {
-      // Check if it's a BMF blueprint (has blocks) or Standard blueprint (has clientExercisePools)
-      if (workoutData.blueprint.blocks) {
-        // BMF blueprint
-        const rounds = ['Round1', 'Round2'];
-        for (const round of rounds) {
-          const block = workoutData.blueprint.blocks.find(b => b.blockId === round);
-          if (block && block.individualCandidates && block.individualCandidates[clientId]) {
-            const clientExercises = block.individualCandidates[clientId].exercises;
-            if (clientExercises && clientExercises.length > 0) {
-              const exerciseName = clientExercises[0].name;
-              // Only add if not in avoided exercises
-              if (!avoidedExercises.includes(exerciseName)) {
-                exercises.push({
-                  name: exerciseName,
-                  confirmed: true,
-                  isExcluded: false,
-                  isActive: true
-                });
-              }
-            }
-          }
-        }
-      } else if (workoutData.blueprint.clientExercisePools) {
-        // Standard blueprint - for now, just show the placeholder exercises
-        // In the future, this would use the actual pre-assigned exercises
-        const placeholderExercises = ['Barbell Back Squat', 'Pull-ups'];
-        placeholderExercises.forEach(exerciseName => {
-          if (!avoidedExercises.includes(exerciseName)) {
-            exercises.push({
-              name: exerciseName,
-              confirmed: true,
-              isExcluded: false,
-              isActive: true
-            });
-          }
-        });
-      }
-    }
-    
     // Add manually included exercises that aren't in the template
     includeExercises.forEach(includedExercise => {
       // Only add if not already in the list and not excluded
@@ -241,7 +163,7 @@ export default function PreferencesPage() {
     id: client.userId,
     name: client.userName || "Unknown Client",
     avatar: client.userId,
-    exerciseCount: workoutData?.groupContext?.clients?.find(c => c.user_id === client.userId)?.exercises?.length || 0,
+    exerciseCount: client.preferences?.includeExercises?.length || 0,
     confirmedExercises: getClientExercisesForRounds(client.userId),
     muscleFocus: client.preferences?.muscleTargets || [],
     avoidance: client.preferences?.muscleLessens || [],
@@ -253,17 +175,6 @@ export default function PreferencesPage() {
 
   return (
     <div className="h-screen bg-gray-50 flex flex-col overflow-hidden relative">
-      {/* Full screen loading overlay */}
-      {isGenerating && (
-        <div className="fixed inset-0 bg-white/80 backdrop-blur-sm z-50 flex items-center justify-center">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
-            <p className="mt-4 text-gray-600 font-medium">Generating workouts...</p>
-            <p className="mt-2 text-sm text-gray-500">This may take a few moments</p>
-          </div>
-        </div>
-      )}
-      
       {/* Action Menu - Top Right */}
       <div className="fixed top-4 right-4 z-10">
         {/* Menu Toggle Button */}
@@ -294,20 +205,21 @@ export default function PreferencesPage() {
             
             <button
               onClick={() => {
-                generateWorkout();
+                router.push(`/session-lobby/group-visualization?sessionId=${sessionId}`);
                 setShowMenu(false);
               }}
-              disabled={isGenerating || !sessionId}
+              disabled={!sessionId}
               className={`w-full px-4 py-2 text-left rounded-md transition-colors flex items-center gap-2 ${
-                isGenerating || !sessionId
+                !sessionId
                   ? 'text-gray-400 cursor-not-allowed'
-                  : 'text-green-600 hover:bg-green-50'
+                  : 'text-indigo-600 hover:bg-indigo-50'
               }`}
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
               </svg>
-              {isGenerating ? 'Generating...' : 'Generate Workouts'}
+              View Workout Visualization
             </button>
             
             <div className="border-t border-gray-200 my-1"></div>

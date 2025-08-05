@@ -34,6 +34,7 @@ export function useGroupWorkoutBlueprint(options: UseGroupWorkoutBlueprintOption
     blueprint: query.data?.blueprint,
     groupContext: query.data?.groupContext,
     summary: query.data?.summary,
+    llmResult: query.data?.llmResult,
     isLoading: query.isLoading,
     error: query.error,
     refetch: query.refetch,
