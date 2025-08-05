@@ -15,7 +15,9 @@ import {
   CreateUserTrainingSessionSchema,
   user as userTable,
   user as User,
-  exercises
+  exercises,
+  workoutExerciseSelections,
+  workoutExerciseSwaps
 } from "@acme/db/schema";
 import { 
   generateGroupWorkoutBlueprint,
@@ -767,7 +769,17 @@ export const trainingSessionRouter = {
         .delete(UserTrainingSession)
         .where(eq(UserTrainingSession.trainingSessionId, input.sessionId));
       
-      // 3. Finally delete the training session
+      // 3. Delete workout exercise selections
+      await ctx.db
+        .delete(workoutExerciseSelections)
+        .where(eq(workoutExerciseSelections.sessionId, input.sessionId));
+      
+      // 4. Delete workout exercise swaps
+      await ctx.db
+        .delete(workoutExerciseSwaps)
+        .where(eq(workoutExerciseSwaps.sessionId, input.sessionId));
+      
+      // 5. Finally delete the training session
       await ctx.db
         .delete(TrainingSession)
         .where(eq(TrainingSession.id, input.sessionId));
@@ -798,7 +810,6 @@ export const trainingSessionRouter = {
     .input(z.object({
       sessionId: z.string().uuid(),
       options: z.object({
-        useCache: z.boolean().default(true),
         includeDiagnostics: z.boolean().default(false),
       }).optional()
     }))
@@ -2268,5 +2279,120 @@ Set your goals and preferences for today's session.`;
         readyCount,
         totalCount
       };
+    }),
+
+  /**
+   * Save visualization data to template config
+   */
+  saveVisualizationData: protectedProcedure
+    .input(z.object({
+      sessionId: z.string().uuid(),
+      visualizationData: z.object({
+        blueprint: z.any(),
+        groupContext: z.any(),
+        llmResult: z.any().optional(),
+        summary: z.any().optional(),
+        llmData: z.any().optional(),
+        exerciseMetadata: z.any().optional(),
+        sharedExerciseIds: z.array(z.string()).optional()
+      })
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const user = ctx.session?.user as SessionUser;
+      
+      // Only trainers can save visualization data
+      if (user.role !== 'trainer') {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'Only trainers can save visualization data',
+        });
+      }
+
+      // Verify session exists and belongs to trainer's business
+      const session = await ctx.db.query.TrainingSession.findFirst({
+        where: and(
+          eq(TrainingSession.id, input.sessionId),
+          eq(TrainingSession.businessId, user.businessId)
+        ),
+      });
+
+      if (!session) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Session not found',
+        });
+      }
+
+      // Build the template config structure
+      const templateConfig = {
+        ...(session.templateConfig as any || {}),
+        visualizationData: {
+          ...input.visualizationData,
+          savedAt: new Date().toISOString()
+        }
+      };
+
+      // Update the session with the visualization data
+      await ctx.db
+        .update(TrainingSession)
+        .set({ 
+          templateConfig,
+          updatedAt: new Date()
+        })
+        .where(eq(TrainingSession.id, input.sessionId));
+
+      return { success: true };
+    }),
+
+  /**
+   * Get saved visualization data
+   */
+  getSavedVisualizationData: protectedProcedure
+    .input(z.object({
+      sessionId: z.string().uuid()
+    }))
+    .query(async ({ ctx, input }) => {
+      const user = ctx.session?.user as SessionUser;
+      
+      // Only trainers can get visualization data
+      if (user.role !== 'trainer') {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'Only trainers can get visualization data',
+        });
+      }
+
+      // Get session with template config
+      const session = await ctx.db.query.TrainingSession.findFirst({
+        where: and(
+          eq(TrainingSession.id, input.sessionId),
+          eq(TrainingSession.businessId, user.businessId)
+        ),
+      });
+
+      if (!session) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Session not found',
+        });
+      }
+
+      const templateConfig = session.templateConfig as any;
+      const visualizationData = templateConfig?.visualizationData;
+
+      if (!visualizationData) {
+        return null;
+      }
+
+      // Check if data is stale (older than 30 minutes)
+      const savedAt = new Date(visualizationData.savedAt);
+      const now = new Date();
+      const diffMinutes = (now.getTime() - savedAt.getTime()) / (1000 * 60);
+      
+      if (diffMinutes > 30) {
+        return null; // Force regeneration if data is too old
+      }
+
+      return visualizationData;
     }),
 } satisfies TRPCRouterRecord;

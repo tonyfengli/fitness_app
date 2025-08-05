@@ -3,7 +3,6 @@ import { useTRPC } from "~/trpc/react";
 
 export interface UseGroupWorkoutBlueprintOptions {
   sessionId: string | null;
-  useCache?: boolean;
   includeDiagnostics?: boolean;
   enabled?: boolean;
 }
@@ -12,7 +11,6 @@ export function useGroupWorkoutBlueprint(options: UseGroupWorkoutBlueprintOption
   const trpc = useTRPC();
   const { 
     sessionId, 
-    useCache = true, 
     includeDiagnostics = false,
     enabled = true
   } = options;
@@ -21,7 +19,7 @@ export function useGroupWorkoutBlueprint(options: UseGroupWorkoutBlueprintOption
     sessionId && enabled
       ? trpc.trainingSession.generateGroupWorkoutBlueprint.queryOptions({
           sessionId,
-          options: { useCache, includeDiagnostics }
+          options: { includeDiagnostics }
         })
       : {
           enabled: false,

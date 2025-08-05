@@ -9,6 +9,7 @@ export * from "./auth-schema";
 export * from "./exercise";
 export * from "./schema/messages";
 export * from "./schema/conversation-state";
+export * from "./schema/workout-selections";
 export * from "./types/exerciseRatings";
 import { exercises } from "./exercise";
 

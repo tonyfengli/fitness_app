@@ -7,7 +7,9 @@ import {
   Workout,
   WorkoutExercise,
   exercises,
-  user as userTable
+  user as userTable,
+  workoutExerciseSelections,
+  workoutExerciseSwaps
 } from "@acme/db/schema";
 import { 
   generateGroupWorkoutBlueprint,
@@ -33,7 +35,6 @@ import type { SessionUser } from "../types/auth";
 const logger = createLogger("WorkoutGenerationService");
 
 export interface GenerateBlueprintOptions {
-  useCache?: boolean;
   includeDiagnostics?: boolean;
 }
 
@@ -179,6 +180,16 @@ export class WorkoutGenerationService {
       }
       
       logger.info("LLM generation completed successfully");
+      
+      // Save Phase 1 selections for standard templates
+      if (isStandardBlueprint && generationResult.exerciseSelection) {
+        await this.savePhase1Selections(
+          sessionId,
+          generationResult.exerciseSelection,
+          groupContext,
+          exercisePool
+        );
+      }
     } catch (error) {
       logger.error("LLM generation failed", error);
       // Don't fail the whole request if LLM fails
@@ -202,7 +213,8 @@ export class WorkoutGenerationService {
         totalClients: clientContexts.length,
         totalBlocks: isBMFBlueprint ? (blueprint as any).blocks.length : 0,
         cohesionWarnings: blueprint.validationWarnings || [],
-        llmGenerated: !!llmResult && !llmResult.error
+        llmGenerated: !!llmResult && !llmResult.error,
+        selectionsStored: isStandardBlueprint && !!llmResult && !llmResult.error
       },
     };
   }
@@ -379,6 +391,107 @@ export class WorkoutGenerationService {
       logger.error("Error generating standard workouts:", error);
       throw new Error(`Standard workout generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
+  }
+
+  /**
+   * Save Phase 1 exercise selections to database
+   */
+  private async savePhase1Selections(
+    sessionId: string,
+    exerciseSelection: any,
+    groupContext: GroupContext,
+    exercisePool: Exercise[]
+  ) {
+    logger.info("Saving Phase 1 exercise selections", { sessionId });
+    
+    const selections = [];
+    
+    // Process each client's selections
+    for (const [clientId, clientSelection] of Object.entries(exerciseSelection.clientSelections)) {
+      const clientData = clientSelection as any;
+      
+      // Process pre-assigned exercises
+      for (const exercise of clientData.preAssigned || []) {
+        const dbExercise = exercisePool.find(e => 
+          e.id === exercise.exerciseId || 
+          e.name.toLowerCase() === exercise.exerciseName.toLowerCase()
+        );
+        
+        if (dbExercise) {
+          selections.push({
+            sessionId,
+            clientId,
+            exerciseId: dbExercise.id,
+            exerciseName: dbExercise.name,
+            isShared: false,
+            sharedWithClients: null,
+            selectionSource: 'llm_phase1'
+          });
+        }
+      }
+      
+      // Process selected exercises
+      for (const exercise of clientData.selected || []) {
+        const dbExercise = exercisePool.find(e => 
+          e.id === exercise.exerciseId || 
+          e.name.toLowerCase() === exercise.exerciseName.toLowerCase()
+        );
+        
+        if (dbExercise) {
+          selections.push({
+            sessionId,
+            clientId,
+            exerciseId: dbExercise.id,
+            exerciseName: dbExercise.name,
+            isShared: exercise.isShared || false,
+            sharedWithClients: exercise.sharedWith || null,
+            selectionSource: 'llm_phase1'
+          });
+        }
+      }
+    }
+    
+    // Also save shared exercises for each participating client
+    for (const sharedExercise of exerciseSelection.sharedExercises || []) {
+      const dbExercise = exercisePool.find(e => 
+        e.id === sharedExercise.exerciseId || 
+        e.name.toLowerCase() === sharedExercise.exerciseName.toLowerCase()
+      );
+      
+      if (dbExercise) {
+        // Check if we already have this exercise for these clients
+        for (const clientId of sharedExercise.clientIds) {
+          const existingSelection = selections.find(s => 
+            s.clientId === clientId && 
+            s.exerciseId === dbExercise.id
+          );
+          
+          // If not already added, add it
+          if (!existingSelection) {
+            selections.push({
+              sessionId,
+              clientId,
+              exerciseId: dbExercise.id,
+              exerciseName: dbExercise.name,
+              isShared: true,
+              sharedWithClients: sharedExercise.clientIds,
+              selectionSource: 'llm_phase1'
+            });
+          }
+        }
+      }
+    }
+    
+    // Batch insert selections
+    if (selections.length > 0) {
+      await this.ctx.db.insert(workoutExerciseSelections)
+        .values(selections)
+        .onConflictDoNothing(); // In case of re-runs
+      
+      logger.info(`Saved ${selections.length} exercise selections`, { sessionId });
+    }
+    
+    return selections;
   }
 
   /**
@@ -915,4 +1028,139 @@ export class WorkoutGenerationService {
     
     return roundMap[roundId] || 40;
   }
+  
+  /**
+   * Generate Phase 2 sequencing based on saved selections
+   */
+  async generatePhase2Sequencing(
+    sessionId: string,
+    selectionsByClient: Record<string, any[]>
+  ) {
+    logger.info("Starting Phase 2 sequencing", { sessionId });
+    
+    // Get session and blueprint data
+    const user = this.ctx.session?.user;
+    const { clientContexts, preScoredExercises, exercisePool, groupContext } = 
+      await WorkoutBlueprintService.prepareClientsForBlueprint(
+        sessionId,
+        user.businessId,
+        user.id
+      );
+    
+    // Get template
+    const template = getWorkoutTemplate(groupContext.templateType || 'standard');
+    if (!template) {
+      throw new Error(`Template ${groupContext.templateType} not found`);
+    }
+    
+    // Convert selections back to ExerciseSelection format
+    const exerciseSelection: any = {
+      clientSelections: {},
+      sharedExercises: [],
+      selectionReasoning: "Loaded from saved selections"
+    };
+    
+    // Process each client's selections
+    for (const [clientId, selections] of Object.entries(selectionsByClient)) {
+      const client = groupContext.clients.find(c => c.user_id === clientId);
+      if (!client) continue;
+      
+      const clientSelection = {
+        clientName: client.name,
+        preAssigned: [],
+        selected: [],
+        totalExercises: selections.length
+      };
+      
+      // Convert selections to the expected format
+      for (const sel of selections) {
+        const exercise = exercisePool.find(ex => ex.id === sel.exerciseId);
+        if (!exercise) continue;
+        
+        const exerciseData = {
+          exerciseId: sel.exerciseId,
+          exerciseName: sel.exerciseName,
+          movementPattern: exercise.movement_pattern || '',
+          primaryMuscle: exercise.primary_muscles?.[0] || '',
+          score: exercise.score || 5.0,
+          isShared: sel.isShared,
+          sharedWith: sel.sharedWithClients
+        };
+        
+        // For now, treat all as selected (not pre-assigned)
+        clientSelection.selected.push(exerciseData);
+      }
+      
+      exerciseSelection.clientSelections[clientId] = clientSelection;
+    }
+    
+    // Rebuild shared exercises list
+    const sharedExerciseMap = new Map<string, Set<string>>();
+    for (const [clientId, selections] of Object.entries(selectionsByClient)) {
+      for (const sel of selections) {
+        if (sel.isShared && sel.sharedWithClients) {
+          if (!sharedExerciseMap.has(sel.exerciseId)) {
+            sharedExerciseMap.set(sel.exerciseId, new Set());
+          }
+          sel.sharedWithClients.forEach((id: string) => sharedExerciseMap.get(sel.exerciseId)!.add(id));
+        }
+      }
+    }
+    
+    for (const [exerciseId, clientIds] of sharedExerciseMap) {
+      const exercise = exercisePool.find(ex => ex.id === exerciseId);
+      if (exercise) {
+        exerciseSelection.sharedExercises.push({
+          exerciseId,
+          exerciseName: exercise.name,
+          clientIds: Array.from(clientIds),
+          averageScore: exercise.score || 5.0
+        });
+      }
+    }
+    
+    // Now run Phase 2 using StandardWorkoutGenerator
+    const generator = new StandardWorkoutGenerator();
+    
+    try {
+      // Use the private method through a workaround
+      const roundOrganization = await (generator as any).organizeIntoRounds(
+        exerciseSelection,
+        template,
+        groupContext
+      );
+      
+      logger.info("Phase 2 sequencing completed", {
+        rounds: roundOrganization.rounds.length,
+        totalDuration: roundOrganization.workoutSummary.totalDuration
+      });
+      
+      // Create workouts with the complete data
+      const generationResult = {
+        exerciseSelection,
+        roundOrganization,
+        systemPrompt: "Phase 2 only - see round organization",
+        userMessage: "Organize exercises into rounds",
+        llmOutput: JSON.stringify(roundOrganization)
+      };
+      
+      const workoutIds = await this.createWorkouts(
+        sessionId,
+        generationResult,
+        groupContext,
+        exercisePool
+      );
+      
+      return {
+        success: true,
+        workoutIds,
+        roundOrganization
+      };
+      
+    } catch (error) {
+      logger.error("Error in Phase 2 sequencing:", error);
+      throw new Error(`Phase 2 sequencing failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
 }

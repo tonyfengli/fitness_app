@@ -1,11 +1,12 @@
 "use client";
 
-import React, { Suspense, useState } from "react";
+import React, { Suspense, useState, useMemo } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 // Removed ClientWorkoutCard import - using custom component
 import { Button, Icon } from "@acme/ui-shared";
 import { useTRPC } from "~/trpc/react";
+import { useExerciseSelections } from "~/hooks/useExerciseSelections";
 
 // Constants
 const AVATAR_API_URL = "https://api.dicebear.com/7.x/avataaars/svg";
@@ -55,11 +56,46 @@ function WorkoutOverviewContent() {
   const sessionId = searchParams.get("sessionId");
   const trpc = useTRPC();
   
-  // Fetch workouts with exercises in a single query
-  const { data: workouts, isLoading, error } = useQuery({
-    ...trpc.workout.sessionWorkoutsWithExercises.queryOptions({ sessionId: sessionId || "" }),
+  // Fetch exercise selections instead of workouts
+  const { selections, isLoading, error } = useExerciseSelections(sessionId);
+  
+  // Also fetch client information to get names
+  const { data: clientsData } = useQuery({
+    ...trpc.auth.getClientsByBusiness.queryOptions(),
     enabled: !!sessionId,
   });
+  
+  // Transform selections into workout-like structure for display
+  // MUST be called before any conditional returns for hooks consistency
+  const workouts = React.useMemo(() => {
+    if (!selections || !clientsData) return [];
+    
+    // Group selections by client
+    const selectionsByClient = selections.reduce((acc, selection) => {
+      if (!acc[selection.clientId]) {
+        acc[selection.clientId] = [];
+      }
+      acc[selection.clientId].push(selection);
+      return acc;
+    }, {} as Record<string, typeof selections>);
+    
+    // Create workout-like objects for each client
+    return Object.entries(selectionsByClient).map(([clientId, clientSelections]) => {
+      const client = clientsData.find(c => c.id === clientId);
+      
+      return {
+        workout: { id: clientId, userId: clientId },
+        user: { 
+          name: client?.name || client?.email?.split('@')[0] || 'Unknown', 
+          email: client?.email || ''
+        },
+        exercises: clientSelections.map((sel, index) => ({
+          id: sel.id,
+          exercise: { name: sel.exerciseName }
+        }))
+      };
+    });
+  }, [selections, clientsData]);
   
   if (!sessionId) {
     return (
@@ -88,7 +124,7 @@ function WorkoutOverviewContent() {
   if (!workouts || workouts.length === 0) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <p className="text-gray-500">No workouts found for this session</p>
+        <p className="text-gray-500">No exercise selections found for this session</p>
       </div>
     );
   }
@@ -153,6 +189,24 @@ export default function WorkoutOverview() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
               </svg>
               Back to Sessions
+            </button>
+            
+            <button
+              onClick={() => {
+                router.push(`/session-lobby/group-visualization?sessionId=${sessionId}`);
+                setShowMenu(false);
+              }}
+              disabled={!sessionId}
+              className={`w-full px-4 py-2 text-left rounded-md transition-colors flex items-center gap-2 ${
+                sessionId
+                  ? 'text-gray-700 hover:bg-gray-100'
+                  : 'text-gray-400 cursor-not-allowed'
+              }`}
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
+              </svg>
+              Group Visualization
             </button>
             
             <button

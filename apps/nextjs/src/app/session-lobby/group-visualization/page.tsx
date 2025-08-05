@@ -3,10 +3,12 @@
 import React, { useState, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { useGenerateGroupWorkout } from "~/hooks/useGenerateGroupWorkout";
 import { useGroupWorkoutBlueprint } from "~/hooks/useGroupWorkoutBlueprint";
 import type { GroupScoredExercise } from "@acme/ai/client";
 import StandardTemplateView from "./StandardTemplateView";
+import { useTRPC } from "~/trpc/react";
 
 // Constants
 const SCORE_THRESHOLDS = {
@@ -149,13 +151,24 @@ export default function GroupVisualizationPage() {
     llmResponsesByClient?: Record<string, string>;
   }>({ systemPrompt: null, userMessage: null, llmOutput: null });
   const [activeTab, setActiveTab] = useState<string>('');
+  const trpc = useTRPC();
+  
+  // Check for saved visualization data first
+  const savedDataQuery = useQuery({
+    ...trpc.trainingSession.getSavedVisualizationData.queryOptions({ sessionId: sessionId || '' }),
+    enabled: !!sessionId
+  });
+  
+  // Save visualization mutation
+  const saveVisualizationMutation = useMutation({
+    ...trpc.trainingSession.saveVisualizationData.mutationOptions()
+  });
   
   // Use the blueprint hook for fetching visualization data
   const blueprintQuery = useGroupWorkoutBlueprint({
     sessionId,
-    useCache: true,
     includeDiagnostics: true,
-    enabled: !!sessionId
+    enabled: !!sessionId && !savedDataQuery.data // Only fetch if no saved data
   });
   
   // Use the generation hook for creating workouts
@@ -190,17 +203,21 @@ export default function GroupVisualizationPage() {
     }
   });
   
-  // Extract data for easier access
-  const isLoading = blueprintQuery.isLoading || blueprintQuery.isFetching;
-  const error = blueprintQuery.error;
-  const data = blueprintQuery.blueprint && blueprintQuery.groupContext && blueprintQuery.summary 
-    ? { 
-        blueprint: blueprintQuery.blueprint, 
-        groupContext: blueprintQuery.groupContext, 
-        summary: blueprintQuery.summary,
-        llmResult: blueprintQuery.llmResult
-      } 
-    : null;
+  // Extract data for easier access - prefer saved data if available
+  const isLoading = savedDataQuery.isLoading || blueprintQuery.isLoading || blueprintQuery.isFetching;
+  const error = savedDataQuery.error || blueprintQuery.error;
+  
+  // Use saved data if available, otherwise use fresh blueprint data
+  const data = savedDataQuery.data 
+    ? savedDataQuery.data
+    : blueprintQuery.blueprint && blueprintQuery.groupContext && blueprintQuery.summary 
+      ? { 
+          blueprint: blueprintQuery.blueprint, 
+          groupContext: blueprintQuery.groupContext, 
+          summary: blueprintQuery.summary,
+          llmResult: blueprintQuery.llmResult
+        } 
+      : null;
 
   // Update LLM debug data when blueprint loads with LLM result
   useEffect(() => {
@@ -214,6 +231,28 @@ export default function GroupVisualizationPage() {
       });
     }
   }, [data?.llmResult]);
+  
+  // Save visualization data when blueprint is generated (not from saved data)
+  useEffect(() => {
+    if (blueprintQuery.blueprint && blueprintQuery.groupContext && !savedDataQuery.data && sessionId) {
+      // Prepare the data to save
+      const visualizationData = {
+        blueprint: blueprintQuery.blueprint,
+        groupContext: blueprintQuery.groupContext,
+        llmResult: blueprintQuery.llmResult,
+        summary: blueprintQuery.summary,
+        // Extract exercise metadata if it's a standard blueprint
+        exerciseMetadata: blueprintQuery.blueprint?.clientExercisePools || undefined,
+        sharedExerciseIds: blueprintQuery.blueprint?.sharedExercisePool?.map((e: any) => e.id) || undefined
+      };
+      
+      // Save the visualization data
+      saveVisualizationMutation.mutate({
+        sessionId,
+        visualizationData
+      });
+    }
+  }, [blueprintQuery.blueprint, blueprintQuery.groupContext, savedDataQuery.data, sessionId]);
   
   // Set default selected block when data loads (only for BMF blueprints)
   useEffect(() => {
@@ -283,6 +322,8 @@ export default function GroupVisualizationPage() {
         setActiveTab={setActiveTab}
         llmDebugData={llmDebugData}
         llmResult={data.llmResult}
+        isFromSavedData={!!savedDataQuery.data}
+        isSaving={saveVisualizationMutation.isPending}
       />
     );
   }
