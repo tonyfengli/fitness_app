@@ -49,6 +49,8 @@ export interface WorkoutGenerationContext {
 }
 
 export class WorkoutGenerationService {
+  private debugMode: boolean = false;
+  
   constructor(private ctx: WorkoutGenerationContext) {}
 
   /**
@@ -290,6 +292,11 @@ export class WorkoutGenerationService {
     // Initialize generator with favorites
     const generator = new StandardWorkoutGenerator(favoritesByClient);
     
+    // Enable debug capture if we're in debug mode
+    if (this.debugMode) {
+      generator.enableDebugCapture();
+    }
+    
     try {
       // Generate workout plan using two-phase approach
       const workoutPlan = await generator.generate(
@@ -305,7 +312,7 @@ export class WorkoutGenerationService {
       });
       
       // Return in format compatible with createWorkouts
-      return {
+      const result: any = {
         exerciseSelection: workoutPlan.exerciseSelection,
         roundOrganization: workoutPlan.roundOrganization,
         systemPrompt: "Two-phase generation - prompts in individual phases",
@@ -313,6 +320,13 @@ export class WorkoutGenerationService {
         llmOutput: JSON.stringify(workoutPlan, null, 2),
         metadata: workoutPlan.metadata
       };
+      
+      // Include per-client debug data if available
+      if (workoutPlan.debug) {
+        result.debug = workoutPlan.debug;
+      }
+      
+      return result;
       
     } catch (error) {
       logger.error("Error generating standard workouts:", error);
@@ -390,6 +404,11 @@ export class WorkoutGenerationService {
    */
   async generateAndCreateWorkouts(sessionId: string, options?: GenerateAndCreateOptions) {
     logger.info("Starting full workout generation", { sessionId, options });
+    
+    // Set debug mode if diagnostics requested
+    if (options?.includeDiagnostics) {
+      this.debugMode = true;
+    }
 
     try {
       // Step 1: Generate blueprint (including exercise pool)
@@ -457,12 +476,18 @@ export class WorkoutGenerationService {
       };
 
       // Include debug information if requested
-      if (options?.includeDiagnostics && generationResult.systemPrompt) {
+      if (options?.includeDiagnostics) {
         result.debug = {
           systemPrompt: generationResult.systemPrompt,
           userMessage: generationResult.userMessage,
           llmOutput: generationResult.llmOutput
         };
+        
+        // Include per-client debug data if available (from standard generator)
+        if (generationResult.debug) {
+          result.debug.systemPromptsByClient = generationResult.debug.systemPromptsByClient;
+          result.debug.llmResponsesByClient = generationResult.debug.llmResponsesByClient;
+        }
       }
 
       return result;

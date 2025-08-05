@@ -145,6 +145,8 @@ export default function GroupVisualizationPage() {
     systemPrompt: string | null;
     userMessage: string | null;
     llmOutput: string | null;
+    systemPromptsByClient?: Record<string, string>;
+    llmResponsesByClient?: Record<string, string>;
   }>({ systemPrompt: null, userMessage: null, llmOutput: null });
   const [activeTab, setActiveTab] = useState<string>('');
   
@@ -178,7 +180,9 @@ export default function GroupVisualizationPage() {
         setLlmDebugData({
           systemPrompt: data.debug.systemPrompt,
           userMessage: data.debug.userMessage,
-          llmOutput: data.debug.llmOutput
+          llmOutput: data.debug.llmOutput,
+          systemPromptsByClient: data.debug.systemPromptsByClient,
+          llmResponsesByClient: data.debug.llmResponsesByClient
         });
       } else {
         console.log('No debug data included in response. Make sure includeDiagnostics is set to true.');

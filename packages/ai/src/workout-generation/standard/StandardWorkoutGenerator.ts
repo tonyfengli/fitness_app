@@ -19,10 +19,18 @@ import { LLMExerciseSelector, type LLMSelectionInput, type LLMSelectionResult } 
 
 export class StandardWorkoutGenerator {
   private llm = createLLM();
+  private captureDebugData: boolean = false;
   
   constructor(
     private favoritesByClient?: Map<string, string[]>
   ) {}
+  
+  /**
+   * Enable debug data capture
+   */
+  enableDebugCapture(): void {
+    this.captureDebugData = true;
+  }
   
   async generate(
     blueprint: StandardGroupWorkoutBlueprint,
@@ -56,7 +64,7 @@ export class StandardWorkoutGenerator {
       sessionId
     });
     
-    return {
+    const result: StandardWorkoutPlan = {
       exerciseSelection,
       roundOrganization,
       metadata: {
@@ -67,6 +75,26 @@ export class StandardWorkoutGenerator {
         generationDurationMs: totalDuration
       }
     };
+    
+    // Add debug data if enabled
+    if (this.captureDebugData && (exerciseSelection as any).debugData) {
+      result.debug = {
+        systemPromptsByClient: {},
+        llmResponsesByClient: {}
+      };
+      
+      const debugData = (exerciseSelection as any).debugData;
+      for (const [clientId, data] of Object.entries(debugData)) {
+        if ((data as any).systemPrompt) {
+          result.debug.systemPromptsByClient![clientId] = (data as any).systemPrompt;
+        }
+        if ((data as any).llmResponse) {
+          result.debug.llmResponsesByClient![clientId] = (data as any).llmResponse;
+        }
+      }
+    }
+    
+    return result;
   }
   
   /**
@@ -102,6 +130,11 @@ export class StandardWorkoutGenerator {
         }))
       });
       
+      // Enable debug capture if requested
+      if (this.captureDebugData) {
+        llmSelector.enableDebugCapture();
+      }
+      
       const llmSelections = await llmSelector.selectExercisesForAllClients(llmInputs);
       
       // Step 4: Convert LLM results to ExerciseSelection format
@@ -119,6 +152,20 @@ export class StandardWorkoutGenerator {
       
       // Add metadata
       (exerciseSelection as any).metadata = { durationMs: duration };
+      
+      // Collect debug data if enabled
+      if (this.captureDebugData) {
+        const debugData: Record<string, { systemPrompt?: string; llmResponse?: string }> = {};
+        for (const [clientId, result] of llmSelections) {
+          if (result.debug) {
+            debugData[clientId] = {
+              systemPrompt: result.debug.systemPrompt,
+              llmResponse: result.debug.llmResponse
+            };
+          }
+        }
+        (exerciseSelection as any).debugData = debugData;
+      }
       
       // Validate response
       this.validateExerciseSelection(exerciseSelection, blueprint, groupContext);
@@ -348,6 +395,12 @@ export class StandardWorkoutGenerator {
       const clientFavoriteIds = this.favoritesByClient?.get(clientId) || [];
       
       // Apply bucketing
+      console.log(`📋 Pre-assigned for ${client.name}:`, pool.preAssigned.map(p => ({
+        name: p.exercise.name,
+        id: p.exercise.id,
+        source: p.source
+      })));
+      
       const bucketingResult = applyFullBodyBucketing(
         pool.availableCandidates,
         pool.preAssigned,
@@ -388,6 +441,13 @@ export class StandardWorkoutGenerator {
         const additionalCandidates = pool.availableCandidates
           .filter(ex => !bucketedIds.has(ex.id))
           .slice(0, 2);
+        
+        console.log(`🎯 LLM Input for ${client.name}:`, {
+          preAssignedCount: pool.preAssigned.length,
+          preAssignedNames: pool.preAssigned.map(p => p.exercise.name),
+          bucketedCount: bucketedCandidates.length,
+          additionalCount: additionalCandidates.length
+        });
         
         inputs.push({
           clientId,

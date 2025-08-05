@@ -64,7 +64,6 @@ Structure: Progressive strength training across all major movement patterns
 
 Exercise Selection Guidance:
 - Prioritize compound movements for efficiency
-- Include 2 core-focused exercises (vs 1 in with-finisher variant)
 - Focus on strength and muscle building
 - No specific conditioning requirement
 - Ensure balanced coverage of all muscle groups`;

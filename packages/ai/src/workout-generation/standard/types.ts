@@ -90,4 +90,10 @@ export interface StandardWorkoutPlan {
     llmModel: string;
     generationDurationMs?: number;
   };
+  debug?: {
+    systemPromptsByClient?: Record<string, string>;
+    llmResponsesByClient?: Record<string, string>;
+    roundOrgSystemPrompt?: string;
+    roundOrgLlmResponse?: string;
+  };
 }

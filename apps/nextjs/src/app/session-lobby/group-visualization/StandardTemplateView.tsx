@@ -164,6 +164,31 @@ export default function StandardTemplateView({
                     </div>
                   </div>
 
+                  {/* LLM System Prompt & Output - Only show if we have LLM debug data for this client */}
+                  {llmDebugData?.systemPromptsByClient?.[clientTab.id] && (
+                    <div className="mb-6 bg-blue-50 rounded-lg p-4">
+                      <h4 className="text-sm font-semibold text-gray-900 mb-4">🤖 LLM System Prompt & Output</h4>
+                      
+                      {/* System Prompt */}
+                      <div className="mb-4">
+                        <h5 className="text-xs font-medium text-gray-700 mb-2">System Prompt:</h5>
+                        <pre className="bg-white p-3 rounded text-xs overflow-x-auto whitespace-pre-wrap border border-blue-200">
+                          {llmDebugData.systemPromptsByClient[clientTab.id]}
+                        </pre>
+                      </div>
+                      
+                      {/* LLM Response */}
+                      {llmDebugData.llmResponsesByClient?.[clientTab.id] && (
+                        <div>
+                          <h5 className="text-xs font-medium text-gray-700 mb-2">LLM Response:</h5>
+                          <pre className="bg-white p-3 rounded text-xs overflow-x-auto whitespace-pre-wrap border border-blue-200">
+                            {llmDebugData.llmResponsesByClient[clientTab.id]}
+                          </pre>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   {/* Constraint Analysis for Pre-Assigned Exercises */}
                   <div className="mb-6 bg-gray-50 rounded-lg p-4">
                     <h4 className="text-sm font-semibold text-gray-900 mb-4">Constraint Analysis for Pre-Assigned Exercises</h4>

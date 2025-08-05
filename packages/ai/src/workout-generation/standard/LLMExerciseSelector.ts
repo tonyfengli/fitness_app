@@ -34,6 +34,10 @@ export interface LLMSelectionResult {
     movementPatterns: string[];
     overallReasoning: string;
   };
+  debug?: {
+    systemPrompt: string;
+    llmResponse: string;
+  };
 }
 
 export interface LLMSelectionConfig {
@@ -48,8 +52,16 @@ export interface LLMSelectionConfig {
 
 export class LLMExerciseSelector {
   private llm = createLLM();
+  private captureDebugData: boolean = false;
   
   constructor(private config: LLMSelectionConfig) {}
+  
+  /**
+   * Enable debug data capture
+   */
+  enableDebugCapture(): void {
+    this.captureDebugData = true;
+  }
   
   /**
    * Process all clients concurrently
@@ -141,7 +153,17 @@ export class LLMExerciseSelector {
       const parsed = JSON.parse(jsonMatch[1]);
       
       // Validate and transform response
-      return this.validateAndTransformResponse(parsed, input, allCandidates);
+      const result = this.validateAndTransformResponse(parsed, input, allCandidates);
+      
+      // Add debug data if enabled
+      if (this.captureDebugData) {
+        result.debug = {
+          systemPrompt: prompt,
+          llmResponse: content
+        };
+      }
+      
+      return result;
       
     } catch (error) {
       console.error(`❌ Error processing LLM response for ${input.client.name}:`, error);
