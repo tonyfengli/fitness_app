@@ -24,6 +24,8 @@ export class FullBodyPromptStrategy implements PromptStrategy {
    - MUST include exercises for all specified muscle targets
    - If a muscle is targeted, select 1-2 exercises that primarily work that muscle
    - Consider compound movements that hit multiple targets efficiently
+   - If the client has no specific muscle targets, ensure exercises are distributed evenly across upper body, lower body, and core, without overloading any single region
+   - ❗ Do not include more than 1 compound lower-body movement (squat, deadlift, lunge variations) unless the client specifically targets lower body. Count pre-assigned exercises toward this limit
 
 3. **Avoid Muscle Lessens**
    - DO NOT select exercises that significantly work "lessen" muscles

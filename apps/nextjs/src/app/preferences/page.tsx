@@ -23,6 +23,15 @@ export default function PreferencesPage() {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
   const [showMenu, setShowMenu] = useState(false);
+  const [generationProgress, setGenerationProgress] = useState<{
+    isGenerating: boolean;
+    currentStep: string;
+    error: string | null;
+  }>({
+    isGenerating: false,
+    currentStep: '',
+    error: null
+  });
   
   // Mutation for marking all clients ready (defined after we have access to refetchClients)
   const markAllReady = useMutation(
@@ -39,6 +48,77 @@ export default function PreferencesPage() {
       }
     })
   );
+  
+  // Blueprint generation state and function
+  const [shouldGenerate, setShouldGenerate] = useState(false);
+  
+  // Blueprint generation query
+  const { refetch: generateBlueprint } = useQuery({
+    ...trpc.trainingSession.generateGroupWorkoutBlueprint.queryOptions({ 
+      sessionId: sessionId || '',
+      options: { includeDiagnostics: true }
+    }),
+    enabled: false // Only run when we manually trigger it
+  });
+  
+  // Save visualization data mutation
+  const saveVisualization = useMutation(
+    trpc.trainingSession.saveVisualizationData.mutationOptions()
+  );
+  
+  // Handler for View Visualization button
+  const handleGenerateAndNavigate = async () => {
+    if (!sessionId) return;
+    
+    setGenerationProgress({
+      isGenerating: true,
+      currentStep: 'Generating blueprint...',
+      error: null
+    });
+    setShowMenu(false);
+    
+    try {
+      // Step 1: Generate blueprint with LLM
+      setGenerationProgress(prev => ({ ...prev, currentStep: 'Generating blueprint...' }));
+      const { data: result } = await generateBlueprint();
+      
+      // Step 2: Check if LLM result exists
+      if (!result || !result.llmResult || result.llmResult.error) {
+        throw new Error('Failed to generate exercise selections');
+      }
+      
+      setGenerationProgress(prev => ({ ...prev, currentStep: 'Saving exercise selections...' }));
+      
+      // Step 3: Save the visualization data
+      if (result && sessionId) {
+        await saveVisualization.mutateAsync({
+          sessionId,
+          visualizationData: {
+            blueprint: result.blueprint,
+            groupContext: result.groupContext,
+            llmResult: result.llmResult,
+            summary: result.summary,
+            exerciseMetadata: result.blueprint?.clientExercisePools || undefined,
+            sharedExerciseIds: result.blueprint?.sharedExercisePool?.map((e: any) => e.id) || undefined
+          }
+        });
+      }
+      
+      // Small delay to show the final step
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Step 4: Navigate to exercise selection page
+      router.push(`/workout-overview?sessionId=${sessionId}&userId=${checkedInClients?.[0]?.userId}`);
+      
+    } catch (error) {
+      console.error('Generation failed:', error);
+      setGenerationProgress({
+        isGenerating: false,
+        currentStep: '',
+        error: error instanceof Error ? error.message : 'Failed to generate workout'
+      });
+    }
+  };
   
   // This page shows a read-only view of all client preferences
   // Real-time updates are handled via Supabase subscriptions
@@ -203,25 +283,6 @@ export default function PreferencesPage() {
               Back
             </button>
             
-            <button
-              onClick={() => {
-                router.push(`/session-lobby/group-visualization?sessionId=${sessionId}`);
-                setShowMenu(false);
-              }}
-              disabled={!sessionId}
-              className={`w-full px-4 py-2 text-left rounded-md transition-colors flex items-center gap-2 ${
-                !sessionId
-                  ? 'text-gray-400 cursor-not-allowed'
-                  : 'text-indigo-600 hover:bg-indigo-50'
-              }`}
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-              </svg>
-              View Workout Visualization
-            </button>
-            
             <div className="border-t border-gray-200 my-1"></div>
             
             <button
@@ -251,12 +312,11 @@ export default function PreferencesPage() {
                   alert('All clients must be marked as ready before viewing visualization');
                   return;
                 }
-                router.push(`/session-lobby/group-visualization?sessionId=${sessionId}`);
-                setShowMenu(false);
+                handleGenerateAndNavigate();
               }}
-              disabled={!checkedInClients?.every(client => client.status === 'ready')}
+              disabled={!checkedInClients?.every(client => client.status === 'ready') || generationProgress.isGenerating}
               className={`w-full px-4 py-2 text-left rounded-md transition-colors flex items-center gap-2 ${
-                !checkedInClients?.every(client => client.status === 'ready')
+                !checkedInClients?.every(client => client.status === 'ready') || generationProgress.isGenerating
                   ? 'text-gray-400 cursor-not-allowed'
                   : 'text-purple-600 hover:bg-purple-50'
               }`}
@@ -264,7 +324,7 @@ export default function PreferencesPage() {
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
               </svg>
-              View Visualization
+              {generationProgress.isGenerating ? 'Generating...' : 'View Visualization'}
             </button>
           </div>
         )}
@@ -395,6 +455,42 @@ export default function PreferencesPage() {
           )}
         </div>
       </div>
+      
+      {/* Progress Modal */}
+      {generationProgress.isGenerating && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center">
+          <div className="bg-white rounded-lg shadow-xl p-6 max-w-sm w-full mx-4">
+            <div className="flex flex-col items-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mb-4"></div>
+              <p className="text-lg font-semibold text-gray-900 mb-2">Generating Workout</p>
+              <p className="text-sm text-gray-600 text-center">{generationProgress.currentStep}</p>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Error Modal */}
+      {generationProgress.error && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center" onClick={() => setGenerationProgress(prev => ({ ...prev, error: null }))}>
+          <div className="bg-white rounded-lg shadow-xl p-6 max-w-sm w-full mx-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex flex-col items-center">
+              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mb-4">
+                <svg className="w-6 h-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <p className="text-lg font-semibold text-gray-900 mb-2">Generation Failed</p>
+              <p className="text-sm text-gray-600 text-center mb-4">{generationProgress.error}</p>
+              <button
+                onClick={() => setGenerationProgress(prev => ({ ...prev, error: null }))}
+                className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
