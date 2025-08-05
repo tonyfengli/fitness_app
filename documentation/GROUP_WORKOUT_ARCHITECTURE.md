@@ -2,7 +2,28 @@
 
 ## Overview
 
-This document describes the current architecture of the group (semi-private) workout system, which generates personalized workouts for multiple clients training together. The system leverages the existing workout generation pipeline with modifications to support group dynamics.
+The group workout system generates personalized workouts for multiple clients training together. It supports two distinct template systems that share common filtering and scoring infrastructure but diverge in their organization and generation strategies:
+
+1. **BMF Template** (`full_body_bmf`) - Block-based organization with single-phase LLM generation
+2. **Standard Template** (`standard`) - Client-pooled organization with two-phase LLM generation
+
+## Template Type vs Workout Type
+
+The system uses two complementary configuration concepts:
+
+### Template Type
+Controls the workout generation strategy (HOW workouts are generated):
+- **`full_body_bmf`** - Uses block-based rounds with deterministic + LLM selection
+- **`standard`** - Uses client-pooled approach with constraint-based bucketing
+
+### Workout Type  
+Controls exercise selection constraints (WHAT exercises are selected):
+- **`FULL_BODY_WITH_FINISHER`** - Full body workout with metabolic finisher
+- **`FULL_BODY_WITHOUT_FINISHER`** - Full body workout without finisher
+- **`TARGETED_WITH_FINISHER`** - Muscle-targeted workout with finisher
+- **`TARGETED_WITHOUT_FINISHER`** - Muscle-targeted workout without finisher
+
+These work together: `templateType` determines the generation flow while `workoutType` determines the exercise constraints and bucketing rules applied during that flow.
 
 ## High-Level Architecture
 
@@ -10,35 +31,49 @@ This document describes the current architecture of the group (semi-private) wor
 ┌─────────────────────────────────────────────────────────────────────┐
 │                        GROUP WORKOUT REQUEST                         │
 │                                                                     │
-│  Session Lobby → Generate Group Workout → GroupContext Creation    │
-└─────────────────────────────────┬───────────────────────────────────┘
-                                  │
-                                  ▼
+│  Session Creation → Client Check-ins → Generate Group Workout      │
+└─────────────────────────────┬───────────────────────────────────────┘
+                              │
+                              ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│                    GROUP WORKOUT PIPELINE                            │
+│                    SHARED PIPELINE PHASES                            │
 │                                                                     │
 │  ┌─────────────┐    ┌─────────────┐    ┌──────────────┐          │
 │  │ Phase 1     │    │ Phase 2     │    │ Phase 3      │          │
 │  │ Filtering   │───▶│ Scoring     │───▶│ Template     │          │
 │  │ (Per Client)│    │ (Per Client)│    │ Processing   │          │
 │  └─────────────┘    └─────────────┘    └──────────────┘          │
-│         │                   │                   │                   │
-│         ▼                   ▼                   ▼                   │
-│  ┌─────────────┐    ┌──────────────┐                              │
-│  │ Phase 4     │    │ Phase 5      │                              │
-│  │ Set Count   │───▶│ LLM Workout  │                              │
-│  │ (Individual)│    │ Generation   │                              │
-│  └─────────────┘    └──────────────┘                              │
-└─────────────────────────────────────────────────────────────────────┘
+└─────────────────────────────────┬───────────────────────────────────┘
+                                  │
+                    ┌─────────────┴─────────────┐
+                    │                           │
+                    ▼                           ▼
+┌───────────────────────────┐   ┌───────────────────────────────────┐
+│     BMF TEMPLATE FLOW     │   │      STANDARD TEMPLATE FLOW       │
+│                           │   │                                   │
+│  ┌───────────────────┐   │   │  ┌─────────────┐                 │
+│  │ Single-Phase LLM  │   │   │  │ Pre-         │                 │
+│  │ Generation        │   │   │  │ Assignment   │                 │
+│  │ (Rounds 3-4)      │   │   │  │ (Currently   │                 │
+│  └───────────────────┘   │   │  │  Disabled)   │                 │
+│                           │   │  └──────┬──────┘                 │
+│                           │   │         │                        │
+│                           │   │         ▼                        │
+│                           │   │  ┌─────────────┐                 │
+│                           │   │  │ Constraint   │                 │
+│                           │   │  │ Bucketing    │                 │
+│                           │   │  └──────┬──────┘                 │
+│                           │   │         │                        │
+│                           │   │         ▼                        │
+│                           │   │  ┌─────────────────────┐         │
+│                           │   │  │ Two-Phase LLM      │         │
+│                           │   │  │ • Phase 1: Select  │         │
+│                           │   │  │ • Phase 2: Organize│         │
+│                           │   │  └─────────────────────┘         │
+└───────────────────────────┘   └───────────────────────────────────┘
 ```
 
 ## Core Data Structures
-
-**File Locations**:
-- GroupContext: `/packages/ai/src/types/groupContext.ts`
-- ClientContext: `/packages/ai/src/types/clientContext.ts`
-- ScoredExercise: `/packages/ai/src/types/scoredExercise.ts`
-- WorkoutTemplate: `/packages/ai/src/types/workoutTemplate.ts`
 
 ### GroupContext
 ```typescript
@@ -51,9 +86,10 @@ interface GroupContext {
   businessId: string;
   
   // Template configuration
-  templateType?: string;  // e.g., 'workout', 'circuit_training', 'full_body_bmf'
+  templateType?: string;  // 'standard' or 'full_body_bmf'
+  workoutType?: WorkoutType;  // e.g., 'FULL_BODY_WITH_FINISHER'
   
-  // Legacy field - not actively used but still present in types
+  // Legacy field - not actively used
   groupExercisePools?: {
     [blockId: string]: GroupScoredExercise[];
   };
@@ -72,8 +108,8 @@ interface ClientContext {
   skill_capacity: 'very_low' | 'low' | 'moderate' | 'high';
   
   // Session preferences
-  primary_goal: string;
-  intensity: 'low' | 'moderate' | 'high';
+  primary_goal?: 'mobility' | 'strength' | 'general_fitness' | 'hypertrophy' | 'burn_fat';
+  intensity?: 'low' | 'moderate' | 'high' | 'intense';
   
   // Exercise preferences
   muscle_target?: string[];
@@ -83,504 +119,387 @@ interface ClientContext {
     avoid: string[];
   };
   avoid_joints?: string[];
+  
+  // Additional fields
+  business_id?: string;
+  templateType?: 'standard' | 'circuit' | 'full_body';
+  default_sets?: number;
+  favoriteExerciseIds?: string[];
 }
 ```
 
-## Pipeline Phases
-
-**Important Note**: Phases 1 and 2 use the EXACT SAME filtering and scoring functions as individual workouts. Each client is processed independently through these phases, ensuring consistent scoring logic across both individual and group workouts.
+## Shared Pipeline Phases (1-3)
 
 ### Phase 1: Exercise Filtering (Per Client)
 
 **Purpose**: Filter the exercise database based on each client's capabilities and constraints.
 
-**Core Module**: `/packages/ai/src/core/filtering/filterExercises.ts`
+**Module**: `/packages/ai/src/core/filtering/filterExercises.ts`
 
+#### Filter Application Order
+
+1. **Include Exercises Separation**
+   - Explicitly requested exercises separated first
+   - Bypass strength/skill restrictions
+   - Still subject to joint restrictions
+
+2. **Strength & Skill Filtering**
+   - Cascading inclusion (higher levels include lower)
+   - Applied to non-included exercises only
+
+3. **Joint Avoidance (Safety Override)**
+   - Filters exercises loading specified joints
+   - Applies to ALL exercises including includes
+   - Safety takes absolute priority
+
+4. **Exclude Filter (Final)**
+   - Removes exercises from avoid list
+   - Absolute override of everything
+
+#### Implementation Details
+
+```typescript
+// Strength cascading example
+if (strengthCapacity === 'moderate') {
+  // Includes: very_low, low, and moderate exercises
+}
+
+// Joint filtering always applied
+if (avoidJoints.includes('knee')) {
+  // Removes all knee-loading exercises, even if explicitly included
+}
 ```
-Input: 
-- ClientContext (per client)
-- Exercise database (all or business-specific)
-
-Filter Application Order:
-┌─────────────────────────────────────────┐
-│  1. Include exercises (separated first) │
-│  2. Strength & Skill filters (remaining)│
-│  3. Joint avoidance (on ALL exercises) │
-│  4. Exclude filter (final, absolute)    │
-└─────────────────────────────────────────┘
-
-Output: Map<clientId, Exercise[]>
-```
-
-#### Filtering Rules
-
-**1. Strength Level Filtering**
-- Cascading inclusion: higher levels include all lower levels
-- Levels: `very_low` → `low` → `moderate` → `high`
-- Example: "moderate" includes exercises for very_low, low, and moderate
-
-**2. Skill Level Filtering**
-- Cascading inclusion: higher levels include all lower levels  
-- Levels: `very_low` → `low` → `moderate` → `high`
-- Applies to exercise `complexityLevel` field
-
-**3. Include Exercises Override**
-- Explicitly requested exercises bypass strength/skill restrictions
-- Does NOT bypass joint restrictions (safety priority)
-- Separated before standard filtering to avoid duplication
-
-**4. Joint Avoidance (Safety Override)**
-- Filters exercises that load specified joints
-- Applies to ALL exercises, including explicitly included ones
-- Safety takes precedence over client requests
-
-**5. Exclude/Avoid Exercises**
-- Final filter - removes exercises regardless of other logic
-- Absolute priority - overrides everything including explicit includes
 
 ### Phase 2: Exercise Scoring (Per Client)
 
-**Purpose**: Score exercises based on each client's preferences and goals using a two-pass scoring system.
+**Purpose**: Score exercises based on client preferences using a two-pass system.
 
-**Core Module**: `/packages/ai/src/core/scoring/scoreExercises.ts`
+**Module**: `/packages/ai/src/core/scoring/scoreExercises.ts`
 
-```
-Input: Filtered Exercise[] per client
+#### Two-Pass Scoring System
 
-Two-Pass Scoring Process:
-┌─────────────────────────────────────────┐
-│  Pass 1: Calculate base scores for all │
-│         exercises without include boost │
-│         (via firstPassScoring.ts)       │
-│                                         │
-│  - Base score: 5.0 for all exercises   │
-│  - Add muscle target bonus if matches  │
-│  - Add muscle lessen penalty if matches│
-│  - Add intensity adjustment based on   │
-│    exercise fatigue profile            │
-│  - Track maximum score achieved        │
-│                                         │
-│  Pass 2: Apply include exercise boost   │
-│         to guarantee top ranking        │
-│         (via secondPassScoring.ts)      │
-│                                         │
-│  - For client-requested exercises:     │
-│    boost = (max_score + 1.0) -         │
-│    current_score                       │
-│  - This ensures they score higher than │
-│    any naturally scored exercise       │
-│  - Other exercises keep Pass 1 scores  │
-└─────────────────────────────────────────┘
+**First Pass** - Calculate natural scores:
+- Base score: 5.0
+- Muscle target bonus: +3.0 (primary), +1.5 (secondary)
+- Muscle lessen penalty: -3.0 (primary), -1.5 (secondary)
+- Favorite exercise boost: +2.0
+- ~~Intensity adjustment~~ (DEPRECATED - always returns 0)
+- Track maximum score achieved
 
-Output: Map<clientId, ScoredExercise[]> sorted by score (highest first)
-```
+**Second Pass** - Apply include boost:
+- For included exercises: boost = (maxScore + 1.0) - currentScore
+- Ensures included exercises rank highest
+- Other exercises retain first pass scores
 
-#### Scoring Algorithm
-
-**Base Score**: 5.0 (all exercises start here)
-
-**Muscle Target Bonuses** (No Stacking):
-- Primary muscle match: **+3.0**
-- Secondary muscle match: **+1.5**
-- Only highest bonus applies (no stacking for multiple matches)
-
-**Muscle Lessen Penalties** (No Stacking):
-- Primary muscle match: **-3.0**
-- Secondary muscle match: **-1.5**
-- Only highest penalty applies (no stacking for multiple matches)
-
-**Favorite Exercise Boost**:
-- User favorite exercises: **+2.0**
-- Applied to exercises in user_exercise_ratings table
-- Stacks with other bonuses (not mutually exclusive)
-
-**Intensity Adjustments** (Positive-Only Scoring):
-Maps workout intensity to exercise fatigue profiles:
-
-| Workout Intensity | Exercise Fatigue Type | Adjustment |
-|------------------|----------------------|------------|
-| **Low** | low_local | +1.0 |
-| **Low** | moderate_local | +0.5 |
-| **Low** | high_local | 0 |
-| **Low** | moderate_systemic | 0 |
-| **Low** | high_systemic | 0 |
-| **Low** | metabolic | 0 |
-| **Moderate** | All types | 0 |
-| **High** | low_local | 0 |
-| **High** | moderate_local | 0 |
-| **High** | high_local | +1.0 |
-| **High** | moderate_systemic | +0.5 |
-| **High** | high_systemic | +1.0 |
-| **High** | metabolic | +1.0 |
-
-**Include Exercise Priority Boost**:
-- Applied in Pass 2
-- Boost = (max_score + 1.0) - current_score
-- Guarantees included exercises rank highest
-
-**Score Clamping**: 
-- Final scores clamped to minimum of 0
-- No negative scores allowed
-
-**Score Breakdown Structure** (Always Included):
+#### Score Breakdown Structure
 ```typescript
 interface ScoredExercise extends Exercise {
   score: number;
-  scoreBreakdown: {  // Required - always included
+  scoreBreakdown: {
     base: number;              // Always 5.0
-    includeExerciseBoost: number;  // > 0 indicates client requested
+    includeExerciseBoost: number;  // > 0 if client requested
     muscleTargetBonus: number;
     muscleLessenPenalty: number;
-    intensityAdjustment: number;
-    total: number;             // Clamped to min 0
+    intensityAdjustment: number;   // Always 0 (deprecated)
+    favoriteBoost: number;         // 2.0 if in favorites
+    total: number;                 // Clamped to min 0
   };
 }
 ```
 
-**Two-Pass Implementation Details**:
+#### Scoring Rules
 
-The two-pass scoring system ensures client-requested exercises always rank highest while maintaining fair scoring for all other exercises:
-
-1. **First Pass** (`/packages/ai/src/core/scoring/firstPassScoring.ts`):
-   - Calculates base scores for ALL exercises without any include boost
-   - Each exercise starts with a base score of 5.0
-   - Applies muscle target bonuses (+3.0 primary, +1.5 secondary)
-   - Applies muscle lessen penalties (-3.0 primary, -1.5 secondary)
-   - Applies intensity adjustments based on exercise fatigue profile
-   - Tracks the maximum score achieved across all exercises
-
-2. **Second Pass** (`/packages/ai/src/core/scoring/secondPassScoring.ts`):
-   - Takes first pass results and the maximum score
-   - For client-requested exercises: calculates boost = (maxScore + 1.0) - currentScore
-   - This guarantees included exercises score higher than any naturally scored exercise
-   - All other exercises retain their first pass scores
-
-3. **Score Analysis** (`/packages/ai/src/core/scoring/scoreAnalysis.ts`):
-   - Provides logging and analysis of score distributions
-   - Tracks performance metrics and scoring patterns
+- **No Stacking**: Only highest muscle bonus/penalty applies
+- **Score Clamping**: Final scores cannot go below 0
+- **Include Priority**: Guaranteed highest scores through dynamic boost
 
 ### Phase 3: Template Processing
 
-**Purpose**: Organize exercises into workout blocks based on template configuration.
+**Purpose**: Route to template-specific organization strategy.
 
-**Key Component**: `TemplateProcessor` at `/packages/ai/src/core/templates/TemplateProcessor.ts`
+**Module**: `/packages/ai/src/core/templates/TemplateProcessor.ts`
 
-```
-Input: 
-- Map<clientId, ScoredExercise[]>
-- WorkoutTemplate
+Based on `templateType`, exercises are organized differently:
 
-Process:
-┌─────────────────────────────────────────────────────┐
-│              For Each Block:                        │
-│                                                     │
-│  1. Filter exercises by block requirements:        │
-│     - Function tags (e.g., 'primary_strength')     │
-│     - Movement patterns (include/exclude)          │
-│     - Equipment constraints                         │
-│     - Client includes always bypass filters        │
-│                                                     │
-│  2. Identify shared exercises:                      │
-│     - Find exercises available to 2+ clients       │
-│     - Only include if ALL sharing clients score    │
-│       the exercise >= 5.0 (base score)             │
-│     - Calculate group score (average of client     │
-│       scores)                                       │
-│     - Sort by client count, then group score       │
-│                                                     │
-│  3. Prepare candidates:                             │
-│     - Shared: All exercises with 2+ clients        │
-│     - Individual: Top 3 × maxExercises per client  │
-│     - Include allFilteredExercises for visibility  │
-│                                                     │
-│  4. Calculate slot allocation:                      │
-│     - targetShared = 40% of maxExercises           │
-│     - actualShared = min(target, available)        │
-│     - individualPerClient = remaining slots        │
-└─────────────────────────────────────────────────────┘
+#### BMF Template (`processForGroup`)
+Creates `GroupWorkoutBlueprint` with:
+- Block-based organization (Round1, Round2, etc.)
+- Shared exercise detection (2+ clients, all score ≥ 5.0)
+- Movement pattern filtering per block
+- Client includes bypass block filters
 
-Output: GroupWorkoutBlueprint
-```
+#### Standard Template (`processForStandardGroup`)
+Creates `StandardGroupWorkoutBlueprint` with:
+- Client-pooled exercise organization
+- Pre-assignment integration (when enabled)
+- Preparation for constraint bucketing
+- No block-based filtering
 
-**Key Features**:
-- Movement pattern filtering with proper include/exclude logic
-- Client-included exercises bypass all filters (checked via `scoreBreakdown.includeExerciseBoost > 0`)
-- Simplified shared exercise detection (no cohesion bonuses)
-- All filtered exercises available for frontend display
-- Tracks used exercises to prevent repetition across blocks
+## Template-Specific Flows
 
-**TemplateProcessor Methods**:
-- `processForGroup(clientExercises: Map<string, ScoredExercise[]>)`: Main entry point
-- `processBlock()`: Processes individual blocks with filtering
-- `filterExercisesForBlock()`: Applies block-specific constraints
-- `isClientIncludedExercise()`: Checks if exercise was explicitly requested by client
-- `findSharedExercises()`: Identifies exercises available to multiple clients
-- `prepareIndividualCandidates()`: Prepares per-client exercise options
+### BMF Template Flow
 
-### Phase 4: LLM Workout Generation
+After Phase 3, BMF templates proceed directly to:
 
-**Purpose**: Use LLM to select final exercises and create coherent workouts. The generation strategy is template-specific.
+#### Single-Phase LLM Generation
 
-```
-Input: GroupWorkoutBlueprint
+**Strategy**: Deterministic + LLM hybrid
+- Rounds 1-2: Deterministic selection from top candidates
+- Rounds 3-4: LLM selection with custom prompt
+- Single LLM call for entire group
 
-Process:
-┌─────────────────────────────────────────────────────┐
-│           Template-Specific Generation              │
-│                                                     │
-│  Each template defines its own generation strategy  │
-│  using a single LLM call with custom prompts       │
-│                                                     │
-│  Example: BMF Template Strategy                     │
-│  ├─ Rounds 1-2: Deterministic selection            │
-│  │   (directly from blueprint)                      │
-│  ├─ Rounds 3-4: LLM selection based on:            │
-│  │   - Client preferences                           │
-│  │   - Available candidates                         │
-│  │   - Equipment constraints                        │
-│  └─ Output: Complete workout assignments           │
-│                                                     │
-│  Other templates will implement their own           │
-│  custom strategies as they are developed            │
-└─────────────────────────────────────────────────────┘
+**Implementation**: 
+- `WorkoutGenerationService.generateBMFWorkouts()`
+- Uses `WorkoutPromptBuilder` for prompt construction
+- Returns complete workout with all rounds assigned
 
-Output: GroupWorkout with exercises, sets, rest periods
-```
+### Standard Template Flow
 
-**Current Template Support**:
-- **Full Body BMF** (`full_body_bmf`): Fully implemented with custom BMF prompt strategy
-- **Other templates**: Placeholder implementations, to be developed
+After Phase 3, Standard templates have additional phases:
 
-**Key Design Principles**:
-- Single LLM call per workout generation
-- Template-specific prompt builders handle unique requirements
-- Flexible architecture allows each template to define its generation approach
+#### Pre-Assignment Phase (Currently Disabled)
 
-## Data Flow Example
+**Status**: Temporarily disabled (`preAssignedCount: 0`) but fully implemented
 
-```
-1. Session Creation
-   └─> GroupContext {
-         clients: [
-           { user_id: "A", strength_capacity: "moderate", intensity: "high", ... },
-           { user_id: "B", strength_capacity: "low", intensity: "moderate", ... }
-         ],
-         templateType: "full_body_bmf"
-       }
+**When Enabled**, pre-assignment follows these rules:
 
-2. Phase 1 & 2 (Parallel per client)
-   └─> For each client:
-       // Phase 1: Filtering
-       filterExercises({
-         exercises: exercisePool,
-         clientContext: client,
-         includeScoring: false
-       })
-       
-       // Phase 2: Scoring
-       scoreAndSortExercises(filtered, {
-         intensity: client.intensity,
-         muscleTarget: client.muscle_target || [],
-         muscleLessen: client.muscle_lessen || [],
-         includeExercises: client.exercise_requests?.include
-       })
-   
-   └─> Client A: 150 filtered → 150 scored exercises
-   └─> Client B: 120 filtered → 120 scored exercises
+**Selection Priority**:
+1. **Include exercises** - All client-requested exercises (no limit)
+2. **Favorite exercises** - Top-scored favorites (max 2)
 
-3. Phase 3 (Template Processing)
-   └─> Block "Round1" {
-         sharedCandidates: 7 exercises (available to both)
-         individualCandidates: {
-           "A": { exercises: [top 3], allFilteredExercises: [all 25] },
-           "B": { exercises: [top 3], allFilteredExercises: [all 20] }
-         }
-       }
+**Limits by Workout Type**:
+- Full Body WITH Finisher: 4 total max
+- Full Body WITHOUT Finisher: 2 total max
+- Targeted workouts: 4 total max
 
-4. LLM Generation (Optional)
-   └─> Template-specific strategy (e.g., BMF):
-       - Some blocks/rounds may use deterministic selection
-       - Others use LLM-based selection
-       - Single LLM call with template-specific prompt
-   └─> Final Assembly:
-       - Complete workouts with sets, rest, instructions
-```
+**Body Part Balance** (Full Body only):
+- MUST select 1 upper body + 1 lower body from favorites
+- Classification based on primary muscle first, then movement pattern
+- Special case: "core" muscle classified as lower body
 
-## Template Configuration
+**Tie-Breaking**:
+- When multiple exercises have equal scores
+- Random selection from tied candidates
+- Tracks `tiedCount` for transparency
 
-### Creating and Configuring Templates
-
-Templates define the workout structure through blocks. Each block can be configured independently:
-
+**Implementation Details**:
 ```typescript
-interface BlockDefinition {
-  id: string;                    // Unique identifier (e.g., 'Round1', 'BlockA')
-  name: string;                  // Display name
-  functionTags: string[];        // Filter by exercise function (e.g., ['primary_strength'])
-  maxExercises: number;          // Maximum exercises the LLM can select
-  candidateCount?: number;       // Number of candidates to display (defaults to maxExercises)
-  selectionStrategy: 'deterministic' | 'randomized';
+// Body part classification logic
+function getBodyPart(exercise: ScoredExercise): BodyPart {
+  const primaryMuscle = exercise.primaryMuscle.toLowerCase();
   
-  // Optional filters
-  movementPatternFilter?: {
-    include?: string[];  // Only these patterns (e.g., ['squat', 'hinge'])
-    exclude?: string[];  // Exclude these patterns
-  };
-  equipmentFilter?: {
-    required?: string[];  // Must have one of these
-    forbidden?: string[]; // Cannot have any of these
-  };
+  // Primary muscle takes precedence
+  if (UPPER_BODY_MUSCLES.includes(primaryMuscle)) return 'upper';
+  if (LOWER_BODY_MUSCLES.includes(primaryMuscle)) return 'lower';
+  
+  // Fall back to movement pattern
+  const pattern = exercise.movementPattern?.toLowerCase();
+  if (UPPER_BODY_PATTERNS.includes(pattern)) return 'upper';
+  
+  return 'lower'; // Default for core, etc.
 }
 ```
 
-#### Key Configuration Options:
+#### Constraint Bucketing Phase
 
-1. **Function Tags**: Controls which exercise types appear
-   - Empty array `[]` = no function tag filtering
-   - Multiple tags = exercises must have at least one matching tag
-   - Common tags: `primary_strength`, `secondary_strength`, `accessory`, `core`, `capacity`
+**Purpose**: Systematically fulfill workout constraints through phased selection.
 
-2. **Exercise Limits**:
-   - `maxExercises`: How many exercises the LLM can actually select for the workout
-   - `candidateCount`: How many exercise options to show in the UI (with blue borders)
-   - Separation allows showing more options while limiting final selection
+**Module**: `/packages/ai/src/workout-generation/bucketing/fullBodyBucketing.ts`
 
-3. **Movement Pattern Filtering**:
-   - `include`: Whitelist specific movement patterns
-   - `exclude`: Blacklist specific movement patterns
-   - Patterns: `squat`, `hinge`, `lunge`, `horizontal_push`, `vertical_push`, `horizontal_pull`, `vertical_pull`
+Bucketing ensures exactly 13 exercises are selected (in addition to pre-assigned) through four phases:
 
-4. **Selection Strategy**:
-   - `deterministic`: Top-scored exercises
-   - `randomized`: LLM can choose from candidates
+**Phase 1: Movement Patterns**
+- Fill required movement pattern slots
+- Exclude pre-assigned exercises to avoid duplication
+- Exclude favorites (reserved for flex slots)
+- Randomize selection when scores are tied
 
-### Example: BMF Template Configuration
+**Phase 2: Muscle Target**
+- Fill muscle target requirements (4 exercises)
+- Match PRIMARY muscles only (not secondary)
+- Case-insensitive muscle name matching
+- Balanced distribution for multiple targets:
+  - 1 target: all 4 exercises for that muscle
+  - 2 targets: 2 exercises each
+  - 3+ targets: distributed as evenly as possible
 
-The Full Body BMF template demonstrates advanced round-based configuration:
+**Phase 3: Capacity** (With Finisher only)
+- Select 1 exercise with 'capacity' function tag
+- Skip for WITHOUT_FINISHER workout types
+
+**Phase 4: Flex Slots**
+- Fill remaining slots to reach exactly 13
+- Priority order:
+  1. Unused favorite exercises
+  2. Highest scoring available exercises
+- Ensures total of 15 exercises (2 pre-assigned + 13 bucketed)
+
+**Constraint Configurations**:
 
 ```typescript
-export const FULL_BODY_BMF_TEMPLATE: WorkoutTemplate = {
-  id: 'full_body_bmf',
-  name: 'Full Body BMF',
-  description: 'Bold Movement Fitness full body workout with 4 sequential rounds',
-  blocks: [
-    {
-      id: 'Round1',
-      name: 'Round 1',
-      functionTags: ['primary_strength', 'secondary_strength'],
-      maxExercises: 1,      // LLM selects 1 exercise
-      candidateCount: 1,    // Show 1 candidate
-      selectionStrategy: 'deterministic',
-      movementPatternFilter: {
-        include: ['squat', 'hinge', 'lunge']  // Lower body only
-      }
-    },
-    {
-      id: 'Round2',
-      name: 'Round 2',
-      functionTags: [],     // No function tag filter
-      maxExercises: 1,      // LLM selects 1 exercise
-      candidateCount: 6,    // Show 6 candidates for variety
-      selectionStrategy: 'randomized',
-      movementPatternFilter: {
-        include: ['vertical_pull', 'horizontal_pull']  // Pulling only
-      }
-    },
-    {
-      id: 'Round3',
-      name: 'Round 3',
-      functionTags: [],     // No function tag filter
-      maxExercises: 2,      // LLM selects up to 2 exercises
-      candidateCount: 8,    // Show 8 candidates
-      selectionStrategy: 'randomized'
-      // No movement pattern filter - all exercises eligible
-    },
-    {
-      id: 'FinalRound',
-      name: 'Final Round',
-      functionTags: ['core', 'capacity'],  // Core/conditioning focus
-      maxExercises: 2,      // LLM selects up to 2 exercises
-      candidateCount: 8,    // Show 8 candidates
-      selectionStrategy: 'randomized'
-    }
-  ],
-  blockOrder: ['Round1', 'Round2', 'Round3', 'FinalRound']
-};
+// Full Body WITH Finisher
+{
+  movementPatterns: {
+    squat: { min: 1, max: 1 },
+    hinge: { min: 1, max: 1 },
+    lunge: { min: 1, max: 1 },
+    horizontal_push: { min: 1, max: 1 },
+    vertical_push: { min: 1, max: 1 },
+    horizontal_pull: { min: 1, max: 1 },
+    vertical_pull: { min: 1, max: 1 },
+    core: { min: 1, max: 1 }
+  },
+  functionalRequirements: {
+    capacity: 1,
+    muscle_target: 4
+  },
+  flexSlots: 2,
+  totalExercises: 15
+}
+
+// Full Body WITHOUT Finisher
+{
+  // Same movement patterns except:
+  core: { min: 2, max: 2 },  // 2 core instead of 1
+  
+  functionalRequirements: {
+    capacity: 0,  // No capacity requirement
+    muscle_target: 4
+  },
+  flexSlots: 2,
+  totalExercises: 15
+}
 ```
 
-#### BMF Template Design Rationale:
+#### Two-Phase LLM Generation
 
-- **Round 1**: Single lower body movement to start (squat/hinge/lunge)
-- **Round 2**: Pulling focus with more variety (6 candidates, 1 selection)
-- **Round 3**: Open selection from all exercises (no restrictions)
-- **Final Round**: Core and conditioning to finish
+**Module**: `/packages/api/src/workout-generation/standard/StandardWorkoutGenerator.ts`
 
-The separation of `candidateCount` and `maxExercises` allows:
-- Round 2 to show 6 options but only select 1 (variety with focus)
-- Rounds 3 & 4 to show 8 options but select up to 2 (flexibility)
+**Phase 1: Individual Exercise Selection**
+- **Concurrent LLM calls** - One per client
+- Each client gets personalized prompt
+- Selects from bucketed candidates
+- Uses `ClientExerciseSelectionPromptBuilder`
+- Returns selected exercises per client
+
+**Phase 2: Round Organization**
+- **Single LLM call** for all clients
+- Organizes selected exercises into rounds
+- Manages equipment conflicts
+- Synchronizes timing across clients
+- Uses `RoundOrganizationPromptBuilder`
+- Returns final workout structure
+
+**Key Differences from BMF**:
+- N+1 total LLM calls (vs 1 for BMF)
+- Personalized selection per client
+- Separate organization phase for coordination
+- More granular control over individual preferences
 
 ## API Endpoints
 
-### Blueprint Generation (Visualization)
-**Endpoint**: `/api/training-session/visualize-group-workout`
-- **Purpose**: Generate workout blueprint for frontend visualization
-- **Implementation**: `/packages/api/src/router/training-session.ts`
-- **Process**: Runs Phases 1-3 only
-- **Returns**: `GroupWorkoutBlueprint` with all exercise candidates
+### Blueprint Generation (Visualization/Testing)
+**Endpoint**: `trainingSession.generateGroupWorkoutBlueprint`
+- Runs Phases 1-3 + template-specific processing
+- Returns blueprint without LLM generation
+- Useful for testing and visualization
 
 ### Full Workout Generation
-**Endpoint**: `/api/training-session/generate-group-workout`  
-- **Purpose**: Generate complete group workout with LLM selection
-- **Implementation**: `/packages/api/src/router/training-session.ts`
-- **Process**: Runs Phases 1-3 + LLM selection
-- **Returns**: Complete `GroupWorkout` with exercises, sets, rest periods
+**Endpoint**: `trainingSession.generateAndCreateGroupWorkouts`
+- Complete pipeline from blueprint to saved workouts
+- Options:
+  - `skipBlueprintCache`: Force regeneration
+  - `dryRun`: Generate without saving
+  - `includeDiagnostics`: Include LLM prompts/responses
 
-## Debugging and Monitoring
+## Key Services and File Locations
 
-The system includes debugging through `GroupWorkoutTestDataLogger` at `/packages/api/src/utils/groupWorkoutTestDataLogger.ts`:
+### Core Services
+- **WorkoutGenerationService**: `/packages/api/src/services/workout-generation-service.ts`
+  - Orchestrates overall generation flow
+  - Routes to template-specific strategies
+  
+- **WorkoutBlueprintService**: `/packages/api/src/services/workout-blueprint-service.ts`
+  - Prepares client contexts
+  - Manages exercise pools
 
-```
-session-test-data/group-workouts/{sessionId}/
-├── 1-overview.json      # Session summary, timing, client list
-├── 2-clients.json       # Per-client filtering and scoring details  
-├── 3-group-pools.json   # Legacy shared exercise analysis
-└── 4-blueprint.json     # Final block organization
-```
+- **TemplateProcessor**: `/packages/ai/src/core/templates/TemplateProcessor.ts`
+  - Routes to template-specific processing
+  - Handles shared exercise detection
 
-**Features**:
-- Split debug files for better performance (75% size reduction)
-- Essential exercise data only to minimize file size
-- Phase timing tracking
-- Filter effectiveness metrics
+- **PreAssignmentService**: `/packages/ai/src/core/templates/preAssignmentService.ts`
+  - Implements priority-based selection
+  - Ensures body part balance
+
+### Type Definitions
+- **GroupContext/ClientContext**: `/packages/ai/src/types/clientContext.ts`
+- **ScoredExercise**: `/packages/ai/src/types/scoredExercise.ts`
+- **Blueprints**: `/packages/ai/src/types/groupWorkoutBlueprint.ts`
+- **Standard Blueprint**: `/packages/ai/src/types/standardBlueprint.ts`
+
+### Scoring System
+- **Config**: `/packages/ai/src/core/scoring/scoringConfig.ts`
+- **First Pass**: `/packages/ai/src/core/scoring/firstPassScoring.ts`
+- **Second Pass**: `/packages/ai/src/core/scoring/secondPassScoring.ts`
+
+### Bucketing
+- **Full Body**: `/packages/ai/src/workout-generation/bucketing/fullBodyBucketing.ts`
+- **Targeted**: (To be implemented)
 
 ## Frontend Integration
 
-The Group Workout Visualization page displays:
-- All exercises that pass block filters (not just top candidates)
-- Top 3 candidates highlighted with blue borders
-- Shared exercise possibilities with client overlap
-- Score breakdowns and adjustments
+The Group Workout Visualization displays:
 
-## Key Design Decisions
+### Exercise Organization
+- Pre-assigned exercises with source indicators
+- Bucketed exercises with constraint labels
+- All filtered exercises (not just selected)
+- Score breakdowns showing all adjustments
 
-2. **Client Preferences First**: Client includes always override template constraints
-3. **Transparent Scoring**: All score adjustments visible in scoreBreakdown
-4. **Flexible Templates**: Templates guide organization but don't enforce rigid rules
-5. **Efficient Debugging**: Split debug files for better performance and readability
-6. **Shared Exercise Minimum Score**: Exercises must score >= 5.0 (base score) for ALL sharing clients to be considered shared. This prevents suggesting exercises that have net negative adjustments for any client in the group
+### Constraint Analysis
+- Real-time constraint fulfillment status
+- Pre-assignment requirements (when enabled)
+- Movement pattern coverage
+- Muscle target distribution
+
+### Visual Indicators
+- Tie-breaking badges showing selection randomization
+- Shared exercise overlap between clients
+- Constraint violation warnings
+- Source tracking (Include/Favorite/Constraint)
 
 ## Performance Characteristics
 
-- Phase 1 & 2: O(n × m) where n = clients, m = exercises
-- Phase 3: O(n × b × e) where b = blocks, e = exercises per client
-- Typical timing: ~500-600ms for 3 clients with full exercise database
-- Debug file size: ~200-300KB (down from ~1MB)
+- **Phase 1-2**: O(n × m) where n = clients, m = exercises
+- **Phase 3**: O(n × e) where e = exercises per client
+- **Pre-assignment**: O(n × f) where f = favorite count
+- **Bucketing**: O(n × c × e) where c = constraint types
+- **LLM calls**: 
+  - BMF: 1 total
+  - Standard: n + 1 (n = client count)
+- **Typical timing**: 600-1000ms for 3 clients (excluding LLM)
 
-## Future Extensibility
+## Key Design Decisions
 
-The architecture supports:
-- Individual workout generation (placeholder in TemplateProcessor)
-- Additional filter types (muscle groups, training styles)
-- Custom scoring algorithms per template
-- Real-time workout adjustments
-- Performance analytics integration
+1. **Two-Pass Scoring**: Ensures client-requested exercises always rank highest while maintaining fair scoring for others
+
+2. **Safety First**: Joint restrictions override all preferences including explicit includes
+
+3. **Flexible Architecture**: Template type and workout type work independently, allowing new combinations
+
+4. **Randomized Tie-Breaking**: Provides variety when multiple exercises have equal scores
+
+5. **Body Part Balance**: Ensures full-body coverage in favorite selections
+
+6. **Constraint-Based Selection**: Systematic approach to meeting workout requirements
+
+7. **Pre-Assignment Flexibility**: Can be enabled/disabled without affecting other systems
+
+## Future Considerations
+
+- Implement bucketing for Targeted workout types
+- Re-enable pre-assignment when ready
+- Add trust scoring for exercise recommendations
+- Optimize LLM token usage for larger groups
+- Enhanced equipment conflict resolution
+- Real-time workout adjustments during session
