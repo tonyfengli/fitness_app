@@ -2395,4 +2395,63 @@ Set your goals and preferences for today's session.`;
 
       return visualizationData;
     }),
+
+  /**
+   * Get saved visualization data - PUBLIC version for clients
+   */
+  getSavedVisualizationDataPublic: publicProcedure
+    .input(z.object({
+      sessionId: z.string().uuid(),
+      userId: z.string()
+    }))
+    .query(async ({ ctx, input }) => {
+      // Verify user belongs to session
+      const userSession = await ctx.db.query.UserTrainingSession.findFirst({
+        where: and(
+          eq(UserTrainingSession.userId, input.userId),
+          eq(UserTrainingSession.trainingSessionId, input.sessionId),
+          or(
+            eq(UserTrainingSession.status, 'checked_in'),
+            eq(UserTrainingSession.status, 'ready')
+          )
+        ),
+      });
+
+      if (!userSession) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'User is not checked into this session',
+        });
+      }
+
+      // Get session with template config
+      const session = await ctx.db.query.TrainingSession.findFirst({
+        where: eq(TrainingSession.id, input.sessionId),
+      });
+
+      if (!session) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Session not found',
+        });
+      }
+
+      const templateConfig = session.templateConfig as any;
+      const visualizationData = templateConfig?.visualizationData;
+
+      if (!visualizationData) {
+        return null;
+      }
+
+      // Check if data is stale (older than 30 minutes)
+      const savedAt = new Date(visualizationData.savedAt);
+      const now = new Date();
+      const diffMinutes = (now.getTime() - savedAt.getTime()) / (1000 * 60);
+      
+      if (diffMinutes > 30) {
+        return null; // Force regeneration if data is too old
+      }
+
+      return visualizationData;
+    }),
 } satisfies TRPCRouterRecord;

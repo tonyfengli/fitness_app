@@ -20,9 +20,10 @@ export class FullBodyPromptStrategy implements PromptStrategy {
    - ${withFinisher ? 'Include at least one high-intensity finisher exercise' : 'Focus on balanced strength movements'}
    - Avoid selecting multiple exercises from the same movement pattern unless targeting specific muscles
 
-2. **Muscle Target Requirements**
-   - MUST include exercises for all specified muscle targets
-   - If a muscle is targeted, select 1-2 exercises that primarily work that muscle
+2. **🎯 Muscle Target Requirements (Final)**
+   - You MUST include exercises for all muscle_targets provided by the client
+   - If only one muscle is targeted, assign at least one exercise that trains that muscle as a primary mover, and a second exercise that targets it either as a primary or secondary mover
+   - If two or more muscles are targeted, assign at least one primary exercise for each target muscle
    - Consider compound movements that hit multiple targets efficiently
    - If the client has no specific muscle targets, ensure exercises are distributed evenly across upper body, lower body, and core, without overloading any single region
    - ❗ Do not include more than 1 compound lower-body movement (squat, deadlift, lunge variations) unless the client specifically targets lower body. Count pre-assigned exercises toward this limit

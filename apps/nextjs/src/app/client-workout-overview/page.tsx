@@ -13,6 +13,15 @@ import {
   XIcon
 } from "@acme/ui-shared";
 
+const AVATAR_API_URL = "https://api.dicebear.com/7.x/avataaars/svg";
+
+interface SelectedExercise {
+  exerciseId: string;
+  exerciseName: string;
+  reasoning: string;
+  isShared: boolean;
+}
+
 function ClientWorkoutOverviewContent() {
   const searchParams = useSearchParams();
   const sessionId = searchParams.get("sessionId");
@@ -20,18 +29,21 @@ function ClientWorkoutOverviewContent() {
   const trpc = useTRPC();
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedExercise, setSelectedExercise] = useState<any>(null);
+  const [selectedExerciseIndex, setSelectedExerciseIndex] = useState<number | null>(null);
   const [showExerciseSelection, setShowExerciseSelection] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedReplacement, setSelectedReplacement] = useState<string | null>(null);
 
-  // Fetch workout data for this client and session
-  const { data: workoutData, isLoading } = useQuery({
-    ...trpc.workout.getClientWorkoutPublic.queryOptions({ 
-      sessionId: sessionId || "", 
-      userId: userId || "" 
+  // Fetch visualization data
+  const { data: visualizationData, isLoading } = useQuery({
+    ...trpc.trainingSession.getSavedVisualizationDataPublic.queryOptions({ 
+      sessionId: sessionId || "",
+      userId: userId || ""
     }),
     enabled: !!sessionId && !!userId,
   });
+
+  // We'll get user info from the visualization data instead
 
   // Fetch available exercises
   const { data: exercisesData, isLoading: isLoadingExercises } = useQuery({
@@ -44,10 +56,138 @@ function ClientWorkoutOverviewContent() {
 
   const availableExercises = exercisesData?.exercises || [];
 
+  // Extract exercises for this specific client
+  const clientExercises = useMemo(() => {
+    if (!visualizationData || !userId) return [];
+    
+    const llmResult = visualizationData.llmResult;
+    const groupContext = visualizationData.groupContext;
+    
+    if (!llmResult || !groupContext) return [];
+
+    // Debug logging
+    console.log('Visualization data:', visualizationData);
+    console.log('LLM Result:', llmResult);
+    console.log('Looking for userId:', userId);
+
+    // Find the client's information
+    const clientIndex = groupContext.clients.findIndex((c: any) => c.user_id === userId);
+    if (clientIndex === -1) return [];
+    
+    const client = groupContext.clients[clientIndex];
+    const exercises: any[] = [];
+    
+    // Get pre-assigned exercises from the blueprint
+    const blueprint = visualizationData.blueprint;
+    if (blueprint?.clientExercisePools?.[userId]) {
+      const preAssigned = blueprint.clientExercisePools[userId].preAssigned || [];
+      preAssigned.forEach((pa: any, index: number) => {
+        exercises.push({
+          id: pa.exercise.id,
+          name: pa.exercise.name,
+          source: pa.source,
+          reasoning: `Pre-assigned from ${pa.source.toLowerCase()}`,
+          isPreAssigned: true,
+          orderIndex: index
+        });
+      });
+    }
+    
+    // Get LLM selected exercises
+    console.log('Checking for LLM selections at:', {
+      path1: llmResult.exerciseSelection?.clientSelections?.[userId],
+      path2: llmResult.llmAssignments,
+      hasExerciseSelection: !!llmResult.exerciseSelection,
+      hasClientSelections: !!llmResult.exerciseSelection?.clientSelections,
+      clientIds: llmResult.exerciseSelection?.clientSelections ? Object.keys(llmResult.exerciseSelection.clientSelections) : [],
+      actualUserId: userId,
+      clientsInContext: groupContext.clients.map((c: any) => ({ user_id: c.user_id, name: c.name }))
+    });
+
+    // Check multiple possible paths for the LLM selections
+    let llmSelections = null;
+    
+    // First, check if exerciseSelection is a string that needs parsing
+    let exerciseSelection = llmResult.exerciseSelection;
+    if (typeof exerciseSelection === 'string') {
+      try {
+        exerciseSelection = JSON.parse(exerciseSelection);
+        console.log('Parsed exerciseSelection from string');
+      } catch (e) {
+        console.log('Failed to parse exerciseSelection string');
+      }
+    }
+    
+    // Path 1: exerciseSelection.clientSelections
+    if (exerciseSelection?.clientSelections?.[userId]) {
+      // The structure uses 'selected' not 'selectedExercises'
+      llmSelections = exerciseSelection.clientSelections[userId].selected || 
+                     exerciseSelection.clientSelections[userId].selectedExercises;
+      console.log('Found in exerciseSelection.clientSelections');
+    } 
+    // Path 2: Direct clientSelections
+    else if (llmResult.clientSelections?.[userId]) {
+      llmSelections = llmResult.clientSelections[userId].selected || 
+                     llmResult.clientSelections[userId].selectedExercises;
+      console.log('Found in llmResult.clientSelections');
+    }
+    // Path 3: Check if we need to use client index instead of userId
+    else if (exerciseSelection?.clientSelections) {
+      // Try using the client index from groupContext
+      const clientKey = `client_${clientIndex}`;
+      if (exerciseSelection.clientSelections[clientKey]) {
+        console.log('Found selections using client key:', clientKey);
+        llmSelections = exerciseSelection.clientSelections[clientKey].selectedExercises;
+      }
+    }
+    // Path 4: llmAssignments for BMF templates
+    else if (llmResult.llmAssignments) {
+      // Look for user in llmAssignments structure
+      console.log('Checking llmAssignments structure');
+    }
+
+    if (llmSelections) {
+      console.log('Found LLM selections:', llmSelections);
+      llmSelections.forEach((ex: any, index: number) => {
+        // Handle different possible structures
+        const exercise = {
+          id: ex.exerciseId || ex.id,
+          name: ex.exerciseName || ex.name,
+          reasoning: ex.reasoning || '',
+          isShared: ex.isShared || false,
+          isPreAssigned: false,
+          orderIndex: exercises.length + index
+        };
+        
+        // Only add if we have at least an ID and name
+        if (exercise.id && exercise.name) {
+          exercises.push(exercise);
+        }
+      });
+      console.log('Added exercises from LLM:', exercises.length - (blueprint?.clientExercisePools?.[userId]?.preAssigned?.length || 0));
+    } else {
+      console.log('No LLM selections found for user');
+    }
+    
+    return exercises;
+  }, [visualizationData, userId]);
+
+  // Get user name and avatar
+  const userName = useMemo(() => {
+    if (visualizationData?.groupContext) {
+      const client = visualizationData.groupContext.clients.find((c: any) => c.user_id === userId);
+      if (client?.name) return client.name;
+    }
+    return 'Client';
+  }, [visualizationData, userId]);
+
+  const avatarUrl = `${AVATAR_API_URL}?seed=${encodeURIComponent(userName)}`;
+
   // Reset states when modals close
   useEffect(() => {
     if (!modalOpen && !showExerciseSelection) {
       setSelectedExercise(null);
+      setSelectedExerciseIndex(null);
       setSelectedReplacement(null);
       setSearchQuery("");
     }
@@ -59,8 +199,6 @@ function ClientWorkoutOverviewContent() {
       return { recommended: [], other: [] };
     }
 
-    // For now, we don't have blueprint recommendations in this context
-    // So we'll just show all exercises in the "other" category
     const filtered = searchQuery.trim() 
       ? filterExercisesBySearch(availableExercises, searchQuery)
       : availableExercises;
@@ -97,13 +235,13 @@ function ClientWorkoutOverviewContent() {
     );
   }
 
-  // Empty state when no workout exists
-  if (!workoutData || workoutData.exercises.length === 0) {
+  // Empty state when no exercises found
+  if (!visualizationData || clientExercises.length === 0) {
     return (
       <div className="min-h-screen bg-gray-50 p-4">
         <div className="max-w-md mx-auto">
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 mt-4 p-6">
-            <h1 className="text-2xl font-bold text-gray-900 mb-4">Confirmed Exercises</h1>
+            <h1 className="text-2xl font-bold text-gray-900 mb-4">Your Workout</h1>
             
             <div className="space-y-4">
               <div className="p-6 bg-gray-50 rounded-lg text-center">
@@ -132,41 +270,49 @@ function ClientWorkoutOverviewContent() {
     );
   }
 
-  // Sort exercises by orderIndex to maintain proper order
-  const sortedExercises = [...workoutData.exercises].sort((a, b) => a.orderIndex - b.orderIndex);
-
   return (
     <div className="min-h-screen bg-gray-50 p-4">
-      <div className="max-w-md mx-auto">
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 mt-4 p-6">
-          <h1 className="text-2xl font-bold text-gray-900 mb-6">Confirmed Exercises</h1>
-          
-          <div className="space-y-2">
-            {sortedExercises.map((exercise, index) => (
-              <div 
-                key={exercise.id}
-                className="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg"
-              >
-                <span className="flex-shrink-0 w-6 h-6 bg-indigo-600 text-white rounded-full flex items-center justify-center text-sm font-medium">
-                  {index + 1}
-                </span>
-                <div className="flex-1">
-                  <p className="font-medium text-gray-900">{exercise.exercise.name}</p>
-                </div>
-                <button 
-                  onClick={() => {
-                    setSelectedExercise(exercise);
-                    setModalOpen(true);
-                  }}
-                  className="flex-shrink-0 w-6 h-6 rounded-full hover:bg-gray-200 flex items-center justify-center transition-colors"
-                  aria-label="Remove exercise"
-                >
-                  <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
+      <div className="w-full max-w-sm mx-auto mt-4">
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+          {/* Header with avatar */}
+          <div className="p-4 border-b border-gray-200">
+            <div className="flex items-center space-x-3">
+              <img
+                src={avatarUrl}
+                alt={`${userName} avatar`}
+                className="w-12 h-12 rounded-full"
+              />
+              <div>
+                <h3 className="font-semibold text-lg text-gray-900">{userName}</h3>
+                <p className="text-sm text-gray-500">The exercises below are locked in. Feel free to pick your own swaps or let AI handle it.</p>
               </div>
-            ))}
+            </div>
+          </div>
+          
+          {/* Exercise list */}
+          <div className="p-4">
+            <div className="space-y-6">
+              {clientExercises.map((exercise, index) => (
+                <div key={exercise.id} className="flex items-center group">
+                  <div className="flex-1">
+                    <span className="text-gray-800 font-medium text-base">{exercise.name}</span>
+                  </div>
+                  <button 
+                    onClick={() => {
+                      setSelectedExercise(exercise);
+                      setSelectedExerciseIndex(index);
+                      setModalOpen(true);
+                    }}
+                    className="ml-2 p-1 rounded-full hover:bg-gray-200 flex items-center justify-center transition-colors"
+                    aria-label="Remove exercise"
+                  >
+                    <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </div>
@@ -187,7 +333,7 @@ function ClientWorkoutOverviewContent() {
           <div className="fixed inset-x-4 top-1/2 -translate-y-1/2 max-w-md mx-auto bg-white rounded-2xl shadow-2xl z-50 p-6">
             <h2 className="text-xl font-bold text-gray-900 mb-2">Replace Exercise</h2>
             <p className="text-gray-600 mb-6">
-              How would you like to replace "{selectedExercise?.exercise.name}"?
+              How would you like to replace "{selectedExercise?.name}"?
             </p>
             
             <div className="space-y-3">
@@ -204,7 +350,7 @@ function ClientWorkoutOverviewContent() {
               <button
                 onClick={() => {
                   // Handle AI choice
-                  console.log("Let AI choose");
+                  console.log("Let AI choose for exercise at index:", selectedExerciseIndex);
                   setModalOpen(false);
                 }}
                 className="w-full py-3 px-4 bg-white text-gray-700 border-2 border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium"
@@ -249,7 +395,7 @@ function ClientWorkoutOverviewContent() {
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-lg font-bold text-gray-900">Change Exercise</h2>
-                  <p className="text-sm text-gray-500 mt-1">Replacing: {selectedExercise?.exercise.name}</p>
+                  <p className="text-sm text-gray-500 mt-1">Replacing: {selectedExercise?.name}</p>
                 </div>
                 <button
                   onClick={() => {
@@ -337,6 +483,7 @@ function ClientWorkoutOverviewContent() {
                 onClick={() => {
                   // As requested, confirm doesn't do anything
                   console.log("Confirm clicked - no action taken");
+                  console.log("Would replace exercise at index:", selectedExerciseIndex, "with:", selectedReplacement);
                   setShowExerciseSelection(false);
                 }}
                 disabled={!selectedReplacement}
