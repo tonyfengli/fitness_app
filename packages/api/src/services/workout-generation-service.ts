@@ -8,7 +8,6 @@ import {
   WorkoutExercise,
   exercises,
   user as userTable,
-  workoutExerciseSelections,
   workoutExerciseSwaps
 } from "@acme/db/schema";
 import { 
@@ -402,96 +401,157 @@ export class WorkoutGenerationService {
     groupContext: GroupContext,
     exercisePool: Exercise[]
   ) {
-    logger.info("Saving Phase 1 exercise selections", { sessionId });
+    logger.info("Saving Phase 1 selections - creating draft workouts", { sessionId });
     
-    const selections = [];
+    const user = this.ctx.session?.user;
     
-    // Process each client's selections
-    for (const [clientId, clientSelection] of Object.entries(exerciseSelection.clientSelections)) {
-      const clientData = clientSelection as any;
+    return await this.ctx.db.transaction(async (tx) => {
+      // First check if draft workouts already exist for this session
+      const existingWorkouts = await tx
+        .select()
+        .from(Workout)
+        .where(and(
+          eq(Workout.trainingSessionId, sessionId),
+          eq(Workout.status, 'draft')
+        ));
       
-      // Process pre-assigned exercises
-      for (const exercise of clientData.preAssigned || []) {
-        const dbExercise = exercisePool.find(e => 
-          e.id === exercise.exerciseId || 
-          e.name.toLowerCase() === exercise.exerciseName.toLowerCase()
-        );
-        
-        if (dbExercise) {
-          selections.push({
-            sessionId,
-            clientId,
-            exerciseId: dbExercise.id,
-            exerciseName: dbExercise.name,
-            isShared: false,
-            sharedWithClients: null,
-            selectionSource: 'llm_phase1'
-          });
-        }
+      if (existingWorkouts.length > 0) {
+        logger.info(`Draft workouts already exist for session ${sessionId}, skipping creation`);
+        return;
       }
       
-      // Process selected exercises
-      for (const exercise of clientData.selected || []) {
-        const dbExercise = exercisePool.find(e => 
-          e.id === exercise.exerciseId || 
-          e.name.toLowerCase() === exercise.exerciseName.toLowerCase()
-        );
-        
-        if (dbExercise) {
-          selections.push({
-            sessionId,
-            clientId,
-            exerciseId: dbExercise.id,
-            exerciseName: dbExercise.name,
-            isShared: exercise.isShared || false,
-            sharedWithClients: exercise.sharedWith || null,
-            selectionSource: 'llm_phase1'
-          });
-        }
+      // Create draft workout for each client
+      const workoutRecords = [];
+      for (const client of groupContext.clients) {
+        workoutRecords.push({
+          trainingSessionId: sessionId,
+          userId: client.user_id,
+          businessId: user.businessId,
+          createdByTrainerId: user.id,
+          notes: '', // Blank as requested
+          workoutType: '', // Blank as requested
+          totalPlannedSets: 0, // Will be updated in Phase 2
+          llmOutput: {
+            phase1: exerciseSelection,
+            timestamp: new Date().toISOString()
+          },
+          context: 'group' as const,
+          status: 'draft' as const
+        });
       }
-    }
-    
-    // Also save shared exercises for each participating client
-    for (const sharedExercise of exerciseSelection.sharedExercises || []) {
-      const dbExercise = exercisePool.find(e => 
-        e.id === sharedExercise.exerciseId || 
-        e.name.toLowerCase() === sharedExercise.exerciseName.toLowerCase()
-      );
       
-      if (dbExercise) {
-        // Check if we already have this exercise for these clients
-        for (const clientId of sharedExercise.clientIds) {
-          const existingSelection = selections.find(s => 
-            s.clientId === clientId && 
-            s.exerciseId === dbExercise.id
+      const createdWorkouts = await tx
+        .insert(Workout)
+        .values(workoutRecords)
+        .returning({ id: Workout.id, userId: Workout.userId });
+      
+      // Map client IDs to workout IDs
+      const clientWorkoutMap = new Map<string, string>();
+      createdWorkouts.forEach(workout => {
+        clientWorkoutMap.set(workout.userId, workout.id);
+      });
+      
+      // Create workout exercise records
+      const exerciseRecords = [];
+      // Use a fixed temporary order index - Phase 2 will assign proper values
+      const TEMP_ORDER_INDEX = 999;
+      
+      // Process each client's selections
+      for (const [clientId, clientSelection] of Object.entries(exerciseSelection.clientSelections)) {
+        const clientData = clientSelection as any;
+        const workoutId = clientWorkoutMap.get(clientId);
+        if (!workoutId) continue;
+        
+        // Process pre-assigned exercises
+        for (const exercise of clientData.preAssigned || []) {
+          const dbExercise = exercisePool.find(e => 
+            e.id === exercise.exerciseId || 
+            e.name.toLowerCase() === exercise.exerciseName.toLowerCase()
           );
           
-          // If not already added, add it
-          if (!existingSelection) {
-            selections.push({
-              sessionId,
-              clientId,
+          if (dbExercise) {
+            exerciseRecords.push({
+              workoutId,
               exerciseId: dbExercise.id,
-              exerciseName: dbExercise.name,
-              isShared: true,
-              sharedWithClients: sharedExercise.clientIds,
+              orderIndex: TEMP_ORDER_INDEX,
+              setsCompleted: 0,
+              groupName: null,
+              isShared: false,
+              sharedWithClients: null,
+              selectionSource: 'pre_assigned'
+            });
+          }
+        }
+        
+        // Process selected exercises
+        for (const exercise of clientData.selected || []) {
+          const dbExercise = exercisePool.find(e => 
+            e.id === exercise.exerciseId || 
+            e.name.toLowerCase() === exercise.exerciseName.toLowerCase()
+          );
+          
+          if (dbExercise) {
+            exerciseRecords.push({
+              workoutId,
+              exerciseId: dbExercise.id,
+              orderIndex: TEMP_ORDER_INDEX,
+              setsCompleted: 0,
+              groupName: null,
+              isShared: exercise.isShared || false,
+              sharedWithClients: exercise.sharedWith || null,
               selectionSource: 'llm_phase1'
             });
           }
         }
       }
-    }
-    
-    // Batch insert selections
-    if (selections.length > 0) {
-      await this.ctx.db.insert(workoutExerciseSelections)
-        .values(selections)
-        .onConflictDoNothing(); // In case of re-runs
       
-      logger.info(`Saved ${selections.length} exercise selections`, { sessionId });
-    }
-    
-    return selections;
+      // Also save shared exercises for each participating client
+      for (const sharedExercise of exerciseSelection.sharedExercises || []) {
+        const dbExercise = exercisePool.find(e => 
+          e.id === sharedExercise.exerciseId || 
+          e.name.toLowerCase() === sharedExercise.exerciseName.toLowerCase()
+        );
+        
+        if (dbExercise) {
+          // Add for each client that shares this exercise
+          for (const clientId of sharedExercise.clientIds) {
+            const workoutId = clientWorkoutMap.get(clientId);
+            if (!workoutId) continue;
+            
+            // Check if we already have this exercise for this client
+            const existingExercise = exerciseRecords.find(e => 
+              e.workoutId === workoutId && 
+              e.exerciseId === dbExercise.id
+            );
+            
+            // If not already added, add it
+            if (!existingExercise) {
+              exerciseRecords.push({
+                workoutId,
+                exerciseId: dbExercise.id,
+                orderIndex: TEMP_ORDER_INDEX,
+                setsCompleted: 0,
+                groupName: null,
+                isShared: true,
+                sharedWithClients: sharedExercise.clientIds,
+                selectionSource: 'llm_phase1'
+              });
+            }
+          }
+        }
+      }
+      
+      // Batch insert exercise records
+      if (exerciseRecords.length > 0) {
+        await tx.insert(WorkoutExercise).values(exerciseRecords);
+        logger.info(`Created ${exerciseRecords.length} workout exercises for ${createdWorkouts.length} draft workouts`, { sessionId });
+      }
+      
+      return {
+        workoutIds: createdWorkouts.map(w => w.id),
+        clientWorkoutMap
+      };
+    });
   }
 
   /**

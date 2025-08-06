@@ -153,7 +153,7 @@ You must select ${this.getExercisesToSelect()} exercises from the following ${th
       sharedInCandidates.forEach((ex, idx) => {
         const sharedInfo = this.config.sharedExercises.find(s => s.id === ex.id);
         output += `${idx + 1}. **${ex.name}** [SHARED with ${sharedInfo?.clientsSharing.length || 0} clients]\n`;
-        output += this.formatExerciseDetails(ex);
+        output += this.formatExerciseDetailsWithoutId(ex);
         output += '\n';
       });
       
@@ -170,7 +170,7 @@ You must select ${this.getExercisesToSelect()} exercises from the following ${th
       
       nonShared.forEach((ex, idx) => {
         output += `${sharedInCandidates.length + idx + 1}. ${ex.name}\n`;
-        output += this.formatExerciseDetails(ex);
+        output += this.formatExerciseDetailsWithoutId(ex);
         output += '\n';
       });
     }
@@ -192,8 +192,7 @@ Return a JSON object with exactly ${exercisesToSelect} selected exercises:
 {
   "selectedExercises": [
     {
-      "exerciseId": "<copy the exact ID from the exercise list above>",
-      "exerciseName": "Exercise Name",
+      "exerciseName": "3-Point Dumbbell Row",
       "reasoning": "Brief explanation of why this exercise was selected",
       "isShared": true,
       "satisfiesConstraints": ["muscle_target", "movement_variety"]
@@ -211,8 +210,9 @@ Return a JSON object with exactly ${exercisesToSelect} selected exercises:
 
 **CRITICAL:**
 - Select EXACTLY ${exercisesToSelect} exercises
-- **COPY THE EXACT EXERCISE ID** from the list above (e.g., "0ed8d787-caff-4e43-b04b-45dc9b93117d")
-- Do NOT use placeholder IDs like "uuid-here" or "uuid-1"
+- **Use the EXACT exercise name** from the list above (e.g., "3-Point Dumbbell Row")
+- Names are case-sensitive - copy them exactly as shown
+- Do NOT modify or abbreviate exercise names
 - Prefer shared exercises when they meet constraints
 - Ensure all muscle targets are covered across selected + pre-assigned exercises`;
   }
@@ -226,6 +226,24 @@ Return a JSON object with exactly ${exercisesToSelect} selected exercises:
   private formatExerciseDetails(ex: ScoredExercise): string {
     let details = `   - ID: ${ex.id}\n`;
     details += `   - Movement: ${ex.movementPattern}, Primary: ${ex.primaryMuscle}\n`;
+    details += `   - Score: ${ex.score.toFixed(1)}`;
+    
+    if (ex.scoreBreakdown) {
+      const factors = this.formatScoreFactors(ex.scoreBreakdown);
+      if (factors) {
+        details += ` (${factors})`;
+      }
+    }
+    
+    if (ex.functionTags && ex.functionTags.length > 0) {
+      details += `\n   - Tags: ${ex.functionTags.join(', ')}`;
+    }
+    
+    return details;
+  }
+  
+  private formatExerciseDetailsWithoutId(ex: ScoredExercise): string {
+    let details = `   - Movement: ${ex.movementPattern}, Primary: ${ex.primaryMuscle}\n`;
     details += `   - Score: ${ex.score.toFixed(1)}`;
     
     if (ex.scoreBreakdown) {

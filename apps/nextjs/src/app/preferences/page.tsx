@@ -91,6 +91,19 @@ export default function PreferencesPage() {
       
       // Step 3: Save the visualization data
       if (result && sessionId) {
+        // Log what we're about to save
+        console.log('💾 PREFERENCES: About to save visualization data:', {
+          hasBlueprint: !!result.blueprint,
+          hasClientPools: !!result.blueprint?.clientExercisePools,
+          clientPoolKeys: result.blueprint?.clientExercisePools ? Object.keys(result.blueprint.clientExercisePools) : [],
+          hasBucketedSelections: result.blueprint?.clientExercisePools ? 
+            Object.entries(result.blueprint.clientExercisePools).map(([clientId, pool]: [string, any]) => ({
+              clientId,
+              hasBucketedSelection: !!pool.bucketedSelection,
+              bucketedCount: pool.bucketedSelection?.exercises?.length || 0
+            })) : []
+        });
+        
         await saveVisualization.mutateAsync({
           sessionId,
           visualizationData: {

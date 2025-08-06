@@ -546,7 +546,7 @@ export class StandardWorkoutGenerator {
         
         // Add to shared exercises list
         const firstClient = clientIdArray[0];
-        const exercise = clientSelections[firstClient]?.selected.find(ex => ex.exerciseId === exerciseId);
+        const exercise = firstClient ? clientSelections[firstClient]?.selected.find((ex: any) => ex.exerciseId === exerciseId) : undefined;
         if (exercise) {
           sharedExercises.push({
             exerciseId,

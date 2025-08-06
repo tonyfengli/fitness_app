@@ -156,7 +156,30 @@ export default function GroupVisualizationPage() {
   // Check for saved visualization data first
   const savedDataQuery = useQuery({
     ...trpc.trainingSession.getSavedVisualizationData.queryOptions({ sessionId: sessionId || '' }),
-    enabled: !!sessionId
+    enabled: !!sessionId,
+    onSuccess: (data) => {
+      console.log('🔍 SAVED DATA LOADED:', {
+        hasSavedData: !!data,
+        hasBlueprint: !!data?.blueprint,
+        hasClientPools: !!data?.blueprint?.clientExercisePools,
+        clientPoolKeys: data?.blueprint?.clientExercisePools ? Object.keys(data.blueprint.clientExercisePools) : [],
+        hasBucketedSelection: data?.blueprint?.clientExercisePools ? 
+          Object.values(data.blueprint.clientExercisePools).some((pool: any) => !!pool.bucketedSelection) : false
+      });
+      if (data?.blueprint?.clientExercisePools) {
+        Object.entries(data.blueprint.clientExercisePools).forEach(([clientId, pool]: [string, any]) => {
+          console.log(`  Client ${clientId} saved pool structure:`, {
+            hasPreAssigned: !!pool.preAssigned,
+            preAssignedCount: pool.preAssigned?.length || 0,
+            hasAvailableCandidates: !!pool.availableCandidates,
+            availableCandidatesCount: pool.availableCandidates?.length || 0,
+            hasBucketedSelection: !!pool.bucketedSelection,
+            bucketedExerciseCount: pool.bucketedSelection?.exercises?.length || 0,
+            bucketedExerciseNames: pool.bucketedSelection?.exercises?.map((e: any) => e.name).slice(0, 5) || 'NO BUCKETED SELECTION'
+          });
+        });
+      }
+    }
   });
   
   // Save visualization mutation
@@ -168,7 +191,22 @@ export default function GroupVisualizationPage() {
   const blueprintQuery = useGroupWorkoutBlueprint({
     sessionId,
     includeDiagnostics: true,
-    enabled: !!sessionId && !savedDataQuery.data // Only fetch if no saved data
+    enabled: !!sessionId && !savedDataQuery.data, // Only fetch if no saved data
+    onSuccess: (data) => {
+      console.log('🔨 NEW BLUEPRINT GENERATED:', {
+        reason: savedDataQuery.data ? 'Should not happen - saved data exists!' : 'No saved data found',
+        hasBlueprint: !!data?.blueprint,
+        hasClientPools: !!data?.blueprint?.clientExercisePools,
+        timestamp: new Date().toISOString()
+      });
+      if (data?.blueprint?.clientExercisePools) {
+        Object.entries(data.blueprint.clientExercisePools).forEach(([clientId, pool]: [string, any]) => {
+          console.log(`  Client ${clientId} NEW bucketed exercises:`, 
+            pool.bucketedSelection?.exercises?.map((e: any) => e.name) || 'NO BUCKETED SELECTION'
+          );
+        });
+      }
+    }
   });
   
   // Use the generation hook for creating workouts
@@ -235,15 +273,32 @@ export default function GroupVisualizationPage() {
   // Save visualization data when blueprint is generated (not from saved data)
   useEffect(() => {
     if (blueprintQuery.blueprint && blueprintQuery.groupContext && !savedDataQuery.data && sessionId) {
-      // Prepare the data to save
+      console.log('💾 SAVING VISUALIZATION DATA:', {
+        hasBlueprint: !!blueprintQuery.blueprint,
+        hasClientPools: !!blueprintQuery.blueprint?.clientExercisePools,
+        hasBucketedSelections: blueprintQuery.blueprint?.clientExercisePools ? 
+          Object.values(blueprintQuery.blueprint.clientExercisePools).every((pool: any) => !!pool.bucketedSelection) : false
+      });
+      
+      // Deep log the blueprint structure before saving
+      if (blueprintQuery.blueprint?.clientExercisePools) {
+        Object.entries(blueprintQuery.blueprint.clientExercisePools).forEach(([clientId, pool]: [string, any]) => {
+          console.log(`  💾 Client ${clientId} data to save:`, {
+            preAssignedCount: pool.preAssigned?.length || 0,
+            availableCandidatesCount: pool.availableCandidates?.length || 0,
+            hasBucketedSelection: !!pool.bucketedSelection,
+            bucketedExerciseCount: pool.bucketedSelection?.exercises?.length || 0,
+            firstBucketedExercises: pool.bucketedSelection?.exercises?.slice(0, 3).map((e: any) => e.name) || 'NONE'
+          });
+        });
+      }
+      
+      // Prepare the data to save - save the complete blueprint including bucketedSelection
       const visualizationData = {
-        blueprint: blueprintQuery.blueprint,
+        blueprint: blueprintQuery.blueprint, // This includes clientExercisePools with bucketedSelection
         groupContext: blueprintQuery.groupContext,
         llmResult: blueprintQuery.llmResult,
-        summary: blueprintQuery.summary,
-        // Extract exercise metadata if it's a standard blueprint
-        exerciseMetadata: blueprintQuery.blueprint?.clientExercisePools || undefined,
-        sharedExerciseIds: blueprintQuery.blueprint?.sharedExercisePool?.map((e: any) => e.id) || undefined
+        summary: blueprintQuery.summary
       };
       
       // Save the visualization data

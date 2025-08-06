@@ -211,6 +211,7 @@ export const Workout = pgTable("workout", (t) => ({
   context: t.text().notNull().default("individual"), // "group", "individual", "homework", "assessment"
   businessId: t.uuid().notNull().references(() => Business.id, { onDelete: "cascade" }), // Direct business reference
   createdByTrainerId: t.text().notNull().references(() => user.id), // Who created this workout
+  status: t.varchar("status", { length: 50 }).default('draft'), // 'draft', 'ready', 'completed'
   createdAt: t.timestamp().defaultNow().notNull(),
   updatedAt: t
     .timestamp({ mode: "date", withTimezone: true })
@@ -229,6 +230,7 @@ export const CreateWorkoutSchema = createInsertSchema(Workout, {
   context: z.enum(["group", "individual", "homework", "assessment"]).default("individual"),
   businessId: z.string().uuid(),
   createdByTrainerId: z.string(),
+  status: z.enum(['draft', 'ready', 'completed']).default('draft'),
 }).omit({
   id: true,
   createdAt: true,
@@ -243,6 +245,9 @@ export const WorkoutExercise = pgTable("workout_exercise", (t) => ({
   orderIndex: t.integer().notNull(),
   setsCompleted: t.integer().notNull(),
   groupName: t.text(), // "Block A", "Round 1", etc.
+  isShared: t.boolean().default(false),
+  sharedWithClients: t.text("shared_with_clients").array(),
+  selectionSource: t.varchar("selection_source", { length: 50 }), // 'llm_phase1', 'manual_swap', 'pre_assigned'
   createdAt: t.timestamp().defaultNow().notNull(),
 }));
 
@@ -252,6 +257,9 @@ export const CreateWorkoutExerciseSchema = createInsertSchema(WorkoutExercise, {
   orderIndex: z.number().int().min(1),
   setsCompleted: z.number().int().min(1),
   groupName: z.string().optional(),
+  isShared: z.boolean().optional().default(false),
+  sharedWithClients: z.array(z.string()).optional(),
+  selectionSource: z.enum(['llm_phase1', 'manual_swap', 'pre_assigned']).optional(),
 }).omit({
   id: true,
   createdAt: true,
@@ -286,3 +294,6 @@ export * from "../drizzle/relations";
 
 // Re-export auth schema items
 export { user, account } from "./auth-schema";
+
+// Re-export workout selections schema items (only swaps now)
+export { workoutExerciseSwaps } from "./schema/workout-selections";

@@ -5,6 +5,7 @@ export interface UseGroupWorkoutBlueprintOptions {
   sessionId: string | null;
   includeDiagnostics?: boolean;
   enabled?: boolean;
+  onSuccess?: (data: any) => void;
 }
 
 export function useGroupWorkoutBlueprint(options: UseGroupWorkoutBlueprintOptions) {
@@ -12,21 +13,27 @@ export function useGroupWorkoutBlueprint(options: UseGroupWorkoutBlueprintOption
   const { 
     sessionId, 
     includeDiagnostics = false,
-    enabled = true
+    enabled = true,
+    onSuccess
   } = options;
 
-  const query = useQuery(
-    sessionId && enabled
-      ? trpc.trainingSession.generateGroupWorkoutBlueprint.queryOptions({
-          sessionId,
-          options: { includeDiagnostics }
-        })
-      : {
-          enabled: false,
-          queryKey: ["disabled"],
-          queryFn: () => Promise.resolve(null)
-        }
-  );
+  const queryOptions = sessionId && enabled
+    ? trpc.trainingSession.generateGroupWorkoutBlueprint.queryOptions({
+        sessionId,
+        options: { includeDiagnostics }
+      })
+    : {
+        enabled: false,
+        queryKey: ["disabled"],
+        queryFn: () => Promise.resolve(null)
+      };
+
+  // Add onSuccess if provided
+  if (onSuccess && 'onSuccess' in queryOptions) {
+    (queryOptions as any).onSuccess = onSuccess;
+  }
+
+  const query = useQuery(queryOptions);
 
   return {
     blueprint: query.data?.blueprint,

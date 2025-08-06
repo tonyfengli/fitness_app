@@ -39,6 +39,26 @@ export default function StandardTemplateView({
   isFromSavedData = false,
   isSaving = false
 }: StandardTemplateViewProps) {
+  // Log what data we're receiving
+  React.useEffect(() => {
+    console.log('🎯 STANDARD TEMPLATE VIEW RENDERED:', {
+      isFromSavedData,
+      hasBlueprint: !!blueprint,
+      hasClientPools: !!blueprint?.clientExercisePools,
+      timestamp: new Date().toISOString()
+    });
+    
+    if (blueprint?.clientExercisePools) {
+      Object.entries(blueprint.clientExercisePools).forEach(([clientId, pool]: [string, any]) => {
+        console.log(`  Client ${clientId} in StandardTemplateView:`, {
+          hasBucketedSelection: !!pool.bucketedSelection,
+          bucketedExerciseCount: pool.bucketedSelection?.exercises?.length || 0,
+          bucketedExercises: pool.bucketedSelection?.exercises?.map((e: any) => e.name).slice(0, 5) || 'NONE'
+        });
+      });
+    }
+  }, [blueprint, isFromSavedData]);
+
   // Create tab options: one per client + shared tab
   const clientTabs = groupContext.clients.map(client => ({
     id: client.user_id,
@@ -111,18 +131,14 @@ export default function StandardTemplateView({
                 {isGenerating ? 'Generating...' : 'Generate Workout'}
               </button>
             ) : (
-              <button
-                onClick={() => {
-                  // Navigate to workout-overview page with sessionId
-                  const sessionId = new URLSearchParams(window.location.search).get('sessionId');
-                  if (sessionId) {
-                    router.push(`/workout-overview?sessionId=${sessionId}`);
-                  }
-                }}
-                className="px-4 py-2 bg-green-600 text-white hover:bg-green-700 rounded-lg"
+              <a
+                href={`/workout-overview?sessionId=${new URLSearchParams(window.location.search).get('sessionId')}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-block px-4 py-2 bg-green-600 text-white hover:bg-green-700 rounded-lg text-center"
               >
                 Exercise Selection
-              </button>
+              </a>
             )}
             <button
               onClick={() => router.push(`/session-lobby?sessionId=${groupContext.sessionId}`)}

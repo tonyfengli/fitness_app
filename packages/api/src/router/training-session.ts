@@ -16,7 +16,6 @@ import {
   user as userTable,
   user as User,
   exercises,
-  workoutExerciseSelections,
   workoutExerciseSwaps
 } from "@acme/db/schema";
 import { 
@@ -769,17 +768,12 @@ export const trainingSessionRouter = {
         .delete(UserTrainingSession)
         .where(eq(UserTrainingSession.trainingSessionId, input.sessionId));
       
-      // 3. Delete workout exercise selections
-      await ctx.db
-        .delete(workoutExerciseSelections)
-        .where(eq(workoutExerciseSelections.sessionId, input.sessionId));
-      
-      // 4. Delete workout exercise swaps
+      // 3. Delete workout exercise swaps
       await ctx.db
         .delete(workoutExerciseSwaps)
         .where(eq(workoutExerciseSwaps.sessionId, input.sessionId));
       
-      // 5. Finally delete the training session
+      // 4. Finally delete the training session
       await ctx.db
         .delete(TrainingSession)
         .where(eq(TrainingSession.id, input.sessionId));
@@ -2331,6 +2325,19 @@ Set your goals and preferences for today's session.`;
           savedAt: new Date().toISOString()
         }
       };
+      
+      // Log what we're saving for debugging
+      console.log('💾 SAVING VISUALIZATION DATA TO DB:', {
+        sessionId: input.sessionId,
+        hasBlueprint: !!input.visualizationData.blueprint,
+        hasClientPools: !!input.visualizationData.blueprint?.clientExercisePools,
+        bucketedSelections: input.visualizationData.blueprint?.clientExercisePools ? 
+          Object.entries(input.visualizationData.blueprint.clientExercisePools).map(([clientId, pool]: [string, any]) => ({
+            clientId,
+            hasBucketedSelection: !!pool.bucketedSelection,
+            bucketedCount: pool.bucketedSelection?.exercises?.length || 0
+          })) : []
+      });
 
       // Update the session with the visualization data
       await ctx.db

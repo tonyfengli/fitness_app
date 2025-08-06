@@ -8,6 +8,7 @@ import type { ScoredExercise } from "../../types/scoredExercise";
 import type { PreAssignedExercise, ClientExercisePool } from "../../types/standardBlueprint";
 import type { GroupScoredExercise } from "../../types/groupContext";
 import { WorkoutType } from "../types/workoutTypes";
+import { SystemMessage, HumanMessage } from "@langchain/core/messages";
 import { ClientExerciseSelectionPromptBuilder } from "./prompts/ClientExerciseSelectionPromptBuilder";
 import { createLLM } from "../../config/llm";
 
@@ -136,7 +137,10 @@ export class LLMExerciseSelector {
     
     try {
       // Call LLM
-      const response = await this.llm.invoke(prompt);
+      const response = await this.llm.invoke([
+        new SystemMessage(prompt),
+        new HumanMessage("Please select the exercises according to the instructions above.")
+      ]);
       const content = response.content.toString();
       
       // Log LLM response for debugging
@@ -179,15 +183,29 @@ export class LLMExerciseSelector {
     input: LLMSelectionInput,
     candidates: ScoredExercise[]
   ): LLMSelectionResult {
-    // Create exercise lookup map
+    // Create exercise lookup maps
     const exerciseMap = new Map(candidates.map(ex => [ex.id, ex]));
+    const exerciseNameMap = new Map(candidates.map(ex => [ex.name, ex]));
     const sharedIds = new Set(this.config.sharedExercises.map(s => s.id));
     
     // Validate and transform selected exercises
     const selectedExercises = llmResponse.selectedExercises.map((selection: any) => {
-      const exercise = exerciseMap.get(selection.exerciseId);
+      // Now we expect exerciseName as the primary identifier
+      let exercise = exerciseNameMap.get(selection.exerciseName);
+      
+      // Fallback: check if they provided exerciseId instead (old format)
+      if (!exercise && selection.exerciseId) {
+        exercise = exerciseMap.get(selection.exerciseId);
+        
+        // Check if LLM swapped the fields
+        if (!exercise && exerciseNameMap.has(selection.exerciseId)) {
+          console.warn(`⚠️ LLM used name in exerciseId field: ${selection.exerciseId}`);
+          exercise = exerciseNameMap.get(selection.exerciseId);
+        }
+      }
+      
       if (!exercise) {
-        throw new Error(`Exercise ${selection.exerciseId} not found in candidates`);
+        throw new Error(`Exercise "${selection.exerciseName || selection.exerciseId}" not found in candidates`);
       }
       
       return {
@@ -202,14 +220,14 @@ export class LLMExerciseSelector {
     const summary = {
       totalSelected: selectedExercises.length,
       sharedExercises: llmResponse.summary?.sharedExercises || 
-        selectedExercises.filter(s => s.isShared).length,
+        selectedExercises.filter((s: any) => s.isShared).length,
       muscleTargetsCovered: llmResponse.summary?.muscleTargetsCovered || [],
       movementPatterns: llmResponse.summary?.movementPatterns || [],
       overallReasoning: llmResponse.summary?.overallReasoning || 'No summary provided'
     };
     
     // Validate count
-    const expectedCount = this.getExpectedExerciseCount(input.client.intensity);
+    const expectedCount = this.getExpectedExerciseCount(input.client.intensity || 'moderate');
     if (selectedExercises.length !== expectedCount) {
       console.warn(
         `⚠️ LLM selected ${selectedExercises.length} exercises for ${input.client.name}, ` +
@@ -235,7 +253,7 @@ export class LLMExerciseSelector {
   private createFallbackSelection(input: LLMSelectionInput): LLMSelectionResult {
     console.log(`⚠️ Using fallback selection for ${input.client.name}`);
     
-    const expectedCount = this.getExpectedExerciseCount(input.client.intensity);
+    const expectedCount = this.getExpectedExerciseCount(input.client.intensity || 'moderate');
     const allCandidates = [...input.bucketedCandidates, ...input.additionalCandidates];
     const sharedIds = new Set(this.config.sharedExercises.map(s => s.id));
     

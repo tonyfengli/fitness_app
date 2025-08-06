@@ -40,6 +40,12 @@ function ClientWorkoutOverviewContent() {
         queryClient.invalidateQueries({
           queryKey: [['workoutSelections', 'getSelectionsPublic']]
         });
+        // Reload the page to show updated exercises
+        window.location.reload();
+      },
+      onError: (error) => {
+        console.error('Failed to swap exercise:', error);
+        alert('Failed to swap exercise. Please try again.');
       }
     })
   );
@@ -70,13 +76,13 @@ function ClientWorkoutOverviewContent() {
 
   // We'll get user info from the visualization data instead
 
-  // Also fetch saved selections as a fallback
+  // Also fetch saved selections (always, not just as fallback)
   const { data: savedSelections } = useQuery({
     ...trpc.workoutSelections.getSelectionsPublic.queryOptions({
       sessionId: sessionId || "",
       clientId: userId || ""
     }),
-    enabled: !!sessionId && !!userId && !visualizationData,
+    enabled: !!sessionId && !!userId,
   });
   
   console.log('Saved selections:', savedSelections);
@@ -94,6 +100,21 @@ function ClientWorkoutOverviewContent() {
 
   // Extract exercises for this specific client
   const clientExercises = useMemo(() => {
+    // First try to use saved selections (source of truth after swaps)
+    if (savedSelections && savedSelections.length > 0) {
+      console.log('Using saved selections as primary source');
+      return savedSelections.map((selection: any, index: number) => ({
+        id: selection.exerciseId,
+        name: selection.exerciseName,
+        source: selection.selectionSource,
+        reasoning: selection.selectionSource === 'manual_swap' ? 'Manually selected by client' : 'Selected by AI',
+        isShared: selection.isShared || false,
+        isPreAssigned: selection.selectionSource === 'pre_assigned',
+        orderIndex: index
+      }));
+    }
+    
+    // Fall back to visualization data if no saved selections
     if (!visualizationData || !userId) return [];
     
     const llmResult = visualizationData.llmResult;
@@ -218,7 +239,7 @@ function ClientWorkoutOverviewContent() {
     }
     
     return exercises;
-  }, [visualizationData, userId]);
+  }, [visualizationData, userId, savedSelections]);
 
   // Get user name and avatar
   const userName = useMemo(() => {
@@ -560,24 +581,24 @@ function ClientWorkoutOverviewContent() {
                   if (!replacementExercise) return;
                   
                   // Call the public swap endpoint
-                  try {
-                    await swapExerciseMutation.mutateAsync({
-                      sessionId: sessionId!,
-                      clientId: userId!,
-                      originalExerciseId: selectedExercise.id,
-                      newExerciseId: replacementExercise.id,
-                      reason: 'Client manual selection'
-                    });
-                    
-                    alert(`Exercise swap saved! Replaced "${selectedExercise.name}" with "${replacementExercise.name}"`);
-                  } catch (error) {
-                    console.error('Failed to swap exercise:', error);
-                    alert('Failed to save exercise swap. Please try again.');
-                  }
-                  
-                  setShowExerciseSelection(false);
+                  swapExerciseMutation.mutate({
+                    sessionId: sessionId!,
+                    clientId: userId!,
+                    originalExerciseId: selectedExercise.id,
+                    newExerciseId: replacementExercise.id,
+                    reason: 'Client manual selection'
+                  }, {
+                    onSuccess: () => {
+                      alert(`Exercise swap saved! Replaced "${selectedExercise.name}" with "${replacementExercise.name}"`);
+                      setShowExerciseSelection(false);
+                    },
+                    onError: (error) => {
+                      console.error('Failed to swap exercise:', error);
+                      alert('Failed to save exercise swap. Please try again.');
+                    }
+                  });
                 }}
-                disabled={!selectedReplacement}
+                disabled={!selectedReplacement || swapExerciseMutation.isPending}
                 className={`px-4 py-2 rounded-lg transition-colors flex items-center gap-2 ${
                   selectedReplacement
                     ? 'bg-indigo-600 hover:bg-indigo-700 text-white' 
