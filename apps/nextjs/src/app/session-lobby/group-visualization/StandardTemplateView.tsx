@@ -587,12 +587,27 @@ export default function StandardTemplateView({
                             <td className="px-4 py-2 text-sm">
                               <div className="flex flex-col gap-1">
                                 <div className="flex items-center gap-1">
-                                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800">
-                                    Pre-assigned ({preAssigned.source})
+                                  <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                                    preAssigned.source === 'Include' ? 'bg-purple-100 text-purple-800' :
+                                    preAssigned.source === 'favorite' ? 'bg-yellow-100 text-yellow-800' :
+                                    preAssigned.source === 'shared_other' ? 'bg-blue-100 text-blue-800' :
+                                    preAssigned.source === 'shared_core_finisher' ? 'bg-green-100 text-green-800' :
+                                    'bg-gray-100 text-gray-800'
+                                  }`}>
+                                    {preAssigned.source === 'Include' ? 'Include' :
+                                     preAssigned.source === 'favorite' ? 'Favorite' :
+                                     preAssigned.source === 'shared_other' ? 'Shared' :
+                                     preAssigned.source === 'shared_core_finisher' ? 'Shared Core/Finisher' :
+                                     preAssigned.source}
                                   </span>
                                   {preAssigned.tiedCount && preAssigned.tiedCount > 1 && (
                                     <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">
                                       Selected from {preAssigned.tiedCount} tied
+                                    </span>
+                                  )}
+                                  {preAssigned.sharedWith && preAssigned.sharedWith.length > 1 && (
+                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                                      Shared with {preAssigned.sharedWith.length - 1} other{preAssigned.sharedWith.length - 1 > 1 ? 's' : ''}
                                     </span>
                                   )}
                                 </div>
@@ -970,14 +985,25 @@ export default function StandardTemplateView({
                       {(sharedSubTab === 'coreFinisher' 
                         ? categorizedSharedExercises.coreAndFinisher 
                         : categorizedSharedExercises.other
-                      ).map((exercise, idx) => (
-                        <tr key={exercise.id}>
-                          <td className="px-4 py-2 text-sm text-gray-900">
-                            {idx + 1}
-                          </td>
-                          <td className="px-4 py-2 text-sm font-medium text-gray-900">
-                            {exercise.name}
-                          </td>
+                      ).map((exercise, idx) => {
+                        // Check if this exercise was selected as pre-assigned for any client
+                        const isSelected = Object.values(blueprint.clientExercisePools).some(pool =>
+                          pool.preAssigned.some(p => p.exercise.id === exercise.id && p.source === 'shared_other')
+                        );
+                        
+                        return (
+                          <tr key={exercise.id} className={isSelected ? 'bg-blue-50' : ''}>
+                            <td className="px-4 py-2 text-sm text-gray-900">
+                              {idx + 1}
+                            </td>
+                            <td className="px-4 py-2 text-sm font-medium text-gray-900">
+                              {exercise.name}
+                              {isSelected && (
+                                <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                                  Selected
+                                </span>
+                              )}
+                            </td>
                           <td className="px-4 py-2 text-sm text-gray-600">
                             {formatMuscleName(exercise.movementPattern || '')}
                           </td>
@@ -1024,7 +1050,8 @@ export default function StandardTemplateView({
                             </div>
                           </td>
                         </tr>
-                      ))}
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>

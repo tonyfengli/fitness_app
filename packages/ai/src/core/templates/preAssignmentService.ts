@@ -2,6 +2,8 @@ import type { ScoredExercise } from "../../types/scoredExercise";
 import type { ClientContext } from "../../types/clientContext";
 import type { PreAssignedExercise } from "../../types/standardBlueprint";
 import type { WorkoutType } from "../../types/clientTypes";
+import type { GroupScoredExercise } from "../../types/groupContext";
+import { categorizeSharedExercises } from "../../workout-generation/standard/sharedExerciseFilters";
 
 /**
  * Constraints for pre-assignment based on workout type
@@ -28,6 +30,11 @@ const WORKOUT_TYPE_CONSTRAINTS: Record<string, PreAssignmentConstraints> = {
     maxPerMuscleGroup: 1
   }
 };
+
+/**
+ * Body category types
+ */
+export type BodyCategory = 'upper' | 'lower' | 'core_full';
 
 /**
  * Service for deterministically pre-assigning exercises based on includes and favorites
@@ -57,6 +64,28 @@ export class PreAssignmentService {
       (exercise.movementPattern && upperBodyPatterns.includes(exercise.movementPattern)) ||
       (exercise.primaryMuscle && upperBodyMuscles.includes(exercise.primaryMuscle))
     );
+  }
+
+  /**
+   * Get body category for an exercise
+   */
+  private static getBodyCategory(exercise: ScoredExercise): BodyCategory {
+    const primaryMuscle = exercise.primaryMuscle?.toLowerCase() || '';
+    const hasCapacityTag = exercise.functionTags?.includes('capacity') || false;
+    
+    // Core/Full body classification
+    if (primaryMuscle === 'core' || primaryMuscle === 'abs' || primaryMuscle === 'obliques' || hasCapacityTag) {
+      return 'core_full';
+    }
+    
+    // Check if upper body
+    if (this.isUpperBodyExercise(exercise)) return 'upper';
+    
+    // Check if lower body
+    if (this.isLowerBodyExercise(exercise)) return 'lower';
+    
+    // Default to core/full if unclear
+    return 'core_full';
   }
 
   /**
@@ -121,7 +150,7 @@ export class PreAssignmentService {
         });
       });
       
-      console.log(`[PreAssignment] Added ${includeExerciseScored.length} include exercises for ${clientContext.name}`);
+      // Added include exercises
     }
     
     // Step 2: If we need more pre-assigned (less than 2), add top favorites
@@ -147,14 +176,11 @@ export class PreAssignmentService {
         });
       });
       
-      console.log(`[PreAssignment] Added ${topFavoritesWithTieInfo.length} favorite exercises for ${clientContext.name}`);
+      // Added favorite exercises
     }
     
-    // Log final pre-assignment
-    console.log(`[PreAssignment] Total pre-assigned for ${clientContext.name}: ${preAssigned.length}`);
-    preAssigned.forEach((pa, idx) => {
-      console.log(`  ${idx + 1}. ${pa.exercise.name} (${pa.source}) - Score: ${pa.exercise.score.toFixed(1)}`);
-    });
+    // Keep essential pre-assignment summary
+    console.log(`[PreAssignment] ${clientContext.name}: ${preAssigned.length} exercises (${preAssigned.map(pa => pa.source).join(', ')})`);
     
     return preAssigned;
   }
@@ -187,19 +213,14 @@ export class PreAssignmentService {
         }
       });
       
-      console.log(`[PreAssignment] Added ${preAssigned.length} include exercises for ${clientContext.name}`);
+      // Added include exercises with constraints
     }
     
     // Check what constraints we still need to satisfy
     const hasLowerBody = preAssigned.some(pa => this.isLowerBodyExercise(pa.exercise));
     const hasUpperBody = preAssigned.some(pa => this.isUpperBodyExercise(pa.exercise));
     
-    // Debug: Check if favorites have score breakdowns
-    console.log(`[PreAssignment] Checking favorite exercises for ${clientContext.name}:`);
-    const debugFavorites = scoredExercises.filter(ex => favoriteExerciseIds.includes(ex.id)).slice(0, 3);
-    debugFavorites.forEach(ex => {
-      console.log(`  - ${ex.name}: Score=${ex.score}, FavoriteBoost=${ex.scoreBreakdown?.favoriteExerciseBoost}`);
-    });
+    // Removed debug favorite score breakdown logging
     
     // Step 2: If we need to satisfy constraints and have room, do so
     if (preAssigned.length < 2) {
@@ -223,7 +244,7 @@ export class PreAssignmentService {
               source: 'Favorite',
               tiedCount: selected[0].tiedCount
             });
-            console.log(`[PreAssignment] Added lower body favorite: ${selected[0].exercise.name}`);
+            // Added lower body favorite
           }
         } else {
           // No favorite lower body, find best lower body from all exercises
@@ -240,7 +261,7 @@ export class PreAssignmentService {
                 source: 'Constraint',
                 tiedCount: selected[0].tiedCount
               });
-              console.log(`[PreAssignment] Added lower body for constraint: ${selected[0].exercise.name}`);
+              // Added lower body for constraint
             }
           }
         }
@@ -261,7 +282,7 @@ export class PreAssignmentService {
               source: 'Favorite',
               tiedCount: selected[0].tiedCount
             });
-            console.log(`[PreAssignment] Added upper body favorite: ${selected[0].exercise.name}`);
+            // Added upper body favorite
           }
         } else {
           // No favorite upper body, find best upper body from all exercises
@@ -278,7 +299,7 @@ export class PreAssignmentService {
                 source: 'Constraint',
                 tiedCount: selected[0].tiedCount
               });
-              console.log(`[PreAssignment] Added upper body for constraint: ${selected[0].exercise.name}`);
+              // Added upper body for constraint
             }
           }
         }
@@ -301,17 +322,15 @@ export class PreAssignmentService {
           });
         });
         
-        console.log(`[PreAssignment] Added ${selected.length} more favorite exercises`);
+        // Added remaining favorite exercises
       }
     }
     
-    // Log final pre-assignment with constraint satisfaction
-    console.log(`[PreAssignment] Total pre-assigned for ${clientContext.name}: ${preAssigned.length}`);
-    console.log(`[PreAssignment] Constraints satisfied - Lower body: ${preAssigned.some(pa => this.isLowerBodyExercise(pa.exercise))}, Upper body: ${preAssigned.some(pa => this.isUpperBodyExercise(pa.exercise))}`);
-    preAssigned.forEach((pa, idx) => {
-      const bodyPart = this.isLowerBodyExercise(pa.exercise) ? 'Lower' : this.isUpperBodyExercise(pa.exercise) ? 'Upper' : 'Core';
-      console.log(`  ${idx + 1}. ${pa.exercise.name} (${pa.source}, ${bodyPart}) - Score: ${pa.exercise.score.toFixed(1)}`);
-    });
+    // Keep essential constraint satisfaction summary
+    const hasLower = preAssigned.some(pa => this.isLowerBodyExercise(pa.exercise));
+    const hasUpper = preAssigned.some(pa => this.isUpperBodyExercise(pa.exercise));
+    console.log(`[PreAssignment] ${clientContext.name}: ${preAssigned.length} exercises (L:${hasLower} U:${hasUpper})`);
+    // Removed detailed exercise-by-exercise logging
     
     return preAssigned;
   }
@@ -428,5 +447,197 @@ export class PreAssignmentService {
     }
     
     return selected;
+  }
+
+  /**
+   * Process pre-assignments for full body workouts with shared exercise logic
+   * This is the new implementation for Exercise #1 and Exercise #2 selection
+   */
+  static processFullBodyPreAssignmentsWithShared(
+    clientsData: Map<string, {
+      context: ClientContext;
+      exercises: ScoredExercise[];
+      favoriteIds: string[];
+    }>,
+    sharedExercisePool: GroupScoredExercise[]
+  ): Map<string, PreAssignedExercise[]> {
+    const result = new Map<string, PreAssignedExercise[]>();
+    const allClientIds = Array.from(clientsData.keys());
+    
+    // Step 1: Each client selects Exercise #1 (highest favorite)
+    const exercise1Selections = new Map<string, { exercise: ScoredExercise; bodyCategory: BodyCategory }>();
+    
+    for (const [clientId, data] of clientsData) {
+      const { exercises, favoriteIds } = data;
+      
+      // Get favorites sorted by score
+      const favorites = exercises
+        .filter(ex => favoriteIds.includes(ex.id))
+        .sort((a, b) => b.score - a.score);
+      
+      if (favorites.length > 0) {
+        // Select highest with tie-breaking
+        const tied = favorites.filter(ex => ex.score === favorites[0]!.score);
+        const selected = tied[Math.floor(Math.random() * tied.length)];
+        
+        if (selected) {
+          exercise1Selections.set(clientId, {
+            exercise: selected,
+            bodyCategory: this.getBodyCategory(selected)
+          });
+          
+          result.set(clientId, [{
+            exercise: selected,
+            source: 'favorite',
+            tiedCount: tied.length > 1 ? tied.length : undefined
+          }]);
+        }
+      } else {
+        // No favorites available
+        result.set(clientId, []);
+      }
+    }
+    
+    // Step 2: Select Exercise #2 from shared pool (globally coordinated)
+    const categorized = categorizeSharedExercises(sharedExercisePool);
+    const otherSharedExercises = categorized.other; // Only use "Other Shared", not Core & Finisher
+    
+    // Determine which clients need shared exercises and their constraints
+    const clientConstraints = new Map<string, 'upper' | 'lower' | null>();
+    
+    for (const [clientId, selection] of exercise1Selections) {
+      const exercise1BodyType = selection.bodyCategory;
+      
+      if (exercise1BodyType === 'upper') {
+        clientConstraints.set(clientId, 'lower');
+      } else if (exercise1BodyType === 'lower') {
+        clientConstraints.set(clientId, 'upper');
+      } else {
+        // core_full can be either upper or lower
+        clientConstraints.set(clientId, null);
+      }
+    }
+    
+    // Try cascading selection for shared Exercise #2
+    let sharedExercise2: GroupScoredExercise | null = null;
+    let participatingClients: string[] = [];
+    
+    // Start with exercises shared by all clients, then cascade down
+    for (let shareCount = allClientIds.length; shareCount >= 2; shareCount--) {
+      const candidatesAtLevel = otherSharedExercises
+        .filter(ex => ex.clientsSharing.length === shareCount)
+        .filter(ex => {
+          // Check if this exercise satisfies constraints for all sharing clients
+          const bodyCategory = this.getBodyCategory(ex);
+          
+          // For clients with specific constraints (upper/lower)
+          for (const clientId of ex.clientsSharing) {
+            const constraint = clientConstraints.get(clientId);
+            if (constraint === 'upper' && bodyCategory !== 'upper') return false;
+            if (constraint === 'lower' && bodyCategory !== 'lower') return false;
+          }
+          
+          return true;
+        })
+        .sort((a, b) => b.groupScore - a.groupScore);
+      
+      if (candidatesAtLevel.length > 0) {
+        // Select highest scoring with tie-breaking
+        const tied = candidatesAtLevel.filter(ex => ex.groupScore === candidatesAtLevel[0]!.groupScore);
+        const selected = tied[Math.floor(Math.random() * tied.length)];
+        if (selected) {
+          sharedExercise2 = selected;
+          participatingClients = selected.clientsSharing;
+        }
+        break;
+      }
+    }
+    
+    // Step 3: Assign Exercise #2 to participating clients
+    if (sharedExercise2) {
+      for (const clientId of participatingClients) {
+        const currentPreAssigned = result.get(clientId) || [];
+        const clientExercise = clientsData.get(clientId)?.exercises.find(ex => ex.id === sharedExercise2!.id);
+        
+        if (clientExercise) {
+          currentPreAssigned.push({
+            exercise: clientExercise,
+            source: 'shared_other',
+            sharedWith: participatingClients
+          });
+          result.set(clientId, currentPreAssigned);
+        }
+      }
+    }
+    
+    // Step 4: Handle "left behind" clients (those who couldn't participate in shared)
+    for (const [clientId, data] of clientsData) {
+      const currentPreAssigned = result.get(clientId) || [];
+      
+      // If client has less than 2 exercises, they were "left behind"
+      if (currentPreAssigned.length < 2) {
+        const { exercises, favoriteIds } = data;
+        const usedIds = new Set(currentPreAssigned.map(p => p.exercise.id));
+        
+        // Get remaining favorites
+        const remainingFavorites = exercises
+          .filter(ex => favoriteIds.includes(ex.id) && !usedIds.has(ex.id))
+          .sort((a, b) => b.score - a.score);
+        
+        // If Exercise #1 exists, apply body type constraint for Exercise #2
+        if (currentPreAssigned.length === 1) {
+          const exercise1BodyType = this.getBodyCategory(currentPreAssigned[0]!.exercise);
+          let constrainedFavorites = remainingFavorites;
+          
+          if (exercise1BodyType === 'upper') {
+            constrainedFavorites = remainingFavorites.filter(ex => this.getBodyCategory(ex) === 'lower');
+          } else if (exercise1BodyType === 'lower') {
+            constrainedFavorites = remainingFavorites.filter(ex => this.getBodyCategory(ex) === 'upper');
+          }
+          
+          // Use constrained if available, otherwise fall back to any favorite
+          const candidatesForExercise2 = constrainedFavorites.length > 0 ? constrainedFavorites : remainingFavorites;
+          
+          if (candidatesForExercise2.length > 0) {
+            const tied = candidatesForExercise2.filter(ex => ex.score === candidatesForExercise2[0]!.score);
+            const selected = tied[Math.floor(Math.random() * tied.length)];
+            
+            if (selected) {
+              currentPreAssigned.push({
+                exercise: selected,
+                source: 'favorite',
+                tiedCount: tied.length > 1 ? tied.length : undefined
+              });
+            }
+          }
+        } else if (currentPreAssigned.length === 0) {
+          // No Exercise #1, select up to 2 favorites
+          const topTwo = this.selectTopWithTieBreakingAndCount(remainingFavorites, 2);
+          topTwo.forEach(({ exercise, tiedCount }) => {
+            currentPreAssigned.push({
+              exercise,
+              source: 'favorite',
+              tiedCount
+            });
+          });
+        }
+        
+        result.set(clientId, currentPreAssigned);
+      }
+    }
+    
+    // Log results
+    console.log('[PreAssignment] Full body with shared results:');
+    for (const [clientId, preAssigned] of result) {
+      const client = clientsData.get(clientId)?.context;
+      console.log(`  ${client?.name}: ${preAssigned.length} exercises`);
+      if (preAssigned[1]?.source === 'shared_other' && preAssigned[1]?.sharedWith) {
+        console.log(`    Shared with: ${preAssigned[1].sharedWith.map((id: string) => 
+          clientsData.get(id)?.context.name || id
+        ).join(', ')}`);
+      }
+    }
+    
+    return result;
   }
 }

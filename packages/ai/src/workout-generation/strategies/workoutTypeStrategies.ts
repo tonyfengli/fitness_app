@@ -177,12 +177,12 @@ export function processPreAssignments(
   // Initialize global tie info for this process
   globalTieInfo = new Map<string, number>();
   
-  console.log('🎯 processPreAssignments:', {
-    workoutType,
-    includeIds: includeIds.length,
-    favoriteIds: favoriteIds.length,
-    maxPreAssignments: strategy.maxPreAssignments
-  });
+  // console.log('🎯 processPreAssignments:', {
+  //   workoutType,
+  //   includeIds: includeIds.length,
+  //   favoriteIds: favoriteIds.length,
+  //   maxPreAssignments: strategy.maxPreAssignments
+  // });
   
   // Sort rules by priority
   const sortedRules = [...strategy.preAssignmentRules].sort((a, b) => a.priority - b.priority);
@@ -256,36 +256,23 @@ export function processPreAssignments(
           });
           
           
-          console.log('  All favorite exercises:', favoriteExercises.map(ex => ({ 
-            name: ex.name, 
-            muscle: ex.primaryMuscle, 
-            pattern: ex.movementPattern,
-            score: ex.score 
-          })));
+          // Removed verbose favorite exercise listing
           
-          console.log('  Favorite body part separation:', {
-            upperBody: upperBody.map(ex => ({ name: ex.name, muscle: ex.primaryMuscle, pattern: ex.movementPattern, score: ex.score })),
-            lowerBody: lowerBody.map(ex => ({ name: ex.name, muscle: ex.primaryMuscle, pattern: ex.movementPattern, score: ex.score }))
-          });
+          // Removed verbose body part separation logging
           
           // Select 1 from each category (with tie-breaking if needed)
           const selectedUpperWithTies = selectWithTieBreaking(upperBody, 1);
           const selectedLowerWithTies = selectWithTieBreaking(lowerBody, 1);
           
-          console.log('  Selected favorites:', {
-            upper: selectedUpperWithTies.map(item => item.exercise.name),
-            lower: selectedLowerWithTies.map(item => item.exercise.name),
-            upperCount: selectedUpperWithTies.length,
-            lowerCount: selectedLowerWithTies.length
-          });
+          // Removed verbose selected favorites logging
           
           // Ensure we have 1 upper and 1 lower (fallback if needed)
           if (selectedUpperWithTies.length === 0 && selectedLowerWithTies.length === 2) {
             console.warn('  ⚠️ No upper body favorites available, using 2 lower body');
           } else if (selectedLowerWithTies.length === 0 && selectedUpperWithTies.length === 2) {
-            console.warn('  ⚠️ No lower body favorites available, using 2 upper body');
+            // No lower body favorites available, using 2 upper body
           } else if (selectedUpperWithTies.length === 0 && selectedLowerWithTies.length === 0) {
-            console.warn('  ⚠️ No favorites available for body part balance');
+            // No favorites available for body part balance
           }
           
           // Store tie information in global map
@@ -323,13 +310,7 @@ export function processPreAssignments(
       strategy.maxPreAssignments - preAssigned.length
     ));
     
-    console.log(`  Rule ${rule.type} (priority ${rule.priority}):`, {
-      candidatesFound: candidates.length,
-      ruleCount: rule.count,
-      currentPreAssigned: preAssigned.length,
-      toAddCount: toAdd.length,
-      exercises: toAdd.map(ex => ex.name)
-    });
+    // Removed verbose rule processing logging
     
     toAdd.forEach(ex => {
       preAssigned.push(ex);
@@ -337,7 +318,8 @@ export function processPreAssignments(
     });
   }
   
-  console.log('  Final pre-assigned:', preAssigned.map(ex => ({ name: ex.name, id: ex.id })));
+  // Keep essential pre-assignment summary
+  console.log(`  Pre-assigned ${preAssigned.length} exercises for workout type ${workoutType}`);
   
   return preAssigned;
 }

@@ -6,8 +6,9 @@ import type { GroupScoredExercise } from "./groupContext";
  */
 export interface PreAssignedExercise {
   exercise: ScoredExercise;
-  source: 'Round1' | 'Round2' | string; // Which round it came from
+  source: 'Round1' | 'Round2' | 'Include' | 'favorite' | 'shared_other' | 'shared_core_finisher' | string; // Which round it came from
   tiedCount?: number; // Number of exercises tied at the same score (for favorites)
+  sharedWith?: string[]; // Client IDs if this is a shared exercise selection
 }
 
 /**

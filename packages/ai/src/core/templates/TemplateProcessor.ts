@@ -2,6 +2,7 @@ import type { ScoredExercise } from "../../types/scoredExercise";
 import type { WorkoutTemplate, BlockDefinition } from "./types/dynamicBlockTypes";
 import type { GroupWorkoutBlueprint, GroupBlockBlueprint } from "../../types/groupBlueprint";
 import type { GroupScoredExercise, GroupContext } from "../../types/groupContext";
+import type { ClientContext } from "../../types/clientContext";
 import type { StandardGroupWorkoutBlueprint, ClientExercisePool, PreAssignedExercise } from "../../types/standardBlueprint";
 import { PreAssignmentService } from "./preAssignmentService";
 import { processPreAssignments, getPreAssignmentTieInfo } from "../../workout-generation/strategies/workoutTypeStrategies";
@@ -34,11 +35,11 @@ export class TemplateProcessor {
   processForGroup(
     clientExercises: Map<string, ScoredExercise[]>
   ): GroupWorkoutBlueprint {
-    console.log('🎯 TemplateProcessor.processForGroup', {
-      template: this.template.id,
-      clientCount: clientExercises.size,
-      blocks: this.template.blocks.map(b => ({ id: b.id, name: b.name }))
-    });
+    // console.log('🎯 TemplateProcessor.processForGroup', {
+    //   template: this.template.id,
+    //   clientCount: clientExercises.size,
+    //   blocks: this.template.blocks.map(b => ({ id: b.id, name: b.name }))
+    // });
 
     const blocks: GroupBlockBlueprint[] = [];
     
@@ -57,7 +58,7 @@ export class TemplateProcessor {
         const availableExercises = exercises.filter(ex => !clientUsed.has(ex.id));
         availableClientExercises.set(clientId, availableExercises);
         
-        console.log(`  Client ${clientId}: ${availableExercises.length} exercises available (${clientUsed.size} already used)`);
+        // Removed verbose per-client availability logging
       }
       
       // Process the block with available exercises only
@@ -75,7 +76,7 @@ export class TemplateProcessor {
           
           if (topExercise) {
             clientUsed.add(topExercise.id);
-            console.log(`    Marking exercise "${topExercise.name}" as used for client ${clientId} (deterministic selection)`);
+            // Marked exercise as used for deterministic selection
             usedExercisesByClient.set(clientId, clientUsed);
           }
         }
@@ -95,7 +96,7 @@ export class TemplateProcessor {
     blockDef: BlockDefinition,
     clientExercises: Map<string, ScoredExercise[]>
   ): GroupBlockBlueprint {
-    console.log(`\n📦 Processing block ${blockDef.id} (${blockDef.name})`);
+    // console.log(`\n📦 Processing block ${blockDef.id} (${blockDef.name})`);
 
     // Step 1: Filter exercises for this block for each client
     const blockFilteredExercises = new Map<string, ScoredExercise[]>();
@@ -104,7 +105,7 @@ export class TemplateProcessor {
       const filtered = this.filterExercisesForBlock(exercises, blockDef, clientId);
       blockFilteredExercises.set(clientId, filtered);
       
-      console.log(`  Client ${clientId}: ${filtered.length} exercises match block criteria`);
+      // Removed verbose per-client block filtering results
     }
 
     // Step 2: Find shared exercises (appear for 2+ clients)
@@ -291,10 +292,9 @@ export class TemplateProcessor {
       return b.groupScore - a.groupScore;
     });
 
-    console.log(`  Found ${sharedExercises.length} shared exercises (2+ clients, core/capacity >= ${SCORING_CONFIG.SHARED_EXERCISE_CORE_FINISHER_MIN_SCORE}, others >= ${SCORING_CONFIG.SHARED_EXERCISE_MIN_SCORE})`);
-    if (sharedExercises.length > 0) {
-      console.log(`  Top shared: ${sharedExercises[0]!.name} (${sharedExercises[0]!.clientsSharing.length} clients)`);
-    }
+    // Keep essential shared exercise summary
+    console.log(`  Found ${sharedExercises.length} shared exercises for block`);
+    // Removed verbose top shared exercise logging
 
     return sharedExercises;
   }
@@ -380,67 +380,103 @@ export class TemplateProcessor {
     groupContext?: GroupContext,
     favoritesByClient?: Map<string, string[]>
   ): StandardGroupWorkoutBlueprint {
-    console.log('🎯 TemplateProcessor.processForStandardGroup', {
-      template: this.template.id,
-      clientCount: clientExercises.size,
-      totalExercisesPerClient: this.template.metadata?.totalExercisesPerClient || 8
-    });
+    // Keep essential standard group processing summary
+    console.log(`Processing standard template: ${this.template.id} for ${clientExercises.size} clients`);
 
-    // Step 1: Determine pre-assigned exercises using new strategy-based system
+    // Step 1: Calculate shared exercise pool first (needed for new pre-assignment logic)
+    const sharedExercisePool = this.findAllSharedExercises(clientExercises);
+    
+    // Step 2: Determine pre-assigned exercises
     const preAssignedByClient = new Map<string, PreAssignedExercise[]>();
     
-    // Only process pre-assignment for standard templates
+    // Check if we should use the new shared exercise logic for full body workouts
+    const useSharedLogic = groupContext?.workoutType === WorkoutType.FULL_BODY_WITH_FINISHER || 
+                          groupContext?.workoutType === WorkoutType.FULL_BODY_WITHOUT_FINISHER;
+    
     if (groupContext && favoritesByClient && groupContext.workoutType) {
-      for (const [clientId, exercises] of clientExercises) {
-        const client = groupContext.clients.find(c => c.user_id === clientId);
-        if (!client) continue;
+      if (useSharedLogic) {
+        // Use new shared exercise logic for full body workouts
+        const clientsData = new Map<string, {
+          context: ClientContext;
+          exercises: ScoredExercise[];
+          favoriteIds: string[];
+        }>();
         
-        // Get include and favorite IDs
-        const includeNames = client.exercise_requests?.include || [];
-        const includeIds = exercises
-          .filter(ex => includeNames.includes(ex.name))
-          .map(ex => ex.id);
-        const favoriteIds = favoritesByClient.get(clientId) || [];
+        for (const [clientId, exercises] of clientExercises) {
+          const client = groupContext.clients.find(c => c.user_id === clientId);
+          if (!client) continue;
+          
+          const favoriteIds = favoritesByClient.get(clientId) || [];
+          clientsData.set(clientId, {
+            context: client,
+            exercises,
+            favoriteIds
+          });
+        }
         
-        // Use new strategy-based pre-assignment
-        const selectedExercises = processPreAssignments(
-          exercises,
-          client,
-          groupContext.workoutType as WorkoutType,
-          includeIds,
-          favoriteIds
+        // Process with new shared logic
+        const results = PreAssignmentService.processFullBodyPreAssignmentsWithShared(
+          clientsData,
+          sharedExercisePool
         );
         
-        // Get tie information from the pre-assignment process
-        const tieInfo = getPreAssignmentTieInfo();
-        
-        // Convert to PreAssignedExercise format with source tracking
-        const preAssigned: PreAssignedExercise[] = selectedExercises.map(exercise => {
-          // Determine source based on what matched
-          let source = 'Round1'; // Default
-          if (includeIds.includes(exercise.id)) {
-            source = 'Include';
-          } else if (favoriteIds.includes(exercise.id)) {
-            source = 'Favorite';
-          } else if (exercise.functionTags?.includes('capacity')) {
-            source = 'Constraint';
-          }
+        // Copy results to preAssignedByClient
+        for (const [clientId, preAssigned] of results) {
+          preAssignedByClient.set(clientId, preAssigned);
+        }
+      } else {
+        // Use original logic for non-full body workouts
+        for (const [clientId, exercises] of clientExercises) {
+          const client = groupContext.clients.find(c => c.user_id === clientId);
+          if (!client) continue;
           
-          // Get tie count if this exercise was selected via tie-breaking
-          const tiedCount = tieInfo?.get(exercise.id);
+          // Get include and favorite IDs
+          const includeNames = client.exercise_requests?.include || [];
+          const includeIds = exercises
+            .filter(ex => includeNames.includes(ex.name))
+            .map(ex => ex.id);
+          const favoriteIds = favoritesByClient.get(clientId) || [];
           
-          return {
-            exercise,
-            source,
-            tiedCount
-          };
-        });
-        
-        preAssignedByClient.set(clientId, preAssigned);
+          // Use original strategy-based pre-assignment
+          const selectedExercises = processPreAssignments(
+            exercises,
+            client,
+            groupContext.workoutType as WorkoutType,
+            includeIds,
+            favoriteIds
+          );
+          
+          // Get tie information from the pre-assignment process
+          const tieInfo = getPreAssignmentTieInfo();
+          
+          // Convert to PreAssignedExercise format with source tracking
+          const preAssigned: PreAssignedExercise[] = selectedExercises.map(exercise => {
+            // Determine source based on what matched
+            let source = 'Round1'; // Default
+            if (includeIds.includes(exercise.id)) {
+              source = 'Include';
+            } else if (favoriteIds.includes(exercise.id)) {
+              source = 'Favorite';
+            } else if (exercise.functionTags?.includes('capacity')) {
+              source = 'Constraint';
+            }
+            
+            // Get tie count if this exercise was selected via tie-breaking
+            const tiedCount = tieInfo?.get(exercise.id);
+            
+            return {
+              exercise,
+              source,
+              tiedCount
+            };
+          });
+          
+          preAssignedByClient.set(clientId, preAssigned);
+        }
       }
     }
 
-    // Step 2: Create available exercise pools (excluding pre-assigned)
+    // Step 3: Create available exercise pools (excluding pre-assigned)
     const clientPools = new Map<string, ScoredExercise[]>();
     
     for (const [clientId, exercises] of clientExercises) {
@@ -451,11 +487,8 @@ export class TemplateProcessor {
       const availableExercises = exercises.filter(ex => !preAssignedIds.has(ex.id));
       clientPools.set(clientId, availableExercises);
       
-      console.log(`  Client ${clientId}: ${availableExercises.length} available exercises (${preAssigned.length} pre-assigned)`);
+      // Removed verbose per-client pool logging
     }
-
-    // Step 3: Find ALL shared exercises across the entire pool
-    const sharedExercisePool = this.findAllSharedExercises(clientPools);
 
     // Step 4: Build the standard blueprint
     const clientExercisePools: Record<string, ClientExercisePool> = {};
@@ -516,7 +549,7 @@ export class TemplateProcessor {
             });
             preAssignedByClient.set(clientId, preAssigned);
             
-            console.log(`  Pre-assigned for ${clientId} in ${blockDef.id}: ${topExercise.name}`);
+            // Pre-assigned exercise for deterministic block
           }
         }
       }
@@ -600,10 +633,9 @@ export class TemplateProcessor {
       return b.groupScore - a.groupScore;
     });
 
-    console.log(`  Found ${sharedExercises.length} shared exercises across entire pool`);
-    if (sharedExercises.length > 0) {
-      console.log(`  Top shared: ${sharedExercises[0]!.name} (${sharedExercises[0]!.clientsSharing.length} clients, score: ${sharedExercises[0]!.groupScore.toFixed(1)})`);
-    }
+    // Keep essential shared pool summary
+    console.log(`  Found ${sharedExercises.length} shared exercises in pool`);
+    // Removed verbose top shared exercise details
 
     return sharedExercises;
   }
