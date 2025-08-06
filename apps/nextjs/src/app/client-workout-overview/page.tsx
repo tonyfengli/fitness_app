@@ -2,7 +2,7 @@
 
 import React, { Suspense, useState, useEffect, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { useTRPC } from "~/trpc/react";
 import { 
   categorizeExercisesByRecommendation,
@@ -27,6 +27,22 @@ function ClientWorkoutOverviewContent() {
   const sessionId = searchParams.get("sessionId");
   const userId = searchParams.get("userId");
   const trpc = useTRPC();
+  const queryClient = useQueryClient();
+  
+  // Set up the mutation
+  const swapExerciseMutation = useMutation(
+    trpc.workoutSelections.swapExercisePublic.mutationOptions({
+      onSuccess: () => {
+        // Invalidate queries on success
+        queryClient.invalidateQueries({
+          queryKey: [['trainingSession', 'getSavedVisualizationDataPublic']]
+        });
+        queryClient.invalidateQueries({
+          queryKey: [['workoutSelections', 'getSelectionsPublic']]
+        });
+      }
+    })
+  );
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedExercise, setSelectedExercise] = useState<any>(null);
   const [selectedExerciseIndex, setSelectedExerciseIndex] = useState<number | null>(null);
@@ -35,15 +51,35 @@ function ClientWorkoutOverviewContent() {
   const [selectedReplacement, setSelectedReplacement] = useState<string | null>(null);
 
   // Fetch visualization data
-  const { data: visualizationData, isLoading } = useQuery({
+  const { data: visualizationData, isLoading, error: visualizationError } = useQuery({
     ...trpc.trainingSession.getSavedVisualizationDataPublic.queryOptions({ 
       sessionId: sessionId || "",
       userId: userId || ""
     }),
     enabled: !!sessionId && !!userId,
   });
+  
+  // Debug visualization data
+  console.log('Visualization query result:', { 
+    data: visualizationData, 
+    isLoading, 
+    error: visualizationError,
+    sessionId,
+    userId 
+  });
 
   // We'll get user info from the visualization data instead
+
+  // Also fetch saved selections as a fallback
+  const { data: savedSelections } = useQuery({
+    ...trpc.workoutSelections.getSelectionsPublic.queryOptions({
+      sessionId: sessionId || "",
+      clientId: userId || ""
+    }),
+    enabled: !!sessionId && !!userId && !visualizationData,
+  });
+  
+  console.log('Saved selections:', savedSelections);
 
   // Fetch available exercises
   const { data: exercisesData, isLoading: isLoadingExercises } = useQuery({
@@ -63,24 +99,34 @@ function ClientWorkoutOverviewContent() {
     const llmResult = visualizationData.llmResult;
     const groupContext = visualizationData.groupContext;
     
-    if (!llmResult || !groupContext) return [];
+    if (!llmResult || !groupContext) {
+      console.log('Missing llmResult or groupContext:', { llmResult, groupContext });
+      return [];
+    }
 
     // Debug logging
-    console.log('Visualization data:', visualizationData);
+    console.log('Full Visualization data:', visualizationData);
     console.log('LLM Result:', llmResult);
     console.log('Looking for userId:', userId);
 
     // Find the client's information
     const clientIndex = groupContext.clients.findIndex((c: any) => c.user_id === userId);
-    if (clientIndex === -1) return [];
+    if (clientIndex === -1) {
+      console.log('Client not found in groupContext. Available clients:', groupContext.clients);
+      return [];
+    }
     
     const client = groupContext.clients[clientIndex];
     const exercises: any[] = [];
     
     // Get pre-assigned exercises from the blueprint
     const blueprint = visualizationData.blueprint;
+    console.log('Blueprint:', blueprint);
+    console.log('Client exercise pools:', blueprint?.clientExercisePools);
+    
     if (blueprint?.clientExercisePools?.[userId]) {
       const preAssigned = blueprint.clientExercisePools[userId].preAssigned || [];
+      console.log('Pre-assigned exercises:', preAssigned);
       preAssigned.forEach((pa: any, index: number) => {
         exercises.push({
           id: pa.exercise.id,
@@ -91,6 +137,8 @@ function ClientWorkoutOverviewContent() {
           orderIndex: index
         });
       });
+    } else {
+      console.log('No client exercise pool found for userId:', userId);
     }
     
     // Get LLM selected exercises
@@ -193,21 +241,23 @@ function ClientWorkoutOverviewContent() {
     }
   }, [modalOpen, showExerciseSelection]);
 
-  // Categorize exercises for the selection modal
-  const categorizedExercises = useMemo(() => {
+  // Filter exercises for the selection modal
+  const filteredExercises = useMemo(() => {
     if (!showExerciseSelection || !selectedExercise) {
-      return { recommended: [], other: [] };
+      return [];
     }
 
+    // Get already selected exercise IDs
+    const selectedIds = new Set(clientExercises.map(ex => ex.id));
+    
+    // Filter available exercises based on search
     const filtered = searchQuery.trim() 
       ? filterExercisesBySearch(availableExercises, searchQuery)
       : availableExercises;
-
-    return {
-      recommended: [],
-      other: filtered
-    };
-  }, [availableExercises, searchQuery, showExerciseSelection, selectedExercise]);
+    
+    // Remove already selected exercises
+    return filtered.filter(exercise => !selectedIds.has(exercise.id));
+  }, [availableExercises, searchQuery, showExerciseSelection, selectedExercise, clientExercises]);
 
   if (!sessionId || !userId) {
     return (
@@ -237,6 +287,18 @@ function ClientWorkoutOverviewContent() {
 
   // Empty state when no exercises found
   if (!visualizationData || clientExercises.length === 0) {
+    // Provide more specific error messages
+    let message = "Your workout hasn't been generated yet. Please check back after your trainer creates it.";
+    let subMessage = "";
+    
+    if (visualizationData === null) {
+      message = "Your workout needs to be regenerated.";
+      subMessage = "The workout data has expired (older than 30 minutes) or hasn't been created yet. Please ask your trainer to click 'View Visualization' on the preferences page to regenerate it.";
+    } else if (visualizationData && clientExercises.length === 0) {
+      message = "No exercises found for your workout.";
+      subMessage = "The workout was generated but no exercises were assigned. Please contact your trainer.";
+    }
+    
     return (
       <div className="min-h-screen bg-gray-50 p-4">
         <div className="max-w-md mx-auto">
@@ -258,10 +320,20 @@ function ClientWorkoutOverviewContent() {
                     d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
                   />
                 </svg>
-                <h2 className="font-semibold text-gray-800 mt-4 mb-2">No Workout Yet</h2>
+                <h2 className="font-semibold text-gray-800 mt-4 mb-2">{message}</h2>
                 <p className="text-gray-600">
-                  Your workout hasn't been generated yet. Please check back after your trainer creates it.
+                  {subMessage || "Please check back after your trainer creates it."}
                 </p>
+                {/* Debug info in development */}
+                {process.env.NODE_ENV === 'development' && (
+                  <div className="mt-4 text-xs text-gray-500 text-left">
+                    <p>Debug Info:</p>
+                    <p>- Session ID: {sessionId || 'None'}</p>
+                    <p>- User ID: {userId || 'None'}</p>
+                    <p>- Has visualization data: {visualizationData ? 'Yes' : 'No'}</p>
+                    <p>- Exercise count: {clientExercises.length}</p>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -436,18 +508,18 @@ function ClientWorkoutOverviewContent() {
                 )}
                 
                 {/* No results message */}
-                {!isLoadingExercises && searchQuery.trim() && categorizedExercises.other.length === 0 && (
+                {!isLoadingExercises && searchQuery.trim() && filteredExercises.length === 0 && (
                   <div className="text-center py-8">
                     <p className="text-gray-500">No exercises found matching "{searchQuery}"</p>
                   </div>
                 )}
                 
                 {/* All exercises */}
-                {!isLoadingExercises && categorizedExercises.other.length > 0 && (
+                {!isLoadingExercises && filteredExercises.length > 0 && (
                   <div>
                     <h3 className="text-sm font-semibold text-gray-600 uppercase tracking-wider mb-3">Available Exercises</h3>
                     <div className="space-y-2">
-                      {categorizedExercises.other.map((exercise: any, idx: number) => (
+                      {filteredExercises.map((exercise: any, idx: number) => (
                         <ExerciseListItem
                           key={exercise.id || idx}
                           name={exercise.name}
@@ -460,7 +532,7 @@ function ClientWorkoutOverviewContent() {
                 )}
                 
                 {/* Empty state when no exercises available */}
-                {!isLoadingExercises && !searchQuery.trim() && categorizedExercises.other.length === 0 && (
+                {!isLoadingExercises && !searchQuery.trim() && filteredExercises.length === 0 && (
                   <div className="text-center py-8">
                     <p className="text-gray-500">No exercises available</p>
                   </div>
@@ -480,10 +552,29 @@ function ClientWorkoutOverviewContent() {
                 Cancel
               </button>
               <button 
-                onClick={() => {
-                  // As requested, confirm doesn't do anything
-                  console.log("Confirm clicked - no action taken");
-                  console.log("Would replace exercise at index:", selectedExerciseIndex, "with:", selectedReplacement);
+                onClick={async () => {
+                  if (!selectedReplacement || selectedExerciseIndex === null) return;
+                  
+                  // Find the replacement exercise details
+                  const replacementExercise = availableExercises.find(ex => ex.name === selectedReplacement);
+                  if (!replacementExercise) return;
+                  
+                  // Call the public swap endpoint
+                  try {
+                    await swapExerciseMutation.mutateAsync({
+                      sessionId: sessionId!,
+                      clientId: userId!,
+                      originalExerciseId: selectedExercise.id,
+                      newExerciseId: replacementExercise.id,
+                      reason: 'Client manual selection'
+                    });
+                    
+                    alert(`Exercise swap saved! Replaced "${selectedExercise.name}" with "${replacementExercise.name}"`);
+                  } catch (error) {
+                    console.error('Failed to swap exercise:', error);
+                    alert('Failed to save exercise swap. Please try again.');
+                  }
+                  
                   setShowExerciseSelection(false);
                 }}
                 disabled={!selectedReplacement}

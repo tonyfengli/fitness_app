@@ -8,12 +8,51 @@ import {
   workoutExerciseSwaps,
   exercises
 } from "@acme/db/schema";
-import { protectedProcedure } from "../trpc";
+import { protectedProcedure, publicProcedure } from "../trpc";
 import type { SessionUser } from "../types/auth";
 import { WorkoutBlueprintService } from "../services/workout-blueprint-service";
 import { WorkoutGenerationService } from "../services/workout-generation-service";
 
 export const workoutSelectionsRouter = {
+  // Get current selections for a session (public version)
+  getSelectionsPublic: publicProcedure
+    .input(z.object({
+      sessionId: z.string(),
+      clientId: z.string()
+    }))
+    .query(async ({ ctx, input }) => {
+      // First verify that the client is checked into the session
+      const { UserTrainingSession } = await import("@acme/db/schema");
+      const userSession = await ctx.db.query.UserTrainingSession.findFirst({
+        where: and(
+          eq(UserTrainingSession.userId, input.clientId),
+          eq(UserTrainingSession.trainingSessionId, input.sessionId),
+          or(
+            eq(UserTrainingSession.status, 'checked_in'),
+            eq(UserTrainingSession.status, 'ready')
+          )
+        ),
+      });
+
+      if (!userSession) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'User is not checked into this session',
+        });
+      }
+
+      // Get selections for this specific client
+      return ctx.db.query.workoutExerciseSelections.findMany({
+        where: and(
+          eq(workoutExerciseSelections.sessionId, input.sessionId),
+          eq(workoutExerciseSelections.clientId, input.clientId)
+        ),
+        orderBy: [
+          asc(workoutExerciseSelections.exerciseName)
+        ]
+      });
+    }),
+
   // Get current selections for a session
   getSelections: protectedProcedure
     .input(z.object({
@@ -82,6 +121,125 @@ export const workoutSelectionsRouter = {
           sharedWithClients: null,
           selectionSource: 'manual_swap'
         });
+
+        return { success: true };
+      });
+    }),
+
+  // Public version of swap exercise for clients
+  swapExercisePublic: publicProcedure
+    .input(z.object({
+      sessionId: z.string(),
+      clientId: z.string(),
+      originalExerciseId: z.string(),
+      newExerciseId: z.string(),
+      reason: z.string().optional()
+    }))
+    .mutation(async ({ ctx, input }) => {
+      // First verify that the client is checked into the session
+      const { UserTrainingSession } = await import("@acme/db/schema");
+      const userSession = await ctx.db.query.UserTrainingSession.findFirst({
+        where: and(
+          eq(UserTrainingSession.userId, input.clientId),
+          eq(UserTrainingSession.trainingSessionId, input.sessionId),
+          or(
+            eq(UserTrainingSession.status, 'checked_in'),
+            eq(UserTrainingSession.status, 'ready')
+          )
+        ),
+      });
+
+      if (!userSession) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'User is not checked into this session',
+        });
+      }
+
+      // Get the new exercise name for the selection
+      const newExercise = await ctx.db.query.exercises.findFirst({
+        where: eq(exercises.id, input.newExerciseId)
+      });
+
+      if (!newExercise) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'New exercise not found',
+        });
+      }
+
+      // Now perform the swap transaction
+      return await ctx.db.transaction(async (tx) => {
+        // 1. Log the swap - we record who made the swap as the client themselves
+        await tx.insert(workoutExerciseSwaps).values({
+          sessionId: input.sessionId,
+          clientId: input.clientId,
+          originalExerciseId: input.originalExerciseId,
+          newExerciseId: input.newExerciseId,
+          swapReason: input.reason || 'Client manual selection',
+          swappedBy: input.clientId // Client swapped their own exercise
+        });
+
+        // 2. Update the selection (delete old, insert new to maintain constraints)
+        await tx.delete(workoutExerciseSelections).where(
+          and(
+            eq(workoutExerciseSelections.sessionId, input.sessionId),
+            eq(workoutExerciseSelections.clientId, input.clientId),
+            eq(workoutExerciseSelections.exerciseId, input.originalExerciseId)
+          )
+        );
+
+        // 3. Insert new selection
+        await tx.insert(workoutExerciseSelections).values({
+          sessionId: input.sessionId,
+          clientId: input.clientId,
+          exerciseId: input.newExerciseId,
+          exerciseName: newExercise.name,
+          isShared: false, // Swapped exercises are individual
+          sharedWithClients: null,
+          selectionSource: 'manual_swap'
+        });
+
+        // 4. Update visualization data in templateConfig
+        const { TrainingSession } = await import("@acme/db/schema");
+        const session = await tx.query.TrainingSession.findFirst({
+          where: eq(TrainingSession.id, input.sessionId)
+        });
+
+        if (session && session.templateConfig) {
+          const templateConfig = session.templateConfig as any;
+          const visualizationData = templateConfig?.visualizationData;
+          
+          if (visualizationData?.llmResult?.exerciseSelection?.clientSelections?.[input.clientId]) {
+            const clientSelection = visualizationData.llmResult.exerciseSelection.clientSelections[input.clientId];
+            
+            // Find and update the exercise in the selected array
+            if (clientSelection.selected && Array.isArray(clientSelection.selected)) {
+              const exerciseIndex = clientSelection.selected.findIndex(
+                (ex: any) => ex.exerciseId === input.originalExerciseId
+              );
+              
+              if (exerciseIndex !== -1) {
+                clientSelection.selected[exerciseIndex] = {
+                  exerciseId: input.newExerciseId,
+                  exerciseName: newExercise.name,
+                  reasoning: 'Manually selected by client',
+                  isShared: false
+                };
+              }
+            }
+            
+            // Update the savedAt to current time as ISO string
+            if (visualizationData.savedAt) {
+              visualizationData.savedAt = new Date().toISOString();
+            }
+            
+            // Update the templateConfig with the modified visualization data
+            await tx.update(TrainingSession)
+              .set({ templateConfig })
+              .where(eq(TrainingSession.id, input.sessionId));
+          }
+        }
 
         return { success: true };
       });
