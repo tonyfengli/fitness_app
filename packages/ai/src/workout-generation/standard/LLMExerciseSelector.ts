@@ -70,13 +70,13 @@ export class LLMExerciseSelector {
   async selectExercisesForAllClients(
     clientInputs: LLMSelectionInput[]
   ): Promise<Map<string, LLMSelectionResult>> {
-    console.log(`🤖 Starting concurrent LLM exercise selection for ${clientInputs.length} clients`);
+    // Starting concurrent LLM exercise selection
     
     // Create promises for concurrent execution
     const selectionPromises = clientInputs.map(input => 
       this.selectExercisesForClient(input)
         .catch(error => {
-          console.error(`❌ LLM selection failed for client ${input.client.name}:`, error);
+          // LLM selection failed for client
           // Return a fallback selection using top scored exercises
           return this.createFallbackSelection(input);
         })
@@ -91,7 +91,7 @@ export class LLMExerciseSelector {
       resultMap.set(result.clientId, result);
     });
     
-    console.log(`✅ LLM exercise selection complete for all clients`);
+    // LLM exercise selection complete
     
     return resultMap;
   }
@@ -128,12 +128,10 @@ export class LLMExerciseSelector {
     
     const prompt = promptBuilder.build();
     
-    console.log(`📝 Calling LLM for ${input.client.name} with ${allCandidates.length} candidates`);
+    // Calling LLM for client
     
     // Log the system prompt for debugging
-    console.log(`\n=== SYSTEM PROMPT FOR ${input.client.name.toUpperCase()} ===`);
-    console.log(prompt);
-    console.log(`=== END SYSTEM PROMPT ===\n`);
+    // System prompt generated
     
     try {
       // Call LLM
@@ -144,9 +142,7 @@ export class LLMExerciseSelector {
       const content = response.content.toString();
       
       // Log LLM response for debugging
-      console.log(`\n=== LLM RESPONSE FOR ${input.client.name.toUpperCase()} ===`);
-      console.log(content);
-      console.log(`=== END LLM RESPONSE ===\n`);
+      // LLM response received
       
       // Extract JSON from response
       const jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/);
@@ -170,7 +166,7 @@ export class LLMExerciseSelector {
       return result;
       
     } catch (error) {
-      console.error(`❌ Error processing LLM response for ${input.client.name}:`, error);
+      // Error processing LLM response
       throw error;
     }
   }
@@ -199,7 +195,7 @@ export class LLMExerciseSelector {
         
         // Check if LLM swapped the fields
         if (!exercise && exerciseNameMap.has(selection.exerciseId)) {
-          console.warn(`⚠️ LLM used name in exerciseId field: ${selection.exerciseId}`);
+          // LLM used name in exerciseId field
           exercise = exerciseNameMap.get(selection.exerciseId);
         }
       }
@@ -229,10 +225,7 @@ export class LLMExerciseSelector {
     // Validate count
     const expectedCount = this.getExpectedExerciseCount(input.client.intensity || 'moderate');
     if (selectedExercises.length !== expectedCount) {
-      console.warn(
-        `⚠️ LLM selected ${selectedExercises.length} exercises for ${input.client.name}, ` +
-        `expected ${expectedCount}. Using top ${expectedCount}.`
-      );
+      // LLM selected wrong number of exercises, adjusting
       
       // Trim or pad as needed
       if (selectedExercises.length > expectedCount) {
@@ -251,7 +244,7 @@ export class LLMExerciseSelector {
    * Create fallback selection if LLM fails
    */
   private createFallbackSelection(input: LLMSelectionInput): LLMSelectionResult {
-    console.log(`⚠️ Using fallback selection for ${input.client.name}`);
+    // Using fallback selection
     
     const expectedCount = this.getExpectedExerciseCount(input.client.intensity || 'moderate');
     const allCandidates = [...input.bucketedCandidates, ...input.additionalCandidates];

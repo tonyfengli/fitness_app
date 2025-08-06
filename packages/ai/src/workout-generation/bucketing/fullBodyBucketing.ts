@@ -80,12 +80,7 @@ export function applyFullBodyBucketing(
   const analysis = analyzeConstraints(preAssignedExercises, client, workoutType);
   const remainingNeeds = getRemainingNeeds(analysis);
   
-  console.log('🪣 Bucketing for', client.name, {
-    preAssigned: preAssignedExercises.length,
-    remainingMovementPatterns: remainingNeeds.movementPatterns,
-    remainingFunctional: remainingNeeds.functionalRequirements,
-    totalRemaining: remainingNeeds.totalExercises
-  });
+  // Bucketing for client
   
   // Phase 1: Fill remaining movement patterns (excluding favorites)
   for (const pattern of remainingNeeds.movementPatterns) {
@@ -107,11 +102,11 @@ export function applyFullBodyBucketing(
         tiedCount: result.tiedCount
       };
     } else {
-      console.warn(`⚠️ No non-favorite exercise found for movement pattern: ${pattern}`);
+      // No non-favorite exercise found for movement pattern
     }
   }
   
-  console.log(`  ✓ Selected ${selected.length} exercises for movement patterns`);
+  // Selected exercises for movement patterns
   
   // Phase 2: Fill muscle_target constraint
   // First, check how many muscle_target exercises we already have from pre-assigned and movement patterns
@@ -128,10 +123,7 @@ export function applyFullBodyBucketing(
     );
   });
   
-  console.log(`  Muscle target status: ${currentMuscleTargetCount}/${requiredMuscleTargetCount} (need ${muscleTargetNeeded} more)`);
-  console.log(`  Existing muscle target exercises:`, existingMuscleTargets.map(ex => 
-    `${ex.name} (${ex.primaryMuscle})`
-  ));
+  // Muscle target status check
   
   if (muscleTargetNeeded > 0 && client.muscle_target && client.muscle_target.length > 0) {
     const targetMuscles = client.muscle_target;
@@ -145,13 +137,13 @@ export function applyFullBodyBucketing(
       muscleCountMap.set(muscle.toLowerCase(), count);
     }
     
-    console.log(`  Current muscle counts:`, Array.from(muscleCountMap.entries()));
+    // Current muscle counts calculated
     
     // Determine how many more we need for each muscle to reach equal distribution
     // For muscle_target constraint of 4: if 1 muscle selected = 4 exercises, if 2 muscles = 2 each
     const totalMuscleTargetRequired = 4; // Total muscle_target constraint
     const targetPerMuscle = Math.floor(totalMuscleTargetRequired / targetMuscles.length);
-    console.log(`  Muscle target calculation: ${totalMuscleTargetRequired} total / ${targetMuscles.length} muscles = ${targetPerMuscle} per muscle`);
+    // Muscle target calculation done
     let distribution: { muscle: string; count: number }[] = [];
     
     for (const muscle of targetMuscles) {
@@ -162,7 +154,7 @@ export function applyFullBodyBucketing(
       }
     }
     
-    console.log(`  Muscle target distribution needed:`, distribution);
+    // Muscle target distribution calculated
     
     // Select exercises for each target muscle
     for (const { muscle, count } of distribution) {
@@ -172,7 +164,7 @@ export function applyFullBodyBucketing(
         exerciseMatchesMusclePreference(ex.primaryMuscle, muscle as any)
       );
       
-      console.log(`  Finding ${count} exercises for ${muscle}: ${muscleCandidates.length} candidates`);
+      // Finding exercises for muscle target
       
       // Select with tie-breaking
       let selectedForMuscle = 0;
@@ -190,7 +182,7 @@ export function applyFullBodyBucketing(
           };
           selectedForMuscle++;
         } else {
-          console.warn(`⚠️ Could not find enough exercises for muscle target: ${muscle} (got ${selectedForMuscle}/${count})`);
+          // Could not find enough exercises for muscle target
           break;
         }
       }
@@ -215,7 +207,7 @@ export function applyFullBodyBucketing(
       ex.functionTags?.includes('capacity')
     );
     
-    console.log(`  Finding ${capacityNeeded} capacity exercises: ${capacityCandidates.length} candidates`);
+    // Finding capacity exercises
     
     // Select with tie-breaking
     const result = selectWithTieBreaking(capacityCandidates, 'capacity');
@@ -228,9 +220,9 @@ export function applyFullBodyBucketing(
         constraint: 'capacity',
         tiedCount: result.tiedCount
       };
-      console.log(`  ✓ Selected capacity exercise: ${result.exercise.name}`);
+      // Selected capacity exercise
     } else {
-      console.warn(`  ⚠️ Could not find capacity exercise`);
+      // Could not find capacity exercise
     }
   }
   
@@ -238,7 +230,7 @@ export function applyFullBodyBucketing(
   const targetBucketedExercises = 13; // We want exactly 13 bucketed exercises
   const remainingSlots = targetBucketedExercises - selected.length;
   
-  console.log(`  Flex slots: ${selected.length}/${targetBucketedExercises} bucketed (need ${remainingSlots} more)`);
+  // Flex slots calculation
   
   if (remainingSlots > 0) {
     // Get favorite exercises that haven't been used yet
@@ -248,7 +240,7 @@ export function applyFullBodyBucketing(
       !preAssignedExercises.some(pre => pre.id === ex.id) // Not already pre-assigned
     );
     
-    console.log(`  Finding ${remainingSlots} favorite exercises for flex slots: ${unusedFavorites.length} candidates`);
+    // Finding favorite exercises for flex slots
     
     // Sort by score and select with tie-breaking
     unusedFavorites.sort((a, b) => b.score - a.score);
@@ -267,7 +259,7 @@ export function applyFullBodyBucketing(
           tiedCount: result.tiedCount
         };
         selectedFlex++;
-        console.log(`  ✓ Selected favorite for flex: ${result.exercise.name}`);
+        // Selected favorite for flex
       } else {
         break;
       }
@@ -276,7 +268,7 @@ export function applyFullBodyBucketing(
     // If we still need more exercises and no favorites left, fill with highest scoring non-favorites
     if (selectedFlex < remainingSlots) {
       const remainingNeeded = remainingSlots - selectedFlex;
-      console.log(`  Still need ${remainingNeeded} more exercises, selecting from non-favorites`);
+      // Still need more exercises, selecting from non-favorites
       
       const nonFavorites = availableExercises.filter(ex => 
         !usedIds.has(ex.id) && 
@@ -299,7 +291,7 @@ export function applyFullBodyBucketing(
             tiedCount: result.tiedCount
           };
           selectedNonFav++;
-          console.log(`  ✓ Selected non-favorite for flex: ${result.exercise.name}`);
+          // Selected non-favorite for flex
         } else {
           break;
         }
@@ -307,14 +299,11 @@ export function applyFullBodyBucketing(
     }
   }
   
-  console.log(`  ✓ Bucketed ${selected.length} exercises for ${client.name} (${preAssignedExercises.length} pre-assigned + ${selected.length} bucketed = ${preAssignedExercises.length + selected.length} total)`);
+  // Bucketing complete
   
   // Final constraint check
   const finalAnalysis = analyzeConstraints([...preAssignedExercises, ...selected], client, workoutType);
-  console.log(`  Final constraint check:`, {
-    muscleTarget: finalAnalysis.functionalRequirements.muscle_target,
-    allConstraintsMet: finalAnalysis.summary.allConstraintsMet
-  });
+  // Final constraint check completed
   
   return {
     exercises: selected,

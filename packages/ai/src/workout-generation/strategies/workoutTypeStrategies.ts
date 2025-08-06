@@ -268,7 +268,7 @@ export function processPreAssignments(
           
           // Ensure we have 1 upper and 1 lower (fallback if needed)
           if (selectedUpperWithTies.length === 0 && selectedLowerWithTies.length === 2) {
-            console.warn('  ⚠️ No upper body favorites available, using 2 lower body');
+            // No upper body favorites available, using 2 lower body
           } else if (selectedLowerWithTies.length === 0 && selectedUpperWithTies.length === 2) {
             // No lower body favorites available, using 2 upper body
           } else if (selectedUpperWithTies.length === 0 && selectedLowerWithTies.length === 0) {

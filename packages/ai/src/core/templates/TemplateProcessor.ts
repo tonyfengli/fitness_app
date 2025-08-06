@@ -35,7 +35,7 @@ export class TemplateProcessor {
   processForGroup(
     clientExercises: Map<string, ScoredExercise[]>
   ): GroupWorkoutBlueprint {
-    // console.log('🎯 TemplateProcessor.processForGroup', {
+    // Removed debug log
     //   template: this.template.id,
     //   clientCount: clientExercises.size,
     //   blocks: this.template.blocks.map(b => ({ id: b.id, name: b.name }))
@@ -96,7 +96,7 @@ export class TemplateProcessor {
     blockDef: BlockDefinition,
     clientExercises: Map<string, ScoredExercise[]>
   ): GroupBlockBlueprint {
-    // console.log(`\n📦 Processing block ${blockDef.id} (${blockDef.name})`);
+    // Removed debug log
 
     // Step 1: Filter exercises for this block for each client
     const blockFilteredExercises = new Map<string, ScoredExercise[]>();
@@ -265,7 +265,7 @@ export class TemplateProcessor {
         // Use stored scores from the map (we know they're all >= 6.5)
         let totalScore = 0;
         const scoreMap = exerciseScoreMap.get(exerciseId)!;
-        const clientScores = clientsArray.map(clientId => {
+        const clientScores = clientsArray.map((clientId: string) => {
           const score = scoreMap.get(clientId) ?? SCORING_CONFIG.SHARED_EXERCISE_MIN_SCORE;
           totalScore += score;
           
@@ -293,7 +293,7 @@ export class TemplateProcessor {
     });
 
     // Keep essential shared exercise summary
-    console.log(`  Found ${sharedExercises.length} shared exercises for block`);
+    // Found ${sharedExercises.length} shared exercises for block
     // Removed verbose top shared exercise logging
 
     return sharedExercises;
@@ -381,7 +381,7 @@ export class TemplateProcessor {
     favoritesByClient?: Map<string, string[]>
   ): StandardGroupWorkoutBlueprint {
     // Keep essential standard group processing summary
-    console.log(`Processing standard template: ${this.template.id} for ${clientExercises.size} clients`);
+    // Processing standard template: ${this.template.id} for ${clientExercises.size} clients
 
     // Step 1: Calculate shared exercise pool first (needed for new pre-assignment logic)
     const sharedExercisePool = this.findAllSharedExercises(clientExercises);
@@ -606,7 +606,7 @@ export class TemplateProcessor {
         // Calculate group score
         let totalScore = 0;
         const scoreMap = exerciseScoreMap.get(exerciseId)!;
-        const clientScores = clientsArray.map(clientId => {
+        const clientScores = clientsArray.map((clientId: string) => {
           const score = scoreMap.get(clientId) ?? SCORING_CONFIG.SHARED_EXERCISE_MIN_SCORE;
           totalScore += score;
           
@@ -634,7 +634,7 @@ export class TemplateProcessor {
     });
 
     // Keep essential shared pool summary
-    console.log(`  Found ${sharedExercises.length} shared exercises in pool`);
+    // Found ${sharedExercises.length} shared exercises in pool
     // Removed verbose top shared exercise details
 
     return sharedExercises;

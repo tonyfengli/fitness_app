@@ -2,7 +2,8 @@
   "extends": "@acme/tsconfig/base.json",
   "compilerOptions": {
     "tsBuildInfoFile": ".cache/tsbuildinfo.json",
-    "outDir": "dist"
+    "outDir": "dist",
+    "downlevelIteration": true
   },
   "include": ["src", "test", "scripts"],
   "exclude": ["node_modules", "dist", "src/utils/testGeneratorClient.ts"]
