@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import type { StandardGroupWorkoutBlueprint, GroupContext } from "@acme/ai/client";
-import { WorkoutType, BUCKET_CONFIGS, getOldMusclesForConsolidated, type ConsolidatedMuscle } from "@acme/ai/client";
+import { WorkoutType, BUCKET_CONFIGS, getOldMusclesForConsolidated, type ConsolidatedMuscle, categorizeSharedExercises } from "@acme/ai/client";
 
 interface StandardTemplateViewProps {
   groupContext: GroupContext;
@@ -77,6 +77,14 @@ export default function StandardTemplateView({
   const setClientSubTab = (clientId: string, tab: 'all' | 'selected') => {
     setClientSubTabs(prev => ({ ...prev, [clientId]: tab }));
   };
+  
+  // State for shared exercise sub-tabs
+  const [sharedSubTab, setSharedSubTab] = useState<'coreFinisher' | 'other'>('other');
+  
+  // Categorize shared exercises
+  const categorizedSharedExercises = useMemo(() => {
+    return categorizeSharedExercises(blueprint.sharedExercisePool);
+  }, [blueprint.sharedExercisePool]);
   
   // State for expandable sections
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
@@ -818,13 +826,43 @@ export default function StandardTemplateView({
                 <h3 className="text-xl font-semibold mb-4">
                   Shared Exercise Pool ({blueprint.sharedExercisePool.length} exercises)
                 </h3>
-                <p className="text-gray-600 mb-6">
+                <p className="text-gray-600 mb-4">
                   These exercises can be performed by multiple clients and may be selected to increase group cohesion.
                 </p>
+                
+                {/* Sub-tabs for Core & Finisher vs Other */}
+                <div className="mb-6">
+                  <div className="border-b border-gray-200">
+                    <nav className="-mb-px flex space-x-8" aria-label="Tabs">
+                      <button
+                        onClick={() => setSharedSubTab('other')}
+                        className={`${
+                          sharedSubTab === 'other'
+                            ? 'border-indigo-500 text-indigo-600'
+                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                        } whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm`}
+                      >
+                        Other Shared Exercises ({categorizedSharedExercises.other.length})
+                      </button>
+                      <button
+                        onClick={() => setSharedSubTab('coreFinisher')}
+                        className={`${
+                          sharedSubTab === 'coreFinisher'
+                            ? 'border-indigo-500 text-indigo-600'
+                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                        } whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm`}
+                      >
+                        Core & Finisher ({categorizedSharedExercises.coreAndFinisher.length})
+                      </button>
+                    </nav>
+                  </div>
+                </div>
 
                 {/* Smart Bucketing Analysis for Shared Pool */}
                 <div className="mb-6 bg-gray-50 rounded-lg p-4">
-                  <h4 className="text-sm font-semibold text-gray-900 mb-3">Shared Pool Smart Bucketing</h4>
+                  <h4 className="text-sm font-semibold text-gray-900 mb-3">
+                    {sharedSubTab === 'coreFinisher' ? 'Core & Finisher' : 'Other Exercises'} Analysis
+                  </h4>
                   
                   <div className="grid grid-cols-3 gap-4">
                     {/* Movement Pattern Distribution */}
@@ -832,7 +870,10 @@ export default function StandardTemplateView({
                       <h5 className="text-xs font-medium text-gray-700 mb-2">Movement Patterns</h5>
                       <div className="space-y-1">
                         {(() => {
-                          const patterns = blueprint.sharedExercisePool.reduce((acc, ex) => {
+                          const currentExercises = sharedSubTab === 'coreFinisher' 
+                            ? categorizedSharedExercises.coreAndFinisher 
+                            : categorizedSharedExercises.other;
+                          const patterns = currentExercises.reduce((acc, ex) => {
                             const pattern = ex.movementPattern || 'unknown';
                             acc[pattern] = (acc[pattern] || 0) + 1;
                             return acc;
@@ -856,7 +897,10 @@ export default function StandardTemplateView({
                       <h5 className="text-xs font-medium text-gray-700 mb-2">Client Sharing</h5>
                       <div className="space-y-1">
                         {(() => {
-                          const distribution = blueprint.sharedExercisePool.reduce((acc, ex) => {
+                          const currentExercises = sharedSubTab === 'coreFinisher' 
+                            ? categorizedSharedExercises.coreAndFinisher 
+                            : categorizedSharedExercises.other;
+                          const distribution = currentExercises.reduce((acc, ex) => {
                             const count = ex.clientsSharing.length;
                             const key = `${count} client${count > 1 ? 's' : ''}`;
                             acc[key] = (acc[key] || 0) + 1;
@@ -883,7 +927,9 @@ export default function StandardTemplateView({
                         <p>2. Ensure 3-5 per function type</p>
                         <p>3. Verify muscle diversity</p>
                         <p className="text-gray-900 font-medium mt-2">
-                          Target: {Math.floor(blueprint.sharedExercisePool.length * 0.4)} exercises (40%)
+                          Target: {Math.floor((sharedSubTab === 'coreFinisher' 
+                            ? categorizedSharedExercises.coreAndFinisher.length 
+                            : categorizedSharedExercises.other.length) * 0.4)} exercises (40%)
                         </p>
                       </div>
                     </div>
@@ -910,6 +956,9 @@ export default function StandardTemplateView({
                           Secondary Muscles
                         </th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Function Tags
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           Group Score
                         </th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -918,7 +967,10 @@ export default function StandardTemplateView({
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                      {blueprint.sharedExercisePool.map((exercise, idx) => (
+                      {(sharedSubTab === 'coreFinisher' 
+                        ? categorizedSharedExercises.coreAndFinisher 
+                        : categorizedSharedExercises.other
+                      ).map((exercise, idx) => (
                         <tr key={exercise.id}>
                           <td className="px-4 py-2 text-sm text-gray-900">
                             {idx + 1}
@@ -936,6 +988,22 @@ export default function StandardTemplateView({
                             {exercise.secondaryMuscles && exercise.secondaryMuscles.length > 0 
                               ? exercise.secondaryMuscles.map(formatMuscleName).join(', ')
                               : '-'}
+                          </td>
+                          <td className="px-4 py-2 text-sm">
+                            <div className="flex flex-wrap gap-1">
+                              {exercise.functionTags?.map(tag => (
+                                <span
+                                  key={tag}
+                                  className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                                    tag === 'core' || tag === 'capacity' 
+                                      ? 'bg-purple-100 text-purple-800' 
+                                      : 'bg-gray-100 text-gray-800'
+                                  }`}
+                                >
+                                  {tag}
+                                </span>
+                              )) || '-'}
+                            </div>
                           </td>
                           <td className="px-4 py-2 text-sm text-gray-900">
                             {exercise.groupScore.toFixed(1)}

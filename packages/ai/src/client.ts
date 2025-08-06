@@ -46,3 +46,11 @@ export {
   getOldMusclesForConsolidated,
   type ConsolidatedMuscle
 } from "./constants/muscleMapping";
+
+// Shared exercise utilities
+export {
+  categorizeSharedExercises,
+  isCoreOrFinisherExercise,
+  getExerciseCategory,
+  type CategorizedSharedExercises
+} from "./workout-generation/standard/sharedExerciseFilters";

@@ -6,6 +6,7 @@ import type { StandardGroupWorkoutBlueprint, ClientExercisePool, PreAssignedExer
 import { PreAssignmentService } from "./preAssignmentService";
 import { processPreAssignments, getPreAssignmentTieInfo } from "../../workout-generation/strategies/workoutTypeStrategies";
 import { WorkoutType } from "../../types/clientTypes";
+import { SCORING_CONFIG } from "../scoring/scoringConfig";
 
 /**
  * Simple, clean template processor for organizing exercises into blocks
@@ -225,11 +226,19 @@ export class TemplateProcessor {
     const exerciseScoreMap = new Map<string, Map<string, number>>();
 
     // Build map of exercise ID to client IDs
-    // Only include if the exercise scores >= 5.0 for the client
+    // Use different thresholds based on exercise type
     for (const [clientId, exercises] of clientExercises) {
       for (const exercise of exercises) {
-        // Skip exercises that score below base (5.0) for this client
-        if (exercise.score < 5.0) {
+        // Determine threshold based on exercise type
+        const isCoreOrFinisher = exercise.functionTags?.some(
+          tag => tag === 'core' || tag === 'capacity'
+        ) ?? false;
+        const threshold = isCoreOrFinisher 
+          ? SCORING_CONFIG.SHARED_EXERCISE_CORE_FINISHER_MIN_SCORE 
+          : SCORING_CONFIG.SHARED_EXERCISE_MIN_SCORE;
+        
+        // Skip exercises that score below the appropriate threshold
+        if (exercise.score < threshold) {
           continue;
         }
         
@@ -252,11 +261,11 @@ export class TemplateProcessor {
         const clientsArray = Array.from(clientIds);
         
         // Calculate group score (average of individual scores)
-        // Use stored scores from the map (we know they're all >= 5.0)
+        // Use stored scores from the map (we know they're all >= 6.5)
         let totalScore = 0;
         const scoreMap = exerciseScoreMap.get(exerciseId)!;
         const clientScores = clientsArray.map(clientId => {
-          const score = scoreMap.get(clientId) ?? 5;
+          const score = scoreMap.get(clientId) ?? SCORING_CONFIG.SHARED_EXERCISE_MIN_SCORE;
           totalScore += score;
           
           return {
@@ -282,7 +291,7 @@ export class TemplateProcessor {
       return b.groupScore - a.groupScore;
     });
 
-    console.log(`  Found ${sharedExercises.length} shared exercises (2+ clients with score >= 5.0)`);
+    console.log(`  Found ${sharedExercises.length} shared exercises (2+ clients, core/capacity >= ${SCORING_CONFIG.SHARED_EXERCISE_CORE_FINISHER_MIN_SCORE}, others >= ${SCORING_CONFIG.SHARED_EXERCISE_MIN_SCORE})`);
     if (sharedExercises.length > 0) {
       console.log(`  Top shared: ${sharedExercises[0]!.name} (${sharedExercises[0]!.clientsSharing.length} clients)`);
     }
@@ -530,8 +539,16 @@ export class TemplateProcessor {
     // Build map of exercise ID to client IDs
     for (const [clientId, exercises] of clientPools) {
       for (const exercise of exercises) {
-        // Only include if score >= 5.0 (quality threshold)
-        if (exercise.score < 5.0) {
+        // Determine threshold based on exercise type
+        const isCoreOrFinisher = exercise.functionTags?.some(
+          tag => tag === 'core' || tag === 'capacity'
+        ) ?? false;
+        const threshold = isCoreOrFinisher 
+          ? SCORING_CONFIG.SHARED_EXERCISE_CORE_FINISHER_MIN_SCORE 
+          : SCORING_CONFIG.SHARED_EXERCISE_MIN_SCORE;
+        
+        // Only include if score meets the appropriate threshold
+        if (exercise.score < threshold) {
           continue;
         }
         
@@ -557,7 +574,7 @@ export class TemplateProcessor {
         let totalScore = 0;
         const scoreMap = exerciseScoreMap.get(exerciseId)!;
         const clientScores = clientsArray.map(clientId => {
-          const score = scoreMap.get(clientId) ?? 5;
+          const score = scoreMap.get(clientId) ?? SCORING_CONFIG.SHARED_EXERCISE_MIN_SCORE;
           totalScore += score;
           
           return {

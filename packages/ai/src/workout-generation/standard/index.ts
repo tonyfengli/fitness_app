@@ -8,3 +8,13 @@ export type {
   WorkoutRoundOrganization, 
   StandardWorkoutPlan 
 } from "./types";
+
+// Shared exercise utilities
+export { SharedExerciseSelector } from "./SharedExerciseSelector";
+export type { SharedExerciseSelectionResult } from "./SharedExerciseSelector";
+export { 
+  categorizeSharedExercises, 
+  isCoreOrFinisherExercise,
+  getExerciseCategory 
+} from "./sharedExerciseFilters";
+export type { CategorizedSharedExercises } from "./sharedExerciseFilters";
