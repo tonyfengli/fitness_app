@@ -592,12 +592,14 @@ export default function StandardTemplateView({
                                     preAssigned.source === 'favorite' ? 'bg-yellow-100 text-yellow-800' :
                                     preAssigned.source === 'shared_other' ? 'bg-blue-100 text-blue-800' :
                                     preAssigned.source === 'shared_core_finisher' ? 'bg-green-100 text-green-800' :
+                                    preAssigned.source === 'finisher' ? 'bg-orange-100 text-orange-800' :
                                     'bg-gray-100 text-gray-800'
                                   }`}>
                                     {preAssigned.source === 'Include' ? 'Include' :
                                      preAssigned.source === 'favorite' ? 'Favorite' :
                                      preAssigned.source === 'shared_other' ? 'Shared' :
                                      preAssigned.source === 'shared_core_finisher' ? 'Shared Core/Finisher' :
+                                     preAssigned.source === 'finisher' ? 'Finisher' :
                                      preAssigned.source}
                                   </span>
                                   {preAssigned.tiedCount && preAssigned.tiedCount > 1 && (

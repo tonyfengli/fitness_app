@@ -1,8 +1,8 @@
 import type { ScoredExercise } from "../../types/scoredExercise";
 import type { ClientContext } from "../../types/clientContext";
 import type { PreAssignedExercise } from "../../types/standardBlueprint";
-import type { WorkoutType } from "../../types/clientTypes";
 import type { GroupScoredExercise } from "../../types/groupContext";
+import { WorkoutType } from "../../types/clientTypes";
 import { categorizeSharedExercises } from "../../workout-generation/standard/sharedExerciseFilters";
 
 /**
@@ -451,7 +451,7 @@ export class PreAssignmentService {
 
   /**
    * Process pre-assignments for full body workouts with shared exercise logic
-   * This is the new implementation for Exercise #1 and Exercise #2 selection
+   * This is the new implementation for Exercise #1, #2, and #3 selection
    */
   static processFullBodyPreAssignmentsWithShared(
     clientsData: Map<string, {
@@ -459,7 +459,8 @@ export class PreAssignmentService {
       exercises: ScoredExercise[];
       favoriteIds: string[];
     }>,
-    sharedExercisePool: GroupScoredExercise[]
+    sharedExercisePool: GroupScoredExercise[],
+    workoutType?: WorkoutType
   ): Map<string, PreAssignedExercise[]> {
     const result = new Map<string, PreAssignedExercise[]>();
     const allClientIds = Array.from(clientsData.keys());
@@ -626,6 +627,120 @@ export class PreAssignmentService {
       }
     }
     
+    // Step 5: Exercise #3 - Finisher selection (only for FULL_BODY_WITH_FINISHER)
+    if (workoutType === WorkoutType.FULL_BODY_WITH_FINISHER) {
+      // Get categorized shared exercises
+      const categorized = categorizeSharedExercises(sharedExercisePool);
+      const coreFinisherPool = categorized.coreAndFinisher;
+      
+      // Determine which clients have finisher (all clients in full body with finisher)
+      const finisherClientIds = allClientIds;
+      
+      if (finisherClientIds.length === 1) {
+        // Single client: select their highest scoring core/capacity exercise
+        const clientId = finisherClientIds[0];
+        const currentPreAssigned = result.get(clientId) || [];
+        const data = clientsData.get(clientId);
+        
+        if (data) {
+          const usedIds = new Set(currentPreAssigned.map(p => p.exercise.id));
+          
+          // Find highest scoring core/capacity exercise not already selected
+          const coreCapacityCandidates = data.exercises
+            .filter(ex => !usedIds.has(ex.id))
+            .filter(ex => ex.functionTags?.some(tag => tag === 'core' || tag === 'capacity'))
+            .sort((a, b) => b.score - a.score);
+          
+          if (coreCapacityCandidates.length > 0) {
+            // Select highest with tie-breaking
+            const tied = coreCapacityCandidates.filter(ex => ex.score === coreCapacityCandidates[0]!.score);
+            const selected = tied[Math.floor(Math.random() * tied.length)];
+            
+            if (selected) {
+              currentPreAssigned.push({
+                exercise: selected,
+                source: 'finisher',
+                tiedCount: tied.length > 1 ? tied.length : undefined
+              });
+              result.set(clientId, currentPreAssigned);
+            }
+          }
+        }
+      } else if (finisherClientIds.length > 1) {
+        // Multiple clients: try to find shared core/finisher exercise
+        const eligibleShared = coreFinisherPool
+          .filter(ex => {
+            // Must be shared by ALL finisher clients
+            return finisherClientIds.every(clientId => ex.clientsSharing.includes(clientId));
+          })
+          .filter(ex => ex.groupScore >= 5.0) // Must meet threshold
+          .filter(ex => {
+            // Not already selected by any client
+            for (const clientId of finisherClientIds) {
+              const preAssigned = result.get(clientId) || [];
+              if (preAssigned.some(p => p.exercise.id === ex.id)) {
+                return false;
+              }
+            }
+            return true;
+          })
+          .sort((a, b) => b.groupScore - a.groupScore);
+        
+        if (eligibleShared.length > 0) {
+          // Select highest scoring shared exercise
+          const tied = eligibleShared.filter(ex => ex.groupScore === eligibleShared[0]!.groupScore);
+          const selected = tied[Math.floor(Math.random() * tied.length)];
+          
+          if (selected) {
+            // Add to all finisher clients
+            for (const clientId of finisherClientIds) {
+              const currentPreAssigned = result.get(clientId) || [];
+              const clientExercise = clientsData.get(clientId)?.exercises.find(ex => ex.id === selected.id);
+              
+              if (clientExercise) {
+                currentPreAssigned.push({
+                  exercise: clientExercise,
+                  source: 'shared_core_finisher',
+                  sharedWith: finisherClientIds.filter(id => id !== clientId),
+                  tiedCount: tied.length > 1 ? tied.length : undefined
+                });
+                result.set(clientId, currentPreAssigned);
+              }
+            }
+          }
+        } else {
+          // Fallback: Each client gets their own highest scoring core/capacity
+          for (const clientId of finisherClientIds) {
+            const currentPreAssigned = result.get(clientId) || [];
+            const data = clientsData.get(clientId);
+            
+            if (data) {
+              const usedIds = new Set(currentPreAssigned.map(p => p.exercise.id));
+              
+              const coreCapacityCandidates = data.exercises
+                .filter(ex => !usedIds.has(ex.id))
+                .filter(ex => ex.functionTags?.some(tag => tag === 'core' || tag === 'capacity'))
+                .sort((a, b) => b.score - a.score);
+              
+              if (coreCapacityCandidates.length > 0) {
+                const tied = coreCapacityCandidates.filter(ex => ex.score === coreCapacityCandidates[0]!.score);
+                const selected = tied[Math.floor(Math.random() * tied.length)];
+                
+                if (selected) {
+                  currentPreAssigned.push({
+                    exercise: selected,
+                    source: 'finisher',
+                    tiedCount: tied.length > 1 ? tied.length : undefined
+                  });
+                  result.set(clientId, currentPreAssigned);
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    
     // Log results
     console.log('[PreAssignment] Full body with shared results:');
     for (const [clientId, preAssigned] of result) {
@@ -633,6 +748,11 @@ export class PreAssignmentService {
       console.log(`  ${client?.name}: ${preAssigned.length} exercises`);
       if (preAssigned[1]?.source === 'shared_other' && preAssigned[1]?.sharedWith) {
         console.log(`    Shared with: ${preAssigned[1].sharedWith.map((id: string) => 
+          clientsData.get(id)?.context.name || id
+        ).join(', ')}`);
+      }
+      if (preAssigned[2]?.source === 'shared_core_finisher' && preAssigned[2]?.sharedWith) {
+        console.log(`    Finisher shared with: ${preAssigned[2].sharedWith.map((id: string) => 
           clientsData.get(id)?.context.name || id
         ).join(', ')}`);
       }

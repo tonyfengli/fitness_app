@@ -417,7 +417,8 @@ export class TemplateProcessor {
         // Process with new shared logic
         const results = PreAssignmentService.processFullBodyPreAssignmentsWithShared(
           clientsData,
-          sharedExercisePool
+          sharedExercisePool,
+          groupContext.workoutType as WorkoutType
         );
         
         // Copy results to preAssignedByClient

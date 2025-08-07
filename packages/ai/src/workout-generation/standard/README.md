@@ -15,7 +15,9 @@ The Standard template uses a two-phase LLM approach:
 
 ## Pre-Assignment Logic
 
-For full body workouts (with or without finisher), the system pre-assigns 2 exercises per client before the LLM selection phase:
+For full body workouts, the system pre-assigns exercises before the LLM selection phase:
+- **Without Finisher**: 2 exercises per client
+- **With Finisher**: 3 exercises per client
 
 ### Exercise Selection Rules
 
@@ -32,6 +34,13 @@ For full body workouts (with or without finisher), the system pre-assigns 2 exer
      - If Exercise #1 is core/full body → Exercise #2 can be either upper or lower
    - Uses cascading selection (tries all clients first, then N-1, down to 2 minimum)
    - All participating clients receive the same shared exercise
+
+3. **Exercise #3: Finisher Exercise** (only for FULL_BODY_WITH_FINISHER)
+   - Single client: Selects their highest scoring core/capacity exercise
+   - Multiple clients: 
+     - Tries to find a core/capacity exercise shared by ALL clients (group score ≥ 5.0)
+     - Fallback: Each client gets their own highest scoring core/capacity exercise
+   - Excludes exercises already selected as #1 or #2
 
 ### Body Category Classification
 
