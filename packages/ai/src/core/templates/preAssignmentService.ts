@@ -395,6 +395,24 @@ export class PreAssignmentService {
   }
   
   /**
+   * Get all combinations of a given size from an array
+   */
+  private static getCombinations<T>(arr: T[], size: number): T[][] {
+    if (size === 0) return [[]];
+    if (arr.length === 0) return [];
+    
+    const first = arr[0];
+    const rest = arr.slice(1);
+    
+    if (first === undefined) return [];
+    
+    const withFirst = this.getCombinations(rest, size - 1).map(combo => [first, ...combo]);
+    const withoutFirst = this.getCombinations(rest, size);
+    
+    return [...withFirst, ...withoutFirst];
+  }
+  
+  /**
    * Select top N exercises with tie-breaking randomization
    */
   private static selectTopWithTieBreaking(
@@ -460,7 +478,7 @@ export class PreAssignmentService {
       favoriteIds: string[];
     }>,
     sharedExercisePool: GroupScoredExercise[],
-    workoutType?: WorkoutType
+    workoutType?: WorkoutType | null
   ): Map<string, PreAssignedExercise[]> {
     const result = new Map<string, PreAssignedExercise[]>();
     const allClientIds = Array.from(clientsData.keys());
@@ -523,34 +541,85 @@ export class PreAssignmentService {
     let sharedExercise2: GroupScoredExercise | null = null;
     let participatingClients: string[] = [];
     
+    console.log('[PreAssignment] Starting shared Exercise #2 selection');
+    console.log('[PreAssignment] Client constraints:', 
+      Array.from(clientConstraints.entries()).map(([id, constraint]) => 
+        `${clientsData.get(id)?.context.name}: ${constraint || 'any'}`
+      ).join(', ')
+    );
+    
     // Start with exercises shared by all clients, then cascade down
     for (let shareCount = allClientIds.length; shareCount >= 2; shareCount--) {
-      const candidatesAtLevel = otherSharedExercises
-        .filter(ex => ex.clientsSharing.length === shareCount)
-        .filter(ex => {
-          // Check if this exercise satisfies constraints for all sharing clients
-          const bodyCategory = this.getBodyCategory(ex);
+      // For partial sharing, we need to find valid client subsets
+      if (shareCount < allClientIds.length) {
+        // Try different combinations of clients that can share
+        const clientCombinations = this.getCombinations(allClientIds, shareCount);
+        
+        for (const clientSubset of clientCombinations) {
+          // Find exercises shared by exactly this subset of clients
+          const candidatesForSubset = otherSharedExercises
+            .filter(ex => {
+              // Exercise must be available for all clients in subset
+              return clientSubset.every(clientId => ex.clientsSharing.includes(clientId));
+            })
+            .filter(ex => {
+              // Check constraints only for the subset we're considering
+              const bodyCategory = this.getBodyCategory(ex);
+              
+              for (const clientId of clientSubset) {
+                const constraint = clientConstraints.get(clientId);
+                if (constraint === 'upper' && bodyCategory !== 'upper') return false;
+                if (constraint === 'lower' && bodyCategory !== 'lower') return false;
+              }
+              
+              return true;
+            })
+            .sort((a, b) => b.groupScore - a.groupScore);
           
-          // For clients with specific constraints (upper/lower)
-          for (const clientId of ex.clientsSharing) {
-            const constraint = clientConstraints.get(clientId);
-            if (constraint === 'upper' && bodyCategory !== 'upper') return false;
-            if (constraint === 'lower' && bodyCategory !== 'lower') return false;
+          if (candidatesForSubset.length > 0) {
+            // Select highest scoring with tie-breaking
+            const tied = candidatesForSubset.filter(ex => ex.groupScore === candidatesForSubset[0]!.groupScore);
+            const selected = tied[Math.floor(Math.random() * tied.length)];
+            if (selected) {
+              sharedExercise2 = selected;
+              participatingClients = clientSubset;
+              console.log(`[PreAssignment] Found ${shareCount}-way shared exercise: ${selected.name} for clients:`,
+                clientSubset.map(id => clientsData.get(id)?.context.name).join(', ')
+              );
+              break;
+            }
           }
-          
-          return true;
-        })
-        .sort((a, b) => b.groupScore - a.groupScore);
-      
-      if (candidatesAtLevel.length > 0) {
-        // Select highest scoring with tie-breaking
-        const tied = candidatesAtLevel.filter(ex => ex.groupScore === candidatesAtLevel[0]!.groupScore);
-        const selected = tied[Math.floor(Math.random() * tied.length)];
-        if (selected) {
-          sharedExercise2 = selected;
-          participatingClients = selected.clientsSharing;
         }
-        break;
+        
+        if (sharedExercise2) break;
+      } else {
+        // Original logic for all clients
+        const candidatesAtLevel = otherSharedExercises
+          .filter(ex => ex.clientsSharing.length >= shareCount)
+          .filter(ex => {
+            // Check if this exercise satisfies constraints for all clients
+            const bodyCategory = this.getBodyCategory(ex);
+            
+            for (const clientId of allClientIds) {
+              const constraint = clientConstraints.get(clientId);
+              if (constraint === 'upper' && bodyCategory !== 'upper') return false;
+              if (constraint === 'lower' && bodyCategory !== 'lower') return false;
+            }
+            
+            return true;
+          })
+          .sort((a, b) => b.groupScore - a.groupScore);
+        
+        if (candidatesAtLevel.length > 0) {
+          // Select highest scoring with tie-breaking
+          const tied = candidatesAtLevel.filter(ex => ex.groupScore === candidatesAtLevel[0]!.groupScore);
+          const selected = tied[Math.floor(Math.random() * tied.length)];
+          if (selected) {
+            sharedExercise2 = selected;
+            participatingClients = allClientIds;
+          }
+          break;
+        }
       }
     }
     
@@ -577,6 +646,7 @@ export class PreAssignmentService {
       
       // If client has less than 2 exercises, they were "left behind"
       if (currentPreAssigned.length < 2) {
+        console.log(`[PreAssignment] Client ${data.context.name} needs individual Exercise #2 selection`);
         const { exercises, favoriteIds } = data;
         const usedIds = new Set(currentPreAssigned.map(p => p.exercise.id));
         
@@ -627,18 +697,21 @@ export class PreAssignmentService {
       }
     }
     
-    // Step 5: Exercise #3 - Finisher selection (only for FULL_BODY_WITH_FINISHER)
-    if (workoutType === WorkoutType.FULL_BODY_WITH_FINISHER) {
+    // Step 5: Exercise #3 - Finisher selection (only for clients with FULL_BODY_WITH_FINISHER)
+    // Determine which clients need a finisher based on their individual workout types
+    const finisherClientIds = allClientIds.filter(clientId => {
+      const clientData = clientsData.get(clientId);
+      return clientData?.context.workoutType === WorkoutType.FULL_BODY_WITH_FINISHER as string;
+    });
+    
+    if (finisherClientIds.length > 0) {
       // Get categorized shared exercises
       const categorized = categorizeSharedExercises(sharedExercisePool);
       const coreFinisherPool = categorized.coreAndFinisher;
       
-      // Determine which clients have finisher (all clients in full body with finisher)
-      const finisherClientIds = allClientIds;
-      
       if (finisherClientIds.length === 1) {
         // Single client: select their highest scoring core/capacity exercise
-        const clientId = finisherClientIds[0];
+        const clientId = finisherClientIds[0] || '';
         const currentPreAssigned = result.get(clientId) || [];
         const data = clientsData.get(clientId);
         
@@ -656,7 +729,7 @@ export class PreAssignmentService {
             const tied = coreCapacityCandidates.filter(ex => ex.score === coreCapacityCandidates[0]!.score);
             const selected = tied[Math.floor(Math.random() * tied.length)];
             
-            if (selected) {
+            if (selected && clientId) {
               currentPreAssigned.push({
                 exercise: selected,
                 source: 'finisher',

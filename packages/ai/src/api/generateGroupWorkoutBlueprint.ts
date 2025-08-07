@@ -139,33 +139,39 @@ export async function generateGroupWorkoutBlueprint(
           favoritesByClient
         );
         
-        // Apply bucketing for Full Body workout types
-        if ((groupContext.workoutType === WorkoutType.FULL_BODY_WITH_FINISHER || 
-             groupContext.workoutType === WorkoutType.FULL_BODY_WITHOUT_FINISHER) && 
-            isStandardBlueprint(blueprint)) {
-          console.log(`🪣 Applying ${groupContext.workoutType.replace(/_/g, ' ')} bucketing...`);
+        // Apply bucketing for clients with Full Body workout types
+        if (isStandardBlueprint(blueprint)) {
           const { applyFullBodyBucketing } = await import('../workout-generation/bucketing/fullBodyBucketing');
           
           for (const [clientId, pool] of Object.entries(blueprint.clientExercisePools)) {
             const client = groupContext.clients.find(c => c.user_id === clientId);
             if (!client) continue;
             
-            // Get favorite IDs for this client
-            const clientFavoriteIds = favoritesByClient.get(clientId) || [];
-            
-            // Apply bucketing to select from available candidates
-            const bucketingResult = applyFullBodyBucketing(
-              pool.availableCandidates,
-              pool.preAssigned,
-              client,
-              groupContext.workoutType,
-              clientFavoriteIds
-            );
-            
-            // Store bucketed selection
-            pool.bucketedSelection = bucketingResult;
-            
-            console.log(`  ✓ Selected ${bucketingResult.exercises.length} additional exercises for ${client.name}`);
+            // Check if this client has a full body workout type
+            if (client.workoutType === WorkoutType.FULL_BODY_WITH_FINISHER || 
+                client.workoutType === WorkoutType.FULL_BODY_WITHOUT_FINISHER) {
+              console.log(`🪣 Applying ${client.workoutType.replace(/_/g, ' ')} bucketing for ${client.name}...`);
+              
+              // Get favorite IDs for this client
+              const clientFavoriteIds = favoritesByClient.get(clientId) || [];
+              
+              // Apply bucketing to select from available candidates using client's workout type
+              const bucketingResult = applyFullBodyBucketing(
+                pool.availableCandidates,
+                pool.preAssigned,
+                client,
+                client.workoutType as WorkoutType,
+                clientFavoriteIds
+              );
+              
+              // Store bucketed selection
+              pool.bucketedSelection = bucketingResult;
+              
+              console.log(`  ✓ Selected ${bucketingResult.exercises.length} additional exercises for ${client.name}`);
+            } else {
+              console.log(`⚠️ Client ${client.name} has non-full body workout type: ${client.workoutType}`);
+              // TODO: Handle other workout types (targeted, etc.)
+            }
           }
         }
         

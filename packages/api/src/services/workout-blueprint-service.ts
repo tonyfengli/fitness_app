@@ -191,7 +191,8 @@ export class WorkoutBlueprintService {
         },
         avoid_joints: client.preferences?.avoidJoints || [],
         default_sets: 10,
-        favoriteExerciseIds: client.favoriteExerciseIds
+        favoriteExerciseIds: client.favoriteExerciseIds,
+        workoutType: client.preferences?.workoutType as ClientContext["workoutType"]
       };
     });
 
@@ -244,16 +245,13 @@ export class WorkoutBlueprintService {
       }
     }
 
-    // Get workout type from the first client's preferences (all clients should have the same for group workout)
-    const workoutType = clientsWithData.find(c => c.preferences?.workoutType)?.preferences?.workoutType;
-    
-    // Create group context
+    // Create group context (workout type is now per-client, not group-level)
     const groupContext: GroupContext = {
       clients: clientContexts,
       sessionId,
       businessId,
-      templateType: (session.templateType || 'full_body_bmf') as 'full_body_bmf',
-      workoutType: workoutType as any
+      templateType: (session.templateType || 'full_body_bmf') as 'full_body_bmf'
+      // Removed workoutType from group level - it's now in each ClientContext
     };
 
     logger.info("Client preparation completed", {

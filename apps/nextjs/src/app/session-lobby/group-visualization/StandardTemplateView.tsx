@@ -110,24 +110,18 @@ export default function StandardTemplateView({
             <p className="text-lg text-gray-600 mt-1">
               Exercise pools for {summary.totalClients} clients
             </p>
-            {groupContext.workoutType && (
-              <div className="mt-2 flex items-center gap-2">
-                <span className="text-sm font-medium text-gray-700">Workout Type:</span>
-                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
-                  {groupContext.workoutType.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+            <div className="mt-2 flex items-center gap-2">
+              {isFromSavedData && (
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                  Using Saved Data
                 </span>
-                {isFromSavedData && (
-                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                    Using Saved Data
-                  </span>
-                )}
-                {isSaving && (
-                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                    Saving...
-                  </span>
-                )}
-              </div>
-            )}
+              )}
+              {isSaving && (
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                  Saving...
+                </span>
+              )}
+            </div>
           </div>
           <div className="flex items-center gap-3">
             {(!llmResult || llmResult.error) ? (
@@ -200,7 +194,7 @@ export default function StandardTemplateView({
                       <h3 className="text-xl font-semibold">{client.name}</h3>
                       <div className="mt-2 grid grid-cols-2 gap-4 text-sm">
                         <div>
-                          <span className="font-medium">Workout Type:</span> {groupContext.workoutType?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) || 'Not Set'}
+                          <span className="font-medium">Workout Type:</span> {client.workoutType?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) || 'Not Set'}
                         </div>
                         <div>
                           <span className="font-medium">Intensity:</span> {client.intensity}
@@ -341,7 +335,7 @@ export default function StandardTemplateView({
                             Constraint Details
                           </button>
                           {(() => {
-                            if (!groupContext.workoutType || !BUCKET_CONFIGS[groupContext.workoutType]) {
+                            if (!client.workoutType || !BUCKET_CONFIGS[client.workoutType]) {
                               return <span className="text-xs text-gray-500">No constraints defined</span>;
                             }
                             
@@ -350,7 +344,7 @@ export default function StandardTemplateView({
                             const bucketedExercises = pool.bucketedSelection?.exercises || [];
                             const allSelectedExercises = [...preAssignedExercises, ...bucketedExercises];
                             
-                            const config = BUCKET_CONFIGS[groupContext.workoutType];
+                            const config = BUCKET_CONFIGS[client.workoutType];
                             let violations = 0;
                             let warnings = 0;
                             
@@ -401,7 +395,7 @@ export default function StandardTemplateView({
                             }
                           })()}
                         </div>
-                        {expandedSections[`${clientTab.id}-compliance`] && groupContext.workoutType && BUCKET_CONFIGS[groupContext.workoutType] && (
+                        {expandedSections[`${clientTab.id}-compliance`] && client.workoutType && BUCKET_CONFIGS[client.workoutType] && (
                           <div className="mt-3 space-y-2">
                                 {(() => {
                                   // Include BOTH pre-assigned and bucketed exercises for complete view
@@ -418,7 +412,7 @@ export default function StandardTemplateView({
                                     }
                                   });
                                   
-                                  return Object.entries(BUCKET_CONFIGS[groupContext.workoutType].movementPatterns).map(([pattern, { min, max }]) => {
+                                  return Object.entries(BUCKET_CONFIGS[client.workoutType].movementPatterns).map(([pattern, { min, max }]) => {
                                     const count = patternCounts[pattern] || 0;
                                     const status = count < min ? 'fail' : 'pass'; // Always pass if >= min
                                     
@@ -459,7 +453,7 @@ export default function StandardTemplateView({
                                   const bucketedExercises = pool.bucketedSelection?.exercises || [];
                                   const allSelectedExercises = [...preAssignedExercises, ...bucketedExercises];
                                   
-                                  return Object.entries(BUCKET_CONFIGS[groupContext.workoutType].functionalRequirements).map(([funcType, required]) => {
+                                  return Object.entries(BUCKET_CONFIGS[client.workoutType].functionalRequirements).map(([funcType, required]) => {
                                     let count = 0;
                                     
                                     if (funcType === 'muscle_target') {
@@ -507,12 +501,12 @@ export default function StandardTemplateView({
                             
                             {/* Summary Info */}
                             <div className="text-xs text-gray-600 pt-2 border-t">
-                              <p>Total exercises needed: {BUCKET_CONFIGS[groupContext.workoutType].totalExercises}</p>
+                              <p>Total exercises needed: {BUCKET_CONFIGS[client.workoutType].totalExercises}</p>
                               <p>Pre-assigned: {pool.preAssigned.length}</p>
-                              <p>Remaining to select: {BUCKET_CONFIGS[groupContext.workoutType].totalExercises - pool.preAssigned.length}</p>
+                              <p>Remaining to select: {BUCKET_CONFIGS[client.workoutType].totalExercises - pool.preAssigned.length}</p>
                               
                               {/* Pre-assignment Requirements */}
-                              {groupContext.workoutType === WorkoutType.FULL_BODY_WITH_FINISHER && (
+                              {client.workoutType === WorkoutType.FULL_BODY_WITH_FINISHER && (
                                 <div className="mt-2 pt-2 border-t">
                                   <p className="font-medium text-gray-700 mb-1">Pre-assignment requirements:</p>
                                   <div className="text-xs text-gray-600 mb-2">
@@ -607,9 +601,9 @@ export default function StandardTemplateView({
                                       Selected from {preAssigned.tiedCount} tied
                                     </span>
                                   )}
-                                  {preAssigned.sharedWith && preAssigned.sharedWith.length > 1 && (
+                                  {preAssigned.sharedWith && preAssigned.sharedWith.length > 0 && (
                                     <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
-                                      Shared with {preAssigned.sharedWith.length - 1} other{preAssigned.sharedWith.length - 1 > 1 ? 's' : ''}
+                                      Shared with {preAssigned.sharedWith.length} other{preAssigned.sharedWith.length > 1 ? 's' : ''}
                                     </span>
                                   )}
                                 </div>
@@ -990,7 +984,10 @@ export default function StandardTemplateView({
                       ).map((exercise, idx) => {
                         // Check if this exercise was selected as pre-assigned for any client
                         const isSelected = Object.values(blueprint.clientExercisePools).some(pool =>
-                          pool.preAssigned.some(p => p.exercise.id === exercise.id && p.source === 'shared_other')
+                          pool.preAssigned.some(p => p.exercise.id === exercise.id && 
+                            (sharedSubTab === 'coreFinisher' 
+                              ? p.source === 'shared_core_finisher' || p.source === 'finisher'
+                              : p.source === 'shared_other'))
                         );
                         
                         return (

@@ -24,6 +24,7 @@ export class FullBodyPromptStrategy implements PromptStrategy {
    - You MUST include exercises for all muscle_targets provided by the client
    - If only one muscle is targeted, assign at least one exercise that trains that muscle as a primary mover, and a second exercise that targets it either as a primary or secondary mover
    - If two or more muscles are targeted, assign at least one primary exercise for each target muscle
+   - ❗ MAXIMUM 2 exercises per primary muscle group across your entire selection to ensure balanced programming
    - Consider compound movements that hit multiple targets efficiently
    - If the client has no specific muscle targets, ensure exercises are distributed evenly across upper body, lower body, and core, without overloading any single region
    - ❗ Do not include more than 1 compound lower-body movement (squat, deadlift, lunge variations) unless the client specifically targets lower body. Count pre-assigned exercises toward this limit
@@ -75,39 +76,39 @@ Exercise Selection Guidance:
   buildSelectionPriorities(): string {
     return `### ⚖️ Selection Priorities
 
-1. **Shared Exercises** (Highest Priority)
-   - Prefer exercises marked as shared when they fit constraints
-   - Shared exercises enhance group cohesion and coaching efficiency
-   - Only skip shared options if they violate hard constraints
+1. **🎯 Muscle Target Requirements** (Highest Priority)
+   - You MUST include exercises for all muscle_targets provided by the client
+   - If only one muscle is targeted, assign at least one exercise that trains that muscle as a primary mover, and a second exercise that targets it either as a primary or secondary mover
+   - If two or more muscles are targeted, assign at least one primary exercise for each target muscle
+   - Consider compound movements that hit multiple targets efficiently
 
-2. **Movement Variety**
+2. **Gap Analysis - Fill the Blanks**
+   - CAREFULLY review the pre-assigned exercises to identify:
+     * Movement patterns already covered (e.g., if hinge is covered, prioritize push/pull/squat/lunge)
+     * Muscle groups already worked (e.g., if glutes/lats are covered, prioritize chest/shoulders/quads)
+     * Exercise types present (e.g., if isolation exercises dominate, add compound movements)
+   - Your selections should complement, not duplicate, what's already assigned
+   - Aim for a complete, balanced workout across all movement patterns and muscle groups
+   - Even when targeting specific muscles, maintain overall balance (max 2 exercises per primary muscle)
+
+3. **Movement Variety**
    - Distribute selections across different movement patterns
    - Avoid clustering (e.g., 3 pushing exercises)
+   - Count pre-assigned exercises when evaluating pattern distribution
    
-3. **Score Optimization**
+4. **Score Optimization**
    - Among valid options, prefer higher-scoring exercises
    - Scores already factor in client preferences and capabilities
    
-4. **Training Effect**
+5. **Training Effect**
    - Consider exercise complexity and training stimulus
    - Mix bilateral and unilateral movements when appropriate`;
   }
   
   getExercisesToSelect(intensity?: 'low' | 'moderate' | 'high' | 'intense'): number {
-    // Adjust selection count based on intensity (assuming 2 pre-assigned)
-    // These counts are for exercises to SELECT, not total exercises
-    switch (intensity) {
-      case 'low':
-        return 2;  // 2 pre-assigned + 2 = 4 total (lighter day)
-      case 'moderate':
-        return 3;  // 2 pre-assigned + 3 = 5 total (standard)
-      case 'high':
-        return 4;  // 2 pre-assigned + 4 = 6 total (higher volume)
-      case 'intense':
-        return 5;  // 2 pre-assigned + 5 = 7 total (max volume)
-      default:
-        return 3;  // Default to moderate
-    }
+    // Use the already calculated value from config
+    // This accounts for variable pre-assigned counts (2 or 3)
+    return this.config.exercisesToSelect;
   }
   
   formatPreAssignedExercises(preAssigned: PreAssignedExercise[]): string {
@@ -118,60 +119,37 @@ Exercise Selection Guidance:
     preAssigned.forEach((pa, idx) => {
       const ex = pa.exercise;
       output += `${idx + 1}. **${ex.name}**\n`;
-      output += `   - Movement: ${ex.movementPattern}, Primary: ${ex.primaryMuscle}\n`;
+      output += `   - Movement: ${ex.movementPattern}, Primary: ${ex.primaryMuscle}`;
+      if (ex.secondaryMuscles && ex.secondaryMuscles.length > 0) {
+        output += `, Secondary: ${ex.secondaryMuscles.join(', ')}`;
+      }
+      output += '\n';
       output += `   - Source: ${pa.source}`;
       if (pa.tiedCount) {
         output += ` (selected from ${pa.tiedCount} tied options)`;
       }
+      if (pa.sharedWith && pa.sharedWith.length > 0) {
+        output += `\n   - Shared with ${pa.sharedWith.length} other client${pa.sharedWith.length > 1 ? 's' : ''}`;
+      }
       output += '\n\n';
     });
+    
+    // Add summary of what's already covered
+    output += '**Coverage Analysis:**\n';
+    const movements = preAssigned.map(pa => pa.exercise.movementPattern).filter(Boolean);
+    const uniqueMovements = [...new Set(movements)];
+    output += `- Movement Patterns: ${uniqueMovements.join(', ') || 'none'}\n`;
+    
+    const primaryMuscles = preAssigned.map(pa => pa.exercise.primaryMuscle).filter(Boolean);
+    const secondaryMuscles = preAssigned.flatMap(pa => pa.exercise.secondaryMuscles || []);
+    const allMuscles = [...new Set([...primaryMuscles, ...secondaryMuscles])];
+    output += `- Muscle Groups: ${allMuscles.join(', ') || 'none'}\n`;
     
     return output;
   }
   
   buildSharedExerciseGuidance(sharedExercises: GroupScoredExercise[]): string {
-    if (sharedExercises.length === 0) {
-      return "No shared exercises available for this group.";
-    }
-    
-    let output = `### 🤝 Shared Exercise Opportunities
-
-**Why Shared Exercises Matter:**
-- Enhance group cohesion and camaraderie
-- Simplify coaching and cueing
-- Create competitive/collaborative moments
-- All shared exercises are pre-validated for quality (score ≥ 5.0 for all applicable clients)
-
-**Available Shared Exercises:**\n\n`;
-    
-    // Group by number of clients who can do them
-    const byClientCount = new Map<number, GroupScoredExercise[]>();
-    
-    sharedExercises.forEach(ex => {
-      const count = ex.clientsSharing.length;
-      if (!byClientCount.has(count)) {
-        byClientCount.set(count, []);
-      }
-      byClientCount.get(count)!.push(ex);
-    });
-    
-    // Sort by client count (descending)
-    const sortedCounts = Array.from(byClientCount.keys()).sort((a, b) => b - a);
-    
-    sortedCounts.forEach(count => {
-      const exercises = byClientCount.get(count)!;
-      output += `**Shared by ${count} clients:**\n`;
-      
-      exercises.slice(0, 5).forEach(ex => {
-        output += `- ${ex.name} (group score: ${ex.groupScore.toFixed(1)})\n`;
-      });
-      
-      if (exercises.length > 5) {
-        output += `  _...and ${exercises.length - 5} more_\n`;
-      }
-      output += '\n';
-    });
-    
-    return output;
+    // No longer needed - shared exercises are handled in pre-assignment
+    return "";
   }
 }

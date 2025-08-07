@@ -32,8 +32,11 @@ export class ClientExerciseSelectionPromptBuilder {
   }
   
   private createStrategy(): PromptStrategy {
-    // First determine how many exercises to select based on intensity
-    const exercisesToSelect = this.getExercisesToSelectForIntensity(this.config.client.intensity);
+    // First determine how many exercises to select based on intensity and pre-assigned count
+    const exercisesToSelect = this.getExercisesToSelectForIntensity(
+      this.config.client.intensity, 
+      this.config.preAssigned.length
+    );
     
     const strategyConfig = {
       workoutType: this.config.workoutType,
@@ -64,23 +67,32 @@ export class ClientExerciseSelectionPromptBuilder {
   }
   
   // Standalone method to get exercise count based on intensity
-  private getExercisesToSelectForIntensity(intensity?: 'low' | 'moderate' | 'high' | 'intense'): number {
+  private getExercisesToSelectForIntensity(intensity?: 'low' | 'moderate' | 'high' | 'intense', preAssignedCount: number = 2): number {
+    const totalExercises = this.getTotalExercisesForIntensity(intensity);
+    return totalExercises - preAssignedCount;
+  }
+  
+  private getTotalExercisesForIntensity(intensity?: 'low' | 'moderate' | 'high' | 'intense'): number {
     switch (intensity) {
       case 'low':
-        return 2;  // 4 total - 2 pre-assigned = 2 to select
+        return 4;
       case 'moderate':
-        return 3;  // 5 total - 2 pre-assigned = 3 to select
+        return 5;
       case 'high':
-        return 4;  // 6 total - 2 pre-assigned = 4 to select
+        return 6;
       case 'intense':
-        return 5;  // 7 total - 2 pre-assigned = 5 to select
+        return 7;
       default:
-        return 3;  // Default to moderate
+        return 5;  // Default to moderate
     }
   }
   
   private getExercisesToSelect(): number {
-    return this.strategy.getExercisesToSelect(this.config.client.intensity);
+    // Use the already calculated value from strategy config
+    return this.getExercisesToSelectForIntensity(
+      this.config.client.intensity,
+      this.config.preAssigned.length
+    );
   }
   
   build(): string {
@@ -128,55 +140,18 @@ You are selecting ${exercisesToSelect} exercises from a curated list of ${this.c
     // Add pre-assigned exercises
     output += '\n\n' + this.strategy.formatPreAssignedExercises(this.config.preAssigned);
     
-    // Add group context
-    if (this.config.otherClientsInfo.length > 0) {
-      output += '\n### 👥 Group Context\n\n';
-      output += 'Other clients in this session:\n';
-      this.config.otherClientsInfo.forEach(other => {
-        output += `- ${other.name}: targets ${this.formatMuscleList(other.muscleTargets)}\n`;
-      });
-    }
-    
     return output;
   }
   
   private buildExerciseOptions(): string {
-    let output = `### 📋 Available Exercise Options
-
-You must select ${this.getExercisesToSelect()} exercises from the following ${this.config.candidates.length} options:\n\n`;
+    let output = `### 📋 Available Exercise Options\n\n`;
     
-    // First, show shared exercises if any
-    const sharedInCandidates = this.identifySharedExercises();
-    if (sharedInCandidates.length > 0) {
-      output += '**🤝 Shared Exercise Options (prefer these when constraints allow):**\n\n';
-      
-      sharedInCandidates.forEach((ex, idx) => {
-        const sharedInfo = this.config.sharedExercises.find(s => s.id === ex.id);
-        output += `${idx + 1}. **${ex.name}** [SHARED with ${sharedInfo?.clientsSharing.length || 0} clients]\n`;
-        output += this.formatExerciseDetailsWithoutId(ex);
-        output += '\n';
-      });
-      
+    // List all candidates without shared/non-shared distinction
+    this.config.candidates.forEach((ex, idx) => {
+      output += `${idx + 1}. **${ex.name}**\n`;
+      output += this.formatExerciseDetailsWithoutId(ex);
       output += '\n';
-    }
-    
-    // Then show non-shared exercises
-    const nonShared = this.config.candidates.filter(ex => 
-      !sharedInCandidates.some(s => s.id === ex.id)
-    );
-    
-    if (nonShared.length > 0) {
-      output += '**💪 Individual Exercise Options:**\n\n';
-      
-      nonShared.forEach((ex, idx) => {
-        output += `${sharedInCandidates.length + idx + 1}. ${ex.name}\n`;
-        output += this.formatExerciseDetailsWithoutId(ex);
-        output += '\n';
-      });
-    }
-    
-    // Add shared exercise guidance
-    output += '\n' + this.strategy.buildSharedExerciseGuidance(this.config.sharedExercises);
+    });
     
     return output;
   }
@@ -210,10 +185,9 @@ Return a JSON object with exactly ${exercisesToSelect} selected exercises:
 
 **CRITICAL:**
 - Select EXACTLY ${exercisesToSelect} exercises
-- **Use the EXACT exercise name** from the list above (e.g., "3-Point Dumbbell Row")
+- **Use the EXACT exercise name** from the list above
 - Names are case-sensitive - copy them exactly as shown
 - Do NOT modify or abbreviate exercise names
-- Prefer shared exercises when they meet constraints
 - Ensure all muscle targets are covered across selected + pre-assigned exercises`;
   }
   

@@ -389,91 +389,91 @@ export class TemplateProcessor {
     // Step 2: Determine pre-assigned exercises
     const preAssignedByClient = new Map<string, PreAssignedExercise[]>();
     
-    // Check if we should use the new shared exercise logic for full body workouts
-    const useSharedLogic = groupContext?.workoutType === WorkoutType.FULL_BODY_WITH_FINISHER || 
-                          groupContext?.workoutType === WorkoutType.FULL_BODY_WITHOUT_FINISHER;
+    // Check if ALL clients have full body workout types to use shared logic
+    const allClientsHaveFullBody = groupContext?.clients.every(client => 
+      client.workoutType === WorkoutType.FULL_BODY_WITH_FINISHER || 
+      client.workoutType === WorkoutType.FULL_BODY_WITHOUT_FINISHER
+    );
     
-    if (groupContext && favoritesByClient && groupContext.workoutType) {
-      if (useSharedLogic) {
-        // Use new shared exercise logic for full body workouts
-        const clientsData = new Map<string, {
-          context: ClientContext;
-          exercises: ScoredExercise[];
-          favoriteIds: string[];
-        }>();
+    if (groupContext && favoritesByClient && allClientsHaveFullBody) {
+      // Use new shared exercise logic for full body workouts
+      const clientsData = new Map<string, {
+        context: ClientContext;
+        exercises: ScoredExercise[];
+        favoriteIds: string[];
+      }>();
+      
+      for (const [clientId, exercises] of clientExercises) {
+        const client = groupContext.clients.find(c => c.user_id === clientId);
+        if (!client) continue;
         
-        for (const [clientId, exercises] of clientExercises) {
-          const client = groupContext.clients.find(c => c.user_id === clientId);
-          if (!client) continue;
-          
-          const favoriteIds = favoritesByClient.get(clientId) || [];
-          clientsData.set(clientId, {
-            context: client,
-            exercises,
-            favoriteIds
-          });
-        }
+        const favoriteIds = favoritesByClient.get(clientId) || [];
+        clientsData.set(clientId, {
+          context: client,
+          exercises,
+          favoriteIds
+        });
+      }
+      
+      // Process with new shared logic (this will handle mixed finisher preferences)
+      const results = PreAssignmentService.processFullBodyPreAssignmentsWithShared(
+        clientsData,
+        sharedExercisePool,
+        null // Don't pass a single workout type - let it use per-client types
+      );
+      
+      // Copy results to preAssignedByClient
+      for (const [clientId, preAssigned] of results) {
+        preAssignedByClient.set(clientId, preAssigned);
+      }
+    } else {
+      // Use original logic for non-full body workouts or mixed workout types
+      for (const [clientId, exercises] of clientExercises) {
+        const client = groupContext?.clients.find(c => c.user_id === clientId);
+        if (!client) continue;
         
-        // Process with new shared logic
-        const results = PreAssignmentService.processFullBodyPreAssignmentsWithShared(
-          clientsData,
-          sharedExercisePool,
-          groupContext.workoutType as WorkoutType
+        // Get include and favorite IDs
+        const includeNames = client.exercise_requests?.include || [];
+        const includeIds = exercises
+          .filter(ex => includeNames.includes(ex.name))
+          .map(ex => ex.id);
+        const favoriteIds = favoritesByClient?.get(clientId) || [];
+        
+        // Use original strategy-based pre-assignment with client's workout type
+        const selectedExercises = processPreAssignments(
+          exercises,
+          client,
+          client.workoutType as WorkoutType,
+          includeIds,
+          favoriteIds
         );
         
-        // Copy results to preAssignedByClient
-        for (const [clientId, preAssigned] of results) {
-          preAssignedByClient.set(clientId, preAssigned);
-        }
-      } else {
-        // Use original logic for non-full body workouts
-        for (const [clientId, exercises] of clientExercises) {
-          const client = groupContext.clients.find(c => c.user_id === clientId);
-          if (!client) continue;
+        // Get tie information from the pre-assignment process
+        const tieInfo = getPreAssignmentTieInfo();
+        
+        // Convert to PreAssignedExercise format with source tracking
+        const preAssigned: PreAssignedExercise[] = selectedExercises.map(exercise => {
+          // Determine source based on what matched
+          let source = 'Round1'; // Default
+          if (includeIds.includes(exercise.id)) {
+            source = 'Include';
+          } else if (favoriteIds.includes(exercise.id)) {
+            source = 'Favorite';
+          } else if (exercise.functionTags?.includes('capacity')) {
+            source = 'Constraint';
+          }
           
-          // Get include and favorite IDs
-          const includeNames = client.exercise_requests?.include || [];
-          const includeIds = exercises
-            .filter(ex => includeNames.includes(ex.name))
-            .map(ex => ex.id);
-          const favoriteIds = favoritesByClient.get(clientId) || [];
+          // Get tie count if this exercise was selected via tie-breaking
+          const tiedCount = tieInfo?.get(exercise.id);
           
-          // Use original strategy-based pre-assignment
-          const selectedExercises = processPreAssignments(
-            exercises,
-            client,
-            groupContext.workoutType as WorkoutType,
-            includeIds,
-            favoriteIds
-          );
-          
-          // Get tie information from the pre-assignment process
-          const tieInfo = getPreAssignmentTieInfo();
-          
-          // Convert to PreAssignedExercise format with source tracking
-          const preAssigned: PreAssignedExercise[] = selectedExercises.map(exercise => {
-            // Determine source based on what matched
-            let source = 'Round1'; // Default
-            if (includeIds.includes(exercise.id)) {
-              source = 'Include';
-            } else if (favoriteIds.includes(exercise.id)) {
-              source = 'Favorite';
-            } else if (exercise.functionTags?.includes('capacity')) {
-              source = 'Constraint';
-            }
-            
-            // Get tie count if this exercise was selected via tie-breaking
-            const tiedCount = tieInfo?.get(exercise.id);
-            
-            return {
-              exercise,
-              source,
-              tiedCount
-            };
-          });
-          
-          preAssignedByClient.set(clientId, preAssigned);
-        }
+          return {
+            exercise,
+            source,
+            tiedCount
+          };
+        });
+        
+        preAssignedByClient.set(clientId, preAssigned);
       }
     }
 

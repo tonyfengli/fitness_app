@@ -401,12 +401,12 @@ export class StandardWorkoutGenerator {
       // Get favorite IDs for this client
       const clientFavoriteIds = this.favoritesByClient?.get(clientId) || [];
       
-      // Apply bucketing
+      // Apply bucketing using client's specific workout type
       const bucketingResult = applyFullBodyBucketing(
         pool.availableCandidates,
         pool.preAssigned,
         client,
-        groupContext.workoutType,
+        (client.workoutType as WorkoutType) || WorkoutType.FULL_BODY_WITH_FINISHER,
         clientFavoriteIds
       );
       

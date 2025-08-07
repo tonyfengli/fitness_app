@@ -116,10 +116,10 @@ export class LLMExerciseSelector {
         muscleTargets: gc.muscleTargets
       }));
     
-    // Build the prompt
+    // Build the prompt using client's specific workout type
     const promptBuilder = new ClientExerciseSelectionPromptBuilder({
       client: input.client,
-      workoutType: this.config.workoutType,
+      workoutType: (input.client.workoutType as WorkoutType) || WorkoutType.FULL_BODY_WITH_FINISHER,
       preAssigned: input.preAssigned,
       candidates: allCandidates,
       sharedExercises: this.config.sharedExercises,
@@ -223,7 +223,7 @@ export class LLMExerciseSelector {
     };
     
     // Validate count
-    const expectedCount = this.getExpectedExerciseCount(input.client.intensity || 'moderate');
+    const expectedCount = this.getExpectedExerciseCount(input.client.intensity || 'moderate', input.preAssigned.length);
     if (selectedExercises.length !== expectedCount) {
       // LLM selected wrong number of exercises, adjusting
       
@@ -246,7 +246,7 @@ export class LLMExerciseSelector {
   private createFallbackSelection(input: LLMSelectionInput): LLMSelectionResult {
     // Using fallback selection
     
-    const expectedCount = this.getExpectedExerciseCount(input.client.intensity || 'moderate');
+    const expectedCount = this.getExpectedExerciseCount(input.client.intensity || 'moderate', input.preAssigned.length);
     const allCandidates = [...input.bucketedCandidates, ...input.additionalCandidates];
     const sharedIds = new Set(this.config.sharedExercises.map(s => s.id));
     
@@ -286,18 +286,29 @@ export class LLMExerciseSelector {
    * Get expected exercise count based on intensity
    * This is the number of exercises to SELECT (not including pre-assigned)
    */
-  private getExpectedExerciseCount(intensity: 'low' | 'moderate' | 'high' | 'intense'): number {
+  private getExpectedExerciseCount(intensity: 'low' | 'moderate' | 'high' | 'intense', preAssignedCount: number): number {
+    // Total exercises based on intensity
+    const totalExercises = this.getTotalExercisesForIntensity(intensity);
+    
+    // Subtract pre-assigned to get how many to select
+    return totalExercises - preAssignedCount;
+  }
+  
+  /**
+   * Get total exercises expected for an intensity level
+   */
+  private getTotalExercisesForIntensity(intensity: 'low' | 'moderate' | 'high' | 'intense'): number {
     switch (intensity) {
       case 'low':
-        return 2;  // 4 total - 2 pre-assigned = 2 to select
+        return 4;
       case 'moderate':
-        return 3;  // 5 total - 2 pre-assigned = 3 to select
+        return 5;
       case 'high':
-        return 4;  // 6 total - 2 pre-assigned = 4 to select
+        return 6;
       case 'intense':
-        return 5;  // 7 total - 2 pre-assigned = 5 to select
+        return 7;
       default:
-        return 3;  // Default to moderate
+        return 5;  // Default to moderate
     }
   }
 }

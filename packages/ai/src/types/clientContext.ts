@@ -23,6 +23,7 @@ export interface ClientContext {
   templateType?: "standard" | "circuit" | "full_body"; // Workout template type
   default_sets?: number; // Default number of sets for this client's workouts
   favoriteExerciseIds?: string[]; // Array of exercise IDs marked as favorites by the client
+  workoutType?: "full_body_with_finisher" | "full_body_without_finisher" | "targeted_with_finisher" | "targeted_without_finisher"; // Client's specific workout type preference
 }
 
 /**
