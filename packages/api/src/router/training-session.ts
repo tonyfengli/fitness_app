@@ -2538,36 +2538,218 @@ Set your goals and preferences for today's session.`;
         });
       }
 
-      try {
-        // Import required modules
-        const { StandardWorkoutGenerator } = await import("@acme/ai");
-        const { getWorkoutTemplate } = await import("@acme/ai");
-        
-        // Get template
-        const template = session.templateType ? getWorkoutTemplate(session.templateType) : null;
-        if (!template) {
-          throw new TRPCError({
-            code: 'BAD_REQUEST',
-            message: 'Invalid workout template',
-          });
-        }
+      console.log('[startWorkout] ✅ Step 1 Complete: All validations passed');
+      console.log('[startWorkout] Session ID:', input.sessionId);
+      console.log('[startWorkout] Template type:', session.templateType);
+      console.log('[startWorkout] Has visualization data:', !!visualizationData);
+      console.log('[startWorkout] Has exercise selection:', !!visualizationData?.llmResult?.exerciseSelection);
 
-        // Get group context from visualization data
+      // Step 2: Phase 2 LLM Organization
+      try {
+        console.log('[startWorkout] Starting Step 2: Phase 2 LLM Organization');
+        
+        // 2.1: Gather workout data with exercise metadata
+        console.log('[startWorkout] Fetching workouts and exercise data...');
+        
+        // Get all workouts for this session
+        const workouts = await ctx.db.query.Workout.findMany({
+          where: eq(Workout.trainingSessionId, input.sessionId)
+        });
+        
+        // For each workout, get exercises with full metadata
+        const workoutsWithExercises = await Promise.all(
+          workouts.map(async (workout) => {
+            // Get workout exercises
+            const workoutExercises = await ctx.db.query.WorkoutExercise.findMany({
+              where: eq(WorkoutExercise.workoutId, workout.id)
+            });
+            
+            // Get full exercise metadata for each
+            const exercisesWithMetadata = await Promise.all(
+              workoutExercises.map(async (we) => {
+                const exercise = await ctx.db.query.exercises.findFirst({
+                  where: eq(exercises.id, we.exerciseId)
+                });
+                return {
+                  ...we,
+                  exercise: exercise
+                };
+              })
+            );
+            
+            return {
+              workout,
+              exercises: exercisesWithMetadata
+            };
+          })
+        );
+        
+        console.log(`[startWorkout] Found ${workoutsWithExercises.length} workouts with exercises`);
+        
+        // 2.2: Extract client context from visualization data
         const groupContext = visualizationData.groupContext;
         const exerciseSelection = visualizationData.llmResult.exerciseSelection;
-
-        // Create generator instance
-        const generator = new StandardWorkoutGenerator();
         
-        // Run Phase 2 organization
-        console.log('[startWorkout] Running Phase 2 organization for session:', input.sessionId);
-        const roundOrganization = await generator.organizeIntoRounds(
-          exerciseSelection,
-          template,
-          groupContext
-        );
+        // 2.3: Prepare data for LLM
+        const phase2Input = {
+          templateType: session.templateType,
+          clients: workoutsWithExercises.map(({ workout, exercises }) => {
+            const client = groupContext.clients.find(c => c.user_id === workout.userId);
+            return {
+              clientId: workout.userId,
+              clientName: client?.name || 'Unknown',
+              fitnessGoal: client?.primary_goal || 'general_fitness',
+              intensity: client?.intensity || 'moderate',
+              exercises: exercises.map(e => ({
+                exerciseId: e.exerciseId,
+                exerciseName: e.exercise?.name || '',
+                primaryMuscle: e.exercise?.primaryMuscle || '',
+                secondaryMuscles: e.exercise?.secondaryMuscles || [],
+                movementPattern: e.exercise?.movementPattern || '',
+                equipment: e.exercise?.equipment || [],
+                complexityLevel: e.exercise?.complexityLevel || '',
+                fatigueProfile: e.exercise?.fatigueProfile || '',
+                isShared: e.isShared,
+                sharedWithClients: e.sharedWithClients
+              }))
+            };
+          }),
+          sharedExercises: exerciseSelection.sharedExercises || []
+        };
+        
+        console.log('[startWorkout] Prepared Phase 2 input:', JSON.stringify(phase2Input, null, 2));
+        
+        // 2.4: Create custom LLM prompt
+        const phase2Prompt = `You are organizing a group workout for ${phase2Input.clients.length} clients. Each client has 5 pre-selected exercises from Phase 1.
 
-        // Store the organization results in the database
+CLIENTS:
+${phase2Input.clients.map(client => `
+- ${client.clientName} (${client.clientId})
+  Goal: ${client.fitnessGoal}
+  Intensity: ${client.intensity}
+  Exercises:
+${client.exercises.map(e => `    * ${e.exerciseName} (ID: ${e.exerciseId})`).join('\n')}
+`).join('')}
+
+SHARED EXERCISES:
+${phase2Input.sharedExercises.map(se => `- ${se.exerciseName} (shared by ${se.clientIds.length} clients)`).join('\n')}
+
+YOUR TASK:
+Organize these exercises into rounds for a cohesive group workout. 
+
+CRITICAL REQUIREMENTS:
+1. EVERY round MUST include EVERY client
+2. Each client MUST have at least one exercise in EACH round
+3. You MUST use the exact exerciseId values provided in the client data above
+4. Each client has 5 exercises - distribute them across rounds (an exercise can appear in multiple rounds if needed)
+
+You have flexibility to:
+1. Decide the number of rounds (typically 3-5, but ensure all exercises are used)
+2. Set the number of sets and reps for each exercise
+3. Decide if shared exercises should have the same sets/reps for all clients
+4. Consider exercise complexity, fatigue profile, and movement patterns when organizing
+
+VALIDATION: Before returning, verify that every round has an exercise for every client.
+
+GUIDELINES:
+- Create a balanced flow that makes sense for group training
+- Consider equipment availability (avoid conflicts)
+- Match sets/reps to client intensity levels
+- Ensure proper warm-up to working sets progression
+- Total workout should be 45-60 minutes
+
+Return a JSON object with this structure:
+{
+  "rounds": [
+    {
+      "roundNumber": 1,
+      "roundName": "Round 1",
+      "focus": "Lower Body Strength",
+      "duration": "12 minutes",
+      "exercises": {
+        "[clientId]": [
+          {
+            "exerciseId": "uuid",
+            "exerciseName": "Barbell Back Squat",
+            "sets": 3,
+            "reps": "8-10",
+            "rest": "90s",
+            "notes": "Focus on depth"
+          }
+        ]
+      }
+    }
+  ],
+  "totalDuration": "48 minutes",
+  "workoutNotes": "General notes about the workout structure"
+}`;
+
+        // 2.5: Call LLM
+        console.log('[startWorkout] Calling Phase 2 LLM...');
+        
+        // Import LLM client
+        const { createLLM } = await import("@acme/ai");
+        const { HumanMessage, SystemMessage } = await import("@langchain/core/messages");
+        
+        const llm = createLLM({
+          modelName: "gpt-4o",
+          temperature: 0.7,
+          maxTokens: 4000
+        });
+        
+        const messages = [
+          new SystemMessage("You are an expert fitness coach organizing group workouts. Return only valid JSON."),
+          new HumanMessage(phase2Prompt)
+        ];
+        
+        const response = await llm.invoke(messages);
+        
+        // Parse the response
+        let roundOrganization;
+        try {
+          // Extract JSON from the response content
+          let content = response.content;
+          
+          // Remove markdown code blocks if present
+          if (typeof content === 'string') {
+            // Remove ```json and ``` markers
+            content = content.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+          }
+          
+          console.log('[startWorkout] Raw LLM response:', content);
+          roundOrganization = JSON.parse(content);
+        } catch (parseError) {
+          console.error('[startWorkout] Failed to parse LLM response:', parseError);
+          console.error('[startWorkout] Raw content:', response.content);
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to parse workout organization'
+          });
+        }
+        
+        console.log('[startWorkout] Phase 2 LLM response:', JSON.stringify(roundOrganization, null, 2));
+        
+        // Validate that every round includes every client
+        const clientIds = phase2Input.clients.map(c => c.clientId);
+        for (const round of roundOrganization.rounds) {
+          const roundClientIds = Object.keys(round.exercises);
+          const missingClients = clientIds.filter(id => !roundClientIds.includes(id));
+          
+          if (missingClients.length > 0) {
+            console.error(`[startWorkout] Round ${round.roundNumber} is missing clients:`, missingClients);
+            throw new TRPCError({
+              code: 'INTERNAL_SERVER_ERROR',
+              message: `Round ${round.roundNumber} does not include all clients. Missing: ${missingClients.join(', ')}`
+            });
+          }
+        }
+        
+        console.log('[startWorkout] ✅ Validation passed: All rounds include all clients');
+        
+        // Step 3: Database Updates
+        console.log('[startWorkout] Starting Step 3: Database Updates');
+        
+        // 3.1: Store the round organization in TrainingSession
         await ctx.db
           .update(TrainingSession)
           .set({ 
@@ -2575,55 +2757,91 @@ Set your goals and preferences for today's session.`;
             updatedAt: new Date()
           })
           .where(eq(TrainingSession.id, input.sessionId));
-
-        // Update WorkoutExercise records with groupName for each round
-        // Get all workouts for this session
-        const workouts = await ctx.db.query.Workout.findMany({
-          where: eq(Workout.trainingSessionId, input.sessionId),
-          with: {
-            exercises: true
-          }
-        });
-
-        // Update each client's exercises with round information
-        for (const workout of workouts) {
-          const clientRounds = roundOrganization.rounds;
+        
+        console.log('[startWorkout] Saved round organization to session');
+        
+        // 3.2: First, reset all workout exercises to clear any previous round assignments
+        console.log('[startWorkout] Resetting all workout exercises...');
+        for (const { workout } of workoutsWithExercises) {
+          await ctx.db
+            .update(WorkoutExercise)
+            .set({ 
+              groupName: null,
+              orderIndex: 999
+            })
+            .where(eq(WorkoutExercise.workoutId, workout.id));
+        }
+        
+        // 3.3: Update workout_exercise records with round information
+        let totalUpdates = 0;
+        let exerciseOrderAcrossRounds = 0; // Global counter for exercise order
+        
+        for (const round of roundOrganization.rounds) {
+          const roundName = round.roundName;
+          const roundIndex = round.roundNumber;
           
-          for (let roundIndex = 0; roundIndex < clientRounds.length; roundIndex++) {
-            const round = clientRounds[roundIndex];
-            const roundExercises = round.exercises[workout.userId] || [];
+          console.log(`[startWorkout] Processing ${roundName}...`);
+          
+          // For each client in this round
+          for (const [clientId, exercises] of Object.entries(round.exercises)) {
+            // Find the workout for this client
+            const clientWorkout = workoutsWithExercises.find(w => w.workout.userId === clientId);
+            if (!clientWorkout) {
+              console.warn(`[startWorkout] No workout found for client ${clientId}`);
+              continue;
+            }
             
-            // Update exercises for this round
-            for (const roundExercise of roundExercises) {
-              // Find matching exercise in workout
-              const workoutExercise = workout.exercises.find(
+            // Update each exercise in this round
+            for (let exerciseIndex = 0; exerciseIndex < exercises.length; exerciseIndex++) {
+              const roundExercise = exercises[exerciseIndex];
+              
+              // Find the matching workout_exercise record
+              const workoutExercise = clientWorkout.exercises.find(
                 we => we.exerciseId === roundExercise.exerciseId
               );
               
               if (workoutExercise) {
+                // Use global order index to ensure proper ordering across all rounds
+                const orderIndex = exerciseOrderAcrossRounds++;
+                
                 await ctx.db
                   .update(WorkoutExercise)
                   .set({ 
-                    groupName: round.roundName,
-                    setsCompleted: roundExercise.sets
+                    groupName: roundName,
+                    setsCompleted: roundExercise.sets,
+                    orderIndex: orderIndex
                   })
                   .where(eq(WorkoutExercise.id, workoutExercise.id));
+                
+                totalUpdates++;
+                console.log(`[startWorkout] Updated ${roundExercise.exerciseName} for ${clientId}: ${roundName}, Sets: ${roundExercise.sets}, Order: ${orderIndex}`);
+              } else {
+                console.warn(`[startWorkout] Exercise ${roundExercise.exerciseId} not found in workout`);
               }
             }
           }
         }
-
-        console.log('[startWorkout] Phase 2 organization complete and saved');
+        
+        // 3.4: Log summary of exercises not included in rounds
+        for (const { workout, exercises } of workoutsWithExercises) {
+          const unassignedExercises = exercises.filter(e => e.orderIndex === 999);
+          if (unassignedExercises.length > 0) {
+            console.log(`[startWorkout] Client ${workout.userId} has ${unassignedExercises.length} exercises not assigned to rounds:`, 
+              unassignedExercises.map(e => e.exercise?.name).join(', '));
+          }
+        }
+        
+        console.log(`[startWorkout] ✅ Step 3 Complete: Updated ${totalUpdates} workout exercises`);
         
         return { 
           success: true, 
           message: 'Workout organized successfully',
-          roundCount: roundOrganization.rounds.length,
-          totalDuration: roundOrganization.workoutSummary.totalDuration
+          roundCount: roundOrganization.rounds?.length || 0,
+          totalDuration: roundOrganization.totalDuration || '0 min'
         };
-
+        
       } catch (error) {
-        console.error('[startWorkout] Error organizing workout:', error);
+        console.error('[startWorkout] Error in Phase 2:', error);
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: error instanceof Error ? error.message : 'Failed to organize workout',
