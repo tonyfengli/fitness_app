@@ -192,8 +192,9 @@ export class StandardWorkoutGenerator {
   
   /**
    * Phase 2: Organize exercises into rounds
+   * Made public to allow external access for the startWorkout flow
    */
-  private async organizeIntoRounds(
+  public async organizeIntoRounds(
     exerciseSelection: ExerciseSelection,
     template: WorkoutTemplate,
     groupContext: GroupContext,

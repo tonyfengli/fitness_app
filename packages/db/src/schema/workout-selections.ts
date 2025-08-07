@@ -7,7 +7,7 @@ import { exercises } from "../exercise";
 
 export const workoutExerciseSwaps = pgTable("workout_exercise_swaps", {
   id: uuid("id").primaryKey().defaultRandom(),
-  sessionId: uuid("session_id").notNull().references(() => TrainingSession.id),
+  trainingSessionId: uuid("training_session_id").notNull().references(() => TrainingSession.id),
   clientId: text("client_id").notNull().references(() => user.id),
   originalExerciseId: uuid("original_exercise_id").notNull().references(() => exercises.id),
   newExerciseId: uuid("new_exercise_id").notNull().references(() => exercises.id),

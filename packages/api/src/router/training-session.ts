@@ -758,22 +758,45 @@ export const trainingSessionRouter = {
       }
       
       // Delete in the correct order to respect foreign key constraints
-      // 1. Delete workout preferences
+      // 1. First get all workouts for this session
+      const workouts = await ctx.db.query.Workout.findMany({
+        where: eq(Workout.trainingSessionId, input.sessionId),
+      });
+      
+      // 2. Delete workout exercises for all workouts
+      if (workouts.length > 0) {
+        const workoutIds = workouts.map(w => w.id);
+        await ctx.db
+          .delete(WorkoutExercise)
+          .where(inArray(WorkoutExercise.workoutId, workoutIds));
+      }
+      
+      // 3. Delete workouts
+      await ctx.db
+        .delete(Workout)
+        .where(eq(Workout.trainingSessionId, input.sessionId));
+      
+      // 4. Delete workout preferences
       await ctx.db
         .delete(WorkoutPreferences)
         .where(eq(WorkoutPreferences.trainingSessionId, input.sessionId));
       
-      // 2. Delete user training sessions (registrations/check-ins)
+      // 5. Delete user training sessions (registrations/check-ins)
       await ctx.db
         .delete(UserTrainingSession)
         .where(eq(UserTrainingSession.trainingSessionId, input.sessionId));
       
-      // 3. Delete workout exercise swaps
-      await ctx.db
-        .delete(workoutExerciseSwaps)
-        .where(eq(workoutExerciseSwaps.sessionId, input.sessionId));
+      // 6. Delete workout exercise swaps
+      try {
+        await ctx.db
+          .delete(workoutExerciseSwaps)
+          .where(eq(workoutExerciseSwaps.trainingSessionId, input.sessionId));
+      } catch (error) {
+        console.error('[deleteSession] Error deleting workout exercise swaps:', error);
+        // Continue with deletion even if this fails since the table might be empty
+      }
       
-      // 4. Finally delete the training session
+      // 7. Finally delete the training session
       await ctx.db
         .delete(TrainingSession)
         .where(eq(TrainingSession.id, input.sessionId));
@@ -2460,5 +2483,151 @@ Set your goals and preferences for today's session.`;
       }
 
       return visualizationData;
+    }),
+
+  /**
+   * Start workout - runs Phase 2 organization and prepares workout for live session
+   */
+  startWorkout: protectedProcedure
+    .input(z.object({
+      sessionId: z.string().uuid()
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const user = ctx.session?.user as SessionUser;
+      
+      // Only trainers can start workouts
+      if (user.role !== 'trainer') {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'Only trainers can start workouts',
+        });
+      }
+
+      // Get session
+      const session = await ctx.db.query.TrainingSession.findFirst({
+        where: and(
+          eq(TrainingSession.id, input.sessionId),
+          eq(TrainingSession.businessId, user.businessId)
+        ),
+      });
+
+      if (!session) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Session not found',
+        });
+      }
+
+      // Check if workout organization already exists
+      if (session.workoutOrganization) {
+        return { 
+          success: true, 
+          message: 'Workout already organized',
+          alreadyOrganized: true 
+        };
+      }
+
+      // Get saved visualization data (contains Phase 1 selections)
+      const templateConfig = session.templateConfig as any;
+      const visualizationData = templateConfig?.visualizationData;
+
+      if (!visualizationData?.llmResult?.exerciseSelection) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'No exercise selections found. Please generate workouts first.',
+        });
+      }
+
+      try {
+        // Import required modules
+        const { StandardWorkoutGenerator } = await import("@acme/ai");
+        const { getWorkoutTemplate } = await import("@acme/ai");
+        
+        // Get template
+        const template = session.templateType ? getWorkoutTemplate(session.templateType) : null;
+        if (!template) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Invalid workout template',
+          });
+        }
+
+        // Get group context from visualization data
+        const groupContext = visualizationData.groupContext;
+        const exerciseSelection = visualizationData.llmResult.exerciseSelection;
+
+        // Create generator instance
+        const generator = new StandardWorkoutGenerator();
+        
+        // Run Phase 2 organization
+        console.log('[startWorkout] Running Phase 2 organization for session:', input.sessionId);
+        const roundOrganization = await generator.organizeIntoRounds(
+          exerciseSelection,
+          template,
+          groupContext
+        );
+
+        // Store the organization results in the database
+        await ctx.db
+          .update(TrainingSession)
+          .set({ 
+            workoutOrganization: roundOrganization,
+            updatedAt: new Date()
+          })
+          .where(eq(TrainingSession.id, input.sessionId));
+
+        // Update WorkoutExercise records with groupName for each round
+        // Get all workouts for this session
+        const workouts = await ctx.db.query.Workout.findMany({
+          where: eq(Workout.trainingSessionId, input.sessionId),
+          with: {
+            exercises: true
+          }
+        });
+
+        // Update each client's exercises with round information
+        for (const workout of workouts) {
+          const clientRounds = roundOrganization.rounds;
+          
+          for (let roundIndex = 0; roundIndex < clientRounds.length; roundIndex++) {
+            const round = clientRounds[roundIndex];
+            const roundExercises = round.exercises[workout.userId] || [];
+            
+            // Update exercises for this round
+            for (const roundExercise of roundExercises) {
+              // Find matching exercise in workout
+              const workoutExercise = workout.exercises.find(
+                we => we.exerciseId === roundExercise.exerciseId
+              );
+              
+              if (workoutExercise) {
+                await ctx.db
+                  .update(WorkoutExercise)
+                  .set({ 
+                    groupName: round.roundName,
+                    setsCompleted: roundExercise.sets
+                  })
+                  .where(eq(WorkoutExercise.id, workoutExercise.id));
+              }
+            }
+          }
+        }
+
+        console.log('[startWorkout] Phase 2 organization complete and saved');
+        
+        return { 
+          success: true, 
+          message: 'Workout organized successfully',
+          roundCount: roundOrganization.rounds.length,
+          totalDuration: roundOrganization.workoutSummary.totalDuration
+        };
+
+      } catch (error) {
+        console.error('[startWorkout] Error organizing workout:', error);
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: error instanceof Error ? error.message : 'Failed to organize workout',
+        });
+      }
     }),
 } satisfies TRPCRouterRecord;

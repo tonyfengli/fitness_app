@@ -157,7 +157,7 @@ export const workoutSelectionsRouter = {
       return await ctx.db.transaction(async (tx) => {
         // 1. Log the swap
         await tx.insert(workoutExerciseSwaps).values({
-          sessionId: input.sessionId,
+          trainingSessionId: input.sessionId,
           clientId: input.clientId,
           originalExerciseId: input.originalExerciseId,
           newExerciseId: input.newExercise.id,
@@ -249,7 +249,7 @@ export const workoutSelectionsRouter = {
       return await ctx.db.transaction(async (tx) => {
         // 1. Log the swap - we record who made the swap as the client themselves
         await tx.insert(workoutExerciseSwaps).values({
-          sessionId: input.sessionId,
+          trainingSessionId: input.sessionId,
           clientId: input.clientId,
           originalExerciseId: input.originalExerciseId,
           newExerciseId: input.newExerciseId,
@@ -343,10 +343,11 @@ export const workoutSelectionsRouter = {
   getSwapHistory: protectedProcedure
     .input(z.object({ sessionId: z.string() }))
     .query(async ({ ctx, input }) => {
-      return ctx.db.query.workoutExerciseSwaps.findMany({
-        where: eq(workoutExerciseSwaps.sessionId, input.sessionId),
-        orderBy: asc(workoutExerciseSwaps.swappedAt)
-      });
+      return ctx.db
+        .select()
+        .from(workoutExerciseSwaps)
+        .where(eq(workoutExerciseSwaps.trainingSessionId, input.sessionId))
+        .orderBy(asc(workoutExerciseSwaps.swappedAt));
     }),
 
   // Finalize selections and trigger Phase 2

@@ -2,7 +2,7 @@
 
 import React, { Suspense, useState, useMemo } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 // Removed ClientWorkoutCard import - using custom component
 import { Button, Icon } from "@acme/ui-shared";
 import { useTRPC } from "~/trpc/react";
@@ -143,12 +143,39 @@ function WorkoutOverviewContent() {
 }
 
 
-export default function WorkoutOverview() {
+function WorkoutOverviewMain() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const sessionId = searchParams.get("sessionId");
   const [showMenu, setShowMenu] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
+  const trpc = useTRPC();
+  
+  // Start workout mutation
+  const startWorkoutMutation = useMutation({
+    ...trpc.trainingSession.startWorkout.mutationOptions(),
+    onSuccess: (data) => {
+      console.log('Workout organized successfully:', data);
+      // Navigate to workout-live after successful organization
+      router.push(`/workout-live?sessionId=${sessionId}&round=1`);
+    },
+    onError: (error: any) => {
+      console.error('Failed to start workout:', error);
+      setIsStarting(false);
+      // You might want to show an error toast here
+      alert(`Failed to start workout: ${error.message}`);
+    }
+  });
+  
+  const handleStartWorkout = async () => {
+    if (!sessionId) return;
+    
+    setIsStarting(true);
+    setShowMenu(false);
+    
+    // Call the startWorkout mutation
+    startWorkoutMutation.mutate({ sessionId });
+  };
   
   return (
     <div className="h-screen bg-gray-50 flex flex-col overflow-hidden relative">
@@ -157,8 +184,8 @@ export default function WorkoutOverview() {
         <div className="fixed inset-0 bg-white/80 backdrop-blur-sm z-50 flex items-center justify-center">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
-            <p className="mt-4 text-gray-600 font-medium">Starting workout...</p>
-            <p className="mt-2 text-sm text-gray-500">Preparing your session</p>
+            <p className="mt-4 text-gray-600 font-medium">Organizing workout...</p>
+            <p className="mt-2 text-sm text-gray-500">Setting up rounds and equipment</p>
           </div>
         </div>
       )}
@@ -210,11 +237,7 @@ export default function WorkoutOverview() {
             </button>
             
             <button
-              onClick={() => {
-                setIsStarting(true);
-                setShowMenu(false);
-                router.push(`/workout-live?sessionId=${sessionId}&round=1`);
-              }}
+              onClick={handleStartWorkout}
               disabled={!sessionId || isStarting}
               className={`w-full px-4 py-2 text-left rounded-md transition-colors flex items-center gap-2 ${
                 sessionId && !isStarting
@@ -244,5 +267,17 @@ export default function WorkoutOverview() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function WorkoutOverview() {
+  return (
+    <Suspense fallback={
+      <div className="h-screen bg-gray-50 flex items-center justify-center">
+        <p className="text-gray-500">Loading...</p>
+      </div>
+    }>
+      <WorkoutOverviewMain />
+    </Suspense>
   );
 }
