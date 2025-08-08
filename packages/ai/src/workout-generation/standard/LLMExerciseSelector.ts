@@ -52,7 +52,13 @@ export interface LLMSelectionConfig {
 }
 
 export class LLMExerciseSelector {
-  private llm = createLLM();
+  private llm = createLLM({
+    modelName: "gpt-5",
+    maxTokens: 2000,
+    reasoning_effort: "high", // Complex personalized exercise selection
+    verbosity: "normal"
+    // Note: GPT-5 only supports default temperature (1.0)
+  });
   private captureDebugData: boolean = false;
   
   constructor(private config: LLMSelectionConfig) {}
@@ -62,6 +68,7 @@ export class LLMExerciseSelector {
    */
   enableDebugCapture(): void {
     this.captureDebugData = true;
+    console.log('[LLMExerciseSelector] Debug capture ENABLED');
   }
   
   /**
@@ -70,13 +77,13 @@ export class LLMExerciseSelector {
   async selectExercisesForAllClients(
     clientInputs: LLMSelectionInput[]
   ): Promise<Map<string, LLMSelectionResult>> {
-    // Starting concurrent LLM exercise selection
+    console.log('[LLMExerciseSelector] Starting concurrent LLM exercise selection for', clientInputs.length, 'clients');
     
     // Create promises for concurrent execution
     const selectionPromises = clientInputs.map(input => 
       this.selectExercisesForClient(input)
         .catch(error => {
-          // LLM selection failed for client
+          console.error(`[LLMExerciseSelector] LLM selection failed for client ${input.clientId}:`, error);
           // Return a fallback selection using top scored exercises
           return this.createFallbackSelection(input);
         })
@@ -102,6 +109,12 @@ export class LLMExerciseSelector {
   private async selectExercisesForClient(
     input: LLMSelectionInput
   ): Promise<LLMSelectionResult> {
+    console.log(`[LLMExerciseSelector] Selecting exercises for client ${input.clientId}`, {
+      preAssignedCount: input.preAssigned.length,
+      bucketedCount: input.bucketedCandidates.length,
+      additionalCount: input.additionalCandidates.length
+    });
+    
     // Combine bucketed + additional candidates to get 15 total
     const allCandidates = [
       ...input.bucketedCandidates,
@@ -142,26 +155,44 @@ export class LLMExerciseSelector {
       const content = response.content.toString();
       
       // Log LLM response for debugging
-      // LLM response received
+      console.log(`[LLMExerciseSelector] LLM response for client ${input.clientId}:`, {
+        responseLength: content.length,
+        first500Chars: content.substring(0, 500),
+        containsJsonBlock: content.includes('```json'),
+        containsJson: content.includes('{')
+      });
       
-      // Extract JSON from response
+      // Extract JSON from response - try markdown code block first, then raw JSON
+      let parsed: any;
       const jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/);
-      if (!jsonMatch) {
-        throw new Error('No JSON found in LLM response');
-      }
       
-      const parsed = JSON.parse(jsonMatch[1]);
+      if (jsonMatch) {
+        // Found JSON in markdown code block
+        parsed = JSON.parse(jsonMatch[1]);
+      } else {
+        // Try parsing the content directly as JSON (GPT-5 returns raw JSON)
+        try {
+          parsed = JSON.parse(content);
+        } catch (parseError) {
+          console.error(`[LLMExerciseSelector] Failed to parse LLM response as JSON:`, parseError);
+          console.error(`[LLMExerciseSelector] Full LLM response:`, content);
+          throw new Error('Failed to parse LLM response as JSON');
+        }
+      }
       
       // Validate and transform response
       const result = this.validateAndTransformResponse(parsed, input, allCandidates);
       
-      // Add debug data if enabled
-      if (this.captureDebugData) {
-        result.debug = {
-          systemPrompt: prompt,
-          llmResponse: content
-        };
-      }
+      // Always capture system prompts and responses for visualization
+      // (previously this was only done when captureDebugData was true)
+      console.log(`[LLMExerciseSelector] Capturing LLM data for client ${input.clientId}`, {
+        promptLength: prompt.length,
+        responseLength: content.length
+      });
+      result.debug = {
+        systemPrompt: prompt,
+        llmResponse: content
+      };
       
       return result;
       

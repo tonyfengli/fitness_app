@@ -21,7 +21,13 @@ import { getLogger } from "../../utils/logger";
 const logger = getLogger();
 
 export class StandardWorkoutGenerator {
-  private llm = createLLM();
+  private llm = createLLM({
+    modelName: "gpt-5",
+    maxTokens: 4000,
+    reasoning_effort: "high",
+    verbosity: "normal"
+    // Note: GPT-5 only supports default temperature (1.0)
+  });
   private captureDebugData: boolean = false;
   
   constructor(
@@ -74,7 +80,7 @@ export class StandardWorkoutGenerator {
         templateType: template.id,
         clientCount: groupContext.clients.length,
         timestamp: new Date().toISOString(),
-        llmModel: 'gpt-4o',
+        llmModel: 'gpt-5',
         generationDurationMs: totalDuration
       }
     };
@@ -108,9 +114,12 @@ export class StandardWorkoutGenerator {
     groupContext: GroupContext,
     retryCount = 0
   ): Promise<ExerciseSelection> {
+    // Get workout type from first client (they should all be the same for group workouts)
+    const workoutType = groupContext.clients[0]?.workoutType as WorkoutType;
+    
     logger.log('[StandardWorkoutGenerator] Phase 1: Bucketing + Concurrent LLM Selection', {
       attempt: retryCount + 1,
-      workoutType: groupContext.workoutType
+      workoutType: workoutType
     });
     
     const startTime = Date.now();
@@ -124,7 +133,7 @@ export class StandardWorkoutGenerator {
       
       // Step 3: Create LLM selector and make concurrent calls
       const llmSelector = new LLMExerciseSelector({
-        workoutType: groupContext.workoutType || WorkoutType.FULL_BODY_WITH_FINISHER,
+        workoutType: workoutType || WorkoutType.FULL_BODY_WITH_FINISHER,
         sharedExercises: blueprint.sharedExercisePool,
         groupContext: groupContext.clients.map(c => ({
           clientId: c.user_id,
@@ -133,10 +142,13 @@ export class StandardWorkoutGenerator {
         }))
       });
       
-      // Enable debug capture if requested
-      if (this.captureDebugData) {
-        llmSelector.enableDebugCapture();
-      }
+      // Debug capture is now always enabled for visualization
+      // (removed the conditional check)
+      
+      logger.log('[StandardWorkoutGenerator] Calling LLM selector for clients:', {
+        clientCount: llmInputs.length,
+        clientIds: llmInputs.map(input => input.clientId)
+      });
       
       const llmSelections = await llmSelector.selectExercisesForAllClients(llmInputs);
       
@@ -156,18 +168,20 @@ export class StandardWorkoutGenerator {
       // Add metadata
       (exerciseSelection as any).metadata = { durationMs: duration };
       
-      // Collect debug data if enabled
-      if (this.captureDebugData) {
-        const debugData: Record<string, { systemPrompt?: string; llmResponse?: string }> = {};
-        for (const [clientId, result] of llmSelections) {
-          if (result.debug) {
-            debugData[clientId] = {
-              systemPrompt: result.debug.systemPrompt,
-              llmResponse: result.debug.llmResponse
-            };
-          }
+      // Always collect debug data for visualization
+      // (previously this was only done when captureDebugData was true)
+      const debugData: Record<string, { systemPrompt?: string; llmResponse?: string }> = {};
+      for (const [clientId, result] of llmSelections) {
+        if (result.debug) {
+          debugData[clientId] = {
+            systemPrompt: result.debug.systemPrompt,
+            llmResponse: result.debug.llmResponse
+          };
         }
+      }
+      if (Object.keys(debugData).length > 0) {
         (exerciseSelection as any).debugData = debugData;
+        logger.log('[StandardWorkoutGenerator] Debug data collected for clients:', Object.keys(debugData));
       }
       
       // Validate response
@@ -388,9 +402,12 @@ export class StandardWorkoutGenerator {
   ): Promise<Map<string, ReturnType<typeof applyFullBodyBucketing>>> {
     const results = new Map();
     
+    // Get workout type from first client for checking
+    const workoutType = groupContext.clients[0]?.workoutType as WorkoutType;
+    
     // Only apply bucketing for Full Body workout types
-    if (groupContext.workoutType !== WorkoutType.FULL_BODY_WITH_FINISHER && 
-        groupContext.workoutType !== WorkoutType.FULL_BODY_WITHOUT_FINISHER) {
+    if (workoutType !== WorkoutType.FULL_BODY_WITH_FINISHER && 
+        workoutType !== WorkoutType.FULL_BODY_WITHOUT_FINISHER) {
       logger.log('[StandardWorkoutGenerator] Skipping bucketing for non-Full Body workout type');
       return results;
     }

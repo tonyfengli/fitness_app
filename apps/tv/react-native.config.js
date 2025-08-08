@@ -12,12 +12,9 @@ module.exports = {
       ? {'react-native-flipper': {platforms: {ios: null}}}
       : {}),
   },
-  commands: [
-    {
-      name: 'log',
-      func: () => {
-        console.log('Custom command');
-      },
-    },
+  // Help Metro find packages in monorepo
+  watchFolders: [
+    path.resolve(__dirname, '../../node_modules'),
+    path.resolve(__dirname, '../../packages'),
   ],
 };

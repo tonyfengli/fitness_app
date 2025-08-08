@@ -35,6 +35,7 @@ const logger = createLogger("WorkoutGenerationService");
 
 export interface GenerateBlueprintOptions {
   includeDiagnostics?: boolean;
+  phase1Only?: boolean; // Stop after Phase 1 (for visualization)
 }
 
 export interface GenerateAndCreateOptions {
@@ -152,13 +153,23 @@ export class WorkoutGenerationService {
       // Enable debug mode if diagnostics requested
       if (options?.includeDiagnostics) {
         this.debugMode = true;
+        logger.info("Debug mode enabled for workout generation", {
+          includeDiagnostics: options.includeDiagnostics,
+          phase1Only: options.phase1Only
+        });
+      } else {
+        logger.info("Debug mode NOT enabled", {
+          optionsProvided: !!options,
+          includeDiagnostics: options?.includeDiagnostics
+        });
       }
       
       const generationResult = await this.generateWithLLM(
         blueprint,
         groupContext,
         exercisePool,
-        sessionId
+        sessionId,
+        { phase1Only: options?.phase1Only }
       );
       
       // Structure the result properly
@@ -225,7 +236,8 @@ export class WorkoutGenerationService {
     blueprint: AnyGroupWorkoutBlueprint, 
     groupContext: GroupContext, 
     exercisePool: Exercise[],
-    sessionId: string
+    sessionId: string,
+    options?: { phase1Only?: boolean }
   ) {
     logger.info("Starting LLM generation", { 
       templateType: groupContext.templateType,
@@ -236,7 +248,7 @@ export class WorkoutGenerationService {
     if (isStandardBlueprint(blueprint)) {
       // Standard template with two-phase LLM
       logger.info("Using standard workout generator (two-phase)");
-      return this.generateStandardWorkouts(blueprint, groupContext, sessionId);
+      return this.generateStandardWorkouts(blueprint, groupContext, sessionId, options);
     }
 
     // BMF template with single-phase LLM
@@ -293,7 +305,11 @@ export class WorkoutGenerationService {
     const userMessage = "Generate the group workout assignments for rounds 3 and 4.";
 
     // Call LLM
-    const llm = createLLM();
+    const llm = createLLM({
+      modelName: "gpt-4",
+      temperature: 0.5,
+      maxTokens: 3000
+    });
     const response = await llm.invoke([
       new SystemMessage(systemPrompt),
       new HumanMessage(userMessage)
@@ -329,9 +345,12 @@ export class WorkoutGenerationService {
   private async generateStandardWorkouts(
     blueprint: StandardGroupWorkoutBlueprint,
     groupContext: GroupContext,
-    sessionId: string
+    sessionId: string,
+    options?: { phase1Only?: boolean }
   ) {
-    logger.info("Generating standard workouts with two-phase LLM");
+    logger.info("Generating standard workouts with two-phase LLM", {
+      phase1Only: options?.phase1Only || false
+    });
     
     // Get template
     const template = getWorkoutTemplate(groupContext.templateType || 'standard');
@@ -356,7 +375,83 @@ export class WorkoutGenerationService {
     }
     
     try {
-      // Generate workout plan using two-phase approach
+      // If phase1Only, we need to manually run just Phase 1
+      if (options?.phase1Only) {
+        logger.info("Running Phase 1 only (exercise selection)");
+        
+        // Access the private method through type casting
+        const exerciseSelection = await (generator as any).selectExercises(blueprint, groupContext);
+        
+        logger.info("Phase 1 exercise selection completed", {
+          hasExerciseSelection: !!exerciseSelection,
+          hasDebugData: !!(exerciseSelection as any).debugData,
+          debugDataClients: (exerciseSelection as any).debugData ? 
+            Object.keys((exerciseSelection as any).debugData) : []
+        });
+        
+        // Return a partial result with only Phase 1 data
+        const result: any = {
+          exerciseSelection,
+          roundOrganization: null, // No Phase 2
+          systemPrompt: "Phase 1 only - exercise selection",
+          userMessage: "Phase 1 only - see individual client selections",
+          llmOutput: JSON.stringify({ exerciseSelection }, null, 2),
+          metadata: {
+            phase1Only: true,
+            templateType: template.id,
+            clientCount: groupContext.clients.length,
+            timestamp: new Date().toISOString()
+          }
+        };
+        
+        // Always include debug data for visualization
+        const debugData = (exerciseSelection as any).debugData;
+        if (debugData) {
+          result.debug = {
+            systemPromptsByClient: {},
+            llmResponsesByClient: {}
+          };
+          
+          logger.info("Phase 1 debug data available", {
+            hasDebugData: true,
+            clientIds: Object.keys(debugData),
+            debugDataSample: Object.entries(debugData).map(([clientId, data]: [string, any]) => ({
+              clientId,
+              hasSystemPrompt: !!data.systemPrompt,
+              hasLlmResponse: !!data.llmResponse,
+              systemPromptLength: data.systemPrompt?.length || 0,
+              llmResponseLength: data.llmResponse?.length || 0
+            }))
+          });
+          
+          for (const [clientId, data] of Object.entries(debugData)) {
+            if ((data as any).systemPrompt) {
+              result.debug.systemPromptsByClient[clientId] = (data as any).systemPrompt;
+            }
+            if ((data as any).llmResponse) {
+              result.debug.llmResponsesByClient[clientId] = (data as any).llmResponse;
+            }
+          }
+        } else {
+          logger.info("No Phase 1 debug data found", {
+            hasExerciseSelection: !!exerciseSelection,
+            exerciseSelectionKeys: Object.keys(exerciseSelection)
+          });
+        }
+        
+        logger.info("Returning Phase 1 result", {
+          hasDebug: !!result.debug,
+          debugKeys: result.debug ? Object.keys(result.debug) : [],
+          systemPromptsByClientCount: result.debug?.systemPromptsByClient ? 
+            Object.keys(result.debug.systemPromptsByClient).length : 0,
+          llmResponsesByClientCount: result.debug?.llmResponsesByClient ? 
+            Object.keys(result.debug.llmResponsesByClient).length : 0
+        });
+        
+        return result;
+      }
+      
+      // Otherwise, run both phases as normal
       const workoutPlan = await generator.generate(
         blueprint,
         groupContext,

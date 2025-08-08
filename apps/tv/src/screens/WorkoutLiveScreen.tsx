@@ -1,13 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
-import { useNavigation, useRoute } from '@react-navigation/native';
-import { NativeStackNavigationProp, NativeStackScreenProps } from '@react-navigation/native-stack';
-import { RootStackParamList } from '../App';
+import { useNavigation } from '../App';
 
-type Props = NativeStackScreenProps<RootStackParamList, 'WorkoutLive'>;
-
-export function WorkoutLiveScreen({ route }: Props) {
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+export function WorkoutLiveScreen({ route }: any) {
+  const navigation = useNavigation();
   const { sessionId, round } = route.params;
   const [timeLeft, setTimeLeft] = useState(299); // 4:59
 

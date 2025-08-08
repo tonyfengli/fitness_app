@@ -57,7 +57,10 @@ function PreferencesPageContent() {
   const { refetch: generateBlueprint } = useQuery({
     ...trpc.trainingSession.generateGroupWorkoutBlueprint.queryOptions({ 
       sessionId: sessionId || '',
-      options: { includeDiagnostics: true }
+      options: { 
+        includeDiagnostics: true,
+        phase1Only: true // Only run Phase 1 for visualization
+      }
     }),
     enabled: false // Only run when we manually trigger it
   });

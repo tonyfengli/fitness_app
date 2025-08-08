@@ -4,6 +4,7 @@ import { useTRPC } from "~/trpc/react";
 export interface UseGroupWorkoutBlueprintOptions {
   sessionId: string | null;
   includeDiagnostics?: boolean;
+  phase1Only?: boolean;
   enabled?: boolean;
   onSuccess?: (data: any) => void;
 }
@@ -13,6 +14,7 @@ export function useGroupWorkoutBlueprint(options: UseGroupWorkoutBlueprintOption
   const { 
     sessionId, 
     includeDiagnostics = false,
+    phase1Only = false,
     enabled = true,
     onSuccess
   } = options;
@@ -20,7 +22,7 @@ export function useGroupWorkoutBlueprint(options: UseGroupWorkoutBlueprintOption
   const queryOptions = sessionId && enabled
     ? trpc.trainingSession.generateGroupWorkoutBlueprint.queryOptions({
         sessionId,
-        options: { includeDiagnostics }
+        options: { includeDiagnostics, phase1Only }
       })
     : {
         enabled: false,

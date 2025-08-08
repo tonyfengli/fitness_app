@@ -1,13 +1,9 @@
 import React from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
-import { useNavigation, useRoute } from '@react-navigation/native';
-import { NativeStackNavigationProp, NativeStackScreenProps } from '@react-navigation/native-stack';
-import { RootStackParamList } from '../App';
+import { useNavigation } from '../App';
 
-type Props = NativeStackScreenProps<RootStackParamList, 'GlobalPreferences'>;
-
-export function GlobalPreferencesScreen({ route }: Props) {
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+export function GlobalPreferencesScreen({ route }: any) {
+  const navigation = useNavigation();
   const { sessionId } = route.params;
 
   // TODO: Implement the full global preferences UI

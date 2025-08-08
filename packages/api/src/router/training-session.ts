@@ -829,6 +829,7 @@ export const trainingSessionRouter = {
       sessionId: z.string().uuid(),
       options: z.object({
         includeDiagnostics: z.boolean().default(false),
+        phase1Only: z.boolean().default(false),
       }).optional()
     }))
     .query(async ({ ctx, input }) => {
@@ -2752,9 +2753,12 @@ Return a JSON object with this structure:
         const { HumanMessage, SystemMessage } = await import("@langchain/core/messages");
         
         const llm = createLLM({
-          modelName: "gpt-4o",
+          modelName: "gpt-5",
           temperature: 0.7,
-          maxTokens: 4000
+          maxTokens: 4000,
+          // GPT-5 specific parameters
+          reasoning_effort: "high", // Complex multi-client round organization
+          verbosity: "normal"
         });
         
         const messages = [

@@ -164,7 +164,10 @@ function GroupVisualizationPageContent() {
         hasClientPools: !!data?.blueprint?.clientExercisePools,
         clientPoolKeys: data?.blueprint?.clientExercisePools ? Object.keys(data.blueprint.clientExercisePools) : [],
         hasBucketedSelection: data?.blueprint?.clientExercisePools ? 
-          Object.values(data.blueprint.clientExercisePools).some((pool: any) => !!pool.bucketedSelection) : false
+          Object.values(data.blueprint.clientExercisePools).some((pool: any) => !!pool.bucketedSelection) : false,
+        hasLlmResult: !!data?.llmResult,
+        llmResultKeys: data?.llmResult ? Object.keys(data.llmResult) : [],
+        llmResultDebug: data?.llmResult?.debug || 'NO DEBUG DATA'
       });
       if (data?.blueprint?.clientExercisePools) {
         Object.entries(data.blueprint.clientExercisePools).forEach(([clientId, pool]: [string, any]) => {
@@ -191,14 +194,36 @@ function GroupVisualizationPageContent() {
   const blueprintQuery = useGroupWorkoutBlueprint({
     sessionId,
     includeDiagnostics: true,
+    phase1Only: true, // Only run Phase 1 for visualization
     enabled: !!sessionId && !savedDataQuery.data, // Only fetch if no saved data
     onSuccess: (data) => {
       console.log('🔨 NEW BLUEPRINT GENERATED:', {
         reason: savedDataQuery.data ? 'Should not happen - saved data exists!' : 'No saved data found',
         hasBlueprint: !!data?.blueprint,
         hasClientPools: !!data?.blueprint?.clientExercisePools,
+        hasLlmResult: !!data?.llmResult,
+        llmResultKeys: data?.llmResult ? Object.keys(data.llmResult) : [],
+        hasDebug: !!data?.llmResult?.debug,
+        debugKeys: data?.llmResult?.debug ? Object.keys(data.llmResult.debug) : [],
         timestamp: new Date().toISOString()
       });
+      
+      if (data?.llmResult) {
+        console.log('🎉 LLM Result in blueprint query:', {
+          llmResultKeys: Object.keys(data.llmResult),
+          hasDebug: !!data.llmResult.debug,
+          debugStructure: data.llmResult.debug || 'NO DEBUG PROPERTY',
+          fullLlmResult: data.llmResult
+        });
+        
+        if (data.llmResult.debug) {
+          console.log('🔍 LLM Debug data structure:', {
+            systemPromptsByClient: Object.keys(data.llmResult.debug.systemPromptsByClient || {}),
+            llmResponsesByClient: Object.keys(data.llmResult.debug.llmResponsesByClient || {})
+          });
+        }
+      }
+      
       if (data?.blueprint?.clientExercisePools) {
         Object.entries(data.blueprint.clientExercisePools).forEach(([clientId, pool]: [string, any]) => {
           console.log(`  Client ${clientId} NEW bucketed exercises:`, 
@@ -259,14 +284,35 @@ function GroupVisualizationPageContent() {
 
   // Update LLM debug data when blueprint loads with LLM result
   useEffect(() => {
+    console.log('🔄 Checking llmResult for debug data:', {
+      hasLlmResult: !!data?.llmResult,
+      hasError: !!data?.llmResult?.error,
+      hasDebug: !!data?.llmResult?.debug,
+      debugKeys: data?.llmResult?.debug ? Object.keys(data.llmResult.debug) : []
+    });
+    
     if (data?.llmResult && !data.llmResult.error) {
-      setLlmDebugData({
-        systemPrompt: data.llmResult.systemPrompt || null,
-        userMessage: data.llmResult.userMessage || null,
-        llmOutput: data.llmResult.llmOutput || null,
-        systemPromptsByClient: data.llmResult.systemPromptsByClient,
-        llmResponsesByClient: data.llmResult.llmResponsesByClient
-      });
+      // Check if debug data is nested inside llmResult.debug
+      if (data.llmResult.debug) {
+        console.log('✅ Found debug data in llmResult.debug');
+        setLlmDebugData({
+          systemPrompt: data.llmResult.systemPrompt || null,
+          userMessage: data.llmResult.userMessage || null,
+          llmOutput: data.llmResult.llmOutput || null,
+          systemPromptsByClient: data.llmResult.debug.systemPromptsByClient,
+          llmResponsesByClient: data.llmResult.debug.llmResponsesByClient
+        });
+      } else {
+        // Fallback to direct properties (old format)
+        console.log('⚠️ No debug property, checking direct properties');
+        setLlmDebugData({
+          systemPrompt: data.llmResult.systemPrompt || null,
+          userMessage: data.llmResult.userMessage || null,
+          llmOutput: data.llmResult.llmOutput || null,
+          systemPromptsByClient: data.llmResult.systemPromptsByClient,
+          llmResponsesByClient: data.llmResult.llmResponsesByClient
+        });
+      }
     }
   }, [data?.llmResult]);
   
@@ -293,6 +339,16 @@ function GroupVisualizationPageContent() {
         });
       }
       
+      // Log llmResult structure before saving
+      console.log('📦 LLM Result structure before saving:', {
+        hasLlmResult: !!blueprintQuery.llmResult,
+        llmResultKeys: blueprintQuery.llmResult ? Object.keys(blueprintQuery.llmResult) : [],
+        hasDebug: !!blueprintQuery.llmResult?.debug,
+        debugKeys: blueprintQuery.llmResult?.debug ? Object.keys(blueprintQuery.llmResult.debug) : [],
+        systemPromptsByClientKeys: blueprintQuery.llmResult?.debug?.systemPromptsByClient ? 
+          Object.keys(blueprintQuery.llmResult.debug.systemPromptsByClient) : []
+      });
+      
       // Prepare the data to save - save the complete blueprint including bucketedSelection
       const visualizationData = {
         blueprint: blueprintQuery.blueprint, // This includes clientExercisePools with bucketedSelection
@@ -316,6 +372,43 @@ function GroupVisualizationPageContent() {
     }
   }, [data, selectedBlock]);
   
+  // Extract debug data from llmResult if available (must be before early returns)
+  const effectiveLlmDebugData = React.useMemo(() => {
+    // If we have debug data from generateWorkout, use that
+    if (llmDebugData.systemPromptsByClient || llmDebugData.llmResponsesByClient) {
+      console.log('🎯 Using debug data from generateWorkout');
+      return llmDebugData;
+    }
+    
+    // Log what we're receiving
+    console.log('🔍 Checking for debug data in llmResult:', {
+      hasData: !!data,
+      hasLlmResult: !!data?.llmResult,
+      llmResultType: typeof data?.llmResult,
+      llmResultKeys: data?.llmResult ? Object.keys(data.llmResult) : [],
+      hasDebug: !!data?.llmResult?.debug,
+      debugType: typeof data?.llmResult?.debug,
+      debugKeys: data?.llmResult?.debug ? Object.keys(data.llmResult.debug) : []
+    });
+    
+    // Otherwise, try to extract from llmResult if data is available
+    if (data?.llmResult?.debug) {
+      console.log('📊 Extracting debug data from llmResult:', {
+        hasSystemPromptsByClient: !!data.llmResult.debug.systemPromptsByClient,
+        hasLlmResponsesByClient: !!data.llmResult.debug.llmResponsesByClient,
+        clientIds: Object.keys(data.llmResult.debug.systemPromptsByClient || {})
+      });
+      
+      return {
+        ...llmDebugData,
+        systemPromptsByClient: data.llmResult.debug.systemPromptsByClient,
+        llmResponsesByClient: data.llmResult.debug.llmResponsesByClient
+      };
+    }
+    
+    console.log('⚠️ No debug data found in llmResult');
+    return llmDebugData;
+  }, [llmDebugData, data]);
   
   if (!sessionId) {
     return (
@@ -375,7 +468,7 @@ function GroupVisualizationPageContent() {
         router={router}
         activeTab={activeTab}
         setActiveTab={setActiveTab}
-        llmDebugData={llmDebugData}
+        llmDebugData={effectiveLlmDebugData}
         llmResult={data.llmResult}
         isFromSavedData={!!savedDataQuery.data}
         isSaving={saveVisualizationMutation.isPending}

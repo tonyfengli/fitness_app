@@ -5,6 +5,9 @@ export interface LLMConfig {
   temperature: number;
   maxTokens?: number;
   timeout?: number;
+  // GPT-5 specific parameters
+  reasoning_effort?: "low" | "medium" | "high";
+  verbosity?: "concise" | "normal" | "verbose";
 }
 
 export interface LLMProvider {
@@ -19,10 +22,26 @@ export const defaultLLMConfig: LLMConfig = {
 };
 
 export function createLLM(config: LLMConfig = defaultLLMConfig): LLMProvider {
-  return new ChatOpenAI({
+  const options: any = {
     modelName: config.modelName,
     temperature: config.temperature,
-    maxTokens: config.maxTokens,
     timeout: config.timeout,
-  });
+  };
+
+  // GPT-5 uses max_completion_tokens instead of maxTokens
+  if (config.modelName === "gpt-5" && config.maxTokens) {
+    options.max_completion_tokens = config.maxTokens;
+  } else if (config.maxTokens) {
+    options.maxTokens = config.maxTokens;
+  }
+
+  // Add GPT-5 specific parameters if provided
+  if (config.reasoning_effort) {
+    options.reasoning_effort = config.reasoning_effort;
+  }
+  if (config.verbosity) {
+    options.verbosity = config.verbosity;
+  }
+
+  return new ChatOpenAI(options);
 }
