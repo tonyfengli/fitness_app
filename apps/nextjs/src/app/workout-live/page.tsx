@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { useTRPC } from "~/trpc/react";
@@ -160,7 +160,7 @@ function Timer({ timeLeft }: { timeLeft: number }) {
   );
 }
 
-export default function WorkoutLivePage() {
+function WorkoutLivePageContent() {
   const searchParams = useSearchParams();
   const sessionId = searchParams.get("sessionId");
   const round = searchParams.get("round") || "1";
@@ -453,5 +453,20 @@ export default function WorkoutLivePage() {
         </button>
       </div>
     </div>
+  );
+}
+
+export default function WorkoutLivePage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading workout...</p>
+        </div>
+      </div>
+    }>
+      <WorkoutLivePageContent />
+    </Suspense>
   );
 }

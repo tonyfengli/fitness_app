@@ -214,7 +214,7 @@ export class WorkoutBlueprintService {
       const filterInput: WorkoutGenerationInput = {
         clientId: client.userId,
         sessionGoal: (clientContext.primary_goal === 'strength' ? 'strength' : 'stability') as "strength" | "stability",
-        intensity: clientContext.intensity || 'moderate',
+        intensity: (clientContext.intensity === 'intense' ? 'high' : clientContext.intensity || 'moderate') as "low" | "moderate" | "high",
         template: 'full_body' as "standard" | "circuit" | "full_body", // Always use full_body for BMF
         includeExercises: clientContext.exercise_requests?.include || [],
         avoidExercises: clientContext.exercise_requests?.avoid || [],

@@ -237,7 +237,7 @@ export class LinearFlowHandler {
         // Check if it's a number selection (1, 2, 3, etc)
         const numberMatch = trimmedResponse.match(/^(\d+)$/);
         if (numberMatch) {
-          const index = parseInt(numberMatch[1]) - 1;
+          const index = parseInt(numberMatch[1]!) - 1;
           if (index >= 0 && index < step.options.length) {
             return { valid: true, value: step.options[index] };
           }
@@ -273,7 +273,7 @@ export class LinearFlowHandler {
   /**
    * Map collected data to workout preferences
    */
-  private static mapToPreferences(collectedData: Record<string, any>): Partial<WorkoutPreferences> {
+  private static mapToPreferences(collectedData: Record<string, any>): Record<string, any> {
     const preferences: any = {};
 
     // Map common fields

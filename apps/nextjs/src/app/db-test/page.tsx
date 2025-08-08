@@ -1,6 +1,9 @@
 import { Suspense } from "react";
 import DatabaseTestContent from "./test-content";
 
+// Disable static generation for this page since it needs to make API calls
+export const dynamic = 'force-dynamic';
+
 export default function DatabaseTestPage() {
   return (
     <div className="container mx-auto py-8">

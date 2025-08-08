@@ -154,7 +154,7 @@ export class UnifiedLogger {
         direction,
         content: content || message.content,
         phoneNumber: message.userPhone,
-        channel: message.channel,
+        channel: message.channel === 'sms' ? 'sms' : 'in_app',
         metadata: {
           ...message.metadata,
           ...metadata,

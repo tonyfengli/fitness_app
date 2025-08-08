@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useTRPC } from "~/trpc/react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
@@ -17,7 +17,7 @@ import { supabase } from "~/lib/supabase";
 
 
 
-export default function PreferencesPage() {
+function PreferencesPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const sessionId = searchParams.get("sessionId");
@@ -570,5 +570,20 @@ export default function PreferencesPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function PreferencesPage() {
+  return (
+    <Suspense fallback={
+      <div className="h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading preferences...</p>
+        </div>
+      </div>
+    }>
+      <PreferencesPageContent />
+    </Suspense>
   );
 }

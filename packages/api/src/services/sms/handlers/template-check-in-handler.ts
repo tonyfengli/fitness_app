@@ -108,12 +108,14 @@ export class TemplateCheckInHandler {
       await saveMessage({
         userId: userInfo.userId,
         businessId: userInfo.businessId,
-        trainingSessionId: userInfo.trainingSessionId,
         phoneNumber,
-        messageContent,
-        messageSid,
+        content: messageContent,
         direction: 'inbound' as const,
-        status: 'sent'
+        status: 'sent',
+        metadata: {
+          twilioMessageSid: messageSid,
+          trainingSessionId: userInfo.trainingSessionId
+        }
       });
 
       // Update check-in status
@@ -163,11 +165,13 @@ export class TemplateCheckInHandler {
       await saveMessage({
         userId: userInfo.userId,
         businessId: userInfo.businessId,
-        trainingSessionId: userInfo.trainingSessionId,
         phoneNumber,
-        messageContent: response,
+        content: response,
         direction: 'outbound' as const,
-        status: 'sent'
+        status: 'sent',
+        metadata: {
+          trainingSessionId: userInfo.trainingSessionId
+        }
       });
 
       return {

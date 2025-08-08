@@ -445,7 +445,8 @@ export const workoutRouter = {
         if (!acc[exercise.workoutId]) {
           acc[exercise.workoutId] = [];
         }
-        acc[exercise.workoutId].push({
+        acc[exercise.workoutId]!.push({
+          workoutId: exercise.workoutId,
           id: exercise.id,
           orderIndex: exercise.orderIndex,
           setsCompleted: exercise.setsCompleted,

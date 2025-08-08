@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -136,7 +136,7 @@ function getScoreAdjustmentLabels(score: number, scoreBreakdown?: any): React.Re
   return null;
 }
 
-export default function GroupVisualizationPage() {
+function GroupVisualizationPageContent() {
   const searchParams = useSearchParams();
   const sessionId = searchParams.get("sessionId");
   const router = useRouter();
@@ -730,6 +730,21 @@ export default function GroupVisualizationPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function GroupVisualizationPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading group visualization...</p>
+        </div>
+      </div>
+    }>
+      <GroupVisualizationPageContent />
+    </Suspense>
   );
 }
 

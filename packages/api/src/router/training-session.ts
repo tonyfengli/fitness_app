@@ -1751,6 +1751,9 @@ Set your goals and preferences for today's session.`;
       }
 
       const sessionData = userSessionData[0];
+      if (!sessionData) {
+        return { recommendations: [] };
+      }
 
       // Only process for BMF templates
       if (sessionData.templateType !== 'full_body_bmf') {
@@ -1765,7 +1768,7 @@ Set your goals and preferences for today's session.`;
         // This ensures clients can see recommendations even before session starts
         const blueprint = await WorkoutBlueprintService.generateBlueprintWithCache(
           input.sessionId,
-          sessionData.businessId,
+          sessionData!.businessId,
           input.userId,
           false // Don't force regenerate - will generate if not cached
         );
@@ -2640,7 +2643,7 @@ Set your goals and preferences for today's session.`;
         const phase2Input = {
           templateType: session.templateType,
           clients: workoutsWithExercises.map(({ workout, exercises }) => {
-            const client = groupContext.clients.find(c => c.user_id === workout.userId);
+            const client = groupContext.clients.find((c: any) => c.user_id === workout.userId);
             return {
               clientId: workout.userId,
               clientName: client?.name || 'Unknown',
@@ -2678,7 +2681,7 @@ ${client.exercises.map(e => `    * ${e.exerciseName} (ID: ${e.exerciseId})`).joi
 `).join('')}
 
 SHARED EXERCISES:
-${phase2Input.sharedExercises.map(se => `- ${se.exerciseName} (shared by ${se.clientIds.length} clients)`).join('\n')}
+${phase2Input.sharedExercises.map((se: any) => `- ${se.exerciseName} (shared by ${se.clientIds.length} clients)`).join('\n')}
 
 YOUR TASK:
 Organize these exercises into rounds for a cohesive group workout. 
@@ -2819,7 +2822,7 @@ Return a JSON object with this structure:
           // Collect all exercise IDs used in rounds for this client
           for (const round of roundOrganization.rounds) {
             const clientExercises = round.exercises[client.clientId] || [];
-            clientExercises.forEach(ex => usedExerciseIds.add(ex.exerciseId));
+            clientExercises.forEach((ex: any) => usedExerciseIds.add(ex.exerciseId));
           }
           
           // Check if all client exercises are used
@@ -2873,7 +2876,7 @@ Return a JSON object with this structure:
           console.log(`[startWorkout] Processing ${roundName}...`);
           
           // For each client in this round
-          for (const [clientId, exercises] of Object.entries(round.exercises)) {
+          for (const [clientId, exercises] of Object.entries(round.exercises) as [string, any][]) {
             // Find the workout for this client
             const clientWorkout = workoutsWithExercises.find(w => w.workout.userId === clientId);
             if (!clientWorkout) {

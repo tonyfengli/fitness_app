@@ -149,6 +149,6 @@ export const createAuthenticatedContext = (
   return createMockContext(user, session);
 };
 
-export const createCaller = (ctx: any) => {
+export const createCaller = (ctx: any): ReturnType<typeof appRouter.createCaller> => {
   return appRouter.createCaller(ctx);
 };

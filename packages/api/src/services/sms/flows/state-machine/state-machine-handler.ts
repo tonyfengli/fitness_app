@@ -92,6 +92,10 @@ export class StateMachineHandler {
         return await this.completeFlow(phoneNumber, messageSid, sessionId, stateMachine, context);
       }
 
+      if (!nextState) {
+        throw new Error(`State ${nextStateId} not found in state machine`);
+      }
+
       // Return next prompt
       return {
         success: true,
@@ -261,7 +265,7 @@ export class StateMachineHandler {
    */
   private static extractPainLevel(message: string): number {
     const match = message.match(/\b([1-9]|10)\b/);
-    return match ? parseInt(match[1]) : 5; // Default to 5 if not specified
+    return match ? parseInt(match[1]!) : 5; // Default to 5 if not specified
   }
 
   /**
@@ -378,7 +382,7 @@ export class StateMachineHandler {
   /**
    * Map collected data to workout preferences
    */
-  private static mapToPreferences(collectedData: Record<string, any>): Partial<WorkoutPreferences> {
+  private static mapToPreferences(collectedData: Record<string, any>): Record<string, any> {
     // Similar to linear flow, but can handle more complex mappings
     const preferences: any = {};
 

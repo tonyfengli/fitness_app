@@ -222,16 +222,16 @@ export class TemplateSMSService {
     
     // If we have template-specific prompts, use those
     if (smsConfig && fieldsToAsk.length === 1) {
-      return prompts[fieldsToAsk[0]] || "Tell me more about your preferences.";
+      return prompts[fieldsToAsk[0]!] || "Tell me more about your preferences.";
     }
 
     // For multiple fields, combine them naturally
     if (fieldsToAsk.length === 2) {
-      const prompt1 = prompts[fieldsToAsk[0]];
-      const prompt2 = prompts[fieldsToAsk[1]];
+      const prompt1 = prompts[fieldsToAsk[0]!];
+      const prompt2 = prompts[fieldsToAsk[1]!];
       
       // Combine the two prompts
-      return `${prompt1} Also, ${prompt2.toLowerCase()}`;
+      return `${prompt1} Also, ${prompt2?.toLowerCase() || 'tell me more'}`;
     }
 
     // Fallback for more than 2 fields

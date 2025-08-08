@@ -103,7 +103,7 @@ export class UnifiedMessageProcessor {
         businessId: params.businessId,
         direction: 'inbound',
         content: params.content,
-        phoneNumber: userPhone,
+        phoneNumber: userPhone || undefined,
         metadata: {
           ...params.metadata,
           channel: params.channel,
@@ -157,21 +157,22 @@ export class UnifiedMessageProcessor {
         channel: params.channel,
       });
       
+      // Map SMS intent types to handler types
       switch (intent.type) {
         case "check_in":
           response = await this.checkInHandler.handle(mockPayload);
           break;
-        case "preference_collection":
+        case "inquiry":
+          // Route inquiry to preference handler for now
           response = await this.preferenceHandler.handle(mockPayload);
           break;
-        case "disambiguation":
-          response = await this.disambiguationHandler.handle(mockPayload);
-          break;
-        case "preference_update":
-          response = await this.preferenceUpdateHandler.handle(mockPayload);
-          break;
         default:
-          response = await this.defaultHandler.handle(mockPayload);
+          response = await this.defaultHandler.handle(
+            mockPayload.From,
+            mockPayload.Body,
+            mockPayload.MessageSid,
+            mockPayload.intent
+          );
       }
       
       logger.info("Handler response", {
@@ -187,7 +188,7 @@ export class UnifiedMessageProcessor {
         businessId: params.businessId,
         direction: 'outbound',
         content: response.message,
-        phoneNumber: userPhone,
+        phoneNumber: userPhone || undefined,
         metadata: {
           ...response.metadata,
           channel: params.channel,

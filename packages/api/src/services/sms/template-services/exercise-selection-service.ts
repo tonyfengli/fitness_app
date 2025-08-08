@@ -102,7 +102,7 @@ export class ExerciseSelectionService {
           } else if (block.individualCandidates) {
             // Find the first client's top candidate
             const firstClientId = Object.keys(block.individualCandidates)[0];
-            const firstClientCandidates = block.individualCandidates[firstClientId];
+            const firstClientCandidates = block.individualCandidates[firstClientId!];
             if (firstClientCandidates?.exercises?.length > 0) {
               topExercise = firstClientCandidates.exercises[0];
             }

@@ -110,12 +110,12 @@ export class FlowRouter {
 
     // Use existing preference handler
     const handler = new PreferenceHandler();
-    return await handler.handle(
-      phoneNumber,
-      messageContent,
-      messageSid,
-      preferenceCheck
-    );
+    return await handler.handle({
+      From: phoneNumber,
+      Body: messageContent,
+      MessageSid: messageSid,
+      intent: { data: preferenceCheck }
+    });
   }
 
   /**

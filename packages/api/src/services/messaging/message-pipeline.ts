@@ -63,10 +63,17 @@ export class MessagePipeline {
       // 5. Detect intent
       console.log(`[${new Date().toISOString()}] Detecting intent for: "${message.content}"`);
       const intentResult = await this.intentRouter.interpretMessage(message.content);
+      
+      // Map SMS intent types to unified message intent types
+      let mappedType: MessageIntent['type'] = 'default';
+      if (intentResult.intent.type === 'check_in') {
+        mappedType = 'check_in';
+      }
+      
       const intent: MessageIntent = {
-        type: intentResult.intent.type,
+        type: mappedType,
         confidence: intentResult.intent.confidence,
-        data: intentResult.intent.data
+        data: (intentResult.intent as any).data
       };
 
       console.log(`[${new Date().toISOString()}] Intent detected:`, {

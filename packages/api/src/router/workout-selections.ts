@@ -56,6 +56,11 @@ export const workoutSelectionsRouter = {
         return [];
       }
 
+      const firstWorkout = workout[0];
+      if (!firstWorkout) {
+        return [];
+      }
+
       // Get workout exercises with exercise details
       const workoutExercises = await ctx.db
         .select({
@@ -64,7 +69,7 @@ export const workoutSelectionsRouter = {
         })
         .from(WorkoutExercise)
         .innerJoin(exercises, eq(WorkoutExercise.exerciseId, exercises.id))
-        .where(eq(WorkoutExercise.workoutId, workout[0].id))
+        .where(eq(WorkoutExercise.workoutId, firstWorkout.id))
         .orderBy(asc(WorkoutExercise.orderIndex));
 
       // Transform to match the expected format
@@ -184,6 +189,14 @@ export const workoutSelectionsRouter = {
           });
         }
 
+        const firstWorkout = workout[0];
+        if (!firstWorkout) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Draft workout not found',
+          });
+        }
+
         // 3. Update the workout exercise
         await tx.update(WorkoutExercise)
           .set({
@@ -194,7 +207,7 @@ export const workoutSelectionsRouter = {
           })
           .where(
             and(
-              eq(WorkoutExercise.workoutId, workout[0].id),
+              eq(WorkoutExercise.workoutId, firstWorkout.id),
               eq(WorkoutExercise.exerciseId, input.originalExerciseId)
             )
           );
@@ -284,6 +297,14 @@ export const workoutSelectionsRouter = {
           });
         }
 
+        const firstWorkout = workout[0];
+        if (!firstWorkout) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Draft workout not found',
+          });
+        }
+
         // 3. Update the workout exercise
         await tx.update(WorkoutExercise)
           .set({
@@ -294,7 +315,7 @@ export const workoutSelectionsRouter = {
           })
           .where(
             and(
-              eq(WorkoutExercise.workoutId, workout[0].id),
+              eq(WorkoutExercise.workoutId, firstWorkout.id),
               eq(WorkoutExercise.exerciseId, input.originalExerciseId)
             )
           );
@@ -325,7 +346,7 @@ export const workoutSelectionsRouter = {
       );
 
       // Check if it's a standard blueprint
-      const blueprint = blueprintData.blueprint as any;
+      const blueprint = (blueprintData as any).blueprint as any;
       if (!blueprint.clientExercisePools) {
         return []; // Not a standard blueprint
       }
@@ -399,7 +420,7 @@ export const workoutSelectionsRouter = {
       const selectionsByClient = workoutExercises.reduce((acc, row) => {
         if (!acc[row.userId]) acc[row.userId] = [];
         
-        acc[row.userId].push({
+        acc[row.userId]!.push({
           id: row.we.id,
           sessionId: input.sessionId,
           clientId: row.userId,

@@ -188,7 +188,7 @@ export const messagesRouter = createTRPCRouter({
             )
             .limit(1);
           
-          if (activeSession.length > 0) {
+          if (activeSession.length > 0 && activeSession[0]) {
             trainingSessionId = activeSession[0].sessionId;
             console.log(`[${new Date().toISOString()}] Found active session for user:`, {
               userId: input.recipientId,

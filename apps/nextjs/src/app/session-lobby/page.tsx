@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useTRPC } from "~/trpc/react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -81,7 +81,7 @@ interface CheckedInClient {
   preferencesUpdated?: boolean; // For preference update animation
 }
 
-export default function SessionLobby() {
+function SessionLobbyContent() {
   const searchParams = useSearchParams();
   const sessionId = searchParams.get("sessionId");
   const router = useRouter();
@@ -601,5 +601,20 @@ export default function SessionLobby() {
         }
       `}</style>
     </div>
+  );
+}
+
+export default function SessionLobby() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading session lobby...</p>
+        </div>
+      </div>
+    }>
+      <SessionLobbyContent />
+    </Suspense>
   );
 }

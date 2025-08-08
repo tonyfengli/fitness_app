@@ -174,8 +174,8 @@ export class WorkoutGenerationService {
       
       // Include per-client debug data if available (from standard generator)
       if (generationResult.debug && options?.includeDiagnostics) {
-        llmResult.systemPromptsByClient = generationResult.debug.systemPromptsByClient;
-        llmResult.llmResponsesByClient = generationResult.debug.llmResponsesByClient;
+        (llmResult as any).systemPromptsByClient = generationResult.debug.systemPromptsByClient;
+        (llmResult as any).llmResponsesByClient = generationResult.debug.llmResponsesByClient;
       }
       
       logger.info("LLM generation completed successfully");
@@ -1125,7 +1125,7 @@ export class WorkoutGenerationService {
       const client = groupContext.clients.find(c => c.user_id === clientId);
       if (!client) continue;
       
-      const clientSelection = {
+      const clientSelection: any = {
         clientName: client.name,
         preAssigned: [],
         selected: [],
@@ -1140,9 +1140,9 @@ export class WorkoutGenerationService {
         const exerciseData = {
           exerciseId: sel.exerciseId,
           exerciseName: sel.exerciseName,
-          movementPattern: exercise.movement_pattern || '',
-          primaryMuscle: exercise.primary_muscles?.[0] || '',
-          score: exercise.score || 5.0,
+          movementPattern: exercise.movementPattern || '',
+          primaryMuscle: exercise.primaryMuscle || '',
+          score: (exercise as any).score || 5.0,
           isShared: sel.isShared,
           sharedWith: sel.sharedWithClients
         };
@@ -1174,7 +1174,7 @@ export class WorkoutGenerationService {
           exerciseId,
           exerciseName: exercise.name,
           clientIds: Array.from(clientIds),
-          averageScore: exercise.score || 5.0
+          averageScore: (exercise as any).score || 5.0
         });
       }
     }

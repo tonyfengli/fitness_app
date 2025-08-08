@@ -85,10 +85,10 @@ export class CheckInHandler {
               });
               
               // Always use preview selections for check-in message
-              const selections = await ExerciseSelectionService.getDeterministicPreview(session.templateType);
+              const selections = await ExerciseSelectionService.getDeterministicPreview(session!.templateType || 'standard');
               
               if (selections.length > 0) {
-                const clientName = ExerciseSelectionService.formatClientName(userName);
+                const clientName = ExerciseSelectionService.formatClientName(userName || null);
                 responseMessage = ExerciseSelectionService.formatSelectionsForSMS(selections, clientName);
                 
                 logger.info("Using exercise preview in check-in", {
