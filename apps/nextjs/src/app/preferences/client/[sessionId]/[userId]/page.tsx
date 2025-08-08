@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useTRPC } from "~/trpc/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { 
@@ -615,22 +615,23 @@ const AddExerciseModal = ({
 
 export default function ClientPreferencePage() {
   const params = useParams();
+  const router = useRouter();
   const sessionId = params.sessionId as string;
   const userId = params.userId as string;
   const trpc = useTRPC();
-  const [currentStep, setCurrentStep] = useState(1); // 1: Workout Style, 2: Muscle Target, 3: Muscle Limit, 4: Intensity, 5: Other Notes
+  const [currentStep, setCurrentStep] = useState(1); // 1: Workout Style, 2: Muscle Target, 3: Muscle Limit, 4: Intensity
   
   // Mutation for updating ready status
   const updateReadyStatus = useMutation(
-    trpc.trainingSession.updateClientReadyStatus.mutationOptions({
+    trpc.trainingSession.updateClientReadyStatusPublic.mutationOptions({
       onSuccess: () => {
-        // Redirect after successful update
-        window.location.href = `/client-workout-overview?sessionId=${sessionId}&userId=${userId}`;
+        // Navigate to workout-overview after marking as ready
+        console.log('Successfully marked as ready');
+        router.push(`/workout-overview?sessionId=${sessionId}&userId=${userId}`);
       },
       onError: (error) => {
         console.error('Failed to update ready status:', error);
-        // Still redirect even if update fails
-        window.location.href = `/client-workout-overview?sessionId=${sessionId}&userId=${userId}`;
+        alert('Failed to mark as ready. Please try again.');
       }
     })
   );
@@ -772,7 +773,7 @@ export default function ClientPreferencePage() {
           {/* Progress indicator */}
           <div className="p-4 border-b border-gray-200">
             <div className="flex items-center justify-center space-x-2">
-              {[1, 2, 3, 4, 5].map((step) => (
+              {[1, 2, 3, 4].map((step) => (
                 <div
                   key={step}
                   className={`h-2 w-8 rounded-full transition-colors ${
@@ -786,7 +787,7 @@ export default function ClientPreferencePage() {
               ))}
             </div>
             <p className="text-center text-sm text-gray-500 mt-2">
-              Step {currentStep} of 5
+              Step {currentStep} of 4
             </p>
           </div>
 
@@ -1118,56 +1119,6 @@ export default function ClientPreferencePage() {
                   Back
                 </button>
                 <button
-                  onClick={() => setCurrentStep(5)}
-                  className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium"
-                >
-                  Next
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Step 5: Other Notes */}
-          {currentStep === 5 && (
-            <div className="p-6">
-              <div className="flex items-center gap-2 mb-4">
-                <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-sm font-semibold">
-                  5
-                </div>
-                <h4 className="font-medium text-gray-900">Other Notes</h4>
-              </div>
-              <p className="text-sm text-gray-600 mb-4">Add any additional notes or preferences</p>
-              <div className="space-y-3">
-                {/* Display existing notes */}
-                {(workoutPreferences?.notes || []).map((note, idx) => (
-                  <PreferenceListItem
-                    key={`note-${idx}`}
-                    label={note}
-                    type="note"
-                    onRemove={() => handleRemoveNote(idx)}
-                    isRemoving={isRemovingNote}
-                  />
-                ))}
-                
-                {/* Add Note button */}
-                <button 
-                  onClick={notesModal.open}
-                  className="w-full p-3 border border-gray-300 rounded-lg text-gray-700 bg-white hover:bg-gray-50 hover:border-gray-400 transition-colors flex items-center justify-center gap-2 font-medium shadow-sm"
-                >
-                  <PlusIcon />
-                  Add Note
-                </button>
-              </div>
-              
-              {/* Navigation buttons */}
-              <div className="mt-8 flex justify-between">
-                <button
-                  onClick={() => setCurrentStep(4)}
-                  className="px-6 py-2 text-gray-700 hover:text-gray-900 transition-colors font-medium"
-                >
-                  Back
-                </button>
-                <button
                   onClick={() => {
                     updateReadyStatus.mutate({
                       sessionId,
@@ -1178,7 +1129,7 @@ export default function ClientPreferencePage() {
                   disabled={updateReadyStatus.isPending}
                   className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium flex items-center gap-2 disabled:opacity-50"
                 >
-                  {updateReadyStatus.isPending ? 'Completing...' : (workoutPreferences?.notes || []).length === 0 ? 'Skip & Complete' : 'Complete'}
+                  {updateReadyStatus.isPending ? 'Completing...' : 'Complete'}
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                   </svg>
@@ -1186,6 +1137,7 @@ export default function ClientPreferencePage() {
               </div>
             </div>
           )}
+
         </div>
       </div>
       

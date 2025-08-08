@@ -6,6 +6,7 @@ import { useTRPC } from "~/trpc/react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { 
   useRealtimePreferences,
+  useRealtimeStatus,
   PreferenceListItem,
   ExerciseListItem,
   CheckIcon,
@@ -169,11 +170,32 @@ export default function PreferencesPage() {
     });
   }, [sessionId, queryClient]);
   
+  // Handle realtime status updates
+  const handleStatusUpdate = useCallback((update: any) => {
+    console.log('[PreferencesPage] Status update received:', update);
+    // Invalidate the checked-in clients query to refetch the latest data
+    queryClient.invalidateQueries({
+      predicate: (query) => {
+        const queryKey = query.queryKey as any[];
+        return queryKey[0]?.[0] === 'trainingSession' && 
+               queryKey[0]?.[1] === 'getCheckedInClients' &&
+               queryKey[1]?.input?.sessionId === sessionId;
+      }
+    });
+  }, [sessionId, queryClient]);
+  
   // Subscribe to realtime preference updates
-  useRealtimePreferences({
+  const { isConnected: preferencesConnected } = useRealtimePreferences({
     sessionId: sessionId || '',
     supabase,
     onPreferenceUpdate: handlePreferenceUpdate
+  });
+  
+  // Subscribe to realtime status updates
+  const { isConnected: statusConnected } = useRealtimeStatus({
+    sessionId: sessionId || '',
+    supabase,
+    onStatusUpdate: handleStatusUpdate
   });
   
 
@@ -256,18 +278,27 @@ export default function PreferencesPage() {
     id: client.userId,
     name: client.userName || "Unknown Client",
     avatar: client.userId,
+    status: client.status,
     exerciseCount: client.preferences?.includeExercises?.length || 0,
     confirmedExercises: getClientExercisesForRounds(client.userId),
     muscleFocus: client.preferences?.muscleTargets || [],
     avoidance: client.preferences?.muscleLessens || [],
     notes: client.preferences?.notes || [],
     intensity: client.preferences?.intensity || 'moderate',
-    workoutType: client.preferences?.sessionGoal || 'full_body',
+    workoutType: client.preferences?.workoutType || null,
     includeFinisher: client.preferences?.notes?.includes('include_finisher') || false
   })) || [];
 
   return (
     <div className="h-screen bg-gray-50 flex flex-col overflow-hidden relative">
+      {/* Real-time Connection Status - Top Left */}
+      <div className="fixed top-4 left-4 z-10">
+        <div className="flex items-center gap-2 text-xs text-gray-500">
+          <div className={`w-2 h-2 rounded-full ${preferencesConnected && statusConnected ? 'bg-green-500' : 'bg-gray-400'}`} />
+          <span>Live updates {preferencesConnected && statusConnected ? 'active' : 'connecting...'}</span>
+        </div>
+      </div>
+      
       {/* Action Menu - Top Right */}
       <div className="fixed top-4 right-4 z-10">
         {/* Menu Toggle Button */}
@@ -350,17 +381,39 @@ export default function PreferencesPage() {
           {clients.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 place-items-center">
               {clients.map((client) => (
-                <div key={client.id} className="bg-white rounded-lg shadow-sm border border-gray-200 w-full max-w-sm">
+                <div 
+                  key={client.id} 
+                  className={`relative bg-white rounded-xl w-full max-w-sm transition-all duration-300 ${
+                    client.status === 'ready'
+                      ? 'shadow-[0_0_40px_rgba(59,130,246,0.5)] border-2 border-blue-400 ring-4 ring-blue-100/50 scale-[1.02]'
+                      : 'shadow-lg border border-gray-200 hover:shadow-xl'
+                  }`}
+                >
+                  {/* Ready Badge */}
+                  {client.status === 'ready' && (
+                    <div className="absolute -top-2 -right-2 bg-blue-500 text-white text-xs font-bold px-3 py-1 rounded-full shadow-lg animate-pulse">
+                      READY
+                    </div>
+                  )}
+                  
                   {/* Client Header */}
-                  <div className="p-3 border-b border-gray-200">
-                    <div className="flex items-center gap-2">
-                      <img
-                        src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${client.avatar}`}
-                        alt={client.name}
-                        className="w-8 h-8 rounded-full"
-                      />
-                      <div>
-                        <h3 className="font-semibold text-gray-900 text-sm">{client.name}</h3>
+                  <div className={`p-4 rounded-t-xl ${
+                    client.status === 'ready' 
+                      ? 'bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-blue-200' 
+                      : 'bg-gray-50 border-b border-gray-200'
+                  }`}>
+                    <div className="flex items-center gap-3">
+                      <div className={`relative ${client.status === 'ready' ? 'ring-2 ring-blue-400 ring-offset-2' : ''} rounded-full`}>
+                        <img
+                          src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${client.avatar}`}
+                          alt={client.name}
+                          className="w-10 h-10 rounded-full"
+                        />
+                      </div>
+                      <div className="flex-1">
+                        <h3 className={`font-semibold text-sm ${
+                          client.status === 'ready' ? 'text-blue-900' : 'text-gray-900'
+                        }`}>{client.name}</h3>
                         {client.notes.length > 0 && (
                           <p className="text-xs text-gray-500">{client.notes.join(', ')}</p>
                         )}
@@ -368,84 +421,96 @@ export default function PreferencesPage() {
                     </div>
                   </div>
 
-                  {/* Section 1: Confirm Exercises */}
-                  <div className="p-3 border-b border-gray-200 flex gap-3">
-                    <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-sm font-semibold flex-shrink-0 mt-0.5">
+
+                  {/* Section 1: Workout Focus */}
+                  <div className={`p-3 border-b flex gap-3 ${
+                    client.status === 'ready' ? 'border-blue-100' : 'border-gray-200'
+                  }`}>
+                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5 ${
+                      client.status === 'ready' 
+                        ? 'bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-md' 
+                        : 'bg-gray-100 text-gray-600'
+                    }`}>
                       1
                     </div>
-                    <div className="space-y-1.5 flex-1">
-                      {client.confirmedExercises.map((exercise, idx) => (
-                        <ExerciseListItem
-                          key={idx}
-                          name={exercise.name}
-                          isExcluded={exercise.isExcluded}
-                          actionButton={
-                            <div className={`w-5 h-5 rounded-full border-2 transition-colors flex items-center justify-center ${
-                              exercise.isActive 
-                                ? 'border-green-500 bg-green-500'
-                                : 'border-gray-300 bg-gray-100 opacity-50' 
-                            }`}>
-                              {exercise.isActive && (
-                                <CheckIcon className="w-3 h-3 text-white" />
-                              )}
-                            </div>
-                          }
-                        />
-                      ))}
+                    <div className="flex-1 flex items-center">
+                      <span className="text-sm text-gray-700">
+                        {client.workoutType === 'full_body_with_finisher' && 'Full Body • With Finisher'}
+                        {client.workoutType === 'full_body_without_finisher' && 'Full Body • No Finisher'}
+                        {client.workoutType === 'targeted_with_finisher' && 'Targeted • With Finisher'}
+                        {client.workoutType === 'targeted_without_finisher' && 'Targeted • No Finisher'}
+                        {!client.workoutType && 'Not Set'}
+                      </span>
                     </div>
                   </div>
 
-                  {/* Section 2: Muscle Focus & Avoidance */}
-                  <div className="p-3 border-b border-gray-200 flex gap-3">
-                    <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-sm font-semibold flex-shrink-0 mt-0.5">
+                  {/* Section 2: Muscle Focus */}
+                  <div className={`p-3 border-b flex gap-3 ${
+                    client.status === 'ready' ? 'border-blue-100' : 'border-gray-200'
+                  }`}>
+                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5 ${
+                      client.status === 'ready' 
+                        ? 'bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-md' 
+                        : 'bg-gray-100 text-gray-600'
+                    }`}>
                       2
                     </div>
                     <div className="flex-1 flex items-center">
                       <div className="flex flex-wrap gap-1">
                         {/* Muscle Target Badges */}
-                        {client.muscleFocus.map((muscle, idx) => (
-                          <span
-                            key={`focus-${idx}`}
-                            className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700"
-                          >
-                            {formatMuscleLabel(muscle)}
-                          </span>
-                        ))}
-                        
-                        {/* Limit Badges */}
-                        {client.avoidance.map((item, idx) => (
-                          <span
-                            key={`avoid-${idx}`}
-                            className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700"
-                          >
-                            {formatMuscleLabel(item)}
-                          </span>
-                        ))}
-                        
-                        {/* Empty state */}
-                        {client.muscleFocus.length === 0 && client.avoidance.length === 0 && (
-                          <span className="text-sm text-gray-700">No muscle preferences</span>
+                        {client.muscleFocus.length > 0 ? (
+                          client.muscleFocus.map((muscle, idx) => (
+                            <span
+                              key={`focus-${idx}`}
+                              className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700"
+                            >
+                              {formatMuscleLabel(muscle)}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-sm text-gray-700">No muscle targets</span>
                         )}
                       </div>
                     </div>
                   </div>
 
-                  {/* Section 3: Workout Focus */}
-                  <div className="p-3 border-b border-gray-200 flex gap-3">
-                    <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-sm font-semibold flex-shrink-0 mt-0.5">
+                  {/* Section 3: Muscle Limit */}
+                  <div className={`p-3 border-b flex gap-3 ${
+                    client.status === 'ready' ? 'border-blue-100' : 'border-gray-200'
+                  }`}>
+                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5 ${
+                      client.status === 'ready' 
+                        ? 'bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-md' 
+                        : 'bg-gray-100 text-gray-600'
+                    }`}>
                       3
                     </div>
                     <div className="flex-1 flex items-center">
-                      <span className="text-sm text-gray-700">
-                        {client.workoutType === 'targeted' ? 'Targeted' : 'Full Body'}
-                        {client.includeFinisher && ' • Finisher'}
-                      </span>
+                      <div className="flex flex-wrap gap-1">
+                        {/* Limit Badges */}
+                        {client.avoidance.length > 0 ? (
+                          client.avoidance.map((item, idx) => (
+                            <span
+                              key={`avoid-${idx}`}
+                              className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700"
+                            >
+                              {formatMuscleLabel(item)}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-sm text-gray-700">No muscle limits</span>
+                        )}
+                      </div>
                     </div>
                   </div>
 
                   {/* Section 4: Intensity */}
                   <div className="p-3 flex gap-3">
-                    <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-sm font-semibold flex-shrink-0 mt-0.5">
+                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5 ${
+                      client.status === 'ready' 
+                        ? 'bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-md' 
+                        : 'bg-gray-100 text-gray-600'
+                    }`}>
                       4
                     </div>
                     <div className="flex-1 flex items-center">

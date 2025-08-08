@@ -53,16 +53,35 @@ function WorkoutCard({ workoutData, exercises }: { workoutData: any; exercises: 
 
 function WorkoutOverviewContent() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const sessionId = searchParams.get("sessionId");
+  const userId = searchParams.get("userId");
   const trpc = useTRPC();
   
-  // Fetch exercise selections instead of workouts
-  const { selections, isLoading, error } = useExerciseSelections(sessionId);
+  // Mutation to update client status back to checked_in
+  const updateStatusMutation = useMutation({
+    ...trpc.trainingSession.updateClientReadyStatusPublic.mutationOptions({
+      onSuccess: () => {
+        // Navigate back to preferences after status update
+        router.push(`/preferences/client/${sessionId}/${userId}`);
+      },
+      onError: (error) => {
+        console.error('Failed to update status:', error);
+        alert('Failed to update status. Please try again.');
+      }
+    })
+  });
   
-  // Also fetch client information to get names
+  // Check if this is a client view (userId present in URL)
+  const isClientView = !!userId;
+  
+  // Fetch exercise selections instead of workouts (skip if client view with no workouts)
+  const { selections, isLoading, error } = useExerciseSelections(isClientView ? null : sessionId);
+  
+  // Also fetch client information to get names (only for trainer view)
   const { data: clientsData } = useQuery({
     ...trpc.auth.getClientsByBusiness.queryOptions(),
-    enabled: !!sessionId,
+    enabled: !!sessionId && !isClientView,
   });
   
   // Transform selections into workout-like structure for display
@@ -105,6 +124,41 @@ function WorkoutOverviewContent() {
     );
   }
   
+  // For client view, skip loading states and show empty state immediately
+  if (isClientView) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="bg-white rounded-lg shadow-lg border border-gray-200 p-8 text-center max-w-md">
+          <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <svg className="w-8 h-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+          <h3 className="text-2xl font-bold text-gray-900 mb-2">All Set!</h3>
+          <p className="text-gray-600 mb-6">Your preferences have been saved. Your trainer will start the workout soon.</p>
+          <button
+            onClick={() => {
+              if (sessionId && userId) {
+                updateStatusMutation.mutate({
+                  sessionId,
+                  userId,
+                  isReady: false
+                });
+              } else {
+                window.history.back();
+              }
+            }}
+            disabled={updateStatusMutation.isPending}
+            className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {updateStatusMutation.isPending ? 'Updating...' : 'Back to Preferences'}
+          </button>
+        </div>
+      </div>
+    );
+  }
+  
+  // Trainer view loading states
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">

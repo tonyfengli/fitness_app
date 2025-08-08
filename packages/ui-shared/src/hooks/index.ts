@@ -12,6 +12,7 @@ export { useWorkoutBlocks } from './useWorkoutBlocks';
 // Client preferences hooks
 export { useClientPreferences } from './useClientPreferences';
 export { useRealtimePreferences } from './useRealtimePreferences';
+export { useRealtimeStatus } from './useRealtimeStatus';
 
 // UI state hooks
 export { useModalState, useMultipleModals } from './useModalState';

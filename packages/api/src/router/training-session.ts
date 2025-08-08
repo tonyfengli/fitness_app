@@ -372,6 +372,7 @@ export const trainingSessionRouter = {
               avoidExercises: preferences.avoidExercises,
               avoidJoints: preferences.avoidJoints,
               sessionGoal: preferences.sessionGoal,
+              workoutType: preferences.workoutType,
               notes: preferences.notes
             } : null
           };
@@ -1421,6 +1422,7 @@ Set your goals and preferences for today's session.`;
             avoidExercises: preferences.avoidExercises,
             avoidJoints: preferences.avoidJoints,
             sessionGoal: preferences.sessionGoal,
+            workoutType: preferences.workoutType,
             notes: preferences.notes,
           } : null,
         }
@@ -2232,6 +2234,50 @@ Set your goals and preferences for today's session.`;
       
       // Update status
       const newStatus = input.isReady ? 'ready' : 'checked_in';
+      await ctx.db
+        .update(UserTrainingSession)
+        .set({ status: newStatus })
+        .where(eq(UserTrainingSession.id, userSession.id));
+      
+      return { 
+        success: true, 
+        newStatus,
+        userId: input.userId 
+      };
+    }),
+    
+  /**
+   * Update client ready status - PUBLIC version for clients
+   */
+  updateClientReadyStatusPublic: publicProcedure
+    .input(z.object({
+      sessionId: z.string(),
+      userId: z.string(),
+      isReady: z.boolean()
+    }))
+    .mutation(async ({ ctx, input }) => {
+      // Verify user belongs to session
+      const userSession = await ctx.db.query.UserTrainingSession.findFirst({
+        where: and(
+          eq(UserTrainingSession.userId, input.userId),
+          eq(UserTrainingSession.trainingSessionId, input.sessionId),
+          or(
+            eq(UserTrainingSession.status, 'checked_in'),
+            eq(UserTrainingSession.status, 'ready')
+          )
+        ),
+      });
+
+      if (!userSession) {
+        throw new TRPCError({ 
+          code: "NOT_FOUND", 
+          message: "User session not found or user not checked in" 
+        });
+      }
+      
+      // Update the user's ready status
+      const newStatus = input.isReady ? 'ready' : 'checked_in';
+      
       await ctx.db
         .update(UserTrainingSession)
         .set({ status: newStatus })
