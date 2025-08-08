@@ -13,7 +13,7 @@ import { WorkoutOverviewScreen } from './screens/WorkoutOverviewScreen';
 import { WorkoutLiveScreen } from './screens/WorkoutLiveScreen';
 
 // Import global styles
-import './global.css';
+// import './global.css'; // Temporarily disabled for build
 
 const Stack = createStackNavigator();
 const queryClient = new QueryClient();

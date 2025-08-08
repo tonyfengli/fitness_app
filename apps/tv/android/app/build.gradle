@@ -92,7 +92,7 @@ android {
         }
         tv {
             dimension "default"
-            minSdkVersion 21
+            minSdkVersion 24
         }
     }
     signingConfigs {
