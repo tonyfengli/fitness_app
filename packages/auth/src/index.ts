@@ -15,7 +15,8 @@ export function initAuth(options: {
     database: drizzleAdapter(db, {
       provider: "pg",
     }),
-    baseURL: options.baseUrl,
+    // Don't set a fixed baseURL - let Better Auth determine it from the request
+    baseURL: undefined,
     secret: options.secret,
     emailAndPassword: {
       enabled: true,
@@ -58,18 +59,19 @@ export function initAuth(options: {
           return Math.random().toString(36).substring(2) + Date.now().toString(36);
         },
       },
-      useSecureCookies: options.baseUrl.startsWith("https"),
+      useSecureCookies: process.env.NODE_ENV === "production",
       crossSubDomainCookies: {
         enabled: false,
       },
     },
     trustedOrigins: [
       "expo://",
-      ...(options.baseUrl.includes("vercel.app") ? [
-        "https://*.vercel.app",
-        options.baseUrl,
-        options.productionUrl
-      ] : []),
+      // Allow all Vercel preview URLs
+      "https://*.vercel.app",
+      // Allow the production URL
+      options.productionUrl,
+      // Allow localhost for development
+      "http://localhost:3000",
     ],
   } satisfies BetterAuthOptions;
 

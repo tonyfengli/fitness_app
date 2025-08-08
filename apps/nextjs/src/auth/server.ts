@@ -7,12 +7,8 @@ import { initAuth } from "@acme/auth";
 
 import { env } from "~/env";
 
-const baseUrl =
-  env.VERCEL_ENV === "production"
-    ? `https://${env.VERCEL_PROJECT_PRODUCTION_URL}`
-    : env.VERCEL_ENV === "preview"
-      ? `https://${env.VERCEL_URL}`
-      : "http://localhost:3000";
+// Use a dynamic approach for Better Auth to accept requests from any Vercel URL
+const baseUrl = "http://localhost:3000"; // This is just for initialization
 
 console.log('[Auth Server] Initializing with:', {
   baseUrl,
