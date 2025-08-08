@@ -10,11 +10,10 @@ if (typeof window !== 'undefined') {
   });
 }
 
-const baseURL = env.NEXT_PUBLIC_VERCEL_ENV === "production"
-  ? `https://${env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL}`
-  : env.NEXT_PUBLIC_VERCEL_ENV === "preview"
-    ? `https://${env.NEXT_PUBLIC_VERCEL_URL}`
-    : "http://localhost:3000";
+// Temporary fix - use window.location.origin
+const baseURL = typeof window !== 'undefined' 
+  ? window.location.origin
+  : "http://localhost:3000";
 
 // Log the final URL
 if (typeof window !== 'undefined') {
