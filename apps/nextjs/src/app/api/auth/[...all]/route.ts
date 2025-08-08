@@ -1,5 +1,5 @@
 import { auth } from "~/auth/server";
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 const handler = async (req: NextRequest, ctx: any) => {
   console.log('[Auth Route] Request:', {
@@ -15,7 +15,16 @@ const handler = async (req: NextRequest, ctx: any) => {
     return response;
   } catch (error) {
     console.error('[Auth Route] Error:', error);
-    throw error;
+    
+    // Return a proper error response with details
+    return NextResponse.json(
+      { 
+        error: 'Authentication failed', 
+        details: error instanceof Error ? error.message : 'Unknown error',
+        stack: process.env.NODE_ENV === 'development' ? (error instanceof Error ? error.stack : undefined) : undefined
+      },
+      { status: 500 }
+    );
   }
 };
 

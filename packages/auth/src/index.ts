@@ -15,8 +15,9 @@ export function initAuth(options: {
     database: drizzleAdapter(db, {
       provider: "pg",
     }),
-    // Don't set a fixed baseURL - let Better Auth determine it from the request
-    baseURL: undefined,
+    // For Vercel, we need to set baseURL dynamically based on the request
+    // Using process.env.VERCEL_URL if available, otherwise undefined
+    baseURL: process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined,
     secret: options.secret,
     emailAndPassword: {
       enabled: true,
