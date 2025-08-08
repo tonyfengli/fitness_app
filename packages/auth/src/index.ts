@@ -63,7 +63,14 @@ export function initAuth(options: {
         enabled: false,
       },
     },
-    trustedOrigins: ["expo://"],
+    trustedOrigins: [
+      "expo://",
+      ...(options.baseUrl.includes("vercel.app") ? [
+        "https://*.vercel.app",
+        options.baseUrl,
+        options.productionUrl
+      ] : []),
+    ],
   } satisfies BetterAuthOptions;
 
   return betterAuth(config);

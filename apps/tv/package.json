@@ -5,11 +5,12 @@
   "main": "index.js",
   "scripts": {
     "android": "react-native run-android",
-    "android:tv": "react-native run-android --variant=tv",
+    "android:tv": "JAVA_HOME='/usr/local/opt/openjdk@17' ANDROID_HOME='$HOME/Library/Android/sdk' PATH='/usr/local/opt/openjdk@17/bin:$PATH:$HOME/Library/Android/sdk/platform-tools' react-native run-android --mode=tvDebug",
     "ios": "react-native run-ios",
     "start": "react-native start",
     "dev": "react-native start",
     "clean": "rm -rf node_modules .turbo build android/app/build ios/build",
+    "clean:android": "cd android && ./gradlew clean",
     "typecheck": "tsc --noEmit",
     "lint": "eslint . --ext .ts,.tsx"
   },
