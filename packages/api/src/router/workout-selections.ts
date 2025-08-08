@@ -213,6 +213,8 @@ export const workoutSelectionsRouter = {
       reason: z.string().optional()
     }))
     .mutation(async ({ ctx, input }) => {
+      console.log('[swapExercisePublic] Starting swap with input:', input);
+      
       // First verify that the client is checked into the session
       const { UserTrainingSession } = await import("@acme/db/schema");
       const userSession = await ctx.db.query.UserTrainingSession.findFirst({
@@ -248,14 +250,20 @@ export const workoutSelectionsRouter = {
       // Now perform the swap transaction
       return await ctx.db.transaction(async (tx) => {
         // 1. Log the swap - we record who made the swap as the client themselves
-        await tx.insert(workoutExerciseSwaps).values({
+        const swapData = {
           trainingSessionId: input.sessionId,
           clientId: input.clientId,
           originalExerciseId: input.originalExerciseId,
           newExerciseId: input.newExerciseId,
           swapReason: input.reason || 'Client manual selection',
           swappedBy: input.clientId // Client swapped their own exercise
-        });
+        };
+        
+        console.log('[swapExercisePublic] Inserting swap data:', swapData);
+        
+        const insertResult = await tx.insert(workoutExerciseSwaps).values(swapData).returning();
+        
+        console.log('[swapExercisePublic] Swap inserted successfully:', insertResult);
 
         // 2. Find the workout exercise to update
         const { Workout } = await import("@acme/db/schema");

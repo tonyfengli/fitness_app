@@ -2,11 +2,12 @@
 
 import React, { Suspense, useState, useMemo } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 // Removed ClientWorkoutCard import - using custom component
-import { Button, Icon } from "@acme/ui-shared";
+import { Button, Icon, useRealtimeExerciseSwaps } from "@acme/ui-shared";
 import { useTRPC } from "~/trpc/react";
 import { useExerciseSelections } from "~/hooks/useExerciseSelections";
+import { supabase } from "~/lib/supabase";
 
 // Constants
 const AVATAR_API_URL = "https://api.dicebear.com/7.x/avataaars/svg";
@@ -16,10 +17,11 @@ function WorkoutCard({ workoutData, exercises }: { workoutData: any; exercises: 
   const userName = workoutData.user.name || workoutData.user.email.split('@')[0];
   const avatarUrl = `${AVATAR_API_URL}?seed=${encodeURIComponent(userName)}`;
   
-  // Get all exercises as a flat list
+  // Get all exercises as a flat list with swap indicator
   const exerciseList = exercises?.map(ex => ({
     id: ex.id,
-    name: ex.exercise.name
+    name: ex.exercise.name,
+    isSwapped: ex.selectionSource === 'manual_swap'
   })) || [];
   
   return (
@@ -42,7 +44,14 @@ function WorkoutCard({ workoutData, exercises }: { workoutData: any; exercises: 
           {exerciseList.map((exercise, index) => (
             <li key={exercise.id} className="flex items-start">
               <span className="text-gray-500 mr-3 mt-0.5">{index + 1}.</span>
-              <span className="text-gray-800">{exercise.name}</span>
+              <div className="flex-1">
+                <span className="text-gray-800">{exercise.name}</span>
+                {exercise.isSwapped && (
+                  <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700">
+                    Swapped
+                  </span>
+                )}
+              </div>
             </li>
           ))}
         </ol>
@@ -55,33 +64,57 @@ function WorkoutOverviewContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const sessionId = searchParams.get("sessionId");
-  const userId = searchParams.get("userId");
   const trpc = useTRPC();
+  const queryClient = useQueryClient();
+  const [lastSwapTime, setLastSwapTime] = useState<Date | null>(null);
   
-  // Mutation to update client status back to checked_in
-  const updateStatusMutation = useMutation({
-    ...trpc.trainingSession.updateClientReadyStatusPublic.mutationOptions({
-      onSuccess: () => {
-        // Navigate back to preferences after status update
-        router.push(`/preferences/client/${sessionId}/${userId}`);
-      },
-      onError: (error) => {
-        console.error('Failed to update status:', error);
-        alert('Failed to update status. Please try again.');
-      }
-    })
+  // Use real-time exercise swap updates
+  const { isConnected: swapUpdatesConnected } = useRealtimeExerciseSwaps({
+    sessionId: sessionId || '',
+    supabase,
+    onSwapUpdate: (swap) => {
+      console.log('[WorkoutOverview] Exercise swap detected:', swap);
+      setLastSwapTime(new Date());
+      
+      // Force refetch of exercise selections
+      queryClient.invalidateQueries({
+        queryKey: [
+          [
+            "workoutSelections",
+            "getSelections"
+          ],
+          {
+            input: {
+              sessionId: sessionId
+            },
+            type: "query"
+          }
+        ]
+      });
+      
+      // Also invalidate the specific hook's query
+      queryClient.refetchQueries({
+        predicate: (query) => {
+          const queryKey = query.queryKey as any[];
+          return queryKey[0] && 
+                 Array.isArray(queryKey[0]) && 
+                 queryKey[0][0] === 'workoutSelections' && 
+                 queryKey[0][1] === 'getSelections';
+        }
+      });
+    },
+    onError: (error) => {
+      console.error('[WorkoutOverview] Real-time swap error:', error);
+    }
   });
   
-  // Check if this is a client view (userId present in URL)
-  const isClientView = !!userId;
+  // Fetch exercise selections instead of workouts
+  const { selections, isLoading, error } = useExerciseSelections(sessionId);
   
-  // Fetch exercise selections instead of workouts (skip if client view with no workouts)
-  const { selections, isLoading, error } = useExerciseSelections(isClientView ? null : sessionId);
-  
-  // Also fetch client information to get names (only for trainer view)
+  // Also fetch client information to get names
   const { data: clientsData } = useQuery({
     ...trpc.auth.getClientsByBusiness.queryOptions(),
-    enabled: !!sessionId && !isClientView,
+    enabled: !!sessionId,
   });
   
   // Transform selections into workout-like structure for display
@@ -110,7 +143,8 @@ function WorkoutOverviewContent() {
         },
         exercises: clientSelections.map((sel, index) => ({
           id: sel.id,
-          exercise: { name: sel.exerciseName }
+          exercise: { name: sel.exerciseName },
+          selectionSource: sel.selectionSource
         }))
       };
     });
@@ -124,41 +158,6 @@ function WorkoutOverviewContent() {
     );
   }
   
-  // For client view, skip loading states and show empty state immediately
-  if (isClientView) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="bg-white rounded-lg shadow-lg border border-gray-200 p-8 text-center max-w-md">
-          <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <svg className="w-8 h-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-            </svg>
-          </div>
-          <h3 className="text-2xl font-bold text-gray-900 mb-2">All Set!</h3>
-          <p className="text-gray-600 mb-6">Your preferences have been saved. Your trainer will start the workout soon.</p>
-          <button
-            onClick={() => {
-              if (sessionId && userId) {
-                updateStatusMutation.mutate({
-                  sessionId,
-                  userId,
-                  isReady: false
-                });
-              } else {
-                window.history.back();
-              }
-            }}
-            disabled={updateStatusMutation.isPending}
-            className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {updateStatusMutation.isPending ? 'Updating...' : 'Back to Preferences'}
-          </button>
-        </div>
-      </div>
-    );
-  }
-  
-  // Trainer view loading states
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -184,14 +183,32 @@ function WorkoutOverviewContent() {
   }
   
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 place-items-center">
-      {workouts.map((workoutData) => (
-        <WorkoutCard 
-          key={workoutData.workout.id} 
-          workoutData={workoutData} 
-          exercises={workoutData.exercises || []}
-        />
-      ))}
+    <div>
+      {/* WebSocket Connection Status */}
+      <div className="fixed bottom-4 left-4 z-10 bg-white rounded-lg shadow-lg px-3 py-2 text-xs">
+        <div className="flex items-center gap-2">
+          <div className={`w-2 h-2 rounded-full ${swapUpdatesConnected ? 'bg-green-500' : 'bg-gray-400'}`} />
+          <span className="text-gray-600">
+            Real-time updates {swapUpdatesConnected ? 'active' : 'connecting...'}
+          </span>
+          {lastSwapTime && (
+            <span className="text-gray-500 ml-2">
+              Last swap: {lastSwapTime.toLocaleTimeString()}
+            </span>
+          )}
+        </div>
+      </div>
+      
+      {/* Workout Cards Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 place-items-center">
+        {workouts.map((workoutData) => (
+          <WorkoutCard 
+            key={workoutData.workout.id} 
+            workoutData={workoutData} 
+            exercises={workoutData.exercises || []}
+          />
+        ))}
+      </div>
     </div>
   );
 }

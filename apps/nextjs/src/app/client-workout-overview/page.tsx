@@ -1,6 +1,6 @@
 "use client";
 
-import React, { Suspense, useState, useEffect, useMemo } from "react";
+import React, { Suspense, useState, useEffect, useMemo, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { useTRPC } from "~/trpc/react";
@@ -10,8 +10,12 @@ import {
   ExerciseListItem,
   SearchIcon,
   SpinnerIcon,
-  XIcon
+  XIcon,
+  useRealtimeWorkoutExercises,
+  useRealtimeExerciseSwaps
 } from "@acme/ui-shared";
+import { supabase } from "~/lib/supabase";
+import { useRouter } from "next/navigation";
 
 const AVATAR_API_URL = "https://api.dicebear.com/7.x/avataaars/svg";
 
@@ -24,45 +28,143 @@ interface SelectedExercise {
 
 function ClientWorkoutOverviewContent() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const sessionId = searchParams.get("sessionId");
   const userId = searchParams.get("userId");
   const trpc = useTRPC();
   const queryClient = useQueryClient();
+  const [realtimeExercises, setRealtimeExercises] = useState<any[]>([]);
   
-  // Set up the mutation
-  const swapExerciseMutation = useMutation(
-    trpc.workoutSelections.swapExercisePublic.mutationOptions({
-      onSuccess: () => {
-        // Invalidate queries on success
-        queryClient.invalidateQueries({
-          queryKey: [['trainingSession', 'getSavedVisualizationDataPublic']]
-        });
-        queryClient.invalidateQueries({
-          queryKey: [['workoutSelections', 'getSelectionsPublic']]
-        });
-        // Reload the page to show updated exercises
-        window.location.reload();
-      },
-      onError: (error) => {
-        console.error('Failed to swap exercise:', error);
-        alert('Failed to swap exercise. Please try again.');
+  // Set up the mutation with optimistic updates
+  const swapExerciseMutation = useMutation({
+    ...trpc.workoutSelections.swapExercisePublic.mutationOptions(),
+    onMutate: async ({ originalExerciseId, newExerciseId, clientId, sessionId }) => {
+      // Cancel any outgoing refetches
+      await queryClient.cancelQueries({
+        queryKey: [['workoutSelections', 'getSelectionsPublic']]
+      });
+      
+      // Find the new exercise details
+      const newExercise = availableExercisesRef.current.find(ex => ex.id === newExerciseId);
+      if (!newExercise) return;
+      
+      // Snapshot previous values
+      const selectionsKey = trpc.workoutSelections.getSelectionsPublic.queryOptions({ sessionId, clientId }).queryKey;
+      const previousSelections = queryClient.getQueryData(selectionsKey);
+      
+      // Optimistically update the selections
+      queryClient.setQueryData(selectionsKey, (old: any) => {
+        if (!old) return old;
+        return old.map((selection: any) => 
+          selection.exerciseId === originalExerciseId
+            ? { ...selection, exerciseId: newExerciseId, exerciseName: newExercise.name, selectionSource: 'manual_swap' }
+            : selection
+        );
+      });
+      
+      return { previousSelections };
+    },
+    onSuccess: () => {
+      // Close modals
+      setShowExerciseSelection(false);
+      setModalOpen(false);
+      setSelectedExercise(null);
+      setSelectedReplacement(null);
+      
+      // Invalidate queries to ensure fresh data
+      queryClient.invalidateQueries({
+        queryKey: [['workoutSelections', 'getSelectionsPublic']]
+      });
+      queryClient.invalidateQueries({
+        queryKey: [['trainingSession', 'getSavedVisualizationDataPublic']]
+      });
+    },
+    onError: (error, variables, context) => {
+      console.error('Failed to swap exercise:', error);
+      
+      // Revert optimistic update
+      if (context?.previousSelections) {
+        const selectionsKey = trpc.workoutSelections.getSelectionsPublic.queryOptions({ 
+          sessionId: variables.sessionId, 
+          clientId: variables.clientId 
+        }).queryKey;
+        queryClient.setQueryData(selectionsKey, context.previousSelections);
       }
-    })
-  );
+      
+      alert('Failed to swap exercise. Please try again.');
+    }
+  });
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedExercise, setSelectedExercise] = useState<any>(null);
   const [selectedExerciseIndex, setSelectedExerciseIndex] = useState<number | null>(null);
   const [showExerciseSelection, setShowExerciseSelection] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedReplacement, setSelectedReplacement] = useState<string | null>(null);
+  const availableExercisesRef = useRef<any[]>([]);
+  
+  // Mutation to update client status back to checked_in
+  const updateStatusMutation = useMutation({
+    ...trpc.trainingSession.updateClientReadyStatusPublic.mutationOptions({
+      onSuccess: () => {
+        // Navigate back to preferences after status update
+        router.push(`/preferences/client/${sessionId}/${userId}`);
+      },
+      onError: (error) => {
+        console.error('Failed to update status:', error);
+        alert('Failed to update status. Please try again.');
+      }
+    })
+  });
+  
+  // Use real-time workout exercises
+  useRealtimeWorkoutExercises({
+    sessionId: sessionId || '',
+    userId: userId || '',
+    supabase,
+    onExercisesUpdate: (exercises) => {
+      console.log('[ClientWorkoutOverview] Received real-time exercises:', exercises);
+      setRealtimeExercises(exercises);
+      // Force refetch of visualization data when exercises arrive
+      queryClient.invalidateQueries({
+        queryKey: [['trainingSession', 'getSavedVisualizationDataPublic']]
+      });
+      queryClient.invalidateQueries({
+        queryKey: [['workoutSelections', 'getSelectionsPublic']]
+      });
+    },
+    onError: (error) => {
+      console.error('[ClientWorkoutOverview] Real-time error:', error);
+    }
+  });
+  
+  // Use real-time exercise swap updates
+  const { isConnected: swapUpdatesConnected } = useRealtimeExerciseSwaps({
+    sessionId: sessionId || '',
+    supabase,
+    onSwapUpdate: (swap) => {
+      console.log('[ClientWorkoutOverview] Exercise swap detected:', swap);
+      
+      // Force refetch of exercise selections and visualization data
+      queryClient.invalidateQueries({
+        queryKey: [['workoutSelections', 'getSelectionsPublic']]
+      });
+      queryClient.invalidateQueries({
+        queryKey: [['trainingSession', 'getSavedVisualizationDataPublic']]
+      });
+    },
+    onError: (error) => {
+      console.error('[ClientWorkoutOverview] Swap updates error:', error);
+    }
+  });
 
   // Fetch visualization data
-  const { data: visualizationData, isLoading, error: visualizationError } = useQuery({
+  const { data: visualizationData, isLoading, error: visualizationError, refetch: refetchVisualization } = useQuery({
     ...trpc.trainingSession.getSavedVisualizationDataPublic.queryOptions({ 
       sessionId: sessionId || "",
       userId: userId || ""
     }),
     enabled: !!sessionId && !!userId,
+    refetchInterval: realtimeExercises.length > 0 ? false : 5000, // Poll every 5s until we get exercises
   });
   
   // Debug visualization data
@@ -74,7 +176,14 @@ function ClientWorkoutOverviewContent() {
     userId 
   });
 
-  // We'll get user info from the visualization data instead
+  // Fetch user info directly from client preference data
+  const { data: clientInfoResponse } = useQuery({
+    ...trpc.trainingSession.getClientPreferenceData.queryOptions({
+      sessionId: sessionId || "",
+      userId: userId || ""
+    }),
+    enabled: !!sessionId && !!userId,
+  });
 
   // Also fetch saved selections (always, not just as fallback)
   const { data: savedSelections } = useQuery({
@@ -97,10 +206,29 @@ function ClientWorkoutOverviewContent() {
   });
 
   const availableExercises = exercisesData?.exercises || [];
+  
+  // Keep ref updated with available exercises
+  useEffect(() => {
+    availableExercisesRef.current = availableExercises;
+  }, [availableExercises]);
 
   // Extract exercises for this specific client
   const clientExercises = useMemo(() => {
-    // First try to use saved selections (source of truth after swaps)
+    // First check if we have real-time exercises
+    if (realtimeExercises.length > 0) {
+      console.log('Using real-time exercises');
+      return realtimeExercises.map((exercise, index) => ({
+        id: exercise.exerciseId,
+        name: exercise.exerciseName || exercise.name,
+        source: 'llm_phase1',
+        reasoning: 'Selected by AI',
+        isShared: exercise.isShared || false,
+        isPreAssigned: false,
+        orderIndex: exercise.orderIndex || index
+      }));
+    }
+    
+    // Then try to use saved selections (source of truth after swaps)
     if (savedSelections && savedSelections.length > 0) {
       console.log('Using saved selections as primary source');
       return savedSelections.map((selection: any, index: number) => ({
@@ -239,16 +367,30 @@ function ClientWorkoutOverviewContent() {
     }
     
     return exercises;
-  }, [visualizationData, userId, savedSelections]);
+  }, [visualizationData, userId, savedSelections, realtimeExercises]);
 
   // Get user name and avatar
   const userName = useMemo(() => {
+    // First try direct client info response
+    if (clientInfoResponse?.user?.userName) {
+      return clientInfoResponse.user.userName;
+    }
+    
+    // Then check visualization data
     if (visualizationData?.groupContext) {
       const client = visualizationData.groupContext.clients.find((c: any) => c.user_id === userId);
       if (client?.name) return client.name;
+      if (client?.email) return client.email.split('@')[0];
     }
+    
+    // Try email from clientInfoResponse
+    if (clientInfoResponse?.user?.userEmail) {
+      return clientInfoResponse.user.userEmail.split('@')[0];
+    }
+    
+    // Final fallback
     return 'Client';
-  }, [visualizationData, userId]);
+  }, [visualizationData, userId, clientInfoResponse]);
 
   const avatarUrl = `${AVATAR_API_URL}?seed=${encodeURIComponent(userName)}`;
 
@@ -261,6 +403,14 @@ function ClientWorkoutOverviewContent() {
       setSearchQuery("");
     }
   }, [modalOpen, showExerciseSelection]);
+  
+  // Refetch visualization when we get real-time exercises
+  useEffect(() => {
+    if (realtimeExercises.length > 0 && !visualizationData) {
+      console.log('[ClientWorkoutOverview] Real-time exercises detected, refetching visualization data');
+      refetchVisualization();
+    }
+  }, [realtimeExercises.length, visualizationData, refetchVisualization]);
 
   // Filter exercises for the selection modal
   const filteredExercises = useMemo(() => {
@@ -307,18 +457,48 @@ function ClientWorkoutOverviewContent() {
   }
 
   // Empty state when no exercises found
-  if (!visualizationData || clientExercises.length === 0) {
-    // Provide more specific error messages
-    let message = "Your workout hasn't been generated yet. Please check back after your trainer creates it.";
-    let subMessage = "";
-    
-    if (visualizationData === null) {
-      message = "Your workout needs to be regenerated.";
-      subMessage = "The workout data has expired (older than 30 minutes) or hasn't been created yet. Please ask your trainer to click 'View Visualization' on the preferences page to regenerate it.";
-    } else if (visualizationData && clientExercises.length === 0) {
-      message = "No exercises found for your workout.";
-      subMessage = "The workout was generated but no exercises were assigned. Please contact your trainer.";
+  if (clientExercises.length === 0 && realtimeExercises.length === 0) {
+    // Show "All Set!" state if we're waiting for workout generation
+    if (!visualizationData || visualizationData === null) {
+      return (
+        <div className="min-h-screen bg-gray-50 p-4 flex items-center justify-center">
+          <div className="bg-white rounded-lg shadow-lg border border-gray-200 p-8 text-center max-w-md">
+            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg className="w-8 h-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <h3 className="text-2xl font-bold text-gray-900 mb-2">All Set!</h3>
+            <p className="text-gray-600 mb-4">Your preferences have been saved. Your trainer will start the workout soon.</p>
+            <div className="flex items-center justify-center gap-2 text-sm text-gray-500 mb-4">
+              <div className="animate-pulse w-2 h-2 bg-gray-400 rounded-full"></div>
+              <span>Waiting for workout generation</span>
+            </div>
+            <button
+              onClick={() => {
+                if (sessionId && userId) {
+                  updateStatusMutation.mutate({
+                    sessionId,
+                    userId,
+                    isReady: false
+                  });
+                } else {
+                  router.push('/');
+                }
+              }}
+              disabled={updateStatusMutation.isPending}
+              className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {updateStatusMutation.isPending ? 'Updating...' : 'Back to Preferences'}
+            </button>
+          </div>
+        </div>
+      );
     }
+    
+    // Other error states
+    let message = "No exercises found for your workout.";
+    let subMessage = "The workout was generated but no exercises were assigned. Please contact your trainer.";
     
     return (
       <div className="min-h-screen bg-gray-50 p-4">
@@ -343,18 +523,8 @@ function ClientWorkoutOverviewContent() {
                 </svg>
                 <h2 className="font-semibold text-gray-800 mt-4 mb-2">{message}</h2>
                 <p className="text-gray-600">
-                  {subMessage || "Please check back after your trainer creates it."}
+                  {subMessage}
                 </p>
-                {/* Debug info in development */}
-                {process.env.NODE_ENV === 'development' && (
-                  <div className="mt-4 text-xs text-gray-500 text-left">
-                    <p>Debug Info:</p>
-                    <p>- Session ID: {sessionId || 'None'}</p>
-                    <p>- User ID: {userId || 'None'}</p>
-                    <p>- Has visualization data: {visualizationData ? 'Yes' : 'No'}</p>
-                    <p>- Exercise count: {clientExercises.length}</p>
-                  </div>
-                )}
               </div>
             </div>
           </div>
@@ -587,25 +757,23 @@ function ClientWorkoutOverviewContent() {
                     originalExerciseId: selectedExercise.id,
                     newExerciseId: replacementExercise.id,
                     reason: 'Client manual selection'
-                  }, {
-                    onSuccess: () => {
-                      alert(`Exercise swap saved! Replaced "${selectedExercise.name}" with "${replacementExercise.name}"`);
-                      setShowExerciseSelection(false);
-                    },
-                    onError: (error) => {
-                      console.error('Failed to swap exercise:', error);
-                      alert('Failed to save exercise swap. Please try again.');
-                    }
                   });
                 }}
                 disabled={!selectedReplacement || swapExerciseMutation.isPending}
                 className={`px-4 py-2 rounded-lg transition-colors flex items-center gap-2 ${
-                  selectedReplacement
+                  selectedReplacement && !swapExerciseMutation.isPending
                     ? 'bg-indigo-600 hover:bg-indigo-700 text-white' 
                     : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                 }`}
               >
-                Confirm Change
+                {swapExerciseMutation.isPending ? (
+                  <>
+                    <SpinnerIcon className="animate-spin h-4 w-4 text-white" />
+                    Saving...
+                  </>
+                ) : (
+                  'Confirm Change'
+                )}
               </button>
             </div>
           </div>

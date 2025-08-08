@@ -625,9 +625,9 @@ export default function ClientPreferencePage() {
   const updateReadyStatus = useMutation(
     trpc.trainingSession.updateClientReadyStatusPublic.mutationOptions({
       onSuccess: () => {
-        // Navigate to workout-overview after marking as ready
+        // Navigate to client-workout-overview after marking as ready
         console.log('Successfully marked as ready');
-        router.push(`/workout-overview?sessionId=${sessionId}&userId=${userId}`);
+        router.push(`/client-workout-overview?sessionId=${sessionId}&userId=${userId}`);
       },
       onError: (error) => {
         console.error('Failed to update ready status:', error);
@@ -795,7 +795,7 @@ export default function ClientPreferencePage() {
           {currentStep === 1 && (
             <div className="p-6">
               <div className="flex items-center gap-2 mb-6">
-                <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-sm font-semibold">
+                <div className="w-8 h-8 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center text-sm font-semibold">
                   1
                 </div>
                 <h4 className="font-medium text-gray-900">Workout Focus</h4>
@@ -927,7 +927,7 @@ export default function ClientPreferencePage() {
           {currentStep === 2 && (
             <div className="p-6">
               <div className="flex items-center gap-2 mb-4">
-                <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-sm font-semibold">
+                <div className="w-8 h-8 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center text-sm font-semibold">
                   2
                 </div>
                 <h4 className="font-medium text-gray-900">Muscle Target</h4>
@@ -1018,7 +1018,7 @@ export default function ClientPreferencePage() {
           {currentStep === 3 && (
             <div className="p-6">
               <div className="flex items-center gap-2 mb-4">
-                <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-sm font-semibold">
+                <div className="w-8 h-8 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center text-sm font-semibold">
                   3
                 </div>
                 <h4 className="font-medium text-gray-900">Muscle Limit</h4>
@@ -1070,7 +1070,7 @@ export default function ClientPreferencePage() {
           {currentStep === 4 && (
             <div className="p-6">
               <div className="flex items-center gap-2 mb-4">
-                <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-sm font-semibold">
+                <div className="w-8 h-8 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center text-sm font-semibold">
                   4
                 </div>
                 <h4 className="font-medium text-gray-900">Intensity</h4>

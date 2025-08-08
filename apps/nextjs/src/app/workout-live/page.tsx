@@ -183,9 +183,39 @@ export default function WorkoutLivePage() {
     return () => clearInterval(timer);
   }, []);
 
+  // Calculate all round names first
+  const sortedRounds = React.useMemo(() => {
+    if (!sessionWorkouts) return [];
+    
+    const roundNames = new Set<string>();
+    sessionWorkouts.forEach(workoutData => {
+      workoutData.exercises.forEach(ex => {
+        if (ex.groupName && ex.orderIndex !== 999) {
+          roundNames.add(ex.groupName);
+        }
+      });
+    });
+    
+    // Convert to array and sort by the order they appear
+    return Array.from(roundNames).sort((a, b) => {
+      // Find the minimum orderIndex for each round
+      let minOrderA = Infinity;
+      let minOrderB = Infinity;
+      
+      sessionWorkouts.forEach(workoutData => {
+        workoutData.exercises.forEach(ex => {
+          if (ex.groupName === a && ex.orderIndex < minOrderA) minOrderA = ex.orderIndex;
+          if (ex.groupName === b && ex.orderIndex < minOrderB) minOrderB = ex.orderIndex;
+        });
+      });
+      
+      return minOrderA - minOrderB;
+    });
+  }, [sessionWorkouts]);
+
   // Group exercises by name for the current round
   const groupedExercises = React.useMemo(() => {
-    if (!sessionWorkouts) return [];
+    if (!sessionWorkouts || sortedRounds.length === 0) return [];
 
     // Create a map of exercise name to clients
     const exerciseMap = new Map<string, {
@@ -198,15 +228,14 @@ export default function WorkoutLivePage() {
       }>;
     }>();
 
+    // Get the round name for the current round number
+    const currentRoundName = sortedRounds[parseInt(round) - 1];
+    
     // Process each workout
     sessionWorkouts.forEach(workoutData => {
-      // Filter exercises for the current round/block
+      // Filter exercises for the current round
       const roundExercises = workoutData.exercises.filter(ex => {
-        const groupName = ex.groupName?.toLowerCase() || '';
-        return groupName.includes(`round ${round}`) || 
-               groupName.includes(`block ${round}`) ||
-               groupName === `round${round}` ||
-               groupName === `block ${String.fromCharCode(64 + parseInt(round))}`.toLowerCase(); // Block A, B, C, D
+        return ex.groupName === currentRoundName && ex.orderIndex !== 999;
       });
 
       // Group by exercise name
@@ -233,7 +262,7 @@ export default function WorkoutLivePage() {
     return Array.from(exerciseMap.values()).sort((a, b) => 
       a.exerciseName.localeCompare(b.exerciseName)
     );
-  }, [sessionWorkouts, round]);
+  }, [sessionWorkouts, round, sortedRounds]);
 
   // Calculate dynamic progress based on time
   const totalTime = 299; // 4:59 in seconds
@@ -410,10 +439,7 @@ export default function WorkoutLivePage() {
         </button>
         
         <div className="text-gray-600">
-          Round {round} of {sessionWorkouts?.[0]?.exercises.reduce((max, ex) => {
-            const roundNum = ex.groupName?.match(/\d+/)?.[0];
-            return Math.max(max, parseInt(roundNum || '0'));
-          }, 0) || 4}
+          Round {round} of {stations.length > 0 ? sortedRounds.length : 0}
         </div>
         
         <button

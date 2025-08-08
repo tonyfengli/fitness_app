@@ -2684,18 +2684,29 @@ YOUR TASK:
 Organize these exercises into rounds for a cohesive group workout. 
 
 CRITICAL REQUIREMENTS:
-1. EVERY round MUST include EVERY client
+1. EVERY round MUST include EVERY client - no exceptions
 2. Each client MUST have at least one exercise in EACH round
 3. You MUST use the exact exerciseId values provided in the client data above
-4. Each client has 5 exercises - distribute them across rounds (an exercise can appear in multiple rounds if needed)
+4. You MUST use ALL 5 exercises for EACH client - no exercise can be left out
+5. If creating fewer than 5 rounds, some exercises MUST appear in multiple rounds
+6. Each client has exactly 5 exercises - ensure ALL are assigned to at least one round
+
+ROUND STRUCTURE RULES:
+- Maximum 5 rounds (since each client only has 5 exercises)
+- Minimum 3 rounds for workout variety
+- Every client MUST appear in EVERY round
+- An exercise can be repeated across rounds if needed
 
 You have flexibility to:
-1. Decide the number of rounds (typically 3-5, but ensure all exercises are used)
+1. Decide the exact number of rounds (3-5 rounds MAX)
 2. Set the number of sets and reps for each exercise
 3. Decide if shared exercises should have the same sets/reps for all clients
 4. Consider exercise complexity, fatigue profile, and movement patterns when organizing
 
-VALIDATION: Before returning, verify that every round has an exercise for every client.
+VALIDATION: Before returning, verify:
+- Total rounds: 3-5 (never more than 5)
+- Every round includes ALL ${phase2Input.clients.length} clients
+- Each client has an exercise in EVERY round
 
 GUIDELINES:
 - Create a balanced flow that makes sense for group training
@@ -2775,6 +2786,15 @@ Return a JSON object with this structure:
         
         console.log('[startWorkout] Phase 2 LLM response:', JSON.stringify(roundOrganization, null, 2));
         
+        // Validate round count
+        if (roundOrganization.rounds.length > 5) {
+          console.error(`[startWorkout] LLM created ${roundOrganization.rounds.length} rounds, but maximum is 5`);
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: `Invalid workout organization: Too many rounds (${roundOrganization.rounds.length}). Maximum is 5 rounds.`
+          });
+        }
+        
         // Validate that every round includes every client
         const clientIds = phase2Input.clients.map(c => c.clientId);
         for (const round of roundOrganization.rounds) {
@@ -2791,6 +2811,30 @@ Return a JSON object with this structure:
         }
         
         console.log('[startWorkout] ✅ Validation passed: All rounds include all clients');
+        
+        // Additional validation: Check if all exercises are used
+        for (const client of phase2Input.clients) {
+          const usedExerciseIds = new Set<string>();
+          
+          // Collect all exercise IDs used in rounds for this client
+          for (const round of roundOrganization.rounds) {
+            const clientExercises = round.exercises[client.clientId] || [];
+            clientExercises.forEach(ex => usedExerciseIds.add(ex.exerciseId));
+          }
+          
+          // Check if all client exercises are used
+          const unusedExercises = client.exercises.filter(ex => !usedExerciseIds.has(ex.exerciseId));
+          if (unusedExercises.length > 0) {
+            console.error(`[startWorkout] Client ${client.clientName} has unused exercises:`, 
+              unusedExercises.map(ex => ex.exerciseName).join(', '));
+            throw new TRPCError({
+              code: 'INTERNAL_SERVER_ERROR',
+              message: `Not all exercises were assigned to rounds. Client ${client.clientName} has ${unusedExercises.length} unused exercises: ${unusedExercises.map(ex => ex.exerciseName).join(', ')}`
+            });
+          }
+        }
+        
+        console.log('[startWorkout] ✅ Validation passed: All exercises are assigned to rounds');
         
         // Step 3: Database Updates
         console.log('[startWorkout] Starting Step 3: Database Updates');
