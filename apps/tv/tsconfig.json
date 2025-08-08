@@ -1,0 +1,18 @@
+{
+  "extends": "@acme/typescript/react-native",
+  "compilerOptions": {
+    "paths": {
+      "~/*": ["./src/*"]
+    },
+    "types": ["nativewind/types"]
+  },
+  "include": [
+    "src",
+    "index.js",
+    "*.ts",
+    "*.tsx",
+    ".expo/types/**/*.ts",
+    "nativewind-env.d.ts"
+  ],
+  "exclude": ["node_modules"]
+}
