@@ -23,11 +23,19 @@ export default function LoginPage() {
     setIsLoading(true);
     setError(null);
 
+    console.log('Login attempt:', {
+      email: formData.email,
+      baseURL: authClient.baseURL,
+      timestamp: new Date().toISOString(),
+    });
+
     try {
       const result = await authClient.signIn.email({
         email: formData.email,
         password: formData.password,
       });
+
+      console.log('Sign in result:', result);
 
       if (result.error) {
         // Check if we're offline
