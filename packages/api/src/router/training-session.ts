@@ -2754,7 +2754,7 @@ Return a JSON object with this structure:
         
         const llm = createLLM({
           modelName: "gpt-5",
-          temperature: 0.7,
+          // temperature: 0.7, // GPT-5 only supports default temperature of 1
           maxTokens: 4000,
           // GPT-5 specific parameters
           reasoning_effort: "high", // Complex multi-client round organization

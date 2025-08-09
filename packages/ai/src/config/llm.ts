@@ -2,7 +2,7 @@ import { ChatOpenAI } from "@langchain/openai";
 
 export interface LLMConfig {
   modelName: string;
-  temperature: number;
+  temperature?: number;
   maxTokens?: number;
   timeout?: number;
   // GPT-5 specific parameters
@@ -24,15 +24,21 @@ export const defaultLLMConfig: LLMConfig = {
 export function createLLM(config: LLMConfig = defaultLLMConfig): LLMProvider {
   const options: any = {
     modelName: config.modelName,
-    temperature: config.temperature,
     timeout: config.timeout,
   };
 
-  // GPT-5 uses max_completion_tokens instead of maxTokens
-  if (config.modelName === "gpt-5" && config.maxTokens) {
-    options.max_completion_tokens = config.maxTokens;
-  } else if (config.maxTokens) {
-    options.maxTokens = config.maxTokens;
+  // GPT-5 only supports default temperature of 1
+  if (config.modelName === "gpt-5") {
+    // Don't set temperature for GPT-5 - it will use the default of 1
+    if (config.maxTokens) {
+      options.max_completion_tokens = config.maxTokens;
+    }
+  } else {
+    // For other models, use the configured temperature
+    options.temperature = config.temperature;
+    if (config.maxTokens) {
+      options.maxTokens = config.maxTokens;
+    }
   }
 
   // Add GPT-5 specific parameters if provided
