@@ -96,29 +96,152 @@ export class ClientExerciseSelectionPromptBuilder {
   }
   
   build(): string {
-    const sections = [
-      this.buildHeader(),
-      this.buildClientContext(),
-      this.strategy.buildConstraints(),
-      this.strategy.buildWorkoutFlow(),
-      this.strategy.buildSelectionPriorities(),
-      this.buildExerciseOptions(),
-      this.buildOutputFormat()
-    ];
-    
-    return sections.join('\n\n');
-  }
-  
-  private buildHeader(): string {
     const exercisesToSelect = this.getExercisesToSelect();
     
-    return `## 💪 Exercise Selection for ${this.config.client.name}
+    return `SYSTEM PROMPT — Phase 1 Exercise Selector (Condensed)
+You are selecting EXACTLY ${exercisesToSelect} exercises for a single client from a curated list. These will complement the client's pre-assigned exercises to complete today's workout.
 
-You are selecting ${exercisesToSelect} exercises from a curated list of ${this.config.candidates.length} options. These exercises will complement ${this.config.preAssigned.length} pre-assigned exercises to create a complete workout.
+Inputs (filled at runtime)
+Client: ${this.buildClientInfo()}
 
-**Workout Type:** ${this.formatWorkoutType(this.config.workoutType)}
-**Intensity:** ${this.config.client.intensity}
-**Total Exercises Needed:** ${this.config.preAssigned.length + exercisesToSelect}`;
+Pre-assigned exercises: ${this.config.preAssigned.length} items (do not re-select)
+${this.buildPreAssignedList()}
+
+Available options: ${this.config.candidates.length} items
+${this.buildCandidatesList()}
+
+Workout type: ${this.formatWorkoutType(this.config.workoutType)}
+
+Hard Rules
+Select exactly ${exercisesToSelect} new exercises (not pre-assigned).
+
+Names must match exactly (case-sensitive).
+
+${this.buildClientConstraints()}
+
+Movement & muscle balance: Complement pre-assigned patterns/muscles; avoid stacking duplicates unless required by targets.
+
+${this.buildMuscleTargetRules()}
+
+Max 2 exercises per primary muscle across the whole session (including pre-assigned).
+
+Lower-body compound limit: Do not exceed 1 compound lower-body movement (squat/deadlift/lunge family) across pre-assigned + selected unless the client explicitly targets lower body.
+
+Prefer higher score among equally valid choices.
+
+Avoid unnecessary complexity; pick options appropriate for ${this.config.client.intensity} intensity.
+
+Selection Priorities (apply in order)
+Satisfy muscle target requirements.
+
+Fill gaps from pre-assigned (patterns/muscles).
+
+Maintain variety (push/pull, upper/lower, core vs non-core).
+
+Prefer higher score ties.
+
+Output (JSON only)
+Return only this JSON. Keep reasoning short (≤ 20 words). No extra keys.
+
+\`\`\`json
+{
+  "selectedExercises": [${this.buildExerciseTemplate(exercisesToSelect)}
+  ],
+  "summary": {
+    "totalSelected": ${exercisesToSelect},
+    "sharedExercises": 0,
+    "muscleTargetsCovered": ["<targets covered across pre-assigned + selected>"],
+    "movementPatterns": ["<patterns across pre-assigned + selected>"],
+    "overallReasoning": "≤25 words."
+  }
+}
+\`\`\`
+
+Guardrails
+Do not invent exercises.
+
+If constraints conflict, prioritize in this order: safety (joints/lessen) → muscle target coverage → movement balance → score.
+
+If no valid pair exists under all rules, choose the safest valid pair and note trade-off in overallReasoning.
+
+Stop after selecting the first valid high-scoring exercise combination that satisfies all constraints. Do not generate or compare alternative combinations once a valid set is found.`;
+  }
+  
+  private buildClientInfo(): string {
+    const client = this.config.client;
+    const parts = [
+      `name: ${client.name}`,
+      `goal: ${client.primary_goal || 'general_fitness'}`,
+      `intensity: ${client.intensity}`
+    ];
+    
+    if (client.muscle_target && client.muscle_target.length > 0) {
+      parts.push(`muscle_targets: ${client.muscle_target.join(', ')}`);
+    }
+    
+    if (client.muscle_lessen && client.muscle_lessen.length > 0) {
+      parts.push(`muscles_to_lessen: ${client.muscle_lessen.join(', ')}`);
+    }
+    
+    if (client.avoid_joints && client.avoid_joints.length > 0) {
+      parts.push(`joints_to_avoid: ${client.avoid_joints.join(', ')}`);
+    }
+    
+    return parts.join(', ');
+  }
+  
+  private buildPreAssignedList(): string {
+    return this.config.preAssigned.map(pa => 
+      `- ${pa.exercise.name} (${pa.exercise.movementPattern}, primary: ${pa.exercise.primaryMuscle}, secondary: ${pa.exercise.secondaryMuscles?.join(', ') || 'none'}, score: ${Math.round(pa.exercise.score)})`
+    ).join('\n');
+  }
+  
+  private buildCandidatesList(): string {
+    return this.config.candidates.map((ex, idx) => 
+      `${idx + 1}. ${ex.name} (${ex.movementPattern}, primary: ${ex.primaryMuscle}, secondary: ${ex.secondaryMuscles?.join(', ') || 'none'}, score: ${Math.round(ex.score)})`
+    ).join('\n');
+  }
+  
+  private buildClientConstraints(): string {
+    const constraints = [];
+    
+    if (this.config.client.muscle_lessen && this.config.client.muscle_lessen.length > 0) {
+      constraints.push(`Respect muscles_to_lessen (${this.config.client.muscle_lessen.join(', ')}): exclude exercises that significantly load them.`);
+    }
+    
+    if (this.config.client.avoid_joints && this.config.client.avoid_joints.length > 0) {
+      constraints.push(`Respect joints_to_avoid (${this.config.client.avoid_joints.join(', ')}): exclude exercises that stress these joints.`);
+    }
+    
+    return constraints.join('\n\n');
+  }
+  
+  private buildMuscleTargetRules(): string {
+    if (!this.config.client.muscle_target || this.config.client.muscle_target.length === 0) {
+      return '';
+    }
+    
+    const targets = this.config.client.muscle_target;
+    
+    if (targets.length === 1) {
+      return `Muscle targets: ${targets[0]} → pick one primary for that muscle + one that hits it primary or secondary.`;
+    } else {
+      return `Muscle targets: ${targets.join(', ')} → pick ≥1 primary for each target (across pre-assigned + selected).`;
+    }
+  }
+  
+  private buildExerciseTemplate(count: number): string {
+    const templates = [];
+    for (let i = 0; i < count; i++) {
+      templates.push(`
+    {
+      "exerciseName": "<exact from list>",
+      "isShared": false,
+      "satisfiesConstraints": ["muscle_target", "movement_variety"],
+      "reasoning": "≤20 words."
+    }`);
+    }
+    return templates.join(',');
   }
   
   private buildClientContext(): string {
@@ -192,83 +315,7 @@ Return a JSON object with exactly ${exercisesToSelect} selected exercises:
   }
   
   // Helper methods
-  private identifySharedExercises(): ScoredExercise[] {
-    const sharedIds = new Set(this.config.sharedExercises.map(s => s.id));
-    return this.config.candidates.filter(ex => sharedIds.has(ex.id));
-  }
-  
-  private formatExerciseDetails(ex: ScoredExercise): string {
-    let details = `   - ID: ${ex.id}\n`;
-    details += `   - Movement: ${ex.movementPattern}, Primary: ${ex.primaryMuscle}\n`;
-    details += `   - Score: ${ex.score.toFixed(1)}`;
-    
-    if (ex.scoreBreakdown) {
-      const factors = this.formatScoreFactors(ex.scoreBreakdown);
-      if (factors) {
-        details += ` (${factors})`;
-      }
-    }
-    
-    if (ex.functionTags && ex.functionTags.length > 0) {
-      details += `\n   - Tags: ${ex.functionTags.join(', ')}`;
-    }
-    
-    return details;
-  }
-  
-  private formatExerciseDetailsWithoutId(ex: ScoredExercise): string {
-    let details = `   - Movement: ${ex.movementPattern}, Primary: ${ex.primaryMuscle}\n`;
-    details += `   - Score: ${ex.score.toFixed(1)}`;
-    
-    if (ex.scoreBreakdown) {
-      const factors = this.formatScoreFactors(ex.scoreBreakdown);
-      if (factors) {
-        details += ` (${factors})`;
-      }
-    }
-    
-    if (ex.functionTags && ex.functionTags.length > 0) {
-      details += `\n   - Tags: ${ex.functionTags.join(', ')}`;
-    }
-    
-    return details;
-  }
-  
-  private formatScoreFactors(breakdown: any): string {
-    const factors: string[] = [];
-    
-    if (breakdown.muscleTargetBonus > 0) {
-      factors.push(`targets muscle +${breakdown.muscleTargetBonus.toFixed(1)}`);
-    }
-    
-    if (breakdown.muscleLessenPenalty < 0) {
-      factors.push(`lessens muscle ${breakdown.muscleLessenPenalty.toFixed(1)}`);
-    }
-    
-    if (breakdown.intensityAdjustment !== 0) {
-      const sign = breakdown.intensityAdjustment > 0 ? '+' : '';
-      factors.push(`intensity ${sign}${breakdown.intensityAdjustment.toFixed(1)}`);
-    }
-    
-    return factors.join(', ');
-  }
-  
   private formatWorkoutType(type: WorkoutType): string {
-    return type.replace(/_/g, ' ').toLowerCase()
-      .replace(/\b\w/g, l => l.toUpperCase());
-  }
-  
-  private formatGoal(goal: string): string {
-    return goal.replace(/_/g, ' ').toLowerCase();
-  }
-  
-  private formatMuscleList(muscles?: string[]): string {
-    if (!muscles || muscles.length === 0) return 'none';
-    return muscles.map(m => m.replace(/_/g, ' ')).join(', ');
-  }
-  
-  private formatJointList(joints?: string[]): string {
-    if (!joints || joints.length === 0) return 'none';
-    return joints.join(', ');
+    return type.replace(/_/g, '_').toLowerCase();
   }
 }

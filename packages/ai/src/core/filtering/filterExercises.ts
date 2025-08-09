@@ -26,7 +26,7 @@ export async function filterExercises(
   options: DirectFilterOptions
 ): Promise<Exercise[] | ScoredExercise[]> {
   const startTime = performance.now();
-  console.log('🚀 filterExercises called');
+  // Removed filterExercises call log
   
   const { 
     exercises: providedExercises, 
@@ -51,7 +51,7 @@ export async function filterExercises(
   }
   
   if (!exercises || exercises.length === 0) {
-    console.log('⚠️ No exercises available to filter');
+    // No exercises available to filter
     return [];
   }
   
@@ -64,22 +64,22 @@ export async function filterExercises(
     ? customFilterFunction(exercises, finalClientContext)
     : applyClientFilters(exercises, finalClientContext);
   const phase1EndTime = performance.now();
-  console.log(`⏱️ Phase 1 (client filters) took: ${(phase1EndTime - phase1StartTime).toFixed(2)}ms, filtered to ${filteredExercises.length} exercises`);
+  // Removed phase 1 timing log
   
   // Apply scoring if requested
   if (includeScoring && scoringCriteria) {
-    console.log('🎯 Applying scoring to filtered exercises');
+    // Applying scoring to filtered exercises
     const scoringStartTime = performance.now();
     const scoredExercises = await scoreAndSortExercises(filteredExercises, scoringCriteria);
     const scoringEndTime = performance.now();
-    console.log(`⏱️ Phase 2 (scoring) took: ${(scoringEndTime - scoringStartTime).toFixed(2)}ms`);
+    // Removed phase 2 timing log
     
     const totalTime = performance.now() - startTime;
-    console.log(`⏱️ TOTAL filterExercises time: ${totalTime.toFixed(2)}ms`);
+    // Removed total timing log
     return scoredExercises;
   }
   
   const totalTime = performance.now() - startTime;
-  console.log(`⏱️ TOTAL filterExercises time: ${totalTime.toFixed(2)}ms (Phase 1 only)`);
+  // Removed total timing log (phase 1 only)
   return filteredExercises;
 }

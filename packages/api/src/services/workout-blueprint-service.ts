@@ -226,7 +226,7 @@ export class WorkoutBlueprintService {
       };
 
       // Run Phase 1 & 2 using the filter service
-      console.log(`[WorkoutBlueprint] Filtering for client ${client.userId} with ${filterInput.favoriteExerciseIds?.length || 0} favorites`);
+      // Removed workout blueprint filtering log
       const filteredResult = await filterService.filterForWorkoutGeneration(filterInput, {
         userId: client.userId, // Use client's userId, not the session owner's userId
         businessId

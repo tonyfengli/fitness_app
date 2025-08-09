@@ -428,6 +428,10 @@ export const workoutRouter = {
           orderIndex: WorkoutExercise.orderIndex,
           setsCompleted: WorkoutExercise.setsCompleted,
           groupName: WorkoutExercise.groupName,
+          phase: WorkoutExercise.phase,
+          scheme: WorkoutExercise.scheme,
+          isShared: WorkoutExercise.isShared,
+          sharedWithClients: WorkoutExercise.sharedWithClients,
           exercise: {
             id: exercises.id,
             name: exercises.name,
@@ -451,6 +455,10 @@ export const workoutRouter = {
           orderIndex: exercise.orderIndex,
           setsCompleted: exercise.setsCompleted,
           groupName: exercise.groupName,
+          phase: exercise.phase,
+          scheme: exercise.scheme,
+          isShared: exercise.isShared,
+          sharedWithClients: exercise.sharedWithClients,
           exercise: exercise.exercise,
         });
         return acc;

@@ -241,6 +241,9 @@ function WorkoutOverviewMain() {
   const handleStartWorkout = async () => {
     if (!sessionId) return;
     
+    // Log timestamp when button is clicked
+    console.log(`[Timestamp] Start Workout button clicked at: ${new Date().toISOString()}`);
+    
     setIsStarting(true);
     setShowMenu(false);
     
@@ -320,6 +323,24 @@ function WorkoutOverviewMain() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347a1.125 1.125 0 01-1.667-.985V5.653z" />
               </svg>
               Start Workout
+            </button>
+            
+            <button
+              onClick={() => {
+                router.push(`/workout-live?sessionId=${sessionId}&round=1`);
+                setShowMenu(false);
+              }}
+              disabled={!sessionId}
+              className={`w-full px-4 py-2 text-left rounded-md transition-colors flex items-center gap-2 ${
+                sessionId
+                  ? 'text-green-600 hover:bg-green-50'
+                  : 'text-gray-400 cursor-not-allowed'
+              }`}
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+              Go to Workout Live
             </button>
           </div>
         )}

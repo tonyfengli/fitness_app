@@ -249,6 +249,9 @@ export const WorkoutExercise = pgTable("workout_exercise", (t) => ({
   isShared: t.boolean().default(false),
   sharedWithClients: t.text("shared_with_clients").array(),
   selectionSource: t.varchar("selection_source", { length: 50 }), // 'llm_phase1', 'manual_swap', 'pre_assigned'
+  phase: t.varchar("phase", { length: 50 }), // 'main_strength', 'accessory', 'core', 'power_conditioning'
+  scheme: t.jsonb("scheme"), // { type: 'reps', sets: 3, reps: '8-10' } or { type: 'time', work: '30s', rest: '15s', rounds: 3 }
+  reasoning: t.text("reasoning"), // LLM reasoning for exercise selection
   createdAt: t.timestamp().defaultNow().notNull(),
 }));
 
@@ -261,6 +264,16 @@ export const CreateWorkoutExerciseSchema = createInsertSchema(WorkoutExercise, {
   isShared: z.boolean().optional().default(false),
   sharedWithClients: z.array(z.string()).optional(),
   selectionSource: z.enum(['llm_phase1', 'manual_swap', 'pre_assigned']).optional(),
+  phase: z.enum(['main_strength', 'accessory', 'core', 'power_conditioning']).optional(),
+  scheme: z.object({
+    type: z.enum(['reps', 'time']),
+    sets: z.number().optional(),
+    reps: z.string().optional(),
+    work: z.string().optional(),
+    rest: z.string().optional(),
+    rounds: z.number().optional(),
+  }).optional(),
+  reasoning: z.string().optional(),
 }).omit({
   id: true,
   createdAt: true,

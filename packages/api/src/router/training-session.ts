@@ -872,6 +872,10 @@ export const trainingSessionRouter = {
       }).optional()
     }))
     .mutation(async ({ ctx, input }) => {
+      const mutationStartTime = new Date().toISOString();
+      console.log(`[Timestamp] generateAndCreateGroupWorkouts mutation started at: ${mutationStartTime}`);
+      console.log(`[Timestamp] Session ID: ${input.sessionId}`);
+      
       const user = ctx.session?.user as SessionUser;
       
       // Only trainers can generate workouts
@@ -888,6 +892,11 @@ export const trainingSessionRouter = {
       
       try {
         const result = await service.generateAndCreateWorkouts(input.sessionId, input.options);
+        
+        const mutationEndTime = new Date().toISOString();
+        console.log(`[Timestamp] generateAndCreateGroupWorkouts mutation completed at: ${mutationEndTime}`);
+        console.log(`[Timestamp] Total duration: ${Date.now() - Date.parse(mutationStartTime)}ms`);
+        
         return result;
       } catch (error) {
         throw new TRPCError({
@@ -2543,6 +2552,10 @@ Set your goals and preferences for today's session.`;
       sessionId: z.string().uuid()
     }))
     .mutation(async ({ ctx, input }) => {
+      const mutationStartTime = new Date().toISOString();
+      console.log(`[Timestamp] startWorkout mutation started at: ${mutationStartTime}`);
+      console.log(`[Timestamp] Session ID: ${input.sessionId}`);
+      
       const user = ctx.session?.user as SessionUser;
       
       // Only trainers can start workouts
@@ -2594,9 +2607,24 @@ Set your goals and preferences for today's session.`;
       console.log('[startWorkout] Has visualization data:', !!visualizationData);
       console.log('[startWorkout] Has exercise selection:', !!visualizationData?.llmResult?.exerciseSelection);
 
-      // Step 2: Phase 2 LLM Organization
+      // Check if this template uses Phase 2 LLM organization
+      const isStandardTemplate = session.templateType === 'standard' || session.templateType === 'standard_strength';
+      
+      if (!isStandardTemplate) {
+        console.log('[startWorkout] Non-standard template detected. Skipping Phase 2 LLM organization.');
+        
+        // For BMF and other templates, the workout is already organized
+        // Just return success without additional processing
+        return { 
+          success: true, 
+          message: 'Workout ready (no Phase 2 organization needed)',
+          templateType: session.templateType
+        };
+      }
+
+      // Step 2: Phase 2 LLM Organization (Standard templates only)
       try {
-        console.log('[startWorkout] Starting Step 2: Phase 2 LLM Organization');
+        console.log('[startWorkout] Starting Step 2: Phase 2 LLM Organization for Standard template');
         
         // 2.1: Gather workout data with exercise metadata
         console.log('[startWorkout] Fetching workouts and exercise data...');
@@ -2669,84 +2697,133 @@ Set your goals and preferences for today's session.`;
         
         console.log('[startWorkout] Prepared Phase 2 input:', JSON.stringify(phase2Input, null, 2));
         
-        // 2.4: Create custom LLM prompt
-        const phase2Prompt = `You are organizing a group workout for ${phase2Input.clients.length} clients. Each client has 5 pre-selected exercises from Phase 1.
+        // 2.4: Create custom LLM prompt with new v2 schema
+        console.log(`[Timestamp] Phase 2 prompt building started at: ${new Date().toISOString()}`);
+        
+        // Get equipment inventory (could be passed from session data in future)
+        const equipmentInventory = {
+          "barbell_rack": 2,
+          "barbell": 4,
+          "dumbbell": 10,
+          "kettlebell": 6,
+          "cable_station": 2,
+          "pull_up_bar": 3,
+          "bench": 4,
+          "box": 4
+        };
 
-CLIENTS:
-${phase2Input.clients.map(client => `
-- ${client.clientName} (${client.clientId})
-  Goal: ${client.fitnessGoal}
-  Intensity: ${client.intensity}
-  Exercises:
-${client.exercises.map(e => `    * ${e.exerciseName} (ID: ${e.exerciseId})`).join('\n')}
-`).join('')}
+        // Check if any client wants finisher
+        const anyClientWantsFinisher = phase2Input.clients.some(client => 
+          // For now, assume high intensity clients want finishers
+          client.intensity === 'high'
+        );
 
-SHARED EXERCISES:
-${phase2Input.sharedExercises.map((se: any) => `- ${se.exerciseName} (shared by ${se.clientIds.length} clients)`).join('\n')}
+        const phase2Prompt = `Inputs:
+clients: ${JSON.stringify(phase2Input.clients.map(client => ({
+  id: client.clientId,
+  name: client.clientName,
+  goal: client.fitnessGoal,
+  intensity: client.intensity,
+  wantsFinisher: client.intensity === 'high',
+  exercises: client.exercises.map(e => ({
+    exerciseId: e.exerciseId,
+    exerciseName: e.exerciseName
+  }))
+})), null, 2)}
 
-YOUR TASK:
-Organize these exercises into rounds for a cohesive group workout. 
+equipment: ${JSON.stringify(equipmentInventory, null, 2)}
 
-CRITICAL REQUIREMENTS:
-1. EVERY round MUST include EVERY client - no exceptions
-2. Each client MUST have at least one exercise in EACH round
-3. You MUST use the exact exerciseId values provided in the client data above
-4. You MUST use ALL 5 exercises for EACH client - no exercise can be left out
-5. If creating fewer than 5 rounds, some exercises MUST appear in multiple rounds
-6. Each client has exactly 5 exercises - ensure ALL are assigned to at least one round
+constraints:
+- fixed phase order: main_strength → accessory → core → power_conditioning
+- equipment rules: If a shared exercise has one set of required equipment → set sharedPolicy: "alternate". If multiple sets exist → set sharedPolicy: "together"
+- session timing guidance: 45-60 minutes total
 
-ROUND STRUCTURE RULES:
-- Maximum 5 rounds (since each client only has 5 exercises)
-- Minimum 3 rounds for workout variety
-- Every client MUST appear in EVERY round
-- An exercise can be repeated across rounds if needed
+Hard Constraints:
+1. Phase order is fixed: main_strength → accessory → core → power_conditioning
+2. Main Strength should start with compound lower-body movement when available
+3. Rounds are flexible (2–4). Choose what best fits the provided exercises
+4. Use only the provided exercises. Do not invent new ones
+5. Exact IDs: Always reference the exact exerciseId values provided
+6. Clients with fewer exercises finish early—no filler
+7. Equipment conflict policy as stated above
+8. Rep-based rounds include sets + reps only; no rest fields
+9. Time-based rounds include work/rest/rounds
+10. Include finisher only if at least one client's wantsFinisher is true
+11. Total duration should be 45-60 minutes
 
-You have flexibility to:
-1. Decide the exact number of rounds (3-5 rounds MAX)
-2. Set the number of sets and reps for each exercise
-3. Decide if shared exercises should have the same sets/reps for all clients
-4. Consider exercise complexity, fatigue profile, and movement patterns when organizing
-
-VALIDATION: Before returning, verify:
-- Total rounds: 3-5 (never more than 5)
-- Every round includes ALL ${phase2Input.clients.length} clients
-- Each client has an exercise in EVERY round
-
-GUIDELINES:
-- Create a balanced flow that makes sense for group training
-- Consider equipment availability (avoid conflicts)
-- Match sets/reps to client intensity levels
-- Ensure proper warm-up to working sets progression
-- Total workout should be 45-60 minutes
-
-Return a JSON object with this structure:
+Return only JSON using this structure:
 {
+  "schemaVersion": "2.0",
   "rounds": [
     {
       "roundNumber": 1,
-      "roundName": "Round 1",
-      "focus": "Lower Body Strength",
-      "duration": "12 minutes",
-      "exercises": {
-        "[clientId]": [
+      "phase": "main_strength",
+      "name": "Round 1 – Main Strength",
+      "modality": "reps",
+      "estimatedDuration": "10-12 min",
+      "rotation": {
+        "type": "paired",
+        "sharedPolicy": "together",
+        "notes": "Use together if multiple sets exist; alternate if single set."
+      },
+      "exercisesByClient": {
+        "<clientId>": [
           {
             "exerciseId": "uuid",
             "exerciseName": "Barbell Back Squat",
-            "sets": 3,
-            "reps": "8-10",
-            "rest": "90s",
-            "notes": "Focus on depth"
+            "scheme": {
+              "type": "reps",
+              "sets": 3,
+              "reps": "6-8"
+            },
+            "shared": {
+              "isShared": true,
+              "with": ["<otherClientId>"]
+            },
+            "equipment": {
+              "name": "barbell_rack",
+              "setsAvailable": 2,
+              "conflictResolution": "together"
+            },
+            "reasoning": "Controlled eccentric, drive through mid-foot."
           }
         ]
       }
     }
   ],
-  "totalDuration": "48 minutes",
-  "workoutNotes": "General notes about the workout structure"
+  "finisher": {
+    "included": ${anyClientWantsFinisher ? 'true' : 'false'},
+    "reason": "${anyClientWantsFinisher ? 'client_requested' : 'no_client_requested'}",
+    "phase": "power_conditioning",
+    "name": "Finisher – Shared High Energy",
+    "format": "EMOM | AMRAP | For Time",
+    "estimatedDuration": "6-8 min",
+    "exercisesByClient": {}
+  },
+  "clientSessionStatus": {
+    "<clientId>": {
+      "willFinishEarly": true,
+      "reason": "fewer_exercises_than_group"
+    }
+  },
+  "totalDuration": "~45 min",
+  "workoutNotes": "Follow phase order: main_strength → accessory → core → power_conditioning."
 }`;
+
+        console.log(`[Timestamp] Phase 2 prompt building completed at: ${new Date().toISOString()}`);
+        console.log(`[Phase 2 Prompt Analysis]`, {
+          promptLength: phase2Prompt.length,
+          systemPromptLength: systemPrompt.length,
+          userPromptLength: phase2Prompt.length,
+          totalPromptLength: systemPrompt.length + phase2Prompt.length,
+          clientCount: phase2Input.clients.length,
+          totalExerciseCount: phase2Input.clients.reduce((sum, c) => sum + c.exercises.length, 0),
+          equipmentTypes: Object.keys(equipmentInventory).length
+        });
 
         // 2.5: Call LLM
         console.log('[startWorkout] Calling Phase 2 LLM...');
+        console.log(`[Timestamp] Phase 2 LLM preparation started at: ${new Date().toISOString()}`);
         
         // Import LLM client
         const { createLLM } = await import("@acme/ai");
@@ -2761,14 +2838,146 @@ Return a JSON object with this structure:
           verbosity: "normal"
         });
         
+        console.log(`[Timestamp] Phase 2 LLM preparation completed at: ${new Date().toISOString()}`);
+        
+        const systemPrompt = `SYSTEM PROMPT — Group Workout Orchestrator (JSON v2)
+You are a group workout programmer. Given per-client exercises and constraints, output a single JSON object (schema v2) that sequences a group session into rounds with clear prescriptions and equipment-aware rotation.
+
+Inputs (you will receive)
+clients: array of clients with:
+
+id, name, goal, intensity, wantsFinisher (boolean), and exercises (4–7 items):
+
+each exercise: { exerciseId, exerciseName }
+
+equipment: inventory with counts (e.g., { "barbell_rack": 1, "kettlebell": 2, ... })
+
+constraints:
+
+fixed phase order: main_strength → accessory → core → power_conditioning
+
+equipment rules (see below)
+
+session timing guidance (derive from client with most exercises)
+
+Hard Constraints
+Phase order is fixed across the session: main_strength → accessory → core → power_conditioning. When using 2-3 rounds, you may use a subset of phases but must maintain this order.
+
+Main Strength should start with a compound lower-body movement when available; if not, sub a compound upper push or pull.
+
+Rounds are flexible (2–4). Choose what best fits the provided exercises while preserving phase order.
+
+Use only the provided exercises for each client. Do not invent new ones.
+
+Exact IDs: Always reference the exact exerciseId values provided.
+
+Clients with fewer exercises finish early—no filler, no extra sets, no standby tasks. In later rounds, these clients may be omitted from exercisesByClient entirely, which is valid and expected.
+
+Equipment conflict policy:
+
+If a shared exercise has one set of required equipment → set sharedPolicy: "alternate" for that station.
+
+If multiple sets exist → set sharedPolicy: "together" so clients perform it simultaneously.
+
+Schemes:
+
+Rep-based rounds (strength/accessory/core) include sets + reps only; no rest fields in rep schemes.
+
+Time-based rounds (power/conditioning) include work/rest/rounds; rest is only allowed here.
+
+Finisher rule:
+
+Include a finisher only if at least one client's wantsFinisher is true.
+
+If included and it's shared, prefer a fun/high-energy station (e.g., EMOM/AMRAP).
+
+Repetition across rounds is allowed when it serves programming balance; variation (tempo/angle/grip) is optional. An exercise may appear in multiple rounds for the same client.
+
+Total duration should be 45-60 minutes, derived from the client with the most exercises.
+
+Programming Logic & Flow
+Round selection (2–4 total) should reflect available exercises per client and keep the fixed phase order.
+
+Main Strength: prioritize big lower-body compound patterns (squat/hinge) early while clients are fresh.
+
+Accessory: upper push/pull pairing is encouraged for balance and flow.
+
+Core: stability/anti-rotation/positional core fits well here; can be shared or individualized.
+
+Power & Conditioning: time-based metabolic/power work to close the session. This phase may exist as a regular round even if no finisher is requested. However, a high-energy shared station in the final round should only be included when at least one client has wantsFinisher=true.
+
+Shared exercises: May appear in any round. If creating a high-energy shared finisher station in the final round, do this only when at least one client has wantsFinisher=true.
+
+Rotation & Equipment
+For each round, specify:
+
+rotation.type: "paired" | "circuit" | "stations"
+
+rotation.sharedPolicy: "together" or "alternate" per equipment availability
+
+Use equipment.setsAvailable and equipment.conflictResolution on each exercise to make the policy explicit.
+
+Validation Checklist (the model must self-check before returning)
+Phase order is not violated: main_strength → accessory → core → power_conditioning (using a subset of phases in order is valid).
+
+2–4 rounds chosen appropriately for the provided exercises.
+
+No invented exercises; all exerciseIds match inputs.
+
+No rest fields in rep-based schemes (strength/accessory/core); rest only present in time-based schemes (power/conditioning).
+
+Equipment conflicts resolved with correct sharedPolicy and conflictResolution.
+
+finisher.included respects wantsFinisher flags.
+
+totalDuration is 45-60 minutes and reflects the client with the most exercises.
+
+Any client with fewer exercises is correctly flagged under clientSessionStatus (no filler work added).
+
+Clients finishing early are validly omitted from later rounds' exercisesByClient.
+
+Style & Output Rules
+Output JSON only, no prose.
+
+Be succinct but complete in notes.
+
+Favor group flow and fun when equipment allows clients to work together.`;
+
+        // Log the raw system prompt
+        console.log('[Phase 2 System Prompt]', systemPrompt);
+        console.log('[Phase 2 System Prompt Length]', systemPrompt.length, 'characters');
+        
         const messages = [
-          new SystemMessage("You are an expert fitness coach organizing group workouts. Return only valid JSON."),
+          new SystemMessage(systemPrompt),
           new HumanMessage(phase2Prompt)
         ];
         
+        const llmStartTime = Date.now();
+        const llmStartISO = new Date().toISOString();
+        console.log(`[Timestamp] Phase 2 LLM call started at: ${llmStartISO}`);
+        
         const response = await llm.invoke(messages);
         
+        const llmEndTime = Date.now();
+        const llmEndISO = new Date().toISOString();
+        console.log(`[Timestamp] Phase 2 LLM call completed at: ${llmEndISO}`);
+        
+        // Log LLM metrics
+        console.log('[Phase 2 LLM Metrics]', {
+          modelName: 'gpt-5',
+          reasoning_effort: 'high',
+          verbosity: 'normal',
+          max_completion_tokens: 4000,
+          executionTime: `${llmEndTime - llmStartTime}ms`,
+          startTime: llmStartISO,
+          endTime: llmEndISO,
+          response_metadata: response.response_metadata,
+          usage_metadata: response.usage_metadata
+        });
+        
         // Parse the response
+        console.log(`[Timestamp] Phase 2 response parsing started at: ${new Date().toISOString()}`);
+        
         let roundOrganization;
         try {
           // Extract JSON from the response content
@@ -2780,8 +2989,10 @@ Return a JSON object with this structure:
             content = content.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
           }
           
-          console.log('[startWorkout] Raw LLM response:', content);
           roundOrganization = JSON.parse(content);
+          console.log(`[Timestamp] Phase 2 response parsing completed at: ${new Date().toISOString()}`);
+          console.log(`[Phase 2 Response Analysis] Response length: ${content.length} characters`);
+          console.log(`[Phase 2 Response Analysis] Number of rounds: ${roundOrganization.rounds?.length || 0}`);
         } catch (parseError) {
           console.error('[startWorkout] Failed to parse LLM response:', parseError);
           console.error('[startWorkout] Raw content:', response.content);
@@ -2791,22 +3002,37 @@ Return a JSON object with this structure:
           });
         }
         
-        console.log('[startWorkout] Phase 2 LLM response:', JSON.stringify(roundOrganization, null, 2));
-        
-        // Validate round count
-        if (roundOrganization.rounds.length > 5) {
-          console.error(`[startWorkout] LLM created ${roundOrganization.rounds.length} rounds, but maximum is 5`);
+        // Validate schema version
+        if (roundOrganization.schemaVersion !== "2.0") {
+          console.error(`[startWorkout] Invalid schema version: ${roundOrganization.schemaVersion}`);
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
-            message: `Invalid workout organization: Too many rounds (${roundOrganization.rounds.length}). Maximum is 5 rounds.`
+            message: `Invalid schema version. Expected 2.0, got ${roundOrganization.schemaVersion}`
           });
         }
         
-        // Validate that every round includes every client
+        // Validate round count
+        if (roundOrganization.rounds.length > 4) {
+          console.error(`[startWorkout] LLM created ${roundOrganization.rounds.length} rounds, but maximum is 4`);
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: `Invalid workout organization: Too many rounds (${roundOrganization.rounds.length}). Maximum is 4 rounds.`
+          });
+        }
+        
+        // Validate that every round includes every client (unless they finish early)
         const clientIds = phase2Input.clients.map(c => c.clientId);
+        const earlyFinishClients = new Set(
+          Object.entries(roundOrganization.clientSessionStatus || {})
+            .filter(([_, status]: [string, any]) => status.willFinishEarly)
+            .map(([clientId]) => clientId)
+        );
+        
         for (const round of roundOrganization.rounds) {
-          const roundClientIds = Object.keys(round.exercises);
-          const missingClients = clientIds.filter(id => !roundClientIds.includes(id));
+          const roundClientIds = Object.keys(round.exercisesByClient);
+          const missingClients = clientIds.filter(id => 
+            !roundClientIds.includes(id) && !earlyFinishClients.has(id)
+          );
           
           if (missingClients.length > 0) {
             console.error(`[startWorkout] Round ${round.roundNumber} is missing clients:`, missingClients);
@@ -2817,36 +3043,33 @@ Return a JSON object with this structure:
           }
         }
         
-        console.log('[startWorkout] ✅ Validation passed: All rounds include all clients');
+        console.log('[startWorkout] ✅ Validation passed: All rounds include expected clients');
         
-        // Additional validation: Check if all exercises are used
+        // Log which exercises are used/unused for debugging (but don't fail)
         for (const client of phase2Input.clients) {
           const usedExerciseIds = new Set<string>();
           
           // Collect all exercise IDs used in rounds for this client
           for (const round of roundOrganization.rounds) {
-            const clientExercises = round.exercises[client.clientId] || [];
+            const clientExercises = round.exercisesByClient[client.clientId] || [];
             clientExercises.forEach((ex: any) => usedExerciseIds.add(ex.exerciseId));
           }
           
-          // Check if all client exercises are used
           const unusedExercises = client.exercises.filter(ex => !usedExerciseIds.has(ex.exerciseId));
           if (unusedExercises.length > 0) {
-            console.error(`[startWorkout] Client ${client.clientName} has unused exercises:`, 
+            console.log(`[startWorkout] Client ${client.clientName} has ${unusedExercises.length} unused exercises:`, 
               unusedExercises.map(ex => ex.exerciseName).join(', '));
-            throw new TRPCError({
-              code: 'INTERNAL_SERVER_ERROR',
-              message: `Not all exercises were assigned to rounds. Client ${client.clientName} has ${unusedExercises.length} unused exercises: ${unusedExercises.map(ex => ex.exerciseName).join(', ')}`
-            });
+          } else {
+            console.log(`[startWorkout] Client ${client.clientName}: All exercises assigned to rounds`);
           }
         }
         
-        console.log('[startWorkout] ✅ Validation passed: All exercises are assigned to rounds');
-        
         // Step 3: Database Updates
         console.log('[startWorkout] Starting Step 3: Database Updates');
+        console.log(`[Timestamp] Database updates started at: ${new Date().toISOString()}`);
         
         // 3.1: Store the round organization in TrainingSession
+        const dbUpdateStartTime = Date.now();
         await ctx.db
           .update(TrainingSession)
           .set({ 
@@ -2856,9 +3079,14 @@ Return a JSON object with this structure:
           .where(eq(TrainingSession.id, input.sessionId));
         
         console.log('[startWorkout] Saved round organization to session');
+        console.log(`[Timestamp] Round organization saved at: ${new Date().toISOString()}`);
+        console.log(`[Timestamp] DB update took: ${Date.now() - dbUpdateStartTime}ms`);
         
         // 3.2: First, reset all workout exercises to clear any previous round assignments
         console.log('[startWorkout] Resetting all workout exercises...');
+        console.log(`[Timestamp] Workout exercise reset started at: ${new Date().toISOString()}`);
+        const resetStartTime = Date.now();
+        
         for (const { workout } of workoutsWithExercises) {
           await ctx.db
             .update(WorkoutExercise)
@@ -2869,18 +3097,24 @@ Return a JSON object with this structure:
             .where(eq(WorkoutExercise.workoutId, workout.id));
         }
         
+        console.log(`[Timestamp] Workout exercise reset completed at: ${new Date().toISOString()}`);
+        console.log(`[Timestamp] Reset took: ${Date.now() - resetStartTime}ms`);
+        
         // 3.3: Update workout_exercise records with round information
+        console.log(`[Timestamp] Round assignment started at: ${new Date().toISOString()}`);
+        const assignmentStartTime = Date.now();
         let totalUpdates = 0;
         let exerciseOrderAcrossRounds = 0; // Global counter for exercise order
         
         for (const round of roundOrganization.rounds) {
-          const roundName = round.roundName;
-          const roundIndex = round.roundNumber;
+          const roundName = round.name;
+          const roundPhase = round.phase;
+          const roundNumber = round.roundNumber;
           
-          console.log(`[startWorkout] Processing ${roundName}...`);
+          console.log(`[startWorkout] Processing ${roundName} (${roundPhase})...`);
           
           // For each client in this round
-          for (const [clientId, exercises] of Object.entries(round.exercises) as [string, any][]) {
+          for (const [clientId, exercises] of Object.entries(round.exercisesByClient) as [string, any][]) {
             // Find the workout for this client
             const clientWorkout = workoutsWithExercises.find(w => w.workout.userId === clientId);
             if (!clientWorkout) {
@@ -2901,17 +3135,23 @@ Return a JSON object with this structure:
                 // Use global order index to ensure proper ordering across all rounds
                 const orderIndex = exerciseOrderAcrossRounds++;
                 
+                // Extract sets from scheme
+                const setsCompleted = roundExercise.scheme.sets || roundExercise.scheme.rounds || 1;
+                
                 await ctx.db
                   .update(WorkoutExercise)
                   .set({ 
                     groupName: roundName,
-                    setsCompleted: roundExercise.sets,
-                    orderIndex: orderIndex
+                    setsCompleted: setsCompleted,
+                    orderIndex: orderIndex,
+                    phase: roundPhase,
+                    scheme: roundExercise.scheme,
+                    reasoning: roundExercise.reasoning
                   })
                   .where(eq(WorkoutExercise.id, workoutExercise.id));
                 
                 totalUpdates++;
-                console.log(`[startWorkout] Updated ${roundExercise.exerciseName} for ${clientId}: ${roundName}, Sets: ${roundExercise.sets}, Order: ${orderIndex}`);
+                console.log(`[startWorkout] Updated ${roundExercise.exerciseName} for ${clientId}: ${roundName}, Phase: ${roundPhase}, Sets: ${setsCompleted}, Order: ${orderIndex}`);
               } else {
                 console.warn(`[startWorkout] Exercise ${roundExercise.exerciseId} not found in workout`);
               }
@@ -2928,13 +3168,23 @@ Return a JSON object with this structure:
           }
         }
         
+        console.log(`[Timestamp] Round assignment completed at: ${new Date().toISOString()}`);
+        console.log(`[Timestamp] Assignment took: ${Date.now() - assignmentStartTime}ms`);
         console.log(`[startWorkout] ✅ Step 3 Complete: Updated ${totalUpdates} workout exercises`);
+        console.log(`[Timestamp] Database updates completed at: ${new Date().toISOString()}`);
+        console.log(`[Timestamp] Total database operations took: ${Date.now() - dbUpdateStartTime}ms`);
+        
+        const mutationEndTime = new Date().toISOString();
+        console.log(`[Timestamp] startWorkout mutation completed at: ${mutationEndTime}`);
+        console.log(`[Timestamp] Total duration from start: ${Date.now() - Date.parse(mutationStartTime)}ms`);
         
         return { 
           success: true, 
           message: 'Workout organized successfully',
           roundCount: roundOrganization.rounds?.length || 0,
-          totalDuration: roundOrganization.totalDuration || '0 min'
+          totalDuration: roundOrganization.totalDuration || '~45 min',
+          schemaVersion: roundOrganization.schemaVersion,
+          finisherIncluded: roundOrganization.finisher?.included || false
         };
         
       } catch (error) {

@@ -44,9 +44,9 @@ export async function filterExercisesFromInput(options: FilterExercisesOptions):
     const { userInput = "", clientContext, workoutTemplate, exercises, intensity } = options;
     
     // Step 1: Build scoring criteria
-    console.log('[filterExercisesFromInput] ClientContext favoriteExerciseIds:', clientContext?.favoriteExerciseIds);
+    // Removed filterExercisesFromInput client context log
     const scoringCriteria = buildScoringCriteria(clientContext, intensity);
-    console.log('[filterExercisesFromInput] ScoringCriteria favoriteExerciseIds:', scoringCriteria?.favoriteExerciseIds);
+    // Removed filterExercisesFromInput scoring criteria log
     
     // Step 2: Filter and score exercises
     const filterStartTime = performance.now();

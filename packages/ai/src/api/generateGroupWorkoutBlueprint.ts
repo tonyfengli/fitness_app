@@ -22,13 +22,7 @@ export async function generateGroupWorkoutBlueprint(
 ): Promise<AnyGroupWorkoutBlueprint> {
   const startTime = Date.now();
   
-  console.log('🎯 generateGroupWorkoutBlueprint called with:', {
-    clientCount: groupContext.clients.length,
-    exerciseCount: exercises.length,
-    templateType: groupContext.templateType,
-    usingPreScored: !!preScoredExercises,
-    clientIds: groupContext.clients.map(c => c.user_id)
-  });
+  // Removed generateGroupWorkoutBlueprint call log
   
   // Import logger for comprehensive error tracking
   let groupWorkoutTestDataLogger: any;
@@ -36,7 +30,7 @@ export async function generateGroupWorkoutBlueprint(
     const loggerModule = await import('../../../api/src/utils/groupWorkoutTestDataLogger');
     groupWorkoutTestDataLogger = loggerModule.groupWorkoutTestDataLogger;
   } catch (error) {
-    console.warn('⚠️ Group workout test data logger not available:', error);
+    // Group workout test data logger not available
   }
   
   try {
@@ -48,28 +42,28 @@ export async function generateGroupWorkoutBlueprint(
     
     if (preScoredExercises) {
       // Use pre-scored exercises if provided
-      console.log('✅ Using pre-scored exercises for', preScoredExercises.size, 'clients');
+      // Using pre-scored exercises
       clientScoredExercises = preScoredExercises;
       
       // Log exercise counts per client
       for (const [clientId, exercises] of preScoredExercises) {
-        console.log(`  Client ${clientId}: ${exercises.length} exercises`);
+        // Client exercise count
       }
     } else {
-      console.log('🔄 Processing exercises for each client...');
+      // Processing exercises for each client
       
       // Process all clients in parallel
       const clientResults = await Promise.all(
         groupContext.clients.map(async (client) => {
           try {
             // Phase 1: Filter exercises for this client
-            console.log(`  Filtering for client ${client.user_id}...`);
+            // Filtering for client
             const filtered = await filterExercises({
               exercises: exercisePool,
               clientContext: client,
               includeScoring: false
             }) as Exercise[];
-            console.log(`  ✅ Client ${client.user_id}: ${filtered.length} exercises after filtering`);
+            // Client exercises filtered
             
             // Phase 2: Score exercises for this client
             const scored = await scoreAndSortExercises(filtered, {
@@ -78,7 +72,7 @@ export async function generateGroupWorkoutBlueprint(
               muscleLessen: client.muscle_lessen || [],
               includeExercises: client.exercise_requests?.include
             }); // scoreBreakdown now always included
-            console.log(`  ✅ Client ${client.user_id}: Scoring complete`);
+            // Client scoring complete
             
             return { clientId: client.user_id, scored };
           } catch (error) {
@@ -100,7 +94,7 @@ export async function generateGroupWorkoutBlueprint(
     
     // Get template configuration
     const templateId = groupContext.templateType || 'full_body_bmf';
-    console.log(`📋 Loading template: ${templateId}`);
+    // Loading template
     const template = getWorkoutTemplate(templateId);
     
     if (!template) {
@@ -110,10 +104,10 @@ export async function generateGroupWorkoutBlueprint(
       throw new Error(error);
     }
     
-    console.log(`✅ Template loaded with ${template.blocks.length} blocks`);
+    // Template loaded
     
     // Phase 3: Create blueprint using new TemplateProcessor
-    console.log('🔄 Starting Phase 3: Template organization...');
+    // Starting Phase 3: Template organization
     const phase3StartTime = Date.now();
     
     try {
@@ -122,14 +116,14 @@ export async function generateGroupWorkoutBlueprint(
       // Check if this is a standard template (two-phase LLM)
       let blueprint: AnyGroupWorkoutBlueprint;
       if (template.metadata?.llmStrategy === 'two-phase') {
-        console.log('📋 Using standard template processor (client-pooled)');
+        // Using standard template processor
         
         // Prepare favorites map from client contexts
         const favoritesByClient = new Map<string, string[]>();
         for (const client of groupContext.clients) {
           if (client.favoriteExerciseIds && client.favoriteExerciseIds.length > 0) {
             favoritesByClient.set(client.user_id, client.favoriteExerciseIds);
-            console.log(`📌 Client ${client.name} has ${client.favoriteExerciseIds.length} favorite exercises`);
+            // Client has favorite exercises
           }
         }
         
@@ -150,7 +144,7 @@ export async function generateGroupWorkoutBlueprint(
             // Check if this client has a full body workout type
             if (client.workoutType === WorkoutType.FULL_BODY_WITH_FINISHER || 
                 client.workoutType === WorkoutType.FULL_BODY_WITHOUT_FINISHER) {
-              console.log(`🪣 Applying ${client.workoutType.replace(/_/g, ' ')} bucketing for ${client.name}...`);
+              // Applying workout bucketing
               
               // Get favorite IDs for this client
               const clientFavoriteIds = favoritesByClient.get(clientId) || [];
@@ -167,29 +161,29 @@ export async function generateGroupWorkoutBlueprint(
               // Store bucketed selection
               pool.bucketedSelection = bucketingResult;
               
-              console.log(`  ✓ Selected ${bucketingResult.exercises.length} additional exercises for ${client.name}`);
+              // Selected additional exercises
             } else {
-              console.log(`⚠️ Client ${client.name} has non-full body workout type: ${client.workoutType}`);
+              // Client has non-full body workout type
               // TODO: Handle other workout types (targeted, etc.)
             }
           }
         }
         
       } else {
-        console.log('📋 Using BMF template processor (block-based)');
+        // Using BMF template processor
         blueprint = processor.processForGroup(clientScoredExercises);
       }
       
       const phase3Time = Date.now() - phase3StartTime;
-      console.log(`✅ Phase 3 complete in ${phase3Time}ms`);
+      // Phase 3 complete
       
       // Log based on blueprint type
       if ('blocks' in blueprint) {
-        console.log(`📊 Blueprint created with ${blueprint.blocks.length} blocks`);
+        // Blueprint created
       } else {
         const clientCount = Object.keys(blueprint.clientExercisePools).length;
-        console.log(`📊 Standard blueprint created for ${clientCount} clients`);
-        console.log(`  Shared exercises: ${blueprint.sharedExercisePool.length}`);
+        // Standard blueprint created
+        // Shared exercises count
       }
       
       // Log warnings if any
@@ -261,7 +255,7 @@ export async function generateGroupWorkoutBlueprint(
       groupWorkoutTestDataLogger?.updateTiming(groupContext.sessionId, 'phase3', phase3Time);
       
       const totalTime = Date.now() - startTime;
-      console.log(`✅ Total group workout generation time: ${totalTime}ms`);
+      // Total group workout generation complete
       
       return blueprint;
       

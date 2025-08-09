@@ -189,7 +189,7 @@ export class ExerciseFilterService {
       const filterStartTime = Date.now();
       
       // Debug log favorites
-      console.log(`[ExerciseFilter] Creating clientContext for ${safeInput.clientName} with favorites:`, safeInput.favoriteExerciseIds);
+      // Removed exercise filter client context log
       
       const result = await filterFunction({
         clientContext: {
@@ -232,7 +232,7 @@ export class ExerciseFilterService {
       
       // Log performance metrics
       if (process.env.NODE_ENV !== 'production') {
-        console.log(`[ExerciseFilter] Performance: DB=${dbEndTime - dbStartTime}ms, Filter=${filterEndTime - filterStartTime}ms, Total=${apiEndTime - apiStartTime}ms`);
+        // Removed exercise filter performance log
       }
       
       return {
@@ -382,11 +382,7 @@ export class ExerciseFilterService {
     
     const apiEndTime = Date.now();
     
-    // Log timing
-    console.log('=== WORKOUT GENERATION FILTER TIMING ===');
-    console.log(`Total API Time: ${apiEndTime - apiStartTime}ms`);
-    console.log(`Total exercises found: ${filteredExercises.length}`);
-    console.log('==========================================');
+    // Removed filter timing logs
     
     if (input.debug) {
       console.log('Block A exercises:', blockA.length);

@@ -54,9 +54,9 @@ export interface LLMSelectionConfig {
 export class LLMExerciseSelector {
   private llm = createLLM({
     modelName: "gpt-5",
-    maxTokens: 2000,
-    reasoning_effort: "high", // Complex personalized exercise selection
-    verbosity: "normal"
+    maxTokens: 500,
+    reasoning_effort: "medium",
+    verbosity: "low"
     // Note: GPT-5 only supports default temperature (1.0)
   });
   private captureDebugData: boolean = false;
@@ -68,7 +68,7 @@ export class LLMExerciseSelector {
    */
   enableDebugCapture(): void {
     this.captureDebugData = true;
-    console.log('[LLMExerciseSelector] Debug capture ENABLED');
+    // Debug capture enabled
   }
   
   /**
@@ -77,19 +77,22 @@ export class LLMExerciseSelector {
   async selectExercisesForAllClients(
     clientInputs: LLMSelectionInput[]
   ): Promise<Map<string, LLMSelectionResult>> {
-    console.log('[LLMExerciseSelector] Starting concurrent LLM exercise selection for', clientInputs.length, 'clients');
+    // Starting concurrent LLM exercise selection
+    console.log('[LLM Timing] Starting parallel requests for', clientInputs.length, 'clients at', new Date().toISOString());
     
     // Create promises for concurrent execution
-    const selectionPromises = clientInputs.map(input => 
-      this.selectExercisesForClient(input)
+    const selectionPromises = clientInputs.map((input, index) => {
+      console.log(`[LLM Timing] Creating promise for client ${index + 1}/${clientInputs.length}: ${input.clientId}`);
+      return this.selectExercisesForClient(input)
         .catch(error => {
           console.error(`[LLMExerciseSelector] LLM selection failed for client ${input.clientId}:`, error);
           // Return a fallback selection using top scored exercises
           return this.createFallbackSelection(input);
-        })
-    );
+        });
+    });
     
     // Execute all LLM calls concurrently
+    console.log('[LLM Timing] All promises created, awaiting Promise.all()...');
     const results = await Promise.all(selectionPromises);
     
     // Convert to map for easy lookup
@@ -109,11 +112,8 @@ export class LLMExerciseSelector {
   private async selectExercisesForClient(
     input: LLMSelectionInput
   ): Promise<LLMSelectionResult> {
-    console.log(`[LLMExerciseSelector] Selecting exercises for client ${input.clientId}`, {
-      preAssignedCount: input.preAssigned.length,
-      bucketedCount: input.bucketedCandidates.length,
-      additionalCount: input.additionalCandidates.length
-    });
+    // Selecting exercises for client
+    console.log(`[LLM Timing] Starting LLM request for client ${input.clientId} at`, new Date().toISOString());
     
     // Combine bucketed + additional candidates to get 15 total
     const allCandidates = [
@@ -141,6 +141,18 @@ export class LLMExerciseSelector {
     
     const prompt = promptBuilder.build();
     
+    // Log prompt size for analysis
+    console.log(`[LLM Prompt Analysis] Client ${input.clientId}:`, {
+      promptLength: prompt.length,
+      candidateExercises: allCandidates.length,
+      preAssignedCount: input.preAssigned.length,
+      bucketedCount: input.bucketedCandidates.length,
+      additionalCount: input.additionalCandidates.length,
+      otherClientsCount: otherClientsInfo.length,
+      clientName: input.client.name,
+      workoutType: input.client.workoutType
+    });
+    
     // Calling LLM for client
     
     // Log the system prompt for debugging
@@ -148,19 +160,38 @@ export class LLMExerciseSelector {
     
     try {
       // Call LLM
+      const llmStartTime = Date.now();
+      const llmStartISO = new Date().toISOString();
+      console.log(`[Timestamp] Phase 1 LLM call started for client ${input.clientId} at: ${llmStartISO}`);
+      
       const response = await this.llm.invoke([
         new SystemMessage(prompt),
         new HumanMessage("Please select the exercises according to the instructions above.")
       ]);
+      
+      const llmEndTime = Date.now();
+      const llmEndISO = new Date().toISOString();
       const content = response.content.toString();
       
-      // Log LLM response for debugging
-      console.log(`[LLMExerciseSelector] LLM response for client ${input.clientId}:`, {
-        responseLength: content.length,
-        first500Chars: content.substring(0, 500),
-        containsJsonBlock: content.includes('```json'),
-        containsJson: content.includes('{')
+      console.log(`[Timestamp] Phase 1 LLM call completed for client ${input.clientId} at: ${llmEndISO}`);
+      
+      // Log LLM metrics
+      console.log('[Phase 1 LLM Metrics]', {
+        clientId: input.clientId,
+        modelName: "gpt-5",
+        reasoning_effort: "medium",
+        verbosity: "low",
+        max_completion_tokens: 500,
+        executionTime: `${llmEndTime - llmStartTime}ms`,
+        startTime: llmStartISO,
+        endTime: llmEndISO,
+        response_metadata: response.response_metadata,
+        usage_metadata: response.usage_metadata
       });
+      console.log(`[LLM Timing] Completed LLM request for client ${input.clientId} at`, new Date().toISOString());
+      
+      // Log LLM response for debugging
+      // LLM response received
       
       // Extract JSON from response - try markdown code block first, then raw JSON
       let parsed: any;
@@ -185,10 +216,7 @@ export class LLMExerciseSelector {
       
       // Always capture system prompts and responses for visualization
       // (previously this was only done when captureDebugData was true)
-      console.log(`[LLMExerciseSelector] Capturing LLM data for client ${input.clientId}`, {
-        promptLength: prompt.length,
-        responseLength: content.length
-      });
+      // Capturing LLM data for debugging
       result.debug = {
         systemPrompt: prompt,
         llmResponse: content

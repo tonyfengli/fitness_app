@@ -1,160 +1,171 @@
 "use client";
 
 import React, { useState, useEffect, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { useTRPC } from "~/trpc/react";
 
-// Exercise station component
+// Modern Exercise Station Component
 function ExerciseStation({
   participants,
   exercise,
-  icon,
-  currentSet,
-  totalSets,
-  color,
-  progressWithinSet,
-  isComplete,
+  phase,
+  scheme,
+  isShared,
+  index,
 }: {
   participants: { name: string; avatar: string }[];
   exercise: string;
-  icon: React.ReactNode;
-  currentSet: number;
-  totalSets: number;
-  color: string;
-  progressWithinSet: number;
-  isComplete: boolean;
+  phase: string;
+  scheme: { type: string; sets?: number; reps?: string; work?: string; rest?: string; rounds?: number };
+  isShared: boolean;
+  index: number;
 }) {
-  const borderColors = {
-    green: "border-green-500",
-    blue: "border-blue-500",
-    orange: "border-orange-500",
+  const phaseColors = {
+    main_strength: { bg: "bg-red-50", border: "border-red-200", text: "text-red-700", accent: "bg-red-500" },
+    accessory: { bg: "bg-blue-50", border: "border-blue-200", text: "text-blue-700", accent: "bg-blue-500" },
+    core: { bg: "bg-green-50", border: "border-green-200", text: "text-green-700", accent: "bg-green-500" },
+    power_conditioning: { bg: "bg-purple-50", border: "border-purple-200", text: "text-purple-700", accent: "bg-purple-500" },
   };
 
-  const progressColors = {
-    green: "bg-green-500",
-    blue: "bg-blue-500",
-    orange: "bg-orange-500",
-  };
-
-  // Use the dynamic progress passed from parent
-  const progress = progressWithinSet;
+  const colors = phaseColors[phase as keyof typeof phaseColors] || phaseColors.main_strength;
 
   return (
-    <div className="flex flex-col items-center">
-      {/* Participants */}
-      <div className="flex items-center gap-2 mb-4">
-        {participants.map((participant, idx) => (
-          <img
-            key={idx}
-            src={participant.avatar}
-            alt={participant.name}
-            className="w-12 h-12 rounded-full"
-          />
-        ))}
-      </div>
-      
-      {/* Names */}
-      <div className="flex items-center justify-center gap-4 mb-4 h-16">
-        {participants.length <= 3 ? (
-          // For 1-3 participants, stack vertically
-          <div className="flex flex-col items-center justify-center gap-1">
-            {participants.map((p, idx) => (
-              <h3 key={idx} className="text-xl font-semibold text-gray-800">
-                {p.name}
-              </h3>
-            ))}
+    <div className={`${colors.bg} ${colors.border} border-2 rounded-3xl p-6 w-96 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1`}>
+      {/* Station Header */}
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-3">
+          <div className={`${colors.accent} text-white w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg`}>
+            {index + 1}
           </div>
-        ) : participants.length === 4 ? (
-          // For 4 participants, 2 groups side by side
-          <>
-            <div className="flex flex-col items-center gap-1">
-              {participants.slice(0, 2).map((p, idx) => (
-                <h3 key={idx} className="text-lg font-semibold text-gray-800">
-                  {p.name}
-                </h3>
-              ))}
-            </div>
-            <div className="flex flex-col items-center gap-1">
-              {participants.slice(2, 4).map((p, idx) => (
-                <h3 key={idx + 2} className="text-lg font-semibold text-gray-800">
-                  {p.name}
-                </h3>
-              ))}
-            </div>
-          </>
-        ) : (
-          // For 5+ participants, groups of 2 with max 4 side by side
-          <div className="flex gap-3">
-            {Array.from({ length: Math.ceil(participants.length / 2) }, (_, groupIdx) => {
-              const startIdx = groupIdx * 2;
-              const group = participants.slice(startIdx, startIdx + 2);
-              return (
-                <div key={groupIdx} className="flex flex-col items-center gap-0.5">
-                  {group.map((p, idx) => (
-                    <h3 key={startIdx + idx} className="text-sm font-semibold text-gray-800">
-                      {p.name}
-                    </h3>
-                  ))}
-                </div>
-              );
-            })}
+          <div>
+            <h3 className="font-bold text-xl text-gray-900">{exercise}</h3>
+            <p className={`text-sm ${colors.text} font-medium`}>
+              {phase.replace('_', ' ').split(' ').map(word => 
+                word.charAt(0).toUpperCase() + word.slice(1)
+              ).join(' ')}
+            </p>
+          </div>
+        </div>
+        {isShared && (
+          <div className="bg-gray-100 px-3 py-1 rounded-full">
+            <span className="text-xs font-semibold text-gray-600">SHARED</span>
           </div>
         )}
       </div>
 
-      {/* Exercise Card */}
-      <div className={`bg-white rounded-2xl border-4 ${borderColors[color as keyof typeof borderColors]} p-8 w-80 h-80 shadow-sm flex flex-col ${isComplete ? 'opacity-75' : ''}`}>
-        <h2 className="text-3xl font-bold text-center mb-8 break-words" style={{
-          display: '-webkit-box',
-          WebkitLineClamp: 2,
-          WebkitBoxOrient: 'vertical',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          minHeight: '2.4em',
-          maxHeight: '2.4em',
-          lineHeight: '1.2em'
-        }}>{exercise}</h2>
-        
-        {/* Exercise Icon */}
-        <div className="flex justify-center flex-1 items-center">
-          {icon}
-        </div>
-
-        {/* Progress Bar */}
-        <div className="relative mt-auto pt-4">
-          <div className="h-6 bg-gray-200 rounded-full overflow-hidden">
-            <div 
-              className={`h-full ${progressColors[color as keyof typeof progressColors]} transition-all duration-300`}
-              style={{ width: `${progress}%` }}
-            />
-          </div>
-          <p className="text-center mt-2 text-gray-600 font-medium">
-            {isComplete ? '✓ Complete' : `Set ${currentSet}/${totalSets}`}
-          </p>
+      {/* Scheme Display */}
+      <div className={`${colors.accent} bg-opacity-10 rounded-2xl p-4 mb-4`}>
+        <div className="text-center">
+          {scheme.type === 'reps' ? (
+            <>
+              <p className="text-3xl font-bold text-gray-900">{scheme.sets} × {scheme.reps}</p>
+              <p className="text-sm text-gray-600 mt-1">Sets × Reps</p>
+            </>
+          ) : (
+            <>
+              <p className="text-2xl font-bold text-gray-900">{scheme.work} / {scheme.rest}</p>
+              <p className="text-lg font-semibold text-gray-700">× {scheme.rounds} rounds</p>
+              <p className="text-sm text-gray-600 mt-1">Work / Rest</p>
+            </>
+          )}
         </div>
       </div>
 
+      {/* Participants */}
+      <div className="space-y-2">
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Participants</p>
+        <div className="flex flex-wrap gap-2">
+          {participants.map((participant, idx) => (
+            <div key={idx} className="flex items-center gap-2 bg-white rounded-full px-3 py-1.5 shadow-sm">
+              <img
+                src={participant.avatar}
+                alt={participant.name}
+                className="w-6 h-6 rounded-full"
+              />
+              <span className="text-sm font-medium text-gray-700">{participant.name}</span>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
 
-// Timer component
-function Timer({ timeLeft }: { timeLeft: number }) {
+// Modern Timer Component
+function Timer({ timeLeft, phase, scheme }: { 
+  timeLeft: number; 
+  phase?: string;
+  scheme?: { type: string; work?: string; rest?: string };
+}) {
   const minutes = Math.floor(timeLeft / 60);
   const seconds = timeLeft % 60;
-
-  // Change color when time is running low
-  const timerColor = timeLeft <= 30 ? "text-red-600" : timeLeft <= 60 ? "text-orange-600" : "text-gray-900";
-  const messageColor = timeLeft <= 30 ? "text-red-500" : timeLeft <= 60 ? "text-orange-500" : "text-gray-600";
+  const isTimeBased = scheme?.type === 'time';
+  const isPowerConditioning = phase === 'power_conditioning';
 
   return (
-    <div className="flex flex-col items-center">
-      <div className={`text-9xl font-bold ${timerColor} tabular-nums leading-none tracking-tighter transition-colors duration-300`}>
-        {String(minutes).padStart(2, "0")}:{String(seconds).padStart(2, "0")}
+    <div className="bg-white rounded-3xl shadow-xl p-8 text-center">
+      <div className="mb-2">
+        <p className="text-sm font-semibold text-gray-500 uppercase tracking-wider">
+          {isTimeBased ? 'Work Time' : 'Round Timer'}
+        </p>
       </div>
-      <div className={`text-xl ${messageColor} mt-3 font-medium uppercase tracking-wide transition-colors duration-300`}>
-        {timeLeft > 180 ? "Keep Going!" : timeLeft > 60 ? "Halfway There!" : timeLeft > 30 ? "Final Minute!" : timeLeft > 0 ? "Almost Done!" : "Time's Up!"}
+      <div className="relative">
+        <div className="text-6xl font-bold text-gray-900 tabular-nums tracking-tight">
+          {String(minutes).padStart(2, "0")}:{String(seconds).padStart(2, "0")}
+        </div>
+        {isTimeBased && scheme && (
+          <div className="mt-4 text-sm text-gray-600">
+            <span className="font-semibold">Format:</span> {scheme.work} work / {scheme.rest} rest
+          </div>
+        )}
+      </div>
+      {/* Progress Ring */}
+      <div className="mt-6">
+        <div className="relative w-32 h-32 mx-auto">
+          <svg className="transform -rotate-90 w-32 h-32">
+            <circle
+              cx="64"
+              cy="64"
+              r="56"
+              stroke="currentColor"
+              strokeWidth="8"
+              fill="none"
+              className="text-gray-200"
+            />
+            <circle
+              cx="64"
+              cy="64"
+              r="56"
+              stroke="currentColor"
+              strokeWidth="8"
+              fill="none"
+              strokeDasharray={351.86}
+              strokeDashoffset={351.86 * (1 - (299 - timeLeft) / 299)}
+              className={`${
+                timeLeft <= 30 ? "text-red-500" : 
+                timeLeft <= 60 ? "text-orange-500" : 
+                isPowerConditioning ? "text-purple-500" :
+                "text-blue-500"
+              } transition-all duration-1000`}
+            />
+          </svg>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Loading Spinner Component
+function LoadingSpinner() {
+  return (
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="text-center">
+        <div className="relative">
+          <div className="w-20 h-20 border-4 border-gray-200 rounded-full"></div>
+          <div className="w-20 h-20 border-4 border-blue-500 rounded-full border-t-transparent animate-spin absolute top-0 left-0"></div>
+        </div>
+        <p className="mt-6 text-gray-600 font-medium">Loading workout...</p>
       </div>
     </div>
   );
@@ -164,7 +175,9 @@ function WorkoutLivePageContent() {
   const searchParams = useSearchParams();
   const sessionId = searchParams.get("sessionId");
   const round = searchParams.get("round") || "1";
-  const [timeLeft, setTimeLeft] = useState(299); // Share timer state
+  const [timeLeft, setTimeLeft] = useState(299); // 5 minutes default
+  const [showMenu, setShowMenu] = useState(false);
+  const router = useRouter();
   const trpc = useTRPC();
 
   // Fetch workouts for the session
@@ -175,6 +188,7 @@ function WorkoutLivePageContent() {
     enabled: !!sessionId,
   });
 
+  // Timer effect
   useEffect(() => {
     const timer = setInterval(() => {
       setTimeLeft((prev) => (prev > 0 ? prev - 1 : 0));
@@ -183,274 +197,291 @@ function WorkoutLivePageContent() {
     return () => clearInterval(timer);
   }, []);
 
-  // Calculate all round names first
-  const sortedRounds = React.useMemo(() => {
-    if (!sessionWorkouts) return [];
+  // Get all rounds and current round data
+  const { rounds, currentRoundData } = React.useMemo(() => {
+    if (!sessionWorkouts || sessionWorkouts.length === 0) {
+      return { rounds: [], currentRoundData: null };
+    }
+
+    // Collect all unique rounds with their phase info
+    const roundsMap = new Map<string, { name: string; phase: string; orderIndex: number }>();
     
-    const roundNames = new Set<string>();
     sessionWorkouts.forEach(workoutData => {
       workoutData.exercises.forEach(ex => {
-        if (ex.groupName && ex.orderIndex !== 999) {
-          roundNames.add(ex.groupName);
+        if (ex.groupName && ex.orderIndex !== 999 && ex.phase) {
+          if (!roundsMap.has(ex.groupName) || ex.orderIndex < roundsMap.get(ex.groupName)!.orderIndex) {
+            roundsMap.set(ex.groupName, {
+              name: ex.groupName,
+              phase: ex.phase,
+              orderIndex: ex.orderIndex
+            });
+          }
         }
       });
     });
-    
-    // Convert to array and sort by the order they appear
-    return Array.from(roundNames).sort((a, b) => {
-      // Find the minimum orderIndex for each round
-      let minOrderA = Infinity;
-      let minOrderB = Infinity;
-      
-      sessionWorkouts.forEach(workoutData => {
-        workoutData.exercises.forEach(ex => {
-          if (ex.groupName === a && ex.orderIndex < minOrderA) minOrderA = ex.orderIndex;
-          if (ex.groupName === b && ex.orderIndex < minOrderB) minOrderB = ex.orderIndex;
-        });
-      });
-      
-      return minOrderA - minOrderB;
-    });
-  }, [sessionWorkouts]);
 
-  // Group exercises by name for the current round
-  const groupedExercises = React.useMemo(() => {
-    if (!sessionWorkouts || sortedRounds.length === 0) return [];
+    // Sort rounds by order index
+    const sortedRounds = Array.from(roundsMap.values()).sort((a, b) => a.orderIndex - b.orderIndex);
+    const currentRoundData = sortedRounds[parseInt(round) - 1] || null;
 
-    // Create a map of exercise name to clients
-    const exerciseMap = new Map<string, {
+    return { rounds: sortedRounds, currentRoundData };
+  }, [sessionWorkouts, round]);
+
+  // Group exercises for current round
+  const stations = React.useMemo(() => {
+    if (!sessionWorkouts || !currentRoundData) return [];
+
+    // Group exercises by name
+    const exerciseGroups = new Map<string, {
       exerciseName: string;
+      phase: string;
+      scheme: any;
+      isShared: boolean;
       participants: Array<{
         userId: string;
         userName: string;
-        setsCompleted: number;
-        totalSets: number;
       }>;
     }>();
 
-    // Get the round name for the current round number
-    const currentRoundName = sortedRounds[parseInt(round) - 1];
-    
-    // Process each workout
     sessionWorkouts.forEach(workoutData => {
-      // Filter exercises for the current round
-      const roundExercises = workoutData.exercises.filter(ex => {
-        return ex.groupName === currentRoundName && ex.orderIndex !== 999;
-      });
+      const roundExercises = workoutData.exercises.filter(ex => 
+        ex.groupName === currentRoundData.name && ex.orderIndex !== 999
+      );
 
-      // Group by exercise name
       roundExercises.forEach(exercise => {
-        const exerciseName = exercise.exercise.name;
+        const key = exercise.exercise.name;
         
-        if (!exerciseMap.has(exerciseName)) {
-          exerciseMap.set(exerciseName, {
-            exerciseName,
+        if (!exerciseGroups.has(key)) {
+          exerciseGroups.set(key, {
+            exerciseName: exercise.exercise.name,
+            phase: exercise.phase,
+            scheme: exercise.scheme,
+            isShared: exercise.isShared || false,
             participants: []
           });
         }
 
-        exerciseMap.get(exerciseName)!.participants.push({
+        exerciseGroups.get(key)!.participants.push({
           userId: workoutData.user.id,
-          userName: workoutData.user.name || workoutData.user.email.split('@')[0],
-          setsCompleted: exercise.setsCompleted,
-          totalSets: exercise.setsCompleted // For now, using completed as total
+          userName: workoutData.user.name || workoutData.user.email.split('@')[0]
         });
       });
     });
 
-    // Convert map to array and sort by exercise name
-    return Array.from(exerciseMap.values()).sort((a, b) => 
-      a.exerciseName.localeCompare(b.exerciseName)
-    );
-  }, [sessionWorkouts, round, sortedRounds]);
-
-  // Calculate dynamic progress based on time
-  const totalTime = 299; // 4:59 in seconds
-  const timeElapsed = totalTime - timeLeft;
-  const progressPercent = (timeElapsed / totalTime) * 100;
-
-  // Dynamic set calculation for each station
-  const getStationProgress = (stationIndex: number) => {
-    // Each station progresses at different rates
-    const rates = [0.6, 1.0, 0.5]; // Back Squat slower, Pull Ups normal, Bench Press slowest
-    const rate = rates[stationIndex] || 1;
-    
-    const stationProgress = progressPercent * rate;
-    const totalSets = stationIndex === 1 ? 5 : 3; // Pull Ups has 5 sets, others have 3
-    
-    // Calculate current set and progress within that set
-    const setsCompleted = Math.floor((stationProgress / 100) * totalSets);
-    const currentSet = Math.min(setsCompleted + 1, totalSets);
-    const progressWithinSet = ((stationProgress / 100) * totalSets - setsCompleted) * 100;
-    
-    return {
-      currentSet,
-      progressWithinSet: currentSet >= totalSets ? 100 : progressWithinSet,
-      isComplete: currentSet >= totalSets && progressWithinSet >= 100
-    };
-  };
-
-  // Map exercise names to colors and icons
-  const getExerciseStyle = (exerciseName: string, index: number) => {
-    const colors = ["green", "blue", "orange", "purple", "red", "indigo"];
-    const color = colors[index % colors.length];
-    
-    // Simple icon mapping based on exercise type
-    let icon = null;
-    const lowerName = exerciseName.toLowerCase();
-    
-    if (lowerName.includes("squat")) {
-      icon = (
-        <svg className={`w-24 h-24 text-${color}-600`} fill="currentColor" viewBox="0 0 100 100">
-          <path d="M25 30 L25 70 M75 30 L75 70 M15 40 L85 40 M15 60 L85 60 M35 25 L35 35 M65 25 L65 35" 
-                stroke="currentColor" strokeWidth="8" fill="none" strokeLinecap="round"/>
-        </svg>
-      );
-    } else if (lowerName.includes("pull") || lowerName.includes("row")) {
-      icon = (
-        <svg className={`w-24 h-24 text-${color}-600`} fill="currentColor" viewBox="0 0 100 100">
-          <circle cx="50" cy="25" r="8"/>
-          <path d="M35 35 Q50 45 65 35 L65 55 Q50 65 35 55 Z"/>
-          <path d="M40 30 L40 70 M60 30 L60 70" stroke="currentColor" strokeWidth="3" fill="none"/>
-        </svg>
-      );
-    } else if (lowerName.includes("press") || lowerName.includes("bench")) {
-      icon = (
-        <svg className={`w-24 h-24 text-${color}-600`} fill="currentColor" viewBox="0 0 100 100">
-          <rect x="10" y="45" width="80" height="10" rx="5"/>
-          <rect x="45" y="20" width="10" height="60" rx="5"/>
-          <circle cx="20" cy="50" r="8"/>
-          <circle cx="80" cy="50" r="8"/>
-        </svg>
-      );
-    } else {
-      // Default icon for other exercises
-      icon = (
-        <svg className={`w-24 h-24 text-${color}-600`} fill="currentColor" viewBox="0 0 100 100">
-          <circle cx="50" cy="50" r="30" stroke="currentColor" strokeWidth="6" fill="none"/>
-          <path d="M50 30 L50 50 L65 65" stroke="currentColor" strokeWidth="4" strokeLinecap="round"/>
-        </svg>
-      );
-    }
-    
-    return { color, icon };
-  };
-
-  // Convert grouped exercises to station format
-  const stations = groupedExercises.map((group, index) => {
-    const { color, icon } = getExerciseStyle(group.exerciseName, index);
-    
-    return {
-      participants: group.participants.map(p => ({
-        name: p.userName,
-        avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(p.userName)}`
-      })),
-      exercise: group.exerciseName,
-      icon,
-      totalSets: group.participants[0]?.totalSets || 3, // Use first participant's total sets
-      color
-    };
-  });
+    return Array.from(exerciseGroups.values());
+  }, [sessionWorkouts, currentRoundData]);
 
   // Loading state
-  if (isLoading) {
+  if (isLoading) return <LoadingSpinner />;
+
+  // No session or no exercises
+  if (!sessionId || stations.length === 0) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading workout data...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // No session ID
-  if (!sessionId) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-gray-600">No session selected</p>
-        </div>
-      </div>
-    );
-  }
-
-  // No exercises for this round
-  if (stations.length === 0) {
-    return (
-      <div className="min-h-screen bg-gray-50 p-8">
-        <div className="flex justify-between items-center mb-12">
-          <div>
-            <h1 className="text-4xl font-bold text-gray-800">Round {round}</h1>
-            <div className="mt-2 h-2 bg-blue-600 rounded-full" style={{ width: "100%" }} />
+        <div className="bg-white rounded-3xl shadow-lg p-12 text-center max-w-md">
+          <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <svg className="w-10 h-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
           </div>
-          <Timer timeLeft={timeLeft} />
-        </div>
-        <div className="flex items-center justify-center h-96">
-          <p className="text-gray-600">No exercises found for Round {round}</p>
+          <h3 className="text-xl font-semibold text-gray-900 mb-2">
+            {!sessionId ? "No Session Selected" : `No Exercises for Round ${round}`}
+          </h3>
+          <p className="text-gray-600">
+            {!sessionId 
+              ? "Please select a valid workout session to continue." 
+              : "This round doesn't have any exercises assigned."}
+          </p>
+          <button
+            onClick={() => window.history.back()}
+            className="mt-6 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            Go Back
+          </button>
         </div>
       </div>
     );
   }
+
+  const currentPhase = currentRoundData?.phase || 'main_strength';
+  const phaseConfig = {
+    main_strength: { gradient: "from-red-500 to-orange-500", bg: "bg-red-50" },
+    accessory: { gradient: "from-blue-500 to-cyan-500", bg: "bg-blue-50" },
+    core: { gradient: "from-green-500 to-emerald-500", bg: "bg-green-50" },
+    power_conditioning: { gradient: "from-purple-500 to-pink-500", bg: "bg-purple-50" },
+  };
+
+  const config = phaseConfig[currentPhase as keyof typeof phaseConfig] || phaseConfig.main_strength;
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
+    <div className={`min-h-screen ${config.bg} transition-colors duration-500`}>
       {/* Header */}
-      <div className="flex justify-between items-center mb-12">
-        <div>
-          <h1 className="text-4xl font-bold text-gray-800">Round {round}</h1>
-          <div className="mt-2 h-2 bg-blue-600 rounded-full" style={{ width: "100%" }} />
+      <div className="bg-white shadow-sm sticky top-0 z-10">
+        <div className="max-w-7xl mx-auto px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">
+                Round {round} of {rounds.length}
+              </h1>
+              <p className="text-lg text-gray-600 mt-1">
+                {currentRoundData?.phase.replace('_', ' ').split(' ').map(word => 
+                  word.charAt(0).toUpperCase() + word.slice(1)
+                ).join(' ')}
+              </p>
+            </div>
+            
+            {/* Round Progress Indicators and Menu */}
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                {rounds.map((r, idx) => (
+                  <div
+                    key={idx}
+                    className={`w-3 h-3 rounded-full transition-all duration-300 ${
+                      idx + 1 === parseInt(round)
+                        ? `bg-gradient-to-r ${config.gradient} scale-125`
+                        : idx + 1 < parseInt(round)
+                        ? "bg-gray-400"
+                        : "bg-gray-300"
+                    }`}
+                  />
+                ))}
+              </div>
+              
+              {/* Menu Button */}
+              <div className="relative">
+                <button
+                  onClick={() => setShowMenu(!showMenu)}
+                  className="bg-white rounded-lg shadow-md p-2.5 hover:bg-gray-50 transition-colors"
+                >
+                  <svg className="w-5 h-5 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+                  </svg>
+                </button>
+                
+                {/* Dropdown Menu */}
+                {showMenu && (
+                  <div className="absolute right-0 mt-2 bg-white rounded-lg shadow-lg p-2 space-y-1 min-w-[200px] z-20">
+                    <button
+                      onClick={() => {
+                        router.push(`/workout-overview?sessionId=${sessionId}`);
+                        setShowMenu(false);
+                      }}
+                      className="w-full px-4 py-2 text-left text-gray-700 hover:bg-gray-100 rounded-md transition-colors flex items-center gap-2"
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 9l6-6m0 0l6 6m-6-6v12a6 6 0 01-12 0v-3" />
+                      </svg>
+                      Back to Overview
+                    </button>
+                    
+                    <button
+                      onClick={() => {
+                        const nextRound = parseInt(round) + 1;
+                        if (nextRound <= rounds.length) {
+                          router.push(`/workout-live?sessionId=${sessionId}&round=${nextRound}`);
+                          setShowMenu(false);
+                        }
+                      }}
+                      disabled={parseInt(round) >= rounds.length}
+                      className={`w-full px-4 py-2 text-left rounded-md transition-colors flex items-center gap-2 ${
+                        parseInt(round) < rounds.length
+                          ? 'text-gray-700 hover:bg-gray-100'
+                          : 'text-gray-400 cursor-not-allowed'
+                      }`}
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+                      </svg>
+                      Next Round
+                    </button>
+                    
+                    <button
+                      onClick={() => {
+                        const prevRound = parseInt(round) - 1;
+                        if (prevRound >= 1) {
+                          router.push(`/workout-live?sessionId=${sessionId}&round=${prevRound}`);
+                          setShowMenu(false);
+                        }
+                      }}
+                      disabled={parseInt(round) <= 1}
+                      className={`w-full px-4 py-2 text-left rounded-md transition-colors flex items-center gap-2 ${
+                        parseInt(round) > 1
+                          ? 'text-gray-700 hover:bg-gray-100'
+                          : 'text-gray-400 cursor-not-allowed'
+                      }`}
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
+                      </svg>
+                      Previous Round
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
-        <Timer timeLeft={timeLeft} />
       </div>
 
-      {/* Exercise Stations */}
-      <div className="flex justify-center gap-12 flex-wrap">
-        {stations.map((station, idx) => {
-          const progress = getStationProgress(idx);
-          return (
-            <ExerciseStation 
-              key={idx} 
-              {...station} 
-              currentSet={progress.currentSet}
-              progressWithinSet={progress.progressWithinSet}
-              isComplete={progress.isComplete}
+      {/* Main Content */}
+      <div className="max-w-7xl mx-auto px-6 py-8">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+          {/* Timer Section */}
+          <div className="lg:col-span-1">
+            <Timer 
+              timeLeft={timeLeft} 
+              phase={currentPhase}
+              scheme={stations[0]?.scheme}
             />
-          );
-        })}
-      </div>
+            
+            {/* Navigation */}
+            <div className="mt-6 space-y-3">
+              <button
+                onClick={() => {
+                  if (parseInt(round) <= 1) {
+                    window.location.href = `/workout-overview?sessionId=${sessionId}`;
+                  } else {
+                    window.location.href = `/workout-live?sessionId=${sessionId}&round=${parseInt(round) - 1}`;
+                  }
+                }}
+                className="w-full px-4 py-3 bg-white text-gray-700 rounded-xl hover:bg-gray-50 transition-colors font-medium shadow-md"
+              >
+                {parseInt(round) <= 1 ? '← Back to Overview' : '← Previous Round'}
+              </button>
+              
+              {parseInt(round) < rounds.length && (
+                <button
+                  onClick={() => {
+                    window.location.href = `/workout-live?sessionId=${sessionId}&round=${parseInt(round) + 1}`;
+                  }}
+                  className={`w-full px-4 py-3 bg-gradient-to-r ${config.gradient} text-white rounded-xl hover:shadow-lg transition-all font-medium`}
+                >
+                  Next Round →
+                </button>
+              )}
+            </div>
+          </div>
 
-      {/* Navigation */}
-      <div className="mt-32 flex justify-between items-center">
-        <button
-          onClick={() => {
-            if (parseInt(round) <= 1) {
-              // Navigate back to workout overview for Round 1
-              window.location.href = `/workout-overview?sessionId=${sessionId}`;
-            } else {
-              // Navigate to previous round
-              const prevRound = parseInt(round) - 1;
-              window.location.href = `/workout-live?sessionId=${sessionId}&round=${prevRound}`;
-            }
-          }}
-          className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-        >
-          {parseInt(round) <= 1 ? 'Back to Overview' : 'Previous Round'}
-        </button>
-        
-        <div className="text-gray-600">
-          Round {round} of {stations.length > 0 ? sortedRounds.length : 0}
+          {/* Exercise Stations */}
+          <div className="lg:col-span-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {stations.map((station, idx) => (
+                <ExerciseStation
+                  key={idx}
+                  index={idx}
+                  participants={station.participants.map(p => ({
+                    name: p.userName,
+                    avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(p.userName)}`
+                  }))}
+                  exercise={station.exerciseName}
+                  phase={station.phase}
+                  scheme={station.scheme}
+                  isShared={station.isShared}
+                />
+              ))}
+            </div>
+          </div>
         </div>
-        
-        <button
-          onClick={() => {
-            const nextRound = parseInt(round) + 1;
-            window.location.href = `/workout-live?sessionId=${sessionId}&round=${nextRound}`;
-          }}
-          className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-        >
-          Next Round
-        </button>
       </div>
     </div>
   );
@@ -458,14 +489,7 @@ function WorkoutLivePageContent() {
 
 export default function WorkoutLivePage() {
   return (
-    <Suspense fallback={
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading workout...</p>
-        </div>
-      </div>
-    }>
+    <Suspense fallback={<LoadingSpinner />}>
       <WorkoutLivePageContent />
     </Suspense>
   );

@@ -8,7 +8,7 @@ export interface Logger {
 export class ConsoleLogger implements Logger {
   private enabled: boolean;
   
-  constructor(enabled: boolean = process.env.NODE_ENV !== 'test') {
+  constructor(enabled: boolean = process.env.NODE_ENV !== 'test' && process.env.DEBUG === 'true') {
     this.enabled = enabled;
   }
   

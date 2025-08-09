@@ -6,7 +6,7 @@ export interface LLMConfig {
   maxTokens?: number;
   timeout?: number;
   // GPT-5 specific parameters
-  reasoning_effort?: "low" | "medium" | "high";
+  reasoning_effort?: "minimal" | "low" | "medium" | "high";
   verbosity?: "concise" | "normal" | "verbose";
 }
 
@@ -25,6 +25,7 @@ export function createLLM(config: LLMConfig = defaultLLMConfig): LLMProvider {
   const options: any = {
     modelName: config.modelName,
     timeout: config.timeout,
+    maxRetries: 0, // Disable retries to see raw behavior
   };
 
   // GPT-5 only supports default temperature of 1
