@@ -13,4 +13,14 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     persistSession: true,
     detectSessionInUrl: false,
   },
+  realtime: {
+    params: {
+      eventsPerSecond: 10, // Rate limiting to prevent overwhelming TV
+    },
+  },
+  global: {
+    headers: {
+      'X-Client-Type': 'react-native-tv', // Identify TV clients for debugging
+    },
+  },
 });

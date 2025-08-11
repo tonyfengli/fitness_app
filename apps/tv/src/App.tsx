@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { View } from 'react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { TRPCProvider } from './providers/TRPCProvider';
+import { RealtimeProvider } from './providers/RealtimeProvider';
 
 // TVEventHandler might be in a different location for react-native-tvos
 let TVEventHandler: any;
@@ -20,10 +21,11 @@ import { SessionLobbyScreen } from './screens/SessionLobbyScreen';
 import { GlobalPreferencesScreen } from './screens/GlobalPreferencesScreen';
 import { WorkoutOverviewScreen } from './screens/WorkoutOverviewScreen';
 import { WorkoutLiveScreen } from './screens/WorkoutLiveScreen';
+import { SessionMonitorScreen } from './screens/SessionMonitorScreen';
 
 const queryClient = new QueryClient();
 
-type ScreenName = 'SessionLobby' | 'GlobalPreferences' | 'WorkoutOverview' | 'WorkoutLive';
+type ScreenName = 'SessionLobby' | 'GlobalPreferences' | 'WorkoutOverview' | 'WorkoutLive' | 'SessionMonitor';
 
 interface NavigationState {
   currentScreen: ScreenName;
@@ -46,7 +48,7 @@ export const useNavigation = () => React.useContext(NavigationContext);
 
 function NavigationContainer({ children }: { children: React.ReactNode }) {
   const [navigationState, setNavigationState] = useState<NavigationState>({
-    currentScreen: 'SessionLobby',
+    currentScreen: 'SessionMonitor', // Start with SessionMonitor to see real-time updates
     sessionId: null,
     currentRound: 1,
   });
@@ -126,6 +128,9 @@ function NavigationContainer({ children }: { children: React.ReactNode }) {
         {navigationState.currentScreen === 'WorkoutLive' && (
           <WorkoutLiveScreen />
         )}
+        {navigationState.currentScreen === 'SessionMonitor' && (
+          <SessionMonitorScreen />
+        )}
       </View>
     </NavigationContext.Provider>
   );
@@ -135,9 +140,11 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TRPCProvider>
-        <NavigationContainer>
-          <View className="flex-1" />
-        </NavigationContainer>
+        <RealtimeProvider>
+          <NavigationContainer>
+            <View className="flex-1" />
+          </NavigationContainer>
+        </RealtimeProvider>
       </TRPCProvider>
     </QueryClientProvider>
   );
