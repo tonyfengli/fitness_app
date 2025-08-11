@@ -53,7 +53,14 @@ export function useRealtimePreferences({
     
     // Create a channel for this session's preferences
     const channel = supabase
-      .channel(`preferences-${sessionId}`)
+      .channel(`preferences-${sessionId}`, {
+        config: {
+          timeout: 30000, // Increase timeout to 30 seconds
+          params: {
+            eventsPerSecond: 10
+          }
+        }
+      })
       .on(
         'postgres_changes',
         {
@@ -101,8 +108,9 @@ export function useRealtimePreferences({
           onErrorRef.current?.(new Error(errorMsg));
         } else if (status === 'TIMED_OUT') {
           setIsConnected(false);
-          const errorMsg = 'Connection timed out';
+          const errorMsg = 'Connection timed out - This may be due to network issues or firewall blocking WebSocket connections';
           setError(errorMsg);
+          console.warn('[useRealtimePreferences] Connection timeout. Common causes: firewall, VPN, or Supabase Realtime not enabled');
           onErrorRef.current?.(new Error(errorMsg));
         } else if (status === 'CLOSED') {
           setIsConnected(false);

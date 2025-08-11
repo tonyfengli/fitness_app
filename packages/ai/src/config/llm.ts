@@ -27,6 +27,9 @@ export function createLLM(config: LLMConfig = defaultLLMConfig): LLMProvider {
     timeout: config.timeout,
     maxRetries: 0, // Disable retries to see raw behavior
   };
+  
+  // For GPT-5, parameters might need to be passed via modelKwargs
+  const modelKwargs: any = {};
 
   // GPT-5 only supports default temperature of 1
   if (config.modelName === "gpt-5") {
@@ -42,13 +45,37 @@ export function createLLM(config: LLMConfig = defaultLLMConfig): LLMProvider {
     }
   }
 
-  // Add GPT-5 specific parameters if provided
-  if (config.reasoning_effort) {
-    options.reasoning_effort = config.reasoning_effort;
-  }
-  if (config.verbosity) {
-    options.verbosity = config.verbosity;
+  // Add GPT-5 specific parameters
+  // Try both approaches - direct options AND modelKwargs
+  if (config.modelName === "gpt-5") {
+    // Approach 1: Direct options (what we had before)
+    if (config.reasoning_effort) {
+      options.reasoning_effort = config.reasoning_effort;
+      modelKwargs.reasoning_effort = config.reasoning_effort;
+    }
+    if (config.verbosity) {
+      options.verbosity = config.verbosity;
+      modelKwargs.verbosity = config.verbosity;
+    }
+    
+    // Approach 2: modelKwargs (LangChain might need this)
+    if (Object.keys(modelKwargs).length > 0) {
+      options.modelKwargs = modelKwargs;
+    }
+    
+    // Approach 3: Try configuration object
+    options.configuration = {
+      reasoning_effort: config.reasoning_effort,
+      verbosity: config.verbosity
+    };
   }
 
-  return new ChatOpenAI(options);
+  const llm = new ChatOpenAI(options);
+  
+  // Add debugging for GPT-5 responses in development
+  if (process.env.NODE_ENV === 'development' && config.modelName === 'gpt-5') {
+    console.log('[createLLM] GPT-5 configuration:', options);
+  }
+  
+  return llm;
 }
