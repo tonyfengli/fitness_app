@@ -17,6 +17,11 @@ config.resolver.nodeModulesPaths = [
   path.resolve(workspaceRoot, 'node_modules'),
 ];
 
+// Add extraNodeModules for vector icons
+config.resolver.extraNodeModules = {
+  'react-native-vector-icons': path.resolve(workspaceRoot, 'node_modules/react-native-vector-icons'),
+};
+
 // Make sure @babel/runtime resolves correctly
 config.resolver.resolveRequest = (context, moduleName, platform) => {
   if (moduleName.startsWith('@babel/runtime')) {
@@ -25,6 +30,8 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
       type: 'sourceFile',
     };
   }
+  
+  
   // Let Metro handle other modules
   return context.resolveRequest(context, moduleName, platform);
 };

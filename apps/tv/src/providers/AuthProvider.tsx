@@ -1,6 +1,23 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { supabase } from '../lib/supabase';
-import type { Session } from '@supabase/supabase-js';
+import { authClient, signIn } from '../auth/client';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+// Auto-login credentials for TV app
+const TV_APP_EMAIL = 'tony.li.feng@gmail.com';
+const TV_APP_PASSWORD = '123456';
+
+interface User {
+  id: string;
+  email: string;
+  name: string;
+  role: string;
+  businessId: string;
+}
+
+interface Session {
+  user: User;
+  token: string;
+}
 
 interface AuthContextType {
   session: Session | null;
@@ -21,59 +38,72 @@ interface AuthProviderProps {
   children: React.ReactNode;
 }
 
-// Temporary auth credentials for TV app
-const TV_APP_EMAIL = 'tv@d33b41e2-f700-4a08-9489-cb6e3daa7f20.local';
-const TV_APP_PASSWORD = 'tv-app-temp-password-2024';
-
 export function AuthProvider({ children }: AuthProviderProps) {
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    // Check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        setSession(session);
-        setIsLoading(false);
-      } else {
-        // Auto sign in with TV app credentials
-        signInTvApp();
-      }
-    });
-
-    // Listen for auth changes
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-    });
-
-    return () => {
-      listener?.subscription.unsubscribe();
-    };
-  }, []);
-
-  const signInTvApp = async () => {
+  const checkAndSignIn = async () => {
     try {
-      console.log('[TV Auth] Attempting to sign in with TV app credentials');
+      console.log('[TV Auth] Checking for existing session...');
       
-      const { data, error } = await supabase.auth.signInWithPassword({
+      // First check if we have a stored session
+      const storedSession = await AsyncStorage.getItem('tv-auth-session');
+      if (storedSession) {
+        const parsedSession = JSON.parse(storedSession);
+        console.log('[TV Auth] Found stored session for:', parsedSession.user.email);
+        setSession(parsedSession);
+        setIsLoading(false);
+        return;
+      }
+
+      // No stored session, attempt auto sign-in
+      console.log('[TV Auth] No stored session, attempting auto sign-in...');
+      console.log('[TV Auth] Using email:', TV_APP_EMAIL);
+      
+      const result = await signIn({
         email: TV_APP_EMAIL,
         password: TV_APP_PASSWORD,
       });
 
-      if (error) {
-        console.error('[TV Auth] Sign in error:', error);
-        // For now, we'll continue without auth
-        // In production, this should be handled properly
+      console.log('[TV Auth] Sign in result:', JSON.stringify(result, null, 2));
+
+      if (result.error) {
+        console.error('[TV Auth] Sign in error:', result.error);
+        // Log more details about the error
+        if (result.error.status) {
+          console.error('[TV Auth] Error status:', result.error.status);
+        }
+        if (result.error.message) {
+          console.error('[TV Auth] Error message:', result.error.message);
+        }
+        setIsLoading(false);
+      } else if (result.data) {
+        // Transform better-auth response to our session format
+        const session: Session = {
+          user: result.data.user as User,
+          token: result.data.token,
+        };
+        
+        console.log('[TV Auth] Successfully signed in as:', session.user.email);
+        console.log('[TV Auth] User data:', JSON.stringify(session.user, null, 2));
+        setSession(session);
+        
+        // Store session for next app launch
+        await AsyncStorage.setItem('tv-auth-session', JSON.stringify(session));
+        setIsLoading(false);
       } else {
-        console.log('[TV Auth] Successfully signed in');
-        setSession(data.session);
+        console.error('[TV Auth] No data or error in response');
+        setIsLoading(false);
       }
-    } catch (err) {
-      console.error('[TV Auth] Unexpected error:', err);
-    } finally {
+    } catch (error) {
+      console.error('[TV Auth] Unexpected error:', error);
       setIsLoading(false);
     }
   };
+
+  useEffect(() => {
+    checkAndSignIn();
+  }, []);
 
   const value: AuthContextType = {
     session,

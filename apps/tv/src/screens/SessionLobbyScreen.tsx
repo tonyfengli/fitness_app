@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { ScrollView, Alert, View, Text, TouchableOpacity, Image } from 'react-native';
+import { ScrollView, Alert, View, Text, TouchableOpacity, Image, ActivityIndicator } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { useNavigation } from '../App';
 import { useBusiness } from '../providers/BusinessProvider';
 import { supabase } from '../lib/supabase';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { api } from '../providers/TRPCProvider';
 import { useRealtimeCheckIns } from '../hooks/useRealtimeCheckIns';
 
@@ -27,13 +27,14 @@ interface CheckedInClient {
 
 export function SessionLobbyScreen() {
   const navigation = useNavigation();
-  const { businessId } = useBusiness();
+  const { businessId, isLoading: isBusinessLoading } = useBusiness();
   const sessionId = navigation.getParam('sessionId');
   const [clients, setClients] = useState<CheckedInClient[]>([]);
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected'>('disconnected');
+  const [isStartingSession, setIsStartingSession] = useState(false);
 
   // Fetch initial checked-in clients using TRPC
-  const { data: initialClients, isLoading } = useQuery(
+  const { data: initialClients, isLoading, error: fetchError } = useQuery(
     sessionId ? api.trainingSession.getCheckedInClients.queryOptions({ sessionId }) : {
       enabled: false,
       queryKey: ['disabled'],
@@ -41,10 +42,28 @@ export function SessionLobbyScreen() {
     }
   );
 
+  // Debug logging
+  useEffect(() => {
+    console.log('[TV SessionLobby] Data state:', {
+      sessionId,
+      isLoading,
+      fetchError,
+      initialClients,
+      clientsCount: clients.length
+    });
+  }, [sessionId, isLoading, fetchError, initialClients, clients]);
+
+  // Clear clients when sessionId changes
+  useEffect(() => {
+    console.log('[TV SessionLobby] Session changed, clearing clients. New sessionId:', sessionId);
+    setClients([]);
+  }, [sessionId]);
+
   // Set initial clients when data loads
   useEffect(() => {
-    if (initialClients) {
-      setClients(initialClients.map(client => ({
+    if (initialClients && initialClients.length > 0) {
+      console.log('[TV SessionLobby] Setting clients from initial data:', initialClients);
+      setClients(initialClients.map((client: any) => ({
         ...client,
         preferences: client.preferences
       })));
@@ -90,8 +109,41 @@ export function SessionLobbyScreen() {
     setConnectionStatus(isConnected ? 'connected' : 'disconnected');
   }, [isConnected]);
 
-  const handleStartSession = () => {
-    navigation.navigate('GlobalPreferences', { sessionId });
+  // Send session start messages mutation
+  const sendStartMessagesMutation = useMutation({
+    ...api.trainingSession.sendSessionStartMessages.mutationOptions(),
+    onSuccess: (data) => {
+      console.log('[TV SessionLobby] SMS send result:', data);
+      // Navigate to preferences after successful SMS send
+      navigation.navigate('GlobalPreferences', { sessionId });
+    },
+    onError: (error: any) => {
+      console.error('[TV SessionLobby] Failed to send start messages:', error);
+      setIsStartingSession(false);
+      Alert.alert(
+        'Error',
+        'Failed to send start messages. Would you like to continue anyway?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Continue',
+            onPress: () => navigation.navigate('GlobalPreferences', { sessionId })
+          }
+        ]
+      );
+    },
+    onSettled: () => {
+      setIsStartingSession(false);
+    }
+  });
+
+  const handleStartSession = async () => {
+    if (!sessionId) return;
+    
+    setIsStartingSession(true);
+    
+    // Send start messages (SMS) to checked-in clients
+    sendStartMessagesMutation.mutate({ sessionId });
   };
 
   const handleCloseSession = async () => {
@@ -114,7 +166,7 @@ export function SessionLobbyScreen() {
                 .from('training_session')
                 .update({ status: 'cancelled' })
                 .eq('id', sessionId)
-                .eq('business_id', businessId)
+                .eq('business_id', businessId!)
                 .eq('status', 'open');
               
               if (error) {
@@ -152,10 +204,22 @@ export function SessionLobbyScreen() {
             </View>
             <TouchableOpacity
               onPress={handleStartSession}
-              className="bg-sky-600 px-6 py-2.5 rounded-lg"
+              className={`px-6 py-2.5 rounded-lg ${
+                isStartingSession || clients.length === 0
+                  ? 'bg-gray-400'
+                  : 'bg-sky-600'
+              }`}
               activeOpacity={0.8}
+              disabled={isStartingSession || clients.length === 0}
             >
-              <Text className="text-white font-semibold">Start Session</Text>
+              {isStartingSession ? (
+                <View className="flex-row items-center">
+                  <ActivityIndicator size="small" color="white" style={{ marginRight: 8 }} />
+                  <Text className="text-white font-semibold">Starting...</Text>
+                </View>
+              ) : (
+                <Text className="text-white font-semibold">Start Session</Text>
+              )}
             </TouchableOpacity>
           </View>
         </View>
@@ -165,7 +229,12 @@ export function SessionLobbyScreen() {
       <View className="flex-1 px-6 pt-6">
         {/* Clients Area */}
         <View className="bg-white rounded-xl shadow-lg flex-1">
-          {isLoading ? (
+          {fetchError ? (
+            <View className="flex-1 items-center justify-center p-12">
+              <Text className="text-red-600">Error loading clients</Text>
+              <Text className="text-gray-600 text-sm mt-2">{fetchError.message || 'Unknown error'}</Text>
+            </View>
+          ) : isLoading ? (
             <View className="flex-1 items-center justify-center">
               <Text className="text-gray-600">Loading clients...</Text>
             </View>

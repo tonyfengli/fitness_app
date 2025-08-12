@@ -130,8 +130,8 @@ dependencies {
 
 // Configure vector icons for monorepo
 project.ext.vectoricons = [
-    iconFontsDir: "../../../../node_modules/react-native-vector-icons/Fonts"
+    iconFontsDir: "../../../../node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts"
 ]
 
 // Add this at the bottom for react-native-vector-icons
-apply from: file("../../../../node_modules/react-native-vector-icons/fonts.gradle")
+apply from: file("../../../../node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/fonts.gradle")
