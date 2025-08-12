@@ -192,8 +192,8 @@ export function SessionLobbyScreen() {
                   <View className="flex-row items-center">
                     {/* DiceBear Avatar - using PNG format */}
                     <Image
-                      source={{ uri: `https://api.dicebear.com/7.x/avataaars/png?seed=${client.userId}&size=40` }}
-                      style={{ width: 40, height: 40, borderRadius: 20, marginRight: 16 }}
+                      source={{ uri: `https://api.dicebear.com/7.x/avataaars/png?seed=${client.userId}&size=128` }}
+                      style={{ width: 28, height: 28, borderRadius: 14, marginRight: 16, alignSelf: 'center' }}
                     />
                     
                     {/* Name only - extract first name */}
@@ -201,6 +201,12 @@ export function SessionLobbyScreen() {
                       <Text className="text-base font-medium text-gray-900">
                         {client.userName ? client.userName.split(' ')[0] : 'Unknown'}
                       </Text>
+                    </View>
+                    
+                    {/* Checked in status */}
+                    <View className="flex-row items-center">
+                      <View className="w-2 h-2 bg-green-500 rounded-full mr-2" />
+                      <Text className="text-sm text-gray-500">Checked in</Text>
                     </View>
                   </View>
                 </View>
