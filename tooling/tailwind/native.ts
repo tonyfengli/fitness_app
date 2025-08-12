@@ -4,6 +4,6 @@ import base from "./base";
 
 export default {
   content: base.content,
-  presets: [base],
+  presets: [base, require("nativewind/preset")],
   theme: {},
 } satisfies Config;

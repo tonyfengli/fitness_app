@@ -1,6 +1,6 @@
 import React from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
 import { useNavigation } from '../App';
+import { Box, Text, TVButton } from '../components';
 
 export function SessionLobbyScreen() {
   const navigation = useNavigation();
@@ -11,31 +11,30 @@ export function SessionLobbyScreen() {
   };
 
   return (
-    <View className="flex-1 bg-gray-900 p-12">
-      <View className="flex-1 items-center justify-center">
-        <Text className="text-tv-5xl font-bold text-white mb-4">
+    <Box style={{ flex: 1 }} backgroundColor="gray900" padding="3xl">
+      <Box style={{ flex: 1 }} alignItems="center" justifyContent="center">
+        <Text variant="h1" color="white" marginBottom="m" fontSize={72} lineHeight={80}>
           Fitness Session
         </Text>
         
-        <Text className="text-tv-2xl text-gray-300 mb-12">
+        <Text variant="h3" color="gray300" marginBottom="3xl">
           Welcome to today's workout
         </Text>
 
-        <TouchableOpacity
+        <TVButton
           onPress={handleStartSession}
-          className="bg-indigo-600 px-16 py-8 rounded-2xl"
+          variant="primary"
+          size="large"
         >
-          <Text className="text-tv-2xl font-semibold text-white">
-            Start Session
-          </Text>
-        </TouchableOpacity>
+          Start Session
+        </TVButton>
 
-        <View className="mt-16">
-          <Text className="text-tv-lg text-gray-400">
+        <Box marginTop="4xl">
+          <Text variant="h5" color="gray400">
             Press Enter or click to begin
           </Text>
-        </View>
-      </View>
-    </View>
+        </Box>
+      </Box>
+    </Box>
   );
 }

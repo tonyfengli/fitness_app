@@ -1,39 +1,32 @@
 const { getDefaultConfig } = require('@react-native/metro-config');
 const path = require('path');
 
-const projectRoot = __dirname;
-const workspaceRoot = path.resolve(projectRoot, '../..');
+const config = getDefaultConfig(__dirname);
 
-const config = getDefaultConfig(projectRoot);
+// Monorepo-friendly
+config.resolver.unstable_enableSymlinks = true;
+config.resolver.unstable_enablePackageExports = true;
 
-// Watch all files in the monorepo
+// Watch all workspace packages
+const workspaceRoot = path.resolve(__dirname, '../..');
 config.watchFolders = [workspaceRoot];
 
-// Resolve node_modules from workspace root
+// Keep the existing node_modules resolution
 config.resolver.nodeModulesPaths = [
-  path.resolve(projectRoot, 'node_modules'),
+  path.resolve(__dirname, 'node_modules'),
   path.resolve(workspaceRoot, 'node_modules'),
 ];
 
-// Create a proxy for resolving node_modules
-const nodeModulesProxy = new Proxy({}, {
-  get: (target, name) => {
-    const modulePath = path.join(workspaceRoot, 'node_modules', name);
-    return modulePath;
+// Make sure @babel/runtime resolves correctly
+config.resolver.resolveRequest = (context, moduleName, platform) => {
+  if (moduleName.startsWith('@babel/runtime')) {
+    return {
+      filePath: require.resolve(moduleName, { paths: [workspaceRoot] }),
+      type: 'sourceFile',
+    };
   }
-});
-
-// Add support for shared packages and dependencies
-config.resolver.extraNodeModules = new Proxy({}, {
-  get: (target, name) => {
-    // First check if it's a workspace package
-    if (name.startsWith('@acme/')) {
-      const packageName = name.replace('@acme/', '');
-      return path.resolve(workspaceRoot, 'packages', packageName);
-    }
-    // Otherwise resolve from root node_modules
-    return path.resolve(workspaceRoot, 'node_modules', name);
-  }
-});
+  // Let Metro handle other modules
+  return context.resolveRequest(context, moduleName, platform);
+};
 
 module.exports = config;

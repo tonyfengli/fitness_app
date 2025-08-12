@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
+import { ScrollView, TouchableOpacity } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { useRealtimeNewSessions } from '../hooks/useRealtimeNewSessions';
 import { useNavigation } from '../App';
+import { Box, Text, Card, Button } from '../components';
 
 interface SessionInfo {
   id: string;
@@ -18,15 +19,14 @@ const BUSINESS_ID = 'd33b41e2-f700-4a08-9489-cb6e3daa7f20';
 export function SessionMonitorScreen() {
   const navigation = useNavigation();
   const [recentSessions, setRecentSessions] = useState<SessionInfo[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const sessionIdsRef = useRef(new Set<string>());
 
   // Memoize the callback to prevent re-subscriptions
   const handleNewSession = useCallback((session: any) => {
-    // console.log('[SessionMonitorScreen] New session detected:', session.id);
-    
     // Check if we already have this session
     if (sessionIdsRef.current.has(session.id)) {
-      // console.log('[SessionMonitorScreen] Duplicate session ignored:', session.id);
       return;
     }
     
@@ -47,10 +47,6 @@ export function SessionMonitorScreen() {
         created_at: session.created_at,
       }, ...prev].slice(0, 10); // Keep only last 10
     });
-
-    // Optional: Auto-navigate to the new session
-    // Uncomment this if you want automatic navigation
-    // navigation.navigate('SessionLobby', { sessionId: session.id });
   }, []);
 
   // Listen for new sessions
@@ -60,39 +56,49 @@ export function SessionMonitorScreen() {
     onNewSession: handleNewSession,
   });
 
+  const loadRecentSessions = useCallback(async () => {
+    setIsLoading(true);
+    setLoadError(null);
+    
+    try {
+      console.log('[SessionMonitorScreen] Starting to load sessions...');
+      console.log('[SessionMonitorScreen] Supabase URL:', supabase.supabaseUrl);
+      
+      const { data, error } = await supabase
+        .from('training_session')
+        .select('id, template_type, status, scheduled_at, created_at')
+        .eq('business_id', BUSINESS_ID)
+        .order('created_at', { ascending: false })
+        .limit(10);
+
+      if (error) {
+        console.error('[SessionMonitorScreen] Supabase error:', error);
+        console.error('[SessionMonitorScreen] Error details:', JSON.stringify(error, null, 2));
+        setLoadError('Failed to load sessions. Please check your connection.');
+        return;
+      }
+
+      if (data) {
+        // Clear and repopulate the session IDs set
+        sessionIdsRef.current.clear();
+        data.forEach(session => {
+          sessionIdsRef.current.add(session.id);
+        });
+        
+        setRecentSessions(data);
+      }
+    } catch (err) {
+      console.error('[SessionMonitorScreen] Error:', err);
+      setLoadError('Network error. Please check your connection.');
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
   // Load recent sessions on mount
   useEffect(() => {
-    
-    const loadRecentSessions = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('training_session')
-          .select('id, template_type, status, scheduled_at, created_at')
-          .eq('business_id', BUSINESS_ID)
-          .order('created_at', { ascending: false })
-          .limit(10);
-
-        if (error) {
-          console.error('[SessionMonitorScreen] Error loading sessions:', error);
-          return;
-        }
-
-        if (data) {
-          // Clear and repopulate the session IDs set
-          sessionIdsRef.current.clear();
-          data.forEach(session => {
-            sessionIdsRef.current.add(session.id);
-          });
-          
-          setRecentSessions(data);
-        }
-      } catch (err) {
-        console.error('[SessionMonitorScreen] Error:', err);
-      }
-    };
-
     loadRecentSessions();
-  }, []);
+  }, [loadRecentSessions]);
 
   const handleSessionPress = (sessionId: string) => {
     navigation.navigate('SessionLobby', { sessionId });
@@ -104,66 +110,95 @@ export function SessionMonitorScreen() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#f3f4f6', padding: 32 }}>
-      <Text style={{ fontSize: 36, fontWeight: 'bold', marginBottom: 16, color: '#000' }}>Session Monitor</Text>
+    <Box style={{ flex: 1 }} backgroundColor="gray100" padding="xl">
+      <Text variant="h1" marginBottom="m">Session Monitor</Text>
       
       {/* Connection Status */}
-      <View style={{ marginBottom: 24, padding: 16, backgroundColor: '#fff', borderRadius: 8 }}>
-        <Text style={{ fontSize: 18, fontWeight: '600', marginBottom: 8, color: '#000' }}>Real-time Status</Text>
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <View style={{ 
-            width: 12, 
-            height: 12, 
-            borderRadius: 6, 
-            marginRight: 8, 
-            backgroundColor: isSubscribed ? '#10b981' : '#ef4444' 
-          }} />
-          <Text style={{ fontSize: 16, color: '#000' }}>
+      <Card variant="elevated" marginBottom="l">
+        <Text variant="h5" marginBottom="s">Real-time Status</Text>
+        <Box flexDirection="row" alignItems="center">
+          <Box 
+            width={12} 
+            height={12} 
+            borderRadius="full" 
+            backgroundColor={isSubscribed ? 'green500' : 'red500'} 
+            marginRight="s" 
+          />
+          <Text variant="body">
             {isSubscribed ? 'Connected' : 'Disconnected'}
           </Text>
-        </View>
+        </Box>
         {error && (
-          <Text style={{ color: '#ef4444', marginTop: 8 }}>{error.message}</Text>
+          <Text variant="bodySmall" color="red600" marginTop="s">
+            {error.message}
+          </Text>
         )}
-      </View>
+      </Card>
 
       {/* Latest Session Alert */}
       {latestSession && (
-        <View style={{ marginBottom: 24, padding: 16, backgroundColor: '#dbeafe', borderRadius: 8 }}>
-          <Text style={{ fontSize: 18, fontWeight: '600', marginBottom: 8, color: '#000' }}>🆕 New Session Created!</Text>
-          <Text style={{ fontSize: 16, color: '#000' }}>Type: {latestSession.template_type}</Text>
-          <Text style={{ fontSize: 16, color: '#000' }}>Status: {latestSession.status}</Text>
-          <TouchableOpacity
-            onPress={() => handleSessionPress(latestSession.id)}
-            style={{ marginTop: 8, backgroundColor: '#3b82f6', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 4 }}
-          >
-            <Text style={{ color: '#fff', fontWeight: '600' }}>Go to Session</Text>
-          </TouchableOpacity>
-        </View>
+        <Card variant="elevated" backgroundColor="blue100" marginBottom="l">
+          <Text variant="h5" marginBottom="s">🆕 New Session Created!</Text>
+          <Text variant="body">Type: {latestSession.template_type}</Text>
+          <Text variant="body">Status: {latestSession.status}</Text>
+          <Box marginTop="s">
+            <Button
+              onPress={() => handleSessionPress(latestSession.id)}
+              variant="primary"
+            >
+              Go to Session
+            </Button>
+          </Box>
+        </Card>
       )}
 
       {/* Recent Sessions List */}
-      <Text style={{ fontSize: 24, fontWeight: 'bold', marginBottom: 16, color: '#000' }}>Recent Sessions</Text>
-      <ScrollView style={{ flex: 1 }}>
-        {recentSessions.map((session) => (
+      <Text variant="h2" marginBottom="m">Recent Sessions</Text>
+      
+      {isLoading ? (
+        <Box style={{ flex: 1 }} justifyContent="center" alignItems="center">
+          <Text variant="body" color="textMuted">Loading sessions...</Text>
+        </Box>
+      ) : loadError ? (
+        <Box style={{ flex: 1 }} justifyContent="center" alignItems="center">
+          <Text variant="body" color="red600" textAlign="center">{loadError}</Text>
+          <Box marginTop="m">
+            <Button variant="primary" onPress={() => {
+              setRecentSessions([]);
+              loadRecentSessions();
+            }}>
+              Retry
+            </Button>
+          </Box>
+        </Box>
+      ) : recentSessions.length === 0 ? (
+        <Box style={{ flex: 1 }} justifyContent="center" alignItems="center">
+          <Text variant="body" color="textMuted">No sessions found</Text>
+        </Box>
+      ) : (
+        <ScrollView style={{ flex: 1 }}>
+          {recentSessions.map((session) => (
           <TouchableOpacity
             key={session.id}
             onPress={() => handleSessionPress(session.id)}
-            style={{ marginBottom: 16, padding: 16, backgroundColor: '#fff', borderRadius: 8 }}
+            activeOpacity={0.7}
           >
-            <Text style={{ fontSize: 18, fontWeight: '600', color: '#000' }}>{session.template_type}</Text>
-            <Text style={{ fontSize: 16, color: '#6b7280' }}>Status: {session.status}</Text>
-            <Text style={{ fontSize: 14, color: '#9ca3af' }}>
-              Created: {formatDate(session.created_at)}
-            </Text>
-            {session.scheduled_at && (
-              <Text style={{ fontSize: 14, color: '#9ca3af' }}>
-                Scheduled: {formatDate(session.scheduled_at)}
+            <Card variant="elevated" marginBottom="m">
+              <Text variant="h5">{session.template_type}</Text>
+              <Text variant="body" color="textSecondary">Status: {session.status}</Text>
+              <Text variant="bodySmall" color="textMuted">
+                Created: {formatDate(session.created_at)}
               </Text>
-            )}
+              {session.scheduled_at && (
+                <Text variant="bodySmall" color="textMuted">
+                  Scheduled: {formatDate(session.scheduled_at)}
+                </Text>
+              )}
+            </Card>
           </TouchableOpacity>
         ))}
       </ScrollView>
-    </View>
+      )}
+    </Box>
   );
 }
