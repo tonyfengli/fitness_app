@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import { useRealtimeNewSessions } from '../hooks/useRealtimeNewSessions';
 import { useNavigation } from '../App';
 import { Box, Text, Card, Button } from '../components';
+import { useBusiness } from '../providers/BusinessProvider';
 
 interface SessionInfo {
   id: string;
@@ -13,11 +14,9 @@ interface SessionInfo {
   created_at: string;
 }
 
-// TODO: Get this from auth context when implemented
-const BUSINESS_ID = 'd33b41e2-f700-4a08-9489-cb6e3daa7f20';
-
 export function SessionMonitorScreen() {
   const navigation = useNavigation();
+  const { businessId } = useBusiness();
   const [recentSessions, setRecentSessions] = useState<SessionInfo[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -51,7 +50,7 @@ export function SessionMonitorScreen() {
 
   // Listen for new sessions
   const { latestSession, isSubscribed, error } = useRealtimeNewSessions({
-    businessId: BUSINESS_ID,
+    businessId: businessId,
     supabase,
     onNewSession: handleNewSession,
   });
@@ -67,7 +66,7 @@ export function SessionMonitorScreen() {
       const { data, error } = await supabase
         .from('training_session')
         .select('id, template_type, status, scheduled_at, created_at')
-        .eq('business_id', BUSINESS_ID)
+        .eq('business_id', businessId)
         .order('created_at', { ascending: false })
         .limit(10);
 
@@ -93,7 +92,7 @@ export function SessionMonitorScreen() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [businessId]);
 
   // Load recent sessions on mount
   useEffect(() => {

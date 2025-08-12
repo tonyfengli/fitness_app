@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View } from 'react-native';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { TRPCProvider } from './providers/TRPCProvider';
 import { RealtimeProvider } from './providers/RealtimeProvider';
 import { ThemeProvider } from './providers/ThemeProvider';
+import { BusinessProvider } from './providers/BusinessProvider';
 import { Box } from './components';
 
 // TVEventHandler might be in a different location for react-native-tvos
@@ -19,16 +19,15 @@ try {
 }
 
 // Screens
+import { MainScreen } from './screens/MainScreen';
 import { SessionLobbyScreen } from './screens/SessionLobbyScreen';
 import { GlobalPreferencesScreen } from './screens/GlobalPreferencesScreen';
 import { WorkoutOverviewScreen } from './screens/WorkoutOverviewScreen';
 import { WorkoutLiveScreen } from './screens/WorkoutLiveScreen';
 import { SessionMonitorScreen } from './screens/SessionMonitorScreen';
-import { NetworkTestScreen } from './screens/NetworkTestScreen';
 
-const queryClient = new QueryClient();
 
-type ScreenName = 'SessionLobby' | 'GlobalPreferences' | 'WorkoutOverview' | 'WorkoutLive' | 'SessionMonitor' | 'NetworkTest';
+type ScreenName = 'Main' | 'SessionLobby' | 'GlobalPreferences' | 'WorkoutOverview' | 'WorkoutLive' | 'SessionMonitor';
 
 interface NavigationState {
   currentScreen: ScreenName;
@@ -51,7 +50,7 @@ export const useNavigation = () => React.useContext(NavigationContext);
 
 function NavigationContainer({ children }: { children: React.ReactNode }) {
   const [navigationState, setNavigationState] = useState<NavigationState>({
-    currentScreen: 'NetworkTest', // Start with NetworkTest to debug connection
+    currentScreen: 'Main',
     sessionId: null,
     currentRound: 1,
   });
@@ -59,7 +58,7 @@ function NavigationContainer({ children }: { children: React.ReactNode }) {
   const [navigationParams, setNavigationParams] = useState<any>({});
   const tvEventHandler = useRef<TVEventHandler | null>(null);
   
-  const screenHistory = useRef<ScreenName[]>(['SessionLobby']);
+  const screenHistory = useRef<ScreenName[]>(['Main']);
 
   const navigate = (screen: ScreenName, params?: any) => {
     screenHistory.current.push(screen);
@@ -120,6 +119,9 @@ function NavigationContainer({ children }: { children: React.ReactNode }) {
   return (
     <NavigationContext.Provider value={navigationValue}>
       <Box style={{ flex: 1 }} backgroundColor="background">
+        {navigationState.currentScreen === 'Main' && (
+          <MainScreen />
+        )}
         {navigationState.currentScreen === 'SessionLobby' && (
           <SessionLobbyScreen />
         )}
@@ -135,9 +137,6 @@ function NavigationContainer({ children }: { children: React.ReactNode }) {
         {navigationState.currentScreen === 'SessionMonitor' && (
           <SessionMonitorScreen />
         )}
-        {navigationState.currentScreen === 'NetworkTest' && (
-          <NetworkTestScreen />
-        )}
       </Box>
     </NavigationContext.Provider>
   );
@@ -145,8 +144,8 @@ function NavigationContainer({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <TRPCProvider>
+    <TRPCProvider>
+      <BusinessProvider>
         <RealtimeProvider>
           <ThemeProvider>
             <NavigationContainer>
@@ -154,7 +153,7 @@ export default function App() {
             </NavigationContainer>
           </ThemeProvider>
         </RealtimeProvider>
-      </TRPCProvider>
-    </QueryClientProvider>
+      </BusinessProvider>
+    </TRPCProvider>
   );
 }
