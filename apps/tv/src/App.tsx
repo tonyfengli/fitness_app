@@ -2,9 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { View } from 'react-native';
 import { TRPCProvider } from './providers/TRPCProvider';
 import { RealtimeProvider } from './providers/RealtimeProvider';
-import { ThemeProvider } from './providers/ThemeProvider';
 import { BusinessProvider } from './providers/BusinessProvider';
-import { Box } from './components';
+import { AuthProvider } from './providers/AuthProvider';
 
 // TVEventHandler might be in a different location for react-native-tvos
 let TVEventHandler: any;
@@ -25,9 +24,10 @@ import { GlobalPreferencesScreen } from './screens/GlobalPreferencesScreen';
 import { WorkoutOverviewScreen } from './screens/WorkoutOverviewScreen';
 import { WorkoutLiveScreen } from './screens/WorkoutLiveScreen';
 import { SessionMonitorScreen } from './screens/SessionMonitorScreen';
+import { TestTailwindScreen } from './screens/TestTailwindScreen';
 
 
-type ScreenName = 'Main' | 'SessionLobby' | 'GlobalPreferences' | 'WorkoutOverview' | 'WorkoutLive' | 'SessionMonitor';
+type ScreenName = 'Main' | 'SessionLobby' | 'GlobalPreferences' | 'WorkoutOverview' | 'WorkoutLive' | 'SessionMonitor' | 'TestTailwind';
 
 interface NavigationState {
   currentScreen: ScreenName;
@@ -118,7 +118,7 @@ function NavigationContainer({ children }: { children: React.ReactNode }) {
 
   return (
     <NavigationContext.Provider value={navigationValue}>
-      <Box style={{ flex: 1 }} backgroundColor="background">
+      <View style={{ flex: 1 }}>
         {navigationState.currentScreen === 'Main' && (
           <MainScreen />
         )}
@@ -137,23 +137,26 @@ function NavigationContainer({ children }: { children: React.ReactNode }) {
         {navigationState.currentScreen === 'SessionMonitor' && (
           <SessionMonitorScreen />
         )}
-      </Box>
+        {navigationState.currentScreen === 'TestTailwind' && (
+          <TestTailwindScreen />
+        )}
+      </View>
     </NavigationContext.Provider>
   );
 }
 
 export default function App() {
   return (
-    <TRPCProvider>
-      <BusinessProvider>
-        <RealtimeProvider>
-          <ThemeProvider>
+    <AuthProvider>
+      <TRPCProvider>
+        <BusinessProvider>
+          <RealtimeProvider>
             <NavigationContainer>
-              <Box style={{ flex: 1 }} />
+              <View style={{ flex: 1 }} />
             </NavigationContainer>
-          </ThemeProvider>
-        </RealtimeProvider>
-      </BusinessProvider>
-    </TRPCProvider>
+          </RealtimeProvider>
+        </BusinessProvider>
+      </TRPCProvider>
+    </AuthProvider>
   );
 }

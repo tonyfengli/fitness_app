@@ -5,14 +5,17 @@
   "main": "index.js",
   "scripts": {
     "android": "react-native run-android",
-    "android:tv": "JAVA_HOME='/usr/local/opt/openjdk@17' ANDROID_HOME='$HOME/Library/Android/sdk' PATH='/usr/local/opt/openjdk@17/bin:$PATH:$HOME/Library/Android/sdk/platform-tools' react-native run-android --mode=tvDebug",
+    "android:tv": "JAVA_HOME='/usr/local/opt/openjdk@17' ANDROID_HOME='$HOME/Library/Android/sdk' PATH='/usr/local/opt/openjdk@17/bin:$PATH:$HOME/Library/Android/sdk/platform-tools' pnpx react-native run-android --mode=tvDebug",
     "ios": "react-native run-ios",
     "start": "react-native start",
     "dev": "react-native start",
     "clean": "rm -rf node_modules .turbo build android/app/build ios/build",
     "clean:android": "cd android && ./gradlew clean",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint . --ext .ts,.tsx"
+    "lint": "eslint . --ext .ts,.tsx",
+    "guard:deps": "node ./scripts/guardDeps.js",
+    "prebuild": "pnpm run guard:deps",
+    "build": "react-native bundle --platform android --dev false --entry-file index.js --bundle-output android/app/src/main/assets/index.android.bundle --assets-dest android/app/src/main/res"
   },
   "dependencies": {
     "@acme/api": "workspace:*",
@@ -21,11 +24,11 @@
     "@react-native-async-storage/async-storage": "^2.1.0",
     "@react-navigation/native": "^7.0.14",
     "@react-navigation/stack": "^7.0.14",
-    "@shopify/restyle": "^2.4.5",
     "@supabase/supabase-js": "^2.53.0",
     "@tanstack/react-query": "catalog:default",
     "@trpc/client": "catalog:default",
     "@trpc/tanstack-react-query": "catalog:default",
+    "nativewind": "2.0.11",
     "react": "catalog:react19",
     "react-dom": "catalog:react19",
     "react-native": "npm:react-native-tvos@0.79.2-0",
@@ -51,7 +54,12 @@
     "babel-plugin-module-resolver": "^5.0.2",
     "eslint": "catalog:default",
     "metro-react-native-babel-preset": "^0.77.0",
+    "tailwindcss": "3.2.7",
     "typescript": "catalog:default"
+  },
+  "overrides": {
+    "tailwindcss": "3.2.7",
+    "postcss": "8.4.21"
   },
   "engines": {
     "node": ">=20.0.0"

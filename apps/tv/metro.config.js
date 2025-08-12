@@ -7,7 +7,7 @@ const config = getDefaultConfig(__dirname);
 config.resolver.unstable_enableSymlinks = true;
 config.resolver.unstable_enablePackageExports = true;
 
-// Watch all workspace packages
+// Watch workspace for dependencies
 const workspaceRoot = path.resolve(__dirname, '../..');
 config.watchFolders = [workspaceRoot];
 
