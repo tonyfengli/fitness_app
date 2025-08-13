@@ -266,6 +266,31 @@ Stop after selecting the first valid high-scoring exercise combination that sati
     return output;
   }
   
+  // Helper methods
+  private formatGoal(goal: string): string {
+    return goal.replace(/_/g, ' ').toLowerCase();
+  }
+  
+  private formatMuscleList(muscles?: string[]): string {
+    if (!muscles || muscles.length === 0) return 'none';
+    return muscles.map(m => m.replace(/_/g, ' ')).join(', ');
+  }
+  
+  private formatJointList(joints?: string[]): string {
+    if (!joints || joints.length === 0) return 'none';
+    return joints.map(j => j.replace(/_/g, ' ')).join(', ');
+  }
+  
+  private formatExerciseDetailsWithoutId(exercise: ScoredExercise): string {
+    let details = `   - Movement: ${exercise.movementPattern}, Primary: ${exercise.primaryMuscle}\n`;
+    if (exercise.secondaryMuscles && exercise.secondaryMuscles.length > 0) {
+      details += `   - Secondary: ${exercise.secondaryMuscles.join(', ')}\n`;
+    }
+    details += `   - Equipment: ${exercise.equipment || 'none'}\n`;
+    details += `   - Score: ${exercise.score.toFixed(1)}`;
+    return details;
+  }
+  
   private buildExerciseOptions(): string {
     let output = `### 📋 Available Exercise Options\n\n`;
     

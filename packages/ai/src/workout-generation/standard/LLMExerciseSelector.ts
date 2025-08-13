@@ -55,8 +55,7 @@ export class LLMExerciseSelector {
   private llm = createLLM({
     modelName: "gpt-5",
     maxTokens: 500,
-    reasoning_effort: "medium",
-    verbosity: "low"
+    reasoning_effort: "medium"
     // Note: GPT-5 only supports default temperature (1.0)
   });
   private captureDebugData: boolean = false;
