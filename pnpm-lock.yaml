@@ -350,6 +350,9 @@ importers:
       react-native:
         specifier: npm:react-native-tvos@0.79.2-0
         version: react-native-tvos@0.79.2-0(@babel/core@7.27.4)(@react-native-community/cli@19.1.1(bufferutil@4.0.8)(typescript@5.8.3))(@types/react@19.1.6)(bufferutil@4.0.8)(react-native-tvos@0.79.2-0)(react@19.0.0)
+      react-native-config:
+        specifier: 1.5.6
+        version: 1.5.6
       react-native-gesture-handler:
         specifier: ~2.25.0
         version: 2.25.0(react-native-tvos@0.79.2-0)(react@19.0.0)
@@ -402,6 +405,9 @@ importers:
       '@react-native/typescript-config':
         specifier: 0.79.2
         version: 0.79.2
+      '@types/node':
+        specifier: ^22.15.29
+        version: 22.15.29
       '@types/react':
         specifier: catalog:react19
         version: 19.1.6
@@ -411,18 +417,24 @@ importers:
       babel-plugin-module-resolver:
         specifier: ^5.0.2
         version: 5.0.2
+      dotenv:
+        specifier: ^16.4.7
+        version: 16.4.7
+      dotenv-expand:
+        specifier: 12.0.2
+        version: 12.0.2
       eslint:
         specifier: catalog:default
         version: 9.28.0(jiti@2.4.2)
       metro-react-native-babel-preset:
         specifier: ^0.77.0
         version: 0.77.0(@babel/core@7.27.4)
-      react-native-dotenv:
-        specifier: 3.4.11
-        version: 3.4.11(@babel/runtime@7.27.4)
       tailwindcss:
         specifier: 3.2.7
         version: 3.2.7(postcss@8.5.6)(ts-node@10.9.2(@types/node@22.15.29)(typescript@5.8.3))
+      ts-node:
+        specifier: 10.9.2
+        version: 10.9.2(@types/node@22.15.29)(typescript@5.8.3)
       typescript:
         specifier: catalog:default
         version: 5.8.3
@@ -5047,6 +5059,10 @@ packages:
     resolution: {integrity: sha512-zIHwmZPRshsCdpMDyVsqGmgyP0yT8GAgXUnkdAoJisxvf33k7yO6OuoKmcTGuXPWSsm8Oh88nZicRLA9Y0rUeA==}
     engines: {node: '>=12'}
 
+  dotenv-expand@12.0.2:
+    resolution: {integrity: sha512-lXpXz2ZE1cea1gL4sz2Ipj8y4PiVjytYr3Ij0SWoms1PGxIv7m2CRKuRuCRtHdVuvM/hNJPMxt5PbhboNC4dPQ==}
+    engines: {node: '>=12'}
+
   dotenv@16.0.3:
     resolution: {integrity: sha512-7GO6HghkA5fYG9TYnNxi14/7K9f5occMlp3zXAuSxn7CKCxt9xbNWG7yF8hTCSUchlfWSe3uLmlPfigevRItzQ==}
     engines: {node: '>=12'}
@@ -7735,6 +7751,14 @@ packages:
   react-is@19.1.0:
     resolution: {integrity: sha512-Oe56aUPnkHyyDxxkvqtd7KkdQP5uIUfHxd5XTb3wE9d/kRnZLmKbDB0GWk919tdQ+mxxPtG6EAs6RMT6i1qtHg==}
 
+  react-native-config@1.5.6:
+    resolution: {integrity: sha512-UB3LEco0FGGbbGvS+DfH2VmGKiP/y5C2MkmfBmfsIaxHSbM1KOTMKYG7YRf6xFhZbJ/01BedHG7SIny5i7N9BQ==}
+    peerDependencies:
+      react-native-windows: '>=0.61'
+    peerDependenciesMeta:
+      react-native-windows:
+        optional: true
+
   react-native-css-interop@0.1.22:
     resolution: {integrity: sha512-Mu01e+H9G+fxSWvwtgWlF5MJBJC4VszTCBXopIpeR171lbeBInHb8aHqoqRPxmJpi3xIHryzqKFOJYAdk7PBxg==}
     engines: {node: '>=18'}
@@ -7750,11 +7774,6 @@ packages:
         optional: true
       react-native-svg:
         optional: true
-
-  react-native-dotenv@3.4.11:
-    resolution: {integrity: sha512-6vnIE+WHABSeHCaYP6l3O1BOEhWxKH6nHAdV7n/wKn/sciZ64zPPp2NUdEUf1m7g4uuzlLbjgr+6uDt89q2DOg==}
-    peerDependencies:
-      '@babel/runtime': ^7.20.6
 
   react-native-edge-to-edge@1.6.0:
     resolution: {integrity: sha512-2WCNdE3Qd6Fwg9+4BpbATUxCLcouF6YRY7K+J36KJ4l3y+tWN6XCqAC4DuoGblAAbb2sLkhEDp4FOlbOIot2Og==}
@@ -14102,6 +14121,10 @@ snapshots:
     dependencies:
       dotenv: 16.4.7
 
+  dotenv-expand@12.0.2:
+    dependencies:
+      dotenv: 16.4.7
+
   dotenv@16.0.3: {}
 
   dotenv@16.4.7: {}
@@ -17136,6 +17159,8 @@ snapshots:
 
   react-is@19.1.0: {}
 
+  react-native-config@1.5.6: {}
+
   react-native-css-interop@0.1.22(react-native-reanimated@3.18.0(@babel/core@7.27.4)(react-native@0.79.2(@babel/core@7.27.4)(@react-native-community/cli@19.1.1(bufferutil@4.0.8)(typescript@5.8.3))(@types/react@19.1.6)(bufferutil@4.0.8)(react@19.0.0))(react@19.0.0))(react-native-safe-area-context@5.4.1(react-native@0.79.2(@babel/core@7.27.4)(@react-native-community/cli@19.1.1(bufferutil@4.0.8)(typescript@5.8.3))(@types/react@19.1.6)(bufferutil@4.0.8)(react@19.0.0))(react@19.0.0))(react-native@0.79.2(@babel/core@7.27.4)(@react-native-community/cli@19.1.1(bufferutil@4.0.8)(typescript@5.8.3))(@types/react@19.1.6)(bufferutil@4.0.8)(react@19.0.0))(react@19.0.0)(tailwindcss@3.4.17(ts-node@10.9.2(@types/node@22.15.29)(typescript@5.8.3))):
     dependencies:
       '@babel/helper-module-imports': 7.25.9
@@ -17152,11 +17177,6 @@ snapshots:
       react-native-safe-area-context: 5.4.1(react-native@0.79.2(@babel/core@7.27.4)(@react-native-community/cli@19.1.1(bufferutil@4.0.8)(typescript@5.8.3))(@types/react@19.1.6)(bufferutil@4.0.8)(react@19.0.0))(react@19.0.0)
     transitivePeerDependencies:
       - supports-color
-
-  react-native-dotenv@3.4.11(@babel/runtime@7.27.4):
-    dependencies:
-      '@babel/runtime': 7.27.4
-      dotenv: 16.4.7
 
   react-native-edge-to-edge@1.6.0(react-native@0.79.2(@babel/core@7.27.4)(@react-native-community/cli@19.1.1(bufferutil@4.0.8)(typescript@5.8.3))(@types/react@19.1.6)(bufferutil@4.0.8)(react@19.0.0))(react@19.0.0):
     dependencies:
