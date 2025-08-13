@@ -2732,8 +2732,7 @@ Build rounds per rules. Output JSON only.`;
           // temperature: 0.7, // GPT-5 only supports default temperature of 1
           maxTokens: 2500,
           // GPT-5 specific parameters
-          reasoning_effort: "low",
-          verbosity: "low"
+          reasoning_effort: "low" as const
         };
         
         if (process.env.NODE_ENV === 'development') {
@@ -2940,8 +2939,8 @@ Stop after outputting JSON. End response with: END`;
         const totalExercisesProvided = phase2Input.clients.reduce((sum, c) => sum + c.exercises.length, 0);
         const totalExercisesAssigned = parsedResponse.schemaVersion === '2.1' 
           ? parsedResponse.assignments.length
-          : roundOrganization.rounds.reduce((sum, round) => {
-              return sum + Object.values(round.exercisesByClient).reduce((rSum, exercises: any) => rSum + exercises.length, 0);
+          : roundOrganization.rounds.reduce((sum: number, round: any) => {
+              return sum + Object.values(round.exercisesByClient).reduce((rSum: number, exercises: any) => rSum + exercises.length, 0);
             }, 0);
         
         if (totalExercisesProvided !== totalExercisesAssigned) {
