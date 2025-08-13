@@ -2,11 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, ScrollView, Image, ActivityIndicator, TouchableOpacity } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { useNavigation } from '../App';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { api } from '../providers/TRPCProvider';
 import { useRealtimePreferences } from '../hooks/useRealtimePreferences';
 import { useRealtimeStatus } from '@acme/ui-shared';
 import { supabase } from '../lib/supabase';
+import { WorkoutGenerationLoader } from '../components/WorkoutGenerationLoader';
 
 interface ClientPreference {
   userId: string;
@@ -29,6 +30,8 @@ export function GlobalPreferencesScreen() {
   const [clients, setClients] = useState<ClientPreference[]>([]);
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'connecting'>('connecting');
   const [statusConnectionStatus, setStatusConnectionStatus] = useState<'connected' | 'connecting'>('connecting');
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generationError, setGenerationError] = useState<string | null>(null);
 
   // Fetch initial preferences - using checked-in clients data
   const { data: clientsData, isLoading } = useQuery(
@@ -84,6 +87,99 @@ export function GlobalPreferencesScreen() {
     },
     onError: (err) => console.error('[TV GlobalPreferences] Status realtime error:', err)
   });
+
+  // Blueprint generation query - we'll trigger it manually
+  const [shouldGenerateBlueprint, setShouldGenerateBlueprint] = useState(false);
+  const { data: blueprintResult, isLoading: isBlueprintLoading, error: blueprintError, refetch: refetchBlueprint } = useQuery({
+    ...api.trainingSession.generateGroupWorkoutBlueprint.queryOptions({
+      sessionId: sessionId || '',
+      options: {
+        includeDiagnostics: true,
+        phase1Only: true
+      }
+    }),
+    enabled: shouldGenerateBlueprint && !!sessionId,
+    retry: false
+  });
+
+  // Save visualization mutation
+  const saveVisualization = useMutation({
+    ...api.trainingSession.saveVisualizationData.mutationOptions(),
+    onError: (error) => {
+      console.error('[TV GlobalPreferences] Save visualization error:', error);
+    }
+  });
+
+  const handleContinue = async () => {
+    setIsGenerating(true);
+    setGenerationError(null);
+    setShouldGenerateBlueprint(true);
+  };
+
+
+  // Handle blueprint generation result
+  useEffect(() => {
+    let isMounted = true;
+    
+    const processBlueprint = async () => {
+      if (blueprintResult && isGenerating && shouldGenerateBlueprint && isMounted) {
+        try {
+          // Immediately mark as processing to prevent re-runs
+          setShouldGenerateBlueprint(false);
+          
+          // Validate result
+          if (!blueprintResult?.llmResult) {
+            throw new Error('Failed to generate workout - no LLM result');
+          }
+          
+          // Save visualization data
+          console.log('[TV GlobalPreferences] Saving visualization data...');
+          await saveVisualization.mutateAsync({
+            sessionId: sessionId!,
+            visualizationData: {
+              blueprint: blueprintResult.blueprint,
+              groupContext: blueprintResult.groupContext,
+              llmResult: blueprintResult.llmResult,
+              summary: blueprintResult.summary,
+              exerciseMetadata: blueprintResult.blueprint?.clientExercisePools || undefined,
+              sharedExerciseIds: blueprintResult.blueprint?.sharedExercisePool?.map((e: any) => e.id) || undefined
+            }
+          });
+          
+          // Navigate to workout overview only if still mounted
+          if (isMounted) {
+            console.log('[TV GlobalPreferences] Navigating to workout overview...');
+            navigation.navigate('WorkoutOverview', { sessionId });
+          }
+        } catch (error: any) {
+          console.error('[TV GlobalPreferences] Error processing workout:', error);
+          if (isMounted) {
+            setGenerationError(error.message || 'Failed to generate workout. Please try again.');
+          }
+        } finally {
+          if (isMounted) {
+            setIsGenerating(false);
+          }
+        }
+      }
+    };
+    
+    processBlueprint();
+    
+    return () => {
+      isMounted = false;
+    };
+  }, [blueprintResult, isGenerating, shouldGenerateBlueprint]);
+  
+  // Handle blueprint error
+  useEffect(() => {
+    if (blueprintError && isGenerating) {
+      console.error('[TV GlobalPreferences] Blueprint error:', blueprintError);
+      setGenerationError('Failed to generate workout. Please try again.');
+      setIsGenerating(false);
+      setShouldGenerateBlueprint(false);
+    }
+  }, [blueprintError, isGenerating]);
 
   useEffect(() => {
     setConnectionStatus(isConnected ? 'connected' : 'connecting');
@@ -153,6 +249,20 @@ export function GlobalPreferencesScreen() {
     );
   }
 
+  // Show loading screen when generating workout
+  if (isGenerating) {
+    return (
+      <WorkoutGenerationLoader
+        clientNames={clients.map(c => c.userName || 'Unknown')}
+        onCancel={() => {
+          setIsGenerating(false);
+          setShouldGenerateBlueprint(false);
+          setGenerationError(null);
+        }}
+      />
+    );
+  }
+
   return (
     <View className="flex-1" style={{ backgroundColor: '#121212' }}>
       {/* Header */}
@@ -184,10 +294,7 @@ export function GlobalPreferencesScreen() {
         </TouchableOpacity>
         
         <TouchableOpacity
-          onPress={() => {
-            // TODO: Add continue logic
-            console.log('Continue pressed');
-          }}
+          onPress={handleContinue}
           activeOpacity={0.7}
           tvParallaxProperties={{
             enabled: true,
@@ -195,6 +302,7 @@ export function GlobalPreferencesScreen() {
             shiftDistanceY: 2,
           }}
           className="px-6 py-2.5 bg-sky-600 rounded-lg"
+          disabled={isGenerating}
         >
           <Text className="text-white font-semibold">Continue</Text>
         </TouchableOpacity>
@@ -327,6 +435,47 @@ export function GlobalPreferencesScreen() {
           {connectionStatus === 'connected' && statusConnectionStatus === 'connected' ? 'Live updates active' : 'Connecting...'}
         </Text>
       </View>
+      
+      {/* Error Modal */}
+      {generationError && (
+        <View className="absolute inset-0 bg-black bg-opacity-50 items-center justify-center px-8">
+          <View className="bg-gray-800 rounded-xl p-8 max-w-lg">
+            <Text className="text-red-400 text-xl font-semibold mb-4">Generation Failed</Text>
+            <Text className="text-gray-300 mb-6">{generationError}</Text>
+            <View className="flex-row justify-end space-x-4">
+              <TouchableOpacity
+                onPress={() => setGenerationError(null)}
+                className="px-6 py-2.5 bg-gray-700 rounded-lg mr-4"
+                activeOpacity={0.7}
+                tvParallaxProperties={{
+                  enabled: true,
+                  shiftDistanceX: 2,
+                  shiftDistanceY: 2,
+                }}
+              >
+                <Text className="text-gray-300">Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => {
+                  setGenerationError(null);
+                  // Reset and retry
+                  setShouldGenerateBlueprint(false);
+                  setTimeout(() => handleContinue(), 100);
+                }}
+                className="px-6 py-2.5 bg-sky-600 rounded-lg"
+                activeOpacity={0.7}
+                tvParallaxProperties={{
+                  enabled: true,
+                  shiftDistanceX: 2,
+                  shiftDistanceY: 2,
+                }}
+              >
+                <Text className="text-white font-semibold">Retry</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      )}
     </View>
   );
 }
