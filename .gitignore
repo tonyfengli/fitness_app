@@ -56,3 +56,4 @@ test-failures.json
 
 # Session test data
 session-test-data/
+apps/tv/.env

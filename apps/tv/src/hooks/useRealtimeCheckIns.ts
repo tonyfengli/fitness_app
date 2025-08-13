@@ -40,9 +40,9 @@ export function useRealtimeCheckIns({
     const timeoutId = setTimeout(() => {
       console.log('[TV] Setting up realtime for session:', sessionId);
     
-      // Create a channel for this session
+      // Create a channel for this session (must match web app channel name)
       const channel = supabase
-        .channel(`tv-session-${sessionId}`)
+        .channel(`session-${sessionId}`)
         .on(
           'postgres_changes',
           {

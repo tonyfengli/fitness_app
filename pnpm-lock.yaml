@@ -353,6 +353,9 @@ importers:
       react-native-gesture-handler:
         specifier: ~2.25.0
         version: 2.25.0(react-native-tvos@0.79.2-0)(react@19.0.0)
+      react-native-linear-gradient:
+        specifier: ^2.8.3
+        version: 2.8.3(react-native-tvos@0.79.2-0)(react@19.0.0)
       react-native-reanimated:
         specifier: ~3.18.0
         version: 3.18.0(@babel/core@7.27.4)(react-native-tvos@0.79.2-0)(react@19.0.0)
@@ -414,6 +417,9 @@ importers:
       metro-react-native-babel-preset:
         specifier: ^0.77.0
         version: 0.77.0(@babel/core@7.27.4)
+      react-native-dotenv:
+        specifier: 3.4.11
+        version: 3.4.11(@babel/runtime@7.27.4)
       tailwindcss:
         specifier: 3.2.7
         version: 3.2.7(postcss@8.5.6)(ts-node@10.9.2(@types/node@22.15.29)(typescript@5.8.3))
@@ -7745,6 +7751,11 @@ packages:
       react-native-svg:
         optional: true
 
+  react-native-dotenv@3.4.11:
+    resolution: {integrity: sha512-6vnIE+WHABSeHCaYP6l3O1BOEhWxKH6nHAdV7n/wKn/sciZ64zPPp2NUdEUf1m7g4uuzlLbjgr+6uDt89q2DOg==}
+    peerDependencies:
+      '@babel/runtime': ^7.20.6
+
   react-native-edge-to-edge@1.6.0:
     resolution: {integrity: sha512-2WCNdE3Qd6Fwg9+4BpbATUxCLcouF6YRY7K+J36KJ4l3y+tWN6XCqAC4DuoGblAAbb2sLkhEDp4FOlbOIot2Og==}
     peerDependencies:
@@ -7759,6 +7770,12 @@ packages:
 
   react-native-is-edge-to-edge@1.1.7:
     resolution: {integrity: sha512-EH6i7E8epJGIcu7KpfXYXiV2JFIYITtq+rVS8uEb+92naMRBdxhTuS8Wn2Q7j9sqyO0B+Xbaaf9VdipIAmGW4w==}
+    peerDependencies:
+      react: '*'
+      react-native: '*'
+
+  react-native-linear-gradient@2.8.3:
+    resolution: {integrity: sha512-KflAXZcEg54PXkLyflaSZQ3PJp4uC4whM7nT/Uot9m0e/qxFV3p6uor1983D1YOBJbJN7rrWdqIjq0T42jOJyA==}
     peerDependencies:
       react: '*'
       react-native: '*'
@@ -17136,6 +17153,11 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
+  react-native-dotenv@3.4.11(@babel/runtime@7.27.4):
+    dependencies:
+      '@babel/runtime': 7.27.4
+      dotenv: 16.4.7
+
   react-native-edge-to-edge@1.6.0(react-native@0.79.2(@babel/core@7.27.4)(@react-native-community/cli@19.1.1(bufferutil@4.0.8)(typescript@5.8.3))(@types/react@19.1.6)(bufferutil@4.0.8)(react@19.0.0))(react@19.0.0):
     dependencies:
       react: 19.0.0
@@ -17166,6 +17188,11 @@ snapshots:
     dependencies:
       react: 19.0.0
       react-native: 0.79.2(@babel/core@7.27.4)(@react-native-community/cli@19.1.1(bufferutil@4.0.8)(typescript@5.8.3))(@types/react@19.1.6)(bufferutil@4.0.8)(react@19.0.0)
+
+  react-native-linear-gradient@2.8.3(react-native-tvos@0.79.2-0)(react@19.0.0):
+    dependencies:
+      react: 19.0.0
+      react-native: react-native-tvos@0.79.2-0(@babel/core@7.27.4)(@react-native-community/cli@19.1.1(bufferutil@4.0.8)(typescript@5.8.3))(@types/react@19.1.6)(bufferutil@4.0.8)(react-native-tvos@0.79.2-0)(react@19.0.0)
 
   react-native-reanimated@3.18.0(@babel/core@7.27.4)(react-native-tvos@0.79.2-0)(react@19.0.0):
     dependencies:
