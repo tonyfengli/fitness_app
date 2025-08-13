@@ -801,57 +801,20 @@ export default function ClientPreferencePage() {
                 <h4 className="font-medium text-gray-900">Workout Focus</h4>
               </div>
               
-              {/* Workout Type */}
+              {/* Workout Type - Full Body Only */}
               <div className="mb-8">
                 <p className="text-sm font-medium text-gray-700 mb-3">Workout Type</p>
                 <div className="space-y-2">
-                  <label className="flex items-center p-3 border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors">
+                  <label className="flex items-center p-3 border border-gray-300 rounded-lg bg-gray-50 cursor-default">
                     <input
                       type="radio"
                       name="workoutType"
                       value="full_body"
-                      checked={workoutPreferences?.workoutType?.startsWith('full_body') ?? true}
-                      onChange={(e) => {
-                        const includeFinisher = workoutPreferences?.workoutType?.includes('with_finisher') ?? false;
-                        const workoutType = includeFinisher ? 'full_body_with_finisher' : 'full_body_without_finisher';
-                        handlePreferenceUpdate({
-                          ...workoutPreferences,
-                          workoutType: workoutType
-                        });
-                        // Update in database
-                        updateWorkoutTypeMutation.mutate({
-                          sessionId,
-                          userId,
-                          workoutType
-                        });
-                      }}
+                      checked={true}
+                      readOnly
                       className="w-4 h-4 text-indigo-600 border-gray-300 focus:ring-indigo-500"
                     />
                     <span className="ml-3 text-gray-700">Full Body</span>
-                  </label>
-                  <label className="flex items-center p-3 border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors">
-                    <input
-                      type="radio"
-                      name="workoutType"
-                      value="targeted"
-                      checked={workoutPreferences?.workoutType?.startsWith('targeted') ?? false}
-                      onChange={(e) => {
-                        const includeFinisher = workoutPreferences?.workoutType?.includes('with_finisher') ?? false;
-                        const workoutType = includeFinisher ? 'targeted_with_finisher' : 'targeted_without_finisher';
-                        handlePreferenceUpdate({
-                          ...workoutPreferences,
-                          workoutType: workoutType
-                        });
-                        // Update in database
-                        updateWorkoutTypeMutation.mutate({
-                          sessionId,
-                          userId,
-                          workoutType
-                        });
-                      }}
-                      className="w-4 h-4 text-indigo-600 border-gray-300 focus:ring-indigo-500"
-                    />
-                    <span className="ml-3 text-gray-700">Targeted</span>
                   </label>
                 </div>
               </div>
@@ -867,8 +830,7 @@ export default function ClientPreferencePage() {
                       value="no"
                       checked={!workoutPreferences?.workoutType?.includes('with_finisher') ?? true}
                       onChange={(e) => {
-                        const isTargeted = workoutPreferences?.workoutType?.startsWith('targeted') ?? false;
-                        const workoutType = isTargeted ? 'targeted_without_finisher' : 'full_body_without_finisher';
+                        const workoutType = 'full_body_without_finisher';
                         handlePreferenceUpdate({
                           ...workoutPreferences,
                           workoutType: workoutType
@@ -891,8 +853,7 @@ export default function ClientPreferencePage() {
                       value="yes"
                       checked={workoutPreferences?.workoutType?.includes('with_finisher') ?? false}
                       onChange={(e) => {
-                        const isTargeted = workoutPreferences?.workoutType?.startsWith('targeted') ?? false;
-                        const workoutType = isTargeted ? 'targeted_with_finisher' : 'full_body_with_finisher';
+                        const workoutType = 'full_body_with_finisher';
                         handlePreferenceUpdate({
                           ...workoutPreferences,
                           workoutType: workoutType
@@ -934,12 +895,7 @@ export default function ClientPreferencePage() {
               </div>
               <p className="text-sm text-gray-600 mb-4">
                 Select muscles you want to focus on during the workout
-                {workoutPreferences?.workoutType?.startsWith('full_body') && (
-                  <span className="block text-xs text-gray-500 mt-1">Full Body workouts: Maximum 2 muscles</span>
-                )}
-                {workoutPreferences?.workoutType?.startsWith('targeted') && (
-                  <span className="block text-xs text-gray-500 mt-1">Targeted workouts: 2-3 muscles required</span>
-                )}
+                <span className="block text-xs text-gray-500 mt-1">Full Body workouts: Maximum 2 muscles</span>
               </p>
               <div className="space-y-3">
                 {/* Muscle Target Items */}
@@ -955,10 +911,8 @@ export default function ClientPreferencePage() {
                 
                 {/* Add button */}
                 {(() => {
-                  const isFullBody = workoutPreferences?.workoutType?.startsWith('full_body');
-                  const isTargeted = workoutPreferences?.workoutType?.startsWith('targeted');
                   const muscleCount = displayData.muscleFocus.length;
-                  const canAddMore = isFullBody ? muscleCount < 2 : muscleCount < 3;
+                  const canAddMore = muscleCount < 2;
                   
                   return (
                     <button 
@@ -975,7 +929,7 @@ export default function ClientPreferencePage() {
                       }`}>
                       <PlusIcon />
                       {muscleCount === 0 ? 'Add Target Muscle' : 
-                       !canAddMore ? `Maximum reached (${muscleCount}/${isFullBody ? 2 : 3})` : 
+                       !canAddMore ? `Maximum reached (${muscleCount}/2)` : 
                        'Add More'}
                     </button>
                   );
@@ -990,26 +944,12 @@ export default function ClientPreferencePage() {
                 >
                   Back
                 </button>
-                {(() => {
-                  const isTargeted = workoutPreferences?.workoutType?.startsWith('targeted');
-                  const muscleCount = displayData.muscleFocus.length;
-                  const canProceed = !isTargeted || muscleCount >= 2;
-                  
-                  return (
-                    <button
-                      onClick={() => canProceed && setCurrentStep(3)}
-                      disabled={!canProceed}
-                      className={`px-6 py-2 rounded-lg transition-colors font-medium ${
-                        canProceed
-                          ? 'bg-indigo-600 text-white hover:bg-indigo-700'
-                          : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                      }`}
-                    >
-                      {!canProceed ? `Add ${2 - muscleCount} more muscle${2 - muscleCount > 1 ? 's' : ''}` :
-                       displayData.muscleFocus.length === 0 ? 'Skip' : 'Next'}
-                    </button>
-                  );
-                })()}
+                <button
+                  onClick={() => setCurrentStep(3)}
+                  className="px-6 py-2 rounded-lg transition-colors font-medium bg-indigo-600 text-white hover:bg-indigo-700"
+                >
+                  {displayData.muscleFocus.length === 0 ? 'Skip' : 'Next'}
+                </button>
               </div>
             </div>
           )}
