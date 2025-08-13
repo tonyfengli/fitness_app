@@ -46,14 +46,40 @@ export function useRealtimePreferences({
       console.log('[TV] Setting up preferences realtime subscription for session:', sessionId);
 
       const channel = supabase
-      .channel(`preferences:${sessionId}`)
+      .channel(`preferences-${sessionId}`)
       .on(
-        'broadcast',
-        { event: 'preference-update' },
-        (payload) => {
-          console.log('[TV] Received preference update:', payload);
-          if (payload.payload) {
-            onPreferenceUpdateRef.current(payload.payload as PreferenceUpdateEvent);
+        'postgres_changes',
+        {
+          event: '*', // Listen to INSERT and UPDATE
+          schema: 'public',
+          table: 'workout_preferences',
+          filter: `training_session_id=eq.${sessionId}`,
+        },
+        async (payload) => {
+          console.log('[TV useRealtimePreferences] Raw payload received:', payload);
+          console.log('[TV useRealtimePreferences] Event type:', payload.eventType);
+          console.log('[TV useRealtimePreferences] Table:', payload.table);
+          console.log('[TV useRealtimePreferences] New data:', payload.new);
+          
+          if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+            const preference = payload.new as any;
+            console.log('[TV useRealtimePreferences] Processing preference:', preference);
+            
+            // Transform database format to our expected format
+            const update: PreferenceUpdateEvent = {
+              userId: preference.user_id,
+              preferences: {
+                intensity: preference.intensity,
+                muscleTargets: preference.muscle_targets,
+                muscleLessens: preference.muscle_lessens,
+                sessionGoal: preference.workout_type?.includes('targeted') ? 'targeted' : 'full-body',
+                includeFinisher: preference.workout_type?.includes('with_finisher') ?? true
+              },
+              isReady: false // This would need to come from user_training_session table
+            };
+            
+            console.log('[TV useRealtimePreferences] Transformed update:', update);
+            onPreferenceUpdateRef.current(update);
           }
         }
       )

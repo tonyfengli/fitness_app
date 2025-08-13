@@ -23,13 +23,19 @@ const trpcClient = createTRPCClient<AppRouter>({
         const storedSession = await AsyncStorage.getItem('tv-auth-session');
         const session = storedSession ? JSON.parse(storedSession) : null;
         
-        return {
+        const headers: Record<string, string> = {
           'x-trpc-source': 'tv-app',
-          // Include authorization header if session exists
-          ...(session?.token && {
-            'Authorization': `Bearer ${session.token}`,
-          }),
+          'Content-Type': 'application/json',
         };
+        
+        // Better Auth expects cookies, not Authorization headers
+        // Send the session token as a cookie
+        if (session?.token) {
+          // Better Auth uses "better-auth.session" as the cookie name
+          headers['Cookie'] = `better-auth.session=${session.token}`;
+        }
+        
+        return headers;
       },
     }),
   ],

@@ -1,9 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, ScrollView, Image, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, Image, ActivityIndicator, TouchableOpacity } from 'react-native';
+import Icon from 'react-native-vector-icons/MaterialIcons';
 import { useNavigation } from '../App';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../providers/TRPCProvider';
 import { useRealtimePreferences } from '../hooks/useRealtimePreferences';
+import { useRealtimeStatus } from '@acme/ui-shared';
+import { supabase } from '../lib/supabase';
 
 interface ClientPreference {
   userId: string;
@@ -25,6 +28,7 @@ export function GlobalPreferencesScreen() {
   const sessionId = navigation.getParam('sessionId');
   const [clients, setClients] = useState<ClientPreference[]>([]);
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'connecting'>('connecting');
+  const [statusConnectionStatus, setStatusConnectionStatus] = useState<'connected' | 'connecting'>('connecting');
 
   // Fetch initial preferences - using checked-in clients data
   const { data: clientsData, isLoading } = useQuery(
@@ -35,23 +39,59 @@ export function GlobalPreferencesScreen() {
     }
   );
 
-  // Set up real-time updates
+  // Set up real-time updates for preferences
   const { isConnected } = useRealtimePreferences({
     sessionId: sessionId || '',
     onPreferenceUpdate: (event) => {
-      console.log('[TV GlobalPreferences] Preference update:', event);
-      setClients(prev => prev.map(client => 
-        client.userId === event.userId 
-          ? { ...client, preferences: event.preferences, isReady: event.isReady }
-          : client
-      ));
+      console.log('[TV GlobalPreferences] Preference update received:', event);
+      console.log('[TV GlobalPreferences] Current clients:', clients);
+      console.log('[TV GlobalPreferences] Looking for user:', event.userId);
+      
+      setClients(prev => {
+        console.log('[TV GlobalPreferences] Previous clients state:', prev);
+        const updated = prev.map(client => {
+          if (client.userId === event.userId) {
+            console.log('[TV GlobalPreferences] Found matching client, updating:', client.userId);
+            return { ...client, preferences: event.preferences, isReady: event.isReady };
+          }
+          return client;
+        });
+        console.log('[TV GlobalPreferences] Updated clients state:', updated);
+        return updated;
+      });
     },
     onError: (err) => console.error('[TV GlobalPreferences] Realtime error:', err)
+  });
+
+  // Set up real-time updates for user_training_session status
+  const { isConnected: isStatusConnected } = useRealtimeStatus({
+    sessionId: sessionId || '',
+    supabase,
+    onStatusUpdate: (update) => {
+      console.log('[TV GlobalPreferences] Status update received:', update);
+      
+      setClients(prev => {
+        const updated = prev.map(client => {
+          if (client.userId === update.userId) {
+            console.log('[TV GlobalPreferences] Updating status for user:', update.userId, 'to:', update.status);
+            // Mark as ready when status is 'ready'
+            return { ...client, isReady: update.status === 'ready' };
+          }
+          return client;
+        });
+        return updated;
+      });
+    },
+    onError: (err) => console.error('[TV GlobalPreferences] Status realtime error:', err)
   });
 
   useEffect(() => {
     setConnectionStatus(isConnected ? 'connected' : 'connecting');
   }, [isConnected]);
+
+  useEffect(() => {
+    setStatusConnectionStatus(isStatusConnected ? 'connected' : 'connecting');
+  }, [isStatusConnected]);
 
   useEffect(() => {
     if (clientsData) {
@@ -86,11 +126,11 @@ export function GlobalPreferencesScreen() {
 
   const getExerciseCount = (intensity?: string | null) => {
     switch (intensity?.toLowerCase()) {
-      case 'low': return 5;
-      case 'moderate': return 12;
-      case 'high': return 18;
-      case 'intense': return 24;
-      default: return 12;
+      case 'low': return 4;
+      case 'moderate': return 5;
+      case 'high': return 6;
+      case 'intense': return 7;
+      default: return 5;
     }
   };
 
@@ -115,18 +155,53 @@ export function GlobalPreferencesScreen() {
 
   return (
     <View className="flex-1 bg-gray-50">
-      {/* Connection Status */}
-      <View className="absolute top-4 left-4 flex-row items-center z-10">
-        <View className={`w-2 h-2 rounded-full mr-2 ${
-          connectionStatus === 'connected' ? 'bg-green-500' : 'bg-gray-400'
-        }`} />
-        <Text className="text-sm text-gray-600">
-          {connectionStatus === 'connected' ? 'Live updates active' : 'Connecting...'}
-        </Text>
+      {/* Header */}
+      <View className="bg-white shadow-sm">
+        <View className="px-6 py-4">
+          <View className="flex-row justify-between items-center">
+            <View className="flex-row items-center">
+              <TouchableOpacity
+                onPress={() => navigation.goBack()}
+                activeOpacity={0.7}
+                tvParallaxProperties={{
+                  enabled: true,
+                  shiftDistanceX: 2,
+                  shiftDistanceY: 2,
+                }}
+                style={({ focused }) => ({
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  paddingHorizontal: 16,
+                  paddingVertical: 8,
+                  borderRadius: 8,
+                  borderWidth: 2,
+                  borderColor: focused ? '#3b82f6' : 'transparent',
+                  backgroundColor: focused ? '#eff6ff' : 'transparent',
+                  transform: focused ? [{ scale: 1.05 }] : [{ scale: 1 }],
+                })}
+              >
+                <Icon name="arrow-back" size={24} color="#6b7280" />
+                <Text className="ml-2 text-lg font-medium text-black">
+                  Back to Lobby
+                </Text>
+              </TouchableOpacity>
+            </View>
+            
+            {/* Connection Status */}
+            <View className="flex-row items-center">
+              <View className={`w-2 h-2 rounded-full mr-2 ${
+                connectionStatus === 'connected' && statusConnectionStatus === 'connected' ? 'bg-green-500' : 'bg-gray-400'
+              }`} />
+              <Text className="text-sm text-gray-600">
+                {connectionStatus === 'connected' && statusConnectionStatus === 'connected' ? 'Live updates active' : 'Connecting...'}
+              </Text>
+            </View>
+          </View>
+        </View>
       </View>
 
       {/* Client Cards Grid */}
-      <View className="flex-1 px-6 py-8">
+      <View className="flex-1 px-6 py-6">
         <View className={`flex-1 flex-row flex-wrap ${clients.length > 4 ? 'content-center' : ''}`}>
           {clients.map((client, index) => {
             // Adjust size based on number of clients
@@ -200,10 +275,10 @@ export function GlobalPreferencesScreen() {
                       </View>
                       <View className="flex-1">
                         {client.preferences?.muscleTargets && client.preferences.muscleTargets.length > 0 ? (
-                          <View className="flex-row flex-wrap">
+                          <View className="flex-row flex-wrap items-center">
                             {client.preferences.muscleTargets.map((muscle) => (
-                              <View key={muscle} className={`bg-blue-100 ${isCompact ? 'px-2 py-0.5' : 'px-3 py-1'} rounded-full mr-2 mb-2`}>
-                                <Text className={`${isCompact ? 'text-xs' : 'text-sm'} text-blue-700 font-medium`}>{muscle}</Text>
+                              <View key={muscle} className={`bg-blue-100 ${isCompact ? 'px-1.5 py-0.5' : 'px-2 py-0.5'} rounded-full mr-1.5`}>
+                                <Text className={`${isCompact ? 'text-[10px]' : 'text-xs'} text-blue-700 font-medium`}>{muscle}</Text>
                               </View>
                             ))}
                           </View>
@@ -226,10 +301,10 @@ export function GlobalPreferencesScreen() {
                       </View>
                       <View className="flex-1">
                         {client.preferences?.muscleLessens && client.preferences.muscleLessens.length > 0 ? (
-                          <View className="flex-row flex-wrap">
+                          <View className="flex-row flex-wrap items-center">
                             {client.preferences.muscleLessens.map((muscle) => (
-                              <View key={muscle} className={`bg-red-100 ${isCompact ? 'px-2 py-0.5' : 'px-3 py-1'} rounded-full mr-2 mb-2`}>
-                                <Text className={`${isCompact ? 'text-xs' : 'text-sm'} text-red-700 font-medium`}>{muscle}</Text>
+                              <View key={muscle} className={`bg-red-100 ${isCompact ? 'px-1.5 py-0.5' : 'px-2 py-0.5'} rounded-full mr-1.5`}>
+                                <Text className={`${isCompact ? 'text-[10px]' : 'text-xs'} text-red-700 font-medium`}>{muscle}</Text>
                               </View>
                             ))}
                           </View>

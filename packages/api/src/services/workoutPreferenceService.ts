@@ -318,8 +318,8 @@ export class WorkoutPreferenceService {
       await WorkoutBlueprintService.invalidateCache(sessionId);
       logger.info("Blueprint cache invalidated for session", { sessionId });
       
-      // SSE broadcast removed - will be replaced with Supabase Realtime
-      logger.info("Preference update completed (real-time updates temporarily disabled)", { 
+      // Real-time updates are handled by Supabase Postgres changes
+      logger.info("Preference update completed", { 
         userId, 
         sessionId
       });

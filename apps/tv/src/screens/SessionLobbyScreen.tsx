@@ -193,8 +193,23 @@ export function SessionLobbyScreen() {
             <View className="flex-row items-center">
               <TouchableOpacity
                 onPress={handleCloseSession}
-                className="flex-row items-center"
                 activeOpacity={0.7}
+                tvParallaxProperties={{
+                  enabled: true,
+                  shiftDistanceX: 2,
+                  shiftDistanceY: 2,
+                }}
+                style={({ focused }) => ({
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  paddingHorizontal: 16,
+                  paddingVertical: 8,
+                  borderRadius: 8,
+                  borderWidth: 2,
+                  borderColor: focused ? '#3b82f6' : 'transparent',
+                  backgroundColor: focused ? '#eff6ff' : 'transparent',
+                  transform: focused ? [{ scale: 1.05 }] : [{ scale: 1 }],
+                })}
               >
                 <Icon name="close" size={24} color="#6b7280" />
                 <Text className="ml-2 text-lg font-medium text-black">
@@ -204,11 +219,7 @@ export function SessionLobbyScreen() {
             </View>
             <TouchableOpacity
               onPress={handleStartSession}
-              className={`px-6 py-2.5 rounded-lg ${
-                isStartingSession || clients.length === 0
-                  ? 'bg-gray-400'
-                  : 'bg-sky-600'
-              }`}
+              className="px-6 py-2.5 bg-sky-600 rounded-lg"
               activeOpacity={0.8}
               disabled={isStartingSession || clients.length === 0}
             >

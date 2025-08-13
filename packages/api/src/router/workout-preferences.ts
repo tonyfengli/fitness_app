@@ -917,6 +917,19 @@ export const workoutPreferencesRouter = createTRPCRouter({
         .where(eq(WorkoutPreferences.id, preference.id))
         .returning();
 
+      // Broadcast the update
+      if (updated) {
+        const preferenceData = {
+          intensity: updated.intensity || null,
+          muscleTargets: updated.muscleTargets || null,
+          muscleLessens: updated.muscleLessens || null,
+          sessionGoal: input.workoutType.includes('targeted') ? 'targeted' : 'full-body',
+          includeFinisher: input.workoutType.includes('with_finisher')
+        };
+        
+        await broadcastPreferenceUpdate(input.sessionId, input.userId, preferenceData, false);
+      }
+
       return updated;
     }),
 });
