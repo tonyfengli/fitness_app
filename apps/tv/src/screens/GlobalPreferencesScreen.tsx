@@ -154,185 +154,161 @@ export function GlobalPreferencesScreen() {
   }
 
   return (
-    <View className="flex-1 bg-gray-50">
+    <View className="flex-1" style={{ backgroundColor: '#121212' }}>
       {/* Header */}
-      <View className="bg-white shadow-sm">
-        <View className="px-6 py-4">
-          <View className="flex-row justify-between items-center">
-            <View className="flex-row items-center">
-              <TouchableOpacity
-                onPress={() => navigation.goBack()}
-                activeOpacity={0.7}
-                tvParallaxProperties={{
-                  enabled: true,
-                  shiftDistanceX: 2,
-                  shiftDistanceY: 2,
-                }}
-                style={({ focused }) => ({
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  paddingHorizontal: 16,
-                  paddingVertical: 8,
-                  borderRadius: 8,
-                  borderWidth: 2,
-                  borderColor: focused ? '#3b82f6' : 'transparent',
-                  backgroundColor: focused ? '#eff6ff' : 'transparent',
-                  transform: focused ? [{ scale: 1.05 }] : [{ scale: 1 }],
-                })}
-              >
-                <Icon name="arrow-back" size={24} color="#6b7280" />
-                <Text className="ml-2 text-lg font-medium text-black">
-                  Back to Lobby
-                </Text>
-              </TouchableOpacity>
-            </View>
-            
-            {/* Connection Status */}
-            <View className="flex-row items-center">
-              <View className={`w-2 h-2 rounded-full mr-2 ${
-                connectionStatus === 'connected' && statusConnectionStatus === 'connected' ? 'bg-green-500' : 'bg-gray-400'
-              }`} />
-              <Text className="text-sm text-gray-600">
-                {connectionStatus === 'connected' && statusConnectionStatus === 'connected' ? 'Live updates active' : 'Connecting...'}
-              </Text>
-            </View>
-          </View>
-        </View>
+      <View className="px-8 py-6 flex-row justify-between items-center">
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          activeOpacity={0.7}
+          tvParallaxProperties={{
+            enabled: true,
+            shiftDistanceX: 2,
+            shiftDistanceY: 2,
+          }}
+          style={({ focused }) => ({
+            flexDirection: 'row',
+            alignItems: 'center',
+            paddingHorizontal: 16,
+            paddingVertical: 8,
+            borderRadius: 8,
+            borderWidth: 2,
+            borderColor: focused ? '#3b82f6' : 'transparent',
+            backgroundColor: focused ? 'rgba(59, 130, 246, 0.1)' : 'transparent',
+            transform: focused ? [{ scale: 1.05 }] : [{ scale: 1 }],
+          })}
+        >
+          <Icon name="arrow-back" size={24} color="#E0E0E0" />
+          <Text className="ml-2 text-lg text-gray-200">
+            Back to Lobby
+          </Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity
+          onPress={() => {
+            // TODO: Add continue logic
+            console.log('Continue pressed');
+          }}
+          activeOpacity={0.7}
+          tvParallaxProperties={{
+            enabled: true,
+            shiftDistanceX: 2,
+            shiftDistanceY: 2,
+          }}
+          className="px-6 py-2.5 bg-sky-600 rounded-lg"
+        >
+          <Text className="text-white font-semibold">Continue</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Client Cards Grid */}
-      <View className="flex-1 px-6 py-6">
-        <View className={`flex-1 flex-row flex-wrap ${clients.length > 4 ? 'content-center' : ''}`}>
+      <View className="flex-1 px-8 pb-12">
+        <View className={`flex-1 flex-row flex-wrap ${clients.length > 4 ? 'items-center content-center' : 'items-center'}`}>
           {clients.map((client, index) => {
             // Adjust size based on number of clients
-            const cardSizeClass = clients.length <= 4 ? "w-1/2 h-1/2" : "w-1/3 h-2/5";
+            const cardSizeClass = clients.length <= 4 ? "w-1/2 h-1/2" : "w-1/3";
             const isCompact = clients.length > 4;
             
             return (
-            <View key={client.userId} className={`${cardSizeClass} p-2`}>
-              <View className={`bg-white h-full flex ${
-                client.isReady ? 'border-2 border-blue-400' : ''
-              } shadow-lg`} style={{
+            <View key={client.userId} className={`${cardSizeClass} p-4`} style={clients.length > 4 ? { height: '48%' } : {}}>
+              <View className={`h-full flex ${
+                client.isReady ? 'border-2 border-blue-500' : ''
+              }`} style={{
+                backgroundColor: '#1F2937',
                 borderRadius: 12,
-                overflow: 'hidden',
                 ...(!client.isReady && {
-                  borderWidth: 0.5,
-                  borderColor: '#e5e7eb'
+                  borderWidth: 0,
                 })
               }}>
                 
-                {/* Ready Badge */}
-                {client.isReady && (
-                  <View className="absolute -top-2 -right-2 bg-blue-500 px-3 py-1 rounded-full">
-                    <Text className="text-white text-xs font-medium">Ready</Text>
-                  </View>
-                )}
 
                 {/* Header Section */}
-                <View className={`${isCompact ? 'px-3 py-1' : 'px-4 py-2'} flex-row items-center`} style={{ 
-                  backgroundColor: '#f9fafb',
-                  borderBottomWidth: 0.5, 
-                  borderBottomColor: '#e5e7eb',
-                  borderTopLeftRadius: 12,
-                  borderTopRightRadius: 12
-                }}>
+                <View className={`${isCompact ? 'px-4 py-2' : 'px-6 py-3'} flex-row items-center`}>
                   <Image 
                     source={{ uri: getAvatarUrl(client.userId) }}
-                    className={isCompact ? "w-6 h-6 rounded-full" : "w-8 h-8 rounded-full"}
+                    className={isCompact ? "w-6 h-6 rounded-full mr-2" : "w-8 h-8 rounded-full mr-3"}
                   />
-                  <Text className={`${isCompact ? 'text-sm' : 'text-base'} font-semibold text-gray-900 ${isCompact ? 'ml-2' : 'ml-3'}`}>
+                  <Text className={`${isCompact ? 'text-base' : 'text-lg'} font-semibold text-white`}>
                     {client.userName || 'Unknown'}
                   </Text>
                 </View>
 
                 {/* Content Sections */}
-                <View className="flex-1" style={{ overflow: 'hidden' }}>
+                <View className={`${isCompact ? 'px-4 pb-3' : 'px-6 pb-4'}`}>
                   {/* Section 1: Workout Type */}
-                  <View className="flex-1 px-3 justify-center" style={{ borderBottomWidth: 0.5, borderBottomColor: '#e5e7eb' }}>
-                    <View className="flex-row items-center">
-                      <View className={`${isCompact ? 'w-5 h-5' : 'w-6 h-6'} rounded-full items-center justify-center ${isCompact ? 'mr-2' : 'mr-3'} ${
-                        client.isReady ? 'bg-indigo-600' : 'bg-gray-50'
-                      }`}>
-                        <Text className={`${isCompact ? 'text-[10px]' : 'text-xs'} font-bold ${client.isReady ? 'text-white' : 'text-gray-700'}`}>
-                          1
-                        </Text>
-                      </View>
-                      <Text className={`${isCompact ? 'text-xs' : 'text-sm'} text-gray-700`}>
-                        {client.preferences?.sessionGoal === 'targeted' ? 'Targeted' : 'Full Body'} • {client.preferences?.includeFinisher ? 'With Finisher' : 'Without Finisher'}
+                  <View className="flex-row items-center mb-2">
+                    <View className={`${isCompact ? 'w-5 h-5' : 'w-6 h-6'} rounded-full items-center justify-center ${isCompact ? 'mr-2' : 'mr-3'} ${
+                      client.isReady ? 'bg-indigo-600' : 'bg-gray-700'
+                    }`}>
+                      <Text className={`${isCompact ? 'text-[10px]' : 'text-xs'} ${client.isReady ? 'text-white' : 'text-gray-300'}`}>
+                        1
                       </Text>
                     </View>
+                    <Text className="text-gray-200 text-sm">
+                      {client.preferences?.sessionGoal === 'targeted' ? 'Targeted' : 'Full Body'} • {client.preferences?.includeFinisher ? 'With Finisher' : 'Without Finisher'}
+                    </Text>
                   </View>
 
                   {/* Section 2: Muscle Targets */}
-                  <View className="flex-1 px-3 justify-center" style={{ borderBottomWidth: 0.5, borderBottomColor: '#e5e7eb' }}>
-                    <View className="flex-row items-center">
-                      <View className={`${isCompact ? 'w-5 h-5' : 'w-6 h-6'} rounded-full items-center justify-center ${isCompact ? 'mr-2' : 'mr-3'} ${
-                        client.isReady ? 'bg-indigo-600' : 'bg-gray-50'
-                      }`}>
-                        <Text className={`${isCompact ? 'text-[10px]' : 'text-xs'} font-bold ${client.isReady ? 'text-white' : 'text-gray-700'}`}>
-                          2
-                        </Text>
-                      </View>
-                      <View className="flex-1">
-                        {client.preferences?.muscleTargets && client.preferences.muscleTargets.length > 0 ? (
-                          <View className="flex-row flex-wrap items-center">
-                            {client.preferences.muscleTargets.map((muscle) => (
-                              <View key={muscle} className={`bg-blue-100 ${isCompact ? 'px-1.5 py-0.5' : 'px-2 py-0.5'} rounded-full mr-1.5`}>
-                                <Text className={`${isCompact ? 'text-[10px]' : 'text-xs'} text-blue-700 font-medium`}>{muscle}</Text>
-                              </View>
-                            ))}
-                          </View>
-                        ) : (
-                          <Text className={`${isCompact ? 'text-xs' : 'text-sm'} text-gray-700`}>No muscle targets</Text>
-                        )}
-                      </View>
+                  <View className="flex-row items-center mb-2">
+                    <View className={`${isCompact ? 'w-5 h-5' : 'w-6 h-6'} rounded-full items-center justify-center ${isCompact ? 'mr-2' : 'mr-3'} ${
+                      client.isReady ? 'bg-indigo-600' : 'bg-gray-700'
+                    }`}>
+                      <Text className={`${isCompact ? 'text-[10px]' : 'text-xs'} ${client.isReady ? 'text-white' : 'text-gray-300'}`}>
+                        2
+                      </Text>
+                    </View>
+                    <View className="flex-1">
+                      {client.preferences?.muscleTargets && client.preferences.muscleTargets.length > 0 ? (
+                        <View className="flex-row flex-wrap items-center">
+                          {client.preferences.muscleTargets.map((muscle) => (
+                            <View key={muscle} className={`bg-indigo-200 ${isCompact ? 'px-2 py-0' : 'px-2.5 py-0.5'} rounded-full mr-1.5`}>
+                              <Text className={`${isCompact ? 'text-[10px]' : 'text-xs'} text-indigo-800 font-semibold`}>{muscle}</Text>
+                            </View>
+                          ))}
+                        </View>
+                      ) : (
+                        <Text className="text-gray-400 text-sm">No muscle targets</Text>
+                      )}
                     </View>
                   </View>
 
                   {/* Section 3: Muscle Limits */}
-                  <View className="flex-1 px-3 justify-center" style={{ borderBottomWidth: 0.5, borderBottomColor: '#e5e7eb' }}>
-                    <View className="flex-row items-center">
-                      <View className={`${isCompact ? 'w-5 h-5' : 'w-6 h-6'} rounded-full items-center justify-center ${isCompact ? 'mr-2' : 'mr-3'} ${
-                        client.isReady ? 'bg-indigo-600' : 'bg-gray-50'
-                      }`}>
-                        <Text className={`${isCompact ? 'text-[10px]' : 'text-xs'} font-bold ${client.isReady ? 'text-white' : 'text-gray-700'}`}>
-                          3
-                        </Text>
-                      </View>
-                      <View className="flex-1">
-                        {client.preferences?.muscleLessens && client.preferences.muscleLessens.length > 0 ? (
-                          <View className="flex-row flex-wrap items-center">
-                            {client.preferences.muscleLessens.map((muscle) => (
-                              <View key={muscle} className={`bg-red-100 ${isCompact ? 'px-1.5 py-0.5' : 'px-2 py-0.5'} rounded-full mr-1.5`}>
-                                <Text className={`${isCompact ? 'text-[10px]' : 'text-xs'} text-red-700 font-medium`}>{muscle}</Text>
-                              </View>
-                            ))}
-                          </View>
-                        ) : (
-                          <Text className={`${isCompact ? 'text-xs' : 'text-sm'} text-gray-700`}>No muscle limits</Text>
-                        )}
-                      </View>
+                  <View className="flex-row items-center mb-2">
+                    <View className={`${isCompact ? 'w-5 h-5' : 'w-6 h-6'} rounded-full items-center justify-center ${isCompact ? 'mr-2' : 'mr-3'} ${
+                      client.isReady ? 'bg-indigo-600' : 'bg-gray-700'
+                    }`}>
+                      <Text className={`${isCompact ? 'text-[10px]' : 'text-xs'} ${client.isReady ? 'text-white' : 'text-gray-300'}`}>
+                        3
+                      </Text>
+                    </View>
+                    <View className="flex-1">
+                      {client.preferences?.muscleLessens && client.preferences.muscleLessens.length > 0 ? (
+                        <View className="flex-row flex-wrap items-center">
+                          {client.preferences.muscleLessens.map((muscle) => (
+                            <View key={muscle} className={`bg-red-200 ${isCompact ? 'px-2 py-0' : 'px-2.5 py-0.5'} rounded-full mr-1.5`}>
+                              <Text className={`${isCompact ? 'text-[10px]' : 'text-xs'} text-red-800 font-semibold`}>{muscle}</Text>
+                            </View>
+                          ))}
+                        </View>
+                      ) : (
+                        <Text className="text-gray-400 text-sm">No muscle limits</Text>
+                      )}
                     </View>
                   </View>
 
                   {/* Section 4: Intensity */}
-                  <View className="flex-1 px-3 justify-center" style={{
-                    borderBottomLeftRadius: 12,
-                    borderBottomRightRadius: 12
-                  }}>
-                    <View className="flex-row items-center">
-                      <View className={`${isCompact ? 'w-5 h-5' : 'w-6 h-6'} rounded-full items-center justify-center ${isCompact ? 'mr-2' : 'mr-3'} ${
-                        client.isReady ? 'bg-indigo-600' : 'bg-gray-50'
-                      }`}>
-                        <Text className={`${isCompact ? 'text-[10px]' : 'text-xs'} font-bold ${client.isReady ? 'text-white' : 'text-gray-700'}`}>
-                          4
-                        </Text>
-                      </View>
-                      <Text className={`${isCompact ? 'text-xs' : 'text-sm'} text-gray-700`}>
-                        {(client.preferences?.intensity || 'Moderate').charAt(0).toUpperCase() + 
-                         (client.preferences?.intensity || 'Moderate').slice(1)} ({getExerciseCount(client.preferences?.intensity)} exercises)
+                  <View className="flex-row items-center">
+                    <View className={`${isCompact ? 'w-5 h-5' : 'w-6 h-6'} rounded-full items-center justify-center ${isCompact ? 'mr-2' : 'mr-3'} ${
+                      client.isReady ? 'bg-indigo-600' : 'bg-gray-700'
+                    }`}>
+                      <Text className={`${isCompact ? 'text-[10px]' : 'text-xs'} ${client.isReady ? 'text-white' : 'text-gray-300'}`}>
+                        4
                       </Text>
                     </View>
+                    <Text className="text-gray-200 text-sm">
+                      {(client.preferences?.intensity || 'Moderate').charAt(0).toUpperCase() + 
+                       (client.preferences?.intensity || 'Moderate').slice(1)} ({getExerciseCount(client.preferences?.intensity)} exercises)
+                    </Text>
                   </View>
                 </View>
               </View>
@@ -340,6 +316,16 @@ export function GlobalPreferencesScreen() {
             );
           })}
         </View>
+      </View>
+      
+      {/* Connection Status - Bottom Left */}
+      <View className="absolute bottom-6 left-8 flex-row items-center">
+        <View className={`w-2 h-2 rounded-full mr-2 ${
+          connectionStatus === 'connected' && statusConnectionStatus === 'connected' ? 'bg-green-400' : 'bg-gray-400'
+        }`} />
+        <Text className="text-sm text-gray-400">
+          {connectionStatus === 'connected' && statusConnectionStatus === 'connected' ? 'Live updates active' : 'Connecting...'}
+        </Text>
       </View>
     </View>
   );
