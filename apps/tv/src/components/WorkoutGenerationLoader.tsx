@@ -48,30 +48,44 @@ export function WorkoutGenerationLoader({ clientNames, onCancel }: WorkoutGenera
     );
     pulse.start();
     return () => pulse.stop();
-  }, [pulseAnim]);
+  }, []);
 
-  // Kettlebell swing animation
+  // Kettlebell swing animation - smooth continuous motion
   useEffect(() => {
+    // Start from center (0)
+    swingAnim.setValue(0);
+    
     const swing = Animated.loop(
       Animated.sequence([
+        // Swing to right
         Animated.timing(swingAnim, {
           toValue: 1,
           duration: 1200,
           useNativeDriver: true,
         }),
+        // Swing through center to left
         Animated.timing(swingAnim, {
           toValue: -1,
-          duration: 1200,
+          duration: 2400,
+          useNativeDriver: true,
+        }),
+        // Swing back to right
+        Animated.timing(swingAnim, {
+          toValue: 1,
+          duration: 2400,
           useNativeDriver: true,
         }),
       ])
     );
     swing.start();
     return () => swing.stop();
-  }, [swingAnim]);
+  }, []);
 
   // Orbit rotation
   useEffect(() => {
+    // Reset to starting position
+    orbitRotation.setValue(0);
+    
     const orbit = Animated.loop(
       Animated.timing(orbitRotation, {
         toValue: 1,
@@ -81,7 +95,7 @@ export function WorkoutGenerationLoader({ clientNames, onCancel }: WorkoutGenera
     );
     orbit.start();
     return () => orbit.stop();
-  }, [orbitRotation]);
+  }, []);
 
   // Progress simulation
   useEffect(() => {
@@ -251,9 +265,9 @@ export function WorkoutGenerationLoader({ clientNames, onCancel }: WorkoutGenera
               <Animated.View
                 style={{
                   position: 'absolute',
-                  width: 200,
-                  height: 200,
-                  borderRadius: 100,
+                  width: 160,
+                  height: 160,
+                  borderRadius: 80,
                   backgroundColor: 'rgba(124,255,181,0.1)',
                   transform: [{ scale: pulseAnim }],
                 }}
@@ -263,10 +277,10 @@ export function WorkoutGenerationLoader({ clientNames, onCancel }: WorkoutGenera
               <Animated.View
                 style={{
                   position: 'absolute',
-                  width: 150,
-                  height: 150,
-                  borderRadius: 75,
-                  borderWidth: 5,
+                  width: 120,
+                  height: 120,
+                  borderRadius: 60,
+                  borderWidth: 4,
                   borderColor: 'rgba(93,225,255,0.3)',
                   borderStyle: 'dashed',
                   transform: [{ rotate: orbitSpin }],
@@ -289,42 +303,42 @@ export function WorkoutGenerationLoader({ clientNames, onCancel }: WorkoutGenera
                   <View style={{ alignItems: 'center' }}>
                     {/* Handle */}
                     <View style={{
-                      width: 48,
-                      height: 24,
-                      borderTopLeftRadius: 24,
-                      borderTopRightRadius: 24,
-                      borderWidth: 6,
+                      width: 38,
+                      height: 19,
+                      borderTopLeftRadius: 19,
+                      borderTopRightRadius: 19,
+                      borderWidth: 5,
                       borderColor: '#c7ddff',
                       borderBottomWidth: 0,
-                      marginBottom: -3,
+                      marginBottom: -2,
                     }} />
                     {/* Body */}
                     <View style={{
-                      width: 70,
-                      height: 55,
-                      borderRadius: 28,
+                      width: 56,
+                      height: 44,
+                      borderRadius: 22,
                       backgroundColor: '#7cffb5',
                       overflow: 'hidden',
                     }}>
                       {/* Gradient effect using overlays */}
                       <View style={{
                         position: 'absolute',
-                        top: -15,
-                        left: -15,
-                        width: 45,
-                        height: 45,
-                        borderRadius: 23,
+                        top: -12,
+                        left: -12,
+                        width: 36,
+                        height: 36,
+                        borderRadius: 18,
                         backgroundColor: '#6ff7ff',
                         opacity: 0.7,
                       }} />
                       {/* Shine */}
                       <View style={{
                         position: 'absolute',
-                        top: 10,
-                        left: 10,
-                        width: 20,
-                        height: 15,
-                        borderRadius: 10,
+                        top: 8,
+                        left: 8,
+                        width: 16,
+                        height: 12,
+                        borderRadius: 8,
                         backgroundColor: 'rgba(255,255,255,0.4)',
                       }} />
                     </View>
@@ -332,22 +346,6 @@ export function WorkoutGenerationLoader({ clientNames, onCancel }: WorkoutGenera
                 </Animated.View>
               </Animated.View>
 
-              {/* Spark effects (simplified) */}
-              {[0, 1, 2, 3].map((i) => (
-                <View
-                  key={i}
-                  style={{
-                    position: 'absolute',
-                    width: 5,
-                    height: 5,
-                    borderRadius: 2.5,
-                    backgroundColor: '#b8ffe0',
-                    opacity: 0.7,
-                    top: i % 2 ? '10%' : '80%',
-                    left: i < 2 ? '15%' : '85%',
-                  }}
-                />
-              ))}
             </View>
 
             {/* Readout */}
