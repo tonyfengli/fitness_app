@@ -310,14 +310,14 @@ export function GlobalPreferencesScreen() {
 
       {/* Client Cards Grid */}
       <View className="flex-1 px-8 pb-12">
-        <View className={`flex-1 flex-row flex-wrap ${clients.length > 4 ? 'items-center content-center' : 'items-center'}`}>
+        <View className={`flex-1 flex-row flex-wrap ${clients.length > 4 ? 'items-center content-center' : 'items-start content-start'}`}>
           {clients.map((client, index) => {
             // Adjust size based on number of clients
-            const cardSizeClass = clients.length <= 4 ? "w-1/2 h-1/2" : "w-1/3";
+            const cardSizeClass = clients.length <= 4 ? "w-1/2" : "w-1/3";
             const isCompact = clients.length > 4;
             
             return (
-            <View key={client.userId} className={`${cardSizeClass} p-4`} style={clients.length > 4 ? { height: '48%' } : {}}>
+            <View key={client.userId} className={`${cardSizeClass} p-4`} style={clients.length <= 4 ? { height: '55%' } : { height: '48%' }}>
               <View className={`h-full flex ${
                 client.isReady ? 'border-2 border-blue-500' : ''
               }`} style={{
@@ -325,12 +325,12 @@ export function GlobalPreferencesScreen() {
                 borderRadius: 12,
                 ...(!client.isReady && {
                   borderWidth: 0,
-                })
+                }),
               }}>
                 
 
                 {/* Header Section */}
-                <View className={`${isCompact ? 'px-4 py-2' : 'px-6 py-3'} flex-row items-center`}>
+                <View className={`${isCompact ? 'px-4 py-2' : 'px-5 py-2.5'} flex-row items-center`}>
                   <Image 
                     source={{ uri: getAvatarUrl(client.userId) }}
                     className={isCompact ? "w-6 h-6 rounded-full mr-2" : "w-8 h-8 rounded-full mr-3"}
@@ -341,9 +341,17 @@ export function GlobalPreferencesScreen() {
                 </View>
 
                 {/* Content Sections */}
-                <View className={`${isCompact ? 'px-4 pb-3' : 'px-6 pb-4'}`}>
+                <ScrollView 
+                  className={`flex-1`}
+                  contentContainerStyle={{ 
+                    paddingHorizontal: isCompact ? 16 : 20,
+                    paddingBottom: isCompact ? 12 : 12,
+                    flexGrow: 1
+                  }}
+                  showsVerticalScrollIndicator={false}
+                >
                   {/* Section 1: Workout Type */}
-                  <View className="flex-row items-center mb-2">
+                  <View className="flex-row items-center mb-1.5">
                     <View className={`${isCompact ? 'w-5 h-5' : 'w-6 h-6'} rounded-full items-center justify-center ${isCompact ? 'mr-2' : 'mr-3'} ${
                       client.isReady ? 'bg-indigo-600' : 'bg-gray-700'
                     }`}>
@@ -351,13 +359,13 @@ export function GlobalPreferencesScreen() {
                         1
                       </Text>
                     </View>
-                    <Text className="text-gray-200 text-sm">
+                    <Text className="text-gray-200 text-xs">
                       {client.preferences?.sessionGoal === 'targeted' ? 'Targeted' : 'Full Body'} • {client.preferences?.includeFinisher ? 'With Finisher' : 'Without Finisher'}
                     </Text>
                   </View>
 
                   {/* Section 2: Muscle Targets */}
-                  <View className="flex-row items-center mb-2">
+                  <View className="flex-row items-center mb-1.5">
                     <View className={`${isCompact ? 'w-5 h-5' : 'w-6 h-6'} rounded-full items-center justify-center ${isCompact ? 'mr-2' : 'mr-3'} ${
                       client.isReady ? 'bg-indigo-600' : 'bg-gray-700'
                     }`}>
@@ -375,13 +383,13 @@ export function GlobalPreferencesScreen() {
                           ))}
                         </View>
                       ) : (
-                        <Text className="text-gray-400 text-sm">No muscle targets</Text>
+                        <Text className="text-gray-400 text-xs">No muscle targets</Text>
                       )}
                     </View>
                   </View>
 
                   {/* Section 3: Muscle Limits */}
-                  <View className="flex-row items-center mb-2">
+                  <View className="flex-row items-center mb-1.5">
                     <View className={`${isCompact ? 'w-5 h-5' : 'w-6 h-6'} rounded-full items-center justify-center ${isCompact ? 'mr-2' : 'mr-3'} ${
                       client.isReady ? 'bg-indigo-600' : 'bg-gray-700'
                     }`}>
@@ -399,7 +407,7 @@ export function GlobalPreferencesScreen() {
                           ))}
                         </View>
                       ) : (
-                        <Text className="text-gray-400 text-sm">No muscle limits</Text>
+                        <Text className="text-gray-400 text-xs">No muscle limits</Text>
                       )}
                     </View>
                   </View>
@@ -413,12 +421,12 @@ export function GlobalPreferencesScreen() {
                         4
                       </Text>
                     </View>
-                    <Text className="text-gray-200 text-sm">
+                    <Text className="text-gray-200 text-xs">
                       {(client.preferences?.intensity || 'Moderate').charAt(0).toUpperCase() + 
                        (client.preferences?.intensity || 'Moderate').slice(1)} ({getExerciseCount(client.preferences?.intensity)} exercises)
                     </Text>
                   </View>
-                </View>
+                </ScrollView>
               </View>
             </View>
             );
