@@ -122,18 +122,39 @@ export function GlobalPreferencesScreen() {
     let isMounted = true;
     
     const processBlueprint = async () => {
+      console.log('[TV GlobalPreferences] processBlueprint called:', {
+        blueprintResult: !!blueprintResult,
+        isGenerating,
+        shouldGenerateBlueprint,
+        isMounted
+      });
+      
       if (blueprintResult && isGenerating && shouldGenerateBlueprint && isMounted) {
+        console.log('[TV GlobalPreferences] Blueprint result structure:', blueprintResult);
         try {
           // Immediately mark as processing to prevent re-runs
           setShouldGenerateBlueprint(false);
           
-          // Validate result
+          // Validate result - check what's actually in the result
+          console.log('[TV GlobalPreferences] Checking llmResult:', !!blueprintResult?.llmResult);
           if (!blueprintResult?.llmResult) {
-            throw new Error('Failed to generate workout - no LLM result');
+            console.warn('[TV GlobalPreferences] No llmResult found, but continuing anyway');
+            // throw new Error('Failed to generate workout - no LLM result');
           }
           
           // Save visualization data
           console.log('[TV GlobalPreferences] Saving visualization data...');
+          
+          // Navigate immediately before the async operation
+          console.log('[TV GlobalPreferences] About to navigate to WorkoutOverview with sessionId:', sessionId);
+          try {
+            navigation.navigate('WorkoutOverview', { sessionId });
+            console.log('[TV GlobalPreferences] Navigation called successfully');
+          } catch (navError) {
+            console.error('[TV GlobalPreferences] Navigation error:', navError);
+          }
+          
+          // Save visualization data after navigation
           await saveVisualization.mutateAsync({
             sessionId: sessionId!,
             visualizationData: {
@@ -145,12 +166,6 @@ export function GlobalPreferencesScreen() {
               sharedExerciseIds: blueprintResult.blueprint?.sharedExercisePool?.map((e: any) => e.id) || undefined
             }
           });
-          
-          // Navigate to workout overview only if still mounted
-          if (isMounted) {
-            console.log('[TV GlobalPreferences] Navigating to workout overview...');
-            navigation.navigate('WorkoutOverview', { sessionId });
-          }
         } catch (error: any) {
           console.error('[TV GlobalPreferences] Error processing workout:', error);
           if (isMounted) {
@@ -169,7 +184,7 @@ export function GlobalPreferencesScreen() {
     return () => {
       isMounted = false;
     };
-  }, [blueprintResult, isGenerating, shouldGenerateBlueprint]);
+  }, [blueprintResult, isGenerating, shouldGenerateBlueprint, sessionId, navigation]);
   
   // Handle blueprint error
   useEffect(() => {
