@@ -111,6 +111,24 @@ export function GlobalPreferencesScreen() {
   });
 
   const handleContinue = async () => {
+    // First check if workout exercises already exist
+    console.log('[TV GlobalPreferences] Checking for existing workout exercises...');
+    try {
+      const existingSelections = await api.workoutSelections.getSelections.query({ sessionId: sessionId! });
+      console.log('[TV GlobalPreferences] Existing selections:', existingSelections);
+      
+      if (existingSelections && existingSelections.length > 0) {
+        console.log('[TV GlobalPreferences] Found', existingSelections.length, 'existing exercises, navigating directly to overview');
+        navigation.navigate('WorkoutOverview', { sessionId });
+        return;
+      }
+      console.log('[TV GlobalPreferences] No existing exercises found, proceeding with generation');
+    } catch (error) {
+      console.log('[TV GlobalPreferences] Error checking existing selections:', error);
+      // Continue with generation if check fails
+    }
+    
+    // No existing exercises, proceed with generation
     setIsGenerating(true);
     setGenerationError(null);
     setShouldGenerateBlueprint(true);
