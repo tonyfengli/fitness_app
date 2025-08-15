@@ -341,7 +341,7 @@ export function GlobalPreferencesScreen() {
     <MattePanel 
       style={{ 
         flex: 1,
-        padding: isCompact ? 12 : 18,
+        padding: isCompact ? 10 : 14,
         ...(client.isReady && {
           borderColor: TOKENS.color.accent,
           borderWidth: 2,
@@ -349,17 +349,17 @@ export function GlobalPreferencesScreen() {
       }}
     >
       {/* Header Section */}
-      <View className="flex-row items-center" style={{ marginBottom: 12 }}>
+      <View className="flex-row items-center" style={{ marginBottom: 10 }}>
         <Image 
           source={{ uri: getAvatarUrl(client.userId) }}
           style={{ 
-            width: isCompact ? 36 : 48, 
-            height: isCompact ? 36 : 48, 
-            borderRadius: isCompact ? 18 : 24, 
-            marginRight: 12 
+            width: isCompact ? 29 : 38, 
+            height: isCompact ? 29 : 38, 
+            borderRadius: isCompact ? 14 : 19, 
+            marginRight: 10 
           }}
         />
-        <Text style={{ fontSize: isCompact ? 18 : 20, fontWeight: '600', color: TOKENS.color.text }}>
+        <Text style={{ fontSize: isCompact ? 14 : 16, fontWeight: '600', color: TOKENS.color.text }}>
           {client.userName || 'Unknown'}
         </Text>
       </View>
@@ -367,37 +367,37 @@ export function GlobalPreferencesScreen() {
       {/* Content Sections */}
       <View className="flex-1">
         {/* Section 1: Workout Type */}
-        <View className="flex-row items-center" style={{ marginBottom: 6 }}>
+        <View className="flex-row items-center" style={{ marginBottom: 5 }}>
           <View style={{
-            width: isCompact ? 24 : 30,
-            height: isCompact ? 24 : 30,
-            borderRadius: isCompact ? 12 : 15,
+            width: isCompact ? 19 : 24,
+            height: isCompact ? 19 : 24,
+            borderRadius: isCompact ? 10 : 12,
             alignItems: 'center',
             justifyContent: 'center',
-            marginRight: 9,
+            marginRight: 7,
             backgroundColor: client.isReady ? TOKENS.color.accent : '#374151'
           }}>
-            <Text style={{ fontSize: isCompact ? 12 : 14, color: client.isReady ? '#070b18' : TOKENS.color.muted, fontWeight: '700' }}>
+            <Text style={{ fontSize: isCompact ? 10 : 11, color: client.isReady ? '#070b18' : TOKENS.color.muted, fontWeight: '700' }}>
               1
             </Text>
           </View>
-          <Text style={{ fontSize: isCompact ? 13 : 15, color: TOKENS.color.text }} numberOfLines={1}>
+          <Text style={{ fontSize: isCompact ? 10 : 12, color: TOKENS.color.text }} numberOfLines={1}>
             {client.preferences?.sessionGoal === 'targeted' ? 'Targeted' : 'Full Body'} • {client.preferences?.includeFinisher ? 'Finisher' : 'No Finisher'}
           </Text>
         </View>
 
         {/* Section 2: Muscle Targets */}
-        <View className="flex-row items-start" style={{ marginBottom: 6 }}>
+        <View className="flex-row items-start" style={{ marginBottom: 5 }}>
           <View style={{
-            width: isCompact ? 24 : 30,
-            height: isCompact ? 24 : 30,
-            borderRadius: isCompact ? 12 : 15,
+            width: isCompact ? 19 : 24,
+            height: isCompact ? 19 : 24,
+            borderRadius: isCompact ? 10 : 12,
             alignItems: 'center',
             justifyContent: 'center',
-            marginRight: 9,
+            marginRight: 7,
             backgroundColor: client.isReady ? TOKENS.color.accent : '#374151'
           }}>
-            <Text style={{ fontSize: isCompact ? 12 : 14, color: client.isReady ? '#070b18' : TOKENS.color.muted, fontWeight: '700' }}>
+            <Text style={{ fontSize: isCompact ? 10 : 11, color: client.isReady ? '#070b18' : TOKENS.color.muted, fontWeight: '700' }}>
               2
             </Text>
           </View>
@@ -407,41 +407,41 @@ export function GlobalPreferencesScreen() {
                 {client.preferences.muscleTargets.slice(0, 3).map((muscle, idx) => (
                   <View key={muscle} style={{
                     backgroundColor: 'rgba(124, 255, 181, 0.2)',
-                    paddingHorizontal: 9,
+                    paddingHorizontal: 7,
                     paddingVertical: 2,
                     borderRadius: TOKENS.radius.chip,
-                    marginRight: 6,
-                    marginBottom: 3
+                    marginRight: 5,
+                    marginBottom: 2
                   }}>
-                    <Text style={{ fontSize: isCompact ? 12 : 13, color: TOKENS.color.accent, fontWeight: '600' }}>
+                    <Text style={{ fontSize: isCompact ? 10 : 10, color: TOKENS.color.accent, fontWeight: '600' }}>
                       {muscle}
                     </Text>
                   </View>
                 ))}
                 {client.preferences.muscleTargets.length > 3 && (
-                  <Text style={{ fontSize: isCompact ? 12 : 13, color: TOKENS.color.muted }}>
+                  <Text style={{ fontSize: isCompact ? 10 : 10, color: TOKENS.color.muted }}>
                     +{client.preferences.muscleTargets.length - 3}
                   </Text>
                 )}
               </View>
             ) : (
-              <Text style={{ fontSize: isCompact ? 13 : 15, color: TOKENS.color.muted }}>No targets</Text>
+              <Text style={{ fontSize: isCompact ? 10 : 12, color: TOKENS.color.muted }}>No targets</Text>
             )}
           </View>
         </View>
 
         {/* Section 3: Muscle Limits */}
-        <View className="flex-row items-start" style={{ marginBottom: 6 }}>
+        <View className="flex-row items-start" style={{ marginBottom: 5 }}>
           <View style={{
-            width: isCompact ? 24 : 30,
-            height: isCompact ? 24 : 30,
-            borderRadius: isCompact ? 12 : 15,
+            width: isCompact ? 19 : 24,
+            height: isCompact ? 19 : 24,
+            borderRadius: isCompact ? 10 : 12,
             alignItems: 'center',
             justifyContent: 'center',
-            marginRight: 9,
+            marginRight: 7,
             backgroundColor: client.isReady ? TOKENS.color.accent : '#374151'
           }}>
-            <Text style={{ fontSize: isCompact ? 12 : 14, color: client.isReady ? '#070b18' : TOKENS.color.muted, fontWeight: '700' }}>
+            <Text style={{ fontSize: isCompact ? 10 : 11, color: client.isReady ? '#070b18' : TOKENS.color.muted, fontWeight: '700' }}>
               3
             </Text>
           </View>
@@ -451,45 +451,45 @@ export function GlobalPreferencesScreen() {
                 {client.preferences.muscleLessens.slice(0, 3).map((muscle) => (
                   <View key={muscle} style={{
                     backgroundColor: 'rgba(239, 68, 68, 0.2)',
-                    paddingHorizontal: 9,
+                    paddingHorizontal: 7,
                     paddingVertical: 2,
                     borderRadius: TOKENS.radius.chip,
-                    marginRight: 6,
-                    marginBottom: 3
+                    marginRight: 5,
+                    marginBottom: 2
                   }}>
-                    <Text style={{ fontSize: isCompact ? 12 : 13, color: '#ef4444', fontWeight: '600' }}>
+                    <Text style={{ fontSize: isCompact ? 10 : 10, color: '#ef4444', fontWeight: '600' }}>
                       {muscle}
                     </Text>
                   </View>
                 ))}
                 {client.preferences.muscleLessens.length > 3 && (
-                  <Text style={{ fontSize: isCompact ? 12 : 13, color: TOKENS.color.muted }}>
+                  <Text style={{ fontSize: isCompact ? 10 : 10, color: TOKENS.color.muted }}>
                     +{client.preferences.muscleLessens.length - 3}
                   </Text>
                 )}
               </View>
             ) : (
-              <Text style={{ fontSize: isCompact ? 13 : 15, color: TOKENS.color.muted }}>No limits</Text>
+              <Text style={{ fontSize: isCompact ? 10 : 12, color: TOKENS.color.muted }}>No limits</Text>
             )}
           </View>
         </View>
 
         {/* Section 4: Intensity */}
-        <View className="flex-row items-center" style={{ marginBottom: 8 }}>
+        <View className="flex-row items-center" style={{ marginBottom: 6 }}>
           <View style={{
-            width: isCompact ? 24 : 30,
-            height: isCompact ? 24 : 30,
-            borderRadius: isCompact ? 12 : 15,
+            width: isCompact ? 19 : 24,
+            height: isCompact ? 19 : 24,
+            borderRadius: isCompact ? 10 : 12,
             alignItems: 'center',
             justifyContent: 'center',
-            marginRight: 9,
+            marginRight: 7,
             backgroundColor: client.isReady ? TOKENS.color.accent : '#374151'
           }}>
-            <Text style={{ fontSize: isCompact ? 12 : 14, color: client.isReady ? '#070b18' : TOKENS.color.muted, fontWeight: '700' }}>
+            <Text style={{ fontSize: isCompact ? 10 : 11, color: client.isReady ? '#070b18' : TOKENS.color.muted, fontWeight: '700' }}>
               4
             </Text>
           </View>
-          <Text style={{ fontSize: isCompact ? 13 : 15, color: TOKENS.color.text }}>
+          <Text style={{ fontSize: isCompact ? 10 : 12, color: TOKENS.color.text }}>
             {(client.preferences?.intensity || 'Moderate').charAt(0).toUpperCase() + 
              (client.preferences?.intensity || 'Moderate').slice(1)} ({getExerciseCount(client.preferences?.intensity)})
           </Text>
@@ -583,7 +583,31 @@ export function GlobalPreferencesScreen() {
 
       {/* Client Cards Grid */}
       <View className="flex-1">
-        {clients.length === 5 ? (
+        {clients.length <= 4 ? (
+          // Layout for 4 or fewer clients: 2 rows, first row always has 2 cards
+          <View className="flex-1" style={{ gap: 12 }}>
+            {/* First row - always 2 cards */}
+            <View className="flex-row" style={{ flex: 1, gap: 12 }}>
+              {clients.slice(0, 2).map((client) => (
+                <View key={client.userId} style={{ flex: 1 }}>
+                  {renderClientCard(client, false)}
+                </View>
+              ))}
+            </View>
+            {/* Second row - 0, 1, or 2 cards */}
+            {clients.length > 2 && (
+              <View className="flex-row" style={{ flex: 1, gap: 12 }}>
+                {clients.slice(2, 4).map((client) => (
+                  <View key={client.userId} style={{ flex: 1 }}>
+                    {renderClientCard(client, false)}
+                  </View>
+                ))}
+                {/* Add empty spacer if only 3 clients total */}
+                {clients.length === 3 && <View style={{ flex: 1 }} />}
+              </View>
+            )}
+          </View>
+        ) : clients.length === 5 ? (
           // Special layout for 5 clients: 3 on top, 2 on bottom
           <View className="flex-1" style={{ gap: 12 }}>
             {/* Top row - 3 cards */}
@@ -604,16 +628,16 @@ export function GlobalPreferencesScreen() {
             </View>
           </View>
         ) : (
-          // Standard grid layout
-          <View className={`flex-1 flex-row flex-wrap ${clients.length > 4 ? 'items-center content-center' : 'items-start content-start'}`} style={{ gap: 12 }}>
+          // Standard grid layout for more than 5 clients
+          <View className="flex-1 flex-row flex-wrap items-center content-center" style={{ gap: 12 }}>
             {clients.map((client, index) => {
-              const cardSizeClass = clients.length <= 4 ? "w-1/2" : "w-1/3";
-              const isCompact = clients.length > 4;
+              const cardSizeClass = "w-1/3";
+              const isCompact = true;
               
               return (
                 <View key={client.userId} className={cardSizeClass} style={[
                   { padding: 6 },
-                  clients.length <= 4 ? { height: '65%' } : { height: '55%' }
+                  { height: '55%' }
                 ]}>
                   {renderClientCard(client, isCompact)}
                 </View>

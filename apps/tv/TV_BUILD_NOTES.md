@@ -419,4 +419,51 @@ apps/tv/
 │   └── config.ts
 ├── scripts/
 │   └── generate-env.js
-└── .env files
+└── .env files (gitignored)
+```
+
+## Key Technical Decisions
+
+### State Management Architecture
+
+**Provider Hierarchy:**
+```
+AuthProvider (BetterAuth session management)
+  └── TRPCProvider (API client with auth headers)
+      └── BusinessProvider (extracts businessId)
+          └── RealtimeProvider (Supabase connection status)
+              └── NavigationContainer (custom navigation)
+                  └── App Screens
+```
+
+**Real-time Management:**
+- RealtimeProvider monitors Supabase connection
+- Individual hooks manage channel subscriptions
+- 100ms delay pattern prevents rapid re-subscriptions
+- Callback refs maintain stability across re-renders
+
+### Performance Optimizations
+
+1. **TV-Specific React Native Fork**: `react-native-tvos@0.79.2-0`
+2. **Rate Limiting**: Supabase limited to 10 events/second
+3. **Connection Monitoring**: 5-second intervals for status checks
+4. **Lazy Channel Creation**: Subscriptions created on-demand
+5. **Query Caching**: React Query handles data caching
+
+### Security Considerations
+
+1. **Hardcoded Credentials**: Development only, needs replacement
+2. **Row-Level Security**: Relies on Supabase RLS policies
+3. **API Authentication**: Bearer tokens + cookie headers
+4. **Business Isolation**: All queries filtered by businessId
+
+## Future Improvements
+
+1. **Authentication**: Implement proper TV pairing/activation flow
+2. **Error Handling**: Add centralized error boundary and reporting
+3. **Connection Resilience**: Add retry logic with exponential backoff
+4. **State Persistence**: Cache data for offline scenarios
+5. **WorkoutLive Integration**: Connect to real session data
+6. **Navigation**: Consider React Navigation for better TV support
+7. **Testing**: Add unit and integration tests
+8. **Analytics**: Implement usage tracking and performance monitoring
