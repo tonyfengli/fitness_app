@@ -43,7 +43,17 @@ export function useRealtimePreferences({
 
     // Small delay to avoid subscribing during rapid re-renders
     const timeoutId = setTimeout(() => {
-      console.log('[TV] Setting up preferences realtime subscription for session:', sessionId);
+      const timestamp = new Date().toISOString();
+      console.log(`[Preferences ${timestamp}] Setting up preferences realtime subscription for session:`, sessionId);
+      
+      // Check if channel already exists
+      const existingChannel = supabase.getChannels().find(ch => ch.topic === `preferences-${sessionId}`);
+      console.log(`[Preferences ${timestamp}] Existing channel state:`, existingChannel?.state);
+      
+      // Log all channels
+      console.log(`[Preferences ${timestamp}] All channels before creating new one:`, 
+        supabase.getChannels().map(ch => ({ topic: ch.topic, state: ch.state }))
+      );
 
       const channel = supabase
       .channel(`preferences-${sessionId}`)
@@ -84,9 +94,15 @@ export function useRealtimePreferences({
         }
       )
       .subscribe((status) => {
+        const timestamp = new Date().toISOString();
         if (status !== 'CLOSED') {
-          console.log('[TV] Preferences subscription status changed:', status);
+          console.log(`[Preferences ${timestamp}] Subscription status changed:`, status);
         }
+        console.log(`[Preferences ${timestamp}] Channel state after subscribe:`, channel.state);
+        console.log(`[Preferences ${timestamp}] All channels after subscribe:`, 
+          supabase.getChannels().map(ch => ({ topic: ch.topic, state: ch.state }))
+        );
+        
         setIsConnected(status === 'SUBSCRIBED');
         if (status === 'CHANNEL_ERROR' && onErrorRef.current) {
           onErrorRef.current(new Error('Failed to connect to preference updates'));
@@ -98,9 +114,27 @@ export function useRealtimePreferences({
 
     return () => {
       clearTimeout(timeoutId);
-      console.log('[TV] Cleaning up preferences realtime subscription');
+      const timestamp = new Date().toISOString();
+      console.log(`[Preferences ${timestamp}] Cleaning up preferences realtime subscription`);
+      
       if (channelRef.current) {
-        supabase.removeChannel(channelRef.current);
+        console.log(`[Preferences ${timestamp}] Channel state before cleanup:`, channelRef.current.state);
+        console.log(`[Preferences ${timestamp}] All channels before removal:`, 
+          supabase.getChannels().map(ch => ({ topic: ch.topic, state: ch.state }))
+        );
+        
+        // Try unsubscribe first, then remove
+        channelRef.current.unsubscribe();
+        
+        // Small delay before removal
+        setTimeout(() => {
+          supabase.removeChannel(channelRef.current!);
+          
+          console.log(`[Preferences ${timestamp}] All channels after removal:`, 
+            supabase.getChannels().map(ch => ({ topic: ch.topic, state: ch.state }))
+          );
+        }, 50);
+        
         channelRef.current = null;
       }
       setIsConnected(false);

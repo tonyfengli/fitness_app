@@ -98,7 +98,14 @@ export function useRealtimeStatus({
       clearTimeout(timeoutId);
       console.log('[useRealtimeStatus] Cleaning up subscription');
       if (channelRef.current) {
-        supabase.removeChannel(channelRef.current);
+        // Unsubscribe first, then remove channel
+        channelRef.current.unsubscribe();
+        
+        // Small delay before removal
+        setTimeout(() => {
+          supabase.removeChannel(channelRef.current!);
+        }, 50);
+        
         channelRef.current = null;
       }
       setIsConnected(false);

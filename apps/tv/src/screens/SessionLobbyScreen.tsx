@@ -116,6 +116,17 @@ export function SessionLobbyScreen() {
       clientsCount: clients.length
     });
   }, [sessionId, isLoading, fetchError, initialClients, clients]);
+  
+  // Lifecycle logging
+  useEffect(() => {
+    const timestamp = new Date().toISOString();
+    console.log(`[SessionLobby ${timestamp}] Component mounted, sessionId:`, sessionId);
+    
+    return () => {
+      const cleanupTimestamp = new Date().toISOString();
+      console.log(`[SessionLobby ${cleanupTimestamp}] Component unmounting`);
+    };
+  }, []);
 
   // Clear clients when sessionId changes
   useEffect(() => {
