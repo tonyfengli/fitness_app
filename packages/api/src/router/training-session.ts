@@ -2,7 +2,7 @@ import type { TRPCRouterRecord } from "@trpc/server";
 import { z } from "zod/v4";
 import { TRPCError } from "@trpc/server";
 
-import { desc, eq, and, gte, lte, or, sql, inArray } from "@acme/db";
+import { desc, eq, and, gte, lte, or, sql, inArray, asc } from "@acme/db";
 import { db } from "@acme/db/client";
 import { 
   TrainingSession, 
@@ -2546,8 +2546,9 @@ Set your goals and preferences for today's session.`;
 
   /**
    * Start workout - runs Phase 2 organization and prepares workout for live session
+   * @deprecated Use startWorkout for new implementations. This legacy version returns minimal data.
    */
-  startWorkout: protectedProcedure
+  startWorkoutLegacy: protectedProcedure
     .input(z.object({
       sessionId: z.string().uuid()
     }))
@@ -3261,5 +3262,163 @@ Decision
           message: error instanceof Error ? error.message : 'Failed to organize workout',
         });
       }
+    }),
+
+  /**
+   * Start workout - TV-optimized version that returns full organization data
+   * This is the new standard implementation that returns workout organization details
+   */
+  startWorkout: protectedProcedure
+    .input(z.object({
+      sessionId: z.string().uuid()
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const mutationStartTime = Date.now();
+      console.log(`[startWorkout-v2] START - Session: ${input.sessionId} at ${new Date().toISOString()}`);
+      
+      const user = ctx.session?.user as SessionUser;
+      
+      // Only trainers can start workouts
+      if (user.role !== 'trainer') {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'Only trainers can start workouts',
+        });
+      }
+
+      // Get session to check if already organized
+      const session = await ctx.db.query.TrainingSession.findFirst({
+        where: and(
+          eq(TrainingSession.id, input.sessionId),
+          eq(TrainingSession.businessId, user.businessId)
+        ),
+      });
+
+      if (!session) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Session not found',
+        });
+      }
+
+      // Check if workout organization already exists
+      if (session.workoutOrganization) {
+        // Already organized - fetch and return full data
+        const fullSession = await ctx.db.query.TrainingSession.findFirst({
+          where: eq(TrainingSession.id, input.sessionId),
+          with: {
+            workouts: {
+              with: {
+                exercises: {
+                  with: {
+                    exercise: true
+                  },
+                  orderBy: [
+                    asc(WorkoutExercise.roundNumber),
+                    asc(WorkoutExercise.orderInRound)
+                  ]
+                }
+              }
+            }
+          }
+        });
+
+        const clients = await ctx.db.query.UserTrainingSession.findMany({
+          where: and(
+            eq(UserTrainingSession.trainingSessionId, input.sessionId),
+            eq(UserTrainingSession.status, 'checked_in')
+          ),
+          with: {
+            user: true
+          }
+        });
+
+        return { 
+          success: true, 
+          message: 'Workout already organized',
+          alreadyOrganized: true,
+          workoutOrganization: fullSession?.workoutOrganization,
+          workouts: fullSession?.workouts || [],
+          clients: clients.map(c => ({
+            userId: c.userId,
+            name: c.user?.name || null,
+            email: c.user?.email || ''
+          })),
+          templateType: session.templateType
+        };
+      }
+
+      // If not organized, we need to run the Phase 2 organization
+      // We'll run the same logic as the legacy endpoint but return full data
+      
+      // Get saved visualization data (contains Phase 1 selections)
+      const templateConfig = session.templateConfig as any;
+      const visualizationData = templateConfig?.visualizationData;
+
+      if (!visualizationData?.llmResult?.exerciseSelection) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'No exercise selections found. Please generate workouts first.',
+        });
+      }
+
+      // Check if this template uses Phase 2 LLM organization
+      const isStandardTemplate = session.templateType === 'standard' || session.templateType === 'standard_strength';
+      
+      if (!isStandardTemplate) {
+        // For BMF and other templates, the workout is already organized
+        console.log(`[startWorkout-v2] SKIP Phase 2 - Non-standard template: ${session.templateType}`);
+        
+        // Fetch and return the data
+        const fullSession = await ctx.db.query.TrainingSession.findFirst({
+          where: eq(TrainingSession.id, input.sessionId),
+          with: {
+            workouts: {
+              with: {
+                exercises: {
+                  with: {
+                    exercise: true
+                  },
+                  orderBy: [
+                    asc(WorkoutExercise.roundNumber),
+                    asc(WorkoutExercise.orderInRound)
+                  ]
+                }
+              }
+            }
+          }
+        });
+
+        const clients = await ctx.db.query.UserTrainingSession.findMany({
+          where: and(
+            eq(UserTrainingSession.trainingSessionId, input.sessionId),
+            eq(UserTrainingSession.status, 'checked_in')
+          ),
+          with: {
+            user: true
+          }
+        });
+
+        return { 
+          success: true, 
+          message: 'Workout ready (no Phase 2 organization needed)',
+          templateType: session.templateType,
+          workoutOrganization: fullSession?.workoutOrganization,
+          workouts: fullSession?.workouts || [],
+          clients: clients.map(c => ({
+            userId: c.userId,
+            name: c.user?.name || null,
+            email: c.user?.email || ''
+          }))
+        };
+      }
+
+      // For standard templates, we need to run Phase 2
+      // TODO: Copy Phase 2 logic from legacy endpoint here
+      // For now, indicate that Phase 2 needs to be implemented
+      throw new TRPCError({
+        code: 'NOT_IMPLEMENTED',
+        message: 'Phase 2 organization for new endpoint not yet implemented. Use legacy endpoint.',
+      });
     }),
 } satisfies TRPCRouterRecord;
