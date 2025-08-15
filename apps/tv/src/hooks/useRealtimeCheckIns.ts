@@ -38,12 +38,7 @@ export function useRealtimeCheckIns({
 
     // Small delay to avoid subscribing during rapid re-renders
     const timeoutId = setTimeout(() => {
-      const timestamp = new Date().toISOString();
-      console.log(`[CheckIns ${timestamp}] Setting up realtime for session:`, sessionId);
-      
-      // Check if channel already exists
-      const existingChannel = supabase.getChannels().find(ch => ch.topic === `session-${sessionId}`);
-      console.log(`[CheckIns ${timestamp}] Existing channel state:`, existingChannel?.state);
+      console.log('[TV] Setting up realtime for session:', sessionId);
     
       // Create a channel for this session (must match web app channel name)
       const channel = supabase
@@ -90,9 +85,7 @@ export function useRealtimeCheckIns({
           }
         )
         .subscribe((status) => {
-          const timestamp = new Date().toISOString();
-          console.log(`[CheckIns ${timestamp}] Subscription status changed:`, status);
-          console.log(`[CheckIns ${timestamp}] Channel state after subscribe:`, channel.state);
+          console.log('[TV] Subscription status changed:', status);
           
           if (status === 'SUBSCRIBED') {
             setIsConnected(true);
@@ -118,28 +111,14 @@ export function useRealtimeCheckIns({
     // Cleanup function
     return () => {
       clearTimeout(timeoutId);
-      const timestamp = new Date().toISOString();
-      console.log(`[CheckIns ${timestamp}] Cleaning up realtime subscription`);
-      
+      console.log('[TV] Cleaning up realtime subscription');
       if (channelRef.current) {
-        console.log(`[CheckIns ${timestamp}] Channel state before cleanup:`, channelRef.current.state);
-        
-        // Log all channels before removal
-        console.log(`[CheckIns ${timestamp}] All channels before removal:`, 
-          supabase.getChannels().map(ch => ({ topic: ch.topic, state: ch.state }))
-        );
-        
         // Try unsubscribe first, then remove
         channelRef.current.unsubscribe();
         
         // Small delay before removal
         setTimeout(() => {
           supabase.removeChannel(channelRef.current!);
-          
-          // Log all channels after removal
-          console.log(`[CheckIns ${timestamp}] All channels after removal:`, 
-            supabase.getChannels().map(ch => ({ topic: ch.topic, state: ch.state }))
-          );
         }, 50);
         
         channelRef.current = null;

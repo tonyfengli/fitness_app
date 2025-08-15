@@ -255,7 +255,163 @@ export function WorkoutOverviewScreen() {
 
       {/* Client Cards Grid */}
       <View className="flex-1">
-        {clientEntries.length === 5 ? (
+        {clientEntries.length <= 4 ? (
+          // Layout for 4 or fewer clients: 2 rows, first row always has 2 cards
+          <View className="flex-1" style={{ gap: 12 }}>
+            {/* First row - always 2 cards */}
+            <View className="flex-row" style={{ flex: 1, gap: 12 }}>
+              {clientEntries.slice(0, 2).map(([clientId, clientData]) => (
+                <View key={clientId} style={{ flex: 1 }}>
+                  <MattePanel style={{ flex: 1, padding: 16 }}>
+                    {/* Header Section - 10% smaller */}
+                    <View className="flex-row items-center" style={{ marginBottom: 11 }}>
+                      <Image 
+                        source={{ uri: getAvatarUrl(clientId) }}
+                        style={{ 
+                          width: 43, 
+                          height: 43, 
+                          borderRadius: 22, 
+                          marginRight: 11 
+                        }}
+                      />
+                      <Text style={{ fontSize: 18, fontWeight: '600', color: TOKENS.color.text }}>
+                        {clientData.clientName}
+                      </Text>
+                    </View>
+
+                    {/* Exercises List - Two Column Layout */}
+                    <View className="flex-1">
+                      {clientData.exercises.length > 0 ? (
+                        <View className="flex-row flex-wrap">
+                          {clientData.exercises.slice(0, 6).map((exercise, index) => {
+                            // Show only first 6, or 5 if there are 7+ exercises
+                            const showMax = clientData.exercises.length > 6 ? 5 : 6;
+                            if (index >= showMax) return null;
+                            
+                            return (
+                              <View key={exercise.id} className="w-1/2 pr-2 mb-2" style={{ flexShrink: 1, minWidth: 0 }}>
+                                <Text 
+                                  style={{ 
+                                    fontSize: 14,
+                                    lineHeight: 18,
+                                    color: TOKENS.color.text,
+                                  }}
+                                  numberOfLines={1}
+                                  ellipsizeMode="tail"
+                                >
+                                  {exercise.exerciseName}
+                                </Text>
+                              </View>
+                            );
+                          })}
+                          {/* Show +N more indicator if there are more than 6 exercises */}
+                          {clientData.exercises.length > 6 && (
+                            <View className="w-1/2 pr-2 mb-2">
+                              <View style={{
+                                backgroundColor: 'rgba(124, 255, 181, 0.2)',
+                                paddingHorizontal: 11,
+                                paddingVertical: 3,
+                                borderRadius: TOKENS.radius.chip,
+                                alignSelf: 'flex-start',
+                              }}>
+                                <Text style={{ fontSize: 11, color: TOKENS.color.accent, fontWeight: '600' }}>
+                                  +{clientData.exercises.length - 5} more
+                                </Text>
+                              </View>
+                            </View>
+                          )}
+                        </View>
+                      ) : (
+                        <View className="flex-1 items-center justify-center">
+                          <Text style={{ fontSize: 14, color: TOKENS.color.muted }}>
+                            No exercises selected yet
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  </MattePanel>
+                </View>
+              ))}
+            </View>
+            {/* Second row - 0, 1, or 2 cards */}
+            {clientEntries.length > 2 && (
+              <View className="flex-row" style={{ flex: 1, gap: 12 }}>
+                {clientEntries.slice(2, 4).map(([clientId, clientData]) => (
+                  <View key={clientId} style={{ flex: 1 }}>
+                    <MattePanel style={{ flex: 1, padding: 16 }}>
+                      {/* Header Section - 10% smaller */}
+                      <View className="flex-row items-center" style={{ marginBottom: 11 }}>
+                        <Image 
+                          source={{ uri: getAvatarUrl(clientId) }}
+                          style={{ 
+                            width: 43, 
+                            height: 43, 
+                            borderRadius: 22, 
+                            marginRight: 11 
+                          }}
+                        />
+                        <Text style={{ fontSize: 18, fontWeight: '600', color: TOKENS.color.text }}>
+                          {clientData.clientName}
+                        </Text>
+                      </View>
+
+                      {/* Exercises List - Two Column Layout */}
+                      <View className="flex-1">
+                        {clientData.exercises.length > 0 ? (
+                          <View className="flex-row flex-wrap">
+                            {clientData.exercises.slice(0, 6).map((exercise, index) => {
+                              const showMax = clientData.exercises.length > 6 ? 5 : 6;
+                              if (index >= showMax) return null;
+                              
+                              return (
+                                <View key={exercise.id} className="w-1/2 pr-2 mb-2" style={{ flexShrink: 1, minWidth: 0 }}>
+                                  <Text 
+                                    style={{ 
+                                      fontSize: 14,
+                                      lineHeight: 18,
+                                      color: TOKENS.color.text,
+                                    }}
+                                    numberOfLines={1}
+                                    ellipsizeMode="tail"
+                                  >
+                                    {exercise.exerciseName}
+                                  </Text>
+                                </View>
+                              );
+                            })}
+                            {clientData.exercises.length > 6 && (
+                              <View className="w-1/2 pr-2 mb-2">
+                                <View style={{
+                                  backgroundColor: 'rgba(124, 255, 181, 0.2)',
+                                  paddingHorizontal: 11,
+                                  paddingVertical: 3,
+                                  borderRadius: TOKENS.radius.chip,
+                                  alignSelf: 'flex-start',
+                                }}>
+                                  <Text style={{ fontSize: 11, color: TOKENS.color.accent, fontWeight: '600' }}>
+                                    +{clientData.exercises.length - 5} more
+                                  </Text>
+                                </View>
+                              </View>
+                            )}
+                          </View>
+                        ) : (
+                          <View className="flex-1 items-center justify-center">
+                            <Text style={{ fontSize: 14, color: TOKENS.color.muted }}>
+                              No exercises selected yet
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                    </MattePanel>
+                  </View>
+                ))}
+                {/* Add empty spacer if only 3 clients total */}
+                {clientEntries.length === 3 && <View style={{ flex: 1 }} />}
+              </View>
+            )}
+          </View>
+        ) : clientEntries.length === 5 ? (
           // Special layout for 5 clients: 3 on top, 2 on bottom
           <View className="flex-1" style={{ gap: 12 }}>
             {/* Top row - 3 cards */}
@@ -332,9 +488,9 @@ export function WorkoutOverviewScreen() {
                       )}
                     </View>
                   </MattePanel>
-                  </View>
-                );
-              })}
+                </View>
+              );
+            })}
             </View>
             {/* Bottom row - 2 cards */}
             <View className="flex-row" style={{ flex: 1, gap: 12, paddingHorizontal: '16.67%' }}>
@@ -411,16 +567,16 @@ export function WorkoutOverviewScreen() {
             </View>
           </View>
         ) : (
-          // Standard grid layout
-          <View className={`flex-1 flex-row flex-wrap ${clientEntries.length > 4 ? 'items-center content-center' : 'items-start content-start'}`} style={{ gap: 12 }}>
+          // Standard grid layout for more than 5 clients
+          <View className="flex-1 flex-row flex-wrap items-center content-center" style={{ gap: 12 }}>
             {clientEntries.map(([clientId, clientData]) => {
-              const cardSizeClass = clientEntries.length <= 4 ? "w-1/2" : "w-1/3";
-              const isCompact = clientEntries.length > 4;
+              const cardSizeClass = "w-1/3";
+              const isCompact = true;
               
               return (
                 <View key={clientId} className={cardSizeClass} style={[
                   { padding: 6 },
-                  clientEntries.length <= 4 ? { height: '65%' } : { height: '55%' }
+                  { height: '55%' }
                 ]}>
                   <MattePanel style={{ flex: 1, padding: isCompact ? 12 : 18 }}>
                     {/* Header Section */}

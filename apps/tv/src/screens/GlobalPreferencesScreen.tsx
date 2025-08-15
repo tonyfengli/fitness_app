@@ -97,16 +97,6 @@ export function GlobalPreferencesScreen() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationError, setGenerationError] = useState<string | null>(null);
   
-  // Lifecycle logging
-  useEffect(() => {
-    const timestamp = new Date().toISOString();
-    console.log(`[GlobalPreferences ${timestamp}] Component mounted, sessionId:`, sessionId);
-    
-    return () => {
-      const cleanupTimestamp = new Date().toISOString();
-      console.log(`[GlobalPreferences ${cleanupTimestamp}] Component unmounting`);
-    };
-  }, []);
 
   // Fetch initial preferences - using checked-in clients data
   const { data: clientsData, isLoading } = useQuery(
