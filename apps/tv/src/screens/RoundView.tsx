@@ -17,7 +17,7 @@ const TOKENS = {
   color: {
     bg: '#070b18',
     card: '#111928',  // brightened from #0a0f1f
-    text: '#d8e2ff',
+    text: '#ffffff',
     muted: '#9cb0ff',
     accent: '#7cffb5',
     accent2: '#5de1ff',

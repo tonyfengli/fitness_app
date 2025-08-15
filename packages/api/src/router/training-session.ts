@@ -2689,7 +2689,7 @@ Set your goals and preferences for today's session.`;
               clientName: client?.name || 'Unknown',
               fitnessGoal: client?.primary_goal || 'general_fitness',
               intensity: client?.intensity || 'moderate',
-              wantsFinisher: client?.intensity === 'high',
+              wantsFinisher: client?.workoutType === 'full_body_with_finisher' || client?.workoutType === 'targeted_with_finisher',
               exercises: exercises.map(e => e.exerciseId) // Just IDs - names are in catalog
             };
           }),
@@ -2746,56 +2746,114 @@ Build rounds per rules. Output JSON only.`;
 - ph: phase → MS=Main Strength, AC=Accessory, CO=Core, PC=Power/Conditioning
 - rot: rotation → PAI=Pair, CIR=Circuit, STA=Station
 - pol: policy → SOLO=Single Client, ALT=Alternate, TOG=Together
-- mov: movement
-- prim: primary muscle group
-- sec: secondary muscles
-- eq: equipment
-- se: sets
-- rp: reps
-- wk: work time
-- rt: rest time
-- rd: number of rounds
+- mov: movement; prim: primary muscle; sec: secondary; eq: equipment
+- se: sets; rp: reps; wk: work; rt: rest; rd: number of rounds
 
-SYSTEM — Group Workout Orchestrator (v2-mini)
-Role: Build group rounds from given clients/exercises/inventory.
+SYSTEM — Group Workout Orchestrator (v2.6.2)
+Role: Build group rounds from given clients/exercises/inventory. Return the smallest valid JSON.
 
-Rules (hard):
-- Global phase order: MS → AC → CO → PC. Use ≥3 rounds. Subsets allowed but never reorder.
-- Per-round cap: stations ≤ active clients that round.
-- One station per client per round. If client has more exercises, schedule in later rounds.
-- Round participation: Maximize clients per round. Only isolate clients when all others have finished.
-- Merge-first: identical exercise in a round = one station with multiple clients (same orderIndex).
-- Main Strength starts with a compound lower-body if available, else upper push/pull.
-- Rep rounds (MS/AC/CO): sets+reps only (no rest). Time rounds (PC): work+rest+rounds only.
-- Finisher (PC) only if any wantsFinisher=true.
-- Use only provided exercise IDs. No inventions.
-- Early finishers: omit from later rounds; no filler.
-- Duration: 45–60 min from the client with most exercises.
-- Output one assignment per client-exercise pair. Shared exercises have same round+orderIndex.
+Abbreviations:
+- ph: phase → MS=Main Strength, AC=Accessory, CO=Core, PC=Power/Conditioning
+- mov: movementPattern; se: sets; rp: reps; wk: work; rt: rest
+
+GLOBAL PER-ROUND CONSTRAINT
+- Each client may appear at most once per round. Never output two assignments for the same (clientId, round).
+
+HARD RULES — priority order
+
+1) Mandatory coverage (highest)
+- Every exercise in each client's \`exercises\` list MUST appear exactly once per occurrence (count duplicates).
+- Duplicate IDs for a client = separate assignments in different rounds (same phase). No omissions.
+
+2) Block logic & mixed finisher policy
+- Classify by movementPattern:
+  • PC = conditioning/power intervals (finisher/capacity).
+  • NON-PC = everything else (MS, AC, CO).
+- Mixed finisher handling (per client):
+  • If \`wantsFinisher=false\`: schedule ALL items (MS, AC, CO) entirely in Block A; they do NOT appear in Block B.
+  • If \`wantsFinisher=true\`:
+      – Let \`coreCount\` be the number of CO items in their list.
+      – If \`intensity!="high"\`:
+          ▸ **Defer exactly ONE** CO item to Block B (choose the most mergeable/common or highest-intensity core for finisher flow).
+          ▸ Keep any remaining CO items for that client in Block A.
+      – If \`intensity=="high"\`:
+          ▸ You may **defer multiple** CO items to Block B (all, if station/time allows).
+- Compute \`nonPcRounds = max NON-PC count across clients\` **after** applying the deferral above (duplicates count).
+
+Block A — NON-PC (rounds 1..nonPcRounds)
+- Mix MS + AC + CO (but CO for finisher clients is included here only if it was **not deferred** by the rule above). Do NOT serialize MS before AC/CO.
+- **Round 1 priority:** If available, assign each client's heaviest lower-body compound (squat/hinge/lunge; barbell preferred) in Round 1, capacity permitting.
+- Breadth-first packing: in each Block-A round, assign exactly ONE pending NON-PC exercise per active client.
+- **Programming practices (when choosing among a client's eligible options):**
+  1) Alternate movement patterns across rounds for that client (avoid same pattern back-to-back).
+  2) Prefer Lower → Upper alternation across rounds when their list allows.
+  3) Heavy before accessory (choose compound/multi-joint before isolation) unless doing so violates 1 or 2.
+- If multiple clients have the same exerciseId in a round, they share ONE station.
+- Clients with no remaining NON-PC drop out of later Block-A rounds (no filler).
+- **Anti-solo:** If the final Block-A round would contain a single client, move that client's remaining NON-PC into the earliest prior Block-A round where they do not already have NON-PC. If none, allow that client TWO NON-PC assignments in the last multi-client round (but still one per client per round overall).
+
+Block B — Finisher / capacity (REQUIRED iff any \`wantsFinisher=true\`)
+- Round number = \`nonPcRounds + 1\` (add Block-B-2 only if needed; see below).
+- Participants: ONLY finisher clients who have at least one **deferred CO** or an explicit **PC** item.
+- Contents:
+  • Include each participating client's **deferred CO** and any explicit **PC** items from the catalog.
+  • **One assignment per client per Block-B round.** If a client has >1 deferred CO:
+      – Default: choose ONE as their station and convert remaining core volume to **+rounds** (if time-based) or **+sets** (if reps-based) on that station.
+      – If \`intensity=="high"\` and distinct movements are desired, open a second Block-B round (Block-B-2) and place one core per client per round (still max one per client per round).
+- **Baseline dose:** In each Block-B round, all participating clients share the SAME time scheme (e.g., work "30–40s", rest "15–20s", rounds 3–4).
+- **Extra capacity:** Only for clients with higher workload (> group median total exercises) or \`intensity:"high"\`. Prefer +1 round/set over adding stations.
+
+3) Phase labeling
+- Label each assignment by phase:
+  • MS: compound squat/hinge/lunge/push/pull; barbell multi-joint rows
+  • AC: isolation/assistance (shoulder/leg/arm isolates; dumbbell/bench/bird-dog/TRX rows)
+  • CO: core/anti_rotation/anti_extension
+  • PC: conditioning/power intervals
+
+4) Participation & capacity
+- Maximize clients per round in Block A. Avoid single-client rounds (see anti-solo).
+- Per-round stations ≤ active clients that round.
+
+5) Schemes
+- MS/AC/CO default to **reps-only** (no rest). If a catalog core item is explicitly time-based, time is allowed.
+- PC and all Block-B rounds are **time-based** (work+rest+rounds).
+
+6) Other constraints
+- Use only provided exercise IDs; no inventions.
+- Early finishers: a client may skip later rounds only AFTER all their listed exercises are scheduled.
+- Target duration: 45–60 min (based on the client with the most exercises).
 
 Inputs:
-exerciseCatalog: [{id, name, movementPattern, primaryMuscle, secondaryMuscles[], equipment[]}]
-clients: [{clientId, clientName, fitnessGoal, intensity, wantsFinisher, exercises:[exerciseId, ...]}]
-equipment: {barbell_rack: 2, kettlebell: 6, ...}
+- exerciseCatalog: [{id, name, movementPattern, primaryMuscle, secondaryMuscles[], equipment[]}]
+- clients: [{clientId, clientName, fitnessGoal, intensity, wantsFinisher, exercises:[exerciseId, ...]}]
+- equipment: {barbell_rack: 2, kettlebell: 6, ...}
 
-Output Format (v2.1-compact):
+Output Format (v2.6.2-compact):
 {
-  "schemaVersion": "2.1",
+  "schemaVersion": "2.6.2",
   "assignments": [
     {
       "clientId": "uuid",
       "exerciseId": "uuid",
       "round": 1,
       "phase": "main_strength|accessory|core|power_conditioning",
-      "orderIndex": 0,
-      "scheme": {"type": "reps", "sets": 3, "reps": "8-10"} or {"type": "time", "work": "30s", "rest": "15s", "rounds": 3},
-      "reasoning": "≤12 words"
+      "scheme": {"type":"reps","sets":3,"reps":"8-10"} | {"type":"time","work":"30s","rest":"15s","rounds":3},
+      "reasoning": ""
     }
   ]
 }
 
-Decision: Be decisive. First valid solution. No alternatives. JSON only. All text ≤12 words.
-Stop after outputting JSON. End response with: END`;
+Validation (single pass before output)
+- For each client, count(assignments matching their \`exercises\`, counting duplicates) == length of that array.
+- No duplicate (clientId, round). If found, consolidate per Block-B rules or open Block-B-2 if \`intensity=="high"\`.
+- If any missing, append minimal additional assignments in the correct block, then output.
+
+Brevity
+- Use the fewest tokens possible. Prefer \`reasoning: ""\`.
+
+Decision
+- Be decisive. First valid solution only. No alternatives.
+- JSON only. Stop after JSON. End with: END`;
 
         // Log prompt sizes for debugging token usage
         console.log(`[startWorkout] Phase 2 Prompt - System: ${systemPrompt.length} chars, User: ${phase2Prompt.length} chars, Total: ${systemPrompt.length + phase2Prompt.length} chars`);
@@ -2867,13 +2925,126 @@ Stop after outputting JSON. End response with: END`;
           });
         }
         
-        // Transform v2.1 format into the existing round structure for backward compatibility
-        let roundOrganization;
-        if (parsedResponse.schemaVersion === '2.1') {
-          console.log('[startWorkout] Transforming v2.1 format to legacy format...');
+        // Fix exercise ID typos/hallucinations before validation
+        if (parsedResponse.schemaVersion === '2.6.2' || parsedResponse.schemaVersion === '2.6') {
+          console.log('[startWorkout] Checking for exercise ID typos...');
           
-          // Group assignments by round number
+          // Create a map of all valid exercise IDs for quick lookup
+          const validExerciseIds = new Set(phase2Input.exerciseCatalog.map(e => e.id));
+          let typoCount = 0;
+          
+          // Helper function to calculate string similarity (Levenshtein distance)
+          const getLevenshteinDistance = (a: string, b: string): number => {
+            const matrix = [];
+            for (let i = 0; i <= b.length; i++) {
+              matrix[i] = [i];
+            }
+            for (let j = 0; j <= a.length; j++) {
+              matrix[0][j] = j;
+            }
+            for (let i = 1; i <= b.length; i++) {
+              for (let j = 1; j <= a.length; j++) {
+                if (b.charAt(i - 1) === a.charAt(j - 1)) {
+                  matrix[i][j] = matrix[i - 1][j - 1];
+                } else {
+                  matrix[i][j] = Math.min(
+                    matrix[i - 1][j - 1] + 1, // substitution
+                    matrix[i][j - 1] + 1,     // insertion
+                    matrix[i - 1][j] + 1      // deletion
+                  );
+                }
+              }
+            }
+            return matrix[b.length][a.length];
+          };
+          
+          // Fix typos in assignments
+          for (const assignment of parsedResponse.assignments) {
+            if (!validExerciseIds.has(assignment.exerciseId)) {
+              // Find the closest matching exercise ID
+              let bestMatch = null;
+              let bestDistance = Infinity;
+              
+              for (const validId of validExerciseIds) {
+                const distance = getLevenshteinDistance(assignment.exerciseId, validId);
+                // Only consider matches with very small edit distance (1-2 characters)
+                if (distance < bestDistance && distance <= 2) {
+                  bestDistance = distance;
+                  bestMatch = validId;
+                }
+              }
+              
+              if (bestMatch) {
+                const exerciseInfo = phase2Input.exerciseCatalog.find(e => e.id === bestMatch);
+                console.warn(`[startWorkout] Fixed exercise ID typo for ${assignment.clientId}: "${assignment.exerciseId}" → "${bestMatch}" (${exerciseInfo?.name})`);
+                assignment.exerciseId = bestMatch;
+                typoCount++;
+              } else {
+                console.error(`[startWorkout] Could not fix invalid exercise ID for ${assignment.clientId}: "${assignment.exerciseId}"`);
+              }
+            }
+          }
+          
+          if (typoCount > 0) {
+            console.log(`[startWorkout] Fixed ${typoCount} exercise ID typos`);
+          }
+          
+          // Now validate that all exercises were assigned (after fixing typos)
+          console.log('[startWorkout] Validating exercise assignments...');
+          
+          // Build a map of assigned exercises per client
+          const assignedByClient = new Map<string, string[]>();
+          for (const assignment of parsedResponse.assignments) {
+            if (!assignedByClient.has(assignment.clientId)) {
+              assignedByClient.set(assignment.clientId, []);
+            }
+            assignedByClient.get(assignment.clientId)!.push(assignment.exerciseId);
+          }
+          
+          // Check each client for missing exercises
+          let missingCount = 0;
+          for (const client of phase2Input.clients) {
+            const expectedExercises = client.exercises;
+            const assignedExercises = assignedByClient.get(client.clientId) || [];
+            
+            // Count occurrences of each exercise
+            const expectedCounts = new Map<string, number>();
+            const assignedCounts = new Map<string, number>();
+            
+            for (const exerciseId of expectedExercises) {
+              expectedCounts.set(exerciseId, (expectedCounts.get(exerciseId) || 0) + 1);
+            }
+            
+            for (const exerciseId of assignedExercises) {
+              assignedCounts.set(exerciseId, (assignedCounts.get(exerciseId) || 0) + 1);
+            }
+            
+            // Find missing exercises
+            for (const [exerciseId, expectedCount] of expectedCounts) {
+              const assignedCount = assignedCounts.get(exerciseId) || 0;
+              const missingInstances = expectedCount - assignedCount;
+              
+              if (missingInstances > 0) {
+                const exerciseInfo = phase2Input.exerciseCatalog.find(e => e.id === exerciseId);
+                console.error(`[startWorkout] CRITICAL: Client ${client.clientName} missing ${missingInstances} instance(s) of exercise ${exerciseId} (${exerciseInfo?.name}) - This should not happen after typo fixes!`);
+                missingCount += missingInstances;
+              }
+            }
+          }
+          
+          if (missingCount > 0) {
+            console.error(`[startWorkout] WARNING: ${missingCount} exercises still missing after typo fixes - LLM may have completely omitted some exercises`);
+          }
+        }
+        
+        // Transform v2.1/v2.2/v2.3/v2.5/v2.6/v2.6.2 format into the existing round structure for backward compatibility
+        let roundOrganization;
+        if (parsedResponse.schemaVersion === '2.1' || parsedResponse.schemaVersion === '2.2' || parsedResponse.schemaVersion === '2.3' || parsedResponse.schemaVersion === '2.5' || parsedResponse.schemaVersion === '2.6' || parsedResponse.schemaVersion === '2.6.2') {
+          console.log(`[startWorkout] Transforming v${parsedResponse.schemaVersion} format to legacy format...`);
+          
+          // First pass: group by round and track unique exercises per round
           const roundsMap = new Map();
+          const exerciseOrderMap = new Map(); // Map of "round-exerciseId" to orderIndex
           
           parsedResponse.assignments.forEach((assignment: any) => {
             const roundNum = assignment.round;
@@ -2882,7 +3053,8 @@ Stop after outputting JSON. End response with: END`;
                 roundNumber: roundNum,
                 name: `Round ${roundNum}`,
                 phase: assignment.phase,
-                exercisesByClient: {}
+                exercisesByClient: {},
+                uniqueExercises: new Set() // Track unique exercises in this round
               });
             }
             
@@ -2893,14 +3065,31 @@ Stop after outputting JSON. End response with: END`;
               round.exercisesByClient[assignment.clientId] = [];
             }
             
-            // Get exercise name from catalog
+            // Track unique exercises for orderIndex assignment
+            round.uniqueExercises.add(assignment.exerciseId);
+          });
+          
+          // Assign orderIndex to each unique exercise in each round
+          roundsMap.forEach((round) => {
+            const exercisesArray = Array.from(round.uniqueExercises);
+            exercisesArray.forEach((exerciseId, index) => {
+              const key = `${round.roundNumber}-${exerciseId}`;
+              exerciseOrderMap.set(key, index);
+            });
+          });
+          
+          // Second pass: add exercises with calculated orderIndex
+          parsedResponse.assignments.forEach((assignment: any) => {
+            const round = roundsMap.get(assignment.round);
             const exerciseInfo = phase2Input.exerciseCatalog.find((e: any) => e.id === assignment.exerciseId);
+            const orderKey = `${assignment.round}-${assignment.exerciseId}`;
+            const orderIndex = exerciseOrderMap.get(orderKey) || 0;
             
             // Add exercise to client's list for this round
             round.exercisesByClient[assignment.clientId].push({
               exerciseId: assignment.exerciseId,
               exerciseName: exerciseInfo?.name || 'Unknown Exercise',
-              orderIndex: assignment.orderIndex,
+              orderIndex: orderIndex, // Use calculated orderIndex
               scheme: assignment.scheme,
               reasoning: assignment.reasoning
             });
@@ -2937,7 +3126,7 @@ Stop after outputting JSON. End response with: END`;
         
         // Add validation to check if all exercises were assigned
         const totalExercisesProvided = phase2Input.clients.reduce((sum, c) => sum + c.exercises.length, 0);
-        const totalExercisesAssigned = parsedResponse.schemaVersion === '2.1' 
+        const totalExercisesAssigned = (parsedResponse.schemaVersion === '2.1' || parsedResponse.schemaVersion === '2.2' || parsedResponse.schemaVersion === '2.3' || parsedResponse.schemaVersion === '2.5' || parsedResponse.schemaVersion === '2.6' || parsedResponse.schemaVersion === '2.6.2')
           ? parsedResponse.assignments.length
           : roundOrganization.rounds.reduce((sum: number, round: any) => {
               return sum + Object.values(round.exercisesByClient).reduce((rSum: number, exercises: any) => rSum + exercises.length, 0);
@@ -3015,9 +3204,15 @@ Stop after outputting JSON. End response with: END`;
               const roundExercise = exercises[exerciseIndex];
               
               // Find the matching workout_exercise record
-              const workoutExercise = clientWorkout.exercises.find(
+              // Need to handle duplicates - find all matching exercises
+              const matchingExercises = clientWorkout.exercises.filter(
                 we => we.exerciseId === roundExercise.exerciseId
               );
+              
+              // Find one that hasn't been updated yet (orderIndex still 999)
+              const workoutExercise = matchingExercises.find(
+                we => we.orderIndex === 999
+              ) || matchingExercises[0]; // Fallback to first if all updated
               
               if (workoutExercise) {
                 // Calculate global orderIndex: round offset + local orderIndex

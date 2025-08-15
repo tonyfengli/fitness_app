@@ -1,11 +1,75 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, Image, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, Image, ActivityIndicator, Pressable } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { useNavigation } from '../App';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../providers/TRPCProvider';
 import { useRealtimeExerciseSwaps } from '@acme/ui-shared';
 import { supabase } from '../lib/supabase';
+
+// Design tokens - matching other screens
+const TOKENS = {
+  color: {
+    bg: '#070b18',
+    card: '#111928',
+    text: '#ffffff',
+    muted: '#9cb0ff',
+    accent: '#7cffb5',
+    accent2: '#5de1ff',
+    focusRing: 'rgba(124,255,181,0.6)',
+    borderGlass: 'rgba(255,255,255,0.08)',
+    cardGlass: 'rgba(255,255,255,0.04)',
+  },
+  radius: {
+    card: 16,
+    chip: 999,
+  },
+};
+
+// Matte panel helper component - matching other screens
+function MattePanel({
+  children,
+  style,
+  focused = false,
+  radius = TOKENS.radius.card,
+}: {
+  children: React.ReactNode;
+  style?: any;
+  focused?: boolean;
+  radius?: number;
+}) {
+  const BASE_SHADOW = {
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOpacity: 0.40,
+    shadowRadius: 22,
+    shadowOffset: { width: 0, height: 8 },
+  };
+  const FOCUS_SHADOW = {
+    elevation: 12,
+    shadowColor: '#000',
+    shadowOpacity: 0.36,
+    shadowRadius: 40,
+    shadowOffset: { width: 0, height: 12 },
+  };
+
+  return (
+    <View
+      style={[
+        {
+          backgroundColor: TOKENS.color.card,
+          borderColor: TOKENS.color.borderGlass,
+          borderWidth: 1,
+          borderRadius: radius,
+        },
+        focused ? FOCUS_SHADOW : BASE_SHADOW,
+        style,
+      ]}
+    >
+      {children}
+    </View>
+  );
+}
 
 interface ExerciseSelection {
   id: string;
@@ -121,9 +185,9 @@ export function WorkoutOverviewScreen() {
 
   if (isLoading) {
     return (
-      <View className="flex-1 bg-gray-50 items-center justify-center">
-        <ActivityIndicator size="large" color="#3b82f6" />
-        <Text className="text-tv-lg text-gray-600 mt-4">Loading workout...</Text>
+      <View className="flex-1 items-center justify-center" style={{ backgroundColor: TOKENS.color.bg }}>
+        <ActivityIndicator size="large" color={TOKENS.color.accent} />
+        <Text style={{ fontSize: 24, color: TOKENS.color.muted, marginTop: 16 }}>Loading workout...</Text>
       </View>
     );
   }
@@ -131,133 +195,316 @@ export function WorkoutOverviewScreen() {
   const clientEntries = Object.entries(groupedSelections);
 
   return (
-    <View className="flex-1" style={{ backgroundColor: '#121212' }}>
+    <View className="flex-1" style={{ backgroundColor: TOKENS.color.bg, padding: 24 }}>
       {/* Header */}
-      <View className="px-8 py-6 flex-row justify-between items-center">
-        <TouchableOpacity
+      <View className="flex-row justify-between items-center mb-6">
+        <Pressable
           onPress={() => navigation.goBack()}
-          activeOpacity={0.7}
-          tvParallaxProperties={{
-            enabled: true,
-            shiftDistanceX: 2,
-            shiftDistanceY: 2,
-          }}
-          style={({ focused }) => ({
-            flexDirection: 'row',
-            alignItems: 'center',
-            paddingHorizontal: 16,
-            paddingVertical: 8,
-            borderRadius: 8,
-            borderWidth: 2,
-            borderColor: focused ? '#3b82f6' : 'transparent',
-            backgroundColor: focused ? 'rgba(59, 130, 246, 0.1)' : 'transparent',
-            transform: focused ? [{ scale: 1.05 }] : [{ scale: 1 }],
-          })}
+          focusable
         >
-          <Icon name="arrow-back" size={24} color="#E0E0E0" />
-          <Text className="ml-2 text-lg text-gray-200">
-            Back
-          </Text>
-        </TouchableOpacity>
+          {({ focused }) => (
+            <MattePanel 
+              focused={focused}
+              style={{ 
+                paddingHorizontal: 32,
+                paddingVertical: 12,
+              }}
+            >
+              {/* Focus ring */}
+              {focused && (
+                <View pointerEvents="none" style={{
+                  position: 'absolute', 
+                  inset: -1,
+                  borderRadius: TOKENS.radius.card,
+                  borderWidth: 2, 
+                  borderColor: TOKENS.color.focusRing,
+                }}/>
+              )}
+              <Text style={{ color: TOKENS.color.text, fontWeight: '700', fontSize: 18 }}>Back</Text>
+            </MattePanel>
+          )}
+        </Pressable>
         
-        <TouchableOpacity
+        <Pressable
           onPress={() => navigation.navigate('WorkoutLive', { sessionId, round: 1 })}
-          activeOpacity={0.7}
-          tvParallaxProperties={{
-            enabled: true,
-            shiftDistanceX: 2,
-            shiftDistanceY: 2,
-          }}
-          className="px-6 py-2.5 bg-green-600 rounded-lg"
+          focusable
         >
-          <Text className="text-white font-semibold">Start Workout</Text>
-        </TouchableOpacity>
+          {({ focused }) => (
+            <MattePanel 
+              focused={focused}
+              style={{ 
+                paddingHorizontal: 32,
+                paddingVertical: 12,
+              }}
+            >
+              {/* Focus ring */}
+              {focused && (
+                <View pointerEvents="none" style={{
+                  position: 'absolute', 
+                  inset: -1,
+                  borderRadius: TOKENS.radius.card,
+                  borderWidth: 2, 
+                  borderColor: TOKENS.color.focusRing,
+                }}/>
+              )}
+              <Text style={{ color: TOKENS.color.text, fontWeight: '700', fontSize: 18 }}>Start Workout</Text>
+            </MattePanel>
+          )}
+        </Pressable>
       </View>
 
       {/* Client Cards Grid */}
-      <View className="flex-1 px-8 pb-12">
-        <View className={`flex-1 flex-row flex-wrap ${clientEntries.length > 4 ? 'items-center content-center' : 'items-start content-start'}`}>
-          {clientEntries.map(([clientId, clientData]) => {
-            const cardSizeClass = clientEntries.length <= 4 ? "w-1/2" : "w-1/3";
-            const isCompact = clientEntries.length > 4;
-            
-            return (
-              <View key={clientId} className={`${cardSizeClass} p-2`} style={clientEntries.length <= 4 ? { height: '55%' } : { height: '48%' }}>
-                <View className="h-full flex" style={{
-                  backgroundColor: '#1F2937',
-                  borderRadius: 12,
-                  borderWidth: 0,
-                }}>
-                  {/* Header Section */}
-                  <View className="px-5 py-2.5 flex-row items-center">
-                    <Image 
-                      source={{ uri: getAvatarUrl(clientId) }}
-                      className="w-8 h-8 rounded-full mr-3"
-                    />
-                    <Text className="text-lg font-semibold text-white">
-                      {clientData.clientName}
-                    </Text>
-                  </View>
+      <View className="flex-1">
+        {clientEntries.length === 5 ? (
+          // Special layout for 5 clients: 3 on top, 2 on bottom
+          <View className="flex-1" style={{ gap: 12 }}>
+            {/* Top row - 3 cards */}
+            <View className="flex-row" style={{ flex: 1, gap: 12 }}>
+              {clientEntries.slice(0, 3).map(([clientId, clientData]) => {
+                const isCompact = true; // Always compact for 5-client layout
+                return (
+                  <View key={clientId} style={{ flex: 1 }}>
+                    <MattePanel style={{ flex: 1, padding: 12 }}>
+                    {/* Header Section */}
+                    <View className="flex-row items-center" style={{ marginBottom: 12 }}>
+                      <Image 
+                        source={{ uri: getAvatarUrl(clientId) }}
+                        style={{ 
+                          width: 36, 
+                          height: 36, 
+                          borderRadius: 18, 
+                          marginRight: 12 
+                        }}
+                      />
+                      <Text style={{ fontSize: 18, fontWeight: '600', color: TOKENS.color.text }}>
+                        {clientData.clientName}
+                      </Text>
+                    </View>
 
-                  {/* Exercises List - Two Column Layout */}
-                  <View className="flex-1 px-5 pt-2 pb-3">
-                    {clientData.exercises.length > 0 ? (
-                      <View className="flex-row flex-wrap">
-                        {clientData.exercises.slice(0, 6).map((exercise, index) => {
-                          // Show only first 6, or 5 if there are 7+ exercises
-                          const showMax = clientData.exercises.length > 6 ? 5 : 6;
-                          if (index >= showMax) return null;
-                          
-                          return (
-                            <View key={exercise.id} className="w-1/2 pr-2 mb-2.5" style={{ flexShrink: 1, minWidth: 0 }}>
-                              <Text 
-                                className="text-white" 
-                                style={{ 
-                                  fontSize: isCompact ? 12 : 13,
-                                  lineHeight: isCompact ? 16 : 18,
-                                }}
-                                numberOfLines={1}
-                                ellipsizeMode="tail"
-                              >
-                                {exercise.exerciseName}
-                              </Text>
+                    {/* Exercises List - Two Column Layout */}
+                    <View className="flex-1">
+                      {clientData.exercises.length > 0 ? (
+                        <View className="flex-row flex-wrap">
+                          {clientData.exercises.slice(0, 6).map((exercise, index) => {
+                            // Show only first 6, or 5 if there are 7+ exercises
+                            const showMax = clientData.exercises.length > 6 ? 5 : 6;
+                            if (index >= showMax) return null;
+                            
+                            return (
+                              <View key={exercise.id} className="w-1/2 pr-2 mb-2.5" style={{ flexShrink: 1, minWidth: 0 }}>
+                                <Text 
+                                  style={{ 
+                                    fontSize: 13,
+                                    lineHeight: 18,
+                                    color: TOKENS.color.text,
+                                  }}
+                                  numberOfLines={1}
+                                  ellipsizeMode="tail"
+                                >
+                                  {exercise.exerciseName}
+                                </Text>
+                              </View>
+                            );
+                          })}
+                          {/* Show +N more indicator if there are more than 6 exercises */}
+                          {clientData.exercises.length > 6 && (
+                            <View className="w-1/2 pr-2 mb-2.5">
+                              <View style={{
+                                backgroundColor: 'rgba(124, 255, 181, 0.2)',
+                                paddingHorizontal: 12,
+                                paddingVertical: 3,
+                                borderRadius: TOKENS.radius.chip,
+                                alignSelf: 'flex-start',
+                              }}>
+                                <Text style={{ fontSize: 12, color: TOKENS.color.accent, fontWeight: '600' }}>
+                                  +{clientData.exercises.length - 5} more
+                                </Text>
+                              </View>
                             </View>
-                          );
-                        })}
-                        {/* Show +N more indicator if there are more than 6 exercises */}
-                        {clientData.exercises.length > 6 && (
-                          <View className="w-1/2 pr-2 mb-2.5">
-                            <View className="bg-gray-700 px-3 py-1 rounded-full self-start">
-                              <Text className="text-gray-300 text-xs font-semibold">
-                                +{clientData.exercises.length - 5} more
-                              </Text>
-                            </View>
-                          </View>
-                        )}
-                      </View>
-                    ) : (
-                      <View className="flex-1 items-center justify-center">
-                        <Text className="text-gray-500 text-base">
-                          No exercises selected yet
-                        </Text>
-                      </View>
-                    )}
+                          )}
+                        </View>
+                      ) : (
+                        <View className="flex-1 items-center justify-center">
+                          <Text style={{ fontSize: 16, color: TOKENS.color.muted }}>
+                            No exercises selected yet
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  </MattePanel>
                   </View>
+                );
+              })}
+            </View>
+            {/* Bottom row - 2 cards */}
+            <View className="flex-row" style={{ flex: 1, gap: 12, paddingHorizontal: '16.67%' }}>
+              {clientEntries.slice(3, 5).map(([clientId, clientData]) => (
+                <View key={clientId} style={{ flex: 1 }}>
+                  <MattePanel style={{ flex: 1, padding: 12 }}>
+                    {/* Header Section */}
+                    <View className="flex-row items-center" style={{ marginBottom: 12 }}>
+                      <Image 
+                        source={{ uri: getAvatarUrl(clientId) }}
+                        style={{ 
+                          width: 36, 
+                          height: 36, 
+                          borderRadius: 18, 
+                          marginRight: 12 
+                        }}
+                      />
+                      <Text style={{ fontSize: 18, fontWeight: '600', color: TOKENS.color.text }}>
+                        {clientData.clientName}
+                      </Text>
+                    </View>
+
+                    {/* Exercises List - Two Column Layout */}
+                    <View className="flex-1">
+                      {clientData.exercises.length > 0 ? (
+                        <View className="flex-row flex-wrap">
+                          {clientData.exercises.slice(0, 6).map((exercise, index) => {
+                            const showMax = clientData.exercises.length > 6 ? 5 : 6;
+                            if (index >= showMax) return null;
+                            
+                            return (
+                              <View key={exercise.id} className="w-1/2 pr-2 mb-2.5" style={{ flexShrink: 1, minWidth: 0 }}>
+                                <Text 
+                                  style={{ 
+                                    fontSize: 13,
+                                    lineHeight: 18,
+                                    color: TOKENS.color.text,
+                                  }}
+                                  numberOfLines={1}
+                                  ellipsizeMode="tail"
+                                >
+                                  {exercise.exerciseName}
+                                </Text>
+                              </View>
+                            );
+                          })}
+                          {clientData.exercises.length > 6 && (
+                            <View className="w-1/2 pr-2 mb-2.5">
+                              <View style={{
+                                backgroundColor: 'rgba(124, 255, 181, 0.2)',
+                                paddingHorizontal: 12,
+                                paddingVertical: 3,
+                                borderRadius: TOKENS.radius.chip,
+                                alignSelf: 'flex-start',
+                              }}>
+                                <Text style={{ fontSize: 12, color: TOKENS.color.accent, fontWeight: '600' }}>
+                                  +{clientData.exercises.length - 5} more
+                                </Text>
+                              </View>
+                            </View>
+                          )}
+                        </View>
+                      ) : (
+                        <View className="flex-1 items-center justify-center">
+                          <Text style={{ fontSize: 16, color: TOKENS.color.muted }}>
+                            No exercises selected yet
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  </MattePanel>
                 </View>
-              </View>
-            );
-          })}
-        </View>
+              ))}
+            </View>
+          </View>
+        ) : (
+          // Standard grid layout
+          <View className={`flex-1 flex-row flex-wrap ${clientEntries.length > 4 ? 'items-center content-center' : 'items-start content-start'}`} style={{ gap: 12 }}>
+            {clientEntries.map(([clientId, clientData]) => {
+              const cardSizeClass = clientEntries.length <= 4 ? "w-1/2" : "w-1/3";
+              const isCompact = clientEntries.length > 4;
+              
+              return (
+                <View key={clientId} className={cardSizeClass} style={[
+                  { padding: 6 },
+                  clientEntries.length <= 4 ? { height: '65%' } : { height: '55%' }
+                ]}>
+                  <MattePanel style={{ flex: 1, padding: isCompact ? 12 : 18 }}>
+                    {/* Header Section */}
+                    <View className="flex-row items-center" style={{ marginBottom: 12 }}>
+                      <Image 
+                        source={{ uri: getAvatarUrl(clientId) }}
+                        style={{ 
+                          width: isCompact ? 36 : 48, 
+                          height: isCompact ? 36 : 48, 
+                          borderRadius: isCompact ? 18 : 24, 
+                          marginRight: 12 
+                        }}
+                      />
+                      <Text style={{ fontSize: isCompact ? 18 : 20, fontWeight: '600', color: TOKENS.color.text }}>
+                        {clientData.clientName}
+                      </Text>
+                    </View>
+
+                    {/* Exercises List - Two Column Layout */}
+                    <View className="flex-1">
+                      {clientData.exercises.length > 0 ? (
+                        <View className="flex-row flex-wrap">
+                          {clientData.exercises.slice(0, 6).map((exercise, index) => {
+                            const showMax = clientData.exercises.length > 6 ? 5 : 6;
+                            if (index >= showMax) return null;
+                            
+                            return (
+                              <View key={exercise.id} className="w-1/2 pr-2 mb-2.5" style={{ flexShrink: 1, minWidth: 0 }}>
+                                <Text 
+                                  style={{ 
+                                    fontSize: isCompact ? 13 : 15,
+                                    lineHeight: isCompact ? 18 : 20,
+                                    color: TOKENS.color.text,
+                                  }}
+                                  numberOfLines={1}
+                                  ellipsizeMode="tail"
+                                >
+                                  {exercise.exerciseName}
+                                </Text>
+                              </View>
+                            );
+                          })}
+                          {clientData.exercises.length > 6 && (
+                            <View className="w-1/2 pr-2 mb-2.5">
+                              <View style={{
+                                backgroundColor: 'rgba(124, 255, 181, 0.2)',
+                                paddingHorizontal: 12,
+                                paddingVertical: 3,
+                                borderRadius: TOKENS.radius.chip,
+                                alignSelf: 'flex-start',
+                              }}>
+                                <Text style={{ fontSize: isCompact ? 12 : 13, color: TOKENS.color.accent, fontWeight: '600' }}>
+                                  +{clientData.exercises.length - 5} more
+                                </Text>
+                              </View>
+                            </View>
+                          )}
+                        </View>
+                      ) : (
+                        <View className="flex-1 items-center justify-center">
+                          <Text style={{ fontSize: 16, color: TOKENS.color.muted }}>
+                            No exercises selected yet
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  </MattePanel>
+                </View>
+              );
+            })}
+          </View>
+        )}
       </View>
       
-      {/* Connection Status - Bottom Left */}
-      <View className="absolute bottom-6 left-8 flex-row items-center">
-        <View className={`w-2 h-2 rounded-full mr-2 ${
-          swapUpdatesConnected ? 'bg-green-400' : 'bg-gray-400'
-        }`} />
-        <Text className="text-sm text-gray-400">
-          {swapUpdatesConnected ? 'Live updates active' : 'Connecting...'}
-        </Text>
+      {/* Connection Status - Bottom */}
+      <View className="mt-6 px-4">
+        <View className="flex-row items-center">
+          <View className={`w-3 h-3 rounded-full mr-2 ${
+            swapUpdatesConnected ? 'bg-green-400' : 'bg-gray-400'
+          }`} />
+          <Text style={{ fontSize: 16, color: TOKENS.color.text }}>
+            {swapUpdatesConnected ? 'Live updates active' : 'Connecting...'}
+          </Text>
+        </View>
       </View>
     </View>
   );

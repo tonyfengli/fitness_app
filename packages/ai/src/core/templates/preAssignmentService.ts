@@ -44,8 +44,8 @@ export class PreAssignmentService {
    * Check if an exercise targets lower body
    */
   private static isLowerBodyExercise(exercise: ScoredExercise): boolean {
-    const lowerBodyPatterns = ['squat', 'lunge', 'hinge', 'calf_raise'];
-    const lowerBodyMuscles = ['quads', 'hamstrings', 'glutes', 'calves'];
+    const lowerBodyPatterns = ['squat', 'lunge', 'hinge', 'calf_raise', 'leg_isolation'];
+    const lowerBodyMuscles = ['quads', 'hamstrings', 'glutes', 'calves', 'adductors', 'abductors', 'shins', 'tibialis_anterior'];
     
     return Boolean(
       (exercise.movementPattern && lowerBodyPatterns.includes(exercise.movementPattern)) ||
@@ -57,8 +57,8 @@ export class PreAssignmentService {
    * Check if an exercise targets upper body
    */
   private static isUpperBodyExercise(exercise: ScoredExercise): boolean {
-    const upperBodyPatterns = ['horizontal_push', 'horizontal_pull', 'vertical_push', 'vertical_pull'];
-    const upperBodyMuscles = ['chest', 'back', 'shoulders', 'lats', 'triceps', 'biceps', 'traps'];
+    const upperBodyPatterns = ['horizontal_push', 'horizontal_pull', 'vertical_push', 'vertical_pull', 'shoulder_isolation', 'arm_isolation', 'bicep_isolation', 'tricep_isolation'];
+    const upperBodyMuscles = ['chest', 'upper_chest', 'lower_chest', 'back', 'upper_back', 'lower_back', 'shoulders', 'delts', 'lats', 'triceps', 'biceps', 'traps'];
     
     return Boolean(
       (exercise.movementPattern && upperBodyPatterns.includes(exercise.movementPattern)) ||
@@ -74,7 +74,8 @@ export class PreAssignmentService {
     const hasCapacityTag = exercise.functionTags?.includes('capacity') || false;
     
     // Core/Full body classification
-    if (primaryMuscle === 'core' || primaryMuscle === 'abs' || primaryMuscle === 'obliques' || hasCapacityTag) {
+    if (primaryMuscle === 'core' || primaryMuscle === 'abs' || primaryMuscle === 'obliques' || 
+        primaryMuscle === 'lower_abs' || primaryMuscle === 'upper_abs' || hasCapacityTag) {
       return 'core_full';
     }
     

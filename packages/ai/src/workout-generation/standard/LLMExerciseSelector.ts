@@ -53,7 +53,7 @@ export interface LLMSelectionConfig {
 
 export class LLMExerciseSelector {
   private llm = createLLM({
-    modelName: "gpt-5",
+    modelName: "gpt-5-mini",
     maxTokens: 500,
     reasoning_effort: "medium"
     // Note: GPT-5 only supports default temperature (1.0)

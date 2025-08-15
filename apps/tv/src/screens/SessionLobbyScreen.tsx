@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { ScrollView, Alert, View, Text, TouchableOpacity, Image, ActivityIndicator } from 'react-native';
+import { ScrollView, Alert, View, Text, TouchableOpacity, Image, ActivityIndicator, Pressable } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { useNavigation } from '../App';
 import { useBusiness } from '../providers/BusinessProvider';
@@ -7,6 +7,70 @@ import { supabase } from '../lib/supabase';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { api } from '../providers/TRPCProvider';
 import { useRealtimeCheckIns } from '../hooks/useRealtimeCheckIns';
+
+// Design tokens - matching WorkoutLive screen
+const TOKENS = {
+  color: {
+    bg: '#070b18',
+    card: '#111928',
+    text: '#ffffff',
+    muted: '#9cb0ff',
+    accent: '#7cffb5',
+    accent2: '#5de1ff',
+    focusRing: 'rgba(124,255,181,0.6)',
+    borderGlass: 'rgba(255,255,255,0.08)',
+    cardGlass: 'rgba(255,255,255,0.04)',
+  },
+  radius: {
+    card: 16,
+    chip: 999,
+  },
+};
+
+// Matte panel helper component - matching WorkoutLive screen
+function MattePanel({
+  children,
+  style,
+  focused = false,
+  radius = TOKENS.radius.card,
+}: {
+  children: React.ReactNode;
+  style?: any;
+  focused?: boolean;
+  radius?: number;
+}) {
+  const BASE_SHADOW = {
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOpacity: 0.40,
+    shadowRadius: 22,
+    shadowOffset: { width: 0, height: 8 },
+  };
+  const FOCUS_SHADOW = {
+    elevation: 12,
+    shadowColor: '#000',
+    shadowOpacity: 0.36,
+    shadowRadius: 40,
+    shadowOffset: { width: 0, height: 12 },
+  };
+
+  return (
+    <View
+      style={[
+        {
+          backgroundColor: TOKENS.color.card,
+          borderColor: TOKENS.color.borderGlass,
+          borderWidth: 1,
+          borderRadius: radius,
+        },
+        focused ? FOCUS_SHADOW : BASE_SHADOW,
+        style,
+      ]}
+    >
+      {children}
+    </View>
+  );
+}
 
 interface CheckedInClient {
   userId: string;
@@ -185,80 +249,105 @@ export function SessionLobbyScreen() {
   };
 
   return (
-    <View className="flex-1" style={{ backgroundColor: '#121212' }}>
+    <View className="flex-1" style={{ backgroundColor: TOKENS.color.bg, padding: 24 }}>
       {/* Header */}
-      <View className="px-8 py-6">
+      <View className="mb-6">
         <View className="flex-row justify-between items-center">
-          <View className="flex-row items-center">
-            <TouchableOpacity
-              onPress={handleCloseSession}
-              activeOpacity={0.7}
-              tvParallaxProperties={{
-                enabled: true,
-                shiftDistanceX: 2,
-                shiftDistanceY: 2,
-              }}
-              style={({ focused }) => ({
-                flexDirection: 'row',
-                alignItems: 'center',
-                paddingHorizontal: 16,
-                paddingVertical: 8,
-                borderRadius: 8,
-                borderWidth: 2,
-                borderColor: focused ? '#ef4444' : 'transparent',
-                backgroundColor: focused ? 'rgba(239, 68, 68, 0.1)' : 'transparent',
-                transform: focused ? [{ scale: 1.05 }] : [{ scale: 1 }],
-              })}
-            >
-              <Icon name="close" size={24} color="#E0E0E0" />
-              <Text className="ml-2 text-lg text-gray-200">
-                Close Session
-              </Text>
-            </TouchableOpacity>
-          </View>
-          <TouchableOpacity
+          <Pressable
+            onPress={handleCloseSession}
+            focusable
+          >
+            {({ focused }) => (
+              <MattePanel 
+                focused={focused}
+                style={{ 
+                  paddingHorizontal: 32,
+                  paddingVertical: 12,
+                }}
+              >
+                {/* Focus ring */}
+                {focused && (
+                  <View pointerEvents="none" style={{
+                    position: 'absolute', 
+                    inset: -1,
+                    borderRadius: TOKENS.radius.card,
+                    borderWidth: 2, 
+                    borderColor: TOKENS.color.focusRing,
+                  }}/>
+                )}
+                <Text style={{ color: TOKENS.color.text, fontWeight: '700', fontSize: 18 }}>Close</Text>
+              </MattePanel>
+            )}
+          </Pressable>
+          <Pressable
             onPress={handleStartSession}
-            className={`px-6 py-2.5 rounded-lg ${
-              isStartingSession || clients.length === 0
-                ? 'bg-gray-700'
-                : 'bg-sky-600'
-            }`}
-            activeOpacity={0.8}
+            focusable
             disabled={isStartingSession || clients.length === 0}
           >
-            {isStartingSession ? (
-              <View className="flex-row items-center">
-                <ActivityIndicator size="small" color="white" style={{ marginRight: 8 }} />
-                <Text className="text-white font-semibold">Starting...</Text>
-              </View>
-            ) : (
-              <Text className="text-white font-semibold">Start Session</Text>
-            )}
-          </TouchableOpacity>
+            {({ focused }) => {
+              const isDisabled = isStartingSession || clients.length === 0;
+              return (
+                <MattePanel 
+                  focused={focused}
+                  style={{ 
+                    paddingHorizontal: 32,
+                    paddingVertical: 12,
+                    opacity: isDisabled ? 0.5 : 1,
+                  }}
+                >
+                  {/* Optional focus ring */}
+                  {focused && !isDisabled && (
+                    <View pointerEvents="none" style={{
+                      position: 'absolute', 
+                      inset: -1,
+                      borderRadius: TOKENS.radius.card,
+                      borderWidth: 2, 
+                      borderColor: TOKENS.color.focusRing,
+                    }}/>
+                  )}
+                  
+                  {isStartingSession ? (
+                    <View className="flex-row items-center">
+                      <ActivityIndicator size="small" color={TOKENS.color.text} style={{ marginRight: 8 }} />
+                      <Text style={{ color: TOKENS.color.text, fontWeight: '700', fontSize: 18 }}>Starting...</Text>
+                    </View>
+                  ) : (
+                    <Text style={{ 
+                      color: isDisabled ? TOKENS.color.muted : TOKENS.color.text, 
+                      fontWeight: '700', 
+                      fontSize: 18 
+                    }}>
+                      Start Session
+                    </Text>
+                  )}
+                </MattePanel>
+              );
+            }}
+          </Pressable>
         </View>
       </View>
 
       {/* Main Content */}
-      <View className="flex-1 px-8">
+      <View className="flex-1">
         {/* Clients Area */}
-        <View className="rounded-xl flex-1" style={{ backgroundColor: '#1F2937' }}>
+        <MattePanel style={{ flex: 1, padding: 16 }}>
           {fetchError ? (
             <View className="flex-1 items-center justify-center p-12">
-              <Text className="text-red-400">Error loading clients</Text>
-              <Text className="text-gray-400 text-sm mt-2">{fetchError.message || 'Unknown error'}</Text>
+              <Text style={{ color: '#ef4444' }}>Error loading clients</Text>
+              <Text style={{ color: TOKENS.color.muted, fontSize: 14, marginTop: 8 }}>{fetchError.message || 'Unknown error'}</Text>
             </View>
           ) : isLoading ? (
             <View className="flex-1 items-center justify-center">
-              <Text className="text-gray-400">Loading clients...</Text>
+              <Text style={{ color: TOKENS.color.muted }}>Loading clients...</Text>
             </View>
           ) : clients.length === 0 ? (
             <View className="flex-1 items-center justify-center p-12">
               {/* Icon placeholder - smaller size */}
               <View className="bg-gray-800 rounded-full w-20 h-20 items-center justify-center mb-4">
-                <Icon name="group-off" size={40} color="#6b7280" />
+                <Icon name="group-off" size={40} color={TOKENS.color.muted} />
               </View>
               
-              <Text className="text-base text-gray-400 text-center">
+              <Text style={{ fontSize: 16, color: TOKENS.color.muted, textAlign: 'center' }}>
                 No one is checked in yet
               </Text>
             </View>
@@ -267,20 +356,25 @@ export function SessionLobbyScreen() {
               {clients.map((client) => (
                 <View 
                   key={client.userId} 
-                  className={`px-6 py-4 border-b border-gray-700 ${
-                    client.isNew ? 'bg-green-900 bg-opacity-20' : ''
-                  }`}
+                  style={{
+                    paddingVertical: 12,
+                    borderBottomWidth: 1,
+                    borderBottomColor: TOKENS.color.borderGlass,
+                    backgroundColor: client.isNew ? 'rgba(124, 255, 181, 0.1)' : 'transparent',
+                    marginHorizontal: -16,
+                    paddingHorizontal: 40,
+                  }}
                 >
                   <View className="flex-row items-center">
                     {/* DiceBear Avatar - using PNG format */}
                     <Image
                       source={{ uri: `https://api.dicebear.com/7.x/avataaars/png?seed=${client.userId}&size=128` }}
-                      style={{ width: 32, height: 32, borderRadius: 16, marginRight: 16, alignSelf: 'center' }}
+                      style={{ width: 32, height: 32, borderRadius: 16, marginRight: 12, alignSelf: 'center' }}
                     />
                     
                     {/* Name only - extract first name */}
                     <View className="flex-1">
-                      <Text className="text-base font-medium text-white">
+                      <Text style={{ fontSize: 16, fontWeight: '600', color: TOKENS.color.text }}>
                         {client.userName ? client.userName.split(' ')[0] : 'Unknown'}
                       </Text>
                     </View>
@@ -288,43 +382,42 @@ export function SessionLobbyScreen() {
                     {/* Checked in status */}
                     <View className="flex-row items-center">
                       <View className="w-2 h-2 bg-green-400 rounded-full mr-2" />
-                      <Text className="text-sm text-gray-400">Checked in</Text>
+                      <Text style={{ fontSize: 14, color: TOKENS.color.text }}>Checked in</Text>
                     </View>
                   </View>
                 </View>
               ))}
             </ScrollView>
           )}
-        </View>
+        </MattePanel>
       </View>
 
-      {/* Footer */}
-      <View className="px-8 py-6">
-        <View className="rounded-xl p-6" style={{ backgroundColor: '#1F2937' }}>
-          <View className="flex-row items-center justify-between">
-            {/* Connection status */}
-            <View className="flex-row items-center">
-              <View 
-                className={`w-3 h-3 rounded-full mr-2 ${
-                  connectionStatus === 'connected' ? 'bg-green-400' : 'bg-red-400'
-                }`} 
-              />
-              <Text className="text-sm text-gray-400">
-                {connectionStatus === 'connected' ? 'Connected' : 'Disconnected'}
-              </Text>
-            </View>
-            
-            {/* Check-in instructions - always show on the right */}
-            <View className="flex-row items-center">
-              <Text className="text-sm text-gray-300">
-                Text <Text className="font-semibold text-sky-400">'here'</Text> to{' '}
-                <Text className="font-semibold text-sky-400">562-608-1666</Text>
-              </Text>
-              <Text className="text-base ml-2">🎉</Text>
-            </View>
+      {/* Footer text without container */}
+      <View className="mt-6 px-4">
+        <View className="flex-row items-center justify-between">
+          {/* Connection status */}
+          <View className="flex-row items-center">
+            <View 
+              className={`w-3 h-3 rounded-full mr-2 ${
+                connectionStatus === 'connected' ? 'bg-green-400' : 'bg-red-400'
+              }`} 
+            />
+            <Text style={{ fontSize: 16, color: TOKENS.color.text }}>
+              {connectionStatus === 'connected' ? 'Connected' : 'Disconnected'}
+            </Text>
+          </View>
+          
+          {/* Check-in instructions */}
+          <View className="flex-row items-center">
+            <Text style={{ fontSize: 16, color: TOKENS.color.text }}>
+              Text <Text style={{ fontWeight: '600', color: TOKENS.color.text }}>'here'</Text> to{' '}
+              <Text style={{ fontWeight: '600', color: TOKENS.color.text }}>562-608-1666</Text>
+            </Text>
+            <Text className="text-base ml-2">🎉</Text>
           </View>
         </View>
       </View>
+
     </View>
   );
 }

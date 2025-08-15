@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, ScrollView, Image, ActivityIndicator, TouchableOpacity } from 'react-native';
+import { View, Text, ScrollView, Image, ActivityIndicator, TouchableOpacity, Pressable } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { useNavigation } from '../App';
 import { useQuery, useMutation } from '@tanstack/react-query';
@@ -8,6 +8,70 @@ import { useRealtimePreferences } from '../hooks/useRealtimePreferences';
 import { useRealtimeStatus } from '@acme/ui-shared';
 import { supabase } from '../lib/supabase';
 import { WorkoutGenerationLoader } from '../components/WorkoutGenerationLoader';
+
+// Design tokens - matching other screens
+const TOKENS = {
+  color: {
+    bg: '#070b18',
+    card: '#111928',
+    text: '#ffffff',
+    muted: '#9cb0ff',
+    accent: '#7cffb5',
+    accent2: '#5de1ff',
+    focusRing: 'rgba(124,255,181,0.6)',
+    borderGlass: 'rgba(255,255,255,0.08)',
+    cardGlass: 'rgba(255,255,255,0.04)',
+  },
+  radius: {
+    card: 16,
+    chip: 999,
+  },
+};
+
+// Matte panel helper component - matching other screens
+function MattePanel({
+  children,
+  style,
+  focused = false,
+  radius = TOKENS.radius.card,
+}: {
+  children: React.ReactNode;
+  style?: any;
+  focused?: boolean;
+  radius?: number;
+}) {
+  const BASE_SHADOW = {
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOpacity: 0.40,
+    shadowRadius: 22,
+    shadowOffset: { width: 0, height: 8 },
+  };
+  const FOCUS_SHADOW = {
+    elevation: 12,
+    shadowColor: '#000',
+    shadowOpacity: 0.36,
+    shadowRadius: 40,
+    shadowOffset: { width: 0, height: 12 },
+  };
+
+  return (
+    <View
+      style={[
+        {
+          backgroundColor: TOKENS.color.card,
+          borderColor: TOKENS.color.borderGlass,
+          borderWidth: 1,
+          borderRadius: radius,
+        },
+        focused ? FOCUS_SHADOW : BASE_SHADOW,
+        style,
+      ]}
+    >
+      {children}
+    </View>
+  );
+}
 
 interface ClientPreference {
   userId: string;
@@ -273,11 +337,172 @@ export function GlobalPreferencesScreen() {
     </View>
   );
 
+  const renderClientCard = (client: ClientPreference, isCompact: boolean) => (
+    <MattePanel 
+      style={{ 
+        flex: 1,
+        padding: isCompact ? 12 : 18,
+        ...(client.isReady && {
+          borderColor: TOKENS.color.accent,
+          borderWidth: 2,
+        })
+      }}
+    >
+      {/* Header Section */}
+      <View className="flex-row items-center" style={{ marginBottom: 12 }}>
+        <Image 
+          source={{ uri: getAvatarUrl(client.userId) }}
+          style={{ 
+            width: isCompact ? 36 : 48, 
+            height: isCompact ? 36 : 48, 
+            borderRadius: isCompact ? 18 : 24, 
+            marginRight: 12 
+          }}
+        />
+        <Text style={{ fontSize: isCompact ? 18 : 20, fontWeight: '600', color: TOKENS.color.text }}>
+          {client.userName || 'Unknown'}
+        </Text>
+      </View>
+
+      {/* Content Sections */}
+      <View className="flex-1">
+        {/* Section 1: Workout Type */}
+        <View className="flex-row items-center" style={{ marginBottom: 6 }}>
+          <View style={{
+            width: isCompact ? 24 : 30,
+            height: isCompact ? 24 : 30,
+            borderRadius: isCompact ? 12 : 15,
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginRight: 9,
+            backgroundColor: client.isReady ? TOKENS.color.accent : '#374151'
+          }}>
+            <Text style={{ fontSize: isCompact ? 12 : 14, color: client.isReady ? '#070b18' : TOKENS.color.muted, fontWeight: '700' }}>
+              1
+            </Text>
+          </View>
+          <Text style={{ fontSize: isCompact ? 13 : 15, color: TOKENS.color.text }} numberOfLines={1}>
+            {client.preferences?.sessionGoal === 'targeted' ? 'Targeted' : 'Full Body'} • {client.preferences?.includeFinisher ? 'Finisher' : 'No Finisher'}
+          </Text>
+        </View>
+
+        {/* Section 2: Muscle Targets */}
+        <View className="flex-row items-start" style={{ marginBottom: 6 }}>
+          <View style={{
+            width: isCompact ? 24 : 30,
+            height: isCompact ? 24 : 30,
+            borderRadius: isCompact ? 12 : 15,
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginRight: 9,
+            backgroundColor: client.isReady ? TOKENS.color.accent : '#374151'
+          }}>
+            <Text style={{ fontSize: isCompact ? 12 : 14, color: client.isReady ? '#070b18' : TOKENS.color.muted, fontWeight: '700' }}>
+              2
+            </Text>
+          </View>
+          <View className="flex-1">
+            {client.preferences?.muscleTargets && client.preferences.muscleTargets.length > 0 ? (
+              <View className="flex-row flex-wrap">
+                {client.preferences.muscleTargets.slice(0, 3).map((muscle, idx) => (
+                  <View key={muscle} style={{
+                    backgroundColor: 'rgba(124, 255, 181, 0.2)',
+                    paddingHorizontal: 9,
+                    paddingVertical: 2,
+                    borderRadius: TOKENS.radius.chip,
+                    marginRight: 6,
+                    marginBottom: 3
+                  }}>
+                    <Text style={{ fontSize: isCompact ? 12 : 13, color: TOKENS.color.accent, fontWeight: '600' }}>
+                      {muscle}
+                    </Text>
+                  </View>
+                ))}
+                {client.preferences.muscleTargets.length > 3 && (
+                  <Text style={{ fontSize: isCompact ? 12 : 13, color: TOKENS.color.muted }}>
+                    +{client.preferences.muscleTargets.length - 3}
+                  </Text>
+                )}
+              </View>
+            ) : (
+              <Text style={{ fontSize: isCompact ? 13 : 15, color: TOKENS.color.muted }}>No targets</Text>
+            )}
+          </View>
+        </View>
+
+        {/* Section 3: Muscle Limits */}
+        <View className="flex-row items-start" style={{ marginBottom: 6 }}>
+          <View style={{
+            width: isCompact ? 24 : 30,
+            height: isCompact ? 24 : 30,
+            borderRadius: isCompact ? 12 : 15,
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginRight: 9,
+            backgroundColor: client.isReady ? TOKENS.color.accent : '#374151'
+          }}>
+            <Text style={{ fontSize: isCompact ? 12 : 14, color: client.isReady ? '#070b18' : TOKENS.color.muted, fontWeight: '700' }}>
+              3
+            </Text>
+          </View>
+          <View className="flex-1">
+            {client.preferences?.muscleLessens && client.preferences.muscleLessens.length > 0 ? (
+              <View className="flex-row flex-wrap">
+                {client.preferences.muscleLessens.slice(0, 3).map((muscle) => (
+                  <View key={muscle} style={{
+                    backgroundColor: 'rgba(239, 68, 68, 0.2)',
+                    paddingHorizontal: 9,
+                    paddingVertical: 2,
+                    borderRadius: TOKENS.radius.chip,
+                    marginRight: 6,
+                    marginBottom: 3
+                  }}>
+                    <Text style={{ fontSize: isCompact ? 12 : 13, color: '#ef4444', fontWeight: '600' }}>
+                      {muscle}
+                    </Text>
+                  </View>
+                ))}
+                {client.preferences.muscleLessens.length > 3 && (
+                  <Text style={{ fontSize: isCompact ? 12 : 13, color: TOKENS.color.muted }}>
+                    +{client.preferences.muscleLessens.length - 3}
+                  </Text>
+                )}
+              </View>
+            ) : (
+              <Text style={{ fontSize: isCompact ? 13 : 15, color: TOKENS.color.muted }}>No limits</Text>
+            )}
+          </View>
+        </View>
+
+        {/* Section 4: Intensity */}
+        <View className="flex-row items-center" style={{ marginBottom: 8 }}>
+          <View style={{
+            width: isCompact ? 24 : 30,
+            height: isCompact ? 24 : 30,
+            borderRadius: isCompact ? 12 : 15,
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginRight: 9,
+            backgroundColor: client.isReady ? TOKENS.color.accent : '#374151'
+          }}>
+            <Text style={{ fontSize: isCompact ? 12 : 14, color: client.isReady ? '#070b18' : TOKENS.color.muted, fontWeight: '700' }}>
+              4
+            </Text>
+          </View>
+          <Text style={{ fontSize: isCompact ? 13 : 15, color: TOKENS.color.text }}>
+            {(client.preferences?.intensity || 'Moderate').charAt(0).toUpperCase() + 
+             (client.preferences?.intensity || 'Moderate').slice(1)} ({getExerciseCount(client.preferences?.intensity)})
+          </Text>
+        </View>
+      </View>
+    </MattePanel>
+  );
+
   if (isLoading) {
     return (
-      <View className="flex-1 bg-gray-50 items-center justify-center">
-        <ActivityIndicator size="large" color="#3b82f6" />
-        <Text className="text-tv-lg text-gray-600 mt-4">Loading preferences...</Text>
+      <View className="flex-1 items-center justify-center" style={{ backgroundColor: TOKENS.color.bg }}>
+        <ActivityIndicator size="large" color={TOKENS.color.accent} />
+        <Text style={{ fontSize: 24, color: TOKENS.color.muted, marginTop: 16 }}>Loading preferences...</Text>
       </View>
     );
   }
@@ -297,224 +522,164 @@ export function GlobalPreferencesScreen() {
   }
 
   return (
-    <View className="flex-1" style={{ backgroundColor: '#121212' }}>
+    <View className="flex-1" style={{ backgroundColor: TOKENS.color.bg, padding: 24 }}>
       {/* Header */}
-      <View className="px-8 py-6 flex-row justify-between items-center">
-        <TouchableOpacity
+      <View className="flex-row justify-between items-center mb-6">
+        <Pressable
           onPress={() => navigation.goBack()}
-          activeOpacity={0.7}
-          tvParallaxProperties={{
-            enabled: true,
-            shiftDistanceX: 2,
-            shiftDistanceY: 2,
-          }}
-          style={({ focused }) => ({
-            flexDirection: 'row',
-            alignItems: 'center',
-            paddingHorizontal: 16,
-            paddingVertical: 8,
-            borderRadius: 8,
-            borderWidth: 2,
-            borderColor: focused ? '#3b82f6' : 'transparent',
-            backgroundColor: focused ? 'rgba(59, 130, 246, 0.1)' : 'transparent',
-            transform: focused ? [{ scale: 1.05 }] : [{ scale: 1 }],
-          })}
+          focusable
         >
-          <Icon name="arrow-back" size={24} color="#E0E0E0" />
-          <Text className="ml-2 text-lg text-gray-200">
-            Back to Lobby
-          </Text>
-        </TouchableOpacity>
+          {({ focused }) => (
+            <MattePanel 
+              focused={focused}
+              style={{ 
+                paddingHorizontal: 32,
+                paddingVertical: 12,
+              }}
+            >
+              {/* Focus ring */}
+              {focused && (
+                <View pointerEvents="none" style={{
+                  position: 'absolute', 
+                  inset: -1,
+                  borderRadius: TOKENS.radius.card,
+                  borderWidth: 2, 
+                  borderColor: TOKENS.color.focusRing,
+                }}/>
+              )}
+              <Text style={{ color: TOKENS.color.text, fontWeight: '700', fontSize: 18 }}>Back</Text>
+            </MattePanel>
+          )}
+        </Pressable>
         
-        <TouchableOpacity
+        <Pressable
           onPress={handleContinue}
-          activeOpacity={0.7}
-          tvParallaxProperties={{
-            enabled: true,
-            shiftDistanceX: 2,
-            shiftDistanceY: 2,
-          }}
-          className="px-6 py-2.5 bg-sky-600 rounded-lg"
+          focusable
           disabled={isGenerating}
         >
-          <Text className="text-white font-semibold">Continue</Text>
-        </TouchableOpacity>
+          {({ focused }) => (
+            <MattePanel 
+              focused={focused}
+              style={{ 
+                paddingHorizontal: 32,
+                paddingVertical: 12,
+              }}
+            >
+              {/* Focus ring */}
+              {focused && (
+                <View pointerEvents="none" style={{
+                  position: 'absolute', 
+                  inset: -1,
+                  borderRadius: TOKENS.radius.card,
+                  borderWidth: 2, 
+                  borderColor: TOKENS.color.focusRing,
+                }}/>
+              )}
+              <Text style={{ color: TOKENS.color.text, fontWeight: '700', fontSize: 18 }}>Continue</Text>
+            </MattePanel>
+          )}
+        </Pressable>
       </View>
 
       {/* Client Cards Grid */}
-      <View className="flex-1 px-8 pb-12">
-        <View className={`flex-1 flex-row flex-wrap ${clients.length > 4 ? 'items-center content-center' : 'items-start content-start'}`}>
-          {clients.map((client, index) => {
-            // Adjust size based on number of clients
-            const cardSizeClass = clients.length <= 4 ? "w-1/2" : "w-1/3";
-            const isCompact = clients.length > 4;
-            
-            return (
-            <View key={client.userId} className={`${cardSizeClass} p-4`} style={clients.length <= 4 ? { height: '55%' } : { height: '48%' }}>
-              <View className={`h-full flex ${
-                client.isReady ? 'border-2 border-blue-500' : ''
-              }`} style={{
-                backgroundColor: '#1F2937',
-                borderRadius: 12,
-                ...(!client.isReady && {
-                  borderWidth: 0,
-                }),
-              }}>
-                
-
-                {/* Header Section */}
-                <View className={`${isCompact ? 'px-4 py-2' : 'px-5 py-2.5'} flex-row items-center`}>
-                  <Image 
-                    source={{ uri: getAvatarUrl(client.userId) }}
-                    className={isCompact ? "w-6 h-6 rounded-full mr-2" : "w-8 h-8 rounded-full mr-3"}
-                  />
-                  <Text className={`${isCompact ? 'text-base' : 'text-lg'} font-semibold text-white`}>
-                    {client.userName || 'Unknown'}
-                  </Text>
+      <View className="flex-1">
+        {clients.length === 5 ? (
+          // Special layout for 5 clients: 3 on top, 2 on bottom
+          <View className="flex-1" style={{ gap: 12 }}>
+            {/* Top row - 3 cards */}
+            <View className="flex-row" style={{ flex: 1, gap: 12 }}>
+              {clients.slice(0, 3).map((client) => (
+                <View key={client.userId} style={{ flex: 1 }}>
+                  {renderClientCard(client, true)}
                 </View>
-
-                {/* Content Sections */}
-                <ScrollView 
-                  className={`flex-1`}
-                  contentContainerStyle={{ 
-                    paddingHorizontal: isCompact ? 16 : 20,
-                    paddingBottom: isCompact ? 12 : 12,
-                    flexGrow: 1
-                  }}
-                  showsVerticalScrollIndicator={false}
-                >
-                  {/* Section 1: Workout Type */}
-                  <View className="flex-row items-center mb-1.5">
-                    <View className={`${isCompact ? 'w-5 h-5' : 'w-6 h-6'} rounded-full items-center justify-center ${isCompact ? 'mr-2' : 'mr-3'} ${
-                      client.isReady ? 'bg-indigo-600' : 'bg-gray-700'
-                    }`}>
-                      <Text className={`${isCompact ? 'text-[10px]' : 'text-xs'} ${client.isReady ? 'text-white' : 'text-gray-300'}`}>
-                        1
-                      </Text>
-                    </View>
-                    <Text className="text-gray-200 text-xs">
-                      {client.preferences?.sessionGoal === 'targeted' ? 'Targeted' : 'Full Body'} • {client.preferences?.includeFinisher ? 'With Finisher' : 'Without Finisher'}
-                    </Text>
-                  </View>
-
-                  {/* Section 2: Muscle Targets */}
-                  <View className="flex-row items-center mb-1.5">
-                    <View className={`${isCompact ? 'w-5 h-5' : 'w-6 h-6'} rounded-full items-center justify-center ${isCompact ? 'mr-2' : 'mr-3'} ${
-                      client.isReady ? 'bg-indigo-600' : 'bg-gray-700'
-                    }`}>
-                      <Text className={`${isCompact ? 'text-[10px]' : 'text-xs'} ${client.isReady ? 'text-white' : 'text-gray-300'}`}>
-                        2
-                      </Text>
-                    </View>
-                    <View className="flex-1">
-                      {client.preferences?.muscleTargets && client.preferences.muscleTargets.length > 0 ? (
-                        <View className="flex-row flex-wrap items-center">
-                          {client.preferences.muscleTargets.map((muscle) => (
-                            <View key={muscle} className={`bg-indigo-200 ${isCompact ? 'px-2 py-0' : 'px-2.5 py-0.5'} rounded-full mr-1.5`}>
-                              <Text className={`${isCompact ? 'text-[10px]' : 'text-xs'} text-indigo-800 font-semibold`}>{muscle}</Text>
-                            </View>
-                          ))}
-                        </View>
-                      ) : (
-                        <Text className="text-gray-400 text-xs">No muscle targets</Text>
-                      )}
-                    </View>
-                  </View>
-
-                  {/* Section 3: Muscle Limits */}
-                  <View className="flex-row items-center mb-1.5">
-                    <View className={`${isCompact ? 'w-5 h-5' : 'w-6 h-6'} rounded-full items-center justify-center ${isCompact ? 'mr-2' : 'mr-3'} ${
-                      client.isReady ? 'bg-indigo-600' : 'bg-gray-700'
-                    }`}>
-                      <Text className={`${isCompact ? 'text-[10px]' : 'text-xs'} ${client.isReady ? 'text-white' : 'text-gray-300'}`}>
-                        3
-                      </Text>
-                    </View>
-                    <View className="flex-1">
-                      {client.preferences?.muscleLessens && client.preferences.muscleLessens.length > 0 ? (
-                        <View className="flex-row flex-wrap items-center">
-                          {client.preferences.muscleLessens.map((muscle) => (
-                            <View key={muscle} className={`bg-red-200 ${isCompact ? 'px-2 py-0' : 'px-2.5 py-0.5'} rounded-full mr-1.5`}>
-                              <Text className={`${isCompact ? 'text-[10px]' : 'text-xs'} text-red-800 font-semibold`}>{muscle}</Text>
-                            </View>
-                          ))}
-                        </View>
-                      ) : (
-                        <Text className="text-gray-400 text-xs">No muscle limits</Text>
-                      )}
-                    </View>
-                  </View>
-
-                  {/* Section 4: Intensity */}
-                  <View className="flex-row items-center">
-                    <View className={`${isCompact ? 'w-5 h-5' : 'w-6 h-6'} rounded-full items-center justify-center ${isCompact ? 'mr-2' : 'mr-3'} ${
-                      client.isReady ? 'bg-indigo-600' : 'bg-gray-700'
-                    }`}>
-                      <Text className={`${isCompact ? 'text-[10px]' : 'text-xs'} ${client.isReady ? 'text-white' : 'text-gray-300'}`}>
-                        4
-                      </Text>
-                    </View>
-                    <Text className="text-gray-200 text-xs">
-                      {(client.preferences?.intensity || 'Moderate').charAt(0).toUpperCase() + 
-                       (client.preferences?.intensity || 'Moderate').slice(1)} ({getExerciseCount(client.preferences?.intensity)} exercises)
-                    </Text>
-                  </View>
-                </ScrollView>
-              </View>
+              ))}
             </View>
-            );
-          })}
-        </View>
+            {/* Bottom row - 2 cards */}
+            <View className="flex-row" style={{ flex: 1, gap: 12, paddingHorizontal: '16.67%' }}>
+              {clients.slice(3, 5).map((client) => (
+                <View key={client.userId} style={{ flex: 1 }}>
+                  {renderClientCard(client, true)}
+                </View>
+              ))}
+            </View>
+          </View>
+        ) : (
+          // Standard grid layout
+          <View className={`flex-1 flex-row flex-wrap ${clients.length > 4 ? 'items-center content-center' : 'items-start content-start'}`} style={{ gap: 12 }}>
+            {clients.map((client, index) => {
+              const cardSizeClass = clients.length <= 4 ? "w-1/2" : "w-1/3";
+              const isCompact = clients.length > 4;
+              
+              return (
+                <View key={client.userId} className={cardSizeClass} style={[
+                  { padding: 6 },
+                  clients.length <= 4 ? { height: '65%' } : { height: '55%' }
+                ]}>
+                  {renderClientCard(client, isCompact)}
+                </View>
+              );
+            })}
+          </View>
+        )}
       </View>
       
-      {/* Connection Status - Bottom Left */}
-      <View className="absolute bottom-6 left-8 flex-row items-center">
-        <View className={`w-2 h-2 rounded-full mr-2 ${
-          connectionStatus === 'connected' && statusConnectionStatus === 'connected' ? 'bg-green-400' : 'bg-gray-400'
-        }`} />
-        <Text className="text-sm text-gray-400">
-          {connectionStatus === 'connected' && statusConnectionStatus === 'connected' ? 'Live updates active' : 'Connecting...'}
-        </Text>
+      {/* Connection Status - Bottom */}
+      <View className="mt-6 px-4">
+        <View className="flex-row items-center">
+          <View className={`w-3 h-3 rounded-full mr-2 ${
+            connectionStatus === 'connected' && statusConnectionStatus === 'connected' ? 'bg-green-400' : 'bg-gray-400'
+          }`} />
+          <Text style={{ fontSize: 16, color: TOKENS.color.text }}>
+            {connectionStatus === 'connected' && statusConnectionStatus === 'connected' ? 'Live updates active' : 'Connecting...'}
+          </Text>
+        </View>
       </View>
       
       {/* Error Modal */}
       {generationError && (
         <View className="absolute inset-0 bg-black bg-opacity-50 items-center justify-center px-8">
-          <View className="bg-gray-800 rounded-xl p-8 max-w-lg">
-            <Text className="text-red-400 text-xl font-semibold mb-4">Generation Failed</Text>
-            <Text className="text-gray-300 mb-6">{generationError}</Text>
+          <MattePanel style={{ padding: 32, maxWidth: 500 }}>
+            <Text style={{ fontSize: 20, fontWeight: '600', color: '#ef4444', marginBottom: 16 }}>Generation Failed</Text>
+            <Text style={{ fontSize: 16, color: TOKENS.color.text, marginBottom: 24 }}>{generationError}</Text>
             <View className="flex-row justify-end space-x-4">
-              <TouchableOpacity
+              <Pressable
                 onPress={() => setGenerationError(null)}
-                className="px-6 py-2.5 bg-gray-700 rounded-lg mr-4"
-                activeOpacity={0.7}
-                tvParallaxProperties={{
-                  enabled: true,
-                  shiftDistanceX: 2,
-                  shiftDistanceY: 2,
-                }}
+                focusable
+                style={({ focused }) => ({
+                  paddingHorizontal: 24,
+                  paddingVertical: 10,
+                  backgroundColor: '#374151',
+                  borderRadius: 8,
+                  marginRight: 16,
+                  transform: focused ? [{ scale: 1.05 }] : [{ scale: 1 }],
+                  borderWidth: focused ? 2 : 0,
+                  borderColor: focused ? TOKENS.color.focusRing : 'transparent',
+                })}
               >
-                <Text className="text-gray-300">Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
+                <Text style={{ color: TOKENS.color.text, fontSize: 16 }}>Cancel</Text>
+              </Pressable>
+              <Pressable
                 onPress={() => {
                   setGenerationError(null);
                   // Reset and retry
                   setShouldGenerateBlueprint(false);
                   setTimeout(() => handleContinue(), 100);
                 }}
-                className="px-6 py-2.5 bg-sky-600 rounded-lg"
-                activeOpacity={0.7}
-                tvParallaxProperties={{
-                  enabled: true,
-                  shiftDistanceX: 2,
-                  shiftDistanceY: 2,
-                }}
+                focusable
+                style={({ focused }) => ({
+                  paddingHorizontal: 24,
+                  paddingVertical: 10,
+                  backgroundColor: TOKENS.color.accent,
+                  borderRadius: 8,
+                  transform: focused ? [{ scale: 1.05 }] : [{ scale: 1 }],
+                  borderWidth: focused ? 2 : 0,
+                  borderColor: focused ? TOKENS.color.focusRing : 'transparent',
+                })}
               >
-                <Text className="text-white font-semibold">Retry</Text>
-              </TouchableOpacity>
+                <Text style={{ color: '#070b18', fontWeight: '600', fontSize: 16 }}>Retry</Text>
+              </Pressable>
             </View>
-          </View>
+          </MattePanel>
         </View>
       )}
     </View>
