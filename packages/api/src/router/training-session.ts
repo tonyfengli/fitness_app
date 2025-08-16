@@ -3304,28 +3304,61 @@ Decision
       // Check if workout organization already exists
       if (session.workoutOrganization) {
         // Already organized - fetch and return full data
-        const fullSession = await ctx.db.query.TrainingSession.findFirst({
-          where: eq(TrainingSession.id, input.sessionId),
-          with: {
-            workouts: {
-              with: {
-                exercises: {
-                  with: {
-                    exercise: true
-                  }
-                }
-              }
-            }
-          }
+        // Use direct queries to avoid Drizzle relation issues
+        const workouts = await ctx.db.query.Workout.findMany({
+          where: eq(Workout.trainingSessionId, input.sessionId)
         });
+        
+        // For each workout, get exercises with full metadata
+        const workoutsWithExercises = await Promise.all(
+          workouts.map(async (workout) => {
+            const workoutExercises = await ctx.db.query.WorkoutExercise.findMany({
+              where: eq(WorkoutExercise.workoutId, workout.id)
+            });
+            
+            const exercisesWithMetadata = await Promise.all(
+              workoutExercises.map(async (we) => {
+                const exercise = await ctx.db.query.exercises.findFirst({
+                  where: eq(exercises.id, we.exerciseId)
+                });
+                return {
+                  ...we,
+                  exercise: exercise
+                };
+              })
+            );
+            
+            // Get user info
+            const userSession = await ctx.db.query.UserTrainingSession.findFirst({
+              where: and(
+                eq(UserTrainingSession.userId, workout.userId),
+                eq(UserTrainingSession.trainingSessionId, input.sessionId)
+              )
+            });
+            
+            const user = await ctx.db.query.user.findFirst({
+              where: eq(userTable.id, workout.userId)
+            });
+            
+            return {
+              id: workout.id,
+              userId: workout.userId,
+              userName: user?.name || null,
+              userEmail: user?.email || '',
+              exercises: exercisesWithMetadata
+            };
+          })
+        );
 
-        const clients = await ctx.db.query.UserTrainingSession.findMany({
-          where: and(
-            eq(UserTrainingSession.trainingSessionId, input.sessionId),
-            eq(UserTrainingSession.status, 'checked_in')
-          ),
-          with: {
-            user: true
+        // Extract unique clients
+        const uniqueClients = new Map();
+        workoutsWithExercises.forEach(workout => {
+          if (!uniqueClients.has(workout.userId)) {
+            uniqueClients.set(workout.userId, {
+              userId: workout.userId,
+              name: workout.userName,
+              email: workout.userEmail
+            });
           }
         });
 
@@ -3333,13 +3366,9 @@ Decision
           success: true, 
           message: 'Workout already organized',
           alreadyOrganized: true,
-          workoutOrganization: fullSession?.workoutOrganization,
-          workouts: fullSession?.workouts || [],
-          clients: clients.map(c => ({
-            userId: c.userId,
-            name: c.user?.name || null,
-            email: c.user?.email || ''
-          })),
+          workoutOrganization: session.workoutOrganization,
+          workouts: workoutsWithExercises,
+          clients: Array.from(uniqueClients.values()),
           templateType: session.templateType
         };
       }
@@ -3365,29 +3394,54 @@ Decision
         // For BMF and other templates, the workout is already organized
         console.log(`[startWorkout-v2] SKIP Phase 2 - Non-standard template: ${session.templateType}`);
         
-        // Fetch and return the data
-        const fullSession = await ctx.db.query.TrainingSession.findFirst({
-          where: eq(TrainingSession.id, input.sessionId),
-          with: {
-            workouts: {
-              with: {
-                exercises: {
-                  with: {
-                    exercise: true
-                  }
-                }
-              }
-            }
-          }
+        // Fetch and return the data using direct queries
+        const workouts = await ctx.db.query.Workout.findMany({
+          where: eq(Workout.trainingSessionId, input.sessionId)
         });
+        
+        // For each workout, get exercises with full metadata
+        const workoutsWithExercises = await Promise.all(
+          workouts.map(async (workout) => {
+            const workoutExercises = await ctx.db.query.WorkoutExercise.findMany({
+              where: eq(WorkoutExercise.workoutId, workout.id)
+            });
+            
+            const exercisesWithMetadata = await Promise.all(
+              workoutExercises.map(async (we) => {
+                const exercise = await ctx.db.query.exercises.findFirst({
+                  where: eq(exercises.id, we.exerciseId)
+                });
+                return {
+                  ...we,
+                  exercise: exercise
+                };
+              })
+            );
+            
+            // Get user info
+            const user = await ctx.db.query.user.findFirst({
+              where: eq(userTable.id, workout.userId)
+            });
+            
+            return {
+              id: workout.id,
+              userId: workout.userId,
+              userName: user?.name || null,
+              userEmail: user?.email || '',
+              exercises: exercisesWithMetadata
+            };
+          })
+        );
 
-        const clients = await ctx.db.query.UserTrainingSession.findMany({
-          where: and(
-            eq(UserTrainingSession.trainingSessionId, input.sessionId),
-            eq(UserTrainingSession.status, 'checked_in')
-          ),
-          with: {
-            user: true
+        // Extract unique clients
+        const uniqueClients = new Map();
+        workoutsWithExercises.forEach(workout => {
+          if (!uniqueClients.has(workout.userId)) {
+            uniqueClients.set(workout.userId, {
+              userId: workout.userId,
+              name: workout.userName,
+              email: workout.userEmail
+            });
           }
         });
 
@@ -3395,13 +3449,9 @@ Decision
           success: true, 
           message: 'Workout ready (no Phase 2 organization needed)',
           templateType: session.templateType,
-          workoutOrganization: fullSession?.workoutOrganization,
-          workouts: fullSession?.workouts || [],
-          clients: clients.map(c => ({
-            userId: c.userId,
-            name: c.user?.name || null,
-            email: c.user?.email || ''
-          }))
+          workoutOrganization: session.workoutOrganization,
+          workouts: workoutsWithExercises,
+          clients: Array.from(uniqueClients.values())
         };
       }
 

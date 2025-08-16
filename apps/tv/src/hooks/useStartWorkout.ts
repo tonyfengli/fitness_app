@@ -41,9 +41,17 @@ export function useStartWorkout() {
       // For non-standard templates or already organized sessions, go directly
       if (result.alreadyOrganized || (result.templateType && result.templateType !== 'standard')) {
         console.log('[TV useStartWorkout] Skipping Phase 2, navigating directly to WorkoutLive');
+        console.log('[TV useStartWorkout] Already organized, passing existing data');
         // Wrap in setTimeout to ensure navigation happens after current execution
         setTimeout(() => {
-          navigation.navigate('WorkoutLive', { sessionId, round: 1 });
+          navigation.navigate('WorkoutLive', { 
+            sessionId, 
+            round: 1,
+            // Pass the existing organization data for efficient loading
+            organization: result.workoutOrganization,
+            workouts: result.workouts,
+            clients: result.clients
+          });
         }, 0);
       } else if (result.workoutOrganization) {
         // For standard templates with organization data

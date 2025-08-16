@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, ScrollView, Image, ActivityIndicator, TouchableOpacity, Pressable } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { useNavigation } from '../App';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../providers/TRPCProvider';
 import { useRealtimePreferences } from '../hooks/useRealtimePreferences';
 import { useRealtimeStatus } from '@acme/ui-shared';
@@ -107,6 +107,43 @@ export function GlobalPreferencesScreen() {
     }
   );
 
+  // Check for existing workout selections
+  const { data: existingSelections, isLoading: selectionsLoading, error: selectionsError } = useQuery(
+    sessionId ? api.workoutSelections.getSelections.queryOptions({ sessionId }) : {
+      enabled: false,
+      queryKey: ['disabled-selections'],
+      queryFn: () => Promise.resolve([])
+    }
+  );
+
+  // Check session data for existing workout organization
+  const { data: sessionData, isLoading: sessionLoading, error: sessionError } = useQuery(
+    sessionId ? api.trainingSession.getSession.queryOptions({ id: sessionId }) : {
+      enabled: false,
+      queryKey: ['disabled-session'],
+      queryFn: () => Promise.resolve(null)
+    }
+  );
+
+  // Log query states when they change
+  useEffect(() => {
+    console.log('[TV GlobalPreferences] Selections query state:', {
+      loading: selectionsLoading,
+      error: selectionsError,
+      hasData: !!existingSelections,
+      dataLength: existingSelections?.length
+    });
+  }, [selectionsLoading, selectionsError, existingSelections]);
+
+  useEffect(() => {
+    console.log('[TV GlobalPreferences] Session query state:', {
+      loading: sessionLoading,
+      error: sessionError,
+      hasData: !!sessionData,
+      hasOrganization: !!sessionData?.workoutOrganization
+    });
+  }, [sessionLoading, sessionError, sessionData]);
+
   // Set up real-time updates for preferences
   const { isConnected } = useRealtimePreferences({
     sessionId: sessionId || '',
@@ -176,48 +213,52 @@ export function GlobalPreferencesScreen() {
   });
 
   const handleContinue = async () => {
-    // First check if workout exercises already exist
-    console.log('[TV GlobalPreferences] Checking for existing workout exercises...');
+    console.log('[TV GlobalPreferences] ========== CONTINUE BUTTON CLICKED ==========');
     console.log('[TV GlobalPreferences] Session ID:', sessionId);
+    console.log('[TV GlobalPreferences] Current state:', {
+      isGenerating,
+      shouldGenerateBlueprint,
+      blueprintResult: !!blueprintResult,
+      isBlueprintLoading
+    });
     
-    try {
-      const existingSelections = await api.workoutSelections.getSelections.query({ sessionId: sessionId! });
-      console.log('[TV GlobalPreferences] API Response - Existing selections:', existingSelections);
-      console.log('[TV GlobalPreferences] Selection count:', existingSelections?.length || 0);
-      
-      // Also check if the session already has workout organization (Phase 2 completed)
-      const session = await api.trainingSession.getSession.query({ id: sessionId! });
-      console.log('[TV GlobalPreferences] Session has workout organization:', !!session?.workoutOrganization);
-      console.log('[TV GlobalPreferences] Session has visualization data:', !!session?.templateConfig?.visualizationData);
-      
-      if (existingSelections && existingSelections.length > 0) {
-        console.log('[TV GlobalPreferences] Found', existingSelections.length, 'existing exercises, navigating directly to overview');
-        navigation.navigate('WorkoutOverview', { sessionId });
-        return;
-      }
-      
-      // If no selections but session has visualization data (Phase 1 completed), something is wrong - still go to overview
-      if (session?.templateConfig?.visualizationData?.llmResult?.exerciseSelection) {
-        console.log('[TV GlobalPreferences] No selections but session has Phase 1 data, navigating to overview anyway');
-        navigation.navigate('WorkoutOverview', { sessionId });
-        return;
-      }
-      
-      console.log('[TV GlobalPreferences] No existing exercises found, proceeding with generation');
-    } catch (error: any) {
-      console.error('[TV GlobalPreferences] Error checking existing selections:', error);
-      console.error('[TV GlobalPreferences] Error details:', {
-        message: error?.message,
-        code: error?.code,
-        data: error?.data
-      });
-      // Continue with generation if check fails
+    // Log query data
+    console.log('[TV GlobalPreferences] Existing selections:', {
+      data: existingSelections,
+      length: existingSelections?.length,
+      isEmpty: !existingSelections || existingSelections.length === 0
+    });
+    
+    console.log('[TV GlobalPreferences] Session data:', {
+      hasData: !!sessionData,
+      hasWorkoutOrganization: !!sessionData?.workoutOrganization,
+      hasVisualizationData: !!sessionData?.templateConfig?.visualizationData,
+      hasExerciseSelection: !!sessionData?.templateConfig?.visualizationData?.llmResult?.exerciseSelection
+    });
+    
+    // Check if we already have workout exercises
+    if (existingSelections && existingSelections.length > 0) {
+      console.log('[TV GlobalPreferences] ✅ Found', existingSelections.length, 'existing exercises, navigating directly to overview');
+      navigation.navigate('WorkoutOverview', { sessionId });
+      return;
     }
+    
+    // If no selections but session has visualization data (Phase 1 completed), something is wrong - still go to overview
+    if (sessionData?.templateConfig?.visualizationData?.llmResult?.exerciseSelection) {
+      console.log('[TV GlobalPreferences] ⚠️ No selections but session has Phase 1 data, navigating to overview anyway');
+      navigation.navigate('WorkoutOverview', { sessionId });
+      return;
+    }
+    
+    console.log('[TV GlobalPreferences] ❌ No existing exercises found, proceeding with generation');
+    console.log('[TV GlobalPreferences] Setting state: isGenerating=true, shouldGenerateBlueprint=true');
     
     // No existing exercises, proceed with generation
     setIsGenerating(true);
     setGenerationError(null);
     setShouldGenerateBlueprint(true);
+    
+    console.log('[TV GlobalPreferences] ========== END CONTINUE HANDLER ==========');
   };
 
 
