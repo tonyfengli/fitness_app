@@ -98,6 +98,15 @@ export function WorkoutOverviewScreen() {
   const [lastSwapTime, setLastSwapTime] = useState<Date | null>(null);
   const { startWorkout, isGenerating, error: startWorkoutError, setError } = useStartWorkout();
   const [showErrorModal, setShowErrorModal] = useState(false);
+  
+  // Check if session already has workout organization
+  const { data: sessionData } = useQuery(
+    sessionId ? api.trainingSession.getSession.queryOptions({ id: sessionId }) : {
+      enabled: false,
+      queryKey: ['disabled-session-overview'],
+      queryFn: () => Promise.resolve(null)
+    }
+  );
 
   // Use real-time exercise swap updates
   const { isConnected: swapUpdatesConnected } = useRealtimeExerciseSwaps({

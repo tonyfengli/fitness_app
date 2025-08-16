@@ -7,6 +7,7 @@ export function useStartWorkout() {
   const navigation = useNavigation();
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loadingMessage, setLoadingMessage] = useState<string | null>(null);
   
   // Create mutation following TV app pattern
   const startWorkoutMutation = useMutation({
@@ -23,11 +24,12 @@ export function useStartWorkout() {
   const startWorkout = async (sessionId: string) => {
     setIsGenerating(true);
     setError(null);
+    setLoadingMessage('Preparing workout...');
     
     try {
       console.log('[TV useStartWorkout] Starting workout for session:', sessionId);
       
-      // Call the mutation using mutateAsync
+      // Call the mutation - if already organized, this will return quickly
       const result = await startWorkoutMutation.mutateAsync({ sessionId });
       
       console.log('[TV useStartWorkout] Result:', {
@@ -37,6 +39,14 @@ export function useStartWorkout() {
         workoutsCount: result.workouts?.length,
         hasOrganization: !!result.workoutOrganization
       });
+      
+      // Log timing for already organized sessions
+      if (result.alreadyOrganized) {
+        console.log('[TV useStartWorkout] ✅ Workout was already organized - skipped Phase 2 LLM');
+        setLoadingMessage('Loading workout...');
+      } else {
+        setLoadingMessage('Organizing workout rounds...');
+      }
       
       // For non-standard templates or already organized sessions, go directly
       if (result.alreadyOrganized || (result.templateType && result.templateType !== 'standard')) {

@@ -239,6 +239,7 @@ export function GlobalPreferencesScreen() {
     // Check if we already have workout exercises
     if (existingSelections && existingSelections.length > 0) {
       console.log('[TV GlobalPreferences] ✅ Found', existingSelections.length, 'existing exercises, navigating directly to overview');
+      // Skip loading screen and navigate directly
       navigation.navigate('WorkoutOverview', { sessionId });
       return;
     }
@@ -246,6 +247,7 @@ export function GlobalPreferencesScreen() {
     // If no selections but session has visualization data (Phase 1 completed), something is wrong - still go to overview
     if (sessionData?.templateConfig?.visualizationData?.llmResult?.exerciseSelection) {
       console.log('[TV GlobalPreferences] ⚠️ No selections but session has Phase 1 data, navigating to overview anyway');
+      // Skip loading screen and navigate directly
       navigation.navigate('WorkoutOverview', { sessionId });
       return;
     }
@@ -253,7 +255,7 @@ export function GlobalPreferencesScreen() {
     console.log('[TV GlobalPreferences] ❌ No existing exercises found, proceeding with generation');
     console.log('[TV GlobalPreferences] Setting state: isGenerating=true, shouldGenerateBlueprint=true');
     
-    // No existing exercises, proceed with generation
+    // No existing exercises, proceed with generation - this WILL show the loading screen
     setIsGenerating(true);
     setGenerationError(null);
     setShouldGenerateBlueprint(true);
