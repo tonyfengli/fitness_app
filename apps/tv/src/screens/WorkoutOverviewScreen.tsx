@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, Image, ActivityIndicator, Pressable } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { useNavigation } from '../App';
@@ -100,13 +100,23 @@ export function WorkoutOverviewScreen() {
   const [showErrorModal, setShowErrorModal] = useState(false);
   
   // Check if session already has workout organization
-  const { data: sessionData } = useQuery(
+  const { data: sessionData, isLoading: sessionLoading } = useQuery(
     sessionId ? api.trainingSession.getSession.queryOptions({ id: sessionId }) : {
       enabled: false,
       queryKey: ['disabled-session-overview'],
       queryFn: () => Promise.resolve(null)
     }
   );
+  
+  // Log session data for debugging
+  useEffect(() => {
+    if (!sessionLoading && sessionData) {
+      console.log('[TV WorkoutOverview] Session data loaded:', {
+        hasWorkoutOrganization: !!sessionData?.workoutOrganization,
+        workoutOrganization: sessionData?.workoutOrganization
+      });
+    }
+  }, [sessionData, sessionLoading]);
 
   // Use real-time exercise swap updates
   const { isConnected: swapUpdatesConnected } = useRealtimeExerciseSwaps({
@@ -239,7 +249,20 @@ export function WorkoutOverviewScreen() {
         </Pressable>
         
         <Pressable
-          onPress={() => startWorkout(sessionId)}
+          onPress={async () => {
+            // Check if workout is already organized
+            if (sessionData?.workoutOrganization) {
+              console.log('[TV WorkoutOverview] Workout already organized, navigating directly');
+              // Navigate directly without loading screen
+              navigation.navigate('WorkoutLive', { 
+                sessionId, 
+                round: 1
+              });
+            } else {
+              // Show loading screen for Phase 2 organization
+              await startWorkout(sessionId);
+            }
+          }}
           focusable
           disabled={!sessionId || isGenerating}
         >
