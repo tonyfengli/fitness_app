@@ -41,14 +41,17 @@ export const workoutSelectionsRouter = {
         });
       }
 
-      // Get the draft workout for this client
+      // Get the draft or ready workout for this client
       const workout = await ctx.db
         .select()
         .from(Workout)
         .where(and(
           eq(Workout.trainingSessionId, input.sessionId),
           eq(Workout.userId, input.clientId),
-          eq(Workout.status, 'draft')
+          or(
+            eq(Workout.status, 'draft'),
+            eq(Workout.status, 'ready')
+          )
         ))
         .limit(1);
 
@@ -94,16 +97,28 @@ export const workoutSelectionsRouter = {
     .query(async ({ ctx, input }) => {
       const { Workout } = await import("@acme/db/schema");
       
+      console.log('[getSelections] Query params:', { sessionId: input.sessionId, clientId: input.clientId });
+      
       // Build where clause for workouts
+      // When checking for existing workouts, look for draft OR ready status
+      // This ensures we find workouts that may have progressed past draft
       const workoutWhere = input.clientId
         ? and(
             eq(Workout.trainingSessionId, input.sessionId),
             eq(Workout.userId, input.clientId),
-            eq(Workout.status, 'draft')
+            or(
+              eq(Workout.status, 'draft'),
+              eq(Workout.status, 'ready'),
+              eq(Workout.status, 'completed')
+            )
           )
         : and(
             eq(Workout.trainingSessionId, input.sessionId),
-            eq(Workout.status, 'draft')
+            or(
+              eq(Workout.status, 'draft'),
+              eq(Workout.status, 'ready'),
+              eq(Workout.status, 'completed')
+            )
           );
 
       // Get workouts first
@@ -111,6 +126,11 @@ export const workoutSelectionsRouter = {
         .select()
         .from(Workout)
         .where(workoutWhere);
+
+      console.log('[getSelections] Found workouts:', workouts.length, 'workouts');
+      if (workouts.length > 0) {
+        console.log('[getSelections] Workout statuses:', workouts.map(w => ({ id: w.id, status: w.status, userId: w.userId })));
+      }
 
       if (workouts.length === 0) {
         return [];
@@ -178,7 +198,11 @@ export const workoutSelectionsRouter = {
           .where(and(
             eq(Workout.trainingSessionId, input.sessionId),
             eq(Workout.userId, input.clientId),
-            eq(Workout.status, 'draft')
+            or(
+              eq(Workout.status, 'draft'),
+              eq(Workout.status, 'ready'),
+              eq(Workout.status, 'completed')
+            )
           ))
           .limit(1);
 
@@ -286,7 +310,11 @@ export const workoutSelectionsRouter = {
           .where(and(
             eq(Workout.trainingSessionId, input.sessionId),
             eq(Workout.userId, input.clientId),
-            eq(Workout.status, 'draft')
+            or(
+              eq(Workout.status, 'draft'),
+              eq(Workout.status, 'ready'),
+              eq(Workout.status, 'completed')
+            )
           ))
           .limit(1);
 

@@ -204,14 +204,45 @@ const ROUNDS: RoundData[] = [
   }
 ];
 
-export default function RoundView() {
+interface RoundViewProps {
+  sessionId?: string;
+  round?: number;
+  workouts?: any[];
+  roundsData?: RoundData[];
+}
+
+export default function RoundView({ sessionId, round, workouts, roundsData }: RoundViewProps = {}) {
+  // Use real data if provided, otherwise fall back to mock data
+  console.log('[RoundView] Props received:', { 
+    hasSessionId: !!sessionId, 
+    round, 
+    hasWorkouts: !!workouts, 
+    hasRoundsData: !!roundsData,
+    roundsDataLength: roundsData?.length 
+  });
+  const rounds = roundsData && roundsData.length > 0 ? roundsData : ROUNDS;
+  console.log('[RoundView] Using rounds:', rounds.length, 'from', roundsData?.length > 0 ? 'real data' : 'mock data');
+  
   const [currentRoundIndex, setCurrentRoundIndex] = useState(0);
   const [phase, setPhase] = useState<"work" | "rest">("work");
-  const [timeRemaining, setTimeRemaining] = useState(ROUNDS[0].workSeconds);
+  const [timeRemaining, setTimeRemaining] = useState(rounds[0].workSeconds);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
-
-  const currentRound = ROUNDS[currentRoundIndex];
-  const nextRound = ROUNDS[(currentRoundIndex + 1) % ROUNDS.length];
+  
+  const currentRound = rounds[currentRoundIndex];
+  const nextRound = rounds[(currentRoundIndex + 1) % rounds.length];
+  
+  // Navigation functions
+  const goToNextRound = () => {
+    setCurrentRoundIndex((prev) => (prev + 1) % rounds.length);
+    setPhase("work");
+    setTimeRemaining(rounds[(currentRoundIndex + 1) % rounds.length].workSeconds);
+  };
+  
+  const goToPreviousRound = () => {
+    setCurrentRoundIndex((prev) => (prev - 1 + rounds.length) % rounds.length);
+    setPhase("work");
+    setTimeRemaining(rounds[(currentRoundIndex - 1 + rounds.length) % rounds.length].workSeconds);
+  };
 
   // Format time as MM:SS
   const formatTime = (seconds: number): string => {
@@ -232,8 +263,8 @@ export default function RoundView() {
           } else {
             // Rest is over, move to next round
             setPhase("work");
-            setCurrentRoundIndex((prevIndex) => (prevIndex + 1) % ROUNDS.length);
-            return ROUNDS[(currentRoundIndex + 1) % ROUNDS.length].workSeconds;
+            setCurrentRoundIndex((prevIndex) => (prevIndex + 1) % rounds.length);
+            return rounds[(currentRoundIndex + 1) % rounds.length].workSeconds;
           }
         }
         return prev - 1;
@@ -331,8 +362,7 @@ export default function RoundView() {
                           paddingHorizontal: 8,
                         }}>
                         <View style={{ width: 16, height: 16, borderRadius: 8, backgroundColor: TOKENS.color.accent, marginRight: 6 }} />
-                        <Text style={{ fontSize: 11.5, color: TOKENS.color.text, fontWeight: '700', marginRight: 4 }}>{a.clientName}</Text>
-                        <Text style={{ fontSize: 10, color: TOKENS.color.muted }}>{a.tag}</Text>
+                        <Text style={{ fontSize: 11.5, color: TOKENS.color.text, fontWeight: '700' }}>{a.clientName}</Text>
                       </View>
                     ))}
                   </View>
@@ -341,6 +371,63 @@ export default function RoundView() {
             </Pressable>
           ))}
         </View>
+      </View>
+      
+      {/* Navigation buttons */}
+      <View className="flex-row justify-center items-center mt-6" style={{ gap: 24 }}>
+        <Pressable
+          onPress={goToPreviousRound}
+          focusable
+        >
+          {({ focused }) => (
+            <MattePanel 
+              focused={focused}
+              style={{ 
+                paddingHorizontal: 32,
+                paddingVertical: 12,
+              }}
+            >
+              {/* Focus ring */}
+              {focused && (
+                <View pointerEvents="none" style={{
+                  position: 'absolute', 
+                  inset: -1,
+                  borderRadius: TOKENS.radius.card,
+                  borderWidth: 2, 
+                  borderColor: TOKENS.color.focusRing,
+                }}/>
+              )}
+              <Text style={{ color: TOKENS.color.text, fontWeight: '700', fontSize: 18 }}>Previous</Text>
+            </MattePanel>
+          )}
+        </Pressable>
+        
+        <Pressable
+          onPress={goToNextRound}
+          focusable
+        >
+          {({ focused }) => (
+            <MattePanel 
+              focused={focused}
+              style={{ 
+                paddingHorizontal: 32,
+                paddingVertical: 12,
+              }}
+            >
+              {/* Focus ring */}
+              {focused && (
+                <View pointerEvents="none" style={{
+                  position: 'absolute', 
+                  inset: -1,
+                  borderRadius: TOKENS.radius.card,
+                  borderWidth: 2, 
+                  borderColor: TOKENS.color.focusRing,
+                }}/>
+              )}
+              <Text style={{ color: TOKENS.color.text, fontWeight: '700', fontSize: 18 }}>Next</Text>
+            </MattePanel>
+          )}
+        </Pressable>
       </View>
     </View>
   );

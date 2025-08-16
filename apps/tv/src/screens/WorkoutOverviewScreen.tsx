@@ -6,6 +6,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../providers/TRPCProvider';
 import { useRealtimeExerciseSwaps } from '@acme/ui-shared';
 import { supabase } from '../lib/supabase';
+import { useStartWorkout } from '../hooks/useStartWorkout';
+import { WorkoutGenerationLoader } from '../components/WorkoutGenerationLoader';
 
 // Design tokens - matching other screens
 const TOKENS = {
@@ -94,6 +96,8 @@ export function WorkoutOverviewScreen() {
   const sessionId = navigation.getParam('sessionId');
   const queryClient = useQueryClient();
   const [lastSwapTime, setLastSwapTime] = useState<Date | null>(null);
+  const { startWorkout, isGenerating, error: startWorkoutError, setError } = useStartWorkout();
+  const [showErrorModal, setShowErrorModal] = useState(false);
 
   // Use real-time exercise swap updates
   const { isConnected: swapUpdatesConnected } = useRealtimeExerciseSwaps({
@@ -226,8 +230,9 @@ export function WorkoutOverviewScreen() {
         </Pressable>
         
         <Pressable
-          onPress={() => navigation.navigate('WorkoutLive', { sessionId, round: 1 })}
+          onPress={() => startWorkout(sessionId)}
           focusable
+          disabled={!sessionId || isGenerating}
         >
           {({ focused }) => (
             <MattePanel 
@@ -662,6 +667,81 @@ export function WorkoutOverviewScreen() {
           </Text>
         </View>
       </View>
+
+      {/* Loading overlay when generating workout */}
+      {isGenerating && (
+        <View style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.8)',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 1000,
+        }}>
+          <WorkoutGenerationLoader clientNames={clients?.map(c => c.userName || 'Unknown') || []} />
+        </View>
+      )}
+
+      {/* Error Modal */}
+      {(showErrorModal || startWorkoutError) && (
+        <View style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.8)',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 1001,
+        }}>
+          <Pressable
+            onPress={() => {
+              setShowErrorModal(false);
+              // Clear the error from the hook
+              setError(null);
+            }}
+            focusable
+          >
+            {({ focused }) => (
+              <MattePanel
+                focused={focused}
+                style={{
+                  maxWidth: 500,
+                  padding: 32,
+                  margin: 24,
+                }}
+              >
+                {/* Focus ring */}
+                {focused && (
+                  <View pointerEvents="none" style={{
+                    position: 'absolute',
+                    inset: -1,
+                    borderRadius: TOKENS.radius.card,
+                    borderWidth: 2,
+                    borderColor: TOKENS.color.focusRing,
+                  }}/>
+                )}
+                <View className="items-center">
+                  <Text style={{ fontSize: 48, marginBottom: 16 }}>⚠️</Text>
+                  <Text style={{ fontSize: 24, fontWeight: '700', color: TOKENS.color.text, marginBottom: 8 }}>
+                    Unable to Start Workout
+                  </Text>
+                  <Text style={{ fontSize: 18, color: TOKENS.color.muted, textAlign: 'center', marginBottom: 24 }}>
+                    {startWorkoutError || 'An error occurred while organizing the workout. Please try again.'}
+                  </Text>
+                  <Text style={{ fontSize: 16, fontWeight: '600', color: TOKENS.color.accent }}>
+                    Press to dismiss
+                  </Text>
+                </View>
+              </MattePanel>
+            )}
+          </Pressable>
+        </View>
+      )}
     </View>
   );
 }

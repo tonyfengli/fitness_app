@@ -222,9 +222,9 @@ function WorkoutOverviewMain() {
   const [isStarting, setIsStarting] = useState(false);
   const trpc = useTRPC();
   
-  // Start workout mutation
+  // Start workout mutation - using legacy endpoint for webapp
   const startWorkoutMutation = useMutation({
-    ...trpc.trainingSession.startWorkout.mutationOptions(),
+    ...trpc.trainingSession.startWorkoutLegacy.mutationOptions(),
     onSuccess: (data) => {
       console.log('Workout organized successfully:', data);
       // Navigate to workout-live after successful organization

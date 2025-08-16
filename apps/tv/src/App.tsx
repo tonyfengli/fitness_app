@@ -61,6 +61,7 @@ function NavigationContainer({ children }: { children: React.ReactNode }) {
   const screenHistory = useRef<ScreenName[]>(['Main']);
 
   const navigate = (screen: ScreenName, params?: any) => {
+    console.log('[Navigation] Navigating to:', screen, 'with params:', params);
     screenHistory.current.push(screen);
     setNavigationState(prev => ({ ...prev, currentScreen: screen }));
     if (params) {
@@ -132,7 +133,10 @@ function NavigationContainer({ children }: { children: React.ReactNode }) {
           <WorkoutOverviewScreen />
         )}
         {navigationState.currentScreen === 'WorkoutLive' && (
-          <WorkoutLiveScreen />
+          <>
+            {console.log('[App] Rendering WorkoutLiveScreen')}
+            <WorkoutLiveScreen />
+          </>
         )}
         {navigationState.currentScreen === 'SessionMonitor' && (
           <SessionMonitorScreen />

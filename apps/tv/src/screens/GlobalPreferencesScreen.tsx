@@ -178,18 +178,39 @@ export function GlobalPreferencesScreen() {
   const handleContinue = async () => {
     // First check if workout exercises already exist
     console.log('[TV GlobalPreferences] Checking for existing workout exercises...');
+    console.log('[TV GlobalPreferences] Session ID:', sessionId);
+    
     try {
       const existingSelections = await api.workoutSelections.getSelections.query({ sessionId: sessionId! });
-      console.log('[TV GlobalPreferences] Existing selections:', existingSelections);
+      console.log('[TV GlobalPreferences] API Response - Existing selections:', existingSelections);
+      console.log('[TV GlobalPreferences] Selection count:', existingSelections?.length || 0);
+      
+      // Also check if the session already has workout organization (Phase 2 completed)
+      const session = await api.trainingSession.getSession.query({ id: sessionId! });
+      console.log('[TV GlobalPreferences] Session has workout organization:', !!session?.workoutOrganization);
+      console.log('[TV GlobalPreferences] Session has visualization data:', !!session?.templateConfig?.visualizationData);
       
       if (existingSelections && existingSelections.length > 0) {
         console.log('[TV GlobalPreferences] Found', existingSelections.length, 'existing exercises, navigating directly to overview');
         navigation.navigate('WorkoutOverview', { sessionId });
         return;
       }
+      
+      // If no selections but session has visualization data (Phase 1 completed), something is wrong - still go to overview
+      if (session?.templateConfig?.visualizationData?.llmResult?.exerciseSelection) {
+        console.log('[TV GlobalPreferences] No selections but session has Phase 1 data, navigating to overview anyway');
+        navigation.navigate('WorkoutOverview', { sessionId });
+        return;
+      }
+      
       console.log('[TV GlobalPreferences] No existing exercises found, proceeding with generation');
-    } catch (error) {
-      console.log('[TV GlobalPreferences] Error checking existing selections:', error);
+    } catch (error: any) {
+      console.error('[TV GlobalPreferences] Error checking existing selections:', error);
+      console.error('[TV GlobalPreferences] Error details:', {
+        message: error?.message,
+        code: error?.code,
+        data: error?.data
+      });
       // Continue with generation if check fails
     }
     

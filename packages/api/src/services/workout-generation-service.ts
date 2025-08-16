@@ -540,6 +540,12 @@ export class WorkoutGenerationService {
         .values(workoutRecords)
         .returning({ id: Workout.id, userId: Workout.userId });
       
+      logger.info(`[savePhase1Selections] Created ${createdWorkouts.length} draft workouts`, {
+        sessionId,
+        workoutIds: createdWorkouts.map(w => w.id),
+        userIds: createdWorkouts.map(w => w.userId)
+      });
+      
       // Map client IDs to workout IDs
       const clientWorkoutMap = new Map<string, string>();
       createdWorkouts.forEach(workout => {
