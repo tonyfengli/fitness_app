@@ -927,7 +927,8 @@ export const workoutPreferencesRouter = createTRPCRouter({
           includeFinisher: input.workoutType.includes('with_finisher')
         };
         
-        await broadcastPreferenceUpdate(input.sessionId, input.userId, preferenceData, false);
+        // TODO: Implement preference update broadcast
+        // await broadcastPreferenceUpdate(input.sessionId, input.userId, preferenceData, false);
       }
 
       return updated;

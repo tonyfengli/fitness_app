@@ -18,7 +18,11 @@
     "lint": "eslint . --ext .ts,.tsx",
     "guard:deps": "node ./scripts/guardDeps.js",
     "prebuild": "pnpm run guard:deps && pnpm run generate-env",
-    "build": "react-native bundle --platform android --dev false --entry-file index.js --bundle-output android/app/src/main/assets/index.android.bundle --assets-dest android/app/src/main/res"
+    "build": "react-native bundle --platform android --dev false --entry-file index.js --bundle-output android/app/src/main/assets/index.android.bundle --assets-dest android/app/src/main/res",
+    "build:debug": "./scripts/build-tv.sh",
+    "build:release": "./scripts/build-tv.sh --release",
+    "build:clean": "./scripts/build-tv.sh --clean",
+    "deploy:tv": "adb install -r android/app/build/outputs/apk/debug/app-debug.apk"
   },
   "dependencies": {
     "@acme/api": "workspace:*",
