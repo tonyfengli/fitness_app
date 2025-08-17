@@ -20,25 +20,36 @@ interface BusinessProviderProps {
   children: React.ReactNode;
 }
 
-// Temporary hardcoded business ID until better-auth is integrated
-const HARDCODED_BUSINESS_ID = 'd33b41e2-f700-4a08-9489-cb6e3daa7f20';
-
 export function BusinessProvider({ children }: BusinessProviderProps) {
-  const { session } = useAuth();
+  const { session, isLoading: authLoading } = useAuth();
   const [businessId, setBusinessId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
+    console.log('[BusinessProvider] 🔍 Session change detected');
+    console.log('[BusinessProvider] Session user:', session?.user?.email || 'No user');
+    console.log('[BusinessProvider] Session businessId:', session?.user?.businessId || 'No businessId');
+    
     if (session?.user?.businessId) {
+      console.log('[BusinessProvider] ✅ Setting businessId from session:', session.user.businessId);
       setBusinessId(session.user.businessId);
-      console.log('[TV Business] Loaded business ID from session:', session.user.businessId);
+    } else if (session) {
+      // Session exists but no businessId - this is an error state
+      console.error('[BusinessProvider] ❌ Session exists but no businessId!');
+      setBusinessId(null);
     } else {
-      // Fallback to hardcoded business ID for now
-      setBusinessId(HARDCODED_BUSINESS_ID);
-      console.log('[TV Business] Using hardcoded business ID:', HARDCODED_BUSINESS_ID);
+      // No session yet
+      console.log('[BusinessProvider] ⏳ No session yet, businessId is null');
+      setBusinessId(null);
     }
-    setIsLoading(false);
-  }, [session]);
+    
+    // Only set loading to false if auth is also done loading
+    if (!authLoading) {
+      setIsLoading(false);
+    }
+    
+    console.log('[BusinessProvider] 🏁 BusinessId updated to:', session?.user?.businessId || 'null');
+  }, [session, authLoading]);
 
   const value: BusinessContextType = {
     businessId,

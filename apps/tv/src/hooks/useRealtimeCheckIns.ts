@@ -38,7 +38,7 @@ export function useRealtimeCheckIns({
 
     // Small delay to avoid subscribing during rapid re-renders
     const timeoutId = setTimeout(() => {
-      console.log('[TV] Setting up realtime for session:', sessionId);
+      console.log('[useRealtimeCheckIns] 🔄 Setting up realtime for session:', sessionId);
     
       // Create a channel for this session (must match web app channel name)
       const channel = supabase
@@ -52,7 +52,7 @@ export function useRealtimeCheckIns({
             filter: `training_session_id=eq.${sessionId}`,
           },
           async (payload) => {
-            console.log('[TV] Realtime event received:', payload);
+            console.log('[useRealtimeCheckIns] 📨 Realtime event received:', payload.eventType, 'for session:', sessionId);
             
             if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
               const checkIn = payload.new;
@@ -85,22 +85,26 @@ export function useRealtimeCheckIns({
           }
         )
         .subscribe((status) => {
-          console.log('[TV] Subscription status changed:', status);
+          console.log(`[useRealtimeCheckIns] 📡 Subscription status changed: ${status} for session-${sessionId}`);
           
           if (status === 'SUBSCRIBED') {
+            console.log(`[useRealtimeCheckIns] ✅ Successfully subscribed to session-${sessionId}`);
             setIsConnected(true);
             setError(null);
           } else if (status === 'CHANNEL_ERROR') {
+            console.error(`[useRealtimeCheckIns] ❌ Channel error for session-${sessionId}`);
             setIsConnected(false);
             const errorMsg = 'Failed to connect to realtime updates';
             setError(errorMsg);
             onErrorRef.current?.(new Error(errorMsg));
           } else if (status === 'TIMED_OUT') {
+            console.error(`[useRealtimeCheckIns] ⏱️ Subscription timed out for session-${sessionId}`);
             setIsConnected(false);
             const errorMsg = 'Connection timed out';
             setError(errorMsg);
             onErrorRef.current?.(new Error(errorMsg));
           } else if (status === 'CLOSED') {
+            console.log(`[useRealtimeCheckIns] 🔒 Channel closed: session-${sessionId}`);
             setIsConnected(false);
           }
         });
@@ -111,14 +115,17 @@ export function useRealtimeCheckIns({
     // Cleanup function
     return () => {
       clearTimeout(timeoutId);
-      console.log('[TV] Cleaning up realtime subscription');
+      console.log('[useRealtimeCheckIns] 🧹 Cleanup triggered for session:', sessionId);
       if (channelRef.current) {
+        const channelName = channelRef.current.topic;
+        console.log(`[useRealtimeCheckIns] 🔌 Unsubscribing from channel: ${channelName}`);
         // Try unsubscribe first, then remove
         channelRef.current.unsubscribe();
         
         // Small delay before removal
         setTimeout(() => {
           supabase.removeChannel(channelRef.current!);
+          console.log(`[useRealtimeCheckIns] ✅ Channel ${channelName} cleaned up`);
         }, 50);
         
         channelRef.current = null;

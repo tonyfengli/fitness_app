@@ -8,6 +8,7 @@ interface RealtimeContextType {
   activeChannels: Map<string, RealtimeChannel>;
   subscribeToChannel: (channelName: string) => RealtimeChannel;
   unsubscribeFromChannel: (channelName: string) => void;
+  cleanupAllChannels: () => void;
 }
 
 const RealtimeContext = createContext<RealtimeContextType | null>(null);
@@ -28,6 +29,7 @@ export function RealtimeProvider({ children }: RealtimeProviderProps) {
   const [isConnected, setIsConnected] = useState(false);
   const activeChannelsRef = useRef(new Map<string, RealtimeChannel>());
   const [appState, setAppState] = useState(AppState.currentState);
+  const [, forceUpdate] = useState({});
 
   // Handle app state changes (foreground/background)
   useEffect(() => {
@@ -87,10 +89,27 @@ export function RealtimeProvider({ children }: RealtimeProviderProps) {
   const unsubscribeFromChannel = (channelName: string) => {
     const channel = activeChannelsRef.current.get(channelName);
     if (channel) {
-      // console.log(`[RealtimeProvider] Unsubscribing from channel: ${channelName}`);
+      console.log(`[RealtimeProvider] 🔌 Unsubscribing from channel: ${channelName}`);
       channel.unsubscribe();
       activeChannelsRef.current.delete(channelName);
     }
+  };
+
+  const cleanupAllChannels = () => {
+    console.log('[RealtimeProvider] 🧹 Cleaning up all channels for account switch');
+    console.log('[RealtimeProvider] Active channels:', Array.from(activeChannelsRef.current.keys()));
+    
+    activeChannelsRef.current.forEach((channel, name) => {
+      console.log(`[RealtimeProvider] 🔌 Cleaning up channel: ${name}`);
+      channel.unsubscribe();
+    });
+    
+    activeChannelsRef.current.clear();
+    
+    // Force re-render to update the context
+    forceUpdate({});
+    
+    console.log('[RealtimeProvider] ✅ All channels cleaned up');
   };
 
   // Cleanup all channels on unmount
@@ -111,6 +130,7 @@ export function RealtimeProvider({ children }: RealtimeProviderProps) {
         activeChannels: activeChannelsRef.current,
         subscribeToChannel,
         unsubscribeFromChannel,
+        cleanupAllChannels,
       }}
     >
       {children}

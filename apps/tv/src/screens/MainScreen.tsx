@@ -33,13 +33,39 @@ interface SessionDetails {
 
 export function MainScreen() {
   const { businessId } = useBusiness();
-  const { user, isLoading: isAuthLoading, isAuthenticated, error: authError, retry } = useAuth();
+  const { user, isLoading: isAuthLoading, isAuthenticated, error: authError, retry, switchAccount, currentEnvironment } = useAuth();
   const [currentSession, setCurrentSession] = useState<SessionDetails | null>(null);
-  const [environment, setEnvironment] = useState<'prod' | 'dev'>('prod');
+  const [isSwitching, setIsSwitching] = useState(false);
+
+  // Log businessId when component mounts or businessId changes
+  React.useEffect(() => {
+    console.log('[MainScreen] 🏢 BusinessId in component:', businessId);
+    console.log('[MainScreen] 👤 Current user:', user?.email, 'BusinessId from user:', user?.businessId);
+  }, [businessId, user]);
+
+  // Handle environment toggle
+  const handleEnvironmentChange = async (newEnv: 'gym' | 'developer') => {
+    if (newEnv === currentEnvironment || isSwitching) return;
+    
+    console.log('[MainScreen] 🔄 Environment toggle:', currentEnvironment, '->', newEnv);
+    setIsSwitching(true);
+    
+    // Clear current session when switching accounts
+    setCurrentSession(null);
+    
+    try {
+      await switchAccount(newEnv);
+      console.log('[MainScreen] ✅ Environment switch complete');
+    } catch (error) {
+      console.error('[MainScreen] ❌ Environment switch failed:', error);
+    } finally {
+      setIsSwitching(false);
+    }
+  };
 
   const createSession = () => {
     const newSession: SessionDetails = {
-      name: environment === 'prod' ? 'Gym Session' : 'Dev Test Session',
+      name: currentEnvironment === 'gym' ? 'Gym Session' : 'Dev Test Session',
       coach: 'Coach A.',
       start: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       code: Math.random().toString(36).substring(2, 6).toUpperCase()
@@ -52,10 +78,10 @@ export function MainScreen() {
   };
 
   // Show loading state
-  if (isAuthLoading) {
+  if (isAuthLoading || isSwitching) {
     return (
       <View style={[styles.container, styles.centerContent]}>
-        <Text style={styles.loadingText}>Loading...</Text>
+        <Text style={styles.loadingText}>{isSwitching ? 'Switching accounts...' : 'Loading...'}</Text>
       </View>
     );
   }
@@ -80,23 +106,29 @@ export function MainScreen() {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.createButton} onPress={createSession}>
+        <TouchableOpacity 
+          style={[styles.createButton, isSwitching && styles.disabledButton]} 
+          onPress={createSession}
+          disabled={isSwitching}
+        >
           <Text style={styles.createButtonText}>+ Create New Session</Text>
         </TouchableOpacity>
         
         {/* Environment Toggle */}
-        <View style={styles.segmented}>
+        <View style={[styles.segmented, isSwitching && styles.disabledSegmented]}>
           <TouchableOpacity 
-            style={[styles.segmentOption, environment === 'dev' && styles.segmentActive]}
-            onPress={() => setEnvironment('dev')}
+            style={[styles.segmentOption, currentEnvironment === 'developer' && styles.segmentActive]}
+            onPress={() => handleEnvironmentChange('developer')}
+            disabled={isSwitching}
           >
-            <Text style={[styles.segmentText, environment === 'dev' && styles.segmentTextActive]}>Developer</Text>
+            <Text style={[styles.segmentText, currentEnvironment === 'developer' && styles.segmentTextActive]}>Developer</Text>
           </TouchableOpacity>
           <TouchableOpacity 
-            style={[styles.segmentOption, environment === 'prod' && styles.segmentActive]}
-            onPress={() => setEnvironment('prod')}
+            style={[styles.segmentOption, currentEnvironment === 'gym' && styles.segmentActive]}
+            onPress={() => handleEnvironmentChange('gym')}
+            disabled={isSwitching}
           >
-            <Text style={[styles.segmentText, environment === 'prod' && styles.segmentTextActive]}>Gym</Text>
+            <Text style={[styles.segmentText, currentEnvironment === 'gym' && styles.segmentTextActive]}>Gym</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -292,5 +324,11 @@ const styles = StyleSheet.create({
     color: TOKENS.color.muted,
     fontSize: 20,
     textAlign: 'center',
+  },
+  disabledButton: {
+    opacity: 0.5,
+  },
+  disabledSegmented: {
+    opacity: 0.5,
   },
 });

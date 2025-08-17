@@ -4,11 +4,18 @@ import { config } from '../config';
 // Storage keys
 const SESSION_STORAGE_KEY = 'tv-auth-session';
 const TOKEN_STORAGE_KEY = 'tv-auth-token';
+const ENVIRONMENT_STORAGE_KEY = 'tv-environment';
 
 // Hardcoded credentials for TV app
 const TV_CREDENTIALS = {
-  email: 'tony.li.feng@gmail.com',
-  password: '123456',
+  gym: {
+    email: 'tony.li.feng@gmail.com',
+    password: '123456',
+  },
+  developer: {
+    email: 'tony.feng.li@gmail.com',
+    password: '123456',
+  }
 };
 
 export interface User {
@@ -44,18 +51,20 @@ class AuthService {
    * Get current session - checks cache first, then storage, then attempts login
    */
   async getSession(): Promise<Session | null> {
-    console.log('[AuthService] Getting session...');
+    console.log('[AuthService] 🔍 Getting session...');
 
     // 1. Check memory cache first
     if (this.sessionCache) {
-      console.log('[AuthService] Found session in cache');
+      console.log('[AuthService] 📦 Found session in cache');
+      console.log('[AuthService] Cached user:', this.sessionCache.user.email, 'BusinessId:', this.sessionCache.user.businessId);
       return this.sessionCache;
     }
 
     // 2. Check AsyncStorage
     const storedSession = await this.getStoredSession();
     if (storedSession && this.isSessionValid(storedSession)) {
-      console.log('[AuthService] Found valid session in storage');
+      console.log('[AuthService] 💾 Found valid session in storage');
+      console.log('[AuthService] Stored user:', storedSession.user.email, 'BusinessId:', storedSession.user.businessId);
       this.sessionCache = storedSession;
       return storedSession;
     }
@@ -70,7 +79,7 @@ class AuthService {
    */
   async signIn(email: string, password: string): Promise<Session | null> {
     try {
-      console.log('[AuthService] Signing in...');
+      console.log('[AuthService] 🚀 Signing in with email:', email);
       
       // 1. First sign in with BetterAuth
       const signInResponse = await fetch(`${this.baseURL}/api/auth/sign-in/email`, {
@@ -90,7 +99,7 @@ class AuthService {
       }
 
       const signInData = await signInResponse.json();
-      console.log('[AuthService] Sign in successful, token:', signInData.token);
+      console.log('[AuthService] ✅ Sign in successful, token:', signInData.token ? 'received' : 'missing');
 
       // Store the token for future requests
       if (signInData.token) {
@@ -100,6 +109,7 @@ class AuthService {
       // 2. Get full session data (like web app does)
       const fullSession = await this.fetchFullSession(signInData.token);
       if (fullSession) {
+        console.log('[AuthService] 📝 Storing session for user:', fullSession.user.email, 'BusinessId:', fullSession.user.businessId);
         await this.storeSession(fullSession);
         this.sessionCache = fullSession;
         return fullSession;
@@ -113,11 +123,80 @@ class AuthService {
   }
 
   /**
+   * Get current environment
+   */
+  async getCurrentEnvironment(): Promise<'gym' | 'developer'> {
+    try {
+      const env = await AsyncStorage.getItem(ENVIRONMENT_STORAGE_KEY);
+      console.log('[AuthService] 🌍 Current environment from storage:', env || 'gym (default)');
+      return (env as 'gym' | 'developer') || 'gym';
+    } catch {
+      return 'gym';
+    }
+  }
+
+  /**
+   * Set current environment
+   */
+  async setCurrentEnvironment(env: 'gym' | 'developer'): Promise<void> {
+    console.log('[AuthService] 🌍 Setting environment to:', env);
+    await AsyncStorage.setItem(ENVIRONMENT_STORAGE_KEY, env);
+  }
+
+  /**
    * Auto login with hardcoded credentials
    */
   async autoLogin(): Promise<Session | null> {
-    console.log('[AuthService] Auto-login with TV credentials');
-    return this.signIn(TV_CREDENTIALS.email, TV_CREDENTIALS.password);
+    const env = await this.getCurrentEnvironment();
+    const credentials = env === 'developer' ? TV_CREDENTIALS.developer : TV_CREDENTIALS.gym;
+    console.log('[AuthService] 🤖 Auto-login with', env, 'credentials:', credentials.email);
+    return this.signIn(credentials.email, credentials.password);
+  }
+
+  /**
+   * Switch account based on environment
+   */
+  async switchAccount(env: 'gym' | 'developer'): Promise<Session | null> {
+    console.log('[AuthService] 🔄 Switching account to:', env);
+    
+    // Store current session in case we need to fallback
+    const currentSession = this.sessionCache;
+    const currentEnv = await this.getCurrentEnvironment();
+    
+    try {
+      // Clear current session
+      console.log('[AuthService] 🧹 Clearing current session before switch');
+      await this.clearSession();
+      
+      // Set new environment
+      await this.setCurrentEnvironment(env);
+      
+      // Login with new credentials
+      const credentials = env === 'developer' ? TV_CREDENTIALS.developer : TV_CREDENTIALS.gym;
+      const newSession = await this.signIn(credentials.email, credentials.password);
+      
+      if (!newSession) {
+        throw new Error('Failed to login with new credentials');
+      }
+      
+      return newSession;
+    } catch (error) {
+      console.error('[AuthService] ❌ Account switch failed:', error);
+      console.log('[AuthService] 🔙 Falling back to previous account');
+      
+      // Restore previous environment
+      await this.setCurrentEnvironment(currentEnv);
+      
+      // Try to restore previous session
+      if (currentSession) {
+        this.sessionCache = currentSession;
+        await this.storeSession(currentSession);
+        return currentSession;
+      }
+      
+      // If no previous session, try auto-login with previous env
+      return this.autoLogin();
+    }
   }
 
   /**
@@ -191,10 +270,13 @@ class AuthService {
       // Validate we got a businessId
       if (!session.user.businessId) {
         console.error('[AuthService] ❌ User missing businessId!', session.user);
+        console.error('[AuthService] 🔄 Clearing session and retrying auto-login');
         // Clear session and retry login
         await this.clearSession();
         return this.autoLogin();
       }
+      
+      console.log('[AuthService] ✅ Session validated with businessId:', session.user.businessId);
 
       return session;
     } catch (error) {
@@ -229,7 +311,8 @@ class AuthService {
    */
   async signOut(): Promise<void> {
     try {
-      console.log('[AuthService] Signing out...');
+      console.log('[AuthService] 🚪 Signing out...');
+      console.log('[AuthService] Current cached user:', this.sessionCache?.user.email, 'BusinessId:', this.sessionCache?.user.businessId);
       
       // Call sign out endpoint
       await fetch(`${this.baseURL}/api/auth/sign-out`, {
@@ -301,9 +384,10 @@ class AuthService {
    */
   async clearSession(): Promise<void> {
     try {
+      console.log('[AuthService] 🧹 Clearing all session data');
       await AsyncStorage.multiRemove([SESSION_STORAGE_KEY, TOKEN_STORAGE_KEY]);
       this.sessionCache = null;
-      console.log('[AuthService] Session cleared');
+      console.log('[AuthService] ✅ Session cleared from memory and storage');
     } catch (error) {
       console.error('[AuthService] Error clearing session:', error);
     }

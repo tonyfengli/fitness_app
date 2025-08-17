@@ -11,6 +11,8 @@ interface AuthContextType {
   error: Error | null;
   retry: () => Promise<void>;
   signOut: () => Promise<void>;
+  switchAccount: (env: 'gym' | 'developer') => Promise<void>;
+  currentEnvironment: 'gym' | 'developer';
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -32,10 +34,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const [retryCount, setRetryCount] = useState(0);
+  const [currentEnvironment, setCurrentEnvironment] = useState<'gym' | 'developer'>('gym');
 
   const initializeAuth = useCallback(async () => {
     try {
-      console.log('[AuthProvider] Initializing authentication...');
+      console.log('[AuthProvider] 🔄 Initializing authentication...');
+      console.log('[AuthProvider] Current session state:', session?.user?.email || 'No session');
       setIsLoading(true);
       setError(null);
 
@@ -50,6 +54,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           role: authSession.user.role,
           businessId: authSession.user.businessId,
         });
+        console.log('[AuthProvider] 🏢 BusinessId from session:', authSession.user.businessId);
         setSession(authSession);
       } else {
         console.error('[AuthProvider] ❌ Authentication failed');
@@ -60,13 +65,20 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setError(err instanceof Error ? err : new Error('Unknown error'));
     } finally {
       setIsLoading(false);
+      console.log('[AuthProvider] 🏁 Auth initialization complete');
     }
   }, []);
 
   // Initialize on mount
   useEffect(() => {
-    initializeAuth();
-  }, [initializeAuth]);
+    // Load environment and then initialize auth
+    const loadEnvironmentAndAuth = async () => {
+      const env = await authService.getCurrentEnvironment();
+      setCurrentEnvironment(env);
+      await initializeAuth();
+    };
+    loadEnvironmentAndAuth();
+  }, []);
 
   // Retry function with exponential backoff
   const retry = useCallback(async () => {
@@ -83,16 +95,18 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   // Sign out function
   const signOut = useCallback(async () => {
-    console.log('[AuthProvider] Signing out...');
+    console.log('[AuthProvider] 🚪 Signing out...');
+    console.log('[AuthProvider] Current user before signout:', session?.user?.email, 'BusinessId:', session?.user?.businessId);
     setIsLoading(true);
     
     try {
       await authService.signOut();
+      console.log('[AuthProvider] ✅ Sign out complete, clearing session');
       setSession(null);
       setError(null);
       
       // After sign out, auto-login again (TV app requirement)
-      console.log('[AuthProvider] Auto-login after sign out...');
+      console.log('[AuthProvider] 🔄 Auto-login after sign out...');
       await initializeAuth();
     } catch (err) {
       console.error('[AuthProvider] Sign out error:', err);
@@ -101,6 +115,31 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setIsLoading(false);
     }
   }, [initializeAuth]);
+
+  // Switch account function
+  const switchAccount = useCallback(async (env: 'gym' | 'developer') => {
+    console.log('[AuthProvider] 🔄 Switching account to:', env);
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      const newSession = await authService.switchAccount(env);
+      
+      if (newSession) {
+        console.log('[AuthProvider] ✅ Account switch successful');
+        setSession(newSession);
+        setCurrentEnvironment(env);
+      } else {
+        throw new Error('Failed to switch account');
+      }
+    } catch (err) {
+      console.error('[AuthProvider] Account switch error:', err);
+      setError(err instanceof Error ? err : new Error('Account switch failed'));
+      // Environment should already be restored by authService.switchAccount
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
   // Compute derived state (matching web app pattern)
   const user = session?.user || null;
@@ -118,6 +157,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
     error,
     retry,
     signOut,
+    switchAccount,
+    currentEnvironment,
   };
 
   return (

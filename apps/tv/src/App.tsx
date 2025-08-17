@@ -4,6 +4,7 @@ import { TRPCProvider } from './providers/TRPCProvider';
 import { RealtimeProvider } from './providers/RealtimeProvider';
 import { BusinessProvider } from './providers/BusinessProvider';
 import { AuthProvider } from './providers/AuthProvider';
+import { useAuthCleanup } from './hooks/useAuthCleanup';
 
 // TVEventHandler might be in a different location for react-native-tvos
 let TVEventHandler: any;
@@ -149,18 +150,28 @@ function NavigationContainer({ children }: { children: React.ReactNode }) {
   );
 }
 
+// Component that uses the auth cleanup hook
+function AppWithCleanup() {
+  // This hook must be called inside AuthProvider
+  useAuthCleanup();
+  
+  return (
+    <TRPCProvider>
+      <BusinessProvider>
+        <RealtimeProvider>
+          <NavigationContainer>
+            <View style={{ flex: 1 }} />
+          </NavigationContainer>
+        </RealtimeProvider>
+      </BusinessProvider>
+    </TRPCProvider>
+  );
+}
+
 export default function App() {
   return (
     <AuthProvider>
-      <TRPCProvider>
-        <BusinessProvider>
-          <RealtimeProvider>
-            <NavigationContainer>
-              <View style={{ flex: 1 }} />
-            </NavigationContainer>
-          </RealtimeProvider>
-        </BusinessProvider>
-      </TRPCProvider>
+      <AppWithCleanup />
     </AuthProvider>
   );
 }
