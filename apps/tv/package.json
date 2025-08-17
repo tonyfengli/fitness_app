@@ -22,7 +22,7 @@
     "build:debug": "./scripts/build-tv.sh",
     "build:release": "./scripts/build-tv.sh --release",
     "build:clean": "./scripts/build-tv.sh --clean",
-    "deploy:tv": "adb install -r android/app/build/outputs/apk/debug/app-debug.apk"
+    "deploy:tv": "adb install -r android/app/build/outputs/apk/tv/debug/app-tv-debug.apk"
   },
   "dependencies": {
     "@acme/api": "workspace:*",

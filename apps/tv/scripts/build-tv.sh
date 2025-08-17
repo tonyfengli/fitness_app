@@ -63,11 +63,11 @@ echo -e "${YELLOW}Building APK...${NC}"
 cd android
 
 if [ "$BUILD_TYPE" = "release" ]; then
-    ./gradlew assembleRelease
-    APK_PATH="app/build/outputs/apk/release/app-release.apk"
+    ./gradlew assembleTvRelease
+    APK_PATH="app/build/outputs/apk/tv/release/app-tv-release.apk"
 else
-    ./gradlew assembleDebug
-    APK_PATH="app/build/outputs/apk/debug/app-debug.apk"
+    ./gradlew assembleTvDebug
+    APK_PATH="app/build/outputs/apk/tv/debug/app-tv-debug.apk"
 fi
 
 cd ..
