@@ -12,6 +12,7 @@ import {
   SpinnerIcon,
   useRealtimeExerciseSwaps,
   useRealtimeWorkoutExercises,
+  useRealtimeStatus,
   XIcon,
 } from "@acme/ui-shared";
 
@@ -152,13 +153,15 @@ function ClientWorkoutOverviewContent() {
   const [expandedMuscles, setExpandedMuscles] = useState<Set<string>>(new Set());
   const availableExercisesRef = useRef<any[]>([]);
   const [hasExercises, setHasExercises] = useState(false);
+  const [isReady, setIsReady] = useState(false);
 
   // Mutation to update client status to workout_ready
   const updateStatusMutation = useMutation({
     ...trpc.trainingSession.updateClientReadyStatusPublic.mutationOptions({
       onSuccess: (data) => {
         console.log('[ClientWorkoutOverview] Status updated to:', data.newStatus);
-        // Stay on this page when status is workout_ready
+        // Set local ready state
+        setIsReady(true);
       },
       onError: (error) => {
         console.error("Failed to update status:", error);
@@ -208,6 +211,24 @@ function ClientWorkoutOverviewContent() {
     },
     onError: (error) => {
       console.error("[ClientWorkoutOverview] Swap updates error:", error);
+    },
+  });
+
+  // Use real-time status updates
+  const { isConnected: statusConnected } = useRealtimeStatus({
+    sessionId: sessionId || "",
+    supabase,
+    onStatusUpdate: (update) => {
+      console.log("[ClientWorkoutOverview] Status update received:", update);
+      
+      // Update ready state if this is the current user
+      if (update.userId === userId && update.status === 'workout_ready') {
+        console.log("[ClientWorkoutOverview] Current user is now workout_ready");
+        setIsReady(true);
+      }
+    },
+    onError: (error) => {
+      console.error("[ClientWorkoutOverview] Status updates error:", error);
     },
   });
 
@@ -511,6 +532,14 @@ function ClientWorkoutOverviewContent() {
     }
   }, [clientExercises.length, hasExercises]);
 
+  // Initialize ready state from client info
+  useEffect(() => {
+    if (clientInfoResponse?.status === 'workout_ready' && !isReady) {
+      console.log("[ClientWorkoutOverview] Initializing ready state from client info");
+      setIsReady(true);
+    }
+  }, [clientInfoResponse?.status, isReady]);
+
   // Filter exercises for the selection modal
   const filteredExercises = useMemo(() => {
     if (!showExerciseSelection || !selectedExercise) {
@@ -585,44 +614,46 @@ function ClientWorkoutOverviewContent() {
     // Show "All Set!" state if we're waiting for workout generation
     if (!visualizationData || visualizationData === null) {
       return (
-        <div className="flex min-h-screen items-center justify-center bg-gray-50 p-4">
-          <div className="max-w-md rounded-lg border border-gray-200 bg-white p-8 text-center shadow-lg">
-            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
-              <svg
-                className="h-8 w-8 text-green-600"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth="2"
+        <div className="min-h-screen bg-gray-50 p-4">
+          <div className="mx-auto max-w-md mt-4">
+            <div className="rounded-lg border border-gray-200 bg-white p-8 text-center shadow-lg">
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
+                <svg
+                  className="h-8 w-8 text-green-600"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M5 13l4 4L19 7"
+                  />
+                </svg>
+              </div>
+              <h3 className="mb-2 text-2xl font-bold text-gray-900">All Set!</h3>
+              <p className="mb-4 text-gray-600">
+                Your preferences have been saved. Your trainer will start the
+                workout soon.
+              </p>
+              <div className="mb-4 flex items-center justify-center gap-2 text-sm text-gray-500">
+                <div className="h-2 w-2 animate-pulse rounded-full bg-yellow-400"></div>
+                <span>Waiting for workout generation</span>
+              </div>
+              <button
+                onClick={() => {
+                  if (sessionId && userId) {
+                    router.push(`/preferences/client/${sessionId}/${userId}`);
+                  } else {
+                    router.push("/");
+                  }
+                }}
+                className="rounded-lg bg-indigo-600 px-6 py-2 font-medium text-white transition-colors hover:bg-indigo-700"
               >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M5 13l4 4L19 7"
-                />
-              </svg>
+                Back to Preferences
+              </button>
             </div>
-            <h3 className="mb-2 text-2xl font-bold text-gray-900">All Set!</h3>
-            <p className="mb-4 text-gray-600">
-              Your preferences have been saved. Your trainer will start the
-              workout soon.
-            </p>
-            <div className="mb-4 flex items-center justify-center gap-2 text-sm text-gray-500">
-              <div className="h-2 w-2 animate-pulse rounded-full bg-gray-400"></div>
-              <span>Waiting for workout generation</span>
-            </div>
-            <button
-              onClick={() => {
-                if (sessionId && userId) {
-                  router.push(`/preferences/client/${sessionId}/${userId}`);
-                } else {
-                  router.push("/");
-                }
-              }}
-              className="rounded-lg bg-indigo-600 px-6 py-2 font-medium text-white transition-colors hover:bg-indigo-700"
-            >
-              Back to Preferences
-            </button>
           </div>
         </div>
       );
@@ -722,7 +753,7 @@ function ClientWorkoutOverviewContent() {
 
       {/* Ready Button */}
       <div className="mx-auto mt-6 max-w-sm px-4">
-        {clientInfoResponse?.status === 'workout_ready' ? (
+        {isReady ? (
           <div className="w-full rounded-lg bg-green-100 border border-green-300 py-3 text-center">
             <span className="text-green-800 font-medium">✓ You're Ready!</span>
           </div>

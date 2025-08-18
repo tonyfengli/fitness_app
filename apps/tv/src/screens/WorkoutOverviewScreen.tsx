@@ -4,7 +4,7 @@ import Icon from 'react-native-vector-icons/MaterialIcons';
 import { useNavigation } from '../App';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../providers/TRPCProvider';
-import { useRealtimeExerciseSwaps } from '@acme/ui-shared';
+import { useRealtimeExerciseSwaps, useRealtimeStatus } from '@acme/ui-shared';
 import { supabase } from '../lib/supabase';
 import { useStartWorkout } from '../hooks/useStartWorkout';
 import { WorkoutGenerationLoader } from '../components/WorkoutGenerationLoader';
@@ -160,6 +160,95 @@ export function WorkoutOverviewScreen() {
     }
   });
 
+  // Use real-time status updates
+  const { isConnected: statusConnected } = useRealtimeStatus({
+    sessionId: sessionId || '',
+    supabase,
+    onStatusUpdate: (update) => {
+      console.log('[TV WorkoutOverview] ========== STATUS UPDATE RECEIVED ==========');
+      console.log('[TV WorkoutOverview] Update details:', {
+        userId: update.userId,
+        status: update.status,
+        updatedAt: update.updatedAt,
+        sessionId: sessionId
+      });
+      console.log('[TV WorkoutOverview] Current selections before refetch:', selections);
+      
+      // Force refetch of selections to get updated status
+      console.log('[TV WorkoutOverview] Invalidating queries...');
+      
+      // Invalidate CLIENTS query (which contains status info)
+      queryClient.invalidateQueries({
+        queryKey: [
+          [
+            "trainingSession",
+            "getCheckedInClients"
+          ],
+          {
+            input: {
+              sessionId: sessionId
+            },
+            type: "query"
+          }
+        ]
+      });
+      
+      // Also invalidate selections query
+      queryClient.invalidateQueries({
+        queryKey: [
+          [
+            "workoutSelections",
+            "getSelections"
+          ],
+          {
+            input: {
+              sessionId: sessionId
+            },
+            type: "query"
+          }
+        ]
+      });
+      
+      // Refetch both queries
+      Promise.all([
+        queryClient.refetchQueries({
+          predicate: (query) => {
+            const queryKey = query.queryKey as any[];
+            return queryKey[0] && 
+                   Array.isArray(queryKey[0]) && 
+                   queryKey[0][0] === 'trainingSession' && 
+                   queryKey[0][1] === 'getCheckedInClients';
+          }
+        }),
+        queryClient.refetchQueries({
+          predicate: (query) => {
+            const queryKey = query.queryKey as any[];
+            return queryKey[0] && 
+                   Array.isArray(queryKey[0]) && 
+                   queryKey[0][0] === 'workoutSelections' && 
+                   queryKey[0][1] === 'getSelections';
+          }
+        })
+      ]).then(() => {
+        console.log('[TV WorkoutOverview] All refetches completed');
+      });
+      
+      console.log('[TV WorkoutOverview] ========== END STATUS UPDATE ==========');
+    },
+    onError: (error) => {
+      console.error('[TV WorkoutOverview] Real-time status error:', error);
+    }
+  });
+  
+  // Log connection status
+  useEffect(() => {
+    console.log('[TV WorkoutOverview] Real-time connections:', {
+      swapUpdatesConnected,
+      statusConnected,
+      sessionId
+    });
+  }, [swapUpdatesConnected, statusConnected, sessionId]);
+
   // Fetch exercise selections using the same pattern as webapp
   const { data: selections, isLoading: selectionsLoading } = useQuery(
     sessionId ? api.workoutSelections.getSelections.queryOptions({ sessionId }) : {
@@ -184,12 +273,22 @@ export function WorkoutOverviewScreen() {
 
   // Group selections by client
   const groupedSelections = React.useMemo(() => {
+    console.log('[TV WorkoutOverview] Computing groupedSelections...');
+    console.log('[TV WorkoutOverview] Clients data:', clients);
+    console.log('[TV WorkoutOverview] Selections data:', selections?.length || 0, 'items');
+    
     if (!selections || !clients) return {};
 
     const grouped: GroupedSelections = {};
     
     // Initialize with all clients
     clients.forEach(client => {
+      console.log('[TV WorkoutOverview] Processing client:', {
+        userId: client.userId,
+        userName: client.userName,
+        status: client.status
+      });
+      
       grouped[client.userId] = {
         clientName: client.userName || 'Unknown',
         exercises: [],
@@ -203,6 +302,8 @@ export function WorkoutOverviewScreen() {
         grouped[selection.clientId].exercises.push(selection);
       }
     });
+    
+    console.log('[TV WorkoutOverview] Final grouped selections:', grouped);
 
     return grouped;
   }, [selections, clients]);
