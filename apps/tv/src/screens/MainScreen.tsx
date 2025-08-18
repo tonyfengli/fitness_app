@@ -4,6 +4,8 @@ import { useBusiness } from '../providers/BusinessProvider';
 import { useAuth } from '../providers/AuthProvider';
 import { supabase } from '../lib/supabase';
 import { useNavigation } from '../App';
+import { api } from '../providers/TRPCProvider';
+import { useMutation } from '@tanstack/react-query';
 
 // Design tokens - matching TV app theme
 const TOKENS = {
@@ -35,6 +37,11 @@ interface TrainingSession {
   created_at: string;
   updated_at: string;
   trainer_id: string | null;
+  trainer?: {
+    id: string;
+    name: string;
+    email: string;
+  };
 }
 
 export function MainScreen() {
@@ -44,12 +51,167 @@ export function MainScreen() {
   const [openSessions, setOpenSessions] = useState<TrainingSession[]>([]);
   const [isLoadingSessions, setIsLoadingSessions] = useState(false);
   const [isSwitching, setIsSwitching] = useState(false);
+  const [showTemplates, setShowTemplates] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState(0);
+
+  // Template options matching the webapp
+  const templates = [
+    { id: 'standard', name: 'Standard', description: 'Client-pooled organization' },
+    { id: 'full_body_bmf', name: 'BMF Template', description: 'Block-based organization' },
+  ];
+
+  // Cancel session mutation
+  const cancelSessionMutation = useMutation({
+    mutationFn: async (input: { sessionId: string }) => {
+      // Use the TRPC client directly to avoid serialization issues
+      try {
+        const result = await api.trainingSession.cancelSession.mutate(input);
+        return result;
+      } catch (error) {
+        // If TRPC fails, fall back to direct Supabase update
+        console.log('[MainScreen] TRPC failed, using Supabase directly');
+        const { error: supabaseError } = await supabase
+          .from('training_session')
+          .update({ status: 'cancelled' })
+          .eq('id', input.sessionId)
+          .eq('business_id', businessId);
+        
+        if (supabaseError) throw supabaseError;
+        return { success: true };
+      }
+    },
+    onSuccess: () => {
+      console.log('[MainScreen] ✅ Session cancelled successfully');
+      // Refresh the sessions list
+      fetchOpenSessions();
+    },
+    onError: (error: any) => {
+      console.error('[MainScreen] ❌ Failed to cancel session:', error);
+      Alert.alert(
+        'Cancel Session Failed',
+        error.message || 'Failed to cancel session. Please try again.',
+        [{ text: 'OK' }]
+      );
+    },
+  });
+
+  // Create session mutation
+  const createSessionMutation = useMutation({
+    ...api.trainingSession.create.mutationOptions(),
+    onSuccess: (newSession) => {
+      console.log('[MainScreen] ✅ Session created:', newSession.id);
+      console.log('[MainScreen] Template type:', newSession.templateType);
+      
+      // Hide template selector
+      setShowTemplates(false);
+      setSelectedTemplate(0);
+      
+      // Refresh the sessions list
+      fetchOpenSessions();
+      
+      // Navigate to the new session
+      navigation.navigate('SessionLobby', { sessionId: newSession.id });
+    },
+    onError: (error: any) => {
+      console.error('[MainScreen] ❌ Failed to create session:', error);
+      
+      // Hide template selector
+      setShowTemplates(false);
+      setSelectedTemplate(0);
+      
+      Alert.alert(
+        'Create Session Failed',
+        error.message || 'Failed to create session. Please try again.',
+        [{ text: 'OK' }]
+      );
+    },
+  });
 
   // Log businessId when component mounts or businessId changes
   React.useEffect(() => {
     console.log('[MainScreen] 🏢 BusinessId in component:', businessId);
     console.log('[MainScreen] 👤 Current user:', user?.email, 'BusinessId from user:', user?.businessId);
   }, [businessId, user]);
+
+  // Handle close session
+  const handleCloseSession = (sessionId: string) => {
+    Alert.alert(
+      'Cancel Session',
+      'Are you sure you want to cancel this session? This action cannot be undone.',
+      [
+        { text: 'No', style: 'cancel' },
+        { 
+          text: 'Yes, Cancel Session', 
+          style: 'destructive',
+          onPress: () => {
+            console.log('[MainScreen] Cancelling session:', sessionId);
+            cancelSessionMutation.mutate({ sessionId });
+          }
+        }
+      ]
+    );
+  };
+
+  // Handle create session
+  const handleCreateSession = async (templateType: string) => {
+    if (!businessId) {
+      console.error('[MainScreen] No businessId available');
+      return;
+    }
+
+    console.log('[MainScreen] Creating session with template:', templateType);
+    
+    createSessionMutation.mutate({
+      businessId,
+      name: `Training Session - ${new Date().toLocaleDateString()}`,
+      templateType,
+      scheduledAt: new Date().toISOString(),
+    });
+  };
+
+  // Extract fetchOpenSessions to be reusable
+  const fetchOpenSessions = async () => {
+    if (!businessId) {
+      console.log('[MainScreen] No businessId yet, skipping session fetch');
+      return;
+    }
+
+    console.log('[MainScreen] 🔍 Fetching open sessions for business:', businessId);
+    console.log('[MainScreen] Current user businessId:', user?.businessId);
+    setIsLoadingSessions(true);
+    
+    try {
+      const { data, error } = await supabase
+        .from('training_session')
+        .select(`
+          *,
+          trainer:user!trainer_id (
+            id,
+            name,
+            email
+          )
+        `)
+        .eq('business_id', businessId)
+        .eq('status', 'open')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('[MainScreen] ❌ Error fetching sessions:', error);
+      } else {
+        console.log('[MainScreen] ✅ Found open sessions:', data?.length || 0);
+        // Double-check sessions belong to current business
+        const validSessions = data?.filter(s => s.business_id === businessId) || [];
+        if (validSessions.length !== data?.length) {
+          console.warn('[MainScreen] ⚠️ Filtered out sessions from wrong business');
+        }
+        setOpenSessions(validSessions);
+      }
+    } catch (error) {
+      console.error('[MainScreen] ❌ Exception fetching sessions:', error);
+    } finally {
+      setIsLoadingSessions(false);
+    }
+  };
 
   // Fetch open sessions when businessId changes
   useEffect(() => {
@@ -73,37 +235,6 @@ export function MainScreen() {
       setOpenSessions([]);
       return;
     }
-
-    const fetchOpenSessions = async () => {
-      console.log('[MainScreen] 🔍 Fetching open sessions for business:', businessId);
-      console.log('[MainScreen] Current user businessId:', user?.businessId);
-      setIsLoadingSessions(true);
-      
-      try {
-        const { data, error } = await supabase
-          .from('training_session')
-          .select('*')
-          .eq('business_id', businessId)
-          .eq('status', 'open')
-          .order('created_at', { ascending: false });
-
-        if (error) {
-          console.error('[MainScreen] ❌ Error fetching sessions:', error);
-        } else {
-          console.log('[MainScreen] ✅ Found open sessions:', data?.length || 0);
-          // Double-check sessions belong to current business
-          const validSessions = data?.filter(s => s.business_id === businessId) || [];
-          if (validSessions.length !== data?.length) {
-            console.warn('[MainScreen] ⚠️ Filtered out sessions from wrong business');
-          }
-          setOpenSessions(validSessions);
-        }
-      } catch (error) {
-        console.error('[MainScreen] ❌ Exception fetching sessions:', error);
-      } finally {
-        setIsLoadingSessions(false);
-      }
-    };
 
     fetchOpenSessions();
   }, [businessId, user, isSwitching]);
@@ -164,11 +295,14 @@ export function MainScreen() {
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
-  // Show loading state
-  if (isAuthLoading || isSwitching) {
+  // Show loading state during initial auth or when switching AND sessions haven't loaded yet
+  if (isAuthLoading || (isSwitching && isLoadingSessions)) {
     return (
       <View style={[styles.container, styles.centerContent]}>
-        <Text style={styles.loadingText}>{isSwitching ? 'Switching accounts...' : 'Loading...'}</Text>
+        <ActivityIndicator size="large" color={TOKENS.color.accent} />
+        <Text style={[styles.loadingText, { marginTop: 16 }]}>
+          {isSwitching ? 'Switching accounts...' : 'Loading...'}
+        </Text>
       </View>
     );
   }
@@ -193,9 +327,50 @@ export function MainScreen() {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>
-          {currentEnvironment === 'gym' ? 'Gym Sessions' : 'Developer Sessions'}
-        </Text>
+        {!showTemplates ? (
+          <TouchableOpacity 
+            style={[styles.createButton, (isAuthLoading || createSessionMutation.isPending) && styles.disabledButton]}
+            onPress={() => setShowTemplates(true)}
+            disabled={isAuthLoading || createSessionMutation.isPending}
+          >
+            <Text style={styles.createButtonText}>
+              {createSessionMutation.isPending ? 'Creating...' : 'Create Session'}
+            </Text>
+          </TouchableOpacity>
+        ) : (
+          <View style={[styles.templateSelector, { opacity: showTemplates ? 1 : 0 }]}>
+            {templates.map((template, index) => (
+              <TouchableOpacity
+                key={template.id}
+                style={[
+                  styles.templateCard,
+                  selectedTemplate === index && styles.templateCardSelected
+                ]}
+                onPress={() => {
+                  setSelectedTemplate(index);
+                  handleCreateSession(template.id);
+                }}
+                onFocus={() => setSelectedTemplate(index)}
+              >
+                <Text style={[
+                  styles.templateTitle,
+                  selectedTemplate === index && styles.templateTitleSelected
+                ]}>
+                  {template.name}
+                </Text>
+              </TouchableOpacity>
+            ))}
+            <TouchableOpacity
+              style={styles.cancelButton}
+              onPress={() => {
+                setShowTemplates(false);
+                setSelectedTemplate(0);
+              }}
+            >
+              <Text style={styles.cancelButtonText}>✕</Text>
+            </TouchableOpacity>
+          </View>
+        )}
         
         {/* Environment Toggle */}
         <View style={[styles.segmented, isSwitching && styles.disabledSegmented]}>
@@ -225,11 +400,16 @@ export function MainScreen() {
           </View>
         ) : openSessions.length > 0 ? (
           <View>
+            {isSwitching && (
+              <View style={styles.switchingOverlay}>
+                <ActivityIndicator size="small" color={TOKENS.color.accent} />
+                <Text style={styles.switchingText}>Switching accounts...</Text>
+              </View>
+            )}
             {openSessions.map((session) => (
-              <TouchableOpacity
+              <View
                 key={session.id}
-                style={styles.sessionCard}
-                onPress={() => handleSessionClick(session)}
+                style={[styles.sessionCard, (isSwitching || isLoadingSessions) && styles.disabledCard]}
               >
                 <View style={styles.sessionHeader}>
                   <Text style={styles.sessionTitle}>
@@ -248,14 +428,30 @@ export function MainScreen() {
                     </Text>
                   </View>
                   <View style={styles.sessionInfo}>
-                    <Text style={styles.sessionLabel}>Session ID</Text>
+                    <Text style={styles.sessionLabel}>USER</Text>
                     <Text style={[styles.sessionValue, styles.sessionId]}>
-                      {session.id.slice(0, 8)}...
+                      {session.trainer?.name || 'Unknown'}
                     </Text>
                   </View>
                 </View>
-                <Text style={styles.tapText}>Tap to enter session →</Text>
-              </TouchableOpacity>
+                
+                {/* Action buttons for the session */}
+                <View style={styles.sessionActions}>
+                  <TouchableOpacity
+                    style={[styles.actionButton, styles.openButton]}
+                    onPress={() => handleSessionClick(session)}
+                  >
+                    <Text style={styles.actionButtonText}>Open Session</Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity
+                    style={[styles.actionButton, styles.closeButton]}
+                    onPress={() => handleCloseSession(session.id)}
+                  >
+                    <Text style={styles.actionButtonText}>Cancel Session</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
             ))}
           </View>
         ) : (
@@ -432,6 +628,121 @@ const styles = StyleSheet.create({
   },
   disabledSegmented: {
     opacity: 0.5,
+  },
+  disabledCard: {
+    opacity: 0.5,
+  },
+  switchingOverlay: {
+    backgroundColor: TOKENS.color.card,
+    borderColor: TOKENS.color.accent,
+    borderWidth: 1,
+    borderRadius: TOKENS.radius.card,
+    padding: 16,
+    marginBottom: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  switchingText: {
+    color: TOKENS.color.accent,
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 12,
+  },
+  templateSelector: {
+    flexDirection: 'row',
+    gap: 16,
+    alignItems: 'center',
+  },
+  templateCard: {
+    backgroundColor: TOKENS.color.card,
+    borderColor: TOKENS.color.borderGlass,
+    borderWidth: 2,
+    borderRadius: TOKENS.radius.card,
+    padding: 20,
+    width: 180,
+    height: 80,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  templateCardSelected: {
+    borderColor: TOKENS.color.accent,
+    backgroundColor: 'rgba(124,255,181,0.1)',
+    transform: [{ scale: 1.05 }],
+  },
+  templateTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: TOKENS.color.text,
+    textAlign: 'center',
+  },
+  templateTitleSelected: {
+    color: TOKENS.color.accent,
+  },
+  templateDescription: {
+    fontSize: 14,
+    color: TOKENS.color.muted,
+    textAlign: 'center',
+  },
+  templateDescriptionSelected: {
+    color: TOKENS.color.text,
+  },
+  defaultBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: TOKENS.color.accent2,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+  },
+  defaultBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: TOKENS.color.bg,
+    letterSpacing: 0.5,
+  },
+  cancelButton: {
+    backgroundColor: TOKENS.color.danger,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 16,
+  },
+  cancelButtonText: {
+    color: TOKENS.color.text,
+    fontSize: 20,
+    fontWeight: '600',
+  },
+  sessionActions: {
+    flexDirection: 'row',
+    marginTop: 16,
+    gap: 12,
+  },
+  actionButton: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: TOKENS.radius.button,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  openButton: {
+    backgroundColor: 'rgba(124, 255, 181, 0.2)',
+    borderWidth: 1,
+    borderColor: TOKENS.color.accent,
+  },
+  closeButton: {
+    backgroundColor: 'rgba(239, 68, 68, 0.2)',
+    borderWidth: 1,
+    borderColor: TOKENS.color.danger,
+  },
+  actionButtonText: {
+    color: TOKENS.color.text,
+    fontSize: 16,
+    fontWeight: '600',
   },
   headerTitle: {
     fontSize: 32,
