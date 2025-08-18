@@ -137,18 +137,30 @@ export function SessionLobbyScreen() {
   useEffect(() => {
     if (!isLoading && initialClients !== undefined) {
       console.log('[TV SessionLobby] Setting clients from initial data:', initialClients);
+      console.log('[TV SessionLobby] Client details:');
+      initialClients?.forEach((client: any, index: number) => {
+        console.log(`[TV SessionLobby] Client ${index + 1}:`, {
+          userId: client.userId,
+          userName: client.userName,
+          status: client.status,
+          checkedInAt: client.checkedInAt,
+          hasPreferences: !!client.preferences,
+          preferenceKeys: client.preferences ? Object.keys(client.preferences) : []
+        });
+      });
       setHasLoadedInitialData(true);
       if (initialClients && initialClients.length > 0) {
         setClients(initialClients.map((client: any) => ({
           ...client,
-          preferences: client.preferences
+          preferences: client.preferences,
+          status: client.status // Make sure we're preserving status
         })));
       }
     }
   }, [initialClients, isLoading]);
 
   // Handle new check-ins from real-time
-  const handleCheckIn = useCallback((event: { userId: string; name: string; checkedInAt: string }) => {
+  const handleCheckIn = useCallback((event: { userId: string; name: string; checkedInAt: string; status?: string }) => {
     setClients(prev => {
       // Check if client already exists
       const exists = prev.some(client => client.userId === event.userId);
@@ -163,6 +175,7 @@ export function SessionLobbyScreen() {
         userEmail: '', // We don't have email from the event
         checkedInAt: new Date(event.checkedInAt),
         preferences: null,
+        status: event.status || 'checked_in', // Preserve status if provided
         isNew: true
       }, ...prev];
     });
@@ -320,6 +333,12 @@ export function SessionLobbyScreen() {
             </View>
           ) : (
             <ScrollView className="flex-1">
+              {console.log('[TV SessionLobby] Rendering clients:', clients.length, 'total')}
+              {console.log('[TV SessionLobby] Client statuses:', clients.map(c => ({ 
+                userName: c.userName, 
+                status: (c as any).status,
+                hasStatus: 'status' in c
+              })))}
               {clients.map((client) => (
                 <View 
                   key={client.userId} 

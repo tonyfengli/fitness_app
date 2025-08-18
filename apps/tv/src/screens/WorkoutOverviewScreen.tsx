@@ -88,6 +88,7 @@ interface GroupedSelections {
   [clientId: string]: {
     clientName: string;
     exercises: ExerciseSelection[];
+    status?: string;
   };
 }
 
@@ -191,7 +192,8 @@ export function WorkoutOverviewScreen() {
     clients.forEach(client => {
       grouped[client.userId] = {
         clientName: client.userName || 'Unknown',
-        exercises: []
+        exercises: [],
+        status: client.status
       };
     });
 
@@ -326,7 +328,14 @@ export function WorkoutOverviewScreen() {
             <View className="flex-row" style={{ flex: 1, gap: 12 }}>
               {clientEntries.slice(0, 2).map(([clientId, clientData]) => (
                 <View key={clientId} style={{ flex: 1 }}>
-                  <MattePanel style={{ flex: 1, padding: 16 }}>
+                  <MattePanel style={{ 
+                    flex: 1, 
+                    padding: 16,
+                    ...(clientData.status === 'ready' && {
+                      borderColor: TOKENS.color.accent,
+                      borderWidth: 2,
+                    })
+                  }}>
                     {/* Header Section - 10% smaller */}
                     <View className="flex-row items-center" style={{ marginBottom: 11 }}>
                       <Image 
@@ -402,7 +411,14 @@ export function WorkoutOverviewScreen() {
               <View className="flex-row" style={{ flex: 1, gap: 12 }}>
                 {clientEntries.slice(2, 4).map(([clientId, clientData]) => (
                   <View key={clientId} style={{ flex: 1 }}>
-                    <MattePanel style={{ flex: 1, padding: 16 }}>
+                    <MattePanel style={{ 
+                      flex: 1, 
+                      padding: 16,
+                      ...(clientData.status === 'ready' && {
+                        borderColor: TOKENS.color.accent,
+                        borderWidth: 2,
+                      })
+                    }}>
                       {/* Header Section - 10% smaller */}
                       <View className="flex-row items-center" style={{ marginBottom: 11 }}>
                         <Image 
@@ -484,7 +500,14 @@ export function WorkoutOverviewScreen() {
                 const isCompact = true; // Always compact for 5-client layout
                 return (
                   <View key={clientId} style={{ flex: 1 }}>
-                    <MattePanel style={{ flex: 1, padding: 12 }}>
+                    <MattePanel style={{ 
+                      flex: 1, 
+                      padding: 12,
+                      ...(clientData.status === 'ready' && {
+                        borderColor: TOKENS.color.accent,
+                        borderWidth: 2,
+                      })
+                    }}>
                     {/* Header Section */}
                     <View className="flex-row items-center" style={{ marginBottom: 12 }}>
                       <Image 
@@ -560,7 +583,14 @@ export function WorkoutOverviewScreen() {
             <View className="flex-row" style={{ flex: 1, gap: 12, paddingHorizontal: '16.67%' }}>
               {clientEntries.slice(3, 5).map(([clientId, clientData]) => (
                 <View key={clientId} style={{ flex: 1 }}>
-                  <MattePanel style={{ flex: 1, padding: 12 }}>
+                  <MattePanel style={{ 
+                    flex: 1, 
+                    padding: 12,
+                    ...(clientData.status === 'ready' && {
+                      borderColor: TOKENS.color.accent,
+                      borderWidth: 2,
+                    })
+                  }}>
                     {/* Header Section */}
                     <View className="flex-row items-center" style={{ marginBottom: 12 }}>
                       <Image 
@@ -642,7 +672,14 @@ export function WorkoutOverviewScreen() {
                   { padding: 6 },
                   { height: '55%' }
                 ]}>
-                  <MattePanel style={{ flex: 1, padding: isCompact ? 12 : 18 }}>
+                  <MattePanel style={{ 
+                    flex: 1, 
+                    padding: isCompact ? 12 : 18,
+                    ...(clientData.status === 'ready' && {
+                      borderColor: TOKENS.color.accent,
+                      borderWidth: 2,
+                    })
+                  }}>
                     {/* Header Section */}
                     <View className="flex-row items-center" style={{ marginBottom: 12 }}>
                       <Image 

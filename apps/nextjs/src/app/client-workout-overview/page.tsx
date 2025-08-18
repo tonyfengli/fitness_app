@@ -27,6 +27,33 @@ interface SelectedExercise {
   isShared: boolean;
 }
 
+// Group exercises by muscle
+const groupByMuscle = (exercises: any[]) => {
+  const grouped = exercises.reduce((acc, exercise) => {
+    const muscle = exercise.primaryMuscle || "Other";
+    if (!acc[muscle]) acc[muscle] = [];
+    acc[muscle].push(exercise);
+    return acc;
+  }, {} as Record<string, any[]>);
+  
+  // Sort by muscle name
+  return Object.entries(grouped).sort(([a], [b]) => a.localeCompare(b));
+};
+
+// Badge colors for movement patterns
+const MOVEMENT_PATTERN_COLORS: Record<string, string> = {
+  horizontal_push: "bg-blue-100 text-blue-800",
+  horizontal_pull: "bg-green-100 text-green-800",
+  vertical_push: "bg-purple-100 text-purple-800",
+  vertical_pull: "bg-indigo-100 text-indigo-800",
+  squat: "bg-red-100 text-red-800",
+  hinge: "bg-orange-100 text-orange-800",
+  lunge: "bg-pink-100 text-pink-800",
+  core: "bg-yellow-100 text-yellow-800",
+  carry: "bg-teal-100 text-teal-800",
+  isolation: "bg-gray-100 text-gray-800",
+};
+
 function ClientWorkoutOverviewContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -122,21 +149,9 @@ function ClientWorkoutOverviewContent() {
   const [selectedReplacement, setSelectedReplacement] = useState<string | null>(
     null,
   );
+  const [expandedMuscles, setExpandedMuscles] = useState<Set<string>>(new Set());
   const availableExercisesRef = useRef<any[]>([]);
 
-  // Mutation to update client status back to checked_in
-  const updateStatusMutation = useMutation({
-    ...trpc.trainingSession.updateClientReadyStatusPublic.mutationOptions({
-      onSuccess: () => {
-        // Navigate back to preferences after status update
-        router.push(`/preferences/client/${sessionId}/${userId}`);
-      },
-      onError: (error) => {
-        console.error("Failed to update status:", error);
-        alert("Failed to update status. Please try again.");
-      },
-    }),
-  });
 
   // Use real-time workout exercises
   useRealtimeWorkoutExercises({
@@ -494,6 +509,22 @@ function ClientWorkoutOverviewContent() {
     clientExercises,
   ]);
 
+  // Group filtered exercises by muscle
+  const groupedExercises = useMemo(() => {
+    return groupByMuscle(filteredExercises);
+  }, [filteredExercises]);
+
+  // Toggle muscle group expansion
+  const toggleMuscleGroup = (muscle: string) => {
+    const newExpanded = new Set(expandedMuscles);
+    if (newExpanded.has(muscle)) {
+      newExpanded.delete(muscle);
+    } else {
+      newExpanded.add(muscle);
+    }
+    setExpandedMuscles(newExpanded);
+  };
+
   if (!sessionId || !userId) {
     return (
       <div className="min-h-screen bg-gray-50 p-4">
@@ -557,21 +588,14 @@ function ClientWorkoutOverviewContent() {
             <button
               onClick={() => {
                 if (sessionId && userId) {
-                  updateStatusMutation.mutate({
-                    sessionId,
-                    userId,
-                    isReady: false,
-                  });
+                  router.push(`/preferences/client/${sessionId}/${userId}`);
                 } else {
                   router.push("/");
                 }
               }}
-              disabled={updateStatusMutation.isPending}
-              className="rounded-lg bg-indigo-600 px-6 py-2 font-medium text-white transition-colors hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-lg bg-indigo-600 px-6 py-2 font-medium text-white transition-colors hover:bg-indigo-700"
             >
-              {updateStatusMutation.isPending
-                ? "Updating..."
-                : "Back to Preferences"}
+              Back to Preferences
             </button>
           </div>
         </div>
@@ -635,8 +659,7 @@ function ClientWorkoutOverviewContent() {
                   {userName}
                 </h3>
                 <p className="text-sm text-gray-500">
-                  The exercises below are locked in. Feel free to pick your own
-                  swaps or let AI handle it.
+                  These exercises have been picked for you, but you can replace any of them.
                 </p>
               </div>
             </div>
@@ -656,24 +679,13 @@ function ClientWorkoutOverviewContent() {
                     onClick={() => {
                       setSelectedExercise(exercise);
                       setSelectedExerciseIndex(index);
-                      setModalOpen(true);
+                      // Skip the modal and go directly to exercise selection
+                      setShowExerciseSelection(true);
                     }}
-                    className="ml-2 flex items-center justify-center rounded-full p-1 transition-colors hover:bg-gray-200"
-                    aria-label="Remove exercise"
+                    className="ml-2 rounded-md bg-gray-100 px-3 py-1 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-200"
+                    aria-label="Replace exercise"
                   >
-                    <svg
-                      className="h-4 w-4 text-gray-500"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M6 18L18 6M6 6l12 12"
-                      />
-                    </svg>
+                    Replace
                   </button>
                 </div>
               ))}
@@ -682,79 +694,7 @@ function ClientWorkoutOverviewContent() {
         </div>
       </div>
 
-      {/* Replace Exercise Modal */}
-      {modalOpen && (
-        <>
-          {/* Background overlay */}
-          <div
-            className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm"
-            onClick={() => {
-              setModalOpen(false);
-              setSelectedExercise(null);
-            }}
-          />
 
-          {/* Modal */}
-          <div className="fixed inset-x-4 top-1/2 z-50 mx-auto max-w-md -translate-y-1/2 rounded-2xl bg-white p-6 shadow-2xl">
-            <h2 className="mb-2 text-xl font-bold text-gray-900">
-              Replace Exercise
-            </h2>
-            <p className="mb-6 text-gray-600">
-              How would you like to replace "{selectedExercise?.name}"?
-            </p>
-
-            <div className="space-y-3">
-              <button
-                onClick={() => {
-                  setModalOpen(false);
-                  setShowExerciseSelection(true);
-                }}
-                className="w-full rounded-lg bg-indigo-600 px-4 py-3 font-medium text-white transition-colors hover:bg-indigo-700"
-              >
-                Pick a replacement
-              </button>
-
-              <button
-                onClick={() => {
-                  // Handle AI choice
-                  console.log(
-                    "Let AI choose for exercise at index:",
-                    selectedExerciseIndex,
-                  );
-                  setModalOpen(false);
-                }}
-                className="w-full rounded-lg border-2 border-gray-300 bg-white px-4 py-3 font-medium text-gray-700 transition-colors hover:bg-gray-50"
-              >
-                Let AI choose
-              </button>
-            </div>
-
-            {/* Close button */}
-            <button
-              onClick={() => {
-                setModalOpen(false);
-                setSelectedExercise(null);
-              }}
-              className="absolute right-4 top-4 text-gray-400 hover:text-gray-600"
-              aria-label="Close modal"
-            >
-              <svg
-                className="h-6 w-6"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
-            </button>
-          </div>
-        </>
-      )}
 
       {/* Exercise Selection Modal */}
       {showExerciseSelection && (
@@ -769,7 +709,7 @@ function ClientWorkoutOverviewContent() {
           />
 
           {/* Modal */}
-          <div className="fixed inset-x-4 top-1/2 z-50 mx-auto flex max-h-[80vh] max-w-lg -translate-y-1/2 flex-col rounded-2xl bg-white shadow-2xl">
+          <div className="fixed inset-x-4 top-1/2 z-50 mx-auto flex h-[80vh] max-w-lg -translate-y-1/2 flex-col rounded-2xl bg-white shadow-2xl">
             {/* Header */}
             <div className="flex-shrink-0 border-b border-gray-200 px-6 py-4">
               <div className="flex items-center justify-between">
@@ -830,22 +770,72 @@ function ClientWorkoutOverviewContent() {
                     </div>
                   )}
 
-                {/* All exercises */}
+                {/* All exercises grouped by muscle */}
                 {!isLoadingExercises && filteredExercises.length > 0 && (
-                  <div>
-                    <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-gray-600">
-                      Available Exercises
-                    </h3>
-                    <div className="space-y-2">
-                      {filteredExercises.map((exercise: any, idx: number) => (
-                        <ExerciseListItem
-                          key={exercise.id || idx}
-                          name={exercise.name}
-                          isSelected={selectedReplacement === exercise.name}
-                          onClick={() => setSelectedReplacement(exercise.name)}
-                        />
-                      ))}
-                    </div>
+                  <div className="space-y-3">
+                    {groupedExercises.map(([muscle, exercises]) => (
+                      <div key={muscle} className="rounded-lg border border-gray-200 bg-white">
+                        {/* Muscle group header */}
+                        <button
+                          onClick={() => toggleMuscleGroup(muscle)}
+                          className="flex w-full items-center justify-between px-4 py-3 text-left transition-colors hover:bg-gray-50"
+                        >
+                          <span className="font-medium text-gray-900 capitalize">
+                            {muscle.toLowerCase().replace(/_/g, ' ')}
+                          </span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm text-gray-500">
+                              {exercises.length} exercise{exercises.length !== 1 ? 's' : ''}
+                            </span>
+                            <svg
+                              className={`h-5 w-5 text-gray-400 transition-transform ${
+                                expandedMuscles.has(muscle) ? 'rotate-180' : ''
+                              }`}
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M19 9l-7 7-7-7"
+                              />
+                            </svg>
+                          </div>
+                        </button>
+                        
+                        {/* Exercise list */}
+                        {expandedMuscles.has(muscle) && (
+                          <div className="border-t border-gray-100 px-4 py-2">
+                            <div className="space-y-2">
+                              {exercises.map((exercise: any) => (
+                                <button
+                                  key={exercise.id}
+                                  onClick={() => setSelectedReplacement(exercise.name)}
+                                  className={`flex w-full items-center justify-between rounded-md px-3 py-2.5 text-left transition-colors ${
+                                    selectedReplacement === exercise.name
+                                      ? 'bg-indigo-50 text-indigo-700'
+                                      : 'hover:bg-gray-50'
+                                  }`}
+                                >
+                                  <span className="font-medium">
+                                    {exercise.name}
+                                  </span>
+                                  {exercise.movementPattern && (
+                                    <span className={`text-xs px-2 py-1 rounded-full ${
+                                      MOVEMENT_PATTERN_COLORS[exercise.movementPattern] || 'bg-gray-100 text-gray-800'
+                                    }`}>
+                                      {exercise.movementPattern.replace(/_/g, ' ')}
+                                    </span>
+                                  )}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
                   </div>
                 )}
 

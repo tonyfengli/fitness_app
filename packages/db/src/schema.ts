@@ -157,7 +157,7 @@ export const UserTrainingSession = pgTable("user_training_session", (t) => ({
     .uuid()
     .notNull()
     .references(() => TrainingSession.id, { onDelete: "cascade" }),
-  status: t.text().notNull().default("registered"), // "registered", "checked_in", "ready", "completed", "no_show"
+  status: t.text().notNull().default("registered"), // "registered", "checked_in", "ready", "workout_ready", "completed", "no_show"
   checkedInAt: t.timestamp(), // When the user checked in
   preferenceCollectionStep: t.text().notNull().default("not_started"), // 'not_started', 'initial_collected', 'disambiguation_pending', 'disambiguation_clarifying', 'disambiguation_resolved', 'followup_sent', 'preferences_active'
   createdAt: t.timestamp().defaultNow().notNull(),
@@ -169,7 +169,7 @@ export const CreateUserTrainingSessionSchema = createInsertSchema(
     userId: z.string(),
     trainingSessionId: z.string().uuid(),
     status: z
-      .enum(["registered", "checked_in", "ready", "completed", "no_show"])
+      .enum(["registered", "checked_in", "ready", "workout_ready", "completed", "no_show"])
       .default("registered"),
     checkedInAt: z.date().optional(),
     preferenceCollectionStep: z

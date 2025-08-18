@@ -404,7 +404,7 @@ export function GlobalPreferencesScreen() {
             sessionGoal,
             includeFinisher
           },
-          isReady: false,
+          isReady: client.status === 'ready',
           notes: null
         };
       });

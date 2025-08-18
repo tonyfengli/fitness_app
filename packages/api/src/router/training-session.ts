@@ -2641,6 +2641,9 @@ Set your goals and preferences for today's session.`;
       }
 
       // Update the user's ready status
+      // This mutation is called from workout overview page
+      // isReady: true = "ready" (client confirmed preferences)
+      // isReady: false = "checked_in" (client went back)
       const newStatus = input.isReady ? "ready" : "checked_in";
 
       await ctx.db
