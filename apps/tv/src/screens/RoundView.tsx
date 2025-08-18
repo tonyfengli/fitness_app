@@ -105,12 +105,12 @@ const ROUNDS: RoundData[] = [
     exercises: [
       {
         title: "Dynamic Stretching",
-        meta: "Mobility • 3×: 45s • Light Movement",
+        meta: "3 sets, 45s",
         assigned: [{ clientName: "Tony", tag: "A1" }, { clientName: "Sara", tag: "A2" }]
       },
       {
         title: "Arm Circles & Swings",
-        meta: "Upper Warm-Up • 3×: 30s • Both Directions",
+        meta: "3 sets, 30s",
         assigned: [
           { clientName: "Max", tag: "B1" },
           { clientName: "Jess", tag: "B2" },
@@ -118,7 +118,7 @@ const ROUNDS: RoundData[] = [
       },
       {
         title: "Bodyweight Squats",
-        meta: "Lower Warm-Up • 3×: 15 reps • Controlled",
+        meta: "3 sets, 15 reps",
         assigned: [{ clientName: "Tony", tag: "C1" }, { clientName: "Max", tag: "C2" }, { clientName: "Sara", tag: "C3" }]
       }
     ]
@@ -131,12 +131,12 @@ const ROUNDS: RoundData[] = [
     exercises: [
       {
         title: "DB Bench Press",
-        meta: "Upper Push • 3×: 8-10 • RPE 7",
+        meta: "3 sets, 8-10 reps",
         assigned: [{ clientName: "Tony", tag: "A1" }, { clientName: "Jess", tag: "A2" }]
       },
       {
         title: "Pull-Up Progression",
-        meta: "Upper Pull • 3×: 6-8 • Full ROM",
+        meta: "3 sets, 6-8 reps",
         assigned: [
           { clientName: "Max", tag: "B1" },
           { clientName: "Sara", tag: "B2" },
@@ -144,7 +144,7 @@ const ROUNDS: RoundData[] = [
       },
       {
         title: "Lateral Raises",
-        meta: "Shoulders • 3×: 12-15 • Light Weight",
+        meta: "3 sets, 12-15 reps",
         assigned: [{ clientName: "Jess", tag: "C1" }, { clientName: "Tony", tag: "C2" }]
       }
     ]
@@ -157,12 +157,12 @@ const ROUNDS: RoundData[] = [
     exercises: [
       {
         title: "Stir-the-Pot Plank",
-        meta: "Core • 3×: 30-40s • Tempo 2-1-2",
+        meta: "3 sets, 30-40s",
         assigned: [{ clientName: "Tony", tag: "A1" }, { clientName: "Jess", tag: "A2" }]
       },
       {
         title: "3-Point DB Row",
-        meta: "Upper Pull • 3×: 10-12/side • RPE 7",
+        meta: "3 sets, 10-12 reps",
         assigned: [
           { clientName: "Tony", tag: "B1" },
           { clientName: "Max", tag: "B2" },
@@ -171,7 +171,7 @@ const ROUNDS: RoundData[] = [
       },
       {
         title: "Goblet Squat",
-        meta: "Lower Push • 3×: 8-10 • Slow Eccentric",
+        meta: "3 sets, 8-10 reps",
         assigned: [{ clientName: "Jess", tag: "C1" }, { clientName: "Max", tag: "C2" }]
       }
     ]
@@ -184,12 +184,12 @@ const ROUNDS: RoundData[] = [
     exercises: [
       {
         title: "Battle Ropes",
-        meta: "Conditioning • 3×: 20s • Max Effort",
+        meta: "3 sets, 20s",
         assigned: [{ clientName: "Sara", tag: "A1" }, { clientName: "Max", tag: "A2" }]
       },
       {
         title: "Box Jumps",
-        meta: "Power • 3×: 10 reps • Explosive",
+        meta: "3 sets, 10 reps",
         assigned: [
           { clientName: "Tony", tag: "B1" },
           { clientName: "Jess", tag: "B2" },
@@ -197,7 +197,7 @@ const ROUNDS: RoundData[] = [
       },
       {
         title: "Farmer's Walk",
-        meta: "Full Body • 3×: 40m • Heavy",
+        meta: "3 sets, 40m",
         assigned: [{ clientName: "Max", tag: "C1" }, { clientName: "Sara", tag: "C2" }, { clientName: "Tony", tag: "C3" }]
       }
     ]
@@ -225,7 +225,8 @@ export default function RoundView({ sessionId, round, workouts, roundsData }: Ro
   
   const [currentRoundIndex, setCurrentRoundIndex] = useState(0);
   const [phase, setPhase] = useState<"work" | "rest">("work");
-  const [timeRemaining, setTimeRemaining] = useState(rounds[0].workSeconds);
+  const [timeRemaining, setTimeRemaining] = useState(600); // 10 minutes
+  const [isPaused, setIsPaused] = useState(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   
   const currentRound = rounds[currentRoundIndex];
@@ -235,13 +236,13 @@ export default function RoundView({ sessionId, round, workouts, roundsData }: Ro
   const goToNextRound = () => {
     setCurrentRoundIndex((prev) => (prev + 1) % rounds.length);
     setPhase("work");
-    setTimeRemaining(rounds[(currentRoundIndex + 1) % rounds.length].workSeconds);
+    setTimeRemaining(600); // 10 minutes
   };
   
   const goToPreviousRound = () => {
     setCurrentRoundIndex((prev) => (prev - 1 + rounds.length) % rounds.length);
     setPhase("work");
-    setTimeRemaining(rounds[(currentRoundIndex - 1 + rounds.length) % rounds.length].workSeconds);
+    setTimeRemaining(600); // 10 minutes
   };
 
   // Format time as MM:SS
@@ -253,30 +254,32 @@ export default function RoundView({ sessionId, round, workouts, roundsData }: Ro
 
   // Timer logic
   useEffect(() => {
-    intervalRef.current = setInterval(() => {
-      setTimeRemaining((prev) => {
-        if (prev <= 1) {
-          // Time's up, transition to next phase
-          if (phase === "work") {
-            setPhase("rest");
-            return currentRound.restSeconds;
-          } else {
-            // Rest is over, move to next round
-            setPhase("work");
-            setCurrentRoundIndex((prevIndex) => (prevIndex + 1) % rounds.length);
-            return rounds[(currentRoundIndex + 1) % rounds.length].workSeconds;
+    if (!isPaused) {
+      intervalRef.current = setInterval(() => {
+        setTimeRemaining((prev) => {
+          if (prev <= 1) {
+            // Time's up, transition to next phase
+            if (phase === "work") {
+              setPhase("rest");
+              return currentRound.restSeconds;
+            } else {
+              // Rest is over, move to next round
+              setPhase("work");
+              setCurrentRoundIndex((prevIndex) => (prevIndex + 1) % rounds.length);
+              return 600; // 10 minutes
+            }
           }
-        }
-        return prev - 1;
-      });
-    }, 1000);
+          return prev - 1;
+        });
+      }, 1000);
+    }
 
     return () => {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
       }
     };
-  }, [phase, currentRoundIndex, currentRound.restSeconds]);
+  }, [phase, currentRoundIndex, currentRound.restSeconds, isPaused]);
 
   // Header subline text
   const getSublineText = (): string => {
@@ -346,7 +349,7 @@ export default function RoundView({ sessionId, round, workouts, roundsData }: Ro
                   </Text>
 
                   {/* Meta */}
-                  <Text style={{ fontSize: 13, color: TOKENS.color.muted, marginBottom: 8 }}>
+                  <Text style={{ fontSize: 15, color: TOKENS.color.text, marginBottom: 8 }}>
                     {exercise.meta}
                   </Text>
 
@@ -385,19 +388,36 @@ export default function RoundView({ sessionId, round, workouts, roundsData }: Ro
               style={{ 
                 paddingHorizontal: 32,
                 paddingVertical: 12,
+                backgroundColor: focused ? 'rgba(255,255,255,0.16)' : TOKENS.color.card,
+                borderColor: focused ? 'rgba(255,255,255,0.45)' : TOKENS.color.borderGlass,
+                borderWidth: focused ? 1 : 1,
+                transform: focused ? [{ translateY: -1 }] : [],
               }}
             >
-              {/* Focus ring */}
-              {focused && (
-                <View pointerEvents="none" style={{
-                  position: 'absolute', 
-                  inset: -1,
-                  borderRadius: TOKENS.radius.card,
-                  borderWidth: 2, 
-                  borderColor: TOKENS.color.focusRing,
-                }}/>
-              )}
-              <Text style={{ color: TOKENS.color.text, fontWeight: '700', fontSize: 18 }}>Previous</Text>
+              <Text style={{ color: TOKENS.color.text, fontSize: 18, letterSpacing: 0.2 }}>Previous</Text>
+            </MattePanel>
+          )}
+        </Pressable>
+        
+        <Pressable
+          onPress={() => {
+            setIsPaused(!isPaused);
+          }}
+          focusable
+        >
+          {({ focused }) => (
+            <MattePanel 
+              focused={focused}
+              style={{ 
+                paddingHorizontal: 18,
+                paddingVertical: 12,
+                backgroundColor: focused ? 'rgba(255,255,255,0.16)' : TOKENS.color.card,
+                borderColor: focused ? 'rgba(255,255,255,0.45)' : TOKENS.color.borderGlass,
+                borderWidth: focused ? 1 : 1,
+                transform: focused ? [{ translateY: -1 }] : [],
+              }}
+            >
+              <Text style={{ color: TOKENS.color.text, fontSize: 18 }}>{isPaused ? '▶' : '❚❚'}</Text>
             </MattePanel>
           )}
         </Pressable>
@@ -412,19 +432,13 @@ export default function RoundView({ sessionId, round, workouts, roundsData }: Ro
               style={{ 
                 paddingHorizontal: 32,
                 paddingVertical: 12,
+                backgroundColor: focused ? 'rgba(255,255,255,0.16)' : TOKENS.color.card,
+                borderColor: focused ? 'rgba(255,255,255,0.45)' : TOKENS.color.borderGlass,
+                borderWidth: focused ? 1 : 1,
+                transform: focused ? [{ translateY: -1 }] : [],
               }}
             >
-              {/* Focus ring */}
-              {focused && (
-                <View pointerEvents="none" style={{
-                  position: 'absolute', 
-                  inset: -1,
-                  borderRadius: TOKENS.radius.card,
-                  borderWidth: 2, 
-                  borderColor: TOKENS.color.focusRing,
-                }}/>
-              )}
-              <Text style={{ color: TOKENS.color.text, fontWeight: '700', fontSize: 18 }}>Next</Text>
+              <Text style={{ color: TOKENS.color.text, fontSize: 18, letterSpacing: 0.2 }}>Next</Text>
             </MattePanel>
           )}
         </Pressable>

@@ -1,7 +1,71 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, Animated, Dimensions } from 'react-native';
+import { View, Text, TouchableOpacity, Animated, Dimensions, Pressable } from 'react-native';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+
+// Design tokens - matching other screens
+const TOKENS = {
+  color: {
+    bg: '#070b18',
+    card: '#111928',
+    text: '#ffffff',
+    muted: '#9cb0ff',
+    accent: '#7cffb5',
+    accent2: '#5de1ff',
+    focusRing: 'rgba(124,255,181,0.6)',
+    borderGlass: 'rgba(255,255,255,0.08)',
+    cardGlass: 'rgba(255,255,255,0.04)',
+  },
+  radius: {
+    card: 16,
+    chip: 999,
+  },
+};
+
+// Matte panel helper component - matching other screens
+function MattePanel({
+  children,
+  style,
+  focused = false,
+  radius = TOKENS.radius.card,
+}: {
+  children: React.ReactNode;
+  style?: any;
+  focused?: boolean;
+  radius?: number;
+}) {
+  const BASE_SHADOW = {
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOpacity: 0.40,
+    shadowRadius: 22,
+    shadowOffset: { width: 0, height: 8 },
+  };
+  const FOCUS_SHADOW = {
+    elevation: 12,
+    shadowColor: '#000',
+    shadowOpacity: 0.36,
+    shadowRadius: 40,
+    shadowOffset: { width: 0, height: 12 },
+  };
+
+  return (
+    <View
+      style={[
+        {
+          backgroundColor: TOKENS.color.card,
+          borderColor: TOKENS.color.borderGlass,
+          borderWidth: 1,
+          borderRadius: radius,
+        },
+        focused ? FOCUS_SHADOW : BASE_SHADOW,
+        style,
+      ]}
+    >
+      {children}
+    </View>
+  );
+}
 
 interface WorkoutGenerationLoaderProps {
   clientNames: string[];
@@ -458,28 +522,31 @@ export function WorkoutGenerationLoader({ clientNames, onCancel }: WorkoutGenera
       
       {/* Cancel button - fixed position */}
       {onCancel && !isComplete && (
-        <TouchableOpacity
+        <Pressable
           onPress={onCancel}
+          focusable
           style={{
             position: 'absolute',
             bottom: 30,
             left: 40,
-            paddingHorizontal: 20,
-            paddingVertical: 10,
-            backgroundColor: 'rgba(255,255,255,0.1)',
-            borderRadius: 8,
-            borderWidth: 1,
-            borderColor: 'rgba(255,255,255,0.2)',
-          }}
-          activeOpacity={0.7}
-          tvParallaxProperties={{
-            enabled: true,
-            shiftDistanceX: 2,
-            shiftDistanceY: 2,
           }}
         >
-          <Text style={{ color: '#9cb0ff', fontSize: 14 }}>Cancel</Text>
-        </TouchableOpacity>
+          {({ focused }) => (
+            <MattePanel 
+              focused={focused}
+              style={{ 
+                paddingHorizontal: 32,
+                paddingVertical: 12,
+                backgroundColor: focused ? 'rgba(255,255,255,0.16)' : TOKENS.color.card,
+                borderColor: focused ? 'rgba(255,255,255,0.45)' : TOKENS.color.borderGlass,
+                borderWidth: focused ? 1 : 1,
+                transform: focused ? [{ translateY: -1 }] : [],
+              }}
+            >
+              <Text style={{ color: TOKENS.color.text, fontSize: 18, letterSpacing: 0.2 }}>Cancel</Text>
+            </MattePanel>
+          )}
+        </Pressable>
       )}
     </View>
   );

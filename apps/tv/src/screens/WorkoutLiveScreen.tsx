@@ -85,23 +85,18 @@ export function WorkoutLiveScreen() {
 
   // Helper function to format exercise metadata from scheme data
   const formatExerciseMetaFromScheme = (scheme: any, fullExercise?: any): string => {
-    const parts = [];
+    if (!scheme) return '';
     
-    // Add muscle group if available
-    if (fullExercise?.exercise?.primaryMuscle) {
-      parts.push(fullExercise.exercise.primaryMuscle);
+    if (scheme.type === 'reps') {
+      const setWord = scheme.sets === 1 ? 'set' : 'sets';
+      const repWord = scheme.reps === 1 ? 'rep' : 'reps';
+      return `${scheme.sets} ${setWord}, ${scheme.reps} ${repWord}`;
+    } else if (scheme.type === 'time') {
+      const roundWord = scheme.rounds === 1 ? 'round' : 'rounds';
+      return `${scheme.rounds} ${roundWord}, ${scheme.work} work / ${scheme.rest} rest`;
     }
     
-    // Add scheme info
-    if (scheme) {
-      if (scheme.type === 'reps') {
-        parts.push(`${scheme.sets}×${scheme.reps}`);
-      } else if (scheme.type === 'time') {
-        parts.push(`${scheme.work}/${scheme.rest} × ${scheme.rounds}`);
-      }
-    }
-    
-    return parts.join(' • ');
+    return '';
   };
 
   // Transform workouts data into rounds format for RoundView
@@ -121,8 +116,8 @@ export function WorkoutLiveScreen() {
     passedOrganization.rounds?.forEach(round => {
       const roundData = {
         label: round.name.split(' - ')[0], // "Round 1" from "Round 1 - Main Strength"
-        workSeconds: 180, // Hard-coded for now
-        restSeconds: 60,  // Hard-coded for now  
+        workSeconds: 600, // 10 minutes
+        restSeconds: 60,  // 1 minute rest
         phase: "work" as const,
         exercises: [] as any[]
       };

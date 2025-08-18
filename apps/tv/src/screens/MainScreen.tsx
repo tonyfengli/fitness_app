@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, Pressable } from 'react-native';
 import { useBusiness } from '../providers/BusinessProvider';
 import { useAuth } from '../providers/AuthProvider';
 import { supabase } from '../lib/supabase';
@@ -20,6 +20,7 @@ const TOKENS = {
     danger: '#ef4444',
     borderGlass: 'rgba(255,255,255,0.08)',
     cardGlass: 'rgba(255,255,255,0.04)',
+    focusRing: 'rgba(124,255,181,0.6)',
   },
   radius: {
     card: 16,
@@ -27,6 +28,51 @@ const TOKENS = {
     chip: 999,
   },
 };
+
+// Matte panel helper component - matching SessionLobby screen
+function MattePanel({
+  children,
+  style,
+  focused = false,
+  radius = TOKENS.radius.card,
+}: {
+  children: React.ReactNode;
+  style?: any;
+  focused?: boolean;
+  radius?: number;
+}) {
+  const BASE_SHADOW = {
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOpacity: 0.40,
+    shadowRadius: 22,
+    shadowOffset: { width: 0, height: 8 },
+  };
+  const FOCUS_SHADOW = {
+    elevation: 12,
+    shadowColor: '#000',
+    shadowOpacity: 0.36,
+    shadowRadius: 40,
+    shadowOffset: { width: 0, height: 12 },
+  };
+
+  return (
+    <View
+      style={[
+        {
+          backgroundColor: TOKENS.color.card,
+          borderColor: TOKENS.color.borderGlass,
+          borderWidth: 1,
+          borderRadius: radius,
+        },
+        focused ? FOCUS_SHADOW : BASE_SHADOW,
+        style,
+      ]}
+    >
+      {children}
+    </View>
+  );
+}
 
 interface TrainingSession {
   id: string;
@@ -52,12 +98,12 @@ export function MainScreen() {
   const [isLoadingSessions, setIsLoadingSessions] = useState(false);
   const [isSwitching, setIsSwitching] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
-  const [selectedTemplate, setSelectedTemplate] = useState(0);
+  const firstTemplateRef = useRef<any>(null);
 
   // Template options matching the webapp
   const templates = [
-    { id: 'standard', name: 'Standard', description: 'Client-pooled organization' },
-    { id: 'full_body_bmf', name: 'BMF Template', description: 'Block-based organization' },
+    { id: 'standard', name: 'Strength', description: 'Client-pooled organization' },
+    { id: 'full_body_bmf', name: 'Deprecated', description: 'Block-based organization' },
   ];
 
   // Cancel session mutation
@@ -104,7 +150,6 @@ export function MainScreen() {
       
       // Hide template selector
       setShowTemplates(false);
-      setSelectedTemplate(0);
       
       // Refresh the sessions list
       fetchOpenSessions();
@@ -117,13 +162,30 @@ export function MainScreen() {
       
       // Hide template selector
       setShowTemplates(false);
-      setSelectedTemplate(0);
       
-      Alert.alert(
-        'Create Session Failed',
-        error.message || 'Failed to create session. Please try again.',
-        [{ text: 'OK' }]
-      );
+      // Check if it's a conflict error (session already exists)
+      if (error.data?.code === 'CONFLICT') {
+        Alert.alert(
+          'Session Already Active',
+          'There is already an open session. Please close the current session before creating a new one.',
+          [
+            { 
+              text: 'OK',
+              style: 'default'
+            }
+          ],
+          { 
+            cancelable: true,
+            onDismiss: () => console.log('[MainScreen] Alert dismissed')
+          }
+        );
+      } else {
+        Alert.alert(
+          'Unable to Create Session',
+          'Something went wrong while creating the session. Please try again.',
+          [{ text: 'OK' }]
+        );
+      }
     },
   });
 
@@ -319,9 +381,28 @@ export function MainScreen() {
         <Text style={styles.errorMessage}>
           {authError?.message || 'Failed to authenticate. Please check your connection.'}
         </Text>
-        <TouchableOpacity style={styles.retryButton} onPress={() => retry()}>
-          <Text style={styles.retryButtonText}>Retry</Text>
-        </TouchableOpacity>
+        <Pressable onPress={() => retry()} focusable>
+          {({ focused }) => (
+            <MattePanel 
+              focused={focused}
+              style={{ 
+                paddingHorizontal: 24,
+                paddingVertical: 12,
+              }}
+            >
+              {focused && (
+                <View pointerEvents="none" style={{
+                  position: 'absolute', 
+                  inset: -1,
+                  borderRadius: TOKENS.radius.card,
+                  borderWidth: 2, 
+                  borderColor: TOKENS.color.danger,
+                }}/>
+              )}
+              <Text style={{ color: TOKENS.color.text, fontWeight: '600', fontSize: 18 }}>Retry</Text>
+            </MattePanel>
+          )}
+        </Pressable>
       </View>
     );
   }
@@ -332,63 +413,135 @@ export function MainScreen() {
       {/* Header */}
       <View style={styles.header}>
         {!showTemplates ? (
-          <TouchableOpacity 
-            style={[styles.createButton, (isAuthLoading || createSessionMutation.isPending) && styles.disabledButton]}
-            onPress={() => setShowTemplates(true)}
-            disabled={isAuthLoading || createSessionMutation.isPending}
+          <Pressable
+            onPress={() => {
+              console.log('[MainScreen] 🎯 Create Session button pressed');
+              setShowTemplates(true);
+              console.log('[MainScreen] 📋 Templates shown, hasTVPreferredFocus should handle focus');
+            }}
+            disabled={isAuthLoading || createSessionMutation.isPending || openSessions.length > 0}
+            focusable
           >
-            <Text style={styles.createButtonText}>
-              {createSessionMutation.isPending ? 'Creating...' : 'Create Session'}
-            </Text>
-          </TouchableOpacity>
+            {({ focused }) => (
+              <MattePanel 
+                focused={focused}
+                style={{ 
+                  paddingHorizontal: 32,
+                  paddingVertical: 12,
+                  opacity: (isAuthLoading || createSessionMutation.isPending || openSessions.length > 0) ? 0.5 : 1,
+                  backgroundColor: focused ? 'rgba(255,255,255,0.16)' : TOKENS.color.card,
+                  borderColor: focused ? 'rgba(255,255,255,0.45)' : TOKENS.color.borderGlass,
+                  borderWidth: focused ? 1 : 1,
+                  transform: focused ? [{ translateY: -1 }] : [],
+                }}
+              >
+                <Text style={{ color: TOKENS.color.text, fontSize: 18, letterSpacing: 0.2 }}>
+                  {createSessionMutation.isPending ? 'Creating...' : 'Create Session'}
+                </Text>
+              </MattePanel>
+            )}
+          </Pressable>
         ) : (
           <View style={[styles.templateSelector, { opacity: showTemplates ? 1 : 0 }]}>
-            {templates.map((template, index) => (
-              <TouchableOpacity
+            {console.log('[MainScreen] 🎨 Template selector rendered with', templates.length, 'templates')}
+            {createSessionMutation.isPending ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color={TOKENS.color.accent} />
+                <Text style={styles.loadingText}>Creating session...</Text>
+              </View>
+            ) : (
+              <>
+                {templates.map((template, index) => (
+              <Pressable
                 key={template.id}
-                style={[
-                  styles.templateCard,
-                  selectedTemplate === index && styles.templateCardSelected
-                ]}
+                ref={index === 0 ? firstTemplateRef : undefined}
+                hasTVPreferredFocus={showTemplates && index === 0}
                 onPress={() => {
-                  setSelectedTemplate(index);
                   handleCreateSession(template.id);
                 }}
-                onFocus={() => setSelectedTemplate(index)}
+                onFocus={() => {
+                  console.log(`[MainScreen] 🎯 Template "${template.name}" (index ${index}) received focus`);
+                }}
+                onBlur={() => {
+                  console.log(`[MainScreen] 🔸 Template "${template.name}" (index ${index}) lost focus`);
+                }}
+                focusable
               >
-                <Text style={[
-                  styles.templateTitle,
-                  selectedTemplate === index && styles.templateTitleSelected
-                ]}>
-                  {template.name}
-                </Text>
-              </TouchableOpacity>
-            ))}
-            <TouchableOpacity
-              style={styles.cancelButton}
-              onPress={() => {
-                setShowTemplates(false);
-                setSelectedTemplate(0);
-              }}
-            >
-              <Text style={styles.cancelButtonText}>✕</Text>
-            </TouchableOpacity>
+                {({ focused }) => (
+                  <MattePanel
+                    focused={focused}
+                    style={{
+                      paddingHorizontal: 24,
+                      paddingVertical: 20,
+                      width: 180,
+                      alignItems: 'center',
+                      backgroundColor: focused ? 'rgba(255,255,255,0.16)' : TOKENS.color.card,
+                      borderColor: focused ? 'rgba(255,255,255,0.45)' : TOKENS.color.borderGlass,
+                      borderWidth: focused ? 1 : 1,
+                      transform: focused ? [{ translateY: -1 }] : [],
+                    }}
+                  >
+                    <Text style={{
+                      fontSize: 18,
+                      letterSpacing: 0.2,
+                      color: TOKENS.color.text,
+                      textAlign: 'center',
+                    }}>
+                      {template.name}
+                    </Text>
+                  </MattePanel>
+                )}
+              </Pressable>
+                ))}
+                <Pressable
+                  onPress={() => {
+                    setShowTemplates(false);
+                  }}
+                  focusable
+                >
+              {({ focused }) => (
+                <MattePanel
+                  focused={focused}
+                  style={{
+                    width: 48,
+                    height: 48,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    backgroundColor: focused ? 'rgba(255,255,255,0.16)' : TOKENS.color.card,
+                    borderColor: focused ? 'rgba(255,255,255,0.45)' : TOKENS.color.borderGlass,
+                    borderWidth: focused ? 1 : 1,
+                    transform: focused ? [{ translateY: -1 }] : [],
+                  }}
+                  radius={24}
+                >
+                  <Text style={{ color: TOKENS.color.text, fontSize: 18, letterSpacing: 0.2 }}>✕</Text>
+                  </MattePanel>
+                )}
+              </Pressable>
+              </>
+            )}
           </View>
         )}
         
         {/* Environment Toggle */}
-        <View style={[styles.segmented, isSwitching && styles.disabledSegmented]}>
+        <View style={[styles.segmented, isSwitching && styles.disabledSegmented]} focusable={false}>
           <TouchableOpacity 
             style={[styles.segmentOption, currentEnvironment === 'developer' && styles.segmentActive]}
             onPress={() => handleEnvironmentChange('developer')}
-            disabled={isSwitching}
+            onFocus={() => console.log('[MainScreen] 🔴 Developer toggle received focus!')}
+            onBlur={() => console.log('[MainScreen] 🔸 Developer toggle lost focus')}
+            disabled={isSwitching || showTemplates}
+            focusable={!showTemplates}
           >
             <Text style={[styles.segmentText, currentEnvironment === 'developer' && styles.segmentTextActive]}>Developer</Text>
           </TouchableOpacity>
           <TouchableOpacity 
             style={[styles.segmentOption, currentEnvironment === 'gym' && styles.segmentActive]}
             onPress={() => handleEnvironmentChange('gym')}
-            disabled={isSwitching}
+            onFocus={() => console.log('[MainScreen] 🔴 Gym toggle received focus!')}
+            onBlur={() => console.log('[MainScreen] 🔸 Gym toggle lost focus')}
+            disabled={isSwitching || showTemplates}
+            focusable={!showTemplates}
           >
             <Text style={[styles.segmentText, currentEnvironment === 'gym' && styles.segmentTextActive]}>Gym</Text>
           </TouchableOpacity>
@@ -441,19 +594,63 @@ export function MainScreen() {
                 
                 {/* Action buttons for the session */}
                 <View style={styles.sessionActions}>
-                  <TouchableOpacity
-                    style={[styles.actionButton, styles.openButton]}
+                  <Pressable
                     onPress={() => handleSessionClick(session)}
+                    focusable
+                    style={{ flex: 1 }}
                   >
-                    <Text style={styles.actionButtonText}>Open Session</Text>
-                  </TouchableOpacity>
+                    {({ focused }) => (
+                      <MattePanel
+                        focused={focused}
+                        style={{
+                          paddingVertical: 12,
+                          paddingHorizontal: 20,
+                          alignItems: 'center',
+                          backgroundColor: focused ? 'rgba(255,255,255,0.16)' : TOKENS.color.card,
+                          borderColor: focused ? 'rgba(255,255,255,0.45)' : TOKENS.color.borderGlass,
+                          borderWidth: focused ? 1 : 1,
+                          transform: focused ? [{ translateY: -1 }] : [],
+                        }}
+                      >
+                        <Text style={{ 
+                          color: TOKENS.color.text, 
+                          fontSize: 18, 
+                          letterSpacing: 0.2 
+                        }}>
+                          Open Session
+                        </Text>
+                      </MattePanel>
+                    )}
+                  </Pressable>
                   
-                  <TouchableOpacity
-                    style={[styles.actionButton, styles.closeButton]}
+                  <Pressable
                     onPress={() => handleCloseSession(session.id)}
+                    focusable
+                    style={{ flex: 1 }}
                   >
-                    <Text style={styles.actionButtonText}>Cancel Session</Text>
-                  </TouchableOpacity>
+                    {({ focused }) => (
+                      <MattePanel
+                        focused={focused}
+                        style={{
+                          paddingVertical: 12,
+                          paddingHorizontal: 20,
+                          alignItems: 'center',
+                          backgroundColor: focused ? 'rgba(255,255,255,0.16)' : TOKENS.color.card,
+                          borderColor: focused ? 'rgba(255,255,255,0.45)' : TOKENS.color.borderGlass,
+                          borderWidth: focused ? 1 : 1,
+                          transform: focused ? [{ translateY: -1 }] : [],
+                        }}
+                      >
+                        <Text style={{ 
+                          color: TOKENS.color.text, 
+                          fontSize: 18, 
+                          letterSpacing: 0.2 
+                        }}>
+                          Cancel Session
+                        </Text>
+                      </MattePanel>
+                    )}
+                  </Pressable>
                 </View>
               </View>
             ))}
@@ -487,6 +684,11 @@ const styles = StyleSheet.create({
     fontSize: 24,
     color: TOKENS.color.text,
   },
+  loadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
   errorTitle: {
     fontSize: 32,
     color: TOKENS.color.text,
@@ -499,43 +701,11 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 32,
   },
-  retryButton: {
-    backgroundColor: TOKENS.color.danger,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: TOKENS.radius.button,
-  },
-  retryButtonText: {
-    color: TOKENS.color.text,
-    fontSize: 18,
-    fontWeight: '600',
-  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 40,
-  },
-  createButton: {
-    backgroundColor: TOKENS.color.accent,
-    paddingHorizontal: 24,
-    paddingVertical: 18,
-    borderRadius: TOKENS.radius.button,
-    shadowColor: TOKENS.color.accent,
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.35,
-    shadowRadius: 30,
-    elevation: 8,
-  },
-  createButtonText: {
-    color: '#051015',
-    fontSize: 22,
-    fontWeight: '700',
-    letterSpacing: 0.3,
-  },
-  dangerButton: {
-    backgroundColor: TOKENS.color.danger,
-    shadowColor: TOKENS.color.danger,
   },
   segmented: {
     backgroundColor: TOKENS.color.card,
@@ -557,18 +727,18 @@ const styles = StyleSheet.create({
     borderRadius: TOKENS.radius.chip,
   },
   segmentActive: {
-    backgroundColor: 'rgba(124,255,181,0.16)',
-    borderColor: 'rgba(124,255,181,0.45)',
-    borderWidth: 1,
-    transform: [{ translateY: -1 }],
+    backgroundColor: 'transparent',
+    borderBottomWidth: 2,
+    borderBottomColor: 'rgba(255,255,255,0.3)',
+    paddingBottom: 12,
   },
   segmentText: {
     fontSize: 18,
     letterSpacing: 0.2,
-    color: TOKENS.color.muted,
+    color: 'rgba(255,255,255,0.4)', // Grayed out for inactive
   },
   segmentTextActive: {
-    color: TOKENS.color.text,
+    color: TOKENS.color.text, // White for active
   },
   mainContent: {
     flex: 1,
@@ -658,31 +828,6 @@ const styles = StyleSheet.create({
     gap: 16,
     alignItems: 'center',
   },
-  templateCard: {
-    backgroundColor: TOKENS.color.card,
-    borderColor: TOKENS.color.borderGlass,
-    borderWidth: 2,
-    borderRadius: TOKENS.radius.card,
-    padding: 20,
-    width: 180,
-    height: 80,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  templateCardSelected: {
-    borderColor: TOKENS.color.accent,
-    backgroundColor: 'rgba(124,255,181,0.1)',
-    transform: [{ scale: 1.05 }],
-  },
-  templateTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: TOKENS.color.text,
-    textAlign: 'center',
-  },
-  templateTitleSelected: {
-    color: TOKENS.color.accent,
-  },
   templateDescription: {
     fontSize: 14,
     color: TOKENS.color.muted,
@@ -706,47 +851,10 @@ const styles = StyleSheet.create({
     color: TOKENS.color.bg,
     letterSpacing: 0.5,
   },
-  cancelButton: {
-    backgroundColor: TOKENS.color.danger,
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginLeft: 16,
-  },
-  cancelButtonText: {
-    color: TOKENS.color.text,
-    fontSize: 20,
-    fontWeight: '600',
-  },
   sessionActions: {
     flexDirection: 'row',
     marginTop: 16,
     gap: 12,
-  },
-  actionButton: {
-    flex: 1,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: TOKENS.radius.button,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  openButton: {
-    backgroundColor: 'rgba(124, 255, 181, 0.2)',
-    borderWidth: 1,
-    borderColor: TOKENS.color.accent,
-  },
-  closeButton: {
-    backgroundColor: 'rgba(239, 68, 68, 0.2)',
-    borderWidth: 1,
-    borderColor: TOKENS.color.danger,
-  },
-  actionButtonText: {
-    color: TOKENS.color.text,
-    fontSize: 16,
-    fontWeight: '600',
   },
   headerTitle: {
     fontSize: 32,

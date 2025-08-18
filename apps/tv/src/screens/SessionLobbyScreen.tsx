@@ -96,6 +96,7 @@ export function SessionLobbyScreen() {
   const [clients, setClients] = useState<CheckedInClient[]>([]);
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected'>('disconnected');
   const [isStartingSession, setIsStartingSession] = useState(false);
+  const [hasLoadedInitialData, setHasLoadedInitialData] = useState(false);
 
   // Fetch initial checked-in clients using TRPC
   console.log('[SessionLobby] 🔍 Setting up query for sessionId:', sessionId);
@@ -129,18 +130,22 @@ export function SessionLobbyScreen() {
   useEffect(() => {
     console.log('[TV SessionLobby] Session changed, clearing clients. New sessionId:', sessionId);
     setClients([]);
+    setHasLoadedInitialData(false);
   }, [sessionId]);
 
   // Set initial clients when data loads
   useEffect(() => {
-    if (initialClients && initialClients.length > 0) {
+    if (!isLoading && initialClients !== undefined) {
       console.log('[TV SessionLobby] Setting clients from initial data:', initialClients);
-      setClients(initialClients.map((client: any) => ({
-        ...client,
-        preferences: client.preferences
-      })));
+      setHasLoadedInitialData(true);
+      if (initialClients && initialClients.length > 0) {
+        setClients(initialClients.map((client: any) => ({
+          ...client,
+          preferences: client.preferences
+        })));
+      }
     }
-  }, [initialClients]);
+  }, [initialClients, isLoading]);
 
   // Handle new check-ins from real-time
   const handleCheckIn = useCallback((event: { userId: string; name: string; checkedInAt: string }) => {
@@ -238,19 +243,13 @@ export function SessionLobbyScreen() {
                 style={{ 
                   paddingHorizontal: 32,
                   paddingVertical: 12,
+                  backgroundColor: focused ? 'rgba(255,255,255,0.16)' : TOKENS.color.card,
+                  borderColor: focused ? 'rgba(255,255,255,0.45)' : TOKENS.color.borderGlass,
+                  borderWidth: focused ? 1 : 1,
+                  transform: focused ? [{ translateY: -1 }] : [],
                 }}
               >
-                {/* Focus ring */}
-                {focused && (
-                  <View pointerEvents="none" style={{
-                    position: 'absolute', 
-                    inset: -1,
-                    borderRadius: TOKENS.radius.card,
-                    borderWidth: 2, 
-                    borderColor: TOKENS.color.focusRing,
-                  }}/>
-                )}
-                <Text style={{ color: TOKENS.color.text, fontWeight: '700', fontSize: 18 }}>← Back</Text>
+                <Text style={{ color: TOKENS.color.text, fontSize: 18, letterSpacing: 0.2 }}>Back</Text>
               </MattePanel>
             )}
           </Pressable>
@@ -268,29 +267,22 @@ export function SessionLobbyScreen() {
                     paddingHorizontal: 32,
                     paddingVertical: 12,
                     opacity: isDisabled ? 0.5 : 1,
+                    backgroundColor: focused ? 'rgba(255,255,255,0.16)' : TOKENS.color.card,
+                    borderColor: focused ? 'rgba(255,255,255,0.45)' : TOKENS.color.borderGlass,
+                    borderWidth: focused ? 1 : 1,
+                    transform: focused ? [{ translateY: -1 }] : [],
                   }}
                 >
-                  {/* Optional focus ring */}
-                  {focused && !isDisabled && (
-                    <View pointerEvents="none" style={{
-                      position: 'absolute', 
-                      inset: -1,
-                      borderRadius: TOKENS.radius.card,
-                      borderWidth: 2, 
-                      borderColor: TOKENS.color.focusRing,
-                    }}/>
-                  )}
-                  
                   {isStartingSession ? (
                     <View className="flex-row items-center">
                       <ActivityIndicator size="small" color={TOKENS.color.text} style={{ marginRight: 8 }} />
-                      <Text style={{ color: TOKENS.color.text, fontWeight: '700', fontSize: 18 }}>Starting...</Text>
+                      <Text style={{ color: TOKENS.color.text, fontSize: 18, letterSpacing: 0.2 }}>Starting...</Text>
                     </View>
                   ) : (
                     <Text style={{ 
-                      color: isDisabled ? TOKENS.color.muted : TOKENS.color.text, 
-                      fontWeight: '700', 
-                      fontSize: 18 
+                      color: TOKENS.color.text, 
+                      fontSize: 18,
+                      letterSpacing: 0.2 
                     }}>
                       Start Session
                     </Text>
@@ -311,7 +303,7 @@ export function SessionLobbyScreen() {
               <Text style={{ color: '#ef4444' }}>Error loading clients</Text>
               <Text style={{ color: TOKENS.color.muted, fontSize: 14, marginTop: 8 }}>{fetchError.message || 'Unknown error'}</Text>
             </View>
-          ) : isLoading ? (
+          ) : isLoading || !hasLoadedInitialData ? (
             <View className="flex-1 items-center justify-center">
               <Text style={{ color: TOKENS.color.muted }}>Loading clients...</Text>
             </View>

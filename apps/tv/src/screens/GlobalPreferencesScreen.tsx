@@ -414,7 +414,7 @@ export function GlobalPreferencesScreen() {
       }}
     >
       {/* Header Section */}
-      <View className="flex-row items-center" style={{ marginBottom: 10 }}>
+      <View className="flex-row items-center" style={{ marginBottom: 24 }}>
         <Image 
           source={{ uri: getAvatarUrl(client.userId) }}
           style={{ 
@@ -429,9 +429,11 @@ export function GlobalPreferencesScreen() {
         </Text>
       </View>
 
-      {/* Content Sections */}
-      <View className="flex-1">
-        {/* Section 1: Workout Type */}
+      {/* Two Column Layout */}
+      <View style={{ flexDirection: 'row', gap: 16 }}>
+        {/* Left Column - Sections 1 & 2 */}
+        <View style={{ flex: 1 }}>
+          {/* Section 1: Workout Type */}
         <View className="flex-row items-center" style={{ marginBottom: 5 }}>
           <View style={{
             width: isCompact ? 19 : 24,
@@ -494,8 +496,11 @@ export function GlobalPreferencesScreen() {
             )}
           </View>
         </View>
+        </View>
 
-        {/* Section 3: Muscle Limits */}
+        {/* Right Column - Sections 3 & 4 */}
+        <View style={{ flex: 1 }}>
+          {/* Section 3: Muscle Limits */}
         <View className="flex-row items-start" style={{ marginBottom: 5 }}>
           <View style={{
             width: isCompact ? 19 : 24,
@@ -540,7 +545,7 @@ export function GlobalPreferencesScreen() {
         </View>
 
         {/* Section 4: Intensity */}
-        <View className="flex-row items-center" style={{ marginBottom: 6 }}>
+        <View className="flex-row items-center">
           <View style={{
             width: isCompact ? 19 : 24,
             height: isCompact ? 19 : 24,
@@ -558,6 +563,7 @@ export function GlobalPreferencesScreen() {
             {(client.preferences?.intensity || 'Moderate').charAt(0).toUpperCase() + 
              (client.preferences?.intensity || 'Moderate').slice(1)} ({getExerciseCount(client.preferences?.intensity)})
           </Text>
+        </View>
         </View>
       </View>
     </MattePanel>
@@ -600,19 +606,13 @@ export function GlobalPreferencesScreen() {
               style={{ 
                 paddingHorizontal: 32,
                 paddingVertical: 12,
+                backgroundColor: focused ? 'rgba(255,255,255,0.16)' : TOKENS.color.card,
+                borderColor: focused ? 'rgba(255,255,255,0.45)' : TOKENS.color.borderGlass,
+                borderWidth: focused ? 1 : 1,
+                transform: focused ? [{ translateY: -1 }] : [],
               }}
             >
-              {/* Focus ring */}
-              {focused && (
-                <View pointerEvents="none" style={{
-                  position: 'absolute', 
-                  inset: -1,
-                  borderRadius: TOKENS.radius.card,
-                  borderWidth: 2, 
-                  borderColor: TOKENS.color.focusRing,
-                }}/>
-              )}
-              <Text style={{ color: TOKENS.color.text, fontWeight: '700', fontSize: 18 }}>Back</Text>
+              <Text style={{ color: TOKENS.color.text, fontSize: 18, letterSpacing: 0.2 }}>Back</Text>
             </MattePanel>
           )}
         </Pressable>
@@ -628,19 +628,14 @@ export function GlobalPreferencesScreen() {
               style={{ 
                 paddingHorizontal: 32,
                 paddingVertical: 12,
+                opacity: isGenerating ? 0.5 : 1,
+                backgroundColor: focused ? 'rgba(255,255,255,0.16)' : TOKENS.color.card,
+                borderColor: focused ? 'rgba(255,255,255,0.45)' : TOKENS.color.borderGlass,
+                borderWidth: focused ? 1 : 1,
+                transform: focused ? [{ translateY: -1 }] : [],
               }}
             >
-              {/* Focus ring */}
-              {focused && (
-                <View pointerEvents="none" style={{
-                  position: 'absolute', 
-                  inset: -1,
-                  borderRadius: TOKENS.radius.card,
-                  borderWidth: 2, 
-                  borderColor: TOKENS.color.focusRing,
-                }}/>
-              )}
-              <Text style={{ color: TOKENS.color.text, fontWeight: '700', fontSize: 18 }}>Continue</Text>
+              <Text style={{ color: TOKENS.color.text, fontSize: 18, letterSpacing: 0.2 }}>Continue</Text>
             </MattePanel>
           )}
         </Pressable>

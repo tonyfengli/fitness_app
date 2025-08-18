@@ -231,19 +231,13 @@ export function WorkoutOverviewScreen() {
               style={{ 
                 paddingHorizontal: 32,
                 paddingVertical: 12,
+                backgroundColor: focused ? 'rgba(255,255,255,0.16)' : TOKENS.color.card,
+                borderColor: focused ? 'rgba(255,255,255,0.45)' : TOKENS.color.borderGlass,
+                borderWidth: focused ? 1 : 1,
+                transform: focused ? [{ translateY: -1 }] : [],
               }}
             >
-              {/* Focus ring */}
-              {focused && (
-                <View pointerEvents="none" style={{
-                  position: 'absolute', 
-                  inset: -1,
-                  borderRadius: TOKENS.radius.card,
-                  borderWidth: 2, 
-                  borderColor: TOKENS.color.focusRing,
-                }}/>
-              )}
-              <Text style={{ color: TOKENS.color.text, fontWeight: '700', fontSize: 18 }}>Back</Text>
+              <Text style={{ color: TOKENS.color.text, fontSize: 18, letterSpacing: 0.2 }}>Back</Text>
             </MattePanel>
           )}
         </Pressable>
@@ -272,19 +266,14 @@ export function WorkoutOverviewScreen() {
               style={{ 
                 paddingHorizontal: 32,
                 paddingVertical: 12,
+                opacity: (!sessionId || isGenerating) ? 0.5 : 1,
+                backgroundColor: focused ? 'rgba(255,255,255,0.16)' : TOKENS.color.card,
+                borderColor: focused ? 'rgba(255,255,255,0.45)' : TOKENS.color.borderGlass,
+                borderWidth: focused ? 1 : 1,
+                transform: focused ? [{ translateY: -1 }] : [],
               }}
             >
-              {/* Focus ring */}
-              {focused && (
-                <View pointerEvents="none" style={{
-                  position: 'absolute', 
-                  inset: -1,
-                  borderRadius: TOKENS.radius.card,
-                  borderWidth: 2, 
-                  borderColor: TOKENS.color.focusRing,
-                }}/>
-              )}
-              <Text style={{ color: TOKENS.color.text, fontWeight: '700', fontSize: 18 }}>Start Workout</Text>
+              <Text style={{ color: TOKENS.color.text, fontSize: 18, letterSpacing: 0.2 }}>Start Workout</Text>
             </MattePanel>
           )}
         </Pressable>
@@ -708,9 +697,6 @@ export function WorkoutOverviewScreen() {
           left: 0,
           right: 0,
           bottom: 0,
-          backgroundColor: 'rgba(0, 0, 0, 0.8)',
-          justifyContent: 'center',
-          alignItems: 'center',
           zIndex: 1000,
         }}>
           <WorkoutGenerationLoader clientNames={clients?.map(c => c.userName || 'Unknown') || []} />
