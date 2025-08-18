@@ -24,17 +24,36 @@ export default function LoginPage() {
     setIsLoading(true);
     setError(null);
 
-    console.log("[Login] Attempting sign in for:", formData.email);
+    console.log("[Login] ========== LOGIN ATTEMPT ==========");
+    console.log("[Login] Email:", formData.email);
+    console.log("[Login] Current URL:", window.location.href);
+    console.log("[Login] Origin:", window.location.origin);
+    console.log("[Login] Auth client baseURL:", authClient._baseUrl || "not accessible");
 
     try {
+      console.log("[Login] Calling authClient.signIn.email...");
       const result = await authClient.signIn.email({
         email: formData.email,
         password: formData.password,
       });
 
-      console.log("[Login] Sign in result:", result);
+      console.log("[Login] Sign in result:", {
+        success: !result.error,
+        hasData: !!result.data,
+        error: result.error,
+        errorMessage: result.error?.message,
+        errorCode: result.error?.code,
+        fullResult: result
+      });
 
       if (result.error) {
+        console.error("[Login] Authentication failed:", {
+          error: result.error,
+          message: result.error.message,
+          code: result.error.code,
+          isOnline: navigator.onLine
+        });
+        
         // Check if we're offline
         if (!navigator.onLine) {
           setError("Connection failed. Please check your internet connection.");
@@ -42,31 +61,54 @@ export default function LoginPage() {
           setError(result.error.message ?? "Invalid email or password");
         }
       } else {
+        console.log("[Login] Authentication successful, setting redirect state");
         // Set redirecting state to show loading UI
         setIsRedirecting(true);
 
+        console.log("[Login] Invalidating auth-session query");
         // Invalidate the session query to force a refetch
         await queryClient.invalidateQueries({ queryKey: ["auth-session"] });
 
+        console.log("[Login] Fetching fresh session data from /api/auth/get-session");
         // Get fresh session data from API
         const response = await fetch("/api/auth/get-session", {
           credentials: "include",
           cache: "no-store",
         });
+        
+        console.log("[Login] Session response status:", response.status);
         const sessionData = await response.json();
+        console.log("[Login] Session data:", {
+          hasUser: !!sessionData?.user,
+          userRole: sessionData?.user?.role,
+          userId: sessionData?.user?.id,
+          businessId: sessionData?.user?.businessId,
+          fullData: sessionData
+        });
 
         const userRole = sessionData?.user?.role;
 
+        console.log("[Login] Routing based on role:", userRole);
         if (userRole === "trainer") {
+          console.log("[Login] Redirecting to trainer dashboard");
           router.push("/trainer-dashboard");
         } else if (userRole === "client") {
+          console.log("[Login] Redirecting to client dashboard");
           router.push("/client-dashboard");
         } else {
+          console.log("[Login] No role found, redirecting to home");
           router.push("/");
         }
         router.refresh();
       }
     } catch (err) {
+      console.error("[Login] Caught error during login:", {
+        error: err,
+        message: err instanceof Error ? err.message : "Unknown error",
+        stack: err instanceof Error ? err.stack : undefined,
+        type: err?.constructor?.name
+      });
+      
       // Simple network vs other error detection
       if (err instanceof TypeError && err.message.includes("fetch")) {
         setError("Connection failed. Please check your internet connection.");
@@ -75,6 +117,7 @@ export default function LoginPage() {
       }
       console.error(err);
     } finally {
+      console.log("[Login] ========== END LOGIN ATTEMPT ==========");
       setIsLoading(false);
     }
   };
