@@ -154,18 +154,22 @@ export function MainScreen() {
 
   // Handle create session
   const handleCreateSession = async (templateType: string) => {
-    if (!businessId) {
-      console.error('[MainScreen] No businessId available');
+    if (!businessId || !user) {
+      console.error('[MainScreen] No businessId or user available');
       return;
     }
 
     console.log('[MainScreen] Creating session with template:', templateType);
+    console.log('[MainScreen] User ID (trainerId):', user.id);
     
     createSessionMutation.mutate({
       businessId,
+      trainerId: user.id, // Add trainer ID from current user
       name: `Training Session - ${new Date().toLocaleDateString()}`,
       templateType,
-      scheduledAt: new Date().toISOString(),
+      scheduledAt: new Date(), // Pass as Date object, not string
+      durationMinutes: 60, // Default 1 hour like webapp
+      maxParticipants: undefined, // Optional field
     });
   };
 
