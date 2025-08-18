@@ -1,9 +1,16 @@
-import { z } from "zod";
-import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
-import { db } from "@acme/db/client";
-import { WorkoutPreferences, CreateWorkoutPreferencesSchema, UserTrainingSession, TrainingSession } from "@acme/db/schema";
-import { eq, and, desc } from "@acme/db";
 import { TRPCError } from "@trpc/server";
+import { z } from "zod";
+
+import { and, desc, eq } from "@acme/db";
+import { db } from "@acme/db/client";
+import {
+  CreateWorkoutPreferencesSchema,
+  TrainingSession,
+  UserTrainingSession,
+  WorkoutPreferences,
+} from "@acme/db/schema";
+
+import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
 
 export const workoutPreferencesRouter = createTRPCRouter({
   create: protectedProcedure
@@ -17,8 +24,8 @@ export const workoutPreferencesRouter = createTRPCRouter({
           and(
             eq(UserTrainingSession.userId, input.userId),
             eq(UserTrainingSession.trainingSessionId, input.trainingSessionId),
-            eq(UserTrainingSession.status, "checked_in")
-          )
+            eq(UserTrainingSession.status, "checked_in"),
+          ),
         )
         .limit(1);
 
@@ -42,8 +49,8 @@ export const workoutPreferencesRouter = createTRPCRouter({
         .where(
           and(
             eq(UserTrainingSession.userId, input.userId),
-            eq(UserTrainingSession.trainingSessionId, input.trainingSessionId)
-          )
+            eq(UserTrainingSession.trainingSessionId, input.trainingSessionId),
+          ),
         );
 
       return preference;
@@ -60,12 +67,19 @@ export const workoutPreferencesRouter = createTRPCRouter({
         avoidExercises: z.array(z.string()).optional(),
         avoidJoints: z.array(z.string()).optional(),
         sessionGoal: z.string().optional(),
-        workoutType: z.enum(["full_body_with_finisher", "full_body_without_finisher", "targeted_with_finisher", "targeted_without_finisher"]).optional(),
-      })
+        workoutType: z
+          .enum([
+            "full_body_with_finisher",
+            "full_body_without_finisher",
+            "targeted_with_finisher",
+            "targeted_without_finisher",
+          ])
+          .optional(),
+      }),
     )
     .mutation(async ({ ctx, input }) => {
       const { id, ...updates } = input;
-      
+
       const [updated] = await db
         .update(WorkoutPreferences)
         .set(updates)
@@ -108,10 +122,12 @@ export const workoutPreferencesRouter = createTRPCRouter({
     }),
 
   getForUserSession: protectedProcedure
-    .input(z.object({ 
-      userId: z.string(),
-      sessionId: z.string().uuid()
-    }))
+    .input(
+      z.object({
+        userId: z.string(),
+        sessionId: z.string().uuid(),
+      }),
+    )
     .query(async ({ ctx, input }) => {
       const [preference] = await db
         .select()
@@ -119,8 +135,8 @@ export const workoutPreferencesRouter = createTRPCRouter({
         .where(
           and(
             eq(WorkoutPreferences.userId, input.userId),
-            eq(WorkoutPreferences.trainingSessionId, input.sessionId)
-          )
+            eq(WorkoutPreferences.trainingSessionId, input.sessionId),
+          ),
         )
         .limit(1);
 
@@ -128,11 +144,13 @@ export const workoutPreferencesRouter = createTRPCRouter({
     }),
 
   addMuscleTarget: protectedProcedure
-    .input(z.object({
-      sessionId: z.string().uuid(),
-      userId: z.string(),
-      muscle: z.string()
-    }))
+    .input(
+      z.object({
+        sessionId: z.string().uuid(),
+        userId: z.string(),
+        muscle: z.string(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       // Verify user has checked in to this session
       const checkIn = await db
@@ -141,8 +159,8 @@ export const workoutPreferencesRouter = createTRPCRouter({
         .where(
           and(
             eq(UserTrainingSession.userId, input.userId),
-            eq(UserTrainingSession.trainingSessionId, input.sessionId)
-          )
+            eq(UserTrainingSession.trainingSessionId, input.sessionId),
+          ),
         )
         .limit(1);
 
@@ -160,11 +178,11 @@ export const workoutPreferencesRouter = createTRPCRouter({
         .where(
           and(
             eq(WorkoutPreferences.userId, input.userId),
-            eq(WorkoutPreferences.trainingSessionId, input.sessionId)
-          )
+            eq(WorkoutPreferences.trainingSessionId, input.sessionId),
+          ),
         )
         .limit(1)
-        .then(res => res[0]);
+        .then((res) => res[0]);
 
       if (!preference) {
         // Get session to retrieve businessId
@@ -173,12 +191,12 @@ export const workoutPreferencesRouter = createTRPCRouter({
           .from(TrainingSession)
           .where(eq(TrainingSession.id, input.sessionId))
           .limit(1)
-          .then(res => res[0]);
+          .then((res) => res[0]);
 
         if (!session) {
           throw new TRPCError({
             code: "NOT_FOUND",
-            message: "Training session not found"
+            message: "Training session not found",
           });
         }
 
@@ -190,7 +208,7 @@ export const workoutPreferencesRouter = createTRPCRouter({
             trainingSessionId: input.sessionId,
             businessId: session.businessId,
             intensity: "moderate",
-            muscleTargets: [input.muscle]
+            muscleTargets: [input.muscle],
           })
           .returning();
       } else {
@@ -198,7 +216,7 @@ export const workoutPreferencesRouter = createTRPCRouter({
         const currentTargets = preference.muscleTargets || [];
         if (!currentTargets.includes(input.muscle)) {
           const updatedTargets = [...currentTargets, input.muscle];
-          
+
           [preference] = await db
             .update(WorkoutPreferences)
             .set({ muscleTargets: updatedTargets })
@@ -211,11 +229,13 @@ export const workoutPreferencesRouter = createTRPCRouter({
     }),
 
   addMuscleLessen: protectedProcedure
-    .input(z.object({
-      sessionId: z.string().uuid(),
-      userId: z.string(),
-      muscle: z.string()
-    }))
+    .input(
+      z.object({
+        sessionId: z.string().uuid(),
+        userId: z.string(),
+        muscle: z.string(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       // Verify user has checked in to this session
       const checkIn = await db
@@ -224,8 +244,8 @@ export const workoutPreferencesRouter = createTRPCRouter({
         .where(
           and(
             eq(UserTrainingSession.userId, input.userId),
-            eq(UserTrainingSession.trainingSessionId, input.sessionId)
-          )
+            eq(UserTrainingSession.trainingSessionId, input.sessionId),
+          ),
         )
         .limit(1);
 
@@ -243,11 +263,11 @@ export const workoutPreferencesRouter = createTRPCRouter({
         .where(
           and(
             eq(WorkoutPreferences.userId, input.userId),
-            eq(WorkoutPreferences.trainingSessionId, input.sessionId)
-          )
+            eq(WorkoutPreferences.trainingSessionId, input.sessionId),
+          ),
         )
         .limit(1)
-        .then(res => res[0]);
+        .then((res) => res[0]);
 
       if (!preference) {
         // Get session to retrieve businessId
@@ -256,12 +276,12 @@ export const workoutPreferencesRouter = createTRPCRouter({
           .from(TrainingSession)
           .where(eq(TrainingSession.id, input.sessionId))
           .limit(1)
-          .then(res => res[0]);
+          .then((res) => res[0]);
 
         if (!session) {
           throw new TRPCError({
             code: "NOT_FOUND",
-            message: "Training session not found"
+            message: "Training session not found",
           });
         }
 
@@ -273,7 +293,7 @@ export const workoutPreferencesRouter = createTRPCRouter({
             trainingSessionId: input.sessionId,
             businessId: session.businessId,
             intensity: "moderate",
-            muscleLessens: [input.muscle]
+            muscleLessens: [input.muscle],
           })
           .returning();
       } else {
@@ -281,7 +301,7 @@ export const workoutPreferencesRouter = createTRPCRouter({
         const currentLessens = preference.muscleLessens || [];
         if (!currentLessens.includes(input.muscle)) {
           const updatedLessens = [...currentLessens, input.muscle];
-          
+
           [preference] = await db
             .update(WorkoutPreferences)
             .set({ muscleLessens: updatedLessens })
@@ -295,10 +315,12 @@ export const workoutPreferencesRouter = createTRPCRouter({
 
   // Public versions for client preferences page
   getForUserSessionPublic: publicProcedure
-    .input(z.object({ 
-      userId: z.string(),
-      sessionId: z.string().uuid()
-    }))
+    .input(
+      z.object({
+        userId: z.string(),
+        sessionId: z.string().uuid(),
+      }),
+    )
     .query(async ({ ctx, input }) => {
       const [preference] = await db
         .select()
@@ -306,8 +328,8 @@ export const workoutPreferencesRouter = createTRPCRouter({
         .where(
           and(
             eq(WorkoutPreferences.userId, input.userId),
-            eq(WorkoutPreferences.trainingSessionId, input.sessionId)
-          )
+            eq(WorkoutPreferences.trainingSessionId, input.sessionId),
+          ),
         )
         .limit(1);
 
@@ -315,11 +337,13 @@ export const workoutPreferencesRouter = createTRPCRouter({
     }),
 
   addMuscleTargetPublic: publicProcedure
-    .input(z.object({
-      sessionId: z.string().uuid(),
-      userId: z.string(),
-      muscle: z.string()
-    }))
+    .input(
+      z.object({
+        sessionId: z.string().uuid(),
+        userId: z.string(),
+        muscle: z.string(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       // Verify user has checked in to this session
       const checkIn = await db
@@ -328,8 +352,8 @@ export const workoutPreferencesRouter = createTRPCRouter({
         .where(
           and(
             eq(UserTrainingSession.userId, input.userId),
-            eq(UserTrainingSession.trainingSessionId, input.sessionId)
-          )
+            eq(UserTrainingSession.trainingSessionId, input.sessionId),
+          ),
         )
         .limit(1);
 
@@ -347,11 +371,11 @@ export const workoutPreferencesRouter = createTRPCRouter({
         .where(
           and(
             eq(WorkoutPreferences.userId, input.userId),
-            eq(WorkoutPreferences.trainingSessionId, input.sessionId)
-          )
+            eq(WorkoutPreferences.trainingSessionId, input.sessionId),
+          ),
         )
         .limit(1)
-        .then(res => res[0]);
+        .then((res) => res[0]);
 
       if (!preference) {
         // Get session to retrieve businessId
@@ -360,12 +384,12 @@ export const workoutPreferencesRouter = createTRPCRouter({
           .from(TrainingSession)
           .where(eq(TrainingSession.id, input.sessionId))
           .limit(1)
-          .then(res => res[0]);
+          .then((res) => res[0]);
 
         if (!session) {
           throw new TRPCError({
             code: "NOT_FOUND",
-            message: "Training session not found"
+            message: "Training session not found",
           });
         }
 
@@ -377,7 +401,7 @@ export const workoutPreferencesRouter = createTRPCRouter({
             trainingSessionId: input.sessionId,
             businessId: session.businessId,
             intensity: "moderate",
-            muscleTargets: [input.muscle]
+            muscleTargets: [input.muscle],
           })
           .returning();
       } else {
@@ -385,25 +409,27 @@ export const workoutPreferencesRouter = createTRPCRouter({
         const currentTargets = preference.muscleTargets || [];
         if (!currentTargets.includes(input.muscle)) {
           // Check muscle target constraints based on workout type
-          const isFullBody = preference.workoutType?.startsWith('full_body');
-          const isTargeted = preference.workoutType?.startsWith('targeted');
-          
+          const isFullBody = preference.workoutType?.startsWith("full_body");
+          const isTargeted = preference.workoutType?.startsWith("targeted");
+
           if (isFullBody && currentTargets.length >= 2) {
             throw new TRPCError({
               code: "BAD_REQUEST",
-              message: "Full body workouts can have a maximum of 2 muscle targets"
+              message:
+                "Full body workouts can have a maximum of 2 muscle targets",
             });
           }
-          
+
           if (isTargeted && currentTargets.length >= 3) {
             throw new TRPCError({
               code: "BAD_REQUEST",
-              message: "Targeted workouts can have a maximum of 3 muscle targets"
+              message:
+                "Targeted workouts can have a maximum of 3 muscle targets",
             });
           }
-          
+
           const updatedTargets = [...currentTargets, input.muscle];
-          
+
           [preference] = await db
             .update(WorkoutPreferences)
             .set({ muscleTargets: updatedTargets })
@@ -416,11 +442,13 @@ export const workoutPreferencesRouter = createTRPCRouter({
     }),
 
   addMuscleLessenPublic: publicProcedure
-    .input(z.object({
-      sessionId: z.string().uuid(),
-      userId: z.string(),
-      muscle: z.string()
-    }))
+    .input(
+      z.object({
+        sessionId: z.string().uuid(),
+        userId: z.string(),
+        muscle: z.string(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       // Verify user has checked in to this session
       const checkIn = await db
@@ -429,8 +457,8 @@ export const workoutPreferencesRouter = createTRPCRouter({
         .where(
           and(
             eq(UserTrainingSession.userId, input.userId),
-            eq(UserTrainingSession.trainingSessionId, input.sessionId)
-          )
+            eq(UserTrainingSession.trainingSessionId, input.sessionId),
+          ),
         )
         .limit(1);
 
@@ -448,11 +476,11 @@ export const workoutPreferencesRouter = createTRPCRouter({
         .where(
           and(
             eq(WorkoutPreferences.userId, input.userId),
-            eq(WorkoutPreferences.trainingSessionId, input.sessionId)
-          )
+            eq(WorkoutPreferences.trainingSessionId, input.sessionId),
+          ),
         )
         .limit(1)
-        .then(res => res[0]);
+        .then((res) => res[0]);
 
       if (!preference) {
         // Get session to retrieve businessId
@@ -461,12 +489,12 @@ export const workoutPreferencesRouter = createTRPCRouter({
           .from(TrainingSession)
           .where(eq(TrainingSession.id, input.sessionId))
           .limit(1)
-          .then(res => res[0]);
+          .then((res) => res[0]);
 
         if (!session) {
           throw new TRPCError({
             code: "NOT_FOUND",
-            message: "Training session not found"
+            message: "Training session not found",
           });
         }
 
@@ -478,7 +506,7 @@ export const workoutPreferencesRouter = createTRPCRouter({
             trainingSessionId: input.sessionId,
             businessId: session.businessId,
             intensity: "moderate",
-            muscleLessens: [input.muscle]
+            muscleLessens: [input.muscle],
           })
           .returning();
       } else {
@@ -486,7 +514,7 @@ export const workoutPreferencesRouter = createTRPCRouter({
         const currentLessens = preference.muscleLessens || [];
         if (!currentLessens.includes(input.muscle)) {
           const updatedLessens = [...currentLessens, input.muscle];
-          
+
           [preference] = await db
             .update(WorkoutPreferences)
             .set({ muscleLessens: updatedLessens })
@@ -499,11 +527,13 @@ export const workoutPreferencesRouter = createTRPCRouter({
     }),
 
   removeMuscleTargetPublic: publicProcedure
-    .input(z.object({
-      sessionId: z.string().uuid(),
-      userId: z.string(),
-      muscle: z.string()
-    }))
+    .input(
+      z.object({
+        sessionId: z.string().uuid(),
+        userId: z.string(),
+        muscle: z.string(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       // Verify user has checked in to this session
       const checkIn = await db
@@ -512,8 +542,8 @@ export const workoutPreferencesRouter = createTRPCRouter({
         .where(
           and(
             eq(UserTrainingSession.userId, input.userId),
-            eq(UserTrainingSession.trainingSessionId, input.sessionId)
-          )
+            eq(UserTrainingSession.trainingSessionId, input.sessionId),
+          ),
         )
         .limit(1);
 
@@ -531,11 +561,11 @@ export const workoutPreferencesRouter = createTRPCRouter({
         .where(
           and(
             eq(WorkoutPreferences.userId, input.userId),
-            eq(WorkoutPreferences.trainingSessionId, input.sessionId)
-          )
+            eq(WorkoutPreferences.trainingSessionId, input.sessionId),
+          ),
         )
         .limit(1)
-        .then(res => res[0]);
+        .then((res) => res[0]);
 
       if (!preference) {
         throw new TRPCError({
@@ -546,8 +576,8 @@ export const workoutPreferencesRouter = createTRPCRouter({
 
       // Remove muscle from targets
       const currentTargets = preference.muscleTargets || [];
-      const updatedTargets = currentTargets.filter(m => m !== input.muscle);
-      
+      const updatedTargets = currentTargets.filter((m) => m !== input.muscle);
+
       const [updated] = await db
         .update(WorkoutPreferences)
         .set({ muscleTargets: updatedTargets })
@@ -558,11 +588,13 @@ export const workoutPreferencesRouter = createTRPCRouter({
     }),
 
   removeMuscleLessenPublic: publicProcedure
-    .input(z.object({
-      sessionId: z.string().uuid(),
-      userId: z.string(),
-      muscle: z.string()
-    }))
+    .input(
+      z.object({
+        sessionId: z.string().uuid(),
+        userId: z.string(),
+        muscle: z.string(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       // Verify user has checked in to this session
       const checkIn = await db
@@ -571,8 +603,8 @@ export const workoutPreferencesRouter = createTRPCRouter({
         .where(
           and(
             eq(UserTrainingSession.userId, input.userId),
-            eq(UserTrainingSession.trainingSessionId, input.sessionId)
-          )
+            eq(UserTrainingSession.trainingSessionId, input.sessionId),
+          ),
         )
         .limit(1);
 
@@ -590,11 +622,11 @@ export const workoutPreferencesRouter = createTRPCRouter({
         .where(
           and(
             eq(WorkoutPreferences.userId, input.userId),
-            eq(WorkoutPreferences.trainingSessionId, input.sessionId)
-          )
+            eq(WorkoutPreferences.trainingSessionId, input.sessionId),
+          ),
         )
         .limit(1)
-        .then(res => res[0]);
+        .then((res) => res[0]);
 
       if (!preference) {
         throw new TRPCError({
@@ -605,8 +637,8 @@ export const workoutPreferencesRouter = createTRPCRouter({
 
       // Remove muscle from lessens
       const currentLessens = preference.muscleLessens || [];
-      const updatedLessens = currentLessens.filter(m => m !== input.muscle);
-      
+      const updatedLessens = currentLessens.filter((m) => m !== input.muscle);
+
       const [updated] = await db
         .update(WorkoutPreferences)
         .set({ muscleLessens: updatedLessens })
@@ -617,11 +649,13 @@ export const workoutPreferencesRouter = createTRPCRouter({
     }),
 
   addNotePublic: publicProcedure
-    .input(z.object({
-      sessionId: z.string().uuid(),
-      userId: z.string(),
-      note: z.string().min(1).trim()
-    }))
+    .input(
+      z.object({
+        sessionId: z.string().uuid(),
+        userId: z.string(),
+        note: z.string().min(1).trim(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       // Verify user has checked in to this session
       const checkIn = await db
@@ -630,8 +664,8 @@ export const workoutPreferencesRouter = createTRPCRouter({
         .where(
           and(
             eq(UserTrainingSession.userId, input.userId),
-            eq(UserTrainingSession.trainingSessionId, input.sessionId)
-          )
+            eq(UserTrainingSession.trainingSessionId, input.sessionId),
+          ),
         )
         .limit(1);
 
@@ -649,11 +683,11 @@ export const workoutPreferencesRouter = createTRPCRouter({
         .where(
           and(
             eq(WorkoutPreferences.userId, input.userId),
-            eq(WorkoutPreferences.trainingSessionId, input.sessionId)
-          )
+            eq(WorkoutPreferences.trainingSessionId, input.sessionId),
+          ),
         )
         .limit(1)
-        .then(res => res[0]);
+        .then((res) => res[0]);
 
       if (!preference) {
         // Get session to retrieve businessId
@@ -662,12 +696,12 @@ export const workoutPreferencesRouter = createTRPCRouter({
           .from(TrainingSession)
           .where(eq(TrainingSession.id, input.sessionId))
           .limit(1)
-          .then(res => res[0]);
+          .then((res) => res[0]);
 
         if (!session) {
           throw new TRPCError({
             code: "NOT_FOUND",
-            message: "Training session not found"
+            message: "Training session not found",
           });
         }
 
@@ -679,14 +713,14 @@ export const workoutPreferencesRouter = createTRPCRouter({
             trainingSessionId: input.sessionId,
             businessId: session.businessId,
             intensity: "moderate",
-            notes: [input.note]
+            notes: [input.note],
           })
           .returning();
       } else {
         // Append to existing notes
         const currentNotes = preference.notes || [];
         const updatedNotes = [...currentNotes, input.note];
-        
+
         [preference] = await db
           .update(WorkoutPreferences)
           .set({ notes: updatedNotes })
@@ -698,11 +732,13 @@ export const workoutPreferencesRouter = createTRPCRouter({
     }),
 
   removeNotePublic: publicProcedure
-    .input(z.object({
-      sessionId: z.string().uuid(),
-      userId: z.string(),
-      noteIndex: z.number().int().min(0)
-    }))
+    .input(
+      z.object({
+        sessionId: z.string().uuid(),
+        userId: z.string(),
+        noteIndex: z.number().int().min(0),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       // Verify user has checked in to this session
       const checkIn = await db
@@ -711,8 +747,8 @@ export const workoutPreferencesRouter = createTRPCRouter({
         .where(
           and(
             eq(UserTrainingSession.userId, input.userId),
-            eq(UserTrainingSession.trainingSessionId, input.sessionId)
-          )
+            eq(UserTrainingSession.trainingSessionId, input.sessionId),
+          ),
         )
         .limit(1);
 
@@ -730,11 +766,11 @@ export const workoutPreferencesRouter = createTRPCRouter({
         .where(
           and(
             eq(WorkoutPreferences.userId, input.userId),
-            eq(WorkoutPreferences.trainingSessionId, input.sessionId)
-          )
+            eq(WorkoutPreferences.trainingSessionId, input.sessionId),
+          ),
         )
         .limit(1)
-        .then(res => res[0]);
+        .then((res) => res[0]);
 
       if (!preference) {
         throw new TRPCError({
@@ -745,8 +781,10 @@ export const workoutPreferencesRouter = createTRPCRouter({
 
       // Remove note at specified index
       const currentNotes = preference.notes || [];
-      const updatedNotes = currentNotes.filter((_, index) => index !== input.noteIndex);
-      
+      const updatedNotes = currentNotes.filter(
+        (_, index) => index !== input.noteIndex,
+      );
+
       const [updated] = await db
         .update(WorkoutPreferences)
         .set({ notes: updatedNotes })
@@ -757,11 +795,13 @@ export const workoutPreferencesRouter = createTRPCRouter({
     }),
 
   updateIntensityPublic: publicProcedure
-    .input(z.object({
-      sessionId: z.string().uuid(),
-      userId: z.string(),
-      intensity: z.enum(["low", "moderate", "high", "intense"])
-    }))
+    .input(
+      z.object({
+        sessionId: z.string().uuid(),
+        userId: z.string(),
+        intensity: z.enum(["low", "moderate", "high", "intense"]),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       // Verify user has checked in to this session
       const checkIn = await db
@@ -770,8 +810,8 @@ export const workoutPreferencesRouter = createTRPCRouter({
         .where(
           and(
             eq(UserTrainingSession.userId, input.userId),
-            eq(UserTrainingSession.trainingSessionId, input.sessionId)
-          )
+            eq(UserTrainingSession.trainingSessionId, input.sessionId),
+          ),
         )
         .limit(1);
 
@@ -789,11 +829,11 @@ export const workoutPreferencesRouter = createTRPCRouter({
         .where(
           and(
             eq(WorkoutPreferences.userId, input.userId),
-            eq(WorkoutPreferences.trainingSessionId, input.sessionId)
-          )
+            eq(WorkoutPreferences.trainingSessionId, input.sessionId),
+          ),
         )
         .limit(1)
-        .then(res => res[0]);
+        .then((res) => res[0]);
 
       if (!preference) {
         // Get session to retrieve businessId
@@ -802,12 +842,12 @@ export const workoutPreferencesRouter = createTRPCRouter({
           .from(TrainingSession)
           .where(eq(TrainingSession.id, input.sessionId))
           .limit(1)
-          .then(res => res[0]);
+          .then((res) => res[0]);
 
         if (!session) {
           throw new TRPCError({
             code: "NOT_FOUND",
-            message: "Training session not found"
+            message: "Training session not found",
           });
         }
 
@@ -819,19 +859,19 @@ export const workoutPreferencesRouter = createTRPCRouter({
             trainingSessionId: input.sessionId,
             businessId: session.businessId,
             intensity: input.intensity,
-            intensitySource: 'explicit'
+            intensitySource: "explicit",
           })
           .returning();
-        
+
         return newPref;
       }
 
       // Update existing preferences
       const [updated] = await db
         .update(WorkoutPreferences)
-        .set({ 
+        .set({
           intensity: input.intensity,
-          intensitySource: 'explicit'
+          intensitySource: "explicit",
         })
         .where(eq(WorkoutPreferences.id, preference.id))
         .returning();
@@ -840,11 +880,18 @@ export const workoutPreferencesRouter = createTRPCRouter({
     }),
 
   updateWorkoutTypePublic: publicProcedure
-    .input(z.object({
-      sessionId: z.string().uuid(),
-      userId: z.string(),
-      workoutType: z.enum(["full_body_with_finisher", "full_body_without_finisher", "targeted_with_finisher", "targeted_without_finisher"])
-    }))
+    .input(
+      z.object({
+        sessionId: z.string().uuid(),
+        userId: z.string(),
+        workoutType: z.enum([
+          "full_body_with_finisher",
+          "full_body_without_finisher",
+          "targeted_with_finisher",
+          "targeted_without_finisher",
+        ]),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       // Verify user has checked in to this session
       const checkIn = await db
@@ -854,8 +901,8 @@ export const workoutPreferencesRouter = createTRPCRouter({
           and(
             eq(UserTrainingSession.userId, input.userId),
             eq(UserTrainingSession.trainingSessionId, input.sessionId),
-            eq(UserTrainingSession.status, "checked_in")
-          )
+            eq(UserTrainingSession.status, "checked_in"),
+          ),
         )
         .limit(1);
 
@@ -873,11 +920,11 @@ export const workoutPreferencesRouter = createTRPCRouter({
         .where(
           and(
             eq(WorkoutPreferences.userId, input.userId),
-            eq(WorkoutPreferences.trainingSessionId, input.sessionId)
-          )
+            eq(WorkoutPreferences.trainingSessionId, input.sessionId),
+          ),
         )
         .limit(1)
-        .then(res => res[0]);
+        .then((res) => res[0]);
 
       if (!preference) {
         // Get session to retrieve businessId
@@ -886,12 +933,12 @@ export const workoutPreferencesRouter = createTRPCRouter({
           .from(TrainingSession)
           .where(eq(TrainingSession.id, input.sessionId))
           .limit(1)
-          .then(res => res[0]);
+          .then((res) => res[0]);
 
         if (!session) {
           throw new TRPCError({
             code: "NOT_FOUND",
-            message: "Training session not found"
+            message: "Training session not found",
           });
         }
 
@@ -903,7 +950,7 @@ export const workoutPreferencesRouter = createTRPCRouter({
             trainingSessionId: input.sessionId,
             businessId: session.businessId,
             workoutType: input.workoutType,
-            collectionMethod: 'web'
+            collectionMethod: "web",
           })
           .returning();
 
@@ -923,10 +970,12 @@ export const workoutPreferencesRouter = createTRPCRouter({
           intensity: updated.intensity || null,
           muscleTargets: updated.muscleTargets || null,
           muscleLessens: updated.muscleLessens || null,
-          sessionGoal: input.workoutType.includes('targeted') ? 'targeted' : 'full-body',
-          includeFinisher: input.workoutType.includes('with_finisher')
+          sessionGoal: input.workoutType.includes("targeted")
+            ? "targeted"
+            : "full-body",
+          includeFinisher: input.workoutType.includes("with_finisher"),
         };
-        
+
         // TODO: Implement preference update broadcast
         // await broadcastPreferenceUpdate(input.sessionId, input.userId, preferenceData, false);
       }

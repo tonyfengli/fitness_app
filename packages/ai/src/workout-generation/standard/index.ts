@@ -3,18 +3,18 @@
  */
 
 export { StandardWorkoutGenerator } from "./StandardWorkoutGenerator";
-export type { 
-  ExerciseSelection, 
-  WorkoutRoundOrganization, 
-  StandardWorkoutPlan 
+export type {
+  ExerciseSelection,
+  WorkoutRoundOrganization,
+  StandardWorkoutPlan,
 } from "./types";
 
 // Shared exercise utilities
 export { SharedExerciseSelector } from "./SharedExerciseSelector";
 export type { SharedExerciseSelectionResult } from "./SharedExerciseSelector";
-export { 
-  categorizeSharedExercises, 
+export {
+  categorizeSharedExercises,
   isCoreOrFinisherExercise,
-  getExerciseCategory 
+  getExerciseCategory,
 } from "./sharedExerciseFilters";
 export type { CategorizedSharedExercises } from "./sharedExerciseFilters";

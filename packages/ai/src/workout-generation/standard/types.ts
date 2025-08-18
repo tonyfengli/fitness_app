@@ -30,14 +30,14 @@ export interface ExerciseSelection {
       totalExercises: number;
     };
   };
-  
+
   sharedExercises: {
     exerciseId: string;
     exerciseName: string;
     clientIds: string[];
     averageScore: number;
   }[];
-  
+
   selectionReasoning: string;
 }
 
@@ -67,13 +67,13 @@ export interface WorkoutRoundOrganization {
       clientRotation: string[][]; // Array of client ID arrays per rotation
     }[];
   }[];
-  
+
   workoutSummary: {
     totalDuration: string;
     equipmentNeeded: string[];
     flowDescription: string;
   };
-  
+
   organizationReasoning: string;
 }
 

@@ -1,14 +1,18 @@
-import { db } from "@acme/db/client";
 import { eq } from "@acme/db";
+import { db } from "@acme/db/client";
 import { BusinessExercise, exercises } from "@acme/db/schema";
-import type { Exercise } from "../types";
+
 import type { ExerciseRepository } from "../repositories/exerciseRepository";
+import type { Exercise } from "../types";
 import { getServices } from "../services/container";
 
 export class ExerciseFetchError extends Error {
-  constructor(message: string, public cause?: unknown) {
+  constructor(
+    message: string,
+    public cause?: unknown,
+  ) {
     super(message);
-    this.name = 'ExerciseFetchError';
+    this.name = "ExerciseFetchError";
   }
 }
 
@@ -19,7 +23,10 @@ class PrismaExerciseRepository implements ExerciseRepository {
       const exerciseList = await db.query.exercises.findMany();
       return exerciseList as Exercise[];
     } catch (error) {
-      throw new ExerciseFetchError('Failed to fetch exercises from database', error);
+      throw new ExerciseFetchError(
+        "Failed to fetch exercises from database",
+        error,
+      );
     }
   }
 
@@ -28,13 +35,16 @@ class PrismaExerciseRepository implements ExerciseRepository {
       const businessExercises = await db.query.BusinessExercise.findMany({
         where: eq(BusinessExercise.businessId, businessId),
         with: {
-          exercise: true
-        }
+          exercise: true,
+        },
       });
-      
+
       return businessExercises.map((be: any) => be.exercise) as Exercise[];
     } catch (error) {
-      throw new ExerciseFetchError(`Failed to fetch exercises for business ${businessId}`, error);
+      throw new ExerciseFetchError(
+        `Failed to fetch exercises for business ${businessId}`,
+        error,
+      );
     }
   }
 }
@@ -70,11 +80,13 @@ export async function fetchAllExercises(): Promise<Exercise[]> {
  * @returns Promise<Exercise[]> - Exercises specific to the business
  * @throws {ExerciseFetchError} If database query fails
  */
-export async function fetchExercisesByBusiness(businessId: string): Promise<Exercise[]> {
+export async function fetchExercisesByBusiness(
+  businessId: string,
+): Promise<Exercise[]> {
   if (!businessId) {
-    throw new ExerciseFetchError('Business ID is required');
+    throw new ExerciseFetchError("Business ID is required");
   }
-  
+
   // Check if a repository is available in the service container (for testing)
   const services = getServices();
   if (services.exerciseRepository) {

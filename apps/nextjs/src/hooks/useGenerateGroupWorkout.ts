@@ -1,8 +1,9 @@
 import { useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation } from "@tanstack/react-query";
-import { useTRPC } from "~/trpc/react";
 import { toast } from "sonner";
+
+import { useTRPC } from "~/trpc/react";
 
 export interface UseGenerateGroupWorkoutOptions {
   sessionId: string;
@@ -14,17 +15,19 @@ export interface UseGenerateGroupWorkoutOptions {
   showToasts?: boolean;
 }
 
-export function useGenerateGroupWorkout(options: UseGenerateGroupWorkoutOptions) {
+export function useGenerateGroupWorkout(
+  options: UseGenerateGroupWorkoutOptions,
+) {
   const router = useRouter();
   const trpc = useTRPC();
-  const { 
-    sessionId, 
-    navigateOnSuccess = false, 
+  const {
+    sessionId,
+    navigateOnSuccess = false,
     navigationTarget,
     includeDiagnostics = false,
     onSuccess,
     onError,
-    showToasts = true
+    showToasts = true,
   } = options;
 
   const mutation = useMutation(
@@ -32,15 +35,16 @@ export function useGenerateGroupWorkout(options: UseGenerateGroupWorkoutOptions)
       onSuccess: (data) => {
         // Show success toast if enabled
         if (showToasts) {
-          toast.success('Workouts generated successfully!');
+          toast.success("Workouts generated successfully!");
         }
-        
+
         // Call custom success handler
         onSuccess?.(data);
-        
+
         // Handle navigation if requested
         if (navigateOnSuccess && data.workoutIds?.length > 0) {
-          const target = navigationTarget || `/workout-overview?sessionId=${sessionId}`;
+          const target =
+            navigationTarget || `/workout-overview?sessionId=${sessionId}`;
           // Use setTimeout to allow any UI updates to complete first
           setTimeout(() => {
             router.push(target);
@@ -50,20 +54,20 @@ export function useGenerateGroupWorkout(options: UseGenerateGroupWorkoutOptions)
       onError: (error) => {
         // Show error toast if enabled
         if (showToasts) {
-          const message = error.message || 'Failed to generate workouts';
+          const message = error.message || "Failed to generate workouts";
           toast.error(message);
         }
-        
+
         // Call custom error handler
         onError?.(error);
-      }
-    })
+      },
+    }),
   );
 
   const generateWorkout = useCallback(() => {
     if (!sessionId) {
       if (showToasts) {
-        toast.error('Session ID is required');
+        toast.error("Session ID is required");
       }
       return;
     }
@@ -73,8 +77,8 @@ export function useGenerateGroupWorkout(options: UseGenerateGroupWorkoutOptions)
       options: {
         skipBlueprintCache: false,
         dryRun: false,
-        includeDiagnostics
-      }
+        includeDiagnostics,
+      },
     });
   }, [sessionId, includeDiagnostics, mutation]);
 
@@ -83,6 +87,6 @@ export function useGenerateGroupWorkout(options: UseGenerateGroupWorkoutOptions)
     isGenerating: mutation.isPending,
     error: mutation.error,
     data: mutation.data,
-    reset: mutation.reset
+    reset: mutation.reset,
   };
 }

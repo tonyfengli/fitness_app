@@ -2,7 +2,9 @@
 
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
+
 import { useTRPC } from "~/trpc/react";
+
 // WorkoutTemplateType is not in client.ts, so we'll define it inline for now
 type WorkoutTemplateType = "standard" | "circuit" | "full_body";
 
@@ -27,7 +29,7 @@ export default function WorkoutGenerationModal({
 }: WorkoutGenerationModalProps) {
   const [error, setError] = useState<string | null>(null);
   const trpc = useTRPC();
-  
+
   const generateWorkout = useMutation(
     trpc.workout.generateIndividual.mutationOptions({
       onSuccess: (result) => {
@@ -35,11 +37,13 @@ export default function WorkoutGenerationModal({
         onClose();
       },
       onError: (err) => {
-        setError(err instanceof Error ? err.message : "Failed to generate workout");
+        setError(
+          err instanceof Error ? err.message : "Failed to generate workout",
+        );
       },
     }),
   );
-  
+
   if (!isOpen) return null;
 
   const handleGenerate = () => {
@@ -56,14 +60,14 @@ export default function WorkoutGenerationModal({
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto">
       {/* Backdrop */}
-      <div 
+      <div
         className="fixed inset-0 bg-black bg-opacity-50 transition-opacity"
         onClick={onClose}
       />
-      
+
       {/* Modal */}
       <div className="flex min-h-full items-center justify-center p-4">
-        <div className="relative w-full max-w-2xl bg-white rounded-lg shadow-xl">
+        <div className="relative w-full max-w-2xl rounded-lg bg-white shadow-xl">
           {/* Header */}
           <div className="flex items-center justify-between border-b px-6 py-4">
             <h2 className="text-xl font-semibold text-gray-900">
@@ -71,47 +75,51 @@ export default function WorkoutGenerationModal({
             </h2>
             <button
               onClick={onClose}
-              className="rounded-md p-1 hover:bg-gray-100 text-gray-500 font-semibold text-xl leading-none"
+              className="rounded-md p-1 text-xl font-semibold leading-none text-gray-500 hover:bg-gray-100"
             >
               ×
             </button>
           </div>
-          
+
           {/* Content */}
           <div className="px-6 py-4">
             <div className="space-y-6">
               {/* Summary */}
-              <div className="bg-gray-50 rounded-lg p-4">
-                <h4 className="font-medium text-gray-700 mb-2">Workout Summary</h4>
-                <div className="text-sm text-gray-600 space-y-1">
+              <div className="rounded-lg bg-gray-50 p-4">
+                <h4 className="mb-2 font-medium text-gray-700">
+                  Workout Summary
+                </h4>
+                <div className="space-y-1 text-sm text-gray-600">
                   <p>• Client: {clientName}</p>
-                  <p>• Template: {templateType.replace("_", " ").toUpperCase()}</p>
+                  <p>
+                    • Template: {templateType.replace("_", " ").toUpperCase()}
+                  </p>
                   <p>• Available exercises: {exercises.length}</p>
                 </div>
               </div>
-              
+
               {/* Error Display */}
               {error && (
-                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                <div className="rounded-lg border border-red-200 bg-red-50 p-4">
                   <p className="text-sm text-red-800">{error}</p>
                 </div>
               )}
             </div>
           </div>
-          
+
           {/* Footer */}
           <div className="flex items-center justify-end gap-3 border-t px-6 py-4">
             <button
               onClick={onClose}
               disabled={generateWorkout.isPending}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+              className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
             >
               Cancel
             </button>
             <button
               onClick={handleGenerate}
               disabled={generateWorkout.isPending}
-              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+              className="rounded-md border border-transparent bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
             >
               {generateWorkout.isPending ? "Generating..." : "Generate Workout"}
             </button>

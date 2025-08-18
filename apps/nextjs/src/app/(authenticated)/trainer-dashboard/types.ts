@@ -32,9 +32,9 @@ export interface FilteredExercisesResult {
 }
 
 export interface WorkoutParameters {
-  sessionGoal: 'strength' | 'stability' | '';
-  intensity: 'low' | 'moderate' | 'high' | '';
-  template: 'standard' | 'circuit' | 'full_body' | '';
+  sessionGoal: "strength" | "stability" | "";
+  intensity: "low" | "moderate" | "high" | "";
+  template: "standard" | "circuit" | "full_body" | "";
   includeExercises: string[];
   avoidExercises: string[];
   muscleTarget: string[];
@@ -53,7 +53,7 @@ export interface SelectOption {
   label: string;
 }
 
-export type TagColor = 'indigo' | 'red' | 'green' | 'yellow';
+export type TagColor = "indigo" | "red" | "green" | "yellow";
 
 export interface BlockConfig {
   id: string;

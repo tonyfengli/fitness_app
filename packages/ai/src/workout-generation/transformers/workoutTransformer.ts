@@ -1,5 +1,6 @@
-import type { exercises } from "@acme/db/schema";
 import type { InferSelectModel } from "drizzle-orm";
+
+import type { exercises } from "@acme/db/schema";
 
 type Exercise = InferSelectModel<typeof exercises>;
 
@@ -16,7 +17,7 @@ export type LLMWorkoutOutput = {
   }>;
 } & {
   reasoning?: string;
-}
+};
 
 /**
  * Database format - what we need to save
@@ -48,11 +49,11 @@ export interface WorkoutDBFormat {
 export async function transformLLMOutputToDB(
   llmOutput: LLMWorkoutOutput,
   exerciseLookup: Map<string, Exercise>,
-  templateType: string = 'standard',
+  templateType: string = "standard",
   workoutName?: string,
-  workoutDescription?: string
+  workoutDescription?: string,
 ): Promise<WorkoutDBFormat> {
-  const exercises: WorkoutDBFormat['exercises'] = [];
+  const exercises: WorkoutDBFormat["exercises"] = [];
   let totalSets = 0;
   let orderIndex = 0;
 
@@ -67,21 +68,24 @@ export async function transformLLMOutputToDB(
     // Process each exercise in the block
     for (const exercise of blockExercises) {
       // Skip exercises without a name
-      if (!exercise.exercise || exercise.exercise.trim() === '') {
+      if (!exercise.exercise || exercise.exercise.trim() === "") {
         continue;
       }
-      
-      const exerciseEntity = findExerciseByName(exercise.exercise, exerciseLookup);
-      
+
+      const exerciseEntity = findExerciseByName(
+        exercise.exercise,
+        exerciseLookup,
+      );
+
       exercises.push({
-        exerciseId: exerciseEntity?.id || 'unknown',
+        exerciseId: exerciseEntity?.id || "unknown",
         exerciseName: exercise.exercise,
         sets: exercise.sets || 0,
         reps: exercise.reps,
         restPeriod: exercise.rest,
         notes: exercise.notes,
         orderIndex: orderIndex++,
-        groupName
+        groupName,
       });
 
       totalSets += exercise.sets || 0;
@@ -95,9 +99,9 @@ export async function transformLLMOutputToDB(
       workoutType: templateType,
       totalPlannedSets: totalSets,
       llmOutput,
-      templateConfig: getTemplateConfig(templateType)
+      templateConfig: getTemplateConfig(templateType),
     },
-    exercises
+    exercises,
   };
 }
 
@@ -107,15 +111,15 @@ export async function transformLLMOutputToDB(
 function formatGroupName(blockKey: string, templateType: string): string {
   // Handle different naming conventions
   const key = blockKey.toLowerCase();
-  
-  if (templateType === 'circuit') {
+
+  if (templateType === "circuit") {
     // Convert round1, round2, etc. to "Round 1", "Round 2"
-    if (key.startsWith('round')) {
-      const roundNumber = key.replace('round', '');
+    if (key.startsWith("round")) {
+      const roundNumber = key.replace("round", "");
       return `Round ${roundNumber}`;
     }
   }
-  
+
   // BMF templates don't use block naming, only round naming
 
   // Fallback: just capitalize first letter
@@ -126,32 +130,34 @@ function formatGroupName(blockKey: string, templateType: string): string {
  * Find exercise by name (case-insensitive)
  */
 function findExerciseByName(
-  exerciseName: string, 
-  exerciseLookup: Map<string, Exercise>
+  exerciseName: string,
+  exerciseLookup: Map<string, Exercise>,
 ): Exercise | undefined {
   // First try exact match
-  const exactMatch = Array.from(exerciseLookup.values())
-    .find(ex => ex.name === exerciseName);
-  
+  const exactMatch = Array.from(exerciseLookup.values()).find(
+    (ex) => ex.name === exerciseName,
+  );
+
   if (exactMatch) return exactMatch;
 
   // Try case-insensitive match
   const lowerName = exerciseName.toLowerCase();
-  return Array.from(exerciseLookup.values())
-    .find(ex => ex.name.toLowerCase() === lowerName);
+  return Array.from(exerciseLookup.values()).find(
+    (ex) => ex.name.toLowerCase() === lowerName,
+  );
 }
 
 /**
  * Generate a default workout name based on template type
  */
 function generateWorkoutName(templateType: string): string {
-  const date = new Date().toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric'
+  const date = new Date().toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
   });
 
   switch (templateType) {
-    case 'circuit':
+    case "circuit":
       return `Circuit Training - ${date}`;
     default:
       return `Strength Training - ${date}`;
@@ -163,16 +169,16 @@ function generateWorkoutName(templateType: string): string {
  */
 function getTemplateConfig(templateType: string): Record<string, any> {
   switch (templateType) {
-    case 'circuit':
+    case "circuit":
       return {
         rounds: 3,
-        workRestRatio: '45s/15s',
-        format: 'time-based'
+        workRestRatio: "45s/15s",
+        format: "time-based",
       };
     default:
       return {
-        blocks: ['A', 'B', 'C', 'D'],
-        format: 'rep-based'
+        blocks: ["A", "B", "C", "D"],
+        format: "rep-based",
       };
   }
 }
@@ -182,11 +188,11 @@ function getTemplateConfig(templateType: string): Record<string, any> {
  */
 export function validateExerciseLookup(
   llmOutput: LLMWorkoutOutput,
-  exerciseLookup: Map<string, Exercise>
-): { 
-  valid: boolean; 
+  exerciseLookup: Map<string, Exercise>,
+): {
+  valid: boolean;
   missingExercises: string[];
-  warnings: string[]; 
+  warnings: string[];
 } {
   const missingExercises: string[] = [];
   const warnings: string[] = [];
@@ -196,16 +202,18 @@ export function validateExerciseLookup(
 
     for (const exercise of blockExercises) {
       // Skip exercises without a name
-      if (!exercise.exercise || exercise.exercise.trim() === '') {
+      if (!exercise.exercise || exercise.exercise.trim() === "") {
         warnings.push(`Exercise in ${blockKey} has no name`);
         continue;
       }
-      
+
       const found = findExerciseByName(exercise.exercise, exerciseLookup);
-      
+
       if (!found) {
         missingExercises.push(exercise.exercise);
-        warnings.push(`Exercise "${exercise.exercise}" in ${blockKey} not found in database`);
+        warnings.push(
+          `Exercise "${exercise.exercise}" in ${blockKey} not found in database`,
+        );
       }
     }
   }
@@ -213,6 +221,6 @@ export function validateExerciseLookup(
   return {
     valid: missingExercises.length === 0,
     missingExercises,
-    warnings
+    warnings,
   };
 }

@@ -4,10 +4,8 @@ export default function PreferencesLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-col h-screen overflow-hidden">
-      <div className="flex-1">
-        {children}
-      </div>
+    <div className="flex h-screen flex-col overflow-hidden">
+      <div className="flex-1">{children}</div>
     </div>
   );
 }

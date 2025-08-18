@@ -2,8 +2,8 @@
  * Types for group workout LLM generation
  */
 
-import type { GroupBlockBlueprint } from "../../../types/groupBlueprint";
 import type { ClientContext } from "../../../types/clientContext";
+import type { GroupBlockBlueprint } from "../../../types/groupBlueprint";
 
 /**
  * Input for shared exercise selection LLM call
@@ -45,11 +45,14 @@ export interface SharedSelectionOutput {
     targetMet: boolean;
     totalSharedSlots: number;
     targetSharedSlots: number;
-    byClient: Record<string, {
-      sharedExercises: number;
-      targetExercises: number;
-      percentage: number;
-    }>;
+    byClient: Record<
+      string,
+      {
+        sharedExercises: number;
+        targetExercises: number;
+        percentage: number;
+      }
+    >;
   };
   reasoning: string;
 }

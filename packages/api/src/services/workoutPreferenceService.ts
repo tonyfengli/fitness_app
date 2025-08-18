@@ -1,6 +1,12 @@
+import { and, desc, eq, or } from "@acme/db";
 import { db } from "@acme/db/client";
-import { WorkoutPreferences, UserTrainingSession, TrainingSession, user } from "@acme/db/schema";
-import { eq, and, or, desc } from "@acme/db";
+import {
+  TrainingSession,
+  user,
+  UserTrainingSession,
+  WorkoutPreferences,
+} from "@acme/db/schema";
+
 import { createLogger } from "../utils/logger";
 
 const logger = createLogger("WorkoutPreferenceService");
@@ -51,13 +57,14 @@ export class WorkoutPreferenceService {
         .select({
           trainingSessionId: UserTrainingSession.trainingSessionId,
           userId: UserTrainingSession.userId,
-          preferenceCollectionStep: UserTrainingSession.preferenceCollectionStep,
+          preferenceCollectionStep:
+            UserTrainingSession.preferenceCollectionStep,
           businessId: TrainingSession.businessId,
         })
         .from(UserTrainingSession)
         .innerJoin(
           TrainingSession,
-          eq(UserTrainingSession.trainingSessionId, TrainingSession.id)
+          eq(UserTrainingSession.trainingSessionId, TrainingSession.id),
         )
         .where(
           and(
@@ -65,14 +72,26 @@ export class WorkoutPreferenceService {
             eq(UserTrainingSession.status, "checked_in"),
             or(
               eq(UserTrainingSession.preferenceCollectionStep, "not_started"),
-              eq(UserTrainingSession.preferenceCollectionStep, "initial_collected"),
-              eq(UserTrainingSession.preferenceCollectionStep, "disambiguation_pending"),
-              eq(UserTrainingSession.preferenceCollectionStep, "disambiguation_clarifying"),
+              eq(
+                UserTrainingSession.preferenceCollectionStep,
+                "initial_collected",
+              ),
+              eq(
+                UserTrainingSession.preferenceCollectionStep,
+                "disambiguation_pending",
+              ),
+              eq(
+                UserTrainingSession.preferenceCollectionStep,
+                "disambiguation_clarifying",
+              ),
               eq(UserTrainingSession.preferenceCollectionStep, "followup_sent"),
-              eq(UserTrainingSession.preferenceCollectionStep, "preferences_active")
+              eq(
+                UserTrainingSession.preferenceCollectionStep,
+                "preferences_active",
+              ),
             ),
-            eq(TrainingSession.status, "open")
-          )
+            eq(TrainingSession.status, "open"),
+          ),
         )
         .limit(1);
 
@@ -96,26 +115,27 @@ export class WorkoutPreferenceService {
     userId: string,
     sessionId: string,
     businessId: string,
-    preferences: Partial<ParsedPreferences>
+    preferences: Partial<ParsedPreferences>,
   ): Promise<void> {
     try {
       // Only save if there are simple preferences to save
-      const hasSimplePrefs = preferences.intensity || 
-                            preferences.sessionGoal !== undefined ||
-                            preferences.muscleTargets?.length ||
-                            preferences.muscleLessens?.length ||
-                            preferences.avoidJoints?.length;
-      
+      const hasSimplePrefs =
+        preferences.intensity ||
+        preferences.sessionGoal !== undefined ||
+        preferences.muscleTargets?.length ||
+        preferences.muscleLessens?.length ||
+        preferences.avoidJoints?.length;
+
       if (!hasSimplePrefs) {
         return;
       }
 
-      logger.info("Saving simple preferences (fire-and-forget)", { 
-        userId, 
+      logger.info("Saving simple preferences (fire-and-forget)", {
+        userId,
         sessionId,
         hasIntensity: !!preferences.intensity,
         hasSessionGoal: preferences.sessionGoal !== undefined,
-        hasMuscleTargets: !!preferences.muscleTargets?.length
+        hasMuscleTargets: !!preferences.muscleTargets?.length,
       });
 
       // Check if preferences already exist
@@ -125,8 +145,8 @@ export class WorkoutPreferenceService {
         .where(
           and(
             eq(WorkoutPreferences.userId, userId),
-            eq(WorkoutPreferences.trainingSessionId, sessionId)
-          )
+            eq(WorkoutPreferences.trainingSessionId, sessionId),
+          ),
         )
         .limit(1);
 
@@ -139,7 +159,10 @@ export class WorkoutPreferenceService {
             muscleTargets: preferences.muscleTargets || existing.muscleTargets,
             muscleLessens: preferences.muscleLessens || existing.muscleLessens,
             avoidJoints: preferences.avoidJoints || existing.avoidJoints,
-            sessionGoal: preferences.sessionGoal !== undefined ? preferences.sessionGoal : existing.sessionGoal,
+            sessionGoal:
+              preferences.sessionGoal !== undefined
+                ? preferences.sessionGoal
+                : existing.sessionGoal,
           })
           .where(eq(WorkoutPreferences.id, existing.id));
       } else {
@@ -169,7 +192,13 @@ export class WorkoutPreferenceService {
     sessionId: string,
     businessId: string,
     preferences: ParsedPreferences,
-    step: "initial_collected" | "disambiguation_pending" | "disambiguation_clarifying" | "disambiguation_resolved" | "followup_sent" | "preferences_active" = "initial_collected"
+    step:
+      | "initial_collected"
+      | "disambiguation_pending"
+      | "disambiguation_clarifying"
+      | "disambiguation_resolved"
+      | "followup_sent"
+      | "preferences_active" = "initial_collected",
   ): Promise<void> {
     console.log("[WorkoutPreferenceService.savePreferences] START", {
       userId,
@@ -177,7 +206,7 @@ export class WorkoutPreferenceService {
       businessId,
       step,
       preferencesKeys: Object.keys(preferences),
-      includeExercisesCount: preferences.includeExercises?.length || 0
+      includeExercisesCount: preferences.includeExercises?.length || 0,
     });
 
     try {
@@ -188,55 +217,69 @@ export class WorkoutPreferenceService {
         .where(
           and(
             eq(WorkoutPreferences.userId, userId),
-            eq(WorkoutPreferences.trainingSessionId, sessionId)
-          )
+            eq(WorkoutPreferences.trainingSessionId, sessionId),
+          ),
         )
         .limit(1);
-      
-      console.log("[WorkoutPreferenceService.savePreferences] Existing check:", {
-        userId,
-        sessionId,
-        existingFound: !!existing,
-        existingId: existing?.id
-      });
+
+      console.log(
+        "[WorkoutPreferenceService.savePreferences] Existing check:",
+        {
+          userId,
+          sessionId,
+          existingFound: !!existing,
+          existingId: existing?.id,
+        },
+      );
 
       if (existing) {
         // Update existing preferences (intelligent merge)
         // For arrays: merge if new array is not empty, otherwise keep existing
         // For scalars: use new value if provided, otherwise keep existing
         const mergedPreferences = {
-          intensity: preferences.intensity !== undefined ? preferences.intensity : existing.intensity,
-          intensitySource: preferences.intensity !== undefined 
-            ? (preferences.intensitySource || 'explicit')
-            : existing.intensitySource,
-          muscleTargets: preferences.muscleTargets !== undefined
-            ? preferences.muscleTargets 
-            : existing.muscleTargets,
-          muscleLessens: preferences.muscleLessens !== undefined
-            ? preferences.muscleLessens
-            : existing.muscleLessens,
-          includeExercises: preferences.includeExercises !== undefined
-            ? preferences.includeExercises
-            : existing.includeExercises,
-          avoidExercises: preferences.avoidExercises !== undefined
-            ? preferences.avoidExercises
-            : existing.avoidExercises,
-          avoidJoints: preferences.avoidJoints !== undefined
-            ? preferences.avoidJoints
-            : existing.avoidJoints,
-          sessionGoal: preferences.sessionGoal !== undefined 
-            ? preferences.sessionGoal 
-            : existing.sessionGoal,
-          sessionGoalSource: preferences.sessionGoal !== undefined
-            ? (preferences.sessionGoalSource || 'explicit')
-            : existing.sessionGoalSource,
+          intensity:
+            preferences.intensity !== undefined
+              ? preferences.intensity
+              : existing.intensity,
+          intensitySource:
+            preferences.intensity !== undefined
+              ? preferences.intensitySource || "explicit"
+              : existing.intensitySource,
+          muscleTargets:
+            preferences.muscleTargets !== undefined
+              ? preferences.muscleTargets
+              : existing.muscleTargets,
+          muscleLessens:
+            preferences.muscleLessens !== undefined
+              ? preferences.muscleLessens
+              : existing.muscleLessens,
+          includeExercises:
+            preferences.includeExercises !== undefined
+              ? preferences.includeExercises
+              : existing.includeExercises,
+          avoidExercises:
+            preferences.avoidExercises !== undefined
+              ? preferences.avoidExercises
+              : existing.avoidExercises,
+          avoidJoints:
+            preferences.avoidJoints !== undefined
+              ? preferences.avoidJoints
+              : existing.avoidJoints,
+          sessionGoal:
+            preferences.sessionGoal !== undefined
+              ? preferences.sessionGoal
+              : existing.sessionGoal,
+          sessionGoalSource:
+            preferences.sessionGoal !== undefined
+              ? preferences.sessionGoalSource || "explicit"
+              : existing.sessionGoalSource,
         };
 
         await db
           .update(WorkoutPreferences)
           .set(mergedPreferences)
           .where(eq(WorkoutPreferences.id, existing.id));
-        
+
         logger.info("Updated existing preferences with merge", {
           userId,
           sessionId,
@@ -250,8 +293,9 @@ export class WorkoutPreferenceService {
           },
           merged: {
             intensity: mergedPreferences.intensity,
-            includeExercisesCount: mergedPreferences.includeExercises?.length || 0,
-          }
+            includeExercisesCount:
+              mergedPreferences.includeExercises?.length || 0,
+          },
         });
       } else {
         // Insert new preferences
@@ -259,24 +303,28 @@ export class WorkoutPreferenceService {
           userId,
           trainingSessionId: sessionId,
           businessId,
-          intensity: preferences.intensity || 'moderate', // Default to moderate if not provided
-          intensitySource: preferences.intensity !== undefined 
-            ? (preferences.intensitySource || 'explicit') 
-            : 'default',
+          intensity: preferences.intensity || "moderate", // Default to moderate if not provided
+          intensitySource:
+            preferences.intensity !== undefined
+              ? preferences.intensitySource || "explicit"
+              : "default",
           muscleTargets: preferences.muscleTargets,
           muscleLessens: preferences.muscleLessens,
           includeExercises: preferences.includeExercises,
           avoidExercises: preferences.avoidExercises,
           avoidJoints: preferences.avoidJoints,
           sessionGoal: preferences.sessionGoal,
-          sessionGoalSource: preferences.sessionGoal !== undefined
-            ? (preferences.sessionGoalSource || 'explicit')
-            : 'default',
+          sessionGoalSource:
+            preferences.sessionGoal !== undefined
+              ? preferences.sessionGoalSource || "explicit"
+              : "default",
           collectionMethod: "sms",
         };
-        
-        console.log("[WorkoutPreferenceService.savePreferences] About to INSERT new preferences");
-        
+
+        console.log(
+          "[WorkoutPreferenceService.savePreferences] About to INSERT new preferences",
+        );
+
         logger.info("Inserting new preferences", {
           userId,
           sessionId,
@@ -284,12 +332,14 @@ export class WorkoutPreferenceService {
             avoidExercises: preferences.avoidExercises?.length || 0,
             includeExercises: preferences.includeExercises?.length || 0,
           },
-          fullValues: valuesToInsert
+          fullValues: valuesToInsert,
         });
-        
+
         await db.insert(WorkoutPreferences).values(valuesToInsert);
-        
-        console.log("[WorkoutPreferenceService.savePreferences] INSERT completed successfully");
+
+        console.log(
+          "[WorkoutPreferenceService.savePreferences] INSERT completed successfully",
+        );
       }
 
       // Update check-in to mark preferences collection step
@@ -299,29 +349,39 @@ export class WorkoutPreferenceService {
         .where(
           and(
             eq(UserTrainingSession.userId, userId),
-            eq(UserTrainingSession.trainingSessionId, sessionId)
-          )
+            eq(UserTrainingSession.trainingSessionId, sessionId),
+          ),
         );
 
-      console.log("[WorkoutPreferenceService.savePreferences] SUCCESS - Preferences saved", {
+      console.log(
+        "[WorkoutPreferenceService.savePreferences] SUCCESS - Preferences saved",
+        {
+          userId,
+          sessionId,
+          step,
+          wasUpdate: !!existing,
+          includeExercisesCount: preferences.includeExercises?.length || 0,
+        },
+      );
+
+      logger.info("Preferences saved successfully", {
         userId,
         sessionId,
         step,
-        wasUpdate: !!existing,
-        includeExercisesCount: preferences.includeExercises?.length || 0
+        isUpdate: !!existing,
       });
-      
-      logger.info("Preferences saved successfully", { userId, sessionId, step, isUpdate: !!existing });
-      
+
       // Invalidate blueprint cache when preferences change
-      const { WorkoutBlueprintService } = await import("./workout-blueprint-service");
+      const { WorkoutBlueprintService } = await import(
+        "./workout-blueprint-service"
+      );
       await WorkoutBlueprintService.invalidateCache(sessionId);
       logger.info("Blueprint cache invalidated for session", { sessionId });
-      
+
       // Real-time updates are handled by Supabase Postgres changes
-      logger.info("Preference update completed", { 
-        userId, 
-        sessionId
+      logger.info("Preference update completed", {
+        userId,
+        sessionId,
       });
     } catch (error) {
       console.error("[WorkoutPreferenceService.savePreferences] ERROR:", {
@@ -329,15 +389,17 @@ export class WorkoutPreferenceService {
         errorMessage: error instanceof Error ? error.message : "Unknown error",
         errorStack: error instanceof Error ? error.stack : undefined,
         userId,
-        sessionId
+        sessionId,
       });
-      
+
       logger.error("Error saving preferences:", error);
       throw error;
     }
   }
 
-  static async getPreferences(sessionId: string): Promise<ParsedPreferences | null> {
+  static async getPreferences(
+    sessionId: string,
+  ): Promise<ParsedPreferences | null> {
     try {
       const [preference] = await db
         .select()
@@ -352,14 +414,16 @@ export class WorkoutPreferenceService {
 
       return {
         intensity: preference.intensity as ParsedPreferences["intensity"],
-        intensitySource: preference.intensitySource as ParsedPreferences["intensitySource"],
+        intensitySource:
+          preference.intensitySource as ParsedPreferences["intensitySource"],
         muscleTargets: preference.muscleTargets || [],
         muscleLessens: preference.muscleLessens || [],
         includeExercises: preference.includeExercises || [],
         avoidExercises: preference.avoidExercises || [],
         avoidJoints: preference.avoidJoints || [],
         sessionGoal: preference.sessionGoal as ParsedPreferences["sessionGoal"],
-        sessionGoalSource: preference.sessionGoalSource as ParsedPreferences["sessionGoalSource"],
+        sessionGoalSource:
+          preference.sessionGoalSource as ParsedPreferences["sessionGoalSource"],
       };
     } catch (error) {
       logger.error("Error getting preferences:", error);

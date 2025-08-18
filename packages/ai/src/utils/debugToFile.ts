@@ -1,7 +1,8 @@
-import * as fs from 'node:fs';
-import * as path from 'node:path';
+import * as fs from "node:fs";
+import * as path from "node:path";
 
-const DEBUG_FILE = '/Users/tonyli/Desktop/fitness_app/current-filter-state.json';
+const DEBUG_FILE =
+  "/Users/tonyli/Desktop/fitness_app/current-filter-state.json";
 
 export interface FilterDebugData {
   timestamp: string;
@@ -20,10 +21,22 @@ export interface FilterDebugData {
   };
   results: {
     totalExercises: number;
-    blockA: { count: number; exercises: { id: string; name: string; score: number }[] };
-    blockB: { count: number; exercises: { id: string; name: string; score: number }[] };
-    blockC: { count: number; exercises: { id: string; name: string; score: number }[] };
-    blockD: { count: number; exercises: { id: string; name: string; score: number }[] };
+    blockA: {
+      count: number;
+      exercises: { id: string; name: string; score: number }[];
+    };
+    blockB: {
+      count: number;
+      exercises: { id: string; name: string; score: number }[];
+    };
+    blockC: {
+      count: number;
+      exercises: { id: string; name: string; score: number }[];
+    };
+    blockD: {
+      count: number;
+      exercises: { id: string; name: string; score: number }[];
+    };
   };
 }
 
@@ -34,11 +47,11 @@ export function saveFilterDebugData(data: FilterDebugData): void {
     fs.writeFileSync(DEBUG_FILE, JSON.stringify(data, null, 2));
     console.log(`✅ Filter debug data saved successfully to: ${DEBUG_FILE}`);
   } catch (error) {
-    console.error('❌ Failed to save debug data:', error);
-    console.error('Error details:', {
+    console.error("❌ Failed to save debug data:", error);
+    console.error("Error details:", {
       message: (error as Error).message,
       code: (error as any).code,
-      path: DEBUG_FILE
+      path: DEBUG_FILE,
     });
   }
 }
@@ -46,11 +59,11 @@ export function saveFilterDebugData(data: FilterDebugData): void {
 export function readFilterDebugData(): FilterDebugData | null {
   try {
     if (fs.existsSync(DEBUG_FILE)) {
-      const data = fs.readFileSync(DEBUG_FILE, 'utf-8');
+      const data = fs.readFileSync(DEBUG_FILE, "utf-8");
       return JSON.parse(data);
     }
   } catch (error) {
-    console.error('Failed to read debug data:', error);
+    console.error("Failed to read debug data:", error);
   }
   return null;
 }

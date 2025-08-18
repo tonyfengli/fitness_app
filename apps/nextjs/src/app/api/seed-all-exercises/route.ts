@@ -1,7 +1,8 @@
+import type { InferInsertModel } from "drizzle-orm";
 import { NextResponse } from "next/server";
+
 import { db } from "@acme/db/client";
 import { exercises } from "@acme/db/schema";
-import type { InferInsertModel } from "drizzle-orm";
 
 const allExercises: InferInsertModel<typeof exercises>[] = [
   {
@@ -67,7 +68,11 @@ const allExercises: InferInsertModel<typeof exercises>[] = [
     loadedJoints: [] as const,
     movementPattern: "horizontal_pull" as const,
     modality: "strength" as const,
-    movementTags: ["bilateral", "scapular_control", "postural_control"] as const,
+    movementTags: [
+      "bilateral",
+      "scapular_control",
+      "postural_control",
+    ] as const,
     functionTags: [] as const,
     fatigueProfile: "moderate_systemic" as const,
     complexityLevel: "moderate" as const,
@@ -123,7 +128,11 @@ const allExercises: InferInsertModel<typeof exercises>[] = [
     loadedJoints: [] as const,
     movementPattern: "horizontal_pull" as const,
     modality: "strength" as const,
-    movementTags: ["isometric_control", "scapular_control", "bilateral"] as const,
+    movementTags: [
+      "isometric_control",
+      "scapular_control",
+      "bilateral",
+    ] as const,
     functionTags: [] as const,
     fatigueProfile: "moderate_local" as const,
     complexityLevel: "moderate" as const,
@@ -333,7 +342,11 @@ const allExercises: InferInsertModel<typeof exercises>[] = [
     loadedJoints: [] as const,
     movementPattern: "core" as const,
     modality: "core" as const,
-    movementTags: ["core_stability", "anti_rotation", "isometric_control"] as const,
+    movementTags: [
+      "core_stability",
+      "anti_rotation",
+      "isometric_control",
+    ] as const,
     functionTags: ["rehab_friendly", "warmup_friendly"] as const,
     fatigueProfile: "low_local" as const,
     complexityLevel: "low" as const,
@@ -347,7 +360,11 @@ const allExercises: InferInsertModel<typeof exercises>[] = [
     loadedJoints: [] as const,
     movementPattern: "core" as const,
     modality: "core" as const,
-    movementTags: ["core_stability", "isometric_control", "anti_rotation"] as const,
+    movementTags: [
+      "core_stability",
+      "isometric_control",
+      "anti_rotation",
+    ] as const,
     functionTags: [] as const,
     fatigueProfile: "moderate_local" as const,
     complexityLevel: "moderate" as const,
@@ -375,7 +392,11 @@ const allExercises: InferInsertModel<typeof exercises>[] = [
     loadedJoints: [] as const,
     movementPattern: "core" as const,
     modality: "core" as const,
-    movementTags: ["core_stability", "isometric_control", "balance_challenge"] as const,
+    movementTags: [
+      "core_stability",
+      "isometric_control",
+      "balance_challenge",
+    ] as const,
     functionTags: ["rehab_friendly"] as const,
     fatigueProfile: "moderate_local" as const,
     complexityLevel: "very_low" as const,
@@ -1828,12 +1849,15 @@ const allExercises: InferInsertModel<typeof exercises>[] = [
 
 export async function POST() {
   try {
-    const insertedExercises = await db.insert(exercises).values(allExercises).returning();
-    
+    const insertedExercises = await db
+      .insert(exercises)
+      .values(allExercises)
+      .returning();
+
     return NextResponse.json({
       success: true,
       message: `Successfully inserted ${insertedExercises.length} exercises`,
-      exercises: insertedExercises.map(ex => ({ id: ex.id, name: ex.name })),
+      exercises: insertedExercises.map((ex) => ({ id: ex.id, name: ex.name })),
     });
   } catch (error) {
     return NextResponse.json(
@@ -1842,7 +1866,7 @@ export async function POST() {
         message: "Failed to insert exercises",
         error: error instanceof Error ? error.message : String(error),
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

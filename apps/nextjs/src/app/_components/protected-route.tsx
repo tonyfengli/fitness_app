@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+
 import { useAuth } from "~/hooks/use-auth";
 
 interface ProtectedRouteProps {
@@ -10,10 +11,10 @@ interface ProtectedRouteProps {
   redirectTo?: string;
 }
 
-export function ProtectedRoute({ 
-  children, 
+export function ProtectedRoute({
+  children,
   requiredRole,
-  redirectTo = "/login" 
+  redirectTo = "/login",
 }: ProtectedRouteProps) {
   const { isAuthenticated, isLoading, user } = useAuth();
   const router = useRouter();
@@ -23,7 +24,12 @@ export function ProtectedRoute({
       router.push(redirectTo);
     }
 
-    if (!isLoading && isAuthenticated && requiredRole && user?.role !== requiredRole) {
+    if (
+      !isLoading &&
+      isAuthenticated &&
+      requiredRole &&
+      user?.role !== requiredRole
+    ) {
       // If user has wrong role, redirect to their appropriate dashboard
       if (user?.role === "trainer") {
         router.push("/trainer-dashboard");
@@ -38,7 +44,7 @@ export function ProtectedRoute({
   if (isLoading) {
     return (
       <div className="flex h-screen items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-primary"></div>
       </div>
     );
   }

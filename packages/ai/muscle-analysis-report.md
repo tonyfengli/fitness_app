@@ -9,6 +9,7 @@ This report analyzes how muscles are defined and used in the fitness app's exerc
 ### 1. Muscle Values Actually Used in Exercise Database
 
 **Primary Muscles (130 exercises total):**
+
 - core: 27 exercises
 - quads: 24 exercises
 - lats: 15 exercises
@@ -29,6 +30,7 @@ This report analyzes how muscles are defined and used in the fitness app's exerc
 - adductors: 1 exercise
 
 **Secondary Muscles:**
+
 - glutes: 40 occurrences
 - core: 34 occurrences
 - shoulders: 34 occurrences
@@ -50,24 +52,46 @@ This report analyzes how muscles are defined and used in the fitness app's exerc
 ### 2. Muscle List Defined in Code
 
 From `workoutTemplate.ts`:
+
 ```typescript
 const ALL_MUSCLES = [
-  "glutes", "quads", "hamstrings", "calves", "adductors", "abductors",
-  "core", "lower_abs", "upper_abs", "obliques", "chest", "upper_chest", 
-  "lower_chest", "lats", "traps", "biceps", "triceps", "shoulders", 
-  "delts", "upper_back", "lower_back", "shins", "tibialis_anterior"
+  "glutes",
+  "quads",
+  "hamstrings",
+  "calves",
+  "adductors",
+  "abductors",
+  "core",
+  "lower_abs",
+  "upper_abs",
+  "obliques",
+  "chest",
+  "upper_chest",
+  "lower_chest",
+  "lats",
+  "traps",
+  "biceps",
+  "triceps",
+  "shoulders",
+  "delts",
+  "upper_back",
+  "lower_back",
+  "shins",
+  "tibialis_anterior",
 ];
 ```
 
 ### 3. Mismatches and Issues
 
 #### Muscles Defined but Never Used:
+
 - **lower_abs** - defined but exercises only use "core"
 - **upper_abs** - defined but exercises only use "core"
 - **lower_chest** - defined but exercises only use "chest" and "upper_chest"
 - **tibialis_anterior** - defined but exercises only use "shins"
 
 #### Redundancy/Overlap Issues:
+
 1. **"delts" vs "shoulders"** - Both are used in the exercise database:
    - 7 exercises use "delts" as primary muscle
    - 9 exercises use "shoulders" as primary muscle

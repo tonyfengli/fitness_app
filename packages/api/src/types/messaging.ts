@@ -2,7 +2,7 @@
  * Unified messaging types for all channels (SMS, Web, API)
  */
 
-export type MessageChannel = 'sms' | 'web' | 'api';
+export type MessageChannel = "sms" | "web" | "api";
 
 export interface UnifiedMessage {
   // Core identifiers
@@ -10,25 +10,25 @@ export interface UnifiedMessage {
   userId: string;
   businessId: string;
   trainingSessionId?: string;
-  
+
   // Message content
   content: string;
   channel: MessageChannel;
-  
+
   // Channel-specific data
   metadata: {
-    phoneNumber?: string;           // For SMS
-    twilioMessageSid?: string;      // For SMS
-    webSessionId?: string;          // For Web
-    testMode?: boolean;             // For testing
-    initiatedBy?: string;           // Who triggered this (for web)
-    initiatedByName?: string;       // Name of person who triggered
-    [key: string]: any;             // Extensible
+    phoneNumber?: string; // For SMS
+    twilioMessageSid?: string; // For SMS
+    webSessionId?: string; // For Web
+    testMode?: boolean; // For testing
+    initiatedBy?: string; // Who triggered this (for web)
+    initiatedByName?: string; // Name of person who triggered
+    [key: string]: any; // Extensible
   };
-  
+
   // Timestamps
   timestamp: Date;
-  
+
   // User info (populated during processing)
   userName?: string;
   userPhone?: string;
@@ -47,7 +47,12 @@ export interface MessageResponse {
 }
 
 export interface MessageIntent {
-  type: 'check_in' | 'preference_collection' | 'disambiguation' | 'preference_update' | 'default';
+  type:
+    | "check_in"
+    | "preference_collection"
+    | "disambiguation"
+    | "preference_update"
+    | "default";
   confidence: number;
   data?: any;
 }

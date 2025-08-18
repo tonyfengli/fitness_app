@@ -1,21 +1,29 @@
-import * as fs from 'node:fs';
-import * as path from 'node:path';
-import type { ScoredExercise } from '../types/scoredExercise';
-import type { FilterDebugData } from './debugToFile';
+import * as fs from "node:fs";
+import * as path from "node:path";
 
-const ENHANCED_DEBUG_FILE = '/Users/tonyli/Desktop/fitness_app/enhanced-debug-state.json';
-const WORKOUT_HISTORY_FILE = '/Users/tonyli/Desktop/fitness_app/workout-generation-history.json';
+import type { ScoredExercise } from "../types/scoredExercise";
+import type { FilterDebugData } from "./debugToFile";
+
+const ENHANCED_DEBUG_FILE =
+  "/Users/tonyli/Desktop/fitness_app/enhanced-debug-state.json";
+const WORKOUT_HISTORY_FILE =
+  "/Users/tonyli/Desktop/fitness_app/workout-generation-history.json";
 
 // Enhancement #1: Enhanced Filter State Tracking
 export interface EnhancedFilterDebugData extends FilterDebugData {
   // Track why exercises were excluded
-  exclusionReasons: Record<string, {
+  exclusionReasons: Record<
+    string,
+    {
       name: string;
       reasons: string[];
-    }>;
-  
+    }
+  >;
+
   // Track constraint satisfaction progress
-  constraintAnalysis: Record<string, {
+  constraintAnalysis: Record<
+    string,
+    {
       required: string[];
       satisfied: string[];
       unsatisfied: string[];
@@ -25,16 +33,20 @@ export interface EnhancedFilterDebugData extends FilterDebugData {
         selected: boolean;
         reason?: string;
       }[];
-    }>;
-  
+    }
+  >;
+
   // Score breakdown for each exercise
-  scoreBreakdowns: Record<string, {
+  scoreBreakdowns: Record<
+    string,
+    {
       name: string;
       baseScore: number;
       bonuses: { reason: string; value: number }[];
       penalties: { reason: string; value: number }[];
       finalScore: number;
-    }>;
+    }
+  >;
 
   // Debug mode logs (Enhancement #8)
   debugLog?: DebugLogEntry[];
@@ -44,7 +56,7 @@ export interface EnhancedFilterDebugData extends FilterDebugData {
 export interface WorkoutGenerationLog {
   sessionId: string;
   timestamp: string;
-  filters: FilterDebugData['filters'];
+  filters: FilterDebugData["filters"];
   results: {
     template: string;
     exerciseCount: number;
@@ -69,7 +81,12 @@ export interface WorkoutGenerationLog {
 export interface DebugLogEntry {
   step: number;
   timestamp: string;
-  phase: 'filtering' | 'scoring' | 'organizing' | 'constraint_check' | 'selection';
+  phase:
+    | "filtering"
+    | "scoring"
+    | "organizing"
+    | "constraint_check"
+    | "selection";
   action: string;
   details: any;
   exercisesAffected?: number;
@@ -78,13 +95,13 @@ export interface DebugLogEntry {
 
 // Helper class to track exclusion reasons during filtering
 export class ExclusionTracker {
-  private exclusions: EnhancedFilterDebugData['exclusionReasons'] = {};
+  private exclusions: EnhancedFilterDebugData["exclusionReasons"] = {};
 
   addExclusion(exercise: ScoredExercise, reason: string): void {
     if (!this.exclusions[exercise.id]) {
       this.exclusions[exercise.id] = {
         name: exercise.name,
-        reasons: []
+        reasons: [],
       };
     }
     const exclusion = this.exclusions[exercise.id];
@@ -93,7 +110,7 @@ export class ExclusionTracker {
     }
   }
 
-  getExclusions(): EnhancedFilterDebugData['exclusionReasons'] {
+  getExclusions(): EnhancedFilterDebugData["exclusionReasons"] {
     return this.exclusions;
   }
 
@@ -104,7 +121,7 @@ export class ExclusionTracker {
 
 // Helper class to track score breakdowns
 export class ScoreTracker {
-  private scoreBreakdowns: EnhancedFilterDebugData['scoreBreakdowns'] = {};
+  private scoreBreakdowns: EnhancedFilterDebugData["scoreBreakdowns"] = {};
 
   addScoreBreakdown(exercise: ScoredExercise, breakdown: any): void {
     this.scoreBreakdowns[exercise.id] = {
@@ -112,7 +129,7 @@ export class ScoreTracker {
       baseScore: breakdown.base || 5.0,
       bonuses: [],
       penalties: [],
-      finalScore: exercise.score
+      finalScore: exercise.score,
     };
 
     const scoreBreakdown = this.scoreBreakdowns[exercise.id];
@@ -121,16 +138,16 @@ export class ScoreTracker {
     // Add muscle target bonus
     if (breakdown.muscleTargetBonus > 0) {
       scoreBreakdown.bonuses.push({
-        reason: 'Muscle Target Match',
-        value: breakdown.muscleTargetBonus
+        reason: "Muscle Target Match",
+        value: breakdown.muscleTargetBonus,
       });
     }
 
     // Add muscle lessen penalty
     if (breakdown.muscleLessenPenalty < 0) {
       scoreBreakdown.penalties.push({
-        reason: 'Muscle De-emphasis',
-        value: breakdown.muscleLessenPenalty
+        reason: "Muscle De-emphasis",
+        value: breakdown.muscleLessenPenalty,
       });
     }
 
@@ -138,13 +155,13 @@ export class ScoreTracker {
     if (breakdown.intensityAdjustment !== 0) {
       if (breakdown.intensityAdjustment > 0) {
         scoreBreakdown.bonuses.push({
-          reason: 'Intensity Match',
-          value: breakdown.intensityAdjustment
+          reason: "Intensity Match",
+          value: breakdown.intensityAdjustment,
         });
       } else {
         scoreBreakdown.penalties.push({
-          reason: 'Intensity Mismatch',
-          value: breakdown.intensityAdjustment
+          reason: "Intensity Mismatch",
+          value: breakdown.intensityAdjustment,
         });
       }
     }
@@ -152,13 +169,13 @@ export class ScoreTracker {
     // Add include boost
     if (breakdown.includeExerciseBoost > 0) {
       scoreBreakdown.bonuses.push({
-        reason: 'Included Exercise Boost',
-        value: breakdown.includeExerciseBoost
+        reason: "Included Exercise Boost",
+        value: breakdown.includeExerciseBoost,
       });
     }
   }
 
-  getScoreBreakdowns(): EnhancedFilterDebugData['scoreBreakdowns'] {
+  getScoreBreakdowns(): EnhancedFilterDebugData["scoreBreakdowns"] {
     return this.scoreBreakdowns;
   }
 
@@ -169,34 +186,45 @@ export class ScoreTracker {
 
 // Helper class to track constraint analysis
 export class ConstraintAnalysisTracker {
-  private constraints: EnhancedFilterDebugData['constraintAnalysis'] = {};
+  private constraints: EnhancedFilterDebugData["constraintAnalysis"] = {};
 
   initBlock(blockName: string, required: string[]): void {
     this.constraints[blockName] = {
       required,
       satisfied: [],
       unsatisfied: [...required],
-      attemptedExercises: []
+      attemptedExercises: [],
     };
   }
 
-  recordAttempt(blockName: string, exerciseName: string, constraint: string, selected: boolean, reason?: string): void {
+  recordAttempt(
+    blockName: string,
+    exerciseName: string,
+    constraint: string,
+    selected: boolean,
+    reason?: string,
+  ): void {
     if (!this.constraints[blockName]) return;
-    
+
     this.constraints[blockName].attemptedExercises.push({
       name: exerciseName,
       constraint,
       selected,
-      reason
+      reason,
     });
 
-    if (selected && this.constraints[blockName].unsatisfied.includes(constraint)) {
+    if (
+      selected &&
+      this.constraints[blockName].unsatisfied.includes(constraint)
+    ) {
       this.constraints[blockName].satisfied.push(constraint);
-      this.constraints[blockName].unsatisfied = this.constraints[blockName].unsatisfied.filter(c => c !== constraint);
+      this.constraints[blockName].unsatisfied = this.constraints[
+        blockName
+      ].unsatisfied.filter((c) => c !== constraint);
     }
   }
 
-  getConstraintAnalysis(): EnhancedFilterDebugData['constraintAnalysis'] {
+  getConstraintAnalysis(): EnhancedFilterDebugData["constraintAnalysis"] {
     return this.constraints;
   }
 
@@ -224,11 +252,16 @@ export class DebugLogger {
     this.enabled = false;
   }
 
-  log(phase: DebugLogEntry['phase'], action: string, details: any, exercisesAffected?: number): void {
+  log(
+    phase: DebugLogEntry["phase"],
+    action: string,
+    details: any,
+    exercisesAffected?: number,
+  ): void {
     if (!this.enabled) return;
 
     const startTime = performance.now();
-    
+
     this.logs.push({
       step: ++this.stepCounter,
       timestamp: new Date().toISOString(),
@@ -236,12 +269,12 @@ export class DebugLogger {
       action,
       details,
       exercisesAffected,
-      performanceMs: 0 // Will be updated by logPerformance
+      performanceMs: 0, // Will be updated by logPerformance
     });
   }
 
   logPerformance(stepNumber: number, duration: number): void {
-    const log = this.logs.find(l => l.step === stepNumber);
+    const log = this.logs.find((l) => l.step === stepNumber);
     if (log) {
       log.performanceMs = duration;
     }
@@ -263,7 +296,7 @@ export function saveEnhancedDebugData(data: EnhancedFilterDebugData): void {
     fs.writeFileSync(ENHANCED_DEBUG_FILE, JSON.stringify(data, null, 2));
     console.log(`📊 Enhanced debug data saved to: ${ENHANCED_DEBUG_FILE}`);
   } catch (error) {
-    console.error('Failed to save enhanced debug data:', error);
+    console.error("Failed to save enhanced debug data:", error);
   }
 }
 
@@ -271,11 +304,11 @@ export function saveEnhancedDebugData(data: EnhancedFilterDebugData): void {
 export function readEnhancedDebugData(): EnhancedFilterDebugData | null {
   try {
     if (fs.existsSync(ENHANCED_DEBUG_FILE)) {
-      const data = fs.readFileSync(ENHANCED_DEBUG_FILE, 'utf-8');
+      const data = fs.readFileSync(ENHANCED_DEBUG_FILE, "utf-8");
       return JSON.parse(data);
     }
   } catch (error) {
-    console.error('Failed to read enhanced debug data:', error);
+    console.error("Failed to read enhanced debug data:", error);
   }
   return null;
 }
@@ -284,35 +317,37 @@ export function readEnhancedDebugData(): EnhancedFilterDebugData | null {
 export function saveWorkoutGenerationLog(log: WorkoutGenerationLog): void {
   try {
     let history: WorkoutGenerationLog[] = [];
-    
+
     // Read existing history
     if (fs.existsSync(WORKOUT_HISTORY_FILE)) {
-      const data = fs.readFileSync(WORKOUT_HISTORY_FILE, 'utf-8');
+      const data = fs.readFileSync(WORKOUT_HISTORY_FILE, "utf-8");
       history = JSON.parse(data);
     }
-    
+
     // Add new log (keep last 100 entries)
     history.unshift(log);
     if (history.length > 100) {
       history = history.slice(0, 100);
     }
-    
+
     // Save updated history
     fs.writeFileSync(WORKOUT_HISTORY_FILE, JSON.stringify(history, null, 2));
-    console.log(`📚 Workout generation log saved. Total history: ${history.length} entries`);
+    console.log(
+      `📚 Workout generation log saved. Total history: ${history.length} entries`,
+    );
   } catch (error) {
-    console.error('Failed to save workout generation log:', error);
+    console.error("Failed to save workout generation log:", error);
   }
 }
 
 export function readWorkoutGenerationHistory(): WorkoutGenerationLog[] {
   try {
     if (fs.existsSync(WORKOUT_HISTORY_FILE)) {
-      const data = fs.readFileSync(WORKOUT_HISTORY_FILE, 'utf-8');
+      const data = fs.readFileSync(WORKOUT_HISTORY_FILE, "utf-8");
       return JSON.parse(data);
     }
   } catch (error) {
-    console.error('Failed to read workout generation history:', error);
+    console.error("Failed to read workout generation history:", error);
   }
   return [];
 }

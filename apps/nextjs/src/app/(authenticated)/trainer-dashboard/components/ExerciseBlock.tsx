@@ -1,9 +1,9 @@
-import type { Exercise, BlockConfig } from '../types';
-import { 
-  isExerciseSelectedForBlock, 
-  filterExercisesByFunctionTags, 
-  sortExercisesByScore 
-} from '../utils';
+import type { BlockConfig, Exercise } from "../types";
+import {
+  filterExercisesByFunctionTags,
+  isExerciseSelectedForBlock,
+  sortExercisesByScore,
+} from "../utils";
 
 interface ExerciseBlockProps {
   exercises: Exercise[];
@@ -12,27 +12,25 @@ interface ExerciseBlockProps {
 
 export function ExerciseBlock({ exercises, blockConfig }: ExerciseBlockProps) {
   const { id, name, functionTags, colorScheme } = blockConfig;
-  
+
   const blockExercises = sortExercisesByScore(
-    filterExercisesByFunctionTags(exercises, functionTags)
+    filterExercisesByFunctionTags(exercises, functionTags),
   );
 
   return (
-    <div className={`${colorScheme.container} border rounded-lg p-3`}>
+    <div className={`${colorScheme.container} rounded-lg border p-3`}>
       <h3 className={`text-base font-semibold ${colorScheme.header} mb-2`}>
         {name}
       </h3>
       <div className="space-y-2">
         {blockExercises.map((exercise, idx) => {
           const isSelected = isExerciseSelectedForBlock(exercise, id);
-          
+
           return (
-            <div 
-              key={exercise.id || idx} 
-              className={`text-sm p-2 rounded ${
-                isSelected 
-                  ? `${colorScheme.selected} border` 
-                  : ''
+            <div
+              key={exercise.id || idx}
+              className={`rounded p-2 text-sm ${
+                isSelected ? `${colorScheme.selected} border` : ""
               }`}
             >
               <span className="font-medium">{exercise.name}</span>
@@ -50,7 +48,7 @@ export function ExerciseBlock({ exercises, blockConfig }: ExerciseBlockProps) {
           );
         })}
         {blockExercises.length === 0 && (
-          <p className="text-sm text-gray-500 italic">No exercises found</p>
+          <p className="text-sm italic text-gray-500">No exercises found</p>
         )}
       </div>
     </div>

@@ -8,7 +8,9 @@ export interface ExerciseSwapUpdate {
   sessionId: string;
   clientId: string;
   originalExerciseId: string;
+  originalExerciseName?: string;
   newExerciseId: string;
+  newExerciseName?: string;
   swappedAt: string;
   reason?: string;
 }

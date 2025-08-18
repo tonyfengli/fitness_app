@@ -1,6 +1,7 @@
-import { v4 as uuidv4 } from 'uuid';
-import { UnifiedMessage, MessageChannel } from '../../../types/messaging';
-import { getUserByPhone } from '../../checkInService';
+import { v4 as uuidv4 } from "uuid";
+
+import type { MessageChannel, UnifiedMessage } from "../../../types/messaging";
+import { getUserByPhone } from "../../checkInService";
 
 export class SMSAdapter {
   /**
@@ -11,33 +12,39 @@ export class SMSAdapter {
       const phoneNumber = payload.From;
       const content = payload.Body;
       const twilioMessageSid = payload.MessageSid;
-      
+
       // Look up user by phone
       const userInfo = await getUserByPhone(phoneNumber);
-      
+
       if (!userInfo) {
-        console.error(`[${new Date().toISOString()}] No user found for phone:`, phoneNumber);
+        console.error(
+          `[${new Date().toISOString()}] No user found for phone:`,
+          phoneNumber,
+        );
         return null;
       }
-      
+
       const message: UnifiedMessage = {
         id: uuidv4(),
         userId: userInfo.userId,
-        businessId: userInfo.businessId || '',
+        businessId: userInfo.businessId || "",
         trainingSessionId: userInfo.trainingSessionId,
         content: content,
-        channel: 'sms' as MessageChannel,
+        channel: "sms" as MessageChannel,
         metadata: {
           phoneNumber,
           twilioMessageSid,
         },
         timestamp: new Date(),
-        userPhone: phoneNumber
+        userPhone: phoneNumber,
       };
-      
+
       return message;
     } catch (error) {
-      console.error(`[${new Date().toISOString()}] Error converting Twilio webhook:`, error);
+      console.error(
+        `[${new Date().toISOString()}] Error converting Twilio webhook:`,
+        error,
+      );
       return null;
     }
   }

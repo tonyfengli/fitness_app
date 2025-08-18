@@ -29,25 +29,25 @@ export const WorkoutInterpretationState = Annotation.Root({
     default: () => ({}),
     reducer: (x, y) => ({ ...x, ...y }),
   }),
-  
+
   // LLM interpretation result
   interpretation: Annotation<string>({
     default: () => "",
     reducer: (x, y) => y || x,
   }),
-  
+
   // Structured output (format TBD based on your needs)
   structuredOutput: Annotation<Record<string, any>>({
     default: () => ({}),
     reducer: (x, y) => ({ ...x, ...y }),
   }),
-  
+
   // Timing information
   timing: Annotation<Record<string, number>>({
     default: () => ({}),
     reducer: (x, y) => ({ ...x, ...y }),
   }),
-  
+
   // Error handling
   error: Annotation<string | null>({
     default: () => null,
@@ -55,4 +55,5 @@ export const WorkoutInterpretationState = Annotation.Root({
   }),
 });
 
-export type WorkoutInterpretationStateType = typeof WorkoutInterpretationState.State;
+export type WorkoutInterpretationStateType =
+  typeof WorkoutInterpretationState.State;

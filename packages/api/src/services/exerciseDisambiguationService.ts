@@ -1,11 +1,11 @@
-import { ExerciseValidationService } from './exerciseValidationService';
-import { ConversationStateService } from './conversationStateService';
-import { createLogger } from '../utils/logger';
+import { createLogger } from "../utils/logger";
+import { ConversationStateService } from "./conversationStateService";
+import { ExerciseValidationService } from "./exerciseValidationService";
 
-const logger = createLogger('ExerciseDisambiguationService');
+const logger = createLogger("ExerciseDisambiguationService");
 
 export interface DisambiguationContext {
-  type: 'preference_initial' | 'preference_update' | 'workout_edit';
+  type: "preference_initial" | "preference_update" | "workout_edit";
   sessionId?: string;
   workoutId?: string;
   userId: string;
@@ -22,7 +22,7 @@ export interface DisambiguationResult {
 
 export interface ExerciseRequest {
   exercises: string[];
-  intent: 'include' | 'avoid' | 'replace';
+  intent: "include" | "avoid" | "replace";
 }
 
 export class ExerciseDisambiguationService {
@@ -31,30 +31,30 @@ export class ExerciseDisambiguationService {
    */
   static async processExercises(
     exerciseRequest: ExerciseRequest,
-    context: DisambiguationContext
+    context: DisambiguationContext,
   ): Promise<DisambiguationResult> {
     try {
       const { exercises, intent } = exerciseRequest;
-      
+
       if (!exercises || exercises.length === 0) {
         return {
           needsDisambiguation: false,
-          validatedExercises: []
+          validatedExercises: [],
         };
       }
 
       // Validate exercises using ExerciseValidationService
-      const validationIntent = intent === 'replace' ? 'include' : intent;
+      const validationIntent = intent === "replace" ? "include" : intent;
       const validation = await ExerciseValidationService.validateExercises(
         exercises,
         context.businessId,
         validationIntent,
-        context.sessionId
+        context.sessionId,
       );
 
       // Check if any matches have multiple options
       const ambiguousMatches = validation.matches.filter(
-        match => match.matchedExercises.length > 1
+        (match) => match.matchedExercises.length > 1,
       );
 
       if (ambiguousMatches.length > 0) {
@@ -66,17 +66,17 @@ export class ExerciseDisambiguationService {
           needsDisambiguation: true,
           disambiguationMessage: message,
           ambiguousMatches,
-          allOptions
+          allOptions,
         };
       }
 
       // No disambiguation needed
       return {
         needsDisambiguation: false,
-        validatedExercises: validation.validatedExercises
+        validatedExercises: validation.validatedExercises,
       };
     } catch (error) {
-      logger.error('Error processing exercises for disambiguation', error);
+      logger.error("Error processing exercises for disambiguation", error);
       throw error;
     }
   }
@@ -86,20 +86,23 @@ export class ExerciseDisambiguationService {
    */
   static formatMessage(
     ambiguousMatches: any[],
-    context: DisambiguationContext
+    context: DisambiguationContext,
   ): string {
-    let message = '';
-    
+    let message = "";
+
     // Context-specific intro
     switch (context.type) {
-      case 'preference_initial':
-        message = 'I found multiple exercises matching your request. Please select by number:\n\n';
+      case "preference_initial":
+        message =
+          "I found multiple exercises matching your request. Please select by number:\n\n";
         break;
-      case 'preference_update':
-        message = 'I found multiple exercises matching your request. Please select by number:\n\n';
+      case "preference_update":
+        message =
+          "I found multiple exercises matching your request. Please select by number:\n\n";
         break;
-      case 'workout_edit':
-        message = 'I found multiple replacement options. Please select by number:\n\n';
+      case "workout_edit":
+        message =
+          "I found multiple replacement options. Please select by number:\n\n";
         break;
     }
 
@@ -107,17 +110,17 @@ export class ExerciseDisambiguationService {
     let optionNumber = 1;
     for (const match of ambiguousMatches) {
       message += `For "${match.userInput}":\n`;
-      
+
       for (const exercise of match.matchedExercises) {
         message += `${optionNumber}. ${exercise.name}\n`;
         optionNumber++;
       }
-      
-      message += '\n';
+
+      message += "\n";
     }
 
     message += "Reply with number(s) (e.g., '1' or '1,3')";
-    
+
     return message;
   }
 
@@ -130,32 +133,32 @@ export class ExerciseDisambiguationService {
       allOptions: Array<{ id: string; name: string }>;
       originalIntent: string;
     },
-    context: DisambiguationContext
+    context: DisambiguationContext,
   ): Promise<void> {
     try {
       switch (context.type) {
-        case 'preference_initial':
-        case 'preference_update':
+        case "preference_initial":
+        case "preference_update":
           // Save to conversation state for preferences
           await ConversationStateService.createExerciseDisambiguation(
             context.userId,
             context.sessionId!,
             context.businessId,
-            state.ambiguousMatches.map(m => m.userInput).join(", "),
-            state.allOptions
+            state.ambiguousMatches.map((m) => m.userInput).join(", "),
+            state.allOptions,
           );
           break;
-          
-        case 'workout_edit':
+
+        case "workout_edit":
           // TODO: Implement workout-specific state storage
-          logger.info('Workout edit disambiguation state would be saved here', {
+          logger.info("Workout edit disambiguation state would be saved here", {
             workoutId: context.workoutId,
-            state
+            state,
           });
           break;
       }
     } catch (error) {
-      logger.error('Error saving disambiguation state', error);
+      logger.error("Error saving disambiguation state", error);
       throw error;
     }
   }
@@ -163,18 +166,20 @@ export class ExerciseDisambiguationService {
   /**
    * Collect all exercise options from ambiguous matches
    */
-  static collectAllOptions(ambiguousMatches: any[]): Array<{ id: string; name: string }> {
+  static collectAllOptions(
+    ambiguousMatches: any[],
+  ): Array<{ id: string; name: string }> {
     const allOptions: Array<{ id: string; name: string }> = [];
-    
+
     for (const match of ambiguousMatches) {
       for (const exercise of match.matchedExercises) {
         allOptions.push({
           id: exercise.id,
-          name: exercise.name
+          name: exercise.name,
         });
       }
     }
-    
+
     return allOptions;
   }
 
@@ -183,7 +188,7 @@ export class ExerciseDisambiguationService {
    */
   static checkNeedsDisambiguation(validationResult: any): boolean {
     return validationResult.matches.some(
-      (match: any) => match.matchedExercises.length > 1
+      (match: any) => match.matchedExercises.length > 1,
     );
   }
 }

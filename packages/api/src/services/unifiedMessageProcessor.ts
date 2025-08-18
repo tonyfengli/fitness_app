@@ -1,27 +1,28 @@
+import { eq } from "@acme/db";
 import { db } from "@acme/db/client";
 import { messages, user as userTable } from "@acme/db/schema";
-import { eq } from "@acme/db";
+
+import type { SMSResponse } from "./sms/types";
 import { createLogger } from "../utils/logger";
-import { saveMessage } from "./messageService";
-import { SMSIntentRouter } from "./sms/intent-router";
-import { CheckInHandler } from "./sms/handlers/check-in-handler";
-import { PreferenceHandler } from "./sms/handlers/preference-handler";
-import { DisambiguationHandler } from "./sms/handlers/disambiguation-handler";
-import { PreferenceUpdateHandler } from "./sms/handlers/preference-update-handler";
-import { DefaultHandler } from "./sms/handlers/default-handler";
-import { SMSResponseSender } from "./sms/response-sender";
 // SSE broadcast will be handled by the API route
 import { SMSDebugLogger } from "../utils/smsDebugLogger";
-import type { SMSResponse } from "./sms/types";
+import { saveMessage } from "./messageService";
+import { CheckInHandler } from "./sms/handlers/check-in-handler";
+import { DefaultHandler } from "./sms/handlers/default-handler";
+import { DisambiguationHandler } from "./sms/handlers/disambiguation-handler";
+import { PreferenceHandler } from "./sms/handlers/preference-handler";
+import { PreferenceUpdateHandler } from "./sms/handlers/preference-update-handler";
+import { SMSIntentRouter } from "./sms/intent-router";
+import { SMSResponseSender } from "./sms/response-sender";
 
 const logger = createLogger("UnifiedMessageProcessor");
 
 interface ProcessMessageParams {
-  from: string;  // userId for in_app, phone number for sms
+  from: string; // userId for in_app, phone number for sms
   content: string;
-  channel: 'sms' | 'in_app';
+  channel: "sms" | "in_app";
   businessId: string;
-  sentBy?: string;  // For in_app messages, who sent it (trainer ID)
+  sentBy?: string; // For in_app messages, who sent it (trainer ID)
   trainingSessionId?: string;
   metadata?: any;
 }
@@ -45,7 +46,9 @@ export class UnifiedMessageProcessor {
     this.responseSender = new SMSResponseSender();
   }
 
-  async processMessage(params: ProcessMessageParams): Promise<SMSResponse | null> {
+  async processMessage(
+    params: ProcessMessageParams,
+  ): Promise<SMSResponse | null> {
     logger.info("Processing message", {
       from: params.from,
       content: params.content,
@@ -53,45 +56,45 @@ export class UnifiedMessageProcessor {
       businessId: params.businessId,
       trainingSessionId: params.trainingSessionId,
     });
-    
+
     try {
       let userId: string;
       let userPhone: string | null = null;
       let userName: string | null = null;
 
       // Resolve user info based on channel
-      if (params.channel === 'in_app') {
+      if (params.channel === "in_app") {
         // For in_app, params.from is already the userId
         userId = params.from;
-        
+
         // Get user details
         const [user] = await db
           .select()
           .from(userTable)
           .where(eq(userTable.id, userId))
           .limit(1);
-          
+
         if (!user) {
           throw new Error(`User not found: ${userId}`);
         }
-        
+
         userPhone = user.phone;
         userName = user.name;
       } else {
         // For SMS, params.from is the phone number
         userPhone = params.from;
-        
+
         // Look up user by phone
         const [user] = await db
           .select()
           .from(userTable)
           .where(eq(userTable.phone, userPhone))
           .limit(1);
-          
+
         if (!user) {
           throw new Error(`User not found for phone: ${userPhone}`);
         }
-        
+
         userId = user.id;
         userName = user.name;
         params.businessId = user.businessId || params.businessId;
@@ -101,7 +104,7 @@ export class UnifiedMessageProcessor {
       await saveMessage({
         userId,
         businessId: params.businessId,
-        direction: 'inbound',
+        direction: "inbound",
         content: params.content,
         phoneNumber: userPhone || undefined,
         metadata: {
@@ -109,27 +112,29 @@ export class UnifiedMessageProcessor {
           channel: params.channel,
           sentBy: params.sentBy,
         },
-        status: 'delivered',
+        status: "delivered",
       });
 
       // Log to debug session if training session exists
       if (params.trainingSessionId) {
         await SMSDebugLogger.logInboundMessage(
-          userPhone || userId,  // Use userId if no phone
+          userPhone || userId, // Use userId if no phone
           params.content,
           params.trainingSessionId,
           {
             ...params.metadata,
             channel: params.channel,
-            userId: userId
-          }
+            userId: userId,
+          },
         );
       }
 
       // Route through intent detection and handlers
-      const interpretResult = await this.intentRouter.interpretMessage(params.content);
+      const interpretResult = await this.intentRouter.interpretMessage(
+        params.content,
+      );
       const intent = interpretResult.intent;
-      
+
       logger.info("Message intent detected", {
         userId,
         channel: params.channel,
@@ -150,13 +155,13 @@ export class UnifiedMessageProcessor {
 
       // Route to appropriate handler
       let response: SMSResponse;
-      
+
       logger.info("Routing to handler", {
         intentType: intent.type,
         userId,
         channel: params.channel,
       });
-      
+
       // Map SMS intent types to handler types
       switch (intent.type) {
         case "check_in":
@@ -171,14 +176,16 @@ export class UnifiedMessageProcessor {
             mockPayload.From,
             mockPayload.Body,
             mockPayload.MessageSid,
-            mockPayload.intent
+            mockPayload.intent,
           );
       }
-      
+
       logger.info("Handler response", {
         success: response.success,
         messageLength: response.message.length,
-        messagePreview: response.message.substring(0, 100) + (response.message.length > 100 ? '...' : ''),
+        messagePreview:
+          response.message.substring(0, 100) +
+          (response.message.length > 100 ? "..." : ""),
         channel: params.channel,
       });
 
@@ -186,7 +193,7 @@ export class UnifiedMessageProcessor {
       await saveMessage({
         userId,
         businessId: params.businessId,
-        direction: 'outbound',
+        direction: "outbound",
         content: response.message,
         phoneNumber: userPhone || undefined,
         metadata: {
@@ -195,41 +202,41 @@ export class UnifiedMessageProcessor {
           respondingTo: params.content,
           intent,
         },
-        status: 'sent',
+        status: "sent",
       });
 
       // Send response based on channel
-      if (params.channel === 'sms' && userPhone) {
+      if (params.channel === "sms" && userPhone) {
         // Send SMS response
         await this.responseSender.sendResponse(userPhone, response.message);
-        
+
         // Log to debug session
         if (params.trainingSessionId) {
           await SMSDebugLogger.logOutboundMessage(
             userPhone,
             response.message,
             params.trainingSessionId,
-            response.metadata
+            response.metadata,
           );
         }
-      } else if (params.channel === 'in_app') {
+      } else if (params.channel === "in_app") {
         // For in_app messages, the frontend will poll or use SSE to get updates
         // The message is already saved to DB, so clients will see it on refresh
         logger.info("In-app message processed and saved", {
           userId,
           responseLength: response.message.length,
         });
-        
+
         // Log to debug session for web app messages too
         if (params.trainingSessionId) {
           await SMSDebugLogger.logOutboundMessage(
-            userPhone || userId,  // Use userId if no phone
+            userPhone || userId, // Use userId if no phone
             response.message,
             params.trainingSessionId,
             {
               ...response.metadata,
-              channel: params.channel
-            }
+              channel: params.channel,
+            },
           );
         }
       }
@@ -240,26 +247,27 @@ export class UnifiedMessageProcessor {
         error,
         params,
       });
-      
+
       // Save error message for visibility
-      if (params.channel === 'in_app') {
+      if (params.channel === "in_app") {
         try {
           await saveMessage({
             userId: params.from,
             businessId: params.businessId,
-            direction: 'outbound',
-            content: "Sorry, I couldn't process your message. Please try again.",
+            direction: "outbound",
+            content:
+              "Sorry, I couldn't process your message. Please try again.",
             metadata: {
-              error: error instanceof Error ? error.message : 'Unknown error',
+              error: error instanceof Error ? error.message : "Unknown error",
               channel: params.channel,
             },
-            status: 'failed',
+            status: "failed",
           });
         } catch (saveError) {
           logger.error("Failed to save error message", saveError);
         }
       }
-      
+
       return null;
     }
   }

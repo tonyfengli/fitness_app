@@ -1,7 +1,8 @@
 import { Icon } from "@acme/ui-shared";
-import type { TagColor, SelectOption } from '../types';
-import { TAG_COLOR_CLASSES } from '../constants';
-import { getOptionLabel } from '../utils';
+
+import type { SelectOption, TagColor } from "../types";
+import { TAG_COLOR_CLASSES } from "../constants";
+import { getOptionLabel } from "../utils";
 
 interface PreferenceTagProps {
   values: string[];
@@ -11,23 +12,23 @@ interface PreferenceTagProps {
   onRemove?: (value: string) => void;
 }
 
-export function PreferenceTag({ 
-  values, 
-  options, 
-  label, 
+export function PreferenceTag({
+  values,
+  options,
+  label,
   tagColor,
-  onRemove 
+  onRemove,
 }: PreferenceTagProps) {
   if (values.length === 0) return null;
 
   return (
     <div>
       <span className="text-gray-600">{label}:</span>
-      <div className="flex flex-wrap gap-2 mt-1">
+      <div className="mt-1 flex flex-wrap gap-2">
         {values.map((value) => (
           <span
             key={value}
-            className={`inline-flex items-center px-2 py-1 rounded text-xs ${TAG_COLOR_CLASSES[tagColor]}`}
+            className={`inline-flex items-center rounded px-2 py-1 text-xs ${TAG_COLOR_CLASSES[tagColor]}`}
           >
             {getOptionLabel(value, options)}
             {onRemove && (

@@ -1,7 +1,9 @@
-import OpenAI from "openai";
-import { exercises } from "@acme/db/schema";
-import { createLogger } from "../utils/logger";
 import type { InferSelectModel } from "drizzle-orm";
+import OpenAI from "openai";
+
+import { exercises } from "@acme/db/schema";
+
+import { createLogger } from "../utils/logger";
 
 const logger = createLogger("ExerciseMatchingLLMService");
 
@@ -22,11 +24,11 @@ interface ReplacementSuggestion {
   matchQuality: "exact" | "similar" | "alternative";
 }
 
-export type ReplacementReason = 
-  | "too_hard" 
-  | "too_easy" 
-  | "avoid_exercise" 
-  | "no_equipment" 
+export type ReplacementReason =
+  | "too_hard"
+  | "too_easy"
+  | "avoid_exercise"
+  | "no_equipment"
   | "injury_concern"
   | "other";
 
@@ -35,7 +37,7 @@ export class ExerciseMatchingLLMService {
 
   constructor() {
     this.openai = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY || 'test-key',
+      apiKey: process.env.OPENAI_API_KEY || "test-key",
     });
   }
 
@@ -45,14 +47,27 @@ export class ExerciseMatchingLLMService {
    */
   async matchUserIntent(
     userPhrase: string,
-    availableExercises: Pick<Exercise, 'id' | 'name' | 'exerciseType' | 'primaryMuscle' | 'equipment' | 'movementPattern' | 'complexityLevel'>[],
-    intent: "avoid" | "include"
+    availableExercises: Pick<
+      Exercise,
+      | "id"
+      | "name"
+      | "exerciseType"
+      | "primaryMuscle"
+      | "equipment"
+      | "movementPattern"
+      | "complexityLevel"
+    >[],
+    intent: "avoid" | "include",
   ): Promise<MatchResult> {
     try {
-      logger.info("Matching user intent", { userPhrase, intent, exerciseCount: availableExercises.length });
+      logger.info("Matching user intent", {
+        userPhrase,
+        intent,
+        exerciseCount: availableExercises.length,
+      });
 
       const exerciseList = this.formatExerciseList(availableExercises);
-      
+
       const systemPrompt = `You are an expert fitness trainer helping match user exercise preferences to actual exercises in a database.
 
 TASK: Match the user's exercise request to exercises from the provided list using a SYSTEMATIC approach.
@@ -72,17 +87,19 @@ MATCHING ALGORITHM:
    c) Apply equipment filters if specified
 
 3. For "${intent}" intent:
-${intent === "avoid" ? 
-`   - Be CONSERVATIVE: Only match exercises that clearly fit
+${
+  intent === "avoid"
+    ? `   - Be CONSERVATIVE: Only match exercises that clearly fit
    - "squats" → ALL exercises with movement_pattern="squat"
    - "heavy squats" → ONLY barbell exercises with movement_pattern="squat"
    - "bench press" → exercises with "bench press" in name
-   - Match should be restrictive to ensure user avoids all relevant exercises` : 
-`   - Be INCLUSIVE: Return all possible variations for user choice
+   - Match should be restrictive to ensure user avoids all relevant exercises`
+    : `   - Be INCLUSIVE: Return all possible variations for user choice
    - "squats" → ALL exercises with movement_pattern="squat"
    - "deadlifts" → ALL exercises with movement_pattern="hinge" AND "deadlift" in name
    - "presses" → exercises with "press" in name OR vertical_push/horizontal_push patterns
-   - Give users options to choose from`}
+   - Give users options to choose from`
+}
 
 SYSTEMATIC MATCHING RULES:
 
@@ -132,7 +149,7 @@ Return a JSON object:
         model: "gpt-4o-mini",
         messages: [
           { role: "system", content: systemPrompt },
-          { role: "user", content: `User wants to ${intent}: "${userPhrase}"` }
+          { role: "user", content: `User wants to ${intent}: "${userPhrase}"` },
         ],
         response_format: { type: "json_object" },
         temperature: 0.1,
@@ -150,23 +167,23 @@ Return a JSON object:
       result.systemPrompt = systemPrompt; // Store the system prompt used
       result.model = "gpt-4o-mini"; // Store the model used
       result.parseTimeMs = parseTimeMs; // Store the parse time
-      
-      logger.info("LLM matching complete", { 
-        userPhrase, 
+
+      logger.info("LLM matching complete", {
+        userPhrase,
         matchCount: result.matchedExerciseNames.length,
-        reasoning: result.reasoning 
+        reasoning: result.reasoning,
       });
 
       // Validate that all returned exercises exist in our list
-      const validExerciseNames = new Set(availableExercises.map(e => e.name));
-      const validatedMatches = result.matchedExerciseNames.filter(name => 
-        validExerciseNames.has(name)
+      const validExerciseNames = new Set(availableExercises.map((e) => e.name));
+      const validatedMatches = result.matchedExerciseNames.filter((name) =>
+        validExerciseNames.has(name),
       );
 
       if (validatedMatches.length !== result.matchedExerciseNames.length) {
         logger.warn("Some LLM matches were invalid", {
           returned: result.matchedExerciseNames,
-          validated: validatedMatches
+          validated: validatedMatches,
         });
       }
 
@@ -176,7 +193,7 @@ Return a JSON object:
       logger.error("Error in LLM exercise matching", error);
       return {
         matchedExerciseNames: [],
-        reasoning: "Error during LLM matching"
+        reasoning: "Error during LLM matching",
       };
     }
   }
@@ -189,19 +206,21 @@ Return a JSON object:
     exerciseToReplace: string,
     reason: ReplacementReason,
     availableExercises: Exercise[],
-    userNote?: string
+    userNote?: string,
   ): Promise<ReplacementSuggestion[]> {
     try {
-      logger.info("Finding replacements", { 
-        exerciseToReplace, 
-        reason, 
+      logger.info("Finding replacements", {
+        exerciseToReplace,
+        reason,
         userNote,
-        exerciseCount: availableExercises.length 
+        exerciseCount: availableExercises.length,
       });
 
       const exerciseList = this.formatExerciseList(availableExercises);
-      const originalExercise = availableExercises.find(e => e.name === exerciseToReplace);
-      
+      const originalExercise = availableExercises.find(
+        (e) => e.name === exerciseToReplace,
+      );
+
       if (!originalExercise) {
         logger.warn("Original exercise not found", { exerciseToReplace });
         return [];
@@ -245,7 +264,10 @@ Return 3-5 suggestions as JSON:
         model: "gpt-4o-mini",
         messages: [
           { role: "system", content: systemPrompt },
-          { role: "user", content: `Find replacements for ${exerciseToReplace}` }
+          {
+            role: "user",
+            content: `Find replacements for ${exerciseToReplace}`,
+          },
         ],
         response_format: { type: "json_object" },
         temperature: 0.5,
@@ -258,10 +280,10 @@ Return 3-5 suggestions as JSON:
       }
 
       const result = JSON.parse(response);
-      
-      logger.info("Replacement suggestions generated", { 
+
+      logger.info("Replacement suggestions generated", {
         exerciseToReplace,
-        suggestionCount: result.suggestions?.length || 0
+        suggestionCount: result.suggestions?.length || 0,
       });
 
       return result.suggestions || [];
@@ -274,23 +296,34 @@ Return 3-5 suggestions as JSON:
   /**
    * Format exercise list for LLM context
    */
-  private formatExerciseList(exercises: Pick<Exercise, 'name' | 'primaryMuscle' | 'equipment' | 'movementPattern'>[]): string {
+  private formatExerciseList(
+    exercises: Pick<
+      Exercise,
+      "name" | "primaryMuscle" | "equipment" | "movementPattern"
+    >[],
+  ): string {
     return exercises
-      .map(ex => `- ${ex.name} | ${ex.primaryMuscle} | ${ex.movementPattern || "unspecified"} | ${ex.equipment?.join("/") || "bodyweight"}`)
+      .map(
+        (ex) =>
+          `- ${ex.name} | ${ex.primaryMuscle} | ${ex.movementPattern || "unspecified"} | ${ex.equipment?.join("/") || "bodyweight"}`,
+      )
       .join("\n");
   }
 
   /**
    * Get context string for replacement reason
    */
-  private getReasonContext(reason: ReplacementReason, userNote?: string): string {
+  private getReasonContext(
+    reason: ReplacementReason,
+    userNote?: string,
+  ): string {
     const contexts = {
       too_hard: "User finds this exercise too difficult or challenging",
       too_easy: "User wants a more challenging variation",
       avoid_exercise: "User wants to avoid this specific exercise",
       no_equipment: "User doesn't have the required equipment",
       injury_concern: "User has injury or pain concerns",
-      other: "User has a specific reason"
+      other: "User has a specific reason",
     };
 
     let context = contexts[reason];

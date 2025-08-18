@@ -1,13 +1,14 @@
+import { getWorkoutTemplate } from "@acme/ai";
+import { eq } from "@acme/db";
 import { db } from "@acme/db/client";
 import { TrainingSession } from "@acme/db/schema";
-import { eq } from "@acme/db";
-import { getWorkoutTemplate } from "@acme/ai";
+
+import type { SMSResponse } from "./types";
 import { createLogger } from "../../utils/logger";
+import { WorkoutPreferenceService } from "../workoutPreferenceService";
 import { LinearFlowHandler } from "./flows/linear/linear-flow-handler";
 import { StateMachineHandler } from "./flows/state-machine/state-machine-handler";
 import { PreferenceHandler } from "./handlers/preference-handler";
-import { WorkoutPreferenceService } from "../workoutPreferenceService";
-import type { SMSResponse } from "./types";
 
 const logger = createLogger("FlowRouter");
 
@@ -20,77 +21,113 @@ export class FlowRouter {
     messageContent: string,
     messageSid: string,
     sessionId: string,
-    preferenceCheck?: any
+    preferenceCheck?: any,
   ): Promise<SMSResponse> {
     try {
       // Get session template configuration
       const [session] = await db
         .select({
           templateType: TrainingSession.templateType,
-          templateConfig: TrainingSession.templateConfig
+          templateConfig: TrainingSession.templateConfig,
         })
         .from(TrainingSession)
         .where(eq(TrainingSession.id, sessionId))
         .limit(1);
 
       if (!session?.templateType) {
-        logger.warn("No template type for session, using legacy flow", { sessionId });
-        return this.useLegacyFlow(phoneNumber, messageContent, messageSid, preferenceCheck);
+        logger.warn("No template type for session, using legacy flow", {
+          sessionId,
+        });
+        return this.useLegacyFlow(
+          phoneNumber,
+          messageContent,
+          messageSid,
+          preferenceCheck,
+        );
       }
 
       // Get template definition
       const template = getWorkoutTemplate(session.templateType);
       if (!template) {
-        logger.warn("Template not found, using legacy flow", { 
-          sessionId, 
-          templateType: session.templateType 
+        logger.warn("Template not found, using legacy flow", {
+          sessionId,
+          templateType: session.templateType,
         });
-        return this.useLegacyFlow(phoneNumber, messageContent, messageSid, preferenceCheck);
+        return this.useLegacyFlow(
+          phoneNumber,
+          messageContent,
+          messageSid,
+          preferenceCheck,
+        );
       }
 
       // Route based on flow type
-      const flowType = template.smsFlowType || 'legacy';
-      
+      const flowType = template.smsFlowType || "legacy";
+
       logger.info("Routing to flow handler", {
         sessionId,
         templateType: session.templateType,
-        flowType
+        flowType,
       });
 
       switch (flowType) {
-        case 'linear':
+        case "linear":
           if (!template.smsLinearFlow) {
-            logger.error("Linear flow configuration missing", { templateType: session.templateType });
-            return this.useLegacyFlow(phoneNumber, messageContent, messageSid, preferenceCheck);
+            logger.error("Linear flow configuration missing", {
+              templateType: session.templateType,
+            });
+            return this.useLegacyFlow(
+              phoneNumber,
+              messageContent,
+              messageSid,
+              preferenceCheck,
+            );
           }
           return await LinearFlowHandler.handle(
             phoneNumber,
             messageContent,
             messageSid,
             sessionId,
-            template.smsLinearFlow
+            template.smsLinearFlow,
           );
 
-        case 'stateMachine':
+        case "stateMachine":
           if (!template.smsStateMachine) {
-            logger.error("State machine configuration missing", { templateType: session.templateType });
-            return this.useLegacyFlow(phoneNumber, messageContent, messageSid, preferenceCheck);
+            logger.error("State machine configuration missing", {
+              templateType: session.templateType,
+            });
+            return this.useLegacyFlow(
+              phoneNumber,
+              messageContent,
+              messageSid,
+              preferenceCheck,
+            );
           }
           return await StateMachineHandler.handle(
             phoneNumber,
             messageContent,
             messageSid,
             sessionId,
-            template.smsStateMachine
+            template.smsStateMachine,
           );
 
-        case 'legacy':
+        case "legacy":
         default:
-          return this.useLegacyFlow(phoneNumber, messageContent, messageSid, preferenceCheck);
+          return this.useLegacyFlow(
+            phoneNumber,
+            messageContent,
+            messageSid,
+            preferenceCheck,
+          );
       }
     } catch (error) {
       logger.error("Flow routing error", error);
-      return this.useLegacyFlow(phoneNumber, messageContent, messageSid, preferenceCheck);
+      return this.useLegacyFlow(
+        phoneNumber,
+        messageContent,
+        messageSid,
+        preferenceCheck,
+      );
     }
   }
 
@@ -101,11 +138,12 @@ export class FlowRouter {
     phoneNumber: string,
     messageContent: string,
     messageSid: string,
-    preferenceCheck?: any
+    preferenceCheck?: any,
   ): Promise<SMSResponse> {
     // If no preference check provided, get it
     if (!preferenceCheck) {
-      preferenceCheck = await WorkoutPreferenceService.isAwaitingPreferences(phoneNumber);
+      preferenceCheck =
+        await WorkoutPreferenceService.isAwaitingPreferences(phoneNumber);
     }
 
     // Use existing preference handler
@@ -114,7 +152,7 @@ export class FlowRouter {
       From: phoneNumber,
       Body: messageContent,
       MessageSid: messageSid,
-      intent: { data: preferenceCheck }
+      intent: { data: preferenceCheck },
     });
   }
 
@@ -134,7 +172,9 @@ export class FlowRouter {
       const template = getWorkoutTemplate(session.templateType);
       if (!template) return false;
 
-      return template.smsFlowType !== 'legacy' && template.smsFlowType !== undefined;
+      return (
+        template.smsFlowType !== "legacy" && template.smsFlowType !== undefined
+      );
     } catch (error) {
       logger.error("Error checking flow type", error);
       return false;

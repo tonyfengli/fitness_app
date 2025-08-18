@@ -80,12 +80,8 @@
           "name": "business_exercise_business_id_business_id_fk",
           "tableFrom": "business_exercise",
           "tableTo": "business",
-          "columnsFrom": [
-            "business_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["business_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -93,12 +89,8 @@
           "name": "business_exercise_exercise_id_exercises_id_fk",
           "tableFrom": "business_exercise",
           "tableTo": "exercises",
-          "columnsFrom": [
-            "exercise_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["exercise_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -243,12 +235,8 @@
           "name": "account_user_id_user_id_fk",
           "tableFrom": "account",
           "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -318,12 +306,8 @@
           "name": "session_user_id_user_id_fk",
           "tableFrom": "session",
           "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -333,9 +317,7 @@
         "session_token_unique": {
           "name": "session_token_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "token"
-          ]
+          "columns": ["token"]
         }
       },
       "policies": {},
@@ -396,9 +378,7 @@
         "user_email_unique": {
           "name": "user_email_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "email"
-          ]
+          "columns": ["email"]
         }
       },
       "policies": {},
@@ -564,12 +544,7 @@
     "public.complexity_level": {
       "name": "complexity_level",
       "schema": "public",
-      "values": [
-        "very_low",
-        "low",
-        "moderate",
-        "high"
-      ]
+      "values": ["very_low", "low", "moderate", "high"]
     },
     "public.fatigue_profile": {
       "name": "fatigue_profile",
@@ -645,12 +620,7 @@
     "public.strength_level": {
       "name": "strength_level",
       "schema": "public",
-      "values": [
-        "very_low",
-        "low",
-        "moderate",
-        "high"
-      ]
+      "values": ["very_low", "low", "moderate", "high"]
     }
   },
   "schemas": {},

@@ -4,10 +4,10 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { cn, ThemeProvider, ThemeToggle, Toaster } from "@acme/ui-shared";
 
 import { TRPCReactProvider } from "~/trpc/react";
-import { Navigation } from "./_components/navigation";
 import { DebugInitializer } from "./_components/debug-initializer";
-import { SessionTestDataInitializer } from "./_components/session-test-data-initializer";
 import { GroupTestDataInitializer } from "./_components/group-test-data-initializer";
+import { Navigation } from "./_components/navigation";
+import { SessionTestDataInitializer } from "./_components/session-test-data-initializer";
 
 import "~/app/globals.css";
 

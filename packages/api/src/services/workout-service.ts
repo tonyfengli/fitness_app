@@ -1,15 +1,17 @@
 import { TRPCError } from "@trpc/server";
-import { eq, and, desc } from "@acme/db";
+
 import type { Database } from "@acme/db/client";
-import { 
+import { and, desc, eq } from "@acme/db";
+import {
+  BusinessExercise,
+  exercises,
+  TrainingSession,
+  user,
+  UserTrainingSession,
   Workout,
   WorkoutExercise,
-  TrainingSession,
-  UserTrainingSession,
-  exercises,
-  BusinessExercise,
-  user
 } from "@acme/db/schema";
+
 import type { SessionUser } from "../types/auth";
 
 export class WorkoutService {
@@ -22,14 +24,14 @@ export class WorkoutService {
     const session = await this.db.query.TrainingSession.findFirst({
       where: and(
         eq(TrainingSession.id, sessionId),
-        eq(TrainingSession.businessId, businessId)
+        eq(TrainingSession.businessId, businessId),
       ),
     });
 
     if (!session) {
       throw new TRPCError({
-        code: 'NOT_FOUND',
-        message: 'Training session not found',
+        code: "NOT_FOUND",
+        message: "Training session not found",
       });
     }
 
@@ -39,7 +41,11 @@ export class WorkoutService {
   /**
    * Verify that a user is registered for a training session
    */
-  async verifyUserRegistration(userId: string, sessionId: string, trainerId: string) {
+  async verifyUserRegistration(
+    userId: string,
+    sessionId: string,
+    trainerId: string,
+  ) {
     // Trainers don't need to be registered
     if (userId === trainerId) {
       return true;
@@ -48,29 +54,28 @@ export class WorkoutService {
     const registration = await this.db.query.UserTrainingSession.findFirst({
       where: and(
         eq(UserTrainingSession.userId, userId),
-        eq(UserTrainingSession.trainingSessionId, sessionId)
+        eq(UserTrainingSession.trainingSessionId, sessionId),
       ),
     });
 
     if (!registration) {
       throw new TRPCError({
-        code: 'FORBIDDEN',
-        message: 'User must be registered for the session to log a workout',
+        code: "FORBIDDEN",
+        message: "User must be registered for the session to log a workout",
       });
     }
 
     return registration;
   }
 
-
   /**
    * Verify that a user can log workouts for another user
    */
   verifyWorkoutPermission(targetUserId: string, currentUser: SessionUser) {
-    if (targetUserId !== currentUser.id && currentUser.role !== 'trainer') {
+    if (targetUserId !== currentUser.id && currentUser.role !== "trainer") {
       throw new TRPCError({
-        code: 'FORBIDDEN',
-        message: 'You can only log your own workouts',
+        code: "FORBIDDEN",
+        message: "You can only log your own workouts",
       });
     }
   }
@@ -81,15 +86,12 @@ export class WorkoutService {
    */
   async verifyWorkoutAccess(workoutId: string, businessId: string) {
     const workout = await this.db.query.Workout.findFirst({
-      where: and(
-        eq(Workout.id, workoutId),
-        eq(Workout.businessId, businessId)
-      ),
+      where: and(eq(Workout.id, workoutId), eq(Workout.businessId, businessId)),
     });
 
     if (!workout) {
       throw new TRPCError({
-        code: 'NOT_FOUND',
+        code: "NOT_FOUND",
         message: WorkoutService.ERRORS.WORKOUT_NOT_FOUND,
       });
     }
@@ -104,14 +106,14 @@ export class WorkoutService {
     const exercise = await this.db.query.WorkoutExercise.findFirst({
       where: and(
         eq(WorkoutExercise.workoutId, workoutId),
-        eq(WorkoutExercise.id, exerciseId)
+        eq(WorkoutExercise.id, exerciseId),
       ),
     });
 
     if (!exercise) {
       throw new TRPCError({
-        code: 'NOT_FOUND',
-        message: 'Exercise not found in workout',
+        code: "NOT_FOUND",
+        message: "Exercise not found in workout",
       });
     }
 
@@ -130,7 +132,7 @@ export class WorkoutService {
     // Group exercises by block
     const exercisesByBlock = new Map<string, typeof workoutExercises>();
     for (const exercise of workoutExercises) {
-      const blockName = exercise.groupName || 'Block A';
+      const blockName = exercise.groupName || "Block A";
       if (!exercisesByBlock.has(blockName)) {
         exercisesByBlock.set(blockName, []);
       }
@@ -143,11 +145,15 @@ export class WorkoutService {
   /**
    * Reorder exercises after deletion or reordering
    */
-  async reorderExercises(workoutId: string, blockName: string, startIndex: number) {
+  async reorderExercises(
+    workoutId: string,
+    blockName: string,
+    startIndex: number,
+  ) {
     const exercises = await this.db.query.WorkoutExercise.findMany({
       where: and(
         eq(WorkoutExercise.workoutId, workoutId),
-        eq(WorkoutExercise.groupName, blockName)
+        eq(WorkoutExercise.groupName, blockName),
       ),
       orderBy: WorkoutExercise.orderIndex,
     });
@@ -169,16 +175,13 @@ export class WorkoutService {
    */
   async verifyClientInBusiness(clientId: string, businessId: string) {
     const client = await this.db.query.user.findFirst({
-      where: and(
-        eq(user.id, clientId),
-        eq(user.businessId, businessId)
-      ),
+      where: and(eq(user.id, clientId), eq(user.businessId, businessId)),
     });
 
     if (!client) {
       throw new TRPCError({
-        code: 'NOT_FOUND',
-        message: 'Client not found in your business',
+        code: "NOT_FOUND",
+        message: "Client not found in your business",
       });
     }
 
@@ -189,7 +192,7 @@ export class WorkoutService {
    * Check if a workout is an assessment (can't be deleted)
    */
   isAssessmentWorkout(workout: { context: string }) {
-    return workout.context === 'assessment';
+    return workout.context === "assessment";
   }
 
   /**
@@ -208,7 +211,15 @@ export class WorkoutService {
       setsCompleted: number;
     }>;
   }) {
-    const { trainingSessionId, userId, businessId, createdByTrainerId, completedAt, notes, exercises } = params;
+    const {
+      trainingSessionId,
+      userId,
+      businessId,
+      createdByTrainerId,
+      completedAt,
+      notes,
+      exercises,
+    } = params;
 
     return await this.db.transaction(async (tx) => {
       // Create workout
@@ -224,27 +235,27 @@ export class WorkoutService {
           context: "group", // Group context since it has a training session
         })
         .returning();
-        
+
       if (!workout) {
         throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to create workout',
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to create workout",
         });
       }
-      
+
       // Create workout exercises if provided
       if (exercises && exercises.length > 0) {
         await tx.insert(WorkoutExercise).values(
-          exercises.map(ex => ({
+          exercises.map((ex) => ({
             workoutId: workout.id,
             exerciseId: ex.exerciseId,
             orderIndex: ex.orderIndex,
             setsCompleted: ex.setsCompleted,
             groupName: "Block A", // Default for now
-          }))
+          })),
         );
       }
-      
+
       return workout;
     });
   }
@@ -253,11 +264,11 @@ export class WorkoutService {
    * Standard error messages
    */
   static readonly ERRORS = {
-    WORKOUT_NOT_FOUND: 'Workout not found',
-    SESSION_NOT_FOUND: 'Training session not found',
-    UNAUTHORIZED: 'Unauthorized',
-    FORBIDDEN: 'You do not have permission to perform this action',
-    INVALID_INPUT: 'Invalid input provided',
-    BUSINESS_REQUIRED: 'User must be associated with a business',
+    WORKOUT_NOT_FOUND: "Workout not found",
+    SESSION_NOT_FOUND: "Training session not found",
+    UNAUTHORIZED: "Unauthorized",
+    FORBIDDEN: "You do not have permission to perform this action",
+    INVALID_INPUT: "Invalid input provided",
+    BUSINESS_REQUIRED: "User must be associated with a business",
   } as const;
 }

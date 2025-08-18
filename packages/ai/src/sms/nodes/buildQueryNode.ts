@@ -23,7 +23,10 @@ export async function buildQueryNode(state: SMSStateType) {
             preferredTime: context.preferredTime,
             notes: context.additionalNotes,
           },
-          requiresHumanReview: intent.confidence < 0.8 || !context.preferredDate || !context.preferredTime,
+          requiresHumanReview:
+            intent.confidence < 0.8 ||
+            !context.preferredDate ||
+            !context.preferredTime,
         };
         break;
 
@@ -37,7 +40,9 @@ export async function buildQueryNode(state: SMSStateType) {
             sessionTime: context.preferredTime,
             reason: context.additionalNotes,
           },
-          requiresHumanReview: intent.confidence < 0.8 || (!context.clientId && !context.clientName),
+          requiresHumanReview:
+            intent.confidence < 0.8 ||
+            (!context.clientId && !context.clientName),
         };
         break;
 
@@ -51,7 +56,10 @@ export async function buildQueryNode(state: SMSStateType) {
             newTime: context.preferredTime,
             notes: context.additionalNotes,
           },
-          requiresHumanReview: intent.confidence < 0.8 || !context.preferredDate || !context.preferredTime,
+          requiresHumanReview:
+            intent.confidence < 0.8 ||
+            !context.preferredDate ||
+            !context.preferredTime,
         };
         break;
 

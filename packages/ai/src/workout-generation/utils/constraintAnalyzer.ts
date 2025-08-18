@@ -3,12 +3,12 @@
  * Analyzes exercise sets against workout type constraints
  */
 
-import type { Exercise } from '../../types/exercise';
-import type { ScoredExercise } from '../../types/scoredExercise';
-import type { ClientContext } from '../../types/clientContext';
-import { WorkoutType } from '../../types/clientTypes';
-import { getWorkoutTypeStrategy } from '../strategies/workoutTypeStrategies';
-import { exerciseMatchesMusclePreference } from '../../constants/muscleMapping';
+import type { ClientContext } from "../../types/clientContext";
+import type { WorkoutType } from "../../types/clientTypes";
+import type { Exercise } from "../../types/exercise";
+import type { ScoredExercise } from "../../types/scoredExercise";
+import { exerciseMatchesMusclePreference } from "../../constants/muscleMapping";
+import { getWorkoutTypeStrategy } from "../strategies/workoutTypeStrategies";
 
 export interface ConstraintAnalysis {
   movementPatterns: {
@@ -16,7 +16,7 @@ export interface ConstraintAnalysis {
       current: number;
       min: number;
       max: number;
-      status: 'met' | 'under' | 'over';
+      status: "met" | "under" | "over";
       needed: number; // How many more needed to meet min
     };
   };
@@ -24,7 +24,7 @@ export interface ConstraintAnalysis {
     [requirement: string]: {
       current: number;
       required: number;
-      status: 'met' | 'under';
+      status: "met" | "under";
       needed: number;
     };
   };
@@ -43,22 +43,24 @@ export interface ConstraintAnalysis {
  * Normalize movement pattern for consistent comparison
  */
 function normalizePattern(pattern: string | undefined): string {
-  return (pattern || '').toLowerCase().trim();
+  return (pattern || "").toLowerCase().trim();
 }
 
 /**
  * Count exercises by movement pattern
  */
-function countMovementPatterns(exercises: (Exercise | ScoredExercise)[]): Map<string, number> {
+function countMovementPatterns(
+  exercises: (Exercise | ScoredExercise)[],
+): Map<string, number> {
   const counts = new Map<string, number>();
-  
-  exercises.forEach(ex => {
+
+  exercises.forEach((ex) => {
     const pattern = normalizePattern(ex.movementPattern);
     if (pattern) {
       counts.set(pattern, (counts.get(pattern) || 0) + 1);
     }
   });
-  
+
   return counts;
 }
 
@@ -67,38 +69,50 @@ function countMovementPatterns(exercises: (Exercise | ScoredExercise)[]): Map<st
  */
 function countFunctionalRequirements(
   exercises: (Exercise | ScoredExercise)[],
-  client: ClientContext
+  client: ClientContext,
 ): Map<string, number> {
   const counts = new Map<string, number>();
-  
+
   // Count capacity/strength tags
-  exercises.forEach(ex => {
-    ex.functionTags?.forEach(tag => {
-      if (tag === 'capacity' || tag === 'strength') {
+  exercises.forEach((ex) => {
+    ex.functionTags?.forEach((tag) => {
+      if (tag === "capacity" || tag === "strength") {
         counts.set(tag, (counts.get(tag) || 0) + 1);
       }
     });
   });
-  
+
   // Count muscle targets (PRIMARY MUSCLE ONLY)
   if (client.muscle_target && client.muscle_target.length > 0) {
-    console.log(`[constraintAnalyzer] Analyzing muscle targets for ${exercises.length} exercises`);
-    console.log(`[constraintAnalyzer] Client muscle targets:`, client.muscle_target);
-    
-    const muscleTargetCount = exercises.filter(ex => {
+    console.log(
+      `[constraintAnalyzer] Analyzing muscle targets for ${exercises.length} exercises`,
+    );
+    console.log(
+      `[constraintAnalyzer] Client muscle targets:`,
+      client.muscle_target,
+    );
+
+    const muscleTargetCount = exercises.filter((ex) => {
       const targets = client.muscle_target || [];
-      const matches = targets.some(muscle => {
-        const result = exerciseMatchesMusclePreference(ex.primaryMuscle, muscle as any);
-        console.log(`[constraintAnalyzer] Checking ${ex.name} (${ex.primaryMuscle}) against target "${muscle}": ${result}`);
+      const matches = targets.some((muscle) => {
+        const result = exerciseMatchesMusclePreference(
+          ex.primaryMuscle,
+          muscle as any,
+        );
+        console.log(
+          `[constraintAnalyzer] Checking ${ex.name} (${ex.primaryMuscle}) against target "${muscle}": ${result}`,
+        );
         return result;
       });
       return matches;
     }).length;
-    
-    console.log(`[constraintAnalyzer] Final muscle target count: ${muscleTargetCount}`);
-    counts.set('muscle_target', muscleTargetCount);
+
+    console.log(
+      `[constraintAnalyzer] Final muscle target count: ${muscleTargetCount}`,
+    );
+    counts.set("muscle_target", muscleTargetCount);
   }
-  
+
   return counts;
 }
 
@@ -108,42 +122,57 @@ function countFunctionalRequirements(
 export function analyzeConstraints(
   exercises: (Exercise | ScoredExercise)[],
   client: ClientContext,
-  workoutType: WorkoutType
+  workoutType: WorkoutType,
 ): ConstraintAnalysis {
   const strategy = getWorkoutTypeStrategy(workoutType);
   const movementCounts = countMovementPatterns(exercises);
   const functionalCounts = countFunctionalRequirements(exercises, client);
-  
+
   // Analyze movement patterns
-  const movementPatterns: ConstraintAnalysis['movementPatterns'] = {};
+  const movementPatterns: ConstraintAnalysis["movementPatterns"] = {};
   let movementPatternsMet = 0;
-  
-  Object.entries(strategy.constraints.movementPatterns).forEach(([pattern, { min, max }]) => {
-    const current = movementCounts.get(pattern) || 0;
-    const status = current >= min ? (current > max ? 'over' : 'met') : 'under';
-    const needed = Math.max(0, min - current);
-    
-    movementPatterns[pattern] = { current, min, max, status, needed };
-    if (status === 'met') movementPatternsMet++;
-  });
-  
+
+  Object.entries(strategy.constraints.movementPatterns).forEach(
+    ([pattern, { min, max }]) => {
+      const current = movementCounts.get(pattern) || 0;
+      const status =
+        current >= min ? (current > max ? "over" : "met") : "under";
+      const needed = Math.max(0, min - current);
+
+      movementPatterns[pattern] = { current, min, max, status, needed };
+      if (status === "met") movementPatternsMet++;
+    },
+  );
+
   // Analyze functional requirements
-  const functionalRequirements: ConstraintAnalysis['functionalRequirements'] = {};
+  const functionalRequirements: ConstraintAnalysis["functionalRequirements"] =
+    {};
   let functionalRequirementsMet = 0;
-  
-  Object.entries(strategy.constraints.functionalRequirements).forEach(([requirement, required]) => {
-    const current = functionalCounts.get(requirement) || 0;
-    const status = current >= required ? 'met' : 'under';
-    const needed = Math.max(0, required - current);
-    
-    functionalRequirements[requirement] = { current, required, status, needed };
-    if (status === 'met') functionalRequirementsMet++;
-  });
-  
+
+  Object.entries(strategy.constraints.functionalRequirements).forEach(
+    ([requirement, required]) => {
+      const current = functionalCounts.get(requirement) || 0;
+      const status = current >= required ? "met" : "under";
+      const needed = Math.max(0, required - current);
+
+      functionalRequirements[requirement] = {
+        current,
+        required,
+        status,
+        needed,
+      };
+      if (status === "met") functionalRequirementsMet++;
+    },
+  );
+
   // Calculate summary
-  const movementPatternsTotal = Object.keys(strategy.constraints.movementPatterns).length;
-  const functionalRequirementsTotal = Object.keys(strategy.constraints.functionalRequirements).length;
-  
+  const movementPatternsTotal = Object.keys(
+    strategy.constraints.movementPatterns,
+  ).length;
+  const functionalRequirementsTotal = Object.keys(
+    strategy.constraints.functionalRequirements,
+  ).length;
+
   const summary = {
     totalExercises: exercises.length,
     totalNeeded: strategy.constraints.totalExercises,
@@ -151,16 +180,16 @@ export function analyzeConstraints(
     movementPatternsTotal,
     functionalRequirementsMet,
     functionalRequirementsTotal,
-    allConstraintsMet: 
-      movementPatternsMet === movementPatternsTotal && 
+    allConstraintsMet:
+      movementPatternsMet === movementPatternsTotal &&
       functionalRequirementsMet === functionalRequirementsTotal &&
-      exercises.length >= strategy.constraints.totalExercises
+      exercises.length >= strategy.constraints.totalExercises,
   };
-  
+
   return {
     movementPatterns,
     functionalRequirements,
-    summary
+    summary,
   };
 }
 
@@ -174,33 +203,35 @@ export function getRemainingNeeds(analysis: ConstraintAnalysis): {
 } {
   const movementPatterns: string[] = [];
   const functionalRequirements: string[] = [];
-  
+
   // Collect unmet movement patterns
   Object.entries(analysis.movementPatterns).forEach(([pattern, data]) => {
-    if (data.status === 'under') {
+    if (data.status === "under") {
       for (let i = 0; i < data.needed; i++) {
         movementPatterns.push(pattern);
       }
     }
   });
-  
+
   // Collect unmet functional requirements
-  Object.entries(analysis.functionalRequirements).forEach(([requirement, data]) => {
-    if (data.status === 'under') {
-      for (let i = 0; i < data.needed; i++) {
-        functionalRequirements.push(requirement);
+  Object.entries(analysis.functionalRequirements).forEach(
+    ([requirement, data]) => {
+      if (data.status === "under") {
+        for (let i = 0; i < data.needed; i++) {
+          functionalRequirements.push(requirement);
+        }
       }
-    }
-  });
-  
+    },
+  );
+
   const totalExercises = Math.max(
     0,
-    analysis.summary.totalNeeded - analysis.summary.totalExercises
+    analysis.summary.totalNeeded - analysis.summary.totalExercises,
   );
-  
+
   return {
     movementPatterns,
     functionalRequirements,
-    totalExercises
+    totalExercises,
   };
 }

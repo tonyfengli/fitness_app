@@ -94,17 +94,15 @@ export const SHARED_SELECTION_INSTRUCTIONS = `## Instructions
 /**
  * Build the complete prompt for shared selection
  */
-export function buildSharedSelectionPrompt(
-  sections?: {
-    role?: string;
-    rules?: string;
-    context?: string;
-    constraints?: string;
-    outputFormat?: string;
-    examples?: string;
-    instructions?: string;
-  }
-): string {
+export function buildSharedSelectionPrompt(sections?: {
+  role?: string;
+  rules?: string;
+  context?: string;
+  constraints?: string;
+  outputFormat?: string;
+  examples?: string;
+  instructions?: string;
+}): string {
   const promptSections = [
     sections?.role ?? SHARED_SELECTION_ROLE,
     sections?.rules ?? SHARED_SELECTION_RULES,
@@ -114,6 +112,6 @@ export function buildSharedSelectionPrompt(
     sections?.examples ?? SHARED_SELECTION_EXAMPLES,
     sections?.instructions ?? SHARED_SELECTION_INSTRUCTIONS,
   ];
-  
-  return promptSections.join('\n\n');
+
+  return promptSections.join("\n\n");
 }

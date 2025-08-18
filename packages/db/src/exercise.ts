@@ -1,5 +1,5 @@
+import type { InferSelectModel } from "drizzle-orm";
 import { pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
-import { InferSelectModel } from "drizzle-orm";
 
 export const exerciseTypeEnum = pgEnum("exercise_type", [
   "squat",
@@ -31,12 +31,12 @@ export const exerciseTypeEnum = pgEnum("exercise_type", [
   "snatch",
   "swing",
   "turkish_get_up",
-  "other"
+  "other",
 ]);
 
 export const primaryMuscleEnum = pgEnum("primary_muscle", [
   "glutes",
-  "quads", 
+  "quads",
   "hamstrings",
   "calves",
   "adductors",
@@ -57,7 +57,7 @@ export const primaryMuscleEnum = pgEnum("primary_muscle", [
   "upper_back",
   "lower_back",
   "shins",
-  "tibialis_anterior"
+  "tibialis_anterior",
 ]);
 export const movementPatternEnum = pgEnum("movement_pattern", [
   "horizontal_push",
@@ -71,7 +71,7 @@ export const movementPatternEnum = pgEnum("movement_pattern", [
   "lunge",
   "hinge",
   "carry",
-  "core"
+  "core",
 ]);
 export const modalityEnum = pgEnum("modality", [
   "strength",
@@ -79,7 +79,7 @@ export const modalityEnum = pgEnum("modality", [
   "core",
   "power",
   "conditioning",
-  "mobility"
+  "mobility",
 ]);
 export const fatigueProfileEnum = pgEnum("fatigue_profile", [
   "low_local",
@@ -87,19 +87,19 @@ export const fatigueProfileEnum = pgEnum("fatigue_profile", [
   "high_local",
   "moderate_systemic",
   "high_systemic",
-  "metabolic"
+  "metabolic",
 ]);
 export const complexityLevelEnum = pgEnum("complexity_level", [
   "very_low",
   "low",
   "moderate",
-  "high"
+  "high",
 ]);
 export const strengthLevelEnum = pgEnum("strength_level", [
   "very_low",
   "low",
   "moderate",
-  "high"
+  "high",
 ]);
 
 export const exercises = pgTable("exercises", {
@@ -110,7 +110,7 @@ export const exercises = pgTable("exercises", {
   secondaryMuscles: text("secondary_muscles", {
     enum: [
       "glutes",
-      "quads", 
+      "quads",
       "hamstrings",
       "calves",
       "adductors",
@@ -131,8 +131,8 @@ export const exercises = pgTable("exercises", {
       "upper_back",
       "lower_back",
       "shins",
-      "tibialis_anterior"
-    ]
+      "tibialis_anterior",
+    ],
   }).array(),
   loadedJoints: text("loaded_joints", {
     enum: [
@@ -147,8 +147,8 @@ export const exercises = pgTable("exercises", {
       "spine",
       "sacroiliac_joint",
       "patella",
-      "rotator_cuff"
-    ]
+      "rotator_cuff",
+    ],
   }).array(),
   movementPattern: movementPatternEnum("movement_pattern").notNull(),
   modality: modalityEnum("modality").notNull(),
@@ -173,8 +173,8 @@ export const exercises = pgTable("exercises", {
       "rehab_friendly",
       "warmup_friendly",
       "finisher_friendly",
-      "mobility_focus"
-    ]
+      "mobility_focus",
+    ],
   }).array(),
   functionTags: text("function_tags", {
     enum: [
@@ -182,8 +182,8 @@ export const exercises = pgTable("exercises", {
       "secondary_strength",
       "accessory",
       "core",
-      "capacity"
-    ]
+      "capacity",
+    ],
   }).array(),
   fatigueProfile: fatigueProfileEnum("fatigue_profile").notNull(),
   complexityLevel: complexityLevelEnum("complexity_level").notNull(),
@@ -204,8 +204,8 @@ export const exercises = pgTable("exercises", {
       "back_machine",
       "ab_wheel",
       "box",
-      "med_ball"
-    ]
+      "med_ball",
+    ],
   }).array(),
   strengthLevel: strengthLevelEnum("strength_level").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),

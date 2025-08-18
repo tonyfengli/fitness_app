@@ -1,6 +1,6 @@
-import type { ScoredExercise } from "./scoredExercise";
-import type { GroupScoredExercise } from "./groupContext";
 import type { BlockConfig } from "../core/templates/types/dynamicBlockTypes";
+import type { GroupScoredExercise } from "./groupContext";
+import type { ScoredExercise } from "./scoredExercise";
 
 /**
  * Represents a possible sub-group for a shared exercise
@@ -17,22 +17,22 @@ export interface SubGroupPossibility {
 export interface GroupBlockBlueprint {
   blockId: string;
   blockConfig: BlockConfig;
-  
+
   // Slot allocation based on available exercises
   slots: {
     total: number;
-    targetShared: number;           // Based on block's shared ratio
-    actualSharedAvailable: number;  // Based on quality threshold (2+ clients)
-    individualPerClient: number;    // Remaining slots for each client
+    targetShared: number; // Based on block's shared ratio
+    actualSharedAvailable: number; // Based on quality threshold (2+ clients)
+    individualPerClient: number; // Remaining slots for each client
   };
-  
+
   // Candidates for LLM to select from
   sharedCandidates: {
     exercises: GroupScoredExercise[];
     minClientsRequired: number;
     subGroupPossibilities: SubGroupPossibility[];
   };
-  
+
   // Individual exercise candidates per client
   individualCandidates: {
     [clientId: string]: {
@@ -41,7 +41,6 @@ export interface GroupBlockBlueprint {
       allFilteredExercises?: ScoredExercise[]; // All exercises that passed block filters
     };
   };
-  
 }
 
 /**

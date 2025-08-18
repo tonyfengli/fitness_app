@@ -3,10 +3,11 @@
  * Automatically creates default preferences for standard template workouts
  */
 
-import { db } from "@acme/db/client";
-import { WorkoutPreferences, TrainingSession, user } from "@acme/db/schema";
-import { eq, and } from "@acme/db";
 import { getWorkoutTemplate } from "@acme/ai";
+import { and, eq } from "@acme/db";
+import { db } from "@acme/db/client";
+import { TrainingSession, user, WorkoutPreferences } from "@acme/db/schema";
+
 import { createLogger } from "../utils/logger";
 
 const logger = createLogger("AutoPreferenceService");
@@ -33,7 +34,7 @@ async function isStandardTemplateSession(sessionId: string): Promise<boolean> {
     }
 
     // Check if it's a standard template
-    const standardTemplates = ['standard', 'standard_strength'];
+    const standardTemplates = ["standard", "standard_strength"];
     return standardTemplates.includes(session.templateType);
   } catch (error) {
     logger.error("Error checking template type", { error, sessionId });
@@ -45,7 +46,7 @@ async function isStandardTemplateSession(sessionId: string): Promise<boolean> {
  * Create default preferences for standard template workouts
  */
 export async function createDefaultPreferencesIfNeeded(
-  options: AutoPreferenceOptions
+  options: AutoPreferenceOptions,
 ): Promise<boolean> {
   const { userId, sessionId, businessId } = options;
 
@@ -53,7 +54,9 @@ export async function createDefaultPreferencesIfNeeded(
     // 1. Check if it's a standard template session
     const isStandard = await isStandardTemplateSession(sessionId);
     if (!isStandard) {
-      logger.info("Not a standard template, skipping auto preferences", { sessionId });
+      logger.info("Not a standard template, skipping auto preferences", {
+        sessionId,
+      });
       return false;
     }
 
@@ -64,8 +67,8 @@ export async function createDefaultPreferencesIfNeeded(
       .where(
         and(
           eq(WorkoutPreferences.userId, userId),
-          eq(WorkoutPreferences.trainingSessionId, sessionId)
-        )
+          eq(WorkoutPreferences.trainingSessionId, sessionId),
+        ),
       )
       .limit(1);
 

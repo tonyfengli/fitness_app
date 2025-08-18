@@ -1,9 +1,15 @@
-import type { Exercise, ClientContext } from "../../types";
-import type { ScoredExercise, ScoringCriteria } from "../../types/scoredExercise";
-import { applyClientFilters } from "./applyClientFilters";
-import { scoreAndSortExercises } from "../scoring/scoreExercises";
-import { fetchAllExercises, fetchExercisesByBusiness } from "../../utils/fetchExercises";
+import type { ClientContext, Exercise } from "../../types";
+import type {
+  ScoredExercise,
+  ScoringCriteria,
+} from "../../types/scoredExercise";
 import { createDefaultClientContext } from "../../types/clientContext";
+import {
+  fetchAllExercises,
+  fetchExercisesByBusiness,
+} from "../../utils/fetchExercises";
+import { scoreAndSortExercises } from "../scoring/scoreExercises";
+import { applyClientFilters } from "./applyClientFilters";
 
 export interface DirectFilterOptions {
   exercises?: Exercise[]; // Optional: provide exercises directly
@@ -12,32 +18,35 @@ export interface DirectFilterOptions {
   includeScoring?: boolean; // Whether to apply scoring and sorting
   scoringCriteria?: ScoringCriteria; // Scoring criteria for Phase 2
   enhancedMode?: boolean; // Enable enhanced debug mode
-  customFilterFunction?: (exercises: Exercise[], criteria: ClientContext) => Exercise[]; // Custom filter function
+  customFilterFunction?: (
+    exercises: Exercise[],
+    criteria: ClientContext,
+  ) => Exercise[]; // Custom filter function
 }
 
 /**
  * Main function to filter exercises
  * Applies client-based filtering and optionally scoring/sorting
- * 
+ *
  * @param options - Filtering and scoring options
  * @returns Filtered exercises (scored and sorted if scoring is enabled)
  */
 export async function filterExercises(
-  options: DirectFilterOptions
+  options: DirectFilterOptions,
 ): Promise<Exercise[] | ScoredExercise[]> {
   const startTime = performance.now();
   // Removed filterExercises call log
-  
-  const { 
-    exercises: providedExercises, 
-    businessId, 
+
+  const {
+    exercises: providedExercises,
+    businessId,
     clientContext,
     includeScoring = false,
     scoringCriteria,
     enhancedMode = false,
-    customFilterFunction
+    customFilterFunction,
   } = options;
-  
+
   // Get exercises: either provided, business-specific, or all
   let exercises: Exercise[];
   if (providedExercises) {
@@ -49,36 +58,40 @@ export async function filterExercises(
   } else {
     exercises = await fetchAllExercises();
   }
-  
+
   if (!exercises || exercises.length === 0) {
     // No exercises available to filter
     return [];
   }
-  
+
   // Use provided context or create default
-  const finalClientContext = clientContext || createDefaultClientContext('default-user');
-  
+  const finalClientContext =
+    clientContext || createDefaultClientContext("default-user");
+
   // Apply client-based filtering only
   const phase1StartTime = performance.now();
-  const filteredExercises = customFilterFunction 
+  const filteredExercises = customFilterFunction
     ? customFilterFunction(exercises, finalClientContext)
     : applyClientFilters(exercises, finalClientContext);
   const phase1EndTime = performance.now();
   // Removed phase 1 timing log
-  
+
   // Apply scoring if requested
   if (includeScoring && scoringCriteria) {
     // Applying scoring to filtered exercises
     const scoringStartTime = performance.now();
-    const scoredExercises = await scoreAndSortExercises(filteredExercises, scoringCriteria);
+    const scoredExercises = await scoreAndSortExercises(
+      filteredExercises,
+      scoringCriteria,
+    );
     const scoringEndTime = performance.now();
     // Removed phase 2 timing log
-    
+
     const totalTime = performance.now() - startTime;
     // Removed total timing log
     return scoredExercises;
   }
-  
+
   const totalTime = performance.now() - startTime;
   // Removed total timing log (phase 1 only)
   return filteredExercises;

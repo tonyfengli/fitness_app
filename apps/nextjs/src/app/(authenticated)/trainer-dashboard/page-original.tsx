@@ -1,33 +1,36 @@
 "use client";
 
 import React, { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { 
-  SidebarLayout, 
-  ClientSidebar, 
-  WorkoutProgramCard,
+import { useRouter } from "next/navigation";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+
+import type { EditContext, ExerciseBlock } from "@acme/ui-desktop";
+import {
   AddExerciseModal,
+  ClientSidebar,
+  DeleteConfirmDialog,
   DuplicateWorkoutModal,
   EditModal,
-  DeleteConfirmDialog
+  SidebarLayout,
+  WorkoutProgramCard,
 } from "@acme/ui-desktop";
 import { Button, FeedbackSection, Icon } from "@acme/ui-shared";
+
 import { useTRPC } from "~/trpc/react";
-import { useRouter } from "next/navigation";
-import type { ExerciseBlock, EditContext } from "@acme/ui-desktop";
 import NewWorkoutModal from "./new-workout-modal";
 
 // Constants
 const AVATAR_API_URL = "https://api.dicebear.com/7.x/avataaars/svg";
 const DEFAULT_WORKOUT_WEEK = "Standard, Individual";
-const LLM_OUTPUT_TEXT = "Generated workout based on client profile: Moderate strength, Moderate skill level. Focus on compound movements with progressive overload. 3 sets of 8-12 reps for primary exercises.";
-
+const LLM_OUTPUT_TEXT =
+  "Generated workout based on client profile: Moderate strength, Moderate skill level. Focus on compound movements with progressive overload. 3 sets of 8-12 reps for primary exercises.";
 
 // Helper function to format strength/skill levels
 function formatLevel(level: string): string {
-  return level.split('_').map(word => 
-    word.charAt(0).toUpperCase() + word.slice(1)
-  ).join(' ');
+  return level
+    .split("_")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
 }
 
 // Workout Section Component
@@ -45,10 +48,19 @@ interface WorkoutSectionProps {
   onDeleteBlock: (workoutId: string, blockName: string) => void;
   onDeleteExercise: (workoutId: string, exerciseId: string) => void;
   onAddExercise: (workoutId: string, blockName: string) => void;
-  onMoveExercise: (workoutId: string, exerciseId: string, direction: 'up' | 'down') => void;
+  onMoveExercise: (
+    workoutId: string,
+    exerciseId: string,
+    direction: "up" | "down",
+  ) => void;
   onEditWorkout: (workoutId: string) => void;
   onEditBlock: (workoutId: string, blockName: string) => void;
-  onEditExercise: (workoutId: string, exerciseId: string, exerciseName: string, blockName: string) => void;
+  onEditExercise: (
+    workoutId: string,
+    exerciseId: string,
+    exerciseName: string,
+    blockName: string,
+  ) => void;
   movingExerciseId: string | null;
   isDeleting: boolean;
   deletingExerciseId: string | null;
@@ -56,14 +68,14 @@ interface WorkoutSectionProps {
   llmOutput?: any;
 }
 
-function WorkoutSection({ 
-  workoutId, 
-  date, 
+function WorkoutSection({
+  workoutId,
+  date,
   week,
-  exerciseBlocks, 
-  feedbackExpanded, 
-  llmOutputExpanded, 
-  onFeedbackToggle, 
+  exerciseBlocks,
+  feedbackExpanded,
+  llmOutputExpanded,
+  onFeedbackToggle,
   onLlmOutputToggle,
   onDeleteWorkout,
   onDuplicateWorkout,
@@ -78,24 +90,30 @@ function WorkoutSection({
   isDeleting,
   deletingExerciseId,
   deletingBlockName,
-  llmOutput 
+  llmOutput,
 }: WorkoutSectionProps) {
   return (
     <div className="space-y-4">
-      <div className="bg-white rounded-2xl shadow-lg">
+      <div className="rounded-2xl bg-white shadow-lg">
         <WorkoutProgramCard
           title={date}
           week={week || DEFAULT_WORKOUT_WEEK}
           exerciseBlocks={exerciseBlocks}
           onAddExercise={(blockName) => onAddExercise(workoutId, blockName)}
-          onEditExercise={(exerciseId, exerciseName, blockName) => onEditExercise(workoutId, exerciseId, exerciseName, blockName)}
+          onEditExercise={(exerciseId, exerciseName, blockName) =>
+            onEditExercise(workoutId, exerciseId, exerciseName, blockName)
+          }
           onEditWorkout={() => onEditWorkout(workoutId)}
           onEditBlock={(blockName) => onEditBlock(workoutId, blockName)}
-          onDeleteExercise={(exerciseId, blockName) => onDeleteExercise(workoutId, exerciseId)}
+          onDeleteExercise={(exerciseId, blockName) =>
+            onDeleteExercise(workoutId, exerciseId)
+          }
           onDeleteWorkout={() => onDeleteWorkout(workoutId)}
           onDuplicateWorkout={onDuplicateWorkout}
           onDeleteBlock={(blockName) => onDeleteBlock(workoutId, blockName)}
-          onMoveExercise={(exerciseId, direction) => onMoveExercise(workoutId, exerciseId, direction)}
+          onMoveExercise={(exerciseId, direction) =>
+            onMoveExercise(workoutId, exerciseId, direction)
+          }
           movingExerciseId={movingExerciseId}
           isDeleting={isDeleting}
           deletingExerciseId={deletingExerciseId}
@@ -106,71 +124,135 @@ function WorkoutSection({
         <div className="border-t border-gray-200">
           <button
             onClick={onLlmOutputToggle}
-            className="w-full flex justify-between items-center p-6 text-left hover:bg-gray-50 transition-colors duration-200"
+            className="flex w-full items-center justify-between p-6 text-left transition-colors duration-200 hover:bg-gray-50"
           >
             <div className="flex items-center gap-4">
-              <span className="text-lg font-semibold text-gray-700">LLM Output</span>
+              <span className="text-lg font-semibold text-gray-700">
+                LLM Output
+              </span>
               {llmOutput?.processingTime && (
                 <span className="text-sm text-gray-500">
                   Generated in {llmOutput.processingTime.toFixed(2)}s
                 </span>
               )}
             </div>
-            <Icon 
-              name={llmOutputExpanded ? "expand_less" : "expand_more"} 
+            <Icon
+              name={llmOutputExpanded ? "expand_less" : "expand_more"}
               className="text-gray-400"
             />
           </button>
           {llmOutputExpanded && (
             <div className="px-6 pb-6">
-              <div className="p-4 bg-gray-50 rounded-xl">
+              <div className="rounded-xl bg-gray-50 p-4">
                 {llmOutput ? (
                   <div className="space-y-4">
                     {/* Show timing breakdown if available */}
                     {llmOutput.timing && (
                       <div className="mb-4">
                         <details className="text-sm text-gray-600">
-                          <summary className="cursor-pointer hover:text-gray-800 font-medium">
+                          <summary className="cursor-pointer font-medium hover:text-gray-800">
                             Show timing breakdown
                           </summary>
                           <div className="mt-2 space-y-1 text-sm">
-                            <div>Exercise formatting: {(llmOutput.timing.exerciseFormatting || 0).toFixed(0)}ms</div>
-                            <div>Set calculation: {(llmOutput.timing.setCountCalculation || 0).toFixed(0)}ms</div>
-                            <div>Prompt building: {(llmOutput.timing.promptBuilding || 0).toFixed(0)}ms</div>
-                            <div className="font-semibold">LLM API call: {((llmOutput.timing.llmApiCall || 0) / 1000).toFixed(2)}s</div>
-                            <div>Response parsing: {(llmOutput.timing.responseParsing || 0).toFixed(0)}ms</div>
+                            <div>
+                              Exercise formatting:{" "}
+                              {(
+                                llmOutput.timing.exerciseFormatting || 0
+                              ).toFixed(0)}
+                              ms
+                            </div>
+                            <div>
+                              Set calculation:{" "}
+                              {(
+                                llmOutput.timing.setCountCalculation || 0
+                              ).toFixed(0)}
+                              ms
+                            </div>
+                            <div>
+                              Prompt building:{" "}
+                              {(llmOutput.timing.promptBuilding || 0).toFixed(
+                                0,
+                              )}
+                              ms
+                            </div>
+                            <div className="font-semibold">
+                              LLM API call:{" "}
+                              {(
+                                (llmOutput.timing.llmApiCall || 0) / 1000
+                              ).toFixed(2)}
+                              s
+                            </div>
+                            <div>
+                              Response parsing:{" "}
+                              {(llmOutput.timing.responseParsing || 0).toFixed(
+                                0,
+                              )}
+                              ms
+                            </div>
                           </div>
                         </details>
                       </div>
                     )}
-                    
+
                     {/* Show reasoning if available */}
                     {llmOutput.reasoning && (
                       <div>
-                        <h4 className="font-semibold text-gray-700 mb-2">Workout Reasoning</h4>
+                        <h4 className="mb-2 font-semibold text-gray-700">
+                          Workout Reasoning
+                        </h4>
                         <p className="text-gray-600">{llmOutput.reasoning}</p>
                       </div>
                     )}
-                    
+
                     {/* Show block details */}
                     <div>
-                      <h4 className="font-semibold text-gray-700 mb-2">Exercise Details</h4>
+                      <h4 className="mb-2 font-semibold text-gray-700">
+                        Exercise Details
+                      </h4>
                       <div className="space-y-3">
                         {Object.entries(llmOutput).map(([key, value]) => {
-                          if (key === 'reasoning' || key === 'timing' || key === 'processingTime' || !Array.isArray(value)) return null;
-                          
-                          const blockName = key.replace('block', 'Block ').toUpperCase();
+                          if (
+                            key === "reasoning" ||
+                            key === "timing" ||
+                            key === "processingTime" ||
+                            !Array.isArray(value)
+                          )
+                            return null;
+
+                          const blockName = key
+                            .replace("block", "Block ")
+                            .toUpperCase();
                           return (
-                            <div key={key} className="border-l-4 border-indigo-200 pl-4">
-                              <h5 className="font-medium text-gray-700 mb-1">{blockName}</h5>
+                            <div
+                              key={key}
+                              className="border-l-4 border-indigo-200 pl-4"
+                            >
+                              <h5 className="mb-1 font-medium text-gray-700">
+                                {blockName}
+                              </h5>
                               <div className="space-y-1">
                                 {value.map((exercise: any, idx: number) => (
-                                  <div key={idx} className="text-sm text-gray-600">
-                                    <span className="font-medium">{exercise.exercise}</span>
-                                    {exercise.sets && <span> - {exercise.sets} sets</span>}
-                                    {exercise.reps && <span> x {exercise.reps} reps</span>}
-                                    {exercise.rest && <span> ({exercise.rest} rest)</span>}
-                                    {exercise.notes && <div className="text-xs text-gray-500 mt-1">{exercise.notes}</div>}
+                                  <div
+                                    key={idx}
+                                    className="text-sm text-gray-600"
+                                  >
+                                    <span className="font-medium">
+                                      {exercise.exercise}
+                                    </span>
+                                    {exercise.sets && (
+                                      <span> - {exercise.sets} sets</span>
+                                    )}
+                                    {exercise.reps && (
+                                      <span> x {exercise.reps} reps</span>
+                                    )}
+                                    {exercise.rest && (
+                                      <span> ({exercise.rest} rest)</span>
+                                    )}
+                                    {exercise.notes && (
+                                      <div className="mt-1 text-xs text-gray-500">
+                                        {exercise.notes}
+                                      </div>
+                                    )}
                                   </div>
                                 ))}
                               </div>
@@ -202,7 +284,7 @@ function WorkoutSection({
           onClick={() => console.log("Add exercise")}
           variant="primary"
           size="sm"
-          className="bg-gray-800 hover:bg-gray-700 flex items-center"
+          className="flex items-center bg-gray-800 hover:bg-gray-700"
         >
           <Icon name="add" size={16} className="mr-2" />
           <span>Add Exercise</span>
@@ -215,7 +297,9 @@ function WorkoutSection({
 export default function TrainerDashboardNew() {
   const [selectedClientId, setSelectedClientId] = useState<string>("");
   const [isNewWorkoutModalOpen, setIsNewWorkoutModalOpen] = useState(false);
-  const [deletingWorkoutId, setDeletingWorkoutId] = useState<string | null>(null);
+  const [deletingWorkoutId, setDeletingWorkoutId] = useState<string | null>(
+    null,
+  );
   const [movingExerciseId, setMovingExerciseId] = useState<string | null>(null);
   const [addExerciseModal, setAddExerciseModal] = useState<{
     isOpen: boolean;
@@ -242,7 +326,7 @@ export default function TrainerDashboardNew() {
     context: null,
     currentData: null,
   });
-  
+
   // Delete confirmation dialog states
   const [deleteWorkoutDialog, setDeleteWorkoutDialog] = useState<{
     isOpen: boolean;
@@ -253,7 +337,7 @@ export default function TrainerDashboardNew() {
     workoutId: null,
     workoutDate: null,
   });
-  
+
   const [deleteBlockDialog, setDeleteBlockDialog] = useState<{
     isOpen: boolean;
     workoutId: string | null;
@@ -263,7 +347,7 @@ export default function TrainerDashboardNew() {
     workoutId: null,
     blockName: null,
   });
-  
+
   const [deleteExerciseDialog, setDeleteExerciseDialog] = useState<{
     isOpen: boolean;
     workoutId: string | null;
@@ -275,51 +359,61 @@ export default function TrainerDashboardNew() {
     exerciseId: null,
     exerciseName: null,
   });
-  
+
   // Track which items are being deleted
-  const [deletingExerciseId, setDeletingExerciseId] = useState<string | null>(null);
-  const [deletingBlockName, setDeletingBlockName] = useState<string | null>(null);
-  
+  const [deletingExerciseId, setDeletingExerciseId] = useState<string | null>(
+    null,
+  );
+  const [deletingBlockName, setDeletingBlockName] = useState<string | null>(
+    null,
+  );
+
   // Combined state for expanded sections
   interface ExpandedState {
     feedback: Record<string, boolean>;
     llmOutput: Record<string, boolean>;
   }
-  
+
   const [expandedState, setExpandedState] = useState<ExpandedState>({
     feedback: {},
     llmOutput: {},
   });
-  
+
   // Toggle function for expanded states
-  const toggleExpanded = (type: 'feedback' | 'llmOutput', workoutId: string) => {
-    setExpandedState(prev => ({
+  const toggleExpanded = (
+    type: "feedback" | "llmOutput",
+    workoutId: string,
+  ) => {
+    setExpandedState((prev) => ({
       ...prev,
       [type]: {
         ...prev[type],
-        [workoutId]: !prev[type][workoutId]
-      }
+        [workoutId]: !prev[type][workoutId],
+      },
     }));
   };
-  
+
   const trpc = useTRPC();
   const router = useRouter();
   const queryClient = useQueryClient();
 
   // Fetch clients from the API
-  const { data: clientsData, isLoading, error } = useQuery(
-    trpc.auth.getClientsByBusiness.queryOptions()
-  );
+  const {
+    data: clientsData,
+    isLoading,
+    error,
+  } = useQuery(trpc.auth.getClientsByBusiness.queryOptions());
 
   // Transform API data to match Client interface
-  const clients = clientsData?.map(client => ({
-    id: client.id,
-    name: client.name || client.email.split('@')[0], // Use name or email prefix
-    program: client.profile 
-      ? `${formatLevel(client.profile.strengthLevel)} strength, ${formatLevel(client.profile.skillLevel)} skill`
-      : "No profile set",
-    avatar: `${AVATAR_API_URL}?seed=${encodeURIComponent(client.name || client.email || client.id)}`
-  })) || [];
+  const clients =
+    clientsData?.map((client) => ({
+      id: client.id,
+      name: client.name || client.email.split("@")[0], // Use name or email prefix
+      program: client.profile
+        ? `${formatLevel(client.profile.strengthLevel)} strength, ${formatLevel(client.profile.skillLevel)} skill`
+        : "No profile set",
+      avatar: `${AVATAR_API_URL}?seed=${encodeURIComponent(client.name || client.email || client.id)}`,
+    })) || [];
 
   // Set initial selected client when data loads
   React.useEffect(() => {
@@ -328,10 +422,14 @@ export default function TrainerDashboardNew() {
     }
   }, [clients, selectedClientId]);
 
-  const selectedClient = clients.find(c => c.id === selectedClientId);
-  
+  const selectedClient = clients.find((c) => c.id === selectedClientId);
+
   // Fetch workouts for selected client
-  const { data: workouts, isLoading: workoutsLoading, error: workoutsError } = useQuery({
+  const {
+    data: workouts,
+    isLoading: workoutsLoading,
+    error: workoutsError,
+  } = useQuery({
     ...trpc.workout.getClientWorkoutsWithExercises.queryOptions({
       clientId: selectedClientId,
       limit: 3,
@@ -341,85 +439,96 @@ export default function TrainerDashboardNew() {
 
   // Delete workout mutation
   const deleteWorkoutMutation = useMutation(
-    trpc.workout.deleteWorkout.mutationOptions()
+    trpc.workout.deleteWorkout.mutationOptions(),
   );
-  
+
   // Delete block mutation
   const deleteBlockMutation = useMutation(
-    trpc.workout.deleteBlock.mutationOptions()
+    trpc.workout.deleteBlock.mutationOptions(),
   );
-  
+
   // Delete exercise mutation
   const deleteExerciseMutation = useMutation(
-    trpc.workout.deleteExercise.mutationOptions()
+    trpc.workout.deleteExercise.mutationOptions(),
   );
-  
+
   // Add exercise mutation
   const addExerciseMutation = useMutation(
-    trpc.workout.addExercise.mutationOptions()
+    trpc.workout.addExercise.mutationOptions(),
   );
-  
+
   // Duplicate workout mutation
   const duplicateWorkoutMutation = useMutation(
-    trpc.workout.duplicateWorkout.mutationOptions()
+    trpc.workout.duplicateWorkout.mutationOptions(),
   );
-  
+
   // Move exercise mutation
   const moveExerciseMutation = useMutation(
-    trpc.workout.updateExerciseOrder.mutationOptions()
+    trpc.workout.updateExerciseOrder.mutationOptions(),
   );
-  
+
   // Replace exercise mutation
   const replaceExerciseMutation = useMutation(
-    trpc.workout.replaceExercise.mutationOptions()
+    trpc.workout.replaceExercise.mutationOptions(),
   );
-  
+
   // Update exercise sets mutation
   const updateExerciseSetsMutation = useMutation(
-    trpc.workout.updateExerciseSets.mutationOptions()
+    trpc.workout.updateExerciseSets.mutationOptions(),
   );
-  
+
   // Fetch available exercises for the business
   const { data: availableExercises } = useQuery(
-    trpc.exercise.all.queryOptions({ limit: 1000 })
+    trpc.exercise.all.queryOptions({ limit: 1000 }),
   );
 
   const handleDeleteWorkout = async (workoutId: string) => {
     // Find workout to get the date for display
-    const workout = workouts?.find(w => w.id === workoutId);
-    const workoutDate = workout ? new Date(workout.createdAt).toLocaleDateString() : 'this workout';
-    
+    const workout = workouts?.find((w) => w.id === workoutId);
+    const workoutDate = workout
+      ? new Date(workout.createdAt).toLocaleDateString()
+      : "this workout";
+
     setDeleteWorkoutDialog({
       isOpen: true,
       workoutId,
       workoutDate,
     });
   };
-  
+
   const confirmDeleteWorkout = async () => {
     if (!deleteWorkoutDialog.workoutId) return;
-    
+
     setDeletingWorkoutId(deleteWorkoutDialog.workoutId);
     try {
-      await deleteWorkoutMutation.mutateAsync({ workoutId: deleteWorkoutDialog.workoutId });
-      
+      await deleteWorkoutMutation.mutateAsync({
+        workoutId: deleteWorkoutDialog.workoutId,
+      });
+
       // Close dialog
-      setDeleteWorkoutDialog({ isOpen: false, workoutId: null, workoutDate: null });
-      
+      setDeleteWorkoutDialog({
+        isOpen: false,
+        workoutId: null,
+        workoutDate: null,
+      });
+
       // Refresh the workouts list
       await queryClient.invalidateQueries({
-        queryKey: [['workout', 'getClientWorkoutsWithExercises'], { input: { clientId: selectedClientId } }]
+        queryKey: [
+          ["workout", "getClientWorkoutsWithExercises"],
+          { input: { clientId: selectedClientId } },
+        ],
       });
-      
+
       // Clear loading state after invalidation completes
       setDeletingWorkoutId(null);
     } catch (error) {
-      console.error('Failed to delete workout:', error);
-      alert('Failed to delete workout. Please try again.');
+      console.error("Failed to delete workout:", error);
+      alert("Failed to delete workout. Please try again.");
       setDeletingWorkoutId(null);
     }
   };
-  
+
   const handleDeleteBlock = async (workoutId: string, blockName: string) => {
     setDeleteBlockDialog({
       isOpen: true,
@@ -427,48 +536,54 @@ export default function TrainerDashboardNew() {
       blockName,
     });
   };
-  
+
   const confirmDeleteBlock = async () => {
     if (!deleteBlockDialog.workoutId || !deleteBlockDialog.blockName) return;
-    
+
     setDeletingBlockName(deleteBlockDialog.blockName);
     try {
-      await deleteBlockMutation.mutateAsync({ 
-        workoutId: deleteBlockDialog.workoutId, 
-        groupName: deleteBlockDialog.blockName 
+      await deleteBlockMutation.mutateAsync({
+        workoutId: deleteBlockDialog.workoutId,
+        groupName: deleteBlockDialog.blockName,
       });
-      
+
       // Close dialog
       setDeleteBlockDialog({ isOpen: false, workoutId: null, blockName: null });
-      
+
       // Refresh the workouts list
       await queryClient.invalidateQueries({
-        queryKey: [['workout', 'getClientWorkoutsWithExercises'], { input: { clientId: selectedClientId } }]
+        queryKey: [
+          ["workout", "getClientWorkoutsWithExercises"],
+          { input: { clientId: selectedClientId } },
+        ],
       });
-      
+
       // Clear loading state after invalidation completes
       setDeletingBlockName(null);
     } catch (error) {
-      console.error('Failed to delete block:', error);
-      alert('Failed to delete block. Please try again.');
+      console.error("Failed to delete block:", error);
+      alert("Failed to delete block. Please try again.");
       setDeletingBlockName(null);
     }
   };
 
-  const handleDeleteExercise = async (workoutId: string, exerciseId: string) => {
+  const handleDeleteExercise = async (
+    workoutId: string,
+    exerciseId: string,
+  ) => {
     // Find exercise name for display
-    const workout = workouts?.find(w => w.id === workoutId);
-    let exerciseName = 'this exercise';
+    const workout = workouts?.find((w) => w.id === workoutId);
+    let exerciseName = "this exercise";
     if (workout) {
       for (const block of workout.exerciseBlocks) {
-        const exercise = block.exercises.find(e => e.id === exerciseId);
+        const exercise = block.exercises.find((e) => e.id === exerciseId);
         if (exercise) {
           exerciseName = exercise.name;
           break;
         }
       }
     }
-    
+
     setDeleteExerciseDialog({
       isOpen: true,
       workoutId,
@@ -476,30 +591,39 @@ export default function TrainerDashboardNew() {
       exerciseName,
     });
   };
-  
+
   const confirmDeleteExercise = async () => {
-    if (!deleteExerciseDialog.workoutId || !deleteExerciseDialog.exerciseId) return;
-    
+    if (!deleteExerciseDialog.workoutId || !deleteExerciseDialog.exerciseId)
+      return;
+
     setDeletingExerciseId(deleteExerciseDialog.exerciseId);
     try {
-      await deleteExerciseMutation.mutateAsync({ 
-        workoutId: deleteExerciseDialog.workoutId, 
-        workoutExerciseId: deleteExerciseDialog.exerciseId // exerciseId is actually the workoutExerciseId based on our data structure
+      await deleteExerciseMutation.mutateAsync({
+        workoutId: deleteExerciseDialog.workoutId,
+        workoutExerciseId: deleteExerciseDialog.exerciseId, // exerciseId is actually the workoutExerciseId based on our data structure
       });
-      
+
       // Close dialog
-      setDeleteExerciseDialog({ isOpen: false, workoutId: null, exerciseId: null, exerciseName: null });
-      
+      setDeleteExerciseDialog({
+        isOpen: false,
+        workoutId: null,
+        exerciseId: null,
+        exerciseName: null,
+      });
+
       // Refresh the workouts list
       await queryClient.invalidateQueries({
-        queryKey: [['workout', 'getClientWorkoutsWithExercises'], { input: { clientId: selectedClientId } }]
+        queryKey: [
+          ["workout", "getClientWorkoutsWithExercises"],
+          { input: { clientId: selectedClientId } },
+        ],
       });
-      
+
       // Clear loading state after invalidation completes
       setDeletingExerciseId(null);
     } catch (error) {
-      console.error('Failed to delete exercise:', error);
-      alert('Failed to delete exercise. Please try again.');
+      console.error("Failed to delete exercise:", error);
+      alert("Failed to delete exercise. Please try again.");
       setDeletingExerciseId(null);
     }
   };
@@ -518,24 +642,27 @@ export default function TrainerDashboardNew() {
         workoutId: addExerciseModal.workoutId,
         exerciseId,
         groupName: addExerciseModal.blockName,
-        position: 'end' as const,
+        position: "end" as const,
         sets,
       });
-      
+
       // Close modal
       setAddExerciseModal({
         isOpen: false,
         workoutId: "",
         blockName: "",
       });
-      
+
       // Refresh the workouts list
       await queryClient.invalidateQueries({
-        queryKey: [['workout', 'getClientWorkoutsWithExercises'], { input: { clientId: selectedClientId } }]
+        queryKey: [
+          ["workout", "getClientWorkoutsWithExercises"],
+          { input: { clientId: selectedClientId } },
+        ],
       });
     } catch (error) {
-      console.error('Failed to add exercise:', error);
-      alert('Failed to add exercise. Please try again.');
+      console.error("Failed to add exercise:", error);
+      alert("Failed to add exercise. Please try again.");
     }
   };
 
@@ -548,45 +675,55 @@ export default function TrainerDashboardNew() {
 
   const handleDuplicateWorkoutConfirm = async () => {
     if (!duplicateWorkoutModal.workoutData) return;
-    
+
     try {
       await duplicateWorkoutMutation.mutateAsync({
         workoutId: duplicateWorkoutModal.workoutData.id,
       });
-      
+
       // Close modal
       setDuplicateWorkoutModal({
         isOpen: false,
         workoutData: null,
       });
-      
+
       // Refresh the workouts list
       await queryClient.invalidateQueries({
-        queryKey: [['workout', 'getClientWorkoutsWithExercises'], { input: { clientId: selectedClientId } }]
+        queryKey: [
+          ["workout", "getClientWorkoutsWithExercises"],
+          { input: { clientId: selectedClientId } },
+        ],
       });
     } catch (error) {
-      console.error('Failed to duplicate workout:', error);
-      alert('Failed to duplicate workout. Please try again.');
+      console.error("Failed to duplicate workout:", error);
+      alert("Failed to duplicate workout. Please try again.");
     }
   };
 
-  const handleMoveExercise = async (workoutId: string, exerciseId: string, direction: 'up' | 'down') => {
+  const handleMoveExercise = async (
+    workoutId: string,
+    exerciseId: string,
+    direction: "up" | "down",
+  ) => {
     setMovingExerciseId(exerciseId);
-    
+
     try {
       await moveExerciseMutation.mutateAsync({
         workoutId,
         workoutExerciseId: exerciseId,
         direction,
       });
-      
+
       // Refresh the workouts list
       await queryClient.invalidateQueries({
-        queryKey: [['workout', 'getClientWorkoutsWithExercises'], { input: { clientId: selectedClientId } }]
+        queryKey: [
+          ["workout", "getClientWorkoutsWithExercises"],
+          { input: { clientId: selectedClientId } },
+        ],
       });
     } catch (error) {
-      console.error('Failed to move exercise:', error);
-      alert('Failed to move exercise. Please try again.');
+      console.error("Failed to move exercise:", error);
+      alert("Failed to move exercise. Please try again.");
     } finally {
       setMovingExerciseId(null);
     }
@@ -595,86 +732,101 @@ export default function TrainerDashboardNew() {
   const handleEditWorkout = (workoutId: string) => {
     setEditModal({
       isOpen: true,
-      context: { type: 'workout', workoutId },
+      context: { type: "workout", workoutId },
     });
   };
 
   const handleEditBlock = (workoutId: string, blockName: string) => {
     setEditModal({
       isOpen: true,
-      context: { type: 'block', workoutId, blockName },
+      context: { type: "block", workoutId, blockName },
     });
   };
 
-  const handleEditExercise = (workoutId: string, exerciseId: string, exerciseName: string, blockName: string) => {
+  const handleEditExercise = (
+    workoutId: string,
+    exerciseId: string,
+    exerciseName: string,
+    blockName: string,
+  ) => {
     // Find the exercise to get its current sets
-    const workout = workouts?.find(w => w.id === workoutId);
+    const workout = workouts?.find((w) => w.id === workoutId);
     let exerciseData = null;
     if (workout) {
       for (const block of workout.exerciseBlocks) {
-        const exercise = block.exercises.find(e => e.id === exerciseId);
+        const exercise = block.exercises.find((e) => e.id === exerciseId);
         if (exercise) {
           exerciseData = exercise;
           break;
         }
       }
     }
-    
+
     setEditModal({
       isOpen: true,
-      context: { type: 'exercise', workoutId, exerciseId, exerciseName, blockName },
+      context: {
+        type: "exercise",
+        workoutId,
+        exerciseId,
+        exerciseName,
+        blockName,
+      },
       currentData: exerciseData,
     });
   };
 
   const handleEditSave = async (data: any) => {
     if (!editModal.context) return;
-    
+
     try {
-      if (editModal.context.type === 'exercise') {
+      if (editModal.context.type === "exercise") {
         const { workoutId, exerciseId } = editModal.context;
-        
+
         // Check if we're changing the exercise or just the sets
         const currentExercise = editModal.currentData;
-        const isChangingExercise = data.exerciseId && data.exerciseId !== currentExercise?.exerciseId;
-        
+        const isChangingExercise =
+          data.exerciseId && data.exerciseId !== currentExercise?.exerciseId;
+
         if (isChangingExercise) {
           // Replace the exercise
           await replaceExerciseMutation.mutateAsync({
             workoutId,
             workoutExerciseId: exerciseId,
-            newExerciseId: data.exerciseId
+            newExerciseId: data.exerciseId,
           });
         }
-        
+
         // Always update sets if provided
         if (data.sets) {
           await updateExerciseSetsMutation.mutateAsync({
             workoutId,
             workoutExerciseId: exerciseId,
-            sets: data.sets
+            sets: data.sets,
           });
         }
       }
-      
+
       // Close modal after save
       setEditModal({ isOpen: false, context: null, currentData: null });
-      
+
       // Refresh data
       await queryClient.invalidateQueries({
-        queryKey: [['workout', 'getClientWorkoutsWithExercises'], { input: { clientId: selectedClientId } }]
+        queryKey: [
+          ["workout", "getClientWorkoutsWithExercises"],
+          { input: { clientId: selectedClientId } },
+        ],
       });
     } catch (error) {
-      console.error('Failed to save edit:', error);
-      alert('Failed to save changes. Please try again.');
+      console.error("Failed to save edit:", error);
+      alert("Failed to save changes. Please try again.");
     }
   };
 
   if (error) {
     return (
-      <div className="flex items-center justify-center h-screen">
+      <div className="flex h-screen items-center justify-center">
         <div className="text-center">
-          <p className="text-red-600 mb-2">Error loading clients</p>
+          <p className="mb-2 text-red-600">Error loading clients</p>
           <p className="text-gray-600">{error.message}</p>
         </div>
       </div>
@@ -693,15 +845,17 @@ export default function TrainerDashboardNew() {
       }
       sidebarWidth="w-80"
     >
-      <div className="flex flex-col h-full">
+      <div className="flex h-full flex-col">
         {isLoading ? (
-          <div className="flex items-center justify-center h-64 p-8">
+          <div className="flex h-64 items-center justify-center p-8">
             <div className="text-gray-500">Loading clients...</div>
           </div>
         ) : clients.length === 0 ? (
-          <div className="flex items-center justify-center h-64 p-8">
+          <div className="flex h-64 items-center justify-center p-8">
             <div className="text-center">
-              <p className="text-gray-500 mb-4">No clients found in your business</p>
+              <p className="mb-4 text-gray-500">
+                No clients found in your business
+              </p>
               <Button onClick={() => router.push("/signup")}>
                 Add Your First Client
               </Button>
@@ -710,15 +864,17 @@ export default function TrainerDashboardNew() {
         ) : selectedClient ? (
           <div className="flex-1 overflow-y-auto p-8">
             {/* Header - Now scrolls with content */}
-            <header className="flex justify-between items-center mb-8">
+            <header className="mb-8 flex items-center justify-between">
               <div>
-                <h1 className="text-4xl font-bold text-gray-900">{selectedClient.name}</h1>
-                <p className="text-gray-500 mt-1">{selectedClient.program}</p>
+                <h1 className="text-4xl font-bold text-gray-900">
+                  {selectedClient.name}
+                </h1>
+                <p className="mt-1 text-gray-500">{selectedClient.program}</p>
               </div>
               <Button
                 onClick={() => setIsNewWorkoutModalOpen(true)}
                 size="lg"
-                className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 flex items-center"
+                className="flex items-center bg-indigo-600 px-6 py-3 text-white hover:bg-indigo-700"
               >
                 <Icon name="add" size={20} className="mr-2" />
                 <span className="font-semibold">New Workout</span>
@@ -729,16 +885,17 @@ export default function TrainerDashboardNew() {
             <div className="space-y-12">
               {/* Workouts */}
               <section>
-                
                 <div className="max-w-6xl space-y-8">
                   {workoutsLoading ? (
-                    <div className="flex items-center justify-center h-64">
+                    <div className="flex h-64 items-center justify-center">
                       <div className="text-gray-500">Loading workouts...</div>
                     </div>
                   ) : workoutsError ? (
-                    <div className="flex items-center justify-center h-64">
+                    <div className="flex h-64 items-center justify-center">
                       <div className="text-center">
-                        <p className="text-red-600 mb-2">Error loading workouts</p>
+                        <p className="mb-2 text-red-600">
+                          Error loading workouts
+                        </p>
                         <p className="text-gray-600">{workoutsError.message}</p>
                       </div>
                     </div>
@@ -746,14 +903,25 @@ export default function TrainerDashboardNew() {
                     workouts.map((workout) => {
                       // Format date with day name
                       const date = new Date(workout.createdAt);
-                      const dayName = date.toLocaleDateString('en-US', { weekday: 'long' });
-                      const monthDay = date.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
+                      const dayName = date.toLocaleDateString("en-US", {
+                        weekday: "long",
+                      });
+                      const monthDay = date.toLocaleDateString("en-US", {
+                        month: "long",
+                        day: "numeric",
+                      });
                       const formattedDate = `${dayName}, ${monthDay}`;
-                      
+
                       // Get template info from llmOutput or use defaults
-                      const templateInfo = workout.llmOutput?.template || workout.workoutType || "Standard";
-                      const contextInfo = workout.context === "individual" ? "Individual" : "Group";
-                      
+                      const templateInfo =
+                        workout.llmOutput?.template ||
+                        workout.workoutType ||
+                        "Standard";
+                      const contextInfo =
+                        workout.context === "individual"
+                          ? "Individual"
+                          : "Group";
+
                       return (
                         <WorkoutSection
                           key={workout.id}
@@ -761,12 +929,22 @@ export default function TrainerDashboardNew() {
                           date={formattedDate}
                           week={`${templateInfo}, ${contextInfo}`}
                           exerciseBlocks={workout.exerciseBlocks}
-                          feedbackExpanded={expandedState.feedback[workout.id] || false}
-                          llmOutputExpanded={expandedState.llmOutput[workout.id] || false}
-                          onFeedbackToggle={() => toggleExpanded('feedback', workout.id)}
-                          onLlmOutputToggle={() => toggleExpanded('llmOutput', workout.id)}
+                          feedbackExpanded={
+                            expandedState.feedback[workout.id] || false
+                          }
+                          llmOutputExpanded={
+                            expandedState.llmOutput[workout.id] || false
+                          }
+                          onFeedbackToggle={() =>
+                            toggleExpanded("feedback", workout.id)
+                          }
+                          onLlmOutputToggle={() =>
+                            toggleExpanded("llmOutput", workout.id)
+                          }
                           onDeleteWorkout={handleDeleteWorkout}
-                          onDuplicateWorkout={() => handleDuplicateWorkout(workout)}
+                          onDuplicateWorkout={() =>
+                            handleDuplicateWorkout(workout)
+                          }
                           onDeleteBlock={handleDeleteBlock}
                           onDeleteExercise={handleDeleteExercise}
                           onAddExercise={handleAddExercise}
@@ -783,9 +961,11 @@ export default function TrainerDashboardNew() {
                       );
                     })
                   ) : (
-                    <div className="flex items-center justify-center h-64">
+                    <div className="flex h-64 items-center justify-center">
                       <div className="text-center">
-                        <p className="text-gray-500 mb-4">No workouts found for this client</p>
+                        <p className="mb-4 text-gray-500">
+                          No workouts found for this client
+                        </p>
                         <Button onClick={() => setIsNewWorkoutModalOpen(true)}>
                           Generate First Workout
                         </Button>
@@ -797,12 +977,12 @@ export default function TrainerDashboardNew() {
             </div>
           </div>
         ) : (
-          <div className="flex items-center justify-center h-64 p-8">
+          <div className="flex h-64 items-center justify-center p-8">
             <p className="text-gray-500">Select a client from the sidebar</p>
           </div>
         )}
       </div>
-      
+
       {/* New Workout Modal */}
       {selectedClient && (
         <NewWorkoutModal
@@ -810,63 +990,97 @@ export default function TrainerDashboardNew() {
           onClose={() => setIsNewWorkoutModalOpen(false)}
           clientId={selectedClient.id}
           clientName={selectedClient.name}
-          clientProfile={clientsData?.find(c => c.id === selectedClient.id)?.profile}
+          clientProfile={
+            clientsData?.find((c) => c.id === selectedClient.id)?.profile
+          }
         />
       )}
-      
+
       {/* Add Exercise Modal */}
       <AddExerciseModal
         isOpen={addExerciseModal.isOpen}
-        onClose={() => setAddExerciseModal({ isOpen: false, workoutId: "", blockName: "" })}
+        onClose={() =>
+          setAddExerciseModal({ isOpen: false, workoutId: "", blockName: "" })
+        }
         onAdd={handleAddExerciseSubmit}
         blockName={addExerciseModal.blockName}
         exercises={availableExercises || []}
       />
-      
+
       {/* Duplicate Workout Modal */}
       <DuplicateWorkoutModal
         isOpen={duplicateWorkoutModal.isOpen}
-        onClose={() => setDuplicateWorkoutModal({ isOpen: false, workoutData: null })}
+        onClose={() =>
+          setDuplicateWorkoutModal({ isOpen: false, workoutData: null })
+        }
         onConfirm={handleDuplicateWorkoutConfirm}
         workoutData={duplicateWorkoutModal.workoutData}
         isLoading={duplicateWorkoutMutation.isPending}
       />
-      
+
       {/* Edit Modal */}
       <EditModal
         isOpen={editModal.isOpen}
-        onClose={() => setEditModal({ isOpen: false, context: null, currentData: null })}
+        onClose={() =>
+          setEditModal({ isOpen: false, context: null, currentData: null })
+        }
         onSave={handleEditSave}
         context={editModal.context}
         currentData={editModal.currentData}
         availableExercises={availableExercises || []}
-        isLoading={replaceExerciseMutation.isPending || updateExerciseSetsMutation.isPending}
+        isLoading={
+          replaceExerciseMutation.isPending ||
+          updateExerciseSetsMutation.isPending
+        }
       />
-      
+
       {/* Delete Confirmation Dialogs */}
       <DeleteConfirmDialog
         isOpen={deleteWorkoutDialog.isOpen}
-        onClose={() => setDeleteWorkoutDialog({ isOpen: false, workoutId: null, workoutDate: null })}
+        onClose={() =>
+          setDeleteWorkoutDialog({
+            isOpen: false,
+            workoutId: null,
+            workoutDate: null,
+          })
+        }
         onConfirm={confirmDeleteWorkout}
         title="Delete Workout"
         message="Are you sure you want to delete this workout? This action cannot be undone."
-        itemName={deleteWorkoutDialog.workoutDate ? `Workout from ${deleteWorkoutDialog.workoutDate}` : undefined}
+        itemName={
+          deleteWorkoutDialog.workoutDate
+            ? `Workout from ${deleteWorkoutDialog.workoutDate}`
+            : undefined
+        }
         isDeleting={deleteWorkoutMutation.isPending}
       />
-      
+
       <DeleteConfirmDialog
         isOpen={deleteBlockDialog.isOpen}
-        onClose={() => setDeleteBlockDialog({ isOpen: false, workoutId: null, blockName: null })}
+        onClose={() =>
+          setDeleteBlockDialog({
+            isOpen: false,
+            workoutId: null,
+            blockName: null,
+          })
+        }
         onConfirm={confirmDeleteBlock}
         title="Delete Block"
         message="Are you sure you want to delete this block? This will remove all exercises in this block."
         itemName={deleteBlockDialog.blockName || undefined}
         isDeleting={deleteBlockMutation.isPending}
       />
-      
+
       <DeleteConfirmDialog
         isOpen={deleteExerciseDialog.isOpen}
-        onClose={() => setDeleteExerciseDialog({ isOpen: false, workoutId: null, exerciseId: null, exerciseName: null })}
+        onClose={() =>
+          setDeleteExerciseDialog({
+            isOpen: false,
+            workoutId: null,
+            exerciseId: null,
+            exerciseName: null,
+          })
+        }
         onConfirm={confirmDeleteExercise}
         title="Delete Exercise"
         message="Are you sure you want to delete this exercise?"

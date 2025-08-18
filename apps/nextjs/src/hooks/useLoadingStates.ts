@@ -1,10 +1,10 @@
 import { useState } from "react";
 
-type LoadingStateTypes = 
-  | 'deletingWorkoutId'
-  | 'deletingExerciseId'
-  | 'deletingBlockName'
-  | 'movingExerciseId';
+type LoadingStateTypes =
+  | "deletingWorkoutId"
+  | "deletingExerciseId"
+  | "deletingBlockName"
+  | "movingExerciseId";
 
 export function useLoadingStates() {
   const [loadingStates, setLoadingStates] = useState({
@@ -15,11 +15,11 @@ export function useLoadingStates() {
   });
 
   const setLoading = (type: LoadingStateTypes, id: string | null) => {
-    setLoadingStates(prev => ({ ...prev, [type]: id }));
+    setLoadingStates((prev) => ({ ...prev, [type]: id }));
   };
 
   const clearLoading = (type: LoadingStateTypes) => {
-    setLoadingStates(prev => ({ ...prev, [type]: null }));
+    setLoadingStates((prev) => ({ ...prev, [type]: null }));
   };
 
   const clearAllLoading = () => {
@@ -38,11 +38,11 @@ export function useLoadingStates() {
     return loadingStates[type] !== null;
   };
 
-  return { 
-    ...loadingStates, 
-    setLoading, 
+  return {
+    ...loadingStates,
+    setLoading,
     clearLoading,
     clearAllLoading,
-    isLoading
+    isLoading,
   };
 }

@@ -8,7 +8,7 @@ import type { ScoredExercise } from "../types/scoredExercise";
 export function randomSelect<T>(exercises: T[]): T | undefined {
   if (exercises.length === 0) return undefined;
   if (exercises.length === 1) return exercises[0];
-  
+
   const randomIndex = Math.floor(Math.random() * exercises.length);
   return exercises[randomIndex];
 }
@@ -23,7 +23,7 @@ export function randomSelect<T>(exercises: T[]): T | undefined {
 export function weightedRandomSelect(
   exercises: ScoredExercise[],
   count: number,
-  weightFn: (score: number) => number = (score) => score * score
+  weightFn: (score: number) => number = (score) => score * score,
 ): ScoredExercise[] {
   if (exercises.length === 0 || count <= 0) return [];
   if (exercises.length <= count) return [...exercises];
@@ -33,7 +33,7 @@ export function weightedRandomSelect(
 
   while (selected.length < count && remaining.length > 0) {
     // Calculate weights for remaining exercises
-    const weights = remaining.map(ex => Math.max(0.01, weightFn(ex.score)));
+    const weights = remaining.map((ex) => Math.max(0.01, weightFn(ex.score)));
     const totalWeight = weights.reduce((sum, w) => sum + w, 0);
 
     // Select based on weighted probability

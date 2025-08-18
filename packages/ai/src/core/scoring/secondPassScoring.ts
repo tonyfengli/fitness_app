@@ -1,12 +1,18 @@
 import type { Exercise } from "../../types";
-import type { ScoredExercise, ScoringCriteria } from "../../types/scoredExercise";
-import { SCORING_CONFIG } from "./scoringConfig";
+import type {
+  ScoredExercise,
+  ScoringCriteria,
+} from "../../types/scoredExercise";
 import { scoreExercise } from "./firstPassScoring";
+import { SCORING_CONFIG } from "./scoringConfig";
 
 /**
  * Check if exercise is in the include list
  */
-function isIncludedExercise(exercise: Exercise, includeExercises: string[]): boolean {
+function isIncludedExercise(
+  exercise: Exercise,
+  includeExercises: string[],
+): boolean {
   if (!includeExercises || includeExercises.length === 0) return false;
   return includeExercises.includes(exercise.name);
 }
@@ -18,28 +24,34 @@ function isIncludedExercise(exercise: Exercise, includeExercises: string[]): boo
 export function performSecondPassScoring(
   firstPassResults: ScoredExercise[],
   criteria: ScoringCriteria,
-  maxScore: number
+  maxScore: number,
 ): ScoredExercise[] {
-  console.log('🎯 Second pass: Boosting included exercises');
-  
-  const finalScoredExercises = firstPassResults.map(exercise => {
+  console.log("🎯 Second pass: Boosting included exercises");
+
+  const finalScoredExercises = firstPassResults.map((exercise) => {
     // Check if this is an included exercise that needs boosting
-    const isIncluded = isIncludedExercise(exercise, criteria.includeExercises || []);
-    
+    const isIncluded = isIncludedExercise(
+      exercise,
+      criteria.includeExercises || [],
+    );
+
     if (isIncluded) {
       // Give included exercises a score 1 point higher than the current max
-      const includeBoost = maxScore + SCORING_CONFIG.INCLUDE_EXERCISE_PRIORITY - exercise.score;
-      
+      const includeBoost =
+        maxScore + SCORING_CONFIG.INCLUDE_EXERCISE_PRIORITY - exercise.score;
+
       // Re-score the exercise with the boost
       const boostedExercise = scoreExercise(exercise, criteria, includeBoost);
-      
-      console.log(`🔹 Boosted included exercise "${exercise.name}" to score ${boostedExercise.score}`);
+
+      console.log(
+        `🔹 Boosted included exercise "${exercise.name}" to score ${boostedExercise.score}`,
+      );
       return boostedExercise;
     }
-    
+
     return exercise;
   });
-  
-  console.log('📊 Second pass complete');
+
+  console.log("📊 Second pass complete");
   return finalScoredExercises;
 }

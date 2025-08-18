@@ -10,7 +10,7 @@ export type SessionUser = {
   createdAt: Date;
   updatedAt: Date;
   // Custom fields
-  role: typeof user.$inferSelect['role'];
-  businessId: typeof user.$inferSelect['businessId'];
-  phone?: typeof user.$inferSelect['phone'];
+  role: (typeof user.$inferSelect)["role"];
+  businessId: (typeof user.$inferSelect)["businessId"];
+  phone?: (typeof user.$inferSelect)["phone"];
 };

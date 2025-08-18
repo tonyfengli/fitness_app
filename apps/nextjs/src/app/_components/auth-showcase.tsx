@@ -14,9 +14,7 @@ export async function AuthShowcase() {
       <div className="flex flex-col items-center gap-4">
         <div className="flex gap-4">
           <Link href="/login">
-            <Button size="lg">
-              Sign in
-            </Button>
+            <Button size="lg">Sign in</Button>
           </Link>
           <Link href="/signup">
             <Button size="lg" variant="outline">

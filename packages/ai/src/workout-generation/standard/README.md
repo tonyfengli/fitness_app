@@ -5,6 +5,7 @@ This module implements the two-phase workout generation system for the "standard
 ## Overview
 
 The Standard template uses a two-phase LLM approach:
+
 1. **Phase 1: Exercise Selection** - Select exercises for each client based on their preferences and constraints
 2. **Phase 2: Round Organization** - Organize selected exercises into rounds with sets, reps, and equipment management
 
@@ -16,6 +17,7 @@ The Standard template uses a two-phase LLM approach:
 ## Pre-Assignment Logic
 
 For full body workouts, the system pre-assigns exercises before the LLM selection phase:
+
 - **Without Finisher**: 2 exercises per client
 - **With Finisher**: 3 exercises per client
 
@@ -37,7 +39,7 @@ For full body workouts, the system pre-assigns exercises before the LLM selectio
 
 3. **Exercise #3: Finisher Exercise** (only for FULL_BODY_WITH_FINISHER)
    - Single client: Selects their highest scoring core/capacity exercise
-   - Multiple clients: 
+   - Multiple clients:
      - Tries to find a core/capacity exercise shared by ALL clients (group score ≥ 5.0)
      - Fallback: Each client gets their own highest scoring core/capacity exercise
    - Excludes exercises already selected as #1 or #2
@@ -45,6 +47,7 @@ For full body workouts, the system pre-assigns exercises before the LLM selectio
 ### Body Category Classification
 
 Exercises are classified into three body categories:
+
 - **Upper**: Horizontal/vertical push/pull patterns, upper body muscles (chest, back, shoulders, etc.)
 - **Lower**: Squat, lunge, hinge patterns, lower body muscles (quads, hamstrings, glutes, calves)
 - **Core/Full**: Core muscles, capacity-tagged exercises
@@ -69,33 +72,43 @@ Shared exercises are split into two categories with different scoring thresholds
 ## Components
 
 ### PreAssignmentService
+
 Handles the pre-assignment logic for full body workouts:
+
 - `processFullBodyPreAssignmentsWithShared()`: Implements the Exercise #1 and #2 selection
 - `getBodyCategory()`: Classifies exercises into upper/lower/core_full categories
 - Manages cascading shared exercise selection and fallback logic
 
 ### StandardWorkoutGenerator
+
 Main orchestrator for the two-phase generation process. Includes:
+
 - Retry logic (up to 3 attempts per phase)
 - Comprehensive logging
 - Validation for both phases
 
 ### ExerciseSelectionPromptBuilder
+
 Builds the Phase 1 prompt that includes:
+
 - Client profiles and preferences
 - Available exercise pools per client (excluding pre-assigned)
 - Shared exercise opportunities
 - Constraints and priorities
 
-### RoundOrganizationPromptBuilder  
+### RoundOrganizationPromptBuilder
+
 Builds the Phase 2 prompt that includes:
+
 - Selected exercises from Phase 1
 - Equipment management requirements
 - Workout flow specifications
 - Timing and rest period guidelines
 
 ### SharedExerciseFilters
+
 Utility functions for categorizing shared exercises:
+
 - `categorizeSharedExercises()`: Splits exercises into Core & Finisher vs Other
 - `isCoreOrFinisherExercise()`: Checks if an exercise has core/capacity tags
 
@@ -104,10 +117,10 @@ Utility functions for categorizing shared exercises:
 ```typescript
 const generator = new StandardWorkoutGenerator();
 const plan = await generator.generate(
-  blueprint,      // StandardGroupWorkoutBlueprint
-  groupContext,   // GroupContext
-  template,       // WorkoutTemplate
-  sessionId       // string
+  blueprint, // StandardGroupWorkoutBlueprint
+  groupContext, // GroupContext
+  template, // WorkoutTemplate
+  sessionId, // string
 );
 ```
 
@@ -126,7 +139,7 @@ interface StandardGroupWorkoutBlueprint {
   sharedExercisePool: GroupScoredExercise[];
   metadata: {
     templateType: string;
-    workoutFlow: 'strength-metabolic' | 'pure-strength';
+    workoutFlow: "strength-metabolic" | "pure-strength";
     totalExercisesPerClient: number;
     preAssignedCount: number;
   };
@@ -134,7 +147,14 @@ interface StandardGroupWorkoutBlueprint {
 
 interface PreAssignedExercise {
   exercise: ScoredExercise;
-  source: 'Round1' | 'Round2' | 'Include' | 'favorite' | 'shared_other' | 'shared_core_finisher' | string;
+  source:
+    | "Round1"
+    | "Round2"
+    | "Include"
+    | "favorite"
+    | "shared_other"
+    | "shared_core_finisher"
+    | string;
   tiedCount?: number; // Number of exercises tied at the same score
   sharedWith?: string[]; // Client IDs if this is a shared exercise selection
 }
@@ -160,6 +180,7 @@ interface PreAssignedExercise {
 ## Output Structure
 
 The generator returns a `StandardWorkoutPlan` containing:
+
 - `exerciseSelection`: Results from Phase 1
 - `roundOrganization`: Results from Phase 2
 - `metadata`: Generation metadata including timing

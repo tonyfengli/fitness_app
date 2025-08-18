@@ -12,12 +12,12 @@ export function extractJSON<T>(content: string): T | null {
     if (jsonMatch) {
       return JSON.parse(jsonMatch[0]) as T;
     }
-    
+
     // If no match, try parsing the whole content
     return JSON.parse(content) as T;
   } catch (error) {
-    console.error('Failed to extract JSON from content:', error);
-    console.error('Content preview:', content.substring(0, 200) + '...');
+    console.error("Failed to extract JSON from content:", error);
+    console.error("Content preview:", content.substring(0, 200) + "...");
     return null;
   }
 }

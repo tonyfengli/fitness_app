@@ -1,9 +1,9 @@
 import { Annotation } from "@langchain/langgraph";
+
+import type { ClientContext } from "./clientContext";
 import type { Exercise } from "./exercise";
 import type { ScoredExercise } from "./scoredExercise";
-import type { ClientContext } from "./clientContext";
 import type { WorkoutTemplate } from "./workoutTemplate";
-
 
 // Define state using the annotation API
 export const WorkoutSessionState = Annotation.Root({
@@ -12,7 +12,7 @@ export const WorkoutSessionState = Annotation.Root({
   exercises: Annotation<Exercise[]>,
   clientContext: Annotation<ClientContext>,
   filteredExercises: Annotation<ScoredExercise[]>,
-  workoutTemplate: Annotation<WorkoutTemplate>
+  workoutTemplate: Annotation<WorkoutTemplate>,
 });
 
 export type WorkoutSessionStateType = typeof WorkoutSessionState.State;

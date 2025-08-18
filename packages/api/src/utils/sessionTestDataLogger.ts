@@ -1,8 +1,9 @@
-import { promises as fs } from 'fs';
-import path from 'path';
-import { createLogger } from './logger';
+import { promises as fs } from "fs";
+import path from "path";
 
-const logger = createLogger('SessionTestDataLogger');
+import { createLogger } from "./logger";
+
+const logger = createLogger("SessionTestDataLogger");
 
 export interface SessionTestData {
   sessionId: string;
@@ -21,14 +22,14 @@ export interface SessionTestData {
 
 export interface MessageData {
   timestamp?: string;
-  direction: 'inbound' | 'outbound';
+  direction: "inbound" | "outbound";
   content: string;
   metadata?: any;
 }
 
 export interface LLMCallData {
   timestamp: string;
-  type: 'preference_parsing' | 'exercise_matching' | 'other';
+  type: "preference_parsing" | "exercise_matching" | "other";
   model: string;
   systemPrompt: string;
   userInput: string;
@@ -41,8 +42,8 @@ export interface LLMCallData {
 export interface ExerciseMatcherCall {
   timestamp: string;
   userPhrase: string;
-  intent: 'avoid' | 'include';
-  matchMethod: 'exercise_type' | 'pattern' | 'llm';
+  intent: "avoid" | "include";
+  matchMethod: "exercise_type" | "pattern" | "llm";
   matchedExercises: string[];
   parseTimeMs: number;
   llmFallback?: {
@@ -54,16 +55,17 @@ export interface ExerciseMatcherCall {
 
 class SessionTestDataLogger {
   private sessionData: Map<string, SessionTestData> = new Map();
-  private enabled: boolean = process.env.SESSION_TEST_DATA_ENABLED === 'true' || true; // Temporarily enabled for testing
+  private enabled: boolean =
+    process.env.SESSION_TEST_DATA_ENABLED === "true" || true; // Temporarily enabled for testing
 
   enable() {
     this.enabled = true;
-    logger.info('Session test data logging enabled');
+    logger.info("Session test data logging enabled");
   }
 
   disable() {
     this.enabled = false;
-    logger.info('Session test data logging disabled');
+    logger.info("Session test data logging disabled");
   }
 
   isEnabled(): boolean {
@@ -73,7 +75,7 @@ class SessionTestDataLogger {
   // Initialize a new session
   initSession(sessionId: string, phoneNumber: string) {
     if (!this.enabled) return;
-    
+
     this.sessionData.set(sessionId, {
       sessionId,
       timestamp: new Date().toISOString(),
@@ -85,64 +87,69 @@ class SessionTestDataLogger {
         totalMessages: 0,
         totalLLMCalls: 0,
         totalExerciseMatcherCalls: 0,
-        llmFallbackCount: 0
-      }
+        llmFallbackCount: 0,
+      },
     });
-    
-    logger.info('Initialized session test data', { sessionId, phoneNumber });
+
+    logger.info("Initialized session test data", { sessionId, phoneNumber });
   }
 
   // Log a message
   logMessage(sessionId: string, message: MessageData) {
     if (!this.enabled) return;
-    
+
     const session = this.sessionData.get(sessionId);
     if (!session) {
-      logger.warn('Session not found for message logging', { sessionId });
+      logger.warn("Session not found for message logging", { sessionId });
       return;
     }
-    
+
     session.messages.push({
       ...message,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     });
     session.summary.totalMessages++;
   }
 
   // Log an LLM call
-  logLLMCall(sessionId: string, llmCall: Omit<LLMCallData, 'timestamp'>) {
+  logLLMCall(sessionId: string, llmCall: Omit<LLMCallData, "timestamp">) {
     if (!this.enabled) return;
-    
+
     const session = this.sessionData.get(sessionId);
     if (!session) {
-      logger.warn('Session not found for LLM call logging', { sessionId });
+      logger.warn("Session not found for LLM call logging", { sessionId });
       return;
     }
-    
+
     session.llmCalls.push({
       ...llmCall,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     });
     session.summary.totalLLMCalls++;
   }
 
   // Log an exercise matcher call
-  logExerciseMatcherCall(sessionId: string, matcherCall: Omit<ExerciseMatcherCall, 'timestamp'>) {
+  logExerciseMatcherCall(
+    sessionId: string,
+    matcherCall: Omit<ExerciseMatcherCall, "timestamp">,
+  ) {
     if (!this.enabled) return;
-    
+
     const session = this.sessionData.get(sessionId);
     if (!session) {
-      logger.warn('Session not found for exercise matcher logging', { sessionId });
+      logger.warn("Session not found for exercise matcher logging", {
+        sessionId,
+      });
       return;
     }
-    
+
     session.exerciseMatcherCalls.push({
       ...matcherCall,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     });
     session.summary.totalExerciseMatcherCalls++;
-    
-    if (matcherCall.matchMethod === 'llm') {
+
+    if (matcherCall.matchMethod === "llm") {
       session.summary.llmFallbackCount++;
     }
   }
@@ -150,49 +157,40 @@ class SessionTestDataLogger {
   // Save session data to file
   async saveSessionData(sessionId: string) {
     if (!this.enabled) return;
-    
+
     const session = this.sessionData.get(sessionId);
     if (!session) {
-      logger.warn('Session not found for saving', { sessionId });
+      logger.warn("Session not found for saving", { sessionId });
       return;
     }
-    
+
     try {
       // Create directory if it doesn't exist
-      const dirPath = path.join(process.cwd(), 'session-test-data');
+      const dirPath = path.join(process.cwd(), "session-test-data");
       await fs.mkdir(dirPath, { recursive: true });
-      
+
       // Create filename with timestamp
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
       const filename = `session_${sessionId}_${timestamp}.json`;
       const filepath = path.join(dirPath, filename);
-      
+
       // Write the file
-      await fs.writeFile(
+      await fs.writeFile(filepath, JSON.stringify(session, null, 2), "utf-8");
+
+      logger.info("Session test data saved", {
+        sessionId,
         filepath,
-        JSON.stringify(session, null, 2),
-        'utf-8'
-      );
-      
-      logger.info('Session test data saved', { 
-        sessionId, 
-        filepath,
-        summary: session.summary 
+        summary: session.summary,
       });
-      
+
       // Also save a "latest" file for easy access
-      const latestPath = path.join(dirPath, 'latest-session.json');
-      await fs.writeFile(
-        latestPath,
-        JSON.stringify(session, null, 2),
-        'utf-8'
-      );
-      
+      const latestPath = path.join(dirPath, "latest-session.json");
+      await fs.writeFile(latestPath, JSON.stringify(session, null, 2), "utf-8");
+
       // Clear session data from memory
       this.sessionData.delete(sessionId);
-      
     } catch (error) {
-      logger.error('Failed to save session test data', { sessionId, error });
+      logger.error("Failed to save session test data", { sessionId, error });
     }
   }
 

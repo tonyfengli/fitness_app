@@ -2,7 +2,6 @@ import type { BetterAuthOptions } from "better-auth";
 import { expo } from "@better-auth/expo";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { username } from "better-auth/plugins";
 import { bearer } from "better-auth/plugins";
 
 import { db } from "@acme/db/client";
@@ -18,7 +17,7 @@ export function initAuth(options: {
     }),
     // For Vercel, we need to set baseURL dynamically based on the request
     // Using process.env.VERCEL_URL if available, otherwise undefined
-    baseURL: process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined,
+    baseURL: options.baseUrl,
     secret: options.secret,
     emailAndPassword: {
       enabled: true,
@@ -52,14 +51,16 @@ export function initAuth(options: {
       cookieCache: {
         enabled: true,
         maxAge: 60 * 5, // Cache for 5 minutes
-      }
+      },
     },
     advanced: {
       cookiePrefix: "better-auth",
       database: {
         generateId: () => {
           // Generate a unique ID for sessions and other entities
-          return Math.random().toString(36).substring(2) + Date.now().toString(36);
+          return (
+            Math.random().toString(36).substring(2) + Date.now().toString(36)
+          );
         },
       },
       useSecureCookies: process.env.NODE_ENV === "production",

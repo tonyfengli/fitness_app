@@ -1,5 +1,5 @@
-import { TemplateProcessor } from "./TemplateProcessor";
 import type { TemplateHandler } from "./types";
+import { TemplateProcessor } from "./TemplateProcessor";
 
 export * from "./types";
 export * from "./types/dynamicBlockTypes";

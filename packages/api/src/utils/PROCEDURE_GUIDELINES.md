@@ -1,16 +1,19 @@
 # TRPC Procedure Size Guidelines
 
 ## Overview
+
 To maintain clean, testable, and maintainable code, TRPC procedures should be kept concise by extracting business logic into dedicated service classes.
 
 ## Guidelines
 
 ### Maximum Procedure Size
+
 - **Target**: 10-20 lines
 - **Hard limit**: 30 lines
 - **Exceptions**: Only for simple CRUD operations with minimal logic
 
 ### What Belongs in Procedures
+
 1. **Input validation** (via Zod schemas)
 2. **Authentication/authorization checks**
 3. **Service instantiation**
@@ -18,6 +21,7 @@ To maintain clean, testable, and maintainable code, TRPC procedures should be ke
 5. **Simple response formatting**
 
 ### What Should Be Extracted
+
 1. **Business logic** → Service classes
 2. **Database queries** → Repository/Service methods
 3. **Complex transformations** → Utility functions
@@ -27,6 +31,7 @@ To maintain clean, testable, and maintainable code, TRPC procedures should be ke
 ## Examples
 
 ### ❌ Bad: Large Procedure
+
 ```typescript
 export const workoutRouter = {
   saveWorkout: protectedProcedure
@@ -43,6 +48,7 @@ export const workoutRouter = {
 ```
 
 ### ✅ Good: Extracted to Service
+
 ```typescript
 export const workoutRouter = {
   saveWorkout: protectedProcedure
@@ -50,12 +56,12 @@ export const workoutRouter = {
     .mutation(async ({ ctx, input }) => {
       const currentUser = ctx.session?.user as SessionUser;
       const businessId = requireBusinessContext(currentUser);
-      
+
       const workoutService = new WorkoutService(ctx.db);
       await workoutService.verifyTrainingSession(input.trainingSessionId, businessId);
-      
+
       const client = await verifyClientInBusiness(ctx.db, input.userId, businessId);
-      
+
       const llmWorkoutService = new LLMWorkoutService(ctx.db);
       return await llmWorkoutService.saveWorkout({
         ...input,
@@ -69,31 +75,32 @@ export const workoutRouter = {
 ## Service Class Structure
 
 ### Basic Service Template
+
 ```typescript
 export class ExampleService {
   constructor(private db: Database) {}
-  
+
   // Public methods for procedure use
   async performAction(input: ActionInput): Promise<ActionResult> {
     // Validation
     this.validateInput(input);
-    
+
     // Business logic
     const processed = await this.processData(input);
-    
+
     // Database operations
     return await this.saveToDatabase(processed);
   }
-  
+
   // Private helper methods
   private validateInput(input: ActionInput) {
     // Complex validation logic
   }
-  
+
   private async processData(input: ActionInput) {
     // Business logic implementation
   }
-  
+
   private async saveToDatabase(data: ProcessedData) {
     // Database transaction handling
   }
@@ -111,6 +118,7 @@ export class ExampleService {
 ## Refactoring Checklist
 
 When refactoring a large procedure:
+
 1. ✅ Identify distinct responsibilities
 2. ✅ Create service class(es) for business logic
 3. ✅ Extract database operations to service methods
@@ -122,12 +130,14 @@ When refactoring a large procedure:
 ## Current Examples in Codebase
 
 ### Successfully Refactored
+
 - `exercise.filter` → `ExerciseFilterService`
 - `exercise.filterForWorkoutGeneration` → `ExerciseFilterService`
 - `workout.saveWorkout` → `LLMWorkoutService`
 - `workout.create` → `WorkoutService`
 
 ### Services Available
+
 - `WorkoutService`: Workout creation and validation
 - `ExerciseFilterService`: AI-powered exercise filtering
 - `LLMWorkoutService`: LLM workout generation and saving

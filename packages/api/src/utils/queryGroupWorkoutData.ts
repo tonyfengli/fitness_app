@@ -1,19 +1,18 @@
 #!/usr/bin/env ts-node
-
-import { promises as fs } from 'fs';
-import path from 'path';
+import { promises as fs } from "fs";
+import path from "path";
 
 /**
  * Utility functions to query group workout data efficiently
- * 
+ *
  * Usage examples:
- * 
+ *
  * 1. Get all exercises for a specific client in a specific block:
  *    const exercises = await getClientBlockExercises('latest-group-workout.json', 'Curtis Yu', 'A');
- * 
+ *
  * 2. Get just exercise names and scores:
  *    const simplified = await getClientBlockExercisesSimplified('latest-group-workout.json', 'Curtis Yu', 'A');
- * 
+ *
  * 3. Compare exercises across clients in a block:
  *    const comparison = await compareClientsInBlock('latest-group-workout.json', 'A');
  */
@@ -46,9 +45,16 @@ interface GroupWorkoutData {
 /**
  * Load group workout data from file
  */
-async function loadGroupWorkoutData(filename: string): Promise<GroupWorkoutData> {
-  const filepath = path.join(process.cwd(), 'session-test-data', 'group-workouts', filename);
-  const content = await fs.readFile(filepath, 'utf-8');
+async function loadGroupWorkoutData(
+  filename: string,
+): Promise<GroupWorkoutData> {
+  const filepath = path.join(
+    process.cwd(),
+    "session-test-data",
+    "group-workouts",
+    filename,
+  );
+  const content = await fs.readFile(filepath, "utf-8");
   return JSON.parse(content);
 }
 
@@ -58,26 +64,28 @@ async function loadGroupWorkoutData(filename: string): Promise<GroupWorkoutData>
 export async function getClientBlockExercises(
   filename: string,
   clientName: string,
-  blockId: string
+  blockId: string,
 ) {
   const data = await loadGroupWorkoutData(filename);
-  
-  const block = data.phaseB.blocks.find(b => b.blockId === blockId);
+
+  const block = data.phaseB.blocks.find((b) => b.blockId === blockId);
   if (!block) {
     throw new Error(`Block ${blockId} not found`);
   }
-  
-  for (const [clientId, clientData] of Object.entries(block.individualExercises)) {
+
+  for (const [clientId, clientData] of Object.entries(
+    block.individualExercises,
+  )) {
     if (clientData.clientName === clientName) {
       return {
         clientName,
         blockId,
         totalCount: clientData.totalCount,
-        exercises: clientData.exercises
+        exercises: clientData.exercises,
       };
     }
   }
-  
+
   throw new Error(`Client ${clientName} not found in block ${blockId}`);
 }
 
@@ -87,20 +95,20 @@ export async function getClientBlockExercises(
 export async function getClientBlockExercisesSimplified(
   filename: string,
   clientName: string,
-  blockId: string
+  blockId: string,
 ) {
   const result = await getClientBlockExercises(filename, clientName, blockId);
-  
+
   return {
     clientName,
     blockId,
     totalCount: result.totalCount,
-    exercises: result.exercises.map(ex => ({
+    exercises: result.exercises.map((ex) => ({
       rank: ex.rank,
       name: ex.exerciseName,
       score: ex.individualScore,
-      selected: ex.isSelected
-    }))
+      selected: ex.isSelected,
+    })),
   };
 }
 
@@ -109,36 +117,38 @@ export async function getClientBlockExercisesSimplified(
  */
 export async function compareClientsInBlock(filename: string, blockId: string) {
   const data = await loadGroupWorkoutData(filename);
-  
-  const block = data.phaseB.blocks.find(b => b.blockId === blockId);
+
+  const block = data.phaseB.blocks.find((b) => b.blockId === blockId);
   if (!block) {
     throw new Error(`Block ${blockId} not found`);
   }
-  
+
   const comparison: any = {
     blockId,
     blockName: block.blockName,
     slotAllocation: block.slotAllocation,
-    sharedExercises: block.sharedExercises.map(ex => ({
+    sharedExercises: block.sharedExercises.map((ex) => ({
       name: ex.exerciseName,
       groupScore: ex.groupScore,
-      sharedBy: ex.clientsSharing.length
+      sharedBy: ex.clientsSharing.length,
     })),
-    clientExercises: {}
+    clientExercises: {},
   };
-  
-  for (const [clientId, clientData] of Object.entries(block.individualExercises)) {
+
+  for (const [clientId, clientData] of Object.entries(
+    block.individualExercises,
+  )) {
     comparison.clientExercises[clientData.clientName] = {
       totalCount: clientData.totalCount,
-      exercises: clientData.exercises.map(ex => ({
+      exercises: clientData.exercises.map((ex) => ({
         rank: ex.rank,
         name: ex.exerciseName,
         score: ex.individualScore,
-        selected: ex.isSelected
-      }))
+        selected: ex.isSelected,
+      })),
     };
   }
-  
+
   return comparison;
 }
 
@@ -147,30 +157,37 @@ export async function compareClientsInBlock(filename: string, blockId: string) {
  */
 export async function getClientAllBlocks(filename: string, clientName: string) {
   const data = await loadGroupWorkoutData(filename);
-  
+
   const clientBlocks: any[] = [];
-  
+
   for (const block of data.phaseB.blocks) {
-    for (const [clientId, clientData] of Object.entries(block.individualExercises)) {
+    for (const [clientId, clientData] of Object.entries(
+      block.individualExercises,
+    )) {
       if (clientData.clientName === clientName) {
         clientBlocks.push({
           blockId: block.blockId,
           blockName: block.blockName,
           exerciseCount: clientData.totalCount,
-          selectedCount: clientData.exercises.filter(ex => ex.isSelected).length,
+          selectedCount: clientData.exercises.filter((ex) => ex.isSelected)
+            .length,
           scoreRange: {
-            min: Math.min(...clientData.exercises.map(ex => ex.individualScore)),
-            max: Math.max(...clientData.exercises.map(ex => ex.individualScore))
-          }
+            min: Math.min(
+              ...clientData.exercises.map((ex) => ex.individualScore),
+            ),
+            max: Math.max(
+              ...clientData.exercises.map((ex) => ex.individualScore),
+            ),
+          },
         });
         break;
       }
     }
   }
-  
+
   return {
     clientName,
-    blocks: clientBlocks
+    blocks: clientBlocks,
   };
 }
 
@@ -181,15 +198,15 @@ export async function getClientAllBlocks(filename: string, clientName: string) {
 //     const curtisBlockA = await getClientBlockExercisesSimplified('latest-group-workout.json', 'Curtis Yu', 'A');
 //     console.log('Curtis Yu - Block A:');
 //     console.log(JSON.stringify(curtisBlockA, null, 2));
-//     
+//
 //     // Compare all clients in Block A
 //     const blockAComparison = await compareClientsInBlock('latest-group-workout.json', 'A');
 //     console.log('\nBlock A Comparison:');
 //     console.log(JSON.stringify(blockAComparison, null, 2));
-//     
+//
 //   } catch (error) {
 //     console.error('Error:', error);
 //   }
 // }
-// 
+//
 // main();

@@ -1,4 +1,5 @@
-import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+
 import { useTRPC } from "~/trpc/react";
 
 export function useExerciseSelections(sessionId: string | null) {
@@ -12,8 +13,8 @@ export function useExerciseSelections(sessionId: string | null) {
       : {
           enabled: false,
           queryKey: ["disabled"],
-          queryFn: () => Promise.resolve([])
-        }
+          queryFn: () => Promise.resolve([]),
+        },
   );
 
   // Get swap history
@@ -23,8 +24,8 @@ export function useExerciseSelections(sessionId: string | null) {
       : {
           enabled: false,
           queryKey: ["disabled"],
-          queryFn: () => Promise.resolve([])
-        }
+          queryFn: () => Promise.resolve([]),
+        },
   );
 
   // Swap exercise mutation
@@ -33,23 +34,26 @@ export function useExerciseSelections(sessionId: string | null) {
       onSuccess: () => {
         // Invalidate both selections and swap history
         queryClient.invalidateQueries({
-          queryKey: [["workoutSelections", "getSelections"]]
+          queryKey: [["workoutSelections", "getSelections"]],
         });
         queryClient.invalidateQueries({
-          queryKey: [["workoutSelections", "getSwapHistory"]]
+          queryKey: [["workoutSelections", "getSwapHistory"]],
         });
-      }
-    })
+      },
+    }),
   );
 
   // Get alternatives for swapping
-  const getSwapAlternatives = async (clientId: string, currentExerciseId: string) => {
+  const getSwapAlternatives = async (
+    clientId: string,
+    currentExerciseId: string,
+  ) => {
     if (!sessionId) return [];
-    
+
     return trpc.workoutSelections.getSwapAlternatives.query({
       sessionId,
       clientId,
-      currentExerciseId
+      currentExerciseId,
     });
   };
 
@@ -58,8 +62,8 @@ export function useExerciseSelections(sessionId: string | null) {
     trpc.workoutSelections.finalizeSelections.mutationOptions({
       onSuccess: () => {
         queryClient.invalidateQueries();
-      }
-    })
+      },
+    }),
   );
 
   return {
@@ -70,6 +74,6 @@ export function useExerciseSelections(sessionId: string | null) {
     getSwapAlternatives,
     finalizeSelections: finalizeSelections.mutate,
     isSwapping: swapExercise.isPending,
-    isFinalizing: finalizeSelections.isPending
+    isFinalizing: finalizeSelections.isPending,
   };
 }

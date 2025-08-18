@@ -1,13 +1,13 @@
 import type { TRPCRouterRecord } from "@trpc/server";
-import { z } from "zod";
 import { hashPassword } from "better-auth/crypto";
+import { z } from "zod";
 
-import { eq, and } from "@acme/db";
-import { user, UserProfile, account } from "@acme/db/schema";
+import { and, eq } from "@acme/db";
+import { account, user, UserProfile } from "@acme/db/schema";
 
-import { protectedProcedure, publicProcedure } from "../trpc";
 import type { SessionUser } from "../types/auth";
 import { normalizePhoneNumber } from "../services/twilio";
+import { protectedProcedure, publicProcedure } from "../trpc";
 
 export const authRouter = {
   getSession: publicProcedure.query(({ ctx }) => {
@@ -22,13 +22,13 @@ export const authRouter = {
     }
     const user = ctx.session.user as SessionUser;
     return {
-      role: user.role || 'client',
+      role: user.role || "client",
       businessId: user.businessId,
     };
   }),
   isTrainer: protectedProcedure.query(({ ctx }) => {
     const user = ctx.session?.user as SessionUser;
-    return user?.role === 'trainer';
+    return user?.role === "trainer";
   }),
   updateUserBusiness: protectedProcedure
     .input(z.object({ businessId: z.string().uuid() }))
@@ -47,7 +47,7 @@ export const authRouter = {
   getClientsByBusiness: protectedProcedure.query(async ({ ctx }) => {
     // Only trainers should be able to see all clients
     const currentUser = ctx.session?.user as SessionUser;
-    if (currentUser?.role !== 'trainer') {
+    if (currentUser?.role !== "trainer") {
       throw new Error("Only trainers can view all clients");
     }
 
@@ -58,10 +58,7 @@ export const authRouter = {
 
     // Fetch all users with role 'client' in the same business with their profiles
     const clients = await ctx.db.query.user.findMany({
-      where: and(
-        eq(user.businessId, businessId),
-        eq(user.role, 'client')
-      ),
+      where: and(eq(user.businessId, businessId), eq(user.role, "client")),
       columns: {
         id: true,
         email: true,
@@ -77,29 +74,31 @@ export const authRouter = {
             notes: true,
           },
           limit: 1,
-        }
+        },
       },
       orderBy: (user, { asc }) => [asc(user.name)],
     });
 
     // Transform the data to have a single profile object
-    return clients.map(client => ({
+    return clients.map((client) => ({
       ...client,
       profile: client.userProfiles?.[0] || null,
       userProfiles: undefined, // Remove the array
     }));
   }),
   updateClientProfile: protectedProcedure
-    .input(z.object({
-      userId: z.string(),
-      strengthLevel: z.enum(["very_low", "low", "moderate", "high"]),
-      skillLevel: z.enum(["very_low", "low", "moderate", "high"]),
-      notes: z.string().optional(),
-    }))
+    .input(
+      z.object({
+        userId: z.string(),
+        strengthLevel: z.enum(["very_low", "low", "moderate", "high"]),
+        skillLevel: z.enum(["very_low", "low", "moderate", "high"]),
+        notes: z.string().optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       // Only trainers can update client profiles
       const currentUser = ctx.session?.user as SessionUser;
-      if (currentUser?.role !== 'trainer') {
+      if (currentUser?.role !== "trainer") {
         throw new Error("Only trainers can update client profiles");
       }
 
@@ -113,7 +112,7 @@ export const authRouter = {
         where: and(
           eq(user.id, input.userId),
           eq(user.businessId, businessId),
-          eq(user.role, 'client')
+          eq(user.role, "client"),
         ),
       });
 
@@ -150,21 +149,25 @@ export const authRouter = {
       return { success: true };
     }),
   createUserProfile: protectedProcedure
-    .input(z.object({
-      userId: z.string(),
-      businessId: z.string().uuid(),
-      strengthLevel: z.enum(["very_low", "low", "moderate", "high"]),
-      skillLevel: z.enum(["very_low", "low", "moderate", "high"]),
-      notes: z.string().optional(),
-    }))
+    .input(
+      z.object({
+        userId: z.string(),
+        businessId: z.string().uuid(),
+        strengthLevel: z.enum(["very_low", "low", "moderate", "high"]),
+        skillLevel: z.enum(["very_low", "low", "moderate", "high"]),
+        notes: z.string().optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       // Check if the user creating the profile is the same user or a trainer
       const currentUser = ctx.session?.user as SessionUser;
       const isOwnProfile = currentUser?.id === input.userId;
-      const isTrainer = currentUser?.role === 'trainer';
-      
+      const isTrainer = currentUser?.role === "trainer";
+
       if (!isOwnProfile && !isTrainer) {
-        throw new Error("You can only create your own profile or a trainer can create client profiles");
+        throw new Error(
+          "You can only create your own profile or a trainer can create client profiles",
+        );
       }
 
       // Check if profile already exists
@@ -188,19 +191,23 @@ export const authRouter = {
       return { success: true };
     }),
   createUserAsTrainer: protectedProcedure
-    .input(z.object({
-      email: z.string().email(),
-      password: z.string().min(6),
-      name: z.string(),
-      phone: z.string().optional(),
-      role: z.enum(["client", "trainer"]),
-      strengthLevel: z.enum(["very_low", "low", "moderate", "high"]).optional(),
-      skillLevel: z.enum(["very_low", "low", "moderate", "high"]).optional(),
-    }))
+    .input(
+      z.object({
+        email: z.string().email(),
+        password: z.string().min(6),
+        name: z.string(),
+        phone: z.string().optional(),
+        role: z.enum(["client", "trainer"]),
+        strengthLevel: z
+          .enum(["very_low", "low", "moderate", "high"])
+          .optional(),
+        skillLevel: z.enum(["very_low", "low", "moderate", "high"]).optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       // Only trainers can create users
       const currentUser = ctx.session?.user as SessionUser;
-      if (currentUser?.role !== 'trainer') {
+      if (currentUser?.role !== "trainer") {
         throw new Error("Only trainers can create users");
       }
 
@@ -226,8 +233,10 @@ export const authRouter = {
       const now = new Date();
 
       // Normalize phone number if provided
-      const normalizedPhone = input.phone ? normalizePhoneNumber(input.phone) : null;
-      
+      const normalizedPhone = input.phone
+        ? normalizePhoneNumber(input.phone)
+        : null;
+
       // Create the user
       await ctx.db.insert(user).values({
         id: userId,
@@ -263,7 +272,7 @@ export const authRouter = {
         });
       }
 
-      return { 
+      return {
         success: true,
         userId: userId,
       };

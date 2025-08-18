@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
+
 import { authClient } from "~/auth/client";
 
 export default function LoginPage() {
@@ -11,7 +12,7 @@ export default function LoginPage() {
   const queryClient = useQueryClient();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
+
   const [formData, setFormData] = useState({
     email: "",
     password: "",
@@ -23,15 +24,15 @@ export default function LoginPage() {
     setIsLoading(true);
     setError(null);
 
-    console.log('[Login] Attempting sign in for:', formData.email);
-    
+    console.log("[Login] Attempting sign in for:", formData.email);
+
     try {
       const result = await authClient.signIn.email({
         email: formData.email,
         password: formData.password,
       });
 
-      console.log('[Login] Sign in result:', result);
+      console.log("[Login] Sign in result:", result);
 
       if (result.error) {
         // Check if we're offline
@@ -43,19 +44,19 @@ export default function LoginPage() {
       } else {
         // Set redirecting state to show loading UI
         setIsRedirecting(true);
-        
+
         // Invalidate the session query to force a refetch
         await queryClient.invalidateQueries({ queryKey: ["auth-session"] });
-        
+
         // Get fresh session data from API
-        const response = await fetch('/api/auth/get-session', {
-          credentials: 'include',
-          cache: 'no-store'
+        const response = await fetch("/api/auth/get-session", {
+          credentials: "include",
+          cache: "no-store",
         });
         const sessionData = await response.json();
-        
+
         const userRole = sessionData?.user?.role;
-        
+
         if (userRole === "trainer") {
           router.push("/trainer-dashboard");
         } else if (userRole === "client") {
@@ -67,7 +68,7 @@ export default function LoginPage() {
       }
     } catch (err) {
       // Simple network vs other error detection
-      if (err instanceof TypeError && err.message.includes('fetch')) {
+      if (err instanceof TypeError && err.message.includes("fetch")) {
         setError("Connection failed. Please check your internet connection.");
       } else {
         setError("An unexpected error occurred. Please try again.");
@@ -83,8 +84,10 @@ export default function LoginPage() {
       {isRedirecting && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-white bg-opacity-75">
           <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-            <p className="mt-4 text-gray-600">Redirecting to your dashboard...</p>
+            <div className="mx-auto h-12 w-12 animate-spin rounded-full border-b-2 border-blue-600"></div>
+            <p className="mt-4 text-gray-600">
+              Redirecting to your dashboard...
+            </p>
           </div>
         </div>
       )}
@@ -103,14 +106,14 @@ export default function LoginPage() {
             </Link>
           </p>
         </div>
-        
+
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           {error && (
             <div className="rounded-md bg-red-50 p-4">
               <p className="text-sm text-red-800">{error}</p>
             </div>
           )}
-          
+
           <div className="-space-y-px rounded-md shadow-sm">
             <div>
               <label htmlFor="email" className="sr-only">
@@ -154,7 +157,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={isLoading}
-              className="group relative flex w-full justify-center rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="group relative flex w-full justify-center rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isLoading ? "Signing in..." : "Sign in"}
             </button>

@@ -1,7 +1,9 @@
-import { useState, useRef, useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
+
 import { Icon } from "@acme/ui-shared";
-import type { SelectOption, TagColor } from '../types';
-import { TAG_COLOR_CLASSES } from '../constants';
+
+import type { SelectOption, TagColor } from "../types";
+import { TAG_COLOR_CLASSES } from "../constants";
 
 interface SearchableMultiSelectProps {
   options: SelectOption[];
@@ -9,16 +11,16 @@ interface SearchableMultiSelectProps {
   onChange: (selected: string[]) => void;
   placeholder?: string;
   tagColor?: TagColor;
-  dropdownDirection?: 'up' | 'down';
+  dropdownDirection?: "up" | "down";
 }
 
-export function SearchableMultiSelect({ 
-  options, 
-  selected, 
-  onChange, 
+export function SearchableMultiSelect({
+  options,
+  selected,
+  onChange,
   placeholder = "Type to search...",
   tagColor = "indigo",
-  dropdownDirection = "down"
+  dropdownDirection = "down",
 }: SearchableMultiSelectProps) {
   const [search, setSearch] = useState("");
   const [isOpen, setIsOpen] = useState(false);
@@ -26,7 +28,10 @@ export function SearchableMultiSelect({
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target as Node)
+      ) {
         setIsOpen(false);
       }
     }
@@ -34,9 +39,10 @@ export function SearchableMultiSelect({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const filteredOptions = options.filter(option =>
-    option.label.toLowerCase().includes(search.toLowerCase()) &&
-    !selected.includes(option.value)
+  const filteredOptions = options.filter(
+    (option) =>
+      option.label.toLowerCase().includes(search.toLowerCase()) &&
+      !selected.includes(option.value),
   );
 
   const handleSelect = (value: string) => {
@@ -46,7 +52,7 @@ export function SearchableMultiSelect({
   };
 
   const handleRemove = (value: string) => {
-    onChange(selected.filter(v => v !== value));
+    onChange(selected.filter((v) => v !== value));
   };
 
   return (
@@ -57,13 +63,15 @@ export function SearchableMultiSelect({
         onChange={(e) => setSearch(e.target.value)}
         onFocus={() => setIsOpen(true)}
         placeholder={placeholder}
-        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+        className="w-full rounded-lg border border-gray-300 px-4 py-3 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500"
       />
-      
+
       {isOpen && filteredOptions.length > 0 && (
-        <div className={`absolute z-10 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-auto ${
-          dropdownDirection === 'up' ? 'bottom-full mb-1' : 'top-full mt-1'
-        }`}>
+        <div
+          className={`absolute z-10 max-h-60 w-full overflow-auto rounded-lg border border-gray-200 bg-white shadow-lg ${
+            dropdownDirection === "up" ? "bottom-full mb-1" : "top-full mt-1"
+          }`}
+        >
           {filteredOptions.map((option) => (
             <button
               key={option.value}
@@ -77,13 +85,13 @@ export function SearchableMultiSelect({
       )}
 
       {selected.length > 0 && (
-        <div className="flex flex-wrap gap-2 mt-2">
+        <div className="mt-2 flex flex-wrap gap-2">
           {selected.map((value) => {
-            const option = options.find(o => o.value === value);
+            const option = options.find((o) => o.value === value);
             return (
               <span
                 key={value}
-                className={`inline-flex items-center px-3 py-1 rounded-full text-sm ${TAG_COLOR_CLASSES[tagColor]}`}
+                className={`inline-flex items-center rounded-full px-3 py-1 text-sm ${TAG_COLOR_CLASSES[tagColor]}`}
               >
                 {option?.label || value}
                 <button

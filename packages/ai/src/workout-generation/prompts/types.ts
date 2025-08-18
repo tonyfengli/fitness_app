@@ -1,4 +1,4 @@
-import type { ClientContext, GroupBlockBlueprint } from '../../types';
+import type { ClientContext, GroupBlockBlueprint } from "../../types";
 
 export interface WorkoutSection {
   name: string;
@@ -33,7 +33,7 @@ export interface DeterministicAssignment {
   clientName: string;
   exercise: string;
   equipment: string[];
-  reason?: 'client_request' | 'muscle_target';
+  reason?: "client_request" | "muscle_target";
 }
 
 export interface GroupWorkoutConfig {
@@ -59,8 +59,8 @@ export interface PromptConfig {
     examples?: string;
     instructions?: string;
   };
-  
+
   // New group workout options
-  workoutType?: 'individual' | 'group';
+  workoutType?: "individual" | "group";
   groupConfig?: GroupWorkoutConfig;
 }

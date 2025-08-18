@@ -2,22 +2,23 @@
  * Prompt strategy for Full Body workouts (with and without finisher)
  */
 
-import type { PromptStrategy, PromptStrategyConfig } from "./PromptStrategy";
-import type { PreAssignedExercise } from "../../../../types/standardBlueprint";
 import type { GroupScoredExercise } from "../../../../types/groupContext";
+import type { PreAssignedExercise } from "../../../../types/standardBlueprint";
+import type { PromptStrategy, PromptStrategyConfig } from "./PromptStrategy";
 import { WorkoutType } from "../../../types/workoutTypes";
 
 export class FullBodyPromptStrategy implements PromptStrategy {
   constructor(private config: PromptStrategyConfig) {}
-  
+
   buildConstraints(): string {
-    const withFinisher = this.config.workoutType === WorkoutType.FULL_BODY_WITH_FINISHER;
-    
+    const withFinisher =
+      this.config.workoutType === WorkoutType.FULL_BODY_WITH_FINISHER;
+
     return `### ✅ MUST Follow (Hard Constraints)
 
 1. **Movement Pattern Coverage**
    - Ensure variety across different movement patterns
-   - ${withFinisher ? 'Include at least one high-intensity finisher exercise' : 'Focus on balanced strength movements'}
+   - ${withFinisher ? "Include at least one high-intensity finisher exercise" : "Focus on balanced strength movements"}
    - Avoid selecting multiple exercises from the same movement pattern unless targeting specific muscles
 
 2. **🎯 Muscle Target Requirements (Final)**
@@ -41,10 +42,11 @@ export class FullBodyPromptStrategy implements PromptStrategy {
    - Do not select exercises already in the pre-assigned list
    - Each exercise can only appear once per client`;
   }
-  
+
   buildWorkoutFlow(): string {
-    const withFinisher = this.config.workoutType === WorkoutType.FULL_BODY_WITH_FINISHER;
-    
+    const withFinisher =
+      this.config.workoutType === WorkoutType.FULL_BODY_WITH_FINISHER;
+
     if (withFinisher) {
       return `### 🏃 Workout Flow
 
@@ -59,7 +61,7 @@ Exercise Selection Guidance:
 - Ensure at least one exercise has capacity/conditioning focus
 - Balance push/pull and upper/lower movements`;
     }
-    
+
     return `### 🏃 Workout Flow
 
 **Full Body Strength Focus**
@@ -72,7 +74,7 @@ Exercise Selection Guidance:
 - No specific conditioning requirement
 - Ensure balanced coverage of all muscle groups`;
   }
-  
+
   buildSelectionPriorities(): string {
     return `### ⚖️ Selection Priorities
 
@@ -104,50 +106,58 @@ Exercise Selection Guidance:
    - Consider exercise complexity and training stimulus
    - Mix bilateral and unilateral movements when appropriate`;
   }
-  
-  getExercisesToSelect(intensity?: 'low' | 'moderate' | 'high' | 'intense'): number {
+
+  getExercisesToSelect(
+    intensity?: "low" | "moderate" | "high" | "intense",
+  ): number {
     // Use the already calculated value from config
     // This accounts for variable pre-assigned counts (2 or 3)
     return this.config.exercisesToSelect;
   }
-  
+
   formatPreAssignedExercises(preAssigned: PreAssignedExercise[]): string {
     if (preAssigned.length === 0) return "No pre-assigned exercises";
-    
+
     let output = "Pre-assigned exercises (DO NOT select these again):\n";
-    
+
     preAssigned.forEach((pa, idx) => {
       const ex = pa.exercise;
       output += `${idx + 1}. **${ex.name}**\n`;
       output += `   - Movement: ${ex.movementPattern}, Primary: ${ex.primaryMuscle}`;
       if (ex.secondaryMuscles && ex.secondaryMuscles.length > 0) {
-        output += `, Secondary: ${ex.secondaryMuscles.join(', ')}`;
+        output += `, Secondary: ${ex.secondaryMuscles.join(", ")}`;
       }
-      output += '\n';
+      output += "\n";
       output += `   - Source: ${pa.source}`;
       if (pa.tiedCount) {
         output += ` (selected from ${pa.tiedCount} tied options)`;
       }
       if (pa.sharedWith && pa.sharedWith.length > 0) {
-        output += `\n   - Shared with ${pa.sharedWith.length} other client${pa.sharedWith.length > 1 ? 's' : ''}`;
+        output += `\n   - Shared with ${pa.sharedWith.length} other client${pa.sharedWith.length > 1 ? "s" : ""}`;
       }
-      output += '\n\n';
+      output += "\n\n";
     });
-    
+
     // Add summary of what's already covered
-    output += '**Coverage Analysis:**\n';
-    const movements = preAssigned.map(pa => pa.exercise.movementPattern).filter(Boolean);
+    output += "**Coverage Analysis:**\n";
+    const movements = preAssigned
+      .map((pa) => pa.exercise.movementPattern)
+      .filter(Boolean);
     const uniqueMovements = [...new Set(movements)];
-    output += `- Movement Patterns: ${uniqueMovements.join(', ') || 'none'}\n`;
-    
-    const primaryMuscles = preAssigned.map(pa => pa.exercise.primaryMuscle).filter(Boolean);
-    const secondaryMuscles = preAssigned.flatMap(pa => pa.exercise.secondaryMuscles || []);
+    output += `- Movement Patterns: ${uniqueMovements.join(", ") || "none"}\n`;
+
+    const primaryMuscles = preAssigned
+      .map((pa) => pa.exercise.primaryMuscle)
+      .filter(Boolean);
+    const secondaryMuscles = preAssigned.flatMap(
+      (pa) => pa.exercise.secondaryMuscles || [],
+    );
     const allMuscles = [...new Set([...primaryMuscles, ...secondaryMuscles])];
-    output += `- Muscle Groups: ${allMuscles.join(', ') || 'none'}\n`;
-    
+    output += `- Muscle Groups: ${allMuscles.join(", ") || "none"}\n`;
+
     return output;
   }
-  
+
   buildSharedExerciseGuidance(sharedExercises: GroupScoredExercise[]): string {
     // No longer needed - shared exercises are handled in pre-assignment
     return "";

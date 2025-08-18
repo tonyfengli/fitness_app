@@ -1,12 +1,19 @@
-import { z } from "zod/v4";
-import { createTRPCRouter, protectedProcedure } from "../trpc";
-import { db } from "@acme/db/client";
-import { messages, user, UserTrainingSession, TrainingSession } from "@acme/db/schema";
-import { eq, desc, and, sql } from "@acme/db";
 import { TRPCError } from "@trpc/server";
+import { z } from "zod/v4";
+
+import { and, desc, eq, sql } from "@acme/db";
+import { db } from "@acme/db/client";
+import {
+  messages,
+  TrainingSession,
+  user,
+  UserTrainingSession,
+} from "@acme/db/schema";
+
 import { saveMessage } from "../services/messageService";
-import { MessagePipeline } from "../services/messaging/message-pipeline";
 import { WebAdapter } from "../services/messaging/adapters/web-adapter";
+import { MessagePipeline } from "../services/messaging/message-pipeline";
+import { createTRPCRouter, protectedProcedure } from "../trpc";
 
 export const messagesRouter = createTRPCRouter({
   // Get messages for a specific user (trainer view)
@@ -14,7 +21,7 @@ export const messagesRouter = createTRPCRouter({
     .input(
       z.object({
         userId: z.string().min(1, "User ID is required"),
-      })
+      }),
     )
     .query(async ({ ctx, input }) => {
       // Check if the current user is a trainer for this business
@@ -38,7 +45,10 @@ export const messagesRouter = createTRPCRouter({
         .where(eq(user.id, input.userId))
         .limit(1);
 
-      if (!targetUser.length || targetUser[0]?.businessId !== trainer[0].businessId) {
+      if (
+        !targetUser.length ||
+        targetUser[0]?.businessId !== trainer[0].businessId
+      ) {
         throw new TRPCError({
           code: "FORBIDDEN",
           message: "Can only view messages for users in your business",
@@ -95,26 +105,33 @@ export const messagesRouter = createTRPCRouter({
       .orderBy(desc(messages.createdAt));
 
     // Group by user and get latest message time
-    const uniqueUsers = usersWithMessages.reduce((acc, curr) => {
-      if (!acc[curr.userId]) {
-        acc[curr.userId] = {
-          userId: curr.userId,
-          userName: curr.userName,
-          userPhone: curr.userPhone,
-          lastMessageAt: curr.lastMessageAt,
-        };
-      } else {
-        // Keep the most recent message time
-        if (curr.lastMessageAt && (!acc[curr.userId].lastMessageAt || 
-            curr.lastMessageAt > acc[curr.userId].lastMessageAt)) {
-          acc[curr.userId].lastMessageAt = curr.lastMessageAt;
+    const uniqueUsers = usersWithMessages.reduce(
+      (acc, curr) => {
+        if (!acc[curr.userId]) {
+          acc[curr.userId] = {
+            userId: curr.userId,
+            userName: curr.userName,
+            userPhone: curr.userPhone,
+            lastMessageAt: curr.lastMessageAt,
+          };
+        } else {
+          // Keep the most recent message time
+          if (
+            curr.lastMessageAt &&
+            (!acc[curr.userId].lastMessageAt ||
+              curr.lastMessageAt > acc[curr.userId].lastMessageAt)
+          ) {
+            acc[curr.userId].lastMessageAt = curr.lastMessageAt;
+          }
         }
-      }
-      return acc;
-    }, {} as Record<string, any>);
+        return acc;
+      },
+      {} as Record<string, any>,
+    );
 
-    return Object.values(uniqueUsers).sort((a, b) => 
-      (b.lastMessageAt?.getTime() || 0) - (a.lastMessageAt?.getTime() || 0)
+    return Object.values(uniqueUsers).sort(
+      (a, b) =>
+        (b.lastMessageAt?.getTime() || 0) - (a.lastMessageAt?.getTime() || 0),
     );
   }),
 
@@ -125,7 +142,7 @@ export const messagesRouter = createTRPCRouter({
         recipientId: z.string().min(1, "Recipient ID is required"),
         content: z.string().min(1, "Message content is required"),
         trainingSessionId: z.string().optional(),
-      })
+      }),
     )
     .mutation(async ({ ctx, input }) => {
       // Verify the sender is a trainer
@@ -149,7 +166,10 @@ export const messagesRouter = createTRPCRouter({
         .where(eq(user.id, input.recipientId))
         .limit(1);
 
-      if (!recipient.length || recipient[0]?.businessId !== trainer[0].businessId) {
+      if (
+        !recipient.length ||
+        recipient[0]?.businessId !== trainer[0].businessId
+      ) {
         throw new TRPCError({
           code: "FORBIDDEN",
           message: "Can only send messages to users in your business",
@@ -167,36 +187,39 @@ export const messagesRouter = createTRPCRouter({
       try {
         // Get active training session for the user if not provided
         let trainingSessionId = input.trainingSessionId;
-        
+
         if (!trainingSessionId) {
           // Find active session for the user
           const activeSession = await db
             .select({
-              sessionId: UserTrainingSession.trainingSessionId
+              sessionId: UserTrainingSession.trainingSessionId,
             })
             .from(UserTrainingSession)
             .innerJoin(
               TrainingSession,
-              eq(UserTrainingSession.trainingSessionId, TrainingSession.id)
+              eq(UserTrainingSession.trainingSessionId, TrainingSession.id),
             )
             .where(
               and(
                 eq(UserTrainingSession.userId, input.recipientId),
                 eq(UserTrainingSession.status, "checked_in"),
-                eq(TrainingSession.status, "open")
-              )
+                eq(TrainingSession.status, "open"),
+              ),
             )
             .limit(1);
-          
+
           if (activeSession.length > 0 && activeSession[0]) {
             trainingSessionId = activeSession[0].sessionId;
-            console.log(`[${new Date().toISOString()}] Found active session for user:`, {
-              userId: input.recipientId,
-              sessionId: trainingSessionId
-            });
+            console.log(
+              `[${new Date().toISOString()}] Found active session for user:`,
+              {
+                userId: input.recipientId,
+                sessionId: trainingSessionId,
+              },
+            );
           }
         }
-        
+
         // Create unified message from web request
         const unifiedMessage = WebAdapter.fromWebRequest({
           recipientId: input.recipientId,
@@ -206,7 +229,7 @@ export const messagesRouter = createTRPCRouter({
           sentBy: ctx.session.user.id,
           sentByName: trainer[0].name,
         });
-        
+
         // Process through unified pipeline
         const pipeline = new MessagePipeline();
         const processed = await pipeline.process(unifiedMessage);
@@ -216,7 +239,10 @@ export const messagesRouter = createTRPCRouter({
           response: processed.response.message,
         };
       } catch (error) {
-        console.error(`[${new Date().toISOString()}] Failed to process test message:`, error);
+        console.error(
+          `[${new Date().toISOString()}] Failed to process test message:`,
+          error,
+        );
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: "Failed to process message",
@@ -229,7 +255,7 @@ export const messagesRouter = createTRPCRouter({
     .input(
       z.object({
         userId: z.string().optional(),
-      })
+      }),
     )
     .query(async ({ ctx, input }) => {
       // Check if the current user is a trainer
@@ -249,10 +275,10 @@ export const messagesRouter = createTRPCRouter({
       const businessId = trainer[0].businessId;
 
       // Build where clause
-      const whereClause = input.userId 
+      const whereClause = input.userId
         ? and(
             eq(messages.businessId, businessId),
-            eq(messages.userId, input.userId)
+            eq(messages.userId, input.userId),
           )
         : eq(messages.businessId, businessId);
 
@@ -280,31 +306,35 @@ export const messagesRouter = createTRPCRouter({
           metadata: messages.metadata,
         })
         .from(messages)
-        .where(and(
-          whereClause,
-          eq(messages.direction, 'outbound')
-        ));
+        .where(and(whereClause, eq(messages.direction, "outbound")));
 
-      const checkInStats = checkInMessages.reduce((acc, msg) => {
-        const metadata = msg.metadata as any;
-        if (metadata?.checkInResult !== undefined) {
-          acc.total++;
-          if (metadata.checkInResult.success) {
-            acc.successful++;
+      const checkInStats = checkInMessages.reduce(
+        (acc, msg) => {
+          const metadata = msg.metadata as any;
+          if (metadata?.checkInResult !== undefined) {
+            acc.total++;
+            if (metadata.checkInResult.success) {
+              acc.successful++;
+            }
           }
-        }
-        return acc;
-      }, { total: 0, successful: 0 });
+          return acc;
+        },
+        { total: 0, successful: 0 },
+      );
 
       return {
         totalMessages: stats[0]?.totalMessages || 0,
-        byDirection: byDirection.reduce((acc, curr) => {
-          acc[curr.direction] = curr.count;
-          return acc;
-        }, {} as Record<string, number>),
-        checkInSuccessRate: checkInStats.total > 0 
-          ? (checkInStats.successful / checkInStats.total) * 100 
-          : 0,
+        byDirection: byDirection.reduce(
+          (acc, curr) => {
+            acc[curr.direction] = curr.count;
+            return acc;
+          },
+          {} as Record<string, number>,
+        ),
+        checkInSuccessRate:
+          checkInStats.total > 0
+            ? (checkInStats.successful / checkInStats.total) * 100
+            : 0,
         checkInTotal: checkInStats.total,
         checkInSuccessful: checkInStats.successful,
       };

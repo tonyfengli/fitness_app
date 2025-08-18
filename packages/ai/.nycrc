@@ -1,8 +1,6 @@
 {
   "all": true,
-  "include": [
-    "src/**/*.ts"
-  ],
+  "include": ["src/**/*.ts"],
   "exclude": [
     "**/*.d.ts",
     "**/*.test.ts",
@@ -11,11 +9,7 @@
     "dist/**",
     "node_modules/**"
   ],
-  "reporter": [
-    "text",
-    "lcov",
-    "html"
-  ],
+  "reporter": ["text", "lcov", "html"],
   "branches": 80,
   "lines": 80,
   "functions": 80,

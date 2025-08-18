@@ -1,8 +1,9 @@
 "use client";
 
 import React from "react";
+
+import { ClientSidebar, SidebarLayout } from "@acme/ui-desktop";
 import { AppProvider, useClients, useUI } from "@acme/ui-shared";
-import { SidebarLayout, ClientSidebar } from "@acme/ui-desktop";
 
 // Main dashboard component that uses the state
 function DashboardContent() {
@@ -49,29 +50,27 @@ function DashboardContent() {
       }
     >
       <div className="p-8">
-        <h1 className="text-3xl font-bold mb-4">
+        <h1 className="mb-4 text-3xl font-bold">
           Dashboard with State Management
         </h1>
-        
+
         {selectedClient ? (
-          <div className="bg-white p-6 rounded-lg shadow">
-            <h2 className="text-xl font-semibold mb-2">
+          <div className="rounded-lg bg-white p-6 shadow">
+            <h2 className="mb-2 text-xl font-semibold">
               Selected Client: {selectedClient.name}
             </h2>
-            <p className="text-gray-600">
-              Program: {selectedClient.program}
-            </p>
+            <p className="text-gray-600">Program: {selectedClient.program}</p>
           </div>
         ) : (
-          <div className="bg-gray-100 p-6 rounded-lg">
+          <div className="rounded-lg bg-gray-100 p-6">
             <p className="text-gray-600">
               Select a client from the sidebar to view details
             </p>
           </div>
         )}
-        
+
         <div className="mt-8">
-          <h3 className="text-lg font-semibold mb-2">State Info:</h3>
+          <h3 className="mb-2 text-lg font-semibold">State Info:</h3>
           <p className="text-sm text-gray-600">
             Total Clients: {clients.length}
           </p>

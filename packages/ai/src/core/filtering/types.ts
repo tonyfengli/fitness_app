@@ -6,8 +6,13 @@
 // Level types
 export type StrengthLevel = "very_low" | "low" | "moderate" | "high";
 export type SkillLevel = "very_low" | "low" | "moderate" | "high";
-export type IntensityLevel = "low_local" | "moderate_local" | "high_local" | 
-                            "moderate_systemic" | "high_systemic" | "metabolic";
+export type IntensityLevel =
+  | "low_local"
+  | "moderate_local"
+  | "high_local"
+  | "moderate_systemic"
+  | "high_systemic"
+  | "metabolic";
 
 // Filter criteria interface
 export interface FilterCriteria {
@@ -19,4 +24,9 @@ export interface FilterCriteria {
 }
 
 // Cascading levels configuration
-export const CASCADING_LEVELS = ["very_low", "low", "moderate", "high"] as const;
+export const CASCADING_LEVELS = [
+  "very_low",
+  "low",
+  "moderate",
+  "high",
+] as const;

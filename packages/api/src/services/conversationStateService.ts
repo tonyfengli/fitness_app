@@ -1,6 +1,7 @@
+import { and, desc, eq, sql } from "@acme/db";
 import { db } from "@acme/db/client";
 import { conversationState } from "@acme/db/schema";
-import { eq, and, desc, sql } from "@acme/db";
+
 import { createLogger } from "../utils/logger";
 
 const logger = createLogger("ConversationStateService");
@@ -19,14 +20,14 @@ export class ConversationStateService {
     trainingSessionId: string,
     businessId: string,
     userInput: string,
-    options: ExerciseOption[]
+    options: ExerciseOption[],
   ): Promise<string> {
     try {
       logger.info("Creating exercise disambiguation state", {
         userId,
         trainingSessionId,
         userInput,
-        optionCount: options.length
+        optionCount: options.length,
       });
 
       const result = await db
@@ -41,13 +42,13 @@ export class ConversationStateService {
             userInput,
             options,
             metadata: {
-              createdAt: new Date().toISOString()
-            }
-          }
+              createdAt: new Date().toISOString(),
+            },
+          },
         })
         .returning();
 
-      return result[0]?.id || '';
+      return result[0]?.id || "";
     } catch (error) {
       logger.error("Error creating conversation state", error);
       throw error;
@@ -59,7 +60,7 @@ export class ConversationStateService {
    */
   static async getPendingDisambiguation(
     userId: string,
-    trainingSessionId: string
+    trainingSessionId: string,
   ): Promise<{
     id: string;
     userInput: string;
@@ -75,8 +76,8 @@ export class ConversationStateService {
             eq(conversationState.userId, userId),
             eq(conversationState.trainingSessionId, trainingSessionId),
             eq(conversationState.conversationType, "include_exercise"),
-            eq(conversationState.currentStep, "awaiting_selection")
-          )
+            eq(conversationState.currentStep, "awaiting_selection"),
+          ),
         )
         .orderBy(desc(conversationState.createdAt))
         .limit(1);
@@ -90,7 +91,7 @@ export class ConversationStateService {
         id: pending.id,
         userInput: state.userInput,
         options: state.options || [],
-        state: pending.state
+        state: pending.state,
       };
     } catch (error) {
       logger.error("Error getting pending disambiguation", error);
@@ -103,7 +104,7 @@ export class ConversationStateService {
    */
   static async processSelection(
     conversationId: string,
-    selectedIndices: number[]
+    selectedIndices: number[],
   ): Promise<ExerciseOption[]> {
     try {
       const [conversation] = await db
@@ -118,10 +119,10 @@ export class ConversationStateService {
 
       const state = conversation.state as any;
       const options = state.options || [];
-      
+
       // Get selected exercises based on indices (1-based from user input)
       const selectedExercises = selectedIndices
-        .map(idx => options[idx - 1])
+        .map((idx) => options[idx - 1])
         .filter(Boolean);
 
       // Update conversation state to completed
@@ -132,15 +133,15 @@ export class ConversationStateService {
           state: {
             ...state,
             selections: selectedExercises.map((ex: ExerciseOption) => ex.name),
-            completedAt: new Date().toISOString()
+            completedAt: new Date().toISOString(),
           },
-          updatedAt: new Date()
+          updatedAt: new Date(),
         })
         .where(eq(conversationState.id, conversationId));
 
       logger.info("Processed selection", {
         conversationId,
-        selectedCount: selectedExercises.length
+        selectedCount: selectedExercises.length,
       });
 
       return selectedExercises;
@@ -155,7 +156,7 @@ export class ConversationStateService {
    */
   static async updateDisambiguationAttempts(
     stateId: string,
-    attempts: number
+    attempts: number,
   ): Promise<void> {
     try {
       await db
@@ -173,10 +174,10 @@ export class ConversationStateService {
               ${attempts}::jsonb
             )
           `,
-          updatedAt: new Date()
+          updatedAt: new Date(),
         })
         .where(eq(conversationState.id, stateId));
-        
+
       logger.info("Updated clarification attempts", { stateId, attempts });
     } catch (error) {
       logger.error("Error updating clarification attempts", error);
@@ -192,15 +193,13 @@ export class ConversationStateService {
       const cutoffDate = new Date();
       cutoffDate.setDate(cutoffDate.getDate() - daysOld);
 
-      const result = await db
-        .delete(conversationState)
-        .where(
-          and(
-            eq(conversationState.currentStep, "completed"),
-            // Note: We'd need to add a less than operator for timestamp comparison
-            // This is pseudo-code for the concept
-          )
-        );
+      const result = await db.delete(conversationState).where(
+        and(
+          eq(conversationState.currentStep, "completed"),
+          // Note: We'd need to add a less than operator for timestamp comparison
+          // This is pseudo-code for the concept
+        ),
+      );
 
       logger.info("Cleaned up old conversation states");
       return 0; // Return count when implemented

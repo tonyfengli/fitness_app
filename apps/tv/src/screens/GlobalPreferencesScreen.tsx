@@ -90,6 +90,7 @@ interface ClientPreference {
 
 export function GlobalPreferencesScreen() {
   const navigation = useNavigation();
+  const queryClient = useQueryClient();
   const sessionId = navigation.getParam('sessionId');
   const [clients, setClients] = useState<ClientPreference[]>([]);
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'connecting'>('connecting');
@@ -291,17 +292,6 @@ export function GlobalPreferencesScreen() {
           
           // Save visualization data
           console.log('[TV GlobalPreferences] Saving visualization data...');
-          
-          // Navigate immediately before the async operation
-          console.log('[TV GlobalPreferences] About to navigate to WorkoutOverview with sessionId:', sessionId);
-          try {
-            navigation.navigate('WorkoutOverview', { sessionId });
-            console.log('[TV GlobalPreferences] Navigation called successfully');
-          } catch (navError) {
-            console.error('[TV GlobalPreferences] Navigation error:', navError);
-          }
-          
-          // Save visualization data after navigation
           await saveVisualization.mutateAsync({
             sessionId: sessionId!,
             visualizationData: {
@@ -313,6 +303,50 @@ export function GlobalPreferencesScreen() {
               sharedExerciseIds: blueprintResult.blueprint?.sharedExercisePool?.map((e: any) => e.id) || undefined
             }
           });
+          
+          // Poll for exercise selections to be ready
+          console.log('[TV GlobalPreferences] Waiting for exercise selections to be saved...');
+          let attempts = 0;
+          let selectionsReady = false;
+          const maxAttempts = 30; // 15 seconds max
+          
+          while (attempts < maxAttempts && !selectionsReady && isMounted) {
+            try {
+              const selections = await queryClient.fetchQuery(
+                api.workoutSelections.getSelections.queryOptions({ sessionId: sessionId! })
+              );
+              
+              if (selections && selections.length > 0) {
+                selectionsReady = true;
+                console.log('[TV GlobalPreferences] ✅ Exercise selections ready:', selections.length, 'exercises found');
+              } else {
+                attempts++;
+                console.log('[TV GlobalPreferences] ⏳ Waiting for selections... attempt', attempts, 'of', maxAttempts);
+                await new Promise(resolve => setTimeout(resolve, 500));
+              }
+            } catch (error) {
+              console.log('[TV GlobalPreferences] Error fetching selections, will retry:', error);
+              attempts++;
+              await new Promise(resolve => setTimeout(resolve, 500));
+            }
+          }
+          
+          if (!selectionsReady) {
+            console.warn('[TV GlobalPreferences] ⚠️ Exercise selections not ready after waiting, proceeding anyway');
+          }
+          
+          // Add a small delay for loader animation
+          console.log('[TV GlobalPreferences] Waiting for loader animation to complete...');
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
+          // Navigate after selections are confirmed
+          console.log('[TV GlobalPreferences] About to navigate to WorkoutOverview with sessionId:', sessionId);
+          try {
+            navigation.navigate('WorkoutOverview', { sessionId });
+            console.log('[TV GlobalPreferences] Navigation called successfully');
+          } catch (navError) {
+            console.error('[TV GlobalPreferences] Navigation error:', navError);
+          }
         } catch (error: any) {
           console.error('[TV GlobalPreferences] Error processing workout:', error);
           if (isMounted) {
@@ -331,7 +365,7 @@ export function GlobalPreferencesScreen() {
     return () => {
       isMounted = false;
     };
-  }, [blueprintResult, isGenerating, shouldGenerateBlueprint, sessionId, navigation]);
+  }, [blueprintResult, isGenerating, shouldGenerateBlueprint, sessionId, navigation, queryClient]);
   
   // Handle blueprint error
   useEffect(() => {
@@ -583,6 +617,8 @@ export function GlobalPreferencesScreen() {
     return (
       <WorkoutGenerationLoader
         clientNames={clients.map(c => c.userName || 'Unknown')}
+        durationMinutes={1}
+        forceComplete={!!blueprintResult}
         onCancel={() => {
           setIsGenerating(false);
           setShouldGenerateBlueprint(false);

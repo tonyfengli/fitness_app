@@ -1,8 +1,8 @@
-import type { Logger } from '../utils/logger';
-import type { LLMProvider } from '../config/llm';
-import type { ExerciseRepository } from '../repositories/exerciseRepository';
-import { ConsoleLogger } from '../utils/logger';
-import { createLLM } from '../config/llm';
+import type { LLMProvider } from "../config/llm";
+import type { ExerciseRepository } from "../repositories/exerciseRepository";
+import type { Logger } from "../utils/logger";
+import { createLLM } from "../config/llm";
+import { ConsoleLogger } from "../utils/logger";
 
 export interface ServiceContainer {
   logger: Logger;

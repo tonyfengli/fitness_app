@@ -1,20 +1,28 @@
-import { pgTable, index } from "drizzle-orm/pg-core";
+import { index, pgTable } from "drizzle-orm/pg-core";
+
 import { Business } from "./schema";
 
-export const user = pgTable("user", (t) => ({
-  id: t.text().primaryKey(),
-  name: t.text().notNull(),
-  email: t.text().notNull().unique(),
-  emailVerified: t.boolean().notNull().default(false),
-  password: t.text(), // Better Auth will handle this
-  phone: t.text(),
-  role: t.text().notNull().default('client'), // 'client' or 'trainer'
-  businessId: t.uuid().notNull().references(() => Business.id, { onDelete: "cascade" }),
-  createdAt: t.timestamp().notNull(),
-  updatedAt: t.timestamp().notNull(),
-}), (table) => ({
-  phoneIdx: index("user_phone_idx").on(table.phone),
-}));
+export const user = pgTable(
+  "user",
+  (t) => ({
+    id: t.text().primaryKey(),
+    name: t.text().notNull(),
+    email: t.text().notNull().unique(),
+    emailVerified: t.boolean().notNull().default(false),
+    password: t.text(), // Better Auth will handle this
+    phone: t.text(),
+    role: t.text().notNull().default("client"), // 'client' or 'trainer'
+    businessId: t
+      .uuid()
+      .notNull()
+      .references(() => Business.id, { onDelete: "cascade" }),
+    createdAt: t.timestamp().notNull(),
+    updatedAt: t.timestamp().notNull(),
+  }),
+  (table) => ({
+    phoneIdx: index("user_phone_idx").on(table.phone),
+  }),
+);
 
 export const session = pgTable("session", (t) => ({
   id: t.text().primaryKey(),

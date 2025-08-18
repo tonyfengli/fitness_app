@@ -1,4 +1,5 @@
 import { useState } from "react";
+
 import type { EditContext, ExerciseBlock } from "@acme/ui-desktop";
 
 interface ModalState<T = any> {
@@ -55,40 +56,40 @@ export function useModalState() {
     edit: { isOpen: false, data: null },
     duplicate: { isOpen: false, data: null },
     addExercise: { isOpen: false, data: null },
-    newWorkout: { isOpen: false, data: null }
+    newWorkout: { isOpen: false, data: null },
   });
 
   const openModal = <K extends keyof ModalsState>(
     type: K,
-    data?: ModalsState[K]['data']
+    data?: ModalsState[K]["data"],
   ) => {
-    setModals(prev => ({
+    setModals((prev) => ({
       ...prev,
-      [type]: { isOpen: true, data: data || null }
+      [type]: { isOpen: true, data: data || null },
     }));
   };
 
   const closeModal = <K extends keyof ModalsState>(type: K) => {
-    setModals(prev => ({
+    setModals((prev) => ({
       ...prev,
-      [type]: { isOpen: false, data: null }
+      [type]: { isOpen: false, data: null },
     }));
   };
 
   const updateModalData = <K extends keyof ModalsState>(
     type: K,
-    data: ModalsState[K]['data']
+    data: ModalsState[K]["data"],
   ) => {
-    setModals(prev => ({
+    setModals((prev) => ({
       ...prev,
-      [type]: { ...prev[type], data }
+      [type]: { ...prev[type], data },
     }));
   };
 
-  return { 
-    modals, 
-    openModal, 
-    closeModal, 
+  return {
+    modals,
+    openModal,
+    closeModal,
     updateModalData,
     // Convenience getters
     deleteWorkoutModal: modals.deleteWorkout,
@@ -97,6 +98,6 @@ export function useModalState() {
     editModal: modals.edit,
     duplicateModal: modals.duplicate,
     addExerciseModal: modals.addExercise,
-    newWorkoutModal: modals.newWorkout
+    newWorkoutModal: modals.newWorkout,
   };
 }

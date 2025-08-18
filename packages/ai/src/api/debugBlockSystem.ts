@@ -17,7 +17,7 @@ export interface DebugResponse {
 export function getDebugLogs(): DebugResponse {
   return {
     enabled: true,
-    logs: BlockDebugger.getLogs()
+    logs: BlockDebugger.getLogs(),
   };
 }
 
@@ -28,7 +28,7 @@ export function getDebugReport(): DebugResponse {
   return {
     enabled: true,
     logs: BlockDebugger.getLogs(),
-    report: BlockDebugger.generateReport()
+    report: BlockDebugger.generateReport(),
   };
 }
 

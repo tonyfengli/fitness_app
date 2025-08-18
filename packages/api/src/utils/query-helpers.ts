@@ -1,19 +1,20 @@
-import { and, desc, eq, inArray } from "@acme/db";
 import type { Database } from "@acme/db/client";
-import { Workout, WorkoutExercise, exercises } from "@acme/db/schema";
+import { and, desc, eq, inArray } from "@acme/db";
+import { exercises, Workout, WorkoutExercise } from "@acme/db/schema";
+
 import { createLogger } from "./logger";
 
-const logger = createLogger('QueryHelpers');
+const logger = createLogger("QueryHelpers");
 
 /**
  * Optimized query helpers to prevent N+1 query problems
- * 
+ *
  * PERFORMANCE OPTIMIZATION:
  * This module contains query helpers that solve N+1 query problems by:
  * - Fetching all related data in minimal queries (usually 2)
  * - Grouping data in memory instead of making multiple DB calls
  * - Providing performance monitoring capabilities
- * 
+ *
  * See PERFORMANCE_OPTIMIZATION.md for detailed documentation
  */
 
@@ -45,7 +46,7 @@ export async function getWorkoutsWithExercisesOptimized(
     userId?: string;
     businessId: string;
     limit?: number;
-  }
+  },
 ): Promise<WorkoutWithExercises[]> {
   // Step 1: Get workouts
   const workoutQuery = db
@@ -62,8 +63,8 @@ export async function getWorkoutsWithExercisesOptimized(
     .where(
       and(
         filters.userId ? eq(Workout.userId, filters.userId) : undefined,
-        eq(Workout.businessId, filters.businessId)
-      )
+        eq(Workout.businessId, filters.businessId),
+      ),
     )
     .orderBy(desc(Workout.createdAt));
 
@@ -78,7 +79,7 @@ export async function getWorkoutsWithExercisesOptimized(
   }
 
   // Step 2: Get all exercises for all workouts in a single query
-  const workoutIds = workouts.map(w => w.id);
+  const workoutIds = workouts.map((w) => w.id);
   const allExercises = await db
     .select({
       workoutExerciseId: WorkoutExercise.id,
@@ -96,68 +97,77 @@ export async function getWorkoutsWithExercisesOptimized(
     .orderBy(WorkoutExercise.orderIndex);
 
   // Step 3: Group exercises by workout
-  const exercisesByWorkout = allExercises.reduce((acc, row) => {
-    if (!acc[row.workoutId]) {
-      acc[row.workoutId] = [];
-    }
-    acc[row.workoutId]!.push({
-      workoutExerciseId: row.workoutExerciseId,
-      orderIndex: row.orderIndex,
-      setsCompleted: row.setsCompleted,
-      groupName: row.groupName,
-      exercise: {
-        id: row.exerciseId,
-        name: row.exerciseName,
-        primaryMuscle: row.primaryMuscle,
-      },
-    });
-    return acc;
-  }, {} as Record<string, Array<{
-    workoutExerciseId: string;
-    orderIndex: number;
-    setsCompleted: number;
-    groupName: string | null;
-    exercise: {
-      id: string;
-      name: string;
-      primaryMuscle: string | null;
-    };
-  }>>);
+  const exercisesByWorkout = allExercises.reduce(
+    (acc, row) => {
+      if (!acc[row.workoutId]) {
+        acc[row.workoutId] = [];
+      }
+      acc[row.workoutId]!.push({
+        workoutExerciseId: row.workoutExerciseId,
+        orderIndex: row.orderIndex,
+        setsCompleted: row.setsCompleted,
+        groupName: row.groupName,
+        exercise: {
+          id: row.exerciseId,
+          name: row.exerciseName,
+          primaryMuscle: row.primaryMuscle,
+        },
+      });
+      return acc;
+    },
+    {} as Record<
+      string,
+      Array<{
+        workoutExerciseId: string;
+        orderIndex: number;
+        setsCompleted: number;
+        groupName: string | null;
+        exercise: {
+          id: string;
+          name: string;
+          primaryMuscle: string | null;
+        };
+      }>
+    >,
+  );
 
   // Step 4: Transform to final format
-  return workouts.map(workout => {
+  return workouts.map((workout) => {
     const workoutExercises = exercisesByWorkout[workout.id] || [];
-    
+
     // Initialize blocks based on workout type and llmOutput
-    const initialBlocks: Record<string, Array<{ id: string; exerciseId: string; name: string; sets: number }>> = {};
-    
+    const initialBlocks: Record<
+      string,
+      Array<{ id: string; exerciseId: string; name: string; sets: number }>
+    > = {};
+
     // Determine expected blocks based on workout type or llmOutput
-    if (workout.llmOutput && typeof workout.llmOutput === 'object') {
+    if (workout.llmOutput && typeof workout.llmOutput === "object") {
       // Extract block names from llmOutput (e.g., blockA, blockB, blockC, round1, round2, etc.)
-      Object.keys(workout.llmOutput).forEach(key => {
-        if (key.startsWith('block') || key.startsWith('round')) {
+      Object.keys(workout.llmOutput).forEach((key) => {
+        if (key.startsWith("block") || key.startsWith("round")) {
           // Convert blockA -> Block A, round1 -> Round 1
-          const blockName = key.startsWith('block') 
-            ? `Block ${key.replace('block', '').toUpperCase()}`
-            : `Round ${key.replace('round', '')}`;
+          const blockName = key.startsWith("block")
+            ? `Block ${key.replace("block", "").toUpperCase()}`
+            : `Round ${key.replace("round", "")}`;
           initialBlocks[blockName] = [];
         }
       });
-    } else if (workout.workoutType === 'circuit') {
+    } else if (workout.workoutType === "circuit") {
       // Default circuit blocks
-      initialBlocks['Round 1'] = [];
-      initialBlocks['Round 2'] = [];
-      initialBlocks['Round 3'] = [];
+      initialBlocks["Round 1"] = [];
+      initialBlocks["Round 2"] = [];
+      initialBlocks["Round 3"] = [];
     } else {
       // Default standard/full_body blocks
-      initialBlocks['Block A'] = [];
-      initialBlocks['Block B'] = [];
-      initialBlocks['Block C'] = [];
+      initialBlocks["Block A"] = [];
+      initialBlocks["Block B"] = [];
+      initialBlocks["Block C"] = [];
     }
-    
+
     // Group actual exercises by block
     const exerciseBlocks = workoutExercises.reduce((acc, we) => {
-      const blockName = we.groupName || 'Block A';
+      const blockName = we.groupName || "Block A";
       if (!acc[blockName]) {
         acc[blockName] = [];
       }
@@ -187,18 +197,18 @@ export async function getWorkoutsWithExercisesOptimized(
  */
 export async function withPerformanceMonitoring<T>(
   operation: string,
-  fn: () => Promise<T>
+  fn: () => Promise<T>,
 ): Promise<T> {
   const start = Date.now();
   try {
     const result = await fn();
     const duration = Date.now() - start;
-    
+
     // Log performance metrics (can be sent to monitoring service)
     if (duration > 1000) {
       logger.performance(operation, duration);
     }
-    
+
     return result;
   } catch (error) {
     const duration = Date.now() - start;

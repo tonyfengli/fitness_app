@@ -5,7 +5,7 @@
 
 export interface ExerciseRequests {
   include: string[]; // Exercise names to include
-  avoid: string[];   // Exercise names to avoid
+  avoid: string[]; // Exercise names to avoid
 }
 
 export interface ClientContext {
@@ -13,7 +13,12 @@ export interface ClientContext {
   name: string;
   strength_capacity: "very_low" | "low" | "moderate" | "high";
   skill_capacity: "very_low" | "low" | "moderate" | "high";
-  primary_goal?: "mobility" | "strength" | "general_fitness" | "hypertrophy" | "burn_fat";
+  primary_goal?:
+    | "mobility"
+    | "strength"
+    | "general_fitness"
+    | "hypertrophy"
+    | "burn_fat";
   intensity?: "low" | "moderate" | "high" | "intense"; // Workout intensity level (not fatigue profile)
   muscle_target?: string[]; // Array of muscles to target more in programming
   muscle_lessen?: string[]; // Array of muscles to work less in programming
@@ -23,7 +28,11 @@ export interface ClientContext {
   templateType?: "standard" | "circuit" | "full_body"; // Workout template type
   default_sets?: number; // Default number of sets for this client's workouts
   favoriteExerciseIds?: string[]; // Array of exercise IDs marked as favorites by the client
-  workoutType?: "full_body_with_finisher" | "full_body_without_finisher" | "targeted_with_finisher" | "targeted_without_finisher"; // Client's specific workout type preference
+  workoutType?:
+    | "full_body_with_finisher"
+    | "full_body_without_finisher"
+    | "targeted_with_finisher"
+    | "targeted_without_finisher"; // Client's specific workout type preference
 }
 
 /**
@@ -42,7 +51,7 @@ export function createDefaultClientContext(
   businessId?: string,
   name: string = "Default Client",
   templateType: ClientContext["templateType"] = "standard",
-  defaultSets: number = 20
+  defaultSets: number = 20,
 ): ClientContext {
   return {
     user_id: userId,
@@ -57,7 +66,7 @@ export function createDefaultClientContext(
     avoid_joints: avoidJoints,
     business_id: businessId,
     templateType: templateType,
-    default_sets: defaultSets
+    default_sets: defaultSets,
   };
 }
 

@@ -27,7 +27,7 @@ export function createLLM(config: LLMConfig = defaultLLMConfig): LLMProvider {
     timeout: config.timeout,
     maxRetries: 0, // Disable retries to see raw behavior
   };
-  
+
   // For GPT-5, parameters might need to be passed via modelKwargs
   const modelKwargs: any = {};
 
@@ -57,25 +57,28 @@ export function createLLM(config: LLMConfig = defaultLLMConfig): LLMProvider {
       options.verbosity = config.verbosity;
       modelKwargs.verbosity = config.verbosity;
     }
-    
+
     // Approach 2: modelKwargs (LangChain might need this)
     if (Object.keys(modelKwargs).length > 0) {
       options.modelKwargs = modelKwargs;
     }
-    
+
     // Approach 3: Try configuration object
     options.configuration = {
       reasoning_effort: config.reasoning_effort,
-      verbosity: config.verbosity
+      verbosity: config.verbosity,
     };
   }
 
   const llm = new ChatOpenAI(options);
-  
+
   // Add debugging for GPT-5 responses in development
-  if (process.env.NODE_ENV === 'development' && (config.modelName === 'gpt-5' || config.modelName === 'gpt-5-mini')) {
+  if (
+    process.env.NODE_ENV === "development" &&
+    (config.modelName === "gpt-5" || config.modelName === "gpt-5-mini")
+  ) {
     console.log(`[createLLM] ${config.modelName} configuration:`, options);
   }
-  
+
   return llm;
 }

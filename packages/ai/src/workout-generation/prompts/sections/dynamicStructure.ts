@@ -1,6 +1,8 @@
-import type { WorkoutStructure } from '../types';
+import type { WorkoutStructure } from "../types";
 
-export function generateStructureConstraints(structure?: WorkoutStructure): string {
+export function generateStructureConstraints(
+  structure?: WorkoutStructure,
+): string {
   // If no structure provided, use the default 4-block structure
   if (!structure) {
     return `Exercise selection constraints:
@@ -12,18 +14,19 @@ export function generateStructureConstraints(structure?: WorkoutStructure): stri
 
   // Generate constraints based on the provided structure
   const sectionConstraints = structure.sections
-    .map(section => {
-      const exerciseRange = section.exerciseCount.min === section.exerciseCount.max
-        ? `exactly ${section.exerciseCount.min} exercise${section.exerciseCount.min > 1 ? 's' : ''}`
-        : `${section.exerciseCount.min}-${section.exerciseCount.max} exercises`;
-      
-      return `- ${section.name}: Select ${exerciseRange}${section.setGuidance ? ` (${section.setGuidance})` : ''}${section.description ? ` - ${section.description}` : ''}`;
+    .map((section) => {
+      const exerciseRange =
+        section.exerciseCount.min === section.exerciseCount.max
+          ? `exactly ${section.exerciseCount.min} exercise${section.exerciseCount.min > 1 ? "s" : ""}`
+          : `${section.exerciseCount.min}-${section.exerciseCount.max} exercises`;
+
+      return `- ${section.name}: Select ${exerciseRange}${section.setGuidance ? ` (${section.setGuidance})` : ""}${section.description ? ` - ${section.description}` : ""}`;
     })
-    .join('\n');
+    .join("\n");
 
   const totalLimit = structure.totalExerciseLimit
     ? `\n- IMPORTANT: Maximum ${structure.totalExerciseLimit} unique exercises TOTAL across ALL sections`
-    : '';
+    : "";
 
   return `Exercise selection constraints:
 ${sectionConstraints}${totalLimit}`;
@@ -44,11 +47,11 @@ export function generateOutputFormat(structure?: WorkoutStructure): string {
 
   // Generate format based on structure
   const sectionFormats = structure.sections
-    .map(section => {
-      const key = section.name.toLowerCase().replace(/\s+/g, '');
+    .map((section) => {
+      const key = section.name.toLowerCase().replace(/\s+/g, "");
       return `  "${key}": [{"exercise": "exercise name", "sets": number}]`;
     })
-    .join(',\n');
+    .join(",\n");
 
   return `Return a JSON object with this structure:
 {

@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+
 import { getSession } from "~/auth/server";
 import TrainerDashboardContent from "./trainer-dashboard-content";
 

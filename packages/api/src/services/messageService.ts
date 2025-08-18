@@ -1,6 +1,7 @@
+import { desc, eq } from "@acme/db";
 import { db } from "@acme/db/client";
 import { messages } from "@acme/db/schema";
-import { eq, desc } from "@acme/db";
+
 import { createLogger } from "../utils/logger";
 
 const logger = createLogger("MessageService");
@@ -8,9 +9,9 @@ const logger = createLogger("MessageService");
 interface SaveMessageParams {
   userId: string;
   businessId: string;
-  direction: 'inbound' | 'outbound';
+  direction: "inbound" | "outbound";
   content: string;
-  channel?: 'sms' | 'in_app';
+  channel?: "sms" | "in_app";
   phoneNumber?: string;
   metadata?: {
     intent?: { type: string; confidence: number };
@@ -22,7 +23,7 @@ interface SaveMessageParams {
     llmParsing?: any; // For LLM parsing metadata
     [key: string]: any; // Allow additional properties
   };
-  status?: 'sent' | 'delivered' | 'failed' | 'read';
+  status?: "sent" | "delivered" | "failed" | "read";
 }
 
 export async function saveMessage(params: SaveMessageParams) {
@@ -33,18 +34,18 @@ export async function saveMessage(params: SaveMessageParams) {
         userId: params.userId,
         businessId: params.businessId,
         direction: params.direction,
-        channel: params.channel || 'sms',
+        channel: params.channel || "sms",
         content: params.content,
         phoneNumber: params.phoneNumber,
         metadata: params.metadata || {},
-        status: params.status || 'sent',
+        status: params.status || "sent",
       })
       .returning();
 
-    logger.info("Message saved", { 
-      messageId: savedMessage?.id, 
+    logger.info("Message saved", {
+      messageId: savedMessage?.id,
       userId: params.userId,
-      direction: params.direction 
+      direction: params.direction,
     });
 
     return savedMessage;

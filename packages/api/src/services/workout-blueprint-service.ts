@@ -1,23 +1,26 @@
-import { db } from "@acme/db/client";
-import { eq, and, or } from "@acme/db";
-import { 
-  TrainingSession, 
-  UserTrainingSession, 
-  WorkoutPreferences, 
-  UserProfile,
-  UserExerciseRatings,
-  user
-} from "@acme/db/schema";
-import { 
-  generateGroupWorkoutBlueprint,
-  type ClientContext,
-  type GroupContext,
-  type ScoredExercise,
-  type Exercise
-} from "@acme/ai";
-import { ExerciseFilterService, type WorkoutGenerationInput } from "./exercise-filter-service";
-import { createLogger } from "../utils/logger";
 import { Redis } from "ioredis";
+
+import type {
+  ClientContext,
+  Exercise,
+  GroupContext,
+  ScoredExercise,
+} from "@acme/ai";
+import { generateGroupWorkoutBlueprint } from "@acme/ai";
+import { and, eq, or } from "@acme/db";
+import { db } from "@acme/db/client";
+import {
+  TrainingSession,
+  user,
+  UserExerciseRatings,
+  UserProfile,
+  UserTrainingSession,
+  WorkoutPreferences,
+} from "@acme/db/schema";
+
+import type { WorkoutGenerationInput } from "./exercise-filter-service";
+import { createLogger } from "../utils/logger";
+import { ExerciseFilterService } from "./exercise-filter-service";
 
 const logger = createLogger("WorkoutBlueprintService");
 
@@ -28,24 +31,29 @@ let redis: Redis | null = null;
 if (process.env.REDIS_HOST || process.env.REDIS_URL) {
   try {
     redis = new Redis({
-      host: process.env.REDIS_HOST || 'localhost',
-      port: parseInt(process.env.REDIS_PORT || '6379'),
+      host: process.env.REDIS_HOST || "localhost",
+      port: parseInt(process.env.REDIS_PORT || "6379"),
       password: process.env.REDIS_PASSWORD,
-      db: parseInt(process.env.REDIS_DB || '0'),
+      db: parseInt(process.env.REDIS_DB || "0"),
       lazyConnect: true,
       enableOfflineQueue: false,
       retryStrategy: (times) => {
         if (times > 3) {
-          logger.warn("Redis connection failed after 3 attempts, blueprint caching disabled");
+          logger.warn(
+            "Redis connection failed after 3 attempts, blueprint caching disabled",
+          );
           return null;
         }
         return Math.min(times * 100, 2000);
-      }
+      },
     });
 
     // Attempt to connect to Redis
     redis.connect().catch((err) => {
-      logger.warn("Redis connection failed, blueprint caching will be disabled", { error: err.message });
+      logger.warn(
+        "Redis connection failed, blueprint caching will be disabled",
+        { error: err.message },
+      );
       redis = null;
     });
   } catch (error) {
@@ -81,15 +89,18 @@ export class WorkoutBlueprintService {
   static async prepareClientsForBlueprint(
     sessionId: string,
     businessId: string,
-    userId: string
+    userId: string,
   ): Promise<BlueprintSetupResult> {
-    logger.info("Preparing clients for blueprint generation", { sessionId, businessId });
+    logger.info("Preparing clients for blueprint generation", {
+      sessionId,
+      businessId,
+    });
 
     // Get session details
     const [session] = await db
       .select({
         id: TrainingSession.id,
-        templateType: TrainingSession.templateType
+        templateType: TrainingSession.templateType,
       })
       .from(TrainingSession)
       .where(eq(TrainingSession.id, sessionId))
@@ -104,21 +115,18 @@ export class WorkoutBlueprintService {
       .select({
         userId: UserTrainingSession.userId,
         userName: user.name,
-        status: UserTrainingSession.status
+        status: UserTrainingSession.status,
       })
       .from(UserTrainingSession)
-      .innerJoin(
-        user,
-        eq(user.id, UserTrainingSession.userId)
-      )
+      .innerJoin(user, eq(user.id, UserTrainingSession.userId))
       .where(
         and(
           eq(UserTrainingSession.trainingSessionId, sessionId),
           or(
             eq(UserTrainingSession.status, "checked_in"),
-            eq(UserTrainingSession.status, "ready")
-          )
-        )
+            eq(UserTrainingSession.status, "ready"),
+          ),
+        ),
       );
 
     if (checkedInClients.length === 0) {
@@ -134,8 +142,8 @@ export class WorkoutBlueprintService {
           .where(
             and(
               eq(WorkoutPreferences.userId, client.userId),
-              eq(WorkoutPreferences.trainingSessionId, sessionId)
-            )
+              eq(WorkoutPreferences.trainingSessionId, sessionId),
+            ),
           )
           .limit(1);
 
@@ -145,54 +153,79 @@ export class WorkoutBlueprintService {
           .where(
             and(
               eq(UserProfile.userId, client.userId),
-              eq(UserProfile.businessId, businessId)
-            )
+              eq(UserProfile.businessId, businessId),
+            ),
           )
           .limit(1);
 
         // Get favorite exercises for this client
         const favoriteExercises = await db
           .select({
-            exerciseId: UserExerciseRatings.exerciseId
+            exerciseId: UserExerciseRatings.exerciseId,
           })
           .from(UserExerciseRatings)
           .where(
             and(
               eq(UserExerciseRatings.userId, client.userId),
               eq(UserExerciseRatings.businessId, businessId),
-              eq(UserExerciseRatings.ratingType, 'favorite')
-            )
+              eq(UserExerciseRatings.ratingType, "favorite"),
+            ),
           );
-        
-        logger.info(`Fetched ${favoriteExercises.length} favorite exercises for ${client.userName}`, {
-          userId: client.userId,
-          favoriteIds: favoriteExercises.map(f => f.exerciseId)
-        });
 
-        return { ...client, preferences, userProfile, favoriteExerciseIds: favoriteExercises.map(f => f.exerciseId) };
-      })
+        logger.info(
+          `Fetched ${favoriteExercises.length} favorite exercises for ${client.userName}`,
+          {
+            userId: client.userId,
+            favoriteIds: favoriteExercises.map((f) => f.exerciseId),
+          },
+        );
+
+        return {
+          ...client,
+          preferences,
+          userProfile,
+          favoriteExerciseIds: favoriteExercises.map((f) => f.exerciseId),
+        };
+      }),
     );
 
     // Create client contexts with favorite exercise IDs
-    const clientContexts: ClientContext[] = clientsWithData.map(client => {
-      logger.info(`Creating context for ${client.userName} with ${client.favoriteExerciseIds?.length || 0} favorites`);
+    const clientContexts: ClientContext[] = clientsWithData.map((client) => {
+      logger.info(
+        `Creating context for ${client.userName} with ${client.favoriteExerciseIds?.length || 0} favorites`,
+      );
       return {
         user_id: client.userId,
-        name: client.userName ?? 'Unknown',
-        strength_capacity: (client.userProfile?.strengthLevel ?? 'moderate') as "very_low" | "low" | "moderate" | "high",
-        skill_capacity: (client.userProfile?.skillLevel ?? 'moderate') as "very_low" | "low" | "moderate" | "high",
-        primary_goal: (client.preferences?.sessionGoal ?? 'general_fitness') as any,
-        intensity: (client.preferences?.intensity ?? 'moderate') as "low" | "moderate" | "high",
-        muscle_target: client.preferences?.muscleTargets?.map(m => m.toLowerCase()) || [],
-        muscle_lessen: client.preferences?.muscleLessens?.map(m => m.toLowerCase()) || [],
+        name: client.userName ?? "Unknown",
+        strength_capacity: (client.userProfile?.strengthLevel ?? "moderate") as
+          | "very_low"
+          | "low"
+          | "moderate"
+          | "high",
+        skill_capacity: (client.userProfile?.skillLevel ?? "moderate") as
+          | "very_low"
+          | "low"
+          | "moderate"
+          | "high",
+        primary_goal: (client.preferences?.sessionGoal ??
+          "general_fitness") as any,
+        intensity: (client.preferences?.intensity ?? "moderate") as
+          | "low"
+          | "moderate"
+          | "high",
+        muscle_target:
+          client.preferences?.muscleTargets?.map((m) => m.toLowerCase()) || [],
+        muscle_lessen:
+          client.preferences?.muscleLessens?.map((m) => m.toLowerCase()) || [],
         exercise_requests: {
           include: client.preferences?.includeExercises || [],
-          avoid: client.preferences?.avoidExercises || []
+          avoid: client.preferences?.avoidExercises || [],
         },
         avoid_joints: client.preferences?.avoidJoints || [],
         default_sets: 10,
         favoriteExerciseIds: client.favoriteExerciseIds,
-        workoutType: client.preferences?.workoutType as ClientContext["workoutType"]
+        workoutType: client.preferences
+          ?.workoutType as ClientContext["workoutType"],
       };
     });
 
@@ -205,7 +238,7 @@ export class WorkoutBlueprintService {
     for (let i = 0; i < clientContexts.length; i++) {
       const client = clientsWithData[i];
       const clientContext = clientContexts[i];
-      
+
       if (!client || !clientContext) {
         logger.warn("Skipping client due to missing data", { index: i });
         continue;
@@ -213,9 +246,16 @@ export class WorkoutBlueprintService {
 
       const filterInput: WorkoutGenerationInput = {
         clientId: client.userId,
-        sessionGoal: (clientContext.primary_goal === 'strength' ? 'strength' : 'stability') as "strength" | "stability",
-        intensity: (clientContext.intensity === 'intense' ? 'high' : clientContext.intensity || 'moderate') as "low" | "moderate" | "high",
-        template: 'full_body' as "standard" | "circuit" | "full_body", // Always use full_body for BMF
+        sessionGoal: (clientContext.primary_goal === "strength"
+          ? "strength"
+          : "stability") as "strength" | "stability",
+        intensity: (clientContext.intensity === "intense"
+          ? "high"
+          : clientContext.intensity || "moderate") as
+          | "low"
+          | "moderate"
+          | "high",
+        template: "full_body" as "standard" | "circuit" | "full_body", // Always use full_body for BMF
         includeExercises: clientContext.exercise_requests?.include || [],
         avoidExercises: clientContext.exercise_requests?.avoid || [],
         muscleTarget: clientContext.muscle_target || [],
@@ -227,10 +267,13 @@ export class WorkoutBlueprintService {
 
       // Run Phase 1 & 2 using the filter service
       // Removed workout blueprint filtering log
-      const filteredResult = await filterService.filterForWorkoutGeneration(filterInput, {
-        userId: client.userId, // Use client's userId, not the session owner's userId
-        businessId
-      });
+      const filteredResult = await filterService.filterForWorkoutGeneration(
+        filterInput,
+        {
+          userId: client.userId, // Use client's userId, not the session owner's userId
+          businessId,
+        },
+      );
 
       // Store pre-scored exercises for this client
       preScoredExercises.set(clientContext.user_id, filteredResult.exercises);
@@ -250,21 +293,22 @@ export class WorkoutBlueprintService {
       clients: clientContexts,
       sessionId,
       businessId,
-      templateType: (session.templateType || 'full_body_bmf') as 'full_body_bmf'
+      templateType: (session.templateType ||
+        "full_body_bmf") as "full_body_bmf",
       // Removed workoutType from group level - it's now in each ClientContext
     };
 
     logger.info("Client preparation completed", {
       sessionId,
       clientCount: clientContexts.length,
-      exercisePoolSize: exercisePool.length
+      exercisePoolSize: exercisePool.length,
     });
 
     return {
       clientContexts,
       preScoredExercises,
       exercisePool,
-      groupContext
+      groupContext,
     };
   }
 
@@ -275,22 +319,22 @@ export class WorkoutBlueprintService {
     sessionId: string,
     businessId: string,
     userId: string,
-    forceRegenerate: boolean = false
+    forceRegenerate: boolean = false,
   ): Promise<any> {
     const cacheKey = `${this.CACHE_PREFIX}${sessionId}`;
 
     // Try to get from cache if not forcing regeneration
-    if (!forceRegenerate && redis && redis.status === 'ready') {
+    if (!forceRegenerate && redis && redis.status === "ready") {
       try {
         const cached = await redis.get(cacheKey);
         if (cached) {
           const cacheEntry: BlueprintCacheEntry = JSON.parse(cached);
           const age = Date.now() - cacheEntry.timestamp;
-          
+
           logger.info("Blueprint cache hit", {
             sessionId,
             ageMs: age,
-            clientCount: cacheEntry.clientCount
+            clientCount: cacheEntry.clientCount,
           });
 
           return cacheEntry.blueprint;
@@ -302,30 +346,30 @@ export class WorkoutBlueprintService {
 
     // Generate new blueprint
     logger.info("Generating new blueprint", { sessionId, forceRegenerate });
-    
-    const setup = await this.prepareClientsForBlueprint(sessionId, businessId, userId);
-    
+
+    const setup = await this.prepareClientsForBlueprint(
+      sessionId,
+      businessId,
+      userId,
+    );
+
     const blueprint = await generateGroupWorkoutBlueprint(
       setup.groupContext,
       setup.exercisePool,
-      setup.preScoredExercises
+      setup.preScoredExercises,
     );
 
     // Cache the blueprint if Redis is available
-    if (redis && redis.status === 'ready') {
+    if (redis && redis.status === "ready") {
       try {
         const cacheEntry: BlueprintCacheEntry = {
           blueprint,
           timestamp: Date.now(),
           clientCount: setup.clientContexts.length,
-          templateType: setup.groupContext.templateType || 'workout'
+          templateType: setup.groupContext.templateType || "workout",
         };
 
-        await redis.setex(
-          cacheKey,
-          this.CACHE_TTL,
-          JSON.stringify(cacheEntry)
-        );
+        await redis.setex(cacheKey, this.CACHE_TTL, JSON.stringify(cacheEntry));
 
         logger.info("Blueprint cached", { sessionId, ttl: this.CACHE_TTL });
       } catch (error) {
@@ -341,12 +385,12 @@ export class WorkoutBlueprintService {
    * Called when preferences are updated
    */
   static async invalidateCache(sessionId: string): Promise<void> {
-    if (!redis || redis.status !== 'ready') {
+    if (!redis || redis.status !== "ready") {
       return;
     }
 
     const cacheKey = `${this.CACHE_PREFIX}${sessionId}`;
-    
+
     try {
       await redis.del(cacheKey);
       logger.info("Blueprint cache invalidated", { sessionId });
@@ -362,7 +406,7 @@ export class WorkoutBlueprintService {
     connected: boolean;
     cachedSessions: number;
   }> {
-    if (!redis || redis.status !== 'ready') {
+    if (!redis || redis.status !== "ready") {
       return { connected: false, cachedSessions: 0 };
     }
 
@@ -370,7 +414,7 @@ export class WorkoutBlueprintService {
       const keys = await redis.keys(`${this.CACHE_PREFIX}*`);
       return {
         connected: true,
-        cachedSessions: keys.length
+        cachedSessions: keys.length,
       };
     } catch (error) {
       logger.warn("Error getting cache stats", { error });
@@ -382,7 +426,7 @@ export class WorkoutBlueprintService {
    * Cleanup expired cache entries (called periodically)
    */
   static async cleanupCache(): Promise<void> {
-    if (!redis || redis.status !== 'ready') {
+    if (!redis || redis.status !== "ready") {
       return;
     }
 

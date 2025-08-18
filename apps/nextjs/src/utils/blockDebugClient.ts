@@ -2,10 +2,10 @@
  * Client-side utilities for block system debugging
  */
 
-import { isDebugEnabled } from './debugConfig';
+import { isDebugEnabled } from "./debugConfig";
 
 export class BlockDebugClient {
-  private static baseUrl = '/api/debug/blocks';
+  private static baseUrl = "/api/debug/blocks";
 
   /**
    * Get current debug logs
@@ -28,9 +28,9 @@ export class BlockDebugClient {
    */
   static async clearLogs(): Promise<any> {
     const response = await fetch(this.baseUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'clear' })
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "clear" }),
     });
     return response.json();
   }
@@ -40,9 +40,9 @@ export class BlockDebugClient {
    */
   static async enable(): Promise<any> {
     const response = await fetch(this.baseUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'enable' })
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "enable" }),
     });
     return response.json();
   }
@@ -52,9 +52,9 @@ export class BlockDebugClient {
    */
   static async disable(): Promise<any> {
     const response = await fetch(this.baseUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'disable' })
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "disable" }),
     });
     return response.json();
   }
@@ -64,11 +64,11 @@ export class BlockDebugClient {
    */
   static async downloadReport(): Promise<void> {
     const data = await this.getReport();
-    const blob = new Blob([data.report || JSON.stringify(data, null, 2)], { 
-      type: 'text/plain' 
+    const blob = new Blob([data.report || JSON.stringify(data, null, 2)], {
+      type: "text/plain",
     });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
+    const a = document.createElement("a");
     a.href = url;
     a.download = `block-debug-${new Date().toISOString()}.txt`;
     document.body.appendChild(a);
@@ -82,7 +82,7 @@ export class BlockDebugClient {
    */
   static async logToConsole(): Promise<void> {
     const data = await this.getLogs();
-    console.group('🔍 Block System Debug Logs');
+    console.group("🔍 Block System Debug Logs");
     data.logs.forEach((log: any, index: number) => {
       console.group(`[${index}] ${log.stage} - ${log.timestamp}`);
       console.log(log.data || log);
@@ -93,10 +93,12 @@ export class BlockDebugClient {
 }
 
 // Make available globally in development
-if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
   (window as any).blockDebug = BlockDebugClient;
   // Only show console messages if explicitly enabled
   if (isDebugEnabled()) {
-    console.log('🔧 Block debug available (disabled by default). Enable with: blockDebug.enable()');
+    console.log(
+      "🔧 Block debug available (disabled by default). Enable with: blockDebug.enable()",
+    );
   }
 }

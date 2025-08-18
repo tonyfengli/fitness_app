@@ -1,35 +1,45 @@
 #!/usr/bin/env node
-import { save, list, generate, listSavedScenarios, generateTestFromScenario } from './debugToTest.js';
+import {
+  generate,
+  generateTestFromScenario,
+  list,
+  listSavedScenarios,
+  save,
+} from "./debugToTest.js";
 
 const command = process.argv[2];
 const args = process.argv.slice(3);
 
-console.log('🧪 Debug to Test CLI\n');
+console.log("🧪 Debug to Test CLI\n");
 
 switch (command) {
-  case 'save':
+  case "save":
     if (args.length < 2) {
-      console.error('Usage: npm run debug-to-test save <name> <description> [notes]');
+      console.error(
+        "Usage: npm run debug-to-test save <name> <description> [notes]",
+      );
       process.exit(1);
     }
     save(args[0]!, args[1]!, args[2]);
     break;
-    
-  case 'list':
+
+  case "list":
     list();
     break;
-    
-  case 'generate':
+
+  case "generate":
     if (args.length < 1) {
-      console.error('Usage: npm run debug-to-test generate <scenario_id_or_name>');
+      console.error(
+        "Usage: npm run debug-to-test generate <scenario_id_or_name>",
+      );
       process.exit(1);
     }
     const testCode = generateTestFromScenario(args[0]!);
     if (testCode) {
-      console.log('\n' + testCode);
+      console.log("\n" + testCode);
     }
     break;
-    
+
   default:
     console.log(`Usage:
   npm run debug-to-test save <name> <description> [notes]

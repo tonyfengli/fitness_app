@@ -7,7 +7,7 @@ import type { ScoringCriteria } from "../types/scoredExercise";
  */
 export function buildScoringCriteria(
   clientContext: ClientContext | undefined,
-  intensityOverride?: "low" | "moderate" | "high"
+  intensityOverride?: "low" | "moderate" | "high",
 ): ScoringCriteria | undefined {
   if (!clientContext) {
     return undefined;

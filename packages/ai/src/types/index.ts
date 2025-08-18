@@ -1,3 +1,7 @@
+// Union type for any blueprint
+import type { GroupWorkoutBlueprint } from "./groupBlueprint";
+import type { StandardGroupWorkoutBlueprint } from "./standardBlueprint";
+
 export * from "./exercise";
 export * from "./workoutSession";
 export * from "./clientContext";
@@ -8,8 +12,6 @@ export * from "./groupContext";
 export * from "./groupBlueprint";
 export * from "./standardBlueprint";
 
-// Union type for any blueprint
-import type { GroupWorkoutBlueprint } from "./groupBlueprint";
-import type { StandardGroupWorkoutBlueprint } from "./standardBlueprint";
-
-export type AnyGroupWorkoutBlueprint = GroupWorkoutBlueprint | StandardGroupWorkoutBlueprint;
+export type AnyGroupWorkoutBlueprint =
+  | GroupWorkoutBlueprint
+  | StandardGroupWorkoutBlueprint;

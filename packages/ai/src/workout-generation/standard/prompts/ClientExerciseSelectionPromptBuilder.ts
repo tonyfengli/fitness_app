@@ -4,20 +4,21 @@
  */
 
 import type { ClientContext } from "../../../types/clientContext";
+import type { GroupScoredExercise } from "../../../types/groupContext";
 import type { ScoredExercise } from "../../../types/scoredExercise";
 import type { PreAssignedExercise } from "../../../types/standardBlueprint";
-import type { GroupScoredExercise } from "../../../types/groupContext";
-import { WorkoutType } from "../../types/workoutTypes";
 import type { PromptStrategy } from "./strategies/PromptStrategy";
+import { WorkoutType } from "../../types/workoutTypes";
 import { FullBodyPromptStrategy } from "./strategies/FullBodyPromptStrategy";
 
 export interface ClientPromptConfig {
   client: ClientContext;
   workoutType: WorkoutType;
   preAssigned: PreAssignedExercise[];
-  candidates: ScoredExercise[];  // The 15 bucketed candidates
-  sharedExercises: GroupScoredExercise[];  // Shared pool info
-  otherClientsInfo: Array<{  // Basic info about other clients for context
+  candidates: ScoredExercise[]; // The 15 bucketed candidates
+  sharedExercises: GroupScoredExercise[]; // Shared pool info
+  otherClientsInfo: Array<{
+    // Basic info about other clients for context
     name: string;
     muscleTargets: string[];
   }>;
@@ -25,79 +26,84 @@ export interface ClientPromptConfig {
 
 export class ClientExerciseSelectionPromptBuilder {
   private strategy: PromptStrategy;
-  
+
   constructor(private config: ClientPromptConfig) {
     // Select appropriate strategy based on workout type
     this.strategy = this.createStrategy();
   }
-  
+
   private createStrategy(): PromptStrategy {
     // First determine how many exercises to select based on intensity and pre-assigned count
     const exercisesToSelect = this.getExercisesToSelectForIntensity(
-      this.config.client.intensity, 
-      this.config.preAssigned.length
+      this.config.client.intensity,
+      this.config.preAssigned.length,
     );
-    
+
     const strategyConfig = {
       workoutType: this.config.workoutType,
       intensity: this.config.client.intensity,
       totalExercisesNeeded: this.config.preAssigned.length + exercisesToSelect,
-      exercisesToSelect
+      exercisesToSelect,
     };
-    
+
     // Create the strategy with the full config
     return this.createStrategyFromConfig(strategyConfig);
   }
-  
+
   private createStrategyFromConfig(strategyConfig: any): PromptStrategy {
     // Add more strategies here as workout types are implemented
     switch (this.config.workoutType) {
       case WorkoutType.FULL_BODY_WITH_FINISHER:
       case WorkoutType.FULL_BODY_WITHOUT_FINISHER:
         return new FullBodyPromptStrategy(strategyConfig);
-      
+
       case WorkoutType.TARGETED_WITH_FINISHER:
       case WorkoutType.TARGETED_WITHOUT_FINISHER:
         // TODO: Implement TargetedPromptStrategy
         throw new Error(`Targeted workout prompts not yet implemented`);
-        
+
       default:
         throw new Error(`Unknown workout type: ${this.config.workoutType}`);
     }
   }
-  
+
   // Standalone method to get exercise count based on intensity
-  private getExercisesToSelectForIntensity(intensity?: 'low' | 'moderate' | 'high' | 'intense', preAssignedCount: number = 2): number {
+  private getExercisesToSelectForIntensity(
+    intensity?: "low" | "moderate" | "high" | "intense",
+    preAssignedCount: number = 2,
+  ): number {
     const totalExercises = this.getTotalExercisesForIntensity(intensity);
     return totalExercises - preAssignedCount;
   }
-  
-  private getTotalExercisesForIntensity(intensity?: 'low' | 'moderate' | 'high' | 'intense'): number {
+
+  private getTotalExercisesForIntensity(
+    intensity?: "low" | "moderate" | "high" | "intense",
+  ): number {
     switch (intensity) {
-      case 'low':
+      case "low":
         return 4;
-      case 'moderate':
+      case "moderate":
         return 5;
-      case 'high':
+      case "high":
         return 6;
-      case 'intense':
+      case "intense":
         return 7;
       default:
-        return 5;  // Default to moderate
+        return 5; // Default to moderate
     }
   }
-  
+
   private getExercisesToSelect(): number {
     // Use the already calculated value from strategy config
     return this.getExercisesToSelectForIntensity(
       this.config.client.intensity,
-      this.config.preAssigned.length
+      this.config.preAssigned.length,
     );
   }
-  
+
   build(): string {
     const exercisesToSelect = this.getExercisesToSelect();
-    
+
     return `SYSTEM PROMPT — Phase 1 Exercise Selector (Condensed)
 You are selecting EXACTLY ${exercisesToSelect} exercises for a single client from a curated list. These will complement the client's pre-assigned exercises to complete today's workout.
 
@@ -166,70 +172,89 @@ If no valid pair exists under all rules, choose the safest valid pair and note t
 
 Stop after selecting the first valid high-scoring exercise combination that satisfies all constraints. Do not generate or compare alternative combinations once a valid set is found.`;
   }
-  
+
   private buildClientInfo(): string {
     const client = this.config.client;
     const parts = [
       `name: ${client.name}`,
-      `goal: ${client.primary_goal || 'general_fitness'}`,
-      `intensity: ${client.intensity}`
+      `goal: ${client.primary_goal || "general_fitness"}`,
+      `intensity: ${client.intensity}`,
     ];
-    
+
     if (client.muscle_target && client.muscle_target.length > 0) {
-      parts.push(`muscle_targets: ${client.muscle_target.join(', ')}`);
+      parts.push(`muscle_targets: ${client.muscle_target.join(", ")}`);
     }
-    
+
     if (client.muscle_lessen && client.muscle_lessen.length > 0) {
-      parts.push(`muscles_to_lessen: ${client.muscle_lessen.join(', ')}`);
+      parts.push(`muscles_to_lessen: ${client.muscle_lessen.join(", ")}`);
     }
-    
+
     if (client.avoid_joints && client.avoid_joints.length > 0) {
-      parts.push(`joints_to_avoid: ${client.avoid_joints.join(', ')}`);
+      parts.push(`joints_to_avoid: ${client.avoid_joints.join(", ")}`);
     }
-    
-    return parts.join(', ');
+
+    return parts.join(", ");
   }
-  
+
   private buildPreAssignedList(): string {
-    return this.config.preAssigned.map(pa => 
-      `- ${pa.exercise.name} (${pa.exercise.movementPattern}, primary: ${pa.exercise.primaryMuscle}, secondary: ${pa.exercise.secondaryMuscles?.join(', ') || 'none'}, score: ${Math.round(pa.exercise.score)})`
-    ).join('\n');
+    return this.config.preAssigned
+      .map(
+        (pa) =>
+          `- ${pa.exercise.name} (${pa.exercise.movementPattern}, primary: ${pa.exercise.primaryMuscle}, secondary: ${pa.exercise.secondaryMuscles?.join(", ") || "none"}, score: ${Math.round(pa.exercise.score)})`,
+      )
+      .join("\n");
   }
-  
+
   private buildCandidatesList(): string {
-    return this.config.candidates.map((ex, idx) => 
-      `${idx + 1}. ${ex.name} (${ex.movementPattern}, primary: ${ex.primaryMuscle}, secondary: ${ex.secondaryMuscles?.join(', ') || 'none'}, score: ${Math.round(ex.score)})`
-    ).join('\n');
+    return this.config.candidates
+      .map(
+        (ex, idx) =>
+          `${idx + 1}. ${ex.name} (${ex.movementPattern}, primary: ${ex.primaryMuscle}, secondary: ${ex.secondaryMuscles?.join(", ") || "none"}, score: ${Math.round(ex.score)})`,
+      )
+      .join("\n");
   }
-  
+
   private buildClientConstraints(): string {
     const constraints = [];
-    
-    if (this.config.client.muscle_lessen && this.config.client.muscle_lessen.length > 0) {
-      constraints.push(`Respect muscles_to_lessen (${this.config.client.muscle_lessen.join(', ')}): exclude exercises that significantly load them.`);
+
+    if (
+      this.config.client.muscle_lessen &&
+      this.config.client.muscle_lessen.length > 0
+    ) {
+      constraints.push(
+        `Respect muscles_to_lessen (${this.config.client.muscle_lessen.join(", ")}): exclude exercises that significantly load them.`,
+      );
     }
-    
-    if (this.config.client.avoid_joints && this.config.client.avoid_joints.length > 0) {
-      constraints.push(`Respect joints_to_avoid (${this.config.client.avoid_joints.join(', ')}): exclude exercises that stress these joints.`);
+
+    if (
+      this.config.client.avoid_joints &&
+      this.config.client.avoid_joints.length > 0
+    ) {
+      constraints.push(
+        `Respect joints_to_avoid (${this.config.client.avoid_joints.join(", ")}): exclude exercises that stress these joints.`,
+      );
     }
-    
-    return constraints.join('\n\n');
+
+    return constraints.join("\n\n");
   }
-  
+
   private buildMuscleTargetRules(): string {
-    if (!this.config.client.muscle_target || this.config.client.muscle_target.length === 0) {
-      return '';
+    if (
+      !this.config.client.muscle_target ||
+      this.config.client.muscle_target.length === 0
+    ) {
+      return "";
     }
-    
+
     const targets = this.config.client.muscle_target;
-    
+
     if (targets.length === 1) {
       return `Muscle targets: ${targets[0]} → pick one primary for that muscle + one that hits it primary or secondary.`;
     } else {
-      return `Muscle targets: ${targets.join(', ')} → pick ≥1 primary for each target (across pre-assigned + selected).`;
+      return `Muscle targets: ${targets.join(", ")} → pick ≥1 primary for each target (across pre-assigned + selected).`;
     }
   }
-  
+
   private buildExerciseTemplate(count: number): string {
     const templates = [];
     for (let i = 0; i < count; i++) {
@@ -241,72 +266,77 @@ Stop after selecting the first valid high-scoring exercise combination that sati
       "reasoning": "≤20 words."
     }`);
     }
-    return templates.join(',');
+    return templates.join(",");
   }
-  
+
   private buildClientContext(): string {
     const client = this.config.client;
-    
+
     let output = `### 👤 Client Profile
 
 **${client.name}**
-- Fitness Goal: ${this.formatGoal(client.primary_goal || 'general_fitness')}
+- Fitness Goal: ${this.formatGoal(client.primary_goal || "general_fitness")}
 - Intensity Level: ${client.intensity}
 - Muscle Targets: ${this.formatMuscleList(client.muscle_target)}
 - Muscles to Lessen: ${this.formatMuscleList(client.muscle_lessen)}
 - Joints to Avoid: ${this.formatJointList(client.avoid_joints)}`;
-    
-    if (client.exercise_requests?.include && client.exercise_requests.include.length > 0) {
-      output += `\n- Requested Exercises: ${client.exercise_requests.include.join(', ')}`;
+
+    if (
+      client.exercise_requests?.include &&
+      client.exercise_requests.include.length > 0
+    ) {
+      output += `\n- Requested Exercises: ${client.exercise_requests.include.join(", ")}`;
     }
-    
+
     // Add pre-assigned exercises
-    output += '\n\n' + this.strategy.formatPreAssignedExercises(this.config.preAssigned);
-    
+    output +=
+      "\n\n" +
+      this.strategy.formatPreAssignedExercises(this.config.preAssigned);
+
     return output;
   }
-  
+
   // Helper methods
   private formatGoal(goal: string): string {
-    return goal.replace(/_/g, ' ').toLowerCase();
+    return goal.replace(/_/g, " ").toLowerCase();
   }
-  
+
   private formatMuscleList(muscles?: string[]): string {
-    if (!muscles || muscles.length === 0) return 'none';
-    return muscles.map(m => m.replace(/_/g, ' ')).join(', ');
+    if (!muscles || muscles.length === 0) return "none";
+    return muscles.map((m) => m.replace(/_/g, " ")).join(", ");
   }
-  
+
   private formatJointList(joints?: string[]): string {
-    if (!joints || joints.length === 0) return 'none';
-    return joints.map(j => j.replace(/_/g, ' ')).join(', ');
+    if (!joints || joints.length === 0) return "none";
+    return joints.map((j) => j.replace(/_/g, " ")).join(", ");
   }
-  
+
   private formatExerciseDetailsWithoutId(exercise: ScoredExercise): string {
     let details = `   - Movement: ${exercise.movementPattern}, Primary: ${exercise.primaryMuscle}\n`;
     if (exercise.secondaryMuscles && exercise.secondaryMuscles.length > 0) {
-      details += `   - Secondary: ${exercise.secondaryMuscles.join(', ')}\n`;
+      details += `   - Secondary: ${exercise.secondaryMuscles.join(", ")}\n`;
     }
-    details += `   - Equipment: ${exercise.equipment || 'none'}\n`;
+    details += `   - Equipment: ${exercise.equipment || "none"}\n`;
     details += `   - Score: ${exercise.score.toFixed(1)}`;
     return details;
   }
-  
+
   private buildExerciseOptions(): string {
     let output = `### 📋 Available Exercise Options\n\n`;
-    
+
     // List all candidates without shared/non-shared distinction
     this.config.candidates.forEach((ex, idx) => {
       output += `${idx + 1}. **${ex.name}**\n`;
       output += this.formatExerciseDetailsWithoutId(ex);
-      output += '\n';
+      output += "\n";
     });
-    
+
     return output;
   }
-  
+
   private buildOutputFormat(): string {
     const exercisesToSelect = this.getExercisesToSelect();
-    
+
     return `### 📋 Output Format
 
 Return a JSON object with exactly ${exercisesToSelect} selected exercises:
@@ -338,9 +368,9 @@ Return a JSON object with exactly ${exercisesToSelect} selected exercises:
 - Do NOT modify or abbreviate exercise names
 - Ensure all muscle targets are covered across selected + pre-assigned exercises`;
   }
-  
+
   // Helper methods
   private formatWorkoutType(type: WorkoutType): string {
-    return type.replace(/_/g, '_').toLowerCase();
+    return type.replace(/_/g, "_").toLowerCase();
   }
 }

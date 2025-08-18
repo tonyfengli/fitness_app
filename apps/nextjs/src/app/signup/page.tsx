@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+
 import { authClient } from "~/auth/client";
 import { useTRPC } from "~/trpc/react";
 import { normalizePhoneNumber } from "~/utils/phone";
@@ -14,21 +15,24 @@ export default function SignupPage() {
   const queryClient = useQueryClient();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
+
   // Check if current user is a trainer
   const { data: currentSession } = useQuery({
     queryKey: ["auth-session"],
     queryFn: () => authClient.getSession(),
   });
-  const isTrainerCreatingClient = currentSession?.user && (currentSession.user as any).role === 'trainer';
-  
+  const isTrainerCreatingClient =
+    currentSession?.user && (currentSession.user as any).role === "trainer";
+
   const [formData, setFormData] = useState({
     email: "",
     password: "",
     name: "",
     phone: "",
     role: "client",
-    businessId: isTrainerCreatingClient ? (currentSession?.user as any)?.businessId || "" : "",
+    businessId: isTrainerCreatingClient
+      ? (currentSession?.user as any)?.businessId || ""
+      : "",
     strengthLevel: "moderate",
     skillLevel: "moderate",
   });
@@ -36,7 +40,7 @@ export default function SignupPage() {
 
   // Fetch businesses
   const { data: businesses, isLoading: businessesLoading } = useQuery(
-    trpc.business.all.queryOptions()
+    trpc.business.all.queryOptions(),
   );
 
   // Mutation for creating user profile
@@ -45,7 +49,7 @@ export default function SignupPage() {
       onError: (err) => {
         console.error("Failed to create user profile:", err);
       },
-    })
+    }),
   );
 
   // Mutation for trainer creating user
@@ -53,14 +57,14 @@ export default function SignupPage() {
     trpc.auth.createUserAsTrainer.mutationOptions({
       onSuccess: async () => {
         // Invalidate clients query to refresh the trainer dashboard
-        await queryClient.invalidateQueries({ 
-          queryKey: ["auth", "getClientsByBusiness"] 
+        await queryClient.invalidateQueries({
+          queryKey: ["auth", "getClientsByBusiness"],
         });
       },
       onError: (err) => {
         setError(err.message || "Failed to create user");
       },
-    })
+    }),
   );
 
   // Update form data when session loads
@@ -68,11 +72,10 @@ export default function SignupPage() {
     if (isTrainerCreatingClient && currentSession?.user) {
       const trainerBusinessId = (currentSession.user as any).businessId;
       if (trainerBusinessId && !formData.businessId) {
-        setFormData(prev => ({ ...prev, businessId: trainerBusinessId }));
+        setFormData((prev) => ({ ...prev, businessId: trainerBusinessId }));
       }
     }
   }, [currentSession, isTrainerCreatingClient, formData.businessId]);
-  
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -89,13 +92,27 @@ export default function SignupPage() {
             name: formData.name,
             phone: formData.phone,
             role: formData.role as "client" | "trainer",
-            strengthLevel: formData.role === "client" ? (formData.strengthLevel as "very_low" | "low" | "moderate" | "high") : undefined,
-            skillLevel: formData.role === "client" ? (formData.skillLevel as "very_low" | "low" | "moderate" | "high") : undefined,
+            strengthLevel:
+              formData.role === "client"
+                ? (formData.strengthLevel as
+                    | "very_low"
+                    | "low"
+                    | "moderate"
+                    | "high")
+                : undefined,
+            skillLevel:
+              formData.role === "client"
+                ? (formData.skillLevel as
+                    | "very_low"
+                    | "low"
+                    | "moderate"
+                    | "high")
+                : undefined,
           });
-          
+
           // Set redirecting state only after success
           setIsRedirecting(true);
-          
+
           // Important: Do NOT sign in as the new user - trainer should remain logged in
           // Just navigate back to trainer dashboard
           router.push("/trainer-dashboard");
@@ -125,20 +142,30 @@ export default function SignupPage() {
           });
 
           if (signInResult.error) {
-            setError("Account created but failed to sign in. Please try logging in.");
+            setError(
+              "Account created but failed to sign in. Please try logging in.",
+            );
             router.push("/login");
           } else {
             // Get fresh session data
             const session = await authClient.getSession();
-            
+
             // Create user profile for clients BEFORE redirecting
             if (formData.role === "client" && session?.user?.id) {
               try {
                 await createProfile.mutateAsync({
                   userId: session.user.id,
                   businessId: formData.businessId,
-                  strengthLevel: formData.strengthLevel as "very_low" | "low" | "moderate" | "high",
-                  skillLevel: formData.skillLevel as "very_low" | "low" | "moderate" | "high",
+                  strengthLevel: formData.strengthLevel as
+                    | "very_low"
+                    | "low"
+                    | "moderate"
+                    | "high",
+                  skillLevel: formData.skillLevel as
+                    | "very_low"
+                    | "low"
+                    | "moderate"
+                    | "high",
                 });
               } catch (profileError: any) {
                 console.error("Failed to create user profile:", profileError);
@@ -147,19 +174,21 @@ export default function SignupPage() {
                   console.log("User profile already exists, continuing...");
                 } else {
                   // For other errors, show error and stop
-                  setError("Account created but failed to set up profile. Please contact support.");
+                  setError(
+                    "Account created but failed to set up profile. Please contact support.",
+                  );
                   setIsLoading(false);
                   return;
                 }
               }
             }
-            
+
             // Only set redirecting state after everything succeeds
             setIsRedirecting(true);
-            
+
             // Invalidate auth cache to force refetch
             await queryClient.invalidateQueries({ queryKey: ["auth-session"] });
-            
+
             // Redirect based on user role
             if (session?.user?.role === "trainer") {
               router.push("/trainer-dashboard");
@@ -185,9 +214,11 @@ export default function SignupPage() {
       {isRedirecting && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-white bg-opacity-75">
           <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+            <div className="mx-auto h-12 w-12 animate-spin rounded-full border-b-2 border-blue-600"></div>
             <p className="mt-4 text-gray-600">
-              {isTrainerCreatingClient ? "Creating new user..." : "Setting up your account..."}
+              {isTrainerCreatingClient
+                ? "Creating new user..."
+                : "Setting up your account..."}
             </p>
           </div>
         </div>
@@ -214,7 +245,9 @@ export default function SignupPage() {
             Back
           </button>
           <h2 className="mt-6 text-center text-3xl font-bold tracking-tight text-gray-900">
-            {isTrainerCreatingClient ? "Create New User" : "Create your account"}
+            {isTrainerCreatingClient
+              ? "Create New User"
+              : "Create your account"}
           </h2>
           {!isTrainerCreatingClient && (
             <p className="mt-2 text-center text-sm text-gray-600">
@@ -228,17 +261,20 @@ export default function SignupPage() {
             </p>
           )}
         </div>
-        
+
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           {error && (
             <div className="rounded-md bg-red-50 p-4">
               <p className="text-sm text-red-800">{error}</p>
             </div>
           )}
-          
+
           <div className="space-y-4">
             <div>
-              <label htmlFor="name" className="block text-sm font-medium text-gray-700">
+              <label
+                htmlFor="name"
+                className="block text-sm font-medium text-gray-700"
+              >
                 Full Name
               </label>
               <input
@@ -257,7 +293,10 @@ export default function SignupPage() {
             </div>
 
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+              <label
+                htmlFor="email"
+                className="block text-sm font-medium text-gray-700"
+              >
                 Email
               </label>
               <input
@@ -276,7 +315,10 @@ export default function SignupPage() {
             </div>
 
             <div>
-              <label htmlFor="phone" className="block text-sm font-medium text-gray-700">
+              <label
+                htmlFor="phone"
+                className="block text-sm font-medium text-gray-700"
+              >
                 Phone Number
               </label>
               <input
@@ -294,7 +336,10 @@ export default function SignupPage() {
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+              <label
+                htmlFor="password"
+                className="block text-sm font-medium text-gray-700"
+              >
                 Password
               </label>
               <input
@@ -313,7 +358,10 @@ export default function SignupPage() {
             </div>
 
             <div>
-              <label htmlFor="role" className="block text-sm font-medium text-gray-700">
+              <label
+                htmlFor="role"
+                className="block text-sm font-medium text-gray-700"
+              >
                 Role
               </label>
               <select
@@ -333,7 +381,10 @@ export default function SignupPage() {
 
             {!isTrainerCreatingClient && (
               <div>
-                <label htmlFor="business" className="block text-sm font-medium text-gray-700">
+                <label
+                  htmlFor="business"
+                  className="block text-sm font-medium text-gray-700"
+                >
                   Business
                 </label>
                 <select
@@ -360,7 +411,10 @@ export default function SignupPage() {
             {formData.role === "client" && (
               <>
                 <div>
-                  <label htmlFor="strengthLevel" className="block text-sm font-medium text-gray-700">
+                  <label
+                    htmlFor="strengthLevel"
+                    className="block text-sm font-medium text-gray-700"
+                  >
                     Strength Level
                   </label>
                   <select
@@ -370,7 +424,10 @@ export default function SignupPage() {
                     className="mt-1 block w-full rounded-md border-0 px-3 py-2 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-blue-600 sm:text-sm sm:leading-6"
                     value={formData.strengthLevel}
                     onChange={(e) =>
-                      setFormData({ ...formData, strengthLevel: e.target.value })
+                      setFormData({
+                        ...formData,
+                        strengthLevel: e.target.value,
+                      })
                     }
                   >
                     <option value="very_low">Very Low</option>
@@ -381,7 +438,10 @@ export default function SignupPage() {
                 </div>
 
                 <div>
-                  <label htmlFor="skillLevel" className="block text-sm font-medium text-gray-700">
+                  <label
+                    htmlFor="skillLevel"
+                    className="block text-sm font-medium text-gray-700"
+                  >
                     Skill Level
                   </label>
                   <select
@@ -408,12 +468,15 @@ export default function SignupPage() {
             <button
               type="submit"
               disabled={isLoading || businessesLoading}
-              className="group relative flex w-full justify-center rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="group relative flex w-full justify-center rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {isLoading 
-                ? (isTrainerCreatingClient ? "Creating user..." : "Creating account...") 
-                : (isTrainerCreatingClient ? "Create User" : "Create account")
-              }
+              {isLoading
+                ? isTrainerCreatingClient
+                  ? "Creating user..."
+                  : "Creating account..."
+                : isTrainerCreatingClient
+                  ? "Create User"
+                  : "Create account"}
             </button>
           </div>
         </form>

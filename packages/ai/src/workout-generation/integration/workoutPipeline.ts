@@ -1,13 +1,24 @@
-import type { ClientContext } from "../../types/clientContext";
-import type { exercises } from "@acme/db/schema";
 import type { InferSelectModel } from "drizzle-orm";
 
-type Exercise = InferSelectModel<typeof exercises>;
-import { generateWorkoutFromExercises } from "../generateWorkoutFromExercises";
-import { transformLLMOutputToDB, validateExerciseLookup } from "../transformers/workoutTransformer";
-import type { LLMWorkoutOutput, WorkoutDBFormat } from "../transformers/workoutTransformer";
+import type { exercises } from "@acme/db/schema";
+
+import type { ClientContext } from "../../types/clientContext";
 import type { ScoredExercise } from "../../types/scoredExercise";
-import type { WorkoutInterpretationStateType, ExercisesByBlock } from "../types";
+import type {
+  LLMWorkoutOutput,
+  WorkoutDBFormat,
+} from "../transformers/workoutTransformer";
+import type {
+  ExercisesByBlock,
+  WorkoutInterpretationStateType,
+} from "../types";
+import { generateWorkoutFromExercises } from "../generateWorkoutFromExercises";
+import {
+  transformLLMOutputToDB,
+  validateExerciseLookup,
+} from "../transformers/workoutTransformer";
+
+type Exercise = InferSelectModel<typeof exercises>;
 
 /**
  * Complete workout generation pipeline
@@ -43,112 +54,118 @@ export interface WorkoutPipelineOutput {
  * Run the complete workout generation pipeline
  */
 export async function runWorkoutPipeline(
-  input: WorkoutPipelineInput
+  input: WorkoutPipelineInput,
 ): Promise<WorkoutPipelineOutput> {
   try {
     const startTime = performance.now();
-    
+
     // Step 1: Generate workout using LLM
     // Convert ScoredExercise to TopExercise format
     const topExercises: ExercisesByBlock = {
-      blockA: (input.exercises.blockA || []).map(ex => ({
+      blockA: (input.exercises.blockA || []).map((ex) => ({
         id: ex.id,
         name: ex.name,
         score: ex.score,
         tags: [...(ex.functionTags || []), ...(ex.movementTags || [])],
         primaryMuscle: ex.primaryMuscle,
         secondaryMuscles: ex.secondaryMuscles || undefined,
-        equipment: ex.equipment || undefined
+        equipment: ex.equipment || undefined,
       })),
-      blockB: (input.exercises.blockB || []).map(ex => ({
+      blockB: (input.exercises.blockB || []).map((ex) => ({
         id: ex.id,
         name: ex.name,
         score: ex.score,
         tags: [...(ex.functionTags || []), ...(ex.movementTags || [])],
         primaryMuscle: ex.primaryMuscle,
         secondaryMuscles: ex.secondaryMuscles || undefined,
-        equipment: ex.equipment || undefined
+        equipment: ex.equipment || undefined,
       })),
-      blockC: (input.exercises.blockC || []).map(ex => ({
+      blockC: (input.exercises.blockC || []).map((ex) => ({
         id: ex.id,
         name: ex.name,
         score: ex.score,
         tags: [...(ex.functionTags || []), ...(ex.movementTags || [])],
         primaryMuscle: ex.primaryMuscle,
         secondaryMuscles: ex.secondaryMuscles || undefined,
-        equipment: ex.equipment || undefined
+        equipment: ex.equipment || undefined,
       })),
-      blockD: (input.exercises.blockD || []).map(ex => ({
+      blockD: (input.exercises.blockD || []).map((ex) => ({
         id: ex.id,
         name: ex.name,
         score: ex.score,
         tags: [...(ex.functionTags || []), ...(ex.movementTags || [])],
         primaryMuscle: ex.primaryMuscle,
         secondaryMuscles: ex.secondaryMuscles || undefined,
-        equipment: ex.equipment || undefined
-      }))
+        equipment: ex.equipment || undefined,
+      })),
     };
-    
+
     const state: WorkoutInterpretationStateType = {
       exercises: topExercises,
       clientContext: input.clientContext,
-      interpretation: '',
+      interpretation: "",
       structuredOutput: {},
       timing: {},
-      error: null
+      error: null,
     };
-    
-    console.log('🚀 Starting workout pipeline for:', input.clientContext.name);
-    console.log('📋 Template type:', input.clientContext.templateType || 'standard');
-    
+
+    console.log("🚀 Starting workout pipeline for:", input.clientContext.name);
+    console.log(
+      "📋 Template type:",
+      input.clientContext.templateType || "standard",
+    );
+
     const llmResult = await generateWorkoutFromExercises(state);
-    
+
     if (llmResult.error) {
       return {
         success: false,
-        error: llmResult.error
+        error: llmResult.error,
       };
     }
-    
+
     if (!llmResult.structuredOutput) {
       return {
         success: false,
-        error: 'No structured output from LLM'
+        error: "No structured output from LLM",
       };
     }
-    
+
     // Check if the structured output is an error
     if (llmResult.structuredOutput.error) {
       return {
         success: false,
-        error: llmResult.structuredOutput.error
+        error: llmResult.structuredOutput.error,
       };
     }
-    
+
     const llmOutput = llmResult.structuredOutput as LLMWorkoutOutput;
-    
+
     // Step 2: Validate exercises exist in database
     const validation = validateExerciseLookup(llmOutput, input.exerciseLookup);
-    
+
     if (!validation.valid) {
-      console.warn('⚠️ Some exercises not found in database:', validation.missingExercises);
+      console.warn(
+        "⚠️ Some exercises not found in database:",
+        validation.missingExercises,
+      );
     }
-    
+
     // Step 3: Transform to database format
     const dbFormat = await transformLLMOutputToDB(
       llmOutput,
       input.exerciseLookup,
-      input.clientContext.templateType || 'standard',
+      input.clientContext.templateType || "standard",
       input.workoutName,
-      input.workoutDescription
+      input.workoutDescription,
     );
-    
+
     const endTime = performance.now();
     const totalTime = endTime - startTime;
-    
-    console.log('✅ Workout pipeline completed successfully');
+
+    console.log("✅ Workout pipeline completed successfully");
     console.log(`⏱️ Total pipeline time: ${totalTime.toFixed(2)}ms`);
-    
+
     return {
       success: true,
       llmOutput,
@@ -156,14 +173,17 @@ export async function runWorkoutPipeline(
       validation,
       timing: {
         ...llmResult.timing,
-        totalPipeline: totalTime
-      }
+        totalPipeline: totalTime,
+      },
     };
   } catch (error) {
-    console.error('❌ Workout pipeline error:', error);
+    console.error("❌ Workout pipeline error:", error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error in workout pipeline'
+      error:
+        error instanceof Error
+          ? error.message
+          : "Unknown error in workout pipeline",
     };
   }
 }
@@ -174,18 +194,18 @@ export async function runWorkoutPipeline(
 export function prepareWorkoutForAPI(
   pipelineOutput: WorkoutPipelineOutput,
   trainingSessionId: string,
-  userId: string
+  userId: string,
 ) {
   if (!pipelineOutput.success || !pipelineOutput.dbFormat) {
-    throw new Error('Pipeline output is not valid for API submission');
+    throw new Error("Pipeline output is not valid for API submission");
   }
-  
+
   return {
     trainingSessionId,
     userId,
     llmOutput: pipelineOutput.llmOutput,
     workoutType: pipelineOutput.dbFormat.workout.workoutType,
     workoutName: pipelineOutput.dbFormat.workout.name,
-    workoutDescription: pipelineOutput.dbFormat.workout.description
+    workoutDescription: pipelineOutput.dbFormat.workout.description,
   };
 }

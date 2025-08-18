@@ -2,35 +2,42 @@
 
 import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
+
 import { authClient } from "~/auth/client";
 import { FrontendDebugClient } from "~/utils/frontendDebugClient";
 
 export function useAuth() {
-  const { data: session, isLoading, error } = useQuery({
+  const {
+    data: session,
+    isLoading,
+    error,
+  } = useQuery({
     queryKey: ["auth-session"],
     queryFn: async () => {
       try {
-        FrontendDebugClient.log('useAuth', 'Fetching session', { 
+        FrontendDebugClient.log("useAuth", "Fetching session", {
           timestamp: Date.now(),
-          url: '/api/auth/get-session'
+          url: "/api/auth/get-session",
         });
-        
+
         // Make a direct fetch call to get the full session
-        const response = await fetch('/api/auth/get-session', {
-          method: 'GET',
-          credentials: 'include',
+        const response = await fetch("/api/auth/get-session", {
+          method: "GET",
+          credentials: "include",
         });
-        
+
         const data = await response.json();
-        
+
         // The actual response structure is: { session: {...}, user: {...} }
         // Combine them into a single session object
-        const session = data ? {
-          ...data.session,
-          user: data.user
-        } : null;
-        
-        FrontendDebugClient.log('useAuth', 'Session raw response', { 
+        const session = data
+          ? {
+              ...data.session,
+              user: data.user,
+            }
+          : null;
+
+        FrontendDebugClient.log("useAuth", "Session raw response", {
           data,
           session,
           hasUser: !!session?.user,
@@ -44,11 +51,13 @@ export function useAuth() {
           nestedUser: data?.session?.user,
           extractedUser: session?.user,
         });
-        
+
         return session;
       } catch (err) {
         console.error("Error fetching session:", err);
-        FrontendDebugClient.log('useAuth', 'Session fetch error', { error: err });
+        FrontendDebugClient.log("useAuth", "Session fetch error", {
+          error: err,
+        });
         return null;
       }
     },
@@ -70,7 +79,7 @@ export function useAuth() {
       user: authState.user,
       isAuthenticated: authState.isAuthenticated,
       isLoading: authState.isLoading,
-      session
+      session,
     });
   }, [authState.isAuthenticated, authState.isLoading, authState.user?.id]);
 

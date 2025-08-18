@@ -1,5 +1,6 @@
-import { ChatOpenAI } from "@langchain/openai";
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
+import { ChatOpenAI } from "@langchain/openai";
+
 import type { SMSStateType } from "../types/smsTypes";
 
 const CONTEXT_PROMPT = `You are an AI assistant that extracts relevant context from fitness client SMS messages.
@@ -37,17 +38,17 @@ Message: ${state.rawMessage}`),
 
     const response = await model.invoke(messages);
     const content = response.content.toString();
-    
+
     // Parse JSON response
     const context = JSON.parse(content);
-    
+
     // Clean up null values
-    Object.keys(context).forEach(key => {
+    Object.keys(context).forEach((key) => {
       if (context[key] === null || context[key] === "null") {
         delete context[key];
       }
     });
-    
+
     return {
       context,
       messages: [...state.messages, ...messages, response],

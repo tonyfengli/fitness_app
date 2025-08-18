@@ -52,7 +52,7 @@ export function useStartWorkout() {
       if (result.alreadyOrganized || (result.templateType && result.templateType !== 'standard')) {
         console.log('[TV useStartWorkout] Skipping Phase 2, navigating directly to WorkoutLive');
         console.log('[TV useStartWorkout] Already organized, passing existing data');
-        // Wrap in setTimeout to ensure navigation happens after current execution
+        // Keep loading screen visible during navigation
         setTimeout(() => {
           navigation.navigate('WorkoutLive', { 
             sessionId, 
@@ -62,12 +62,14 @@ export function useStartWorkout() {
             workouts: result.workouts,
             clients: result.clients
           });
+          // Dismiss loading screen after navigation starts
+          setTimeout(() => setIsGenerating(false), 100);
         }, 0);
       } else if (result.workoutOrganization) {
         // For standard templates with organization data
         console.log('[TV useStartWorkout] Phase 2 complete, navigating with organization data');
         console.log('[TV useStartWorkout] Workouts to pass:', result.workouts?.length);
-        // Wrap in setTimeout to ensure navigation happens after current execution
+        // Keep loading screen visible during navigation
         setTimeout(() => {
           navigation.navigate('WorkoutLive', { 
             sessionId, 
@@ -77,6 +79,8 @@ export function useStartWorkout() {
             workouts: result.workouts,
             clients: result.clients
           });
+          // Dismiss loading screen after navigation starts
+          setTimeout(() => setIsGenerating(false), 100);
         }, 0);
       } else {
         // This shouldn't happen with the current implementation
@@ -87,9 +91,8 @@ export function useStartWorkout() {
     } catch (e: any) {
       console.error('[TV useStartWorkout] Error:', e);
       setError(e.message || 'Failed to start workout');
+      setIsGenerating(false); // Only set false on error
       throw e;
-    } finally {
-      setIsGenerating(false);
     }
   };
   

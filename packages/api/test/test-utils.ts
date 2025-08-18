@@ -1,11 +1,12 @@
-import { vi } from 'vitest';
-import { appRouter } from '../src';
+import { vi } from "vitest";
+
+import { appRouter } from "../src";
 
 type User = {
   id: string;
   username?: string;
   phone?: string;
-  role: 'client' | 'trainer';
+  role: "client" | "trainer";
   businessId: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -19,20 +20,20 @@ type Session = {
 };
 
 export const mockUser = (overrides?: Partial<User>): User => ({
-  id: 'test-user-id',
-  username: 'testuser',
-  phone: '+1234567890',
-  role: 'client',
-  businessId: 'test-business-id',
+  id: "test-user-id",
+  username: "testuser",
+  phone: "+1234567890",
+  role: "client",
+  businessId: "test-business-id",
   createdAt: new Date(),
   updatedAt: new Date(),
-  name: 'Test User',
+  name: "Test User",
   ...overrides,
 });
 
 export const mockSession = (overrides?: Partial<Session>): Session => ({
-  id: 'test-session-id',
-  userId: 'test-user-id',
+  id: "test-session-id",
+  userId: "test-user-id",
   expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
   ...overrides,
 });
@@ -55,32 +56,44 @@ export const createSelectMock = (returnData: any[] = []) => {
 
   // Make the select function return the chain
   const selectFn = vi.fn(() => mockChain);
-  
+
   return { selectFn, mockChain };
 };
 
 export const createMockContext = (
   user?: Partial<User>,
-  session?: Partial<Session>
+  session?: Partial<Session>,
 ): any => {
-  const mockUser = user ? { 
-    id: 'test-user-id', 
-    name: 'Test User',
-    email: 'test@example.com',
-    emailVerified: true,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    ...user 
-  } as User : null;
-  const mockSession = session ? { id: 'test-session-id', userId: mockUser?.id || 'test-user-id', ...session } as Session : null;
-  
+  const mockUser = user
+    ? ({
+        id: "test-user-id",
+        name: "Test User",
+        email: "test@example.com",
+        emailVerified: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        ...user,
+      } as User)
+    : null;
+  const mockSession = session
+    ? ({
+        id: "test-session-id",
+        userId: mockUser?.id || "test-user-id",
+        ...session,
+      } as Session)
+    : null;
+
   // Create the select mock
   const { selectFn, mockChain } = createSelectMock([]);
 
   return {
     session: mockSession ? { ...mockSession, user: mockUser } : null,
     authApi: {
-      getSession: vi.fn().mockResolvedValue(mockSession ? { ...mockSession, user: mockUser } : null),
+      getSession: vi
+        .fn()
+        .mockResolvedValue(
+          mockSession ? { ...mockSession, user: mockUser } : null,
+        ),
     },
     db: {
       query: {
@@ -140,15 +153,17 @@ export const createMockContext = (
 };
 
 export const createAuthenticatedContext = (
-  role: 'trainer' | 'client' = 'client',
-  businessId: string | null = 'test-business-id'
+  role: "trainer" | "client" = "client",
+  businessId: string | null = "test-business-id",
 ): any => {
   const user = mockUser({ role, businessId });
   const session = mockSession({ userId: user.id });
-  
+
   return createMockContext(user, session);
 };
 
-export const createCaller = (ctx: any): ReturnType<typeof appRouter.createCaller> => {
+export const createCaller = (
+  ctx: any,
+): ReturnType<typeof appRouter.createCaller> => {
   return appRouter.createCaller(ctx);
 };

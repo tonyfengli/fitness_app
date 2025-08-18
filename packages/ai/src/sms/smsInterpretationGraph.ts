@@ -1,7 +1,8 @@
-import { StateGraph, START, END } from "@langchain/langgraph";
+import { END, START, StateGraph } from "@langchain/langgraph";
+
 import type { SMSStateType } from "./types/smsTypes";
+import { buildQueryNode, extractContextNode, parseIntentNode } from "./nodes";
 import { SMSState } from "./types/smsTypes";
-import { parseIntentNode, extractContextNode, buildQueryNode } from "./nodes";
 
 /**
  * Creates the SMS interpretation graph
@@ -31,7 +32,7 @@ export function createSMSInterpretationGraph() {
     {
       extractContext: "extractContext" as any,
       end: END,
-    }
+    },
   );
 
   // Conditional edge from extractContext
@@ -46,7 +47,7 @@ export function createSMSInterpretationGraph() {
     {
       buildQuery: "buildQuery" as any,
       end: END,
-    }
+    },
   );
 
   // Final edge
@@ -66,6 +67,6 @@ export async function interpretSMS(rawMessage: string) {
     rawMessage,
     messages: [],
   });
-  
+
   return result;
 }

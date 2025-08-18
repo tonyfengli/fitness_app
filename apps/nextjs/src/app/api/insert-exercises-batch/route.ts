@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+
 import { db } from "@acme/db/client";
 import { exercises } from "@acme/db/schema";
 
@@ -148,12 +149,15 @@ const firstBatch = [
 
 export async function POST() {
   try {
-    const insertedExercises = await db.insert(exercises).values(firstBatch).returning();
-    
+    const insertedExercises = await db
+      .insert(exercises)
+      .values(firstBatch)
+      .returning();
+
     return NextResponse.json({
       success: true,
       message: `Successfully inserted ${insertedExercises.length} exercises`,
-      exercises: insertedExercises.map(ex => ({ id: ex.id, name: ex.name })),
+      exercises: insertedExercises.map((ex) => ({ id: ex.id, name: ex.name })),
     });
   } catch (error) {
     return NextResponse.json(
@@ -162,7 +166,7 @@ export async function POST() {
         message: "Failed to insert exercises",
         error: error instanceof Error ? error.message : String(error),
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

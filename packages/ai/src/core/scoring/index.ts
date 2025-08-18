@@ -5,5 +5,8 @@
 
 export { performFirstPassScoring, scoreExercise } from "./firstPassScoring";
 export { performSecondPassScoring } from "./secondPassScoring";
-export { analyzeScoreDistribution, logScoringPerformance } from "./scoreAnalysis";
+export {
+  analyzeScoreDistribution,
+  logScoringPerformance,
+} from "./scoreAnalysis";
 export type { ScoreDistribution } from "./scoreAnalysis";

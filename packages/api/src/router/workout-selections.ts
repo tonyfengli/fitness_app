@@ -1,25 +1,29 @@
 import type { TRPCRouterRecord } from "@trpc/server";
-import { z } from "zod/v4";
 import { TRPCError } from "@trpc/server";
-import { eq, and, or, asc, sql } from "@acme/db";
+import { z } from "zod/v4";
+
+import { and, asc, eq, or, sql } from "@acme/db";
 import { db } from "@acme/db/client";
-import { 
-  workoutExerciseSwaps,
+import {
   exercises,
-  WorkoutExercise
+  WorkoutExercise,
+  workoutExerciseSwaps,
 } from "@acme/db/schema";
-import { protectedProcedure, publicProcedure } from "../trpc";
+
 import type { SessionUser } from "../types/auth";
 import { WorkoutBlueprintService } from "../services/workout-blueprint-service";
 import { WorkoutGenerationService } from "../services/workout-generation-service";
+import { protectedProcedure, publicProcedure } from "../trpc";
 
 export const workoutSelectionsRouter = {
   // Get current selections for a session (public version)
   getSelectionsPublic: publicProcedure
-    .input(z.object({
-      sessionId: z.string(),
-      clientId: z.string()
-    }))
+    .input(
+      z.object({
+        sessionId: z.string(),
+        clientId: z.string(),
+      }),
+    )
     .query(async ({ ctx, input }) => {
       // First verify that the client is checked into the session
       const { UserTrainingSession, Workout } = await import("@acme/db/schema");
@@ -28,16 +32,16 @@ export const workoutSelectionsRouter = {
           eq(UserTrainingSession.userId, input.clientId),
           eq(UserTrainingSession.trainingSessionId, input.sessionId),
           or(
-            eq(UserTrainingSession.status, 'checked_in'),
-            eq(UserTrainingSession.status, 'ready')
-          )
+            eq(UserTrainingSession.status, "checked_in"),
+            eq(UserTrainingSession.status, "ready"),
+          ),
         ),
       });
 
       if (!userSession) {
         throw new TRPCError({
-          code: 'NOT_FOUND',
-          message: 'User is not checked into this session',
+          code: "NOT_FOUND",
+          message: "User is not checked into this session",
         });
       }
 
@@ -45,14 +49,13 @@ export const workoutSelectionsRouter = {
       const workout = await ctx.db
         .select()
         .from(Workout)
-        .where(and(
-          eq(Workout.trainingSessionId, input.sessionId),
-          eq(Workout.userId, input.clientId),
-          or(
-            eq(Workout.status, 'draft'),
-            eq(Workout.status, 'ready')
-          )
-        ))
+        .where(
+          and(
+            eq(Workout.trainingSessionId, input.sessionId),
+            eq(Workout.userId, input.clientId),
+            or(eq(Workout.status, "draft"), eq(Workout.status, "ready")),
+          ),
+        )
         .limit(1);
 
       if (!workout || workout.length === 0) {
@@ -68,7 +71,7 @@ export const workoutSelectionsRouter = {
       const workoutExercises = await ctx.db
         .select({
           we: WorkoutExercise,
-          exercise: exercises
+          exercise: exercises,
         })
         .from(WorkoutExercise)
         .innerJoin(exercises, eq(WorkoutExercise.exerciseId, exercises.id))
@@ -76,7 +79,7 @@ export const workoutSelectionsRouter = {
         .orderBy(asc(WorkoutExercise.orderIndex));
 
       // Transform to match the expected format
-      return workoutExercises.map(row => ({
+      return workoutExercises.map((row) => ({
         id: row.we.id,
         sessionId: input.sessionId,
         clientId: input.clientId,
@@ -84,21 +87,26 @@ export const workoutSelectionsRouter = {
         exerciseName: row.exercise.name,
         isShared: row.we.isShared || false,
         sharedWithClients: row.we.sharedWithClients,
-        selectionSource: row.we.selectionSource
+        selectionSource: row.we.selectionSource,
       }));
     }),
 
   // Get current selections for a session
   getSelections: protectedProcedure
-    .input(z.object({
-      sessionId: z.string(),
-      clientId: z.string().optional()
-    }))
+    .input(
+      z.object({
+        sessionId: z.string(),
+        clientId: z.string().optional(),
+      }),
+    )
     .query(async ({ ctx, input }) => {
       const { Workout } = await import("@acme/db/schema");
-      
-      console.log('[getSelections] Query params:', { sessionId: input.sessionId, clientId: input.clientId });
-      
+
+      console.log("[getSelections] Query params:", {
+        sessionId: input.sessionId,
+        clientId: input.clientId,
+      });
+
       // Build where clause for workouts
       // When checking for existing workouts, look for draft OR ready status
       // This ensures we find workouts that may have progressed past draft
@@ -107,29 +115,37 @@ export const workoutSelectionsRouter = {
             eq(Workout.trainingSessionId, input.sessionId),
             eq(Workout.userId, input.clientId),
             or(
-              eq(Workout.status, 'draft'),
-              eq(Workout.status, 'ready'),
-              eq(Workout.status, 'completed')
-            )
+              eq(Workout.status, "draft"),
+              eq(Workout.status, "ready"),
+              eq(Workout.status, "completed"),
+            ),
           )
         : and(
             eq(Workout.trainingSessionId, input.sessionId),
             or(
-              eq(Workout.status, 'draft'),
-              eq(Workout.status, 'ready'),
-              eq(Workout.status, 'completed')
-            )
+              eq(Workout.status, "draft"),
+              eq(Workout.status, "ready"),
+              eq(Workout.status, "completed"),
+            ),
           );
 
       // Get workouts first
-      const workouts = await ctx.db
-        .select()
-        .from(Workout)
-        .where(workoutWhere);
+      const workouts = await ctx.db.select().from(Workout).where(workoutWhere);
 
-      console.log('[getSelections] Found workouts:', workouts.length, 'workouts');
+      console.log(
+        "[getSelections] Found workouts:",
+        workouts.length,
+        "workouts",
+      );
       if (workouts.length > 0) {
-        console.log('[getSelections] Workout statuses:', workouts.map(w => ({ id: w.id, status: w.status, userId: w.userId })));
+        console.log(
+          "[getSelections] Workout statuses:",
+          workouts.map((w) => ({
+            id: w.id,
+            status: w.status,
+            userId: w.userId,
+          })),
+        );
       }
 
       if (workouts.length === 0) {
@@ -137,22 +153,27 @@ export const workoutSelectionsRouter = {
       }
 
       // Get workout exercises with exercise details
-      const workoutIds = workouts.map(w => w.id);
+      const workoutIds = workouts.map((w) => w.id);
       const workoutExercises = await ctx.db
         .select({
           we: WorkoutExercise,
           exercise: exercises,
           workoutId: WorkoutExercise.workoutId,
-          userId: Workout.userId
+          userId: Workout.userId,
         })
         .from(WorkoutExercise)
         .innerJoin(exercises, eq(WorkoutExercise.exerciseId, exercises.id))
         .innerJoin(Workout, eq(WorkoutExercise.workoutId, Workout.id))
-        .where(sql`${WorkoutExercise.workoutId} IN (${sql.join(workoutIds.map(id => sql`${id}`), sql`, `)})`)
+        .where(
+          sql`${WorkoutExercise.workoutId} IN (${sql.join(
+            workoutIds.map((id) => sql`${id}`),
+            sql`, `,
+          )})`,
+        )
         .orderBy(asc(WorkoutExercise.orderIndex));
 
       // Transform to match expected format
-      return workoutExercises.map(row => ({
+      return workoutExercises.map((row) => ({
         id: row.we.id,
         sessionId: input.sessionId,
         clientId: row.userId,
@@ -160,22 +181,24 @@ export const workoutSelectionsRouter = {
         exerciseName: row.exercise.name,
         isShared: row.we.isShared || false,
         sharedWithClients: row.we.sharedWithClients,
-        selectionSource: row.we.selectionSource
+        selectionSource: row.we.selectionSource,
       }));
     }),
 
   // Swap an exercise
   swapExercise: protectedProcedure
-    .input(z.object({
-      sessionId: z.string(),
-      clientId: z.string(),
-      originalExerciseId: z.string(),
-      newExercise: z.object({
-        id: z.string(),
-        name: z.string()
+    .input(
+      z.object({
+        sessionId: z.string(),
+        clientId: z.string(),
+        originalExerciseId: z.string(),
+        newExercise: z.object({
+          id: z.string(),
+          name: z.string(),
+        }),
+        reason: z.string().optional(),
       }),
-      reason: z.string().optional()
-    }))
+    )
     .mutation(async ({ ctx, input }) => {
       const user = ctx.session.user;
 
@@ -187,7 +210,7 @@ export const workoutSelectionsRouter = {
           originalExerciseId: input.originalExerciseId,
           newExerciseId: input.newExercise.id,
           swapReason: input.reason,
-          swappedBy: user.id
+          swappedBy: user.id,
         });
 
         // 2. Find the workout for this user
@@ -195,45 +218,48 @@ export const workoutSelectionsRouter = {
         const workout = await tx
           .select()
           .from(Workout)
-          .where(and(
-            eq(Workout.trainingSessionId, input.sessionId),
-            eq(Workout.userId, input.clientId),
-            or(
-              eq(Workout.status, 'draft'),
-              eq(Workout.status, 'ready'),
-              eq(Workout.status, 'completed')
-            )
-          ))
+          .where(
+            and(
+              eq(Workout.trainingSessionId, input.sessionId),
+              eq(Workout.userId, input.clientId),
+              or(
+                eq(Workout.status, "draft"),
+                eq(Workout.status, "ready"),
+                eq(Workout.status, "completed"),
+              ),
+            ),
+          )
           .limit(1);
 
         if (!workout || workout.length === 0) {
           throw new TRPCError({
-            code: 'NOT_FOUND',
-            message: 'Draft workout not found',
+            code: "NOT_FOUND",
+            message: "Draft workout not found",
           });
         }
 
         const firstWorkout = workout[0];
         if (!firstWorkout) {
           throw new TRPCError({
-            code: 'NOT_FOUND',
-            message: 'Draft workout not found',
+            code: "NOT_FOUND",
+            message: "Draft workout not found",
           });
         }
 
         // 3. Update the workout exercise
-        await tx.update(WorkoutExercise)
+        await tx
+          .update(WorkoutExercise)
           .set({
             exerciseId: input.newExercise.id,
             isShared: false, // Swapped exercises are individual
             sharedWithClients: null,
-            selectionSource: 'manual_swap'
+            selectionSource: "manual_swap",
           })
           .where(
             and(
               eq(WorkoutExercise.workoutId, firstWorkout.id),
-              eq(WorkoutExercise.exerciseId, input.originalExerciseId)
-            )
+              eq(WorkoutExercise.exerciseId, input.originalExerciseId),
+            ),
           );
 
         return { success: true };
@@ -242,16 +268,18 @@ export const workoutSelectionsRouter = {
 
   // Public version of swap exercise for clients
   swapExercisePublic: publicProcedure
-    .input(z.object({
-      sessionId: z.string(),
-      clientId: z.string(),
-      originalExerciseId: z.string(),
-      newExerciseId: z.string(),
-      reason: z.string().optional()
-    }))
+    .input(
+      z.object({
+        sessionId: z.string(),
+        clientId: z.string(),
+        originalExerciseId: z.string(),
+        newExerciseId: z.string(),
+        reason: z.string().optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
-      console.log('[swapExercisePublic] Starting swap with input:', input);
-      
+      console.log("[swapExercisePublic] Starting swap with input:", input);
+
       // First verify that the client is checked into the session
       const { UserTrainingSession } = await import("@acme/db/schema");
       const userSession = await ctx.db.query.UserTrainingSession.findFirst({
@@ -259,28 +287,28 @@ export const workoutSelectionsRouter = {
           eq(UserTrainingSession.userId, input.clientId),
           eq(UserTrainingSession.trainingSessionId, input.sessionId),
           or(
-            eq(UserTrainingSession.status, 'checked_in'),
-            eq(UserTrainingSession.status, 'ready')
-          )
+            eq(UserTrainingSession.status, "checked_in"),
+            eq(UserTrainingSession.status, "ready"),
+          ),
         ),
       });
 
       if (!userSession) {
         throw new TRPCError({
-          code: 'NOT_FOUND',
-          message: 'User is not checked into this session',
+          code: "NOT_FOUND",
+          message: "User is not checked into this session",
         });
       }
 
       // Get the new exercise name for the selection
       const newExercise = await ctx.db.query.exercises.findFirst({
-        where: eq(exercises.id, input.newExerciseId)
+        where: eq(exercises.id, input.newExerciseId),
       });
 
       if (!newExercise) {
         throw new TRPCError({
-          code: 'NOT_FOUND',
-          message: 'New exercise not found',
+          code: "NOT_FOUND",
+          message: "New exercise not found",
         });
       }
 
@@ -292,60 +320,69 @@ export const workoutSelectionsRouter = {
           clientId: input.clientId,
           originalExerciseId: input.originalExerciseId,
           newExerciseId: input.newExerciseId,
-          swapReason: input.reason || 'Client manual selection',
-          swappedBy: input.clientId // Client swapped their own exercise
+          swapReason: input.reason || "Client manual selection",
+          swappedBy: input.clientId, // Client swapped their own exercise
         };
-        
-        console.log('[swapExercisePublic] Inserting swap data:', swapData);
-        
-        const insertResult = await tx.insert(workoutExerciseSwaps).values(swapData).returning();
-        
-        console.log('[swapExercisePublic] Swap inserted successfully:', insertResult);
+
+        console.log("[swapExercisePublic] Inserting swap data:", swapData);
+
+        const insertResult = await tx
+          .insert(workoutExerciseSwaps)
+          .values(swapData)
+          .returning();
+
+        console.log(
+          "[swapExercisePublic] Swap inserted successfully:",
+          insertResult,
+        );
 
         // 2. Find the workout exercise to update
         const { Workout } = await import("@acme/db/schema");
         const workout = await tx
           .select()
           .from(Workout)
-          .where(and(
-            eq(Workout.trainingSessionId, input.sessionId),
-            eq(Workout.userId, input.clientId),
-            or(
-              eq(Workout.status, 'draft'),
-              eq(Workout.status, 'ready'),
-              eq(Workout.status, 'completed')
-            )
-          ))
+          .where(
+            and(
+              eq(Workout.trainingSessionId, input.sessionId),
+              eq(Workout.userId, input.clientId),
+              or(
+                eq(Workout.status, "draft"),
+                eq(Workout.status, "ready"),
+                eq(Workout.status, "completed"),
+              ),
+            ),
+          )
           .limit(1);
 
         if (!workout || workout.length === 0) {
           throw new TRPCError({
-            code: 'NOT_FOUND',
-            message: 'Draft workout not found',
+            code: "NOT_FOUND",
+            message: "Draft workout not found",
           });
         }
 
         const firstWorkout = workout[0];
         if (!firstWorkout) {
           throw new TRPCError({
-            code: 'NOT_FOUND',
-            message: 'Draft workout not found',
+            code: "NOT_FOUND",
+            message: "Draft workout not found",
           });
         }
 
         // 3. Update the workout exercise
-        await tx.update(WorkoutExercise)
+        await tx
+          .update(WorkoutExercise)
           .set({
             exerciseId: input.newExerciseId,
             isShared: false, // Swapped exercises are individual
             sharedWithClients: null,
-            selectionSource: 'manual_swap'
+            selectionSource: "manual_swap",
           })
           .where(
             and(
               eq(WorkoutExercise.workoutId, firstWorkout.id),
-              eq(WorkoutExercise.exerciseId, input.originalExerciseId)
-            )
+              eq(WorkoutExercise.exerciseId, input.originalExerciseId),
+            ),
           );
 
         // 4. Skip templateConfig update for now to avoid serialization issues
@@ -358,20 +395,23 @@ export const workoutSelectionsRouter = {
 
   // Get available alternatives for swapping
   getSwapAlternatives: protectedProcedure
-    .input(z.object({
-      sessionId: z.string(),
-      clientId: z.string(),
-      currentExerciseId: z.string()
-    }))
+    .input(
+      z.object({
+        sessionId: z.string(),
+        clientId: z.string(),
+        currentExerciseId: z.string(),
+      }),
+    )
     .query(async ({ ctx, input }) => {
       const user = ctx.session.user;
-      
+
       // Get the blueprint data to find alternatives
-      const blueprintData = await WorkoutBlueprintService.prepareClientsForBlueprint(
-        input.sessionId,
-        user.businessId,
-        user.id
-      );
+      const blueprintData =
+        await WorkoutBlueprintService.prepareClientsForBlueprint(
+          input.sessionId,
+          user.businessId,
+          user.id,
+        );
 
       // Check if it's a standard blueprint
       const blueprint = (blueprintData as any).blueprint as any;
@@ -392,7 +432,7 @@ export const workoutSelectionsRouter = {
           name: ex.name,
           score: ex.score,
           muscleGroups: ex.muscleGroups || [],
-          equipment: ex.equipment || []
+          equipment: ex.equipment || [],
         }));
     }),
 
@@ -412,63 +452,73 @@ export const workoutSelectionsRouter = {
     .input(z.object({ sessionId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const { Workout } = await import("@acme/db/schema");
-      
+
       // Get draft workouts for this session
       const draftWorkouts = await ctx.db
         .select()
         .from(Workout)
-        .where(and(
-          eq(Workout.trainingSessionId, input.sessionId),
-          eq(Workout.status, 'draft')
-        ));
+        .where(
+          and(
+            eq(Workout.trainingSessionId, input.sessionId),
+            eq(Workout.status, "draft"),
+          ),
+        );
 
       if (draftWorkouts.length === 0) {
         throw new TRPCError({
-          code: 'NOT_FOUND',
-          message: 'No draft workouts found for this session'
+          code: "NOT_FOUND",
+          message: "No draft workouts found for this session",
         });
       }
 
       // Get workout exercises for all draft workouts
-      const workoutIds = draftWorkouts.map(w => w.id);
+      const workoutIds = draftWorkouts.map((w) => w.id);
       const workoutExercises = await ctx.db
         .select({
           we: WorkoutExercise,
           exercise: exercises,
           workoutId: WorkoutExercise.workoutId,
-          userId: Workout.userId
+          userId: Workout.userId,
         })
         .from(WorkoutExercise)
         .innerJoin(exercises, eq(WorkoutExercise.exerciseId, exercises.id))
         .innerJoin(Workout, eq(WorkoutExercise.workoutId, Workout.id))
-        .where(sql`${WorkoutExercise.workoutId} IN (${sql.join(workoutIds.map(id => sql`${id}`), sql`, `)})`)
+        .where(
+          sql`${WorkoutExercise.workoutId} IN (${sql.join(
+            workoutIds.map((id) => sql`${id}`),
+            sql`, `,
+          )})`,
+        )
         .orderBy(asc(WorkoutExercise.orderIndex));
 
       // Transform to match expected format for Phase 2
-      const selectionsByClient = workoutExercises.reduce((acc, row) => {
-        if (!acc[row.userId]) acc[row.userId] = [];
-        
-        acc[row.userId]!.push({
-          id: row.we.id,
-          sessionId: input.sessionId,
-          clientId: row.userId,
-          exerciseId: row.we.exerciseId,
-          exerciseName: row.exercise.name,
-          isShared: row.we.isShared || false,
-          sharedWithClients: row.we.sharedWithClients,
-          selectionSource: row.we.selectionSource
-        });
-        
-        return acc;
-      }, {} as Record<string, any[]>);
+      const selectionsByClient = workoutExercises.reduce(
+        (acc, row) => {
+          if (!acc[row.userId]) acc[row.userId] = [];
+
+          acc[row.userId]!.push({
+            id: row.we.id,
+            sessionId: input.sessionId,
+            clientId: row.userId,
+            exerciseId: row.we.exerciseId,
+            exerciseName: row.exercise.name,
+            isShared: row.we.isShared || false,
+            sharedWithClients: row.we.sharedWithClients,
+            selectionSource: row.we.selectionSource,
+          });
+
+          return acc;
+        },
+        {} as Record<string, any[]>,
+      );
 
       // Trigger Phase 2 LLM for sequencing and sets/reps
       const workoutService = new WorkoutGenerationService(ctx);
       const result = await workoutService.generatePhase2Sequencing(
         input.sessionId,
-        selectionsByClient
+        selectionsByClient,
       );
 
       return result;
-    })
+    }),
 } satisfies TRPCRouterRecord;

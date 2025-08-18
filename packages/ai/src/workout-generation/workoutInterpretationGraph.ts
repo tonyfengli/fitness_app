@@ -1,7 +1,8 @@
-import { StateGraph, START, END } from "@langchain/langgraph";
-import type { WorkoutInterpretationStateType, ExercisesByBlock } from "./types";
-import { WorkoutInterpretationState } from "./types";
+import { END, START, StateGraph } from "@langchain/langgraph";
+
+import type { ExercisesByBlock, WorkoutInterpretationStateType } from "./types";
 import { generateWorkoutFromExercises } from "./generateWorkoutFromExercises";
+import { WorkoutInterpretationState } from "./types";
 
 /**
  * Creates the workout interpretation graph
@@ -16,7 +17,7 @@ export function createWorkoutInterpretationGraph() {
 
   // Define workflow edges
   workflow.addEdge(START, "interpretExercises" as any);
-  
+
   // Conditional edge to handle errors
   workflow.addConditionalEdges(
     "interpretExercises" as any,
@@ -30,7 +31,7 @@ export function createWorkoutInterpretationGraph() {
     },
     {
       end: END,
-    }
+    },
   );
 
   return workflow.compile();
@@ -45,14 +46,14 @@ export const workoutInterpretationGraph = createWorkoutInterpretationGraph();
  */
 export async function interpretWorkout(
   exercises: ExercisesByBlock,
-  clientContext?: Record<string, any>
+  clientContext?: Record<string, any>,
 ) {
   try {
     const result = await workoutInterpretationGraph.invoke({
       exercises,
       clientContext: clientContext || {},
     });
-    
+
     return result;
   } catch (error) {
     console.error("Error interpreting workout:", error);

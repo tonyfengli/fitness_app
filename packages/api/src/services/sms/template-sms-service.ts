@@ -1,7 +1,9 @@
+import type { SMSConfig } from "@acme/ai";
+import { getWorkoutTemplate } from "@acme/ai";
+import { eq } from "@acme/db";
 import { db } from "@acme/db/client";
 import { TrainingSession } from "@acme/db/schema";
-import { eq } from "@acme/db";
-import { getWorkoutTemplate, type SMSConfig } from "@acme/ai";
+
 import { createLogger } from "../../utils/logger";
 
 const logger = createLogger("TemplateSMSService");
@@ -17,12 +19,14 @@ export class TemplateSMSService {
   /**
    * Get SMS configuration for a session
    */
-  static async getSMSConfigForSession(sessionId: string): Promise<SMSConfig | null> {
+  static async getSMSConfigForSession(
+    sessionId: string,
+  ): Promise<SMSConfig | null> {
     try {
       const [session] = await db
         .select({
           templateType: TrainingSession.templateType,
-          templateConfig: TrainingSession.templateConfig
+          templateConfig: TrainingSession.templateConfig,
         })
         .from(TrainingSession)
         .where(eq(TrainingSession.id, sessionId))
@@ -34,7 +38,7 @@ export class TemplateSMSService {
       }
 
       // Get template based on type
-      const templateType = session.templateType || 'full_body_bmf';
+      const templateType = session.templateType || "full_body_bmf";
       const template = getWorkoutTemplate(templateType);
 
       logger.info("Getting SMS config for session", {
@@ -43,7 +47,7 @@ export class TemplateSMSService {
         defaultedTo: templateType,
         templateFound: !!template,
         hasSmsConfig: !!template?.smsConfig,
-        templateName: template?.name
+        templateName: template?.name,
       });
 
       if (!template?.smsConfig) {
@@ -61,16 +65,19 @@ export class TemplateSMSService {
   /**
    * Get check-in response based on template
    */
-  static getCheckInResponse(smsConfig: SMSConfig | null, userName?: string): string {
+  static getCheckInResponse(
+    smsConfig: SMSConfig | null,
+    userName?: string,
+  ): string {
     if (!smsConfig) {
       // Default fallback
-      return `Hello ${userName || 'there'}! You're checked in for the session. Welcome!`;
+      return `Hello ${userName || "there"}! You're checked in for the session. Welcome!`;
     }
 
     // Replace placeholders if needed
     let response = smsConfig.checkInResponse;
     if (userName) {
-      response = response.replace('{name}', userName);
+      response = response.replace("{name}", userName);
     }
 
     return response;
@@ -79,7 +86,10 @@ export class TemplateSMSService {
   /**
    * Get preference prompt based on template
    */
-  static getPreferencePrompt(smsConfig: SMSConfig | null, userName?: string): string {
+  static getPreferencePrompt(
+    smsConfig: SMSConfig | null,
+    userName?: string,
+  ): string {
     if (!smsConfig) {
       // Default fallback
       const name = userName || "there";
@@ -88,7 +98,7 @@ export class TemplateSMSService {
 
     let prompt = smsConfig.preferencePrompt;
     if (userName) {
-      prompt = prompt.replace('{name}', userName);
+      prompt = prompt.replace("{name}", userName);
     }
 
     return prompt;
@@ -98,28 +108,33 @@ export class TemplateSMSService {
    * Get follow-up prompts based on template and missing fields
    */
   static getFollowUpPrompts(
-    smsConfig: SMSConfig | null, 
-    fieldsToAsk: string[]
+    smsConfig: SMSConfig | null,
+    fieldsToAsk: string[],
   ): Record<string, string> {
     if (!smsConfig) {
       // Default fallback prompts
       return {
-        sessionGoal: "What's your training focus today - strength, endurance, or stability?",
-        muscleTargets: "Any specific muscle groups or areas you want to work on?",
-        intensity: "How are you feeling today - ready for high intensity, moderate, or taking it easy?",
-        avoidance: "Any areas we should be careful with or exercises to avoid?"
+        sessionGoal:
+          "What's your training focus today - strength, endurance, or stability?",
+        muscleTargets:
+          "Any specific muscle groups or areas you want to work on?",
+        intensity:
+          "How are you feeling today - ready for high intensity, moderate, or taking it easy?",
+        avoidance: "Any areas we should be careful with or exercises to avoid?",
       };
     }
 
     const prompts: Record<string, string> = {};
-    
+
     for (const field of fieldsToAsk) {
-      if (field === 'avoidJoints' || field === 'avoidExercises') {
+      if (field === "avoidJoints" || field === "avoidExercises") {
         // Map both to the combined 'avoidance' prompt
-        prompts[field] = smsConfig.followUpPrompts.avoidance || "Any areas we should avoid?";
+        prompts[field] =
+          smsConfig.followUpPrompts.avoidance || "Any areas we should avoid?";
       } else {
         const promptKey = field as keyof typeof smsConfig.followUpPrompts;
-        prompts[field] = smsConfig.followUpPrompts[promptKey] || `Tell me about ${field}`;
+        prompts[field] =
+          smsConfig.followUpPrompts[promptKey] || `Tell me about ${field}`;
       }
     }
 
@@ -144,7 +159,7 @@ export class TemplateSMSService {
   static getPriorityFields(smsConfig: SMSConfig | null): string[] {
     if (!smsConfig) {
       // Default priority
-      return ['sessionGoal', 'muscleTargets', 'intensity'];
+      return ["sessionGoal", "muscleTargets", "intensity"];
     }
 
     return smsConfig.priorityFields;
@@ -156,7 +171,7 @@ export class TemplateSMSService {
   static determineFieldsToAsk(
     smsConfig: SMSConfig | null,
     existingPreferences: any,
-    maxFields: number = 2
+    maxFields: number = 2,
   ): string[] {
     const priorityFields = this.getPriorityFields(smsConfig);
     const fieldsToAsk: string[] = [];
@@ -172,7 +187,13 @@ export class TemplateSMSService {
     }
 
     // If we still need more fields, check non-priority fields
-    const allFields = ['sessionGoal', 'muscleTargets', 'intensity', 'avoidJoints', 'avoidExercises'];
+    const allFields = [
+      "sessionGoal",
+      "muscleTargets",
+      "intensity",
+      "avoidJoints",
+      "avoidExercises",
+    ];
     for (const field of allFields) {
       if (fieldsToAsk.length >= maxFields) break;
       if (priorityFields.includes(field)) continue; // Already checked
@@ -191,16 +212,16 @@ export class TemplateSMSService {
    */
   private static checkFieldHasValue(preferences: any, field: string): boolean {
     switch (field) {
-      case 'sessionGoal':
+      case "sessionGoal":
         return !!preferences.sessionGoal;
-      case 'muscleTargets':
-        return !!(preferences.muscleTargets?.length);
-      case 'intensity':
+      case "muscleTargets":
+        return !!preferences.muscleTargets?.length;
+      case "intensity":
         return !!preferences.intensity;
-      case 'avoidJoints':
-        return !!(preferences.avoidJoints?.length);
-      case 'avoidExercises':
-        return !!(preferences.avoidExercises?.length);
+      case "avoidJoints":
+        return !!preferences.avoidJoints?.length;
+      case "avoidExercises":
+        return !!preferences.avoidExercises?.length;
       default:
         return false;
     }
@@ -212,14 +233,14 @@ export class TemplateSMSService {
   static generateTemplateFollowUp(
     smsConfig: SMSConfig | null,
     fieldsToAsk: string[],
-    existingPreferences: any
+    existingPreferences: any,
   ): string {
     if (fieldsToAsk.length === 0) {
       return this.getConfirmationMessage(smsConfig);
     }
 
     const prompts = this.getFollowUpPrompts(smsConfig, fieldsToAsk);
-    
+
     // If we have template-specific prompts, use those
     if (smsConfig && fieldsToAsk.length === 1) {
       return prompts[fieldsToAsk[0]!] || "Tell me more about your preferences.";
@@ -229,9 +250,9 @@ export class TemplateSMSService {
     if (fieldsToAsk.length === 2) {
       const prompt1 = prompts[fieldsToAsk[0]!];
       const prompt2 = prompts[fieldsToAsk[1]!];
-      
+
       // Combine the two prompts
-      return `${prompt1} Also, ${prompt2?.toLowerCase() || 'tell me more'}`;
+      return `${prompt1} Also, ${prompt2?.toLowerCase() || "tell me more"}`;
     }
 
     // Fallback for more than 2 fields

@@ -70,6 +70,8 @@ function MattePanel({
 interface WorkoutGenerationLoaderProps {
   clientNames: string[];
   onCancel?: () => void;
+  durationMinutes?: number; // Duration in minutes
+  forceComplete?: boolean; // Force progress to 100% immediately
 }
 
 const MESSAGES = [
@@ -78,14 +80,17 @@ const MESSAGES = [
   'Balancing push / pull…',
   'Reserving equipment…',
   'Picking a spicy finisher…',
-  'Syncing your playlist…',
   'Almost there…'
 ];
 
-export function WorkoutGenerationLoader({ clientNames, onCancel }: WorkoutGenerationLoaderProps) {
+export function WorkoutGenerationLoader({ clientNames, onCancel, durationMinutes = 1, forceComplete = false }: WorkoutGenerationLoaderProps) {
   const [progress, setProgress] = useState(0);
   const [messageIndex, setMessageIndex] = useState(0);
   const [isComplete, setIsComplete] = useState(false);
+  
+  // Calculate interval based on duration
+  const durationMs = durationMinutes * 60 * 1000; // Convert to milliseconds
+  const updateInterval = durationMs / 100; // Update every 1% of progress
   
   // Animations
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -170,27 +175,48 @@ export function WorkoutGenerationLoader({ clientNames, onCancel }: WorkoutGenera
           handleComplete();
           return 100;
         }
-        const remaining = 100 - prev;
-        const step = Math.max(1, Math.round(Math.random() * Math.max(1, remaining / 9)));
-        return Math.min(99, prev + step);
+        // Smooth linear progression
+        return Math.min(99, prev + 1);
       });
-    }, 300);
+    }, updateInterval);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [updateInterval]);
+
+  // Handle force complete
+  useEffect(() => {
+    if (forceComplete && progress < 100) {
+      // Quickly animate to 100%
+      const rapidInterval = setInterval(() => {
+        setProgress(prev => {
+          if (prev >= 100) {
+            clearInterval(rapidInterval);
+            handleComplete();
+            return 100;
+          }
+          // Jump by 10% each frame for quick completion
+          return Math.min(100, prev + 10);
+        });
+      }, 50); // Update every 50ms for smooth but fast animation
+
+      return () => clearInterval(rapidInterval);
+    }
+  }, [forceComplete]);
 
   // Update progress bar animation
   useEffect(() => {
     Animated.timing(progressAnim, {
       toValue: progress / 100,
-      duration: 220,
+      duration: forceComplete ? 50 : 220, // Faster animation when force completing
       useNativeDriver: false,
     }).start();
-  }, [progress, progressAnim]);
+  }, [progress, progressAnim, forceComplete]);
 
   // Message rotation
   useEffect(() => {
-    if (progress % 13 < 3) {
+    // Change message every ~15% of progress
+    const messageChangeInterval = Math.floor(100 / MESSAGES.length);
+    if (progress > 0 && progress % messageChangeInterval === 0) {
       setMessageIndex(prev => (prev + 1) % MESSAGES.length);
     }
   }, [progress]);
@@ -309,7 +335,7 @@ export function WorkoutGenerationLoader({ clientNames, onCancel }: WorkoutGenera
                 fontSize: 13,
                 marginTop: 1,
               }}>
-                Balancing muscles • Checking equipment • Syncing beats
+                Balancing muscles • Checking equipment
               </Text>
             </View>
           </View>

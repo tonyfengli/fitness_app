@@ -1,15 +1,16 @@
+import type { ParsedPreferences } from "@acme/ai";
+
 import { createLogger } from "../utils/logger";
+import { ExerciseDisambiguationService } from "./exerciseDisambiguationService";
 import { exerciseUpdateParser } from "./exerciseUpdateParser";
 import { ExerciseValidationService } from "./exerciseValidationService";
-import { ExerciseDisambiguationService } from "./exerciseDisambiguationService";
-import type { ParsedPreferences } from "@acme/ai";
 
 const logger = createLogger("PreferenceUpdateParser");
 
 export interface UpdateParseResult {
   hasUpdates: boolean;
   updates: Partial<ParsedPreferences>;
-  updateType: 'add' | 'remove' | 'change' | 'mixed' | null;
+  updateType: "add" | "remove" | "change" | "mixed" | null;
   fieldsUpdated: string[];
   rawInput: string;
   exerciseValidation?: {
@@ -26,34 +27,36 @@ export class PreferenceUpdateParser {
   private static readonly UPDATE_PATTERNS = {
     // Addition patterns
     add: /\b(add|include|also|plus|and|with)\b/i,
-    
-    // Removal patterns  
+
+    // Removal patterns
     remove: /\b(remove|skip|no|avoid|without|stop|don't|dont|exclude)\b/i,
-    
+
     // Change patterns
     change: /\b(change|switch|instead|replace|make it|update)\b/i,
-    
+
     // Intensity changes
-    intensityChange: /\b(go|make it|switch to|change to)\s+(easy|easier|light|lighter|hard|harder|moderate|medium)\b/i,
-    
+    intensityChange:
+      /\b(go|make it|switch to|change to)\s+(easy|easier|light|lighter|hard|harder|moderate|medium)\b/i,
+
     // Session goal changes
-    goalChange: /\b(focus on|switch to|change to|do)\s+(strength|stability|endurance)\b/i,
+    goalChange:
+      /\b(focus on|switch to|change to|do)\s+(strength|stability|endurance)\b/i,
   };
 
   /**
    * Parse a message for preference updates
    */
   static async parseUpdate(
-    message: string, 
+    message: string,
     currentPreferences: ParsedPreferences,
-    businessId?: string
+    businessId?: string,
   ): Promise<UpdateParseResult> {
     const result: UpdateParseResult = {
       hasUpdates: false,
       updates: {},
       updateType: null,
       fieldsUpdated: [],
-      rawInput: message
+      rawInput: message,
     };
 
     const lowerMessage = message.toLowerCase();
@@ -62,7 +65,7 @@ export class PreferenceUpdateParser {
     const intensityUpdate = this.parseIntensityUpdate(lowerMessage);
     if (intensityUpdate) {
       result.updates.intensity = intensityUpdate;
-      result.fieldsUpdated.push('intensity');
+      result.fieldsUpdated.push("intensity");
       result.hasUpdates = true;
     }
 
@@ -70,144 +73,170 @@ export class PreferenceUpdateParser {
     const goalUpdate = this.parseSessionGoalUpdate(lowerMessage);
     if (goalUpdate !== undefined) {
       result.updates.sessionGoal = goalUpdate;
-      result.fieldsUpdated.push('sessionGoal');
+      result.fieldsUpdated.push("sessionGoal");
       result.hasUpdates = true;
     }
 
     // Check if this is a replacement scenario (contains "instead")
     const isReplacement = /\binstead\b/i.test(message);
-    
+
     // Skip exercise parsing if this is purely a session goal update
-    const isSessionGoalOnly = goalUpdate !== undefined && 
-      /\b(make\s+(this|it)\s+a?\s+(strength|stability|endurance)\s+session|focus\s+on\s+(strength|stability|endurance))\b/i.test(lowerMessage);
-    
+    const isSessionGoalOnly =
+      goalUpdate !== undefined &&
+      /\b(make\s+(this|it)\s+a?\s+(strength|stability|endurance)\s+session|focus\s+on\s+(strength|stability|endurance))\b/i.test(
+        lowerMessage,
+      );
+
     // Check for exercise additions/removals using the exercise update parser
-    const exerciseUpdateIntent = isSessionGoalOnly 
-      ? { action: 'unknown' as const, exercises: [], rawInput: message }
+    const exerciseUpdateIntent = isSessionGoalOnly
+      ? { action: "unknown" as const, exercises: [], rawInput: message }
       : await exerciseUpdateParser.parseExerciseUpdate(message, businessId);
-    
-    if (exerciseUpdateIntent.action !== 'unknown' && exerciseUpdateIntent.exercises.length > 0) {
+
+    if (
+      exerciseUpdateIntent.action !== "unknown" &&
+      exerciseUpdateIntent.exercises.length > 0
+    ) {
       // Use the validation result from the exercise update parser if available
-      if (exerciseUpdateIntent.action === 'add' || isReplacement) {
+      if (exerciseUpdateIntent.action === "add" || isReplacement) {
         const validation = exerciseUpdateIntent.validationResult || {
           validatedExercises: exerciseUpdateIntent.exercises,
           matches: [],
-          hasUnrecognized: false
+          hasUnrecognized: false,
         };
-        
+
         // Check if disambiguation is needed
-        if (ExerciseDisambiguationService.checkNeedsDisambiguation(validation)) {
+        if (
+          ExerciseDisambiguationService.checkNeedsDisambiguation(validation)
+        ) {
           result.exerciseValidation = {
             includeValidation: validation,
-            needsDisambiguation: true
+            needsDisambiguation: true,
           };
           result.hasUpdates = true;
-          result.updateType = isReplacement ? 'change' : 'add';
+          result.updateType = isReplacement ? "change" : "add";
           return result; // Return early - disambiguation needed
         }
-        
+
         // No disambiguation needed - proceed with validated exercises
         if (isReplacement) {
           result.updates.includeExercises = validation.validatedExercises;
-          result.fieldsUpdated.push('includeExercises');
+          result.fieldsUpdated.push("includeExercises");
           result.hasUpdates = true;
-          result.updateType = 'change';
+          result.updateType = "change";
         } else {
           // For additions, append to include list (avoiding duplicates)
           const currentIncludes = currentPreferences.includeExercises || [];
           const newExercises = validation.validatedExercises.filter(
-            (exercise: string) => !currentIncludes.some(
-              (included: string) => included.toLowerCase() === exercise.toLowerCase()
-            )
+            (exercise: string) =>
+              !currentIncludes.some(
+                (included: string) =>
+                  included.toLowerCase() === exercise.toLowerCase(),
+              ),
           );
-          
+
           if (newExercises.length > 0) {
-            result.updates.includeExercises = [...currentIncludes, ...newExercises];
-            result.fieldsUpdated.push('includeExercises');
+            result.updates.includeExercises = [
+              ...currentIncludes,
+              ...newExercises,
+            ];
+            result.fieldsUpdated.push("includeExercises");
             result.hasUpdates = true;
           }
         }
-      } else if (exerciseUpdateIntent.action === 'remove') {
+      } else if (exerciseUpdateIntent.action === "remove") {
         // Use the validation result from the exercise update parser if available
         const validation = exerciseUpdateIntent.validationResult || {
           validatedExercises: exerciseUpdateIntent.exercises,
           matches: [],
-          hasUnrecognized: false
+          hasUnrecognized: false,
         };
-        
+
         // Check if disambiguation is needed
-        if (ExerciseDisambiguationService.checkNeedsDisambiguation(validation)) {
+        if (
+          ExerciseDisambiguationService.checkNeedsDisambiguation(validation)
+        ) {
           result.exerciseValidation = {
             avoidValidation: validation,
-            needsDisambiguation: true
+            needsDisambiguation: true,
           };
           result.hasUpdates = true;
-          result.updateType = 'remove';
+          result.updateType = "remove";
           return result; // Return early - disambiguation needed
         }
-        
+
         // No disambiguation needed - proceed with validated exercises
         const currentIncludes = currentPreferences.includeExercises || [];
         const exercisesToRemove = validation.validatedExercises;
-        
+
         // Filter out from includes
         const filteredIncludes = currentIncludes.filter(
-          (exercise: string) => !exercisesToRemove.some(
-            (toRemove: string) => exercise.toLowerCase() === toRemove.toLowerCase()
-          )
+          (exercise: string) =>
+            !exercisesToRemove.some(
+              (toRemove: string) =>
+                exercise.toLowerCase() === toRemove.toLowerCase(),
+            ),
         );
-        
+
         // Check if we actually removed anything from includes
-        const removedFromIncludes = currentIncludes.length > filteredIncludes.length;
-        
+        const removedFromIncludes =
+          currentIncludes.length > filteredIncludes.length;
+
         if (removedFromIncludes) {
           // Some exercises were removed from includes
           result.updates.includeExercises = filteredIncludes;
-          result.fieldsUpdated.push('includeExercises');
+          result.fieldsUpdated.push("includeExercises");
           result.hasUpdates = true;
         }
-        
+
         // Always add removed exercises to avoid list
         const currentAvoids = currentPreferences.avoidExercises || [];
         const newAvoids = exercisesToRemove.filter(
-          (exercise: string) => !currentAvoids.some(
-            (avoided: string) => avoided.toLowerCase() === exercise.toLowerCase()
-          )
+          (exercise: string) =>
+            !currentAvoids.some(
+              (avoided: string) =>
+                avoided.toLowerCase() === exercise.toLowerCase(),
+            ),
         );
-        
+
         if (newAvoids.length > 0) {
           result.updates.avoidExercises = [...currentAvoids, ...newAvoids];
-          result.fieldsUpdated.push('avoidExercises');
+          result.fieldsUpdated.push("avoidExercises");
           result.hasUpdates = true;
         }
       }
     }
 
     // Check for muscle target updates
-    const muscleUpdates = this.parseMuscleUpdates(lowerMessage, currentPreferences);
+    const muscleUpdates = this.parseMuscleUpdates(
+      lowerMessage,
+      currentPreferences,
+    );
     if (muscleUpdates.hasChanges) {
       if (muscleUpdates.targetsToAdd.length > 0) {
         result.updates.muscleTargets = [
           ...(currentPreferences.muscleTargets || []),
-          ...muscleUpdates.targetsToAdd
+          ...muscleUpdates.targetsToAdd,
         ];
-        result.fieldsUpdated.push('muscleTargets');
+        result.fieldsUpdated.push("muscleTargets");
       }
       if (muscleUpdates.toAvoid.length > 0) {
         result.updates.muscleLessens = [
           ...(currentPreferences.muscleLessens || []),
-          ...muscleUpdates.toAvoid
+          ...muscleUpdates.toAvoid,
         ];
-        result.fieldsUpdated.push('muscleLessens');
+        result.fieldsUpdated.push("muscleLessens");
       }
       result.hasUpdates = true;
     }
 
     // Check for joint updates
-    const jointUpdates = this.parseJointUpdates(lowerMessage, currentPreferences);
+    const jointUpdates = this.parseJointUpdates(
+      lowerMessage,
+      currentPreferences,
+    );
     if (jointUpdates.length > 0) {
       result.updates.avoidJoints = jointUpdates;
-      result.fieldsUpdated.push('avoidJoints');
+      result.fieldsUpdated.push("avoidJoints");
       result.hasUpdates = true;
     }
 
@@ -219,7 +248,7 @@ export class PreferenceUpdateParser {
     logger.info("Parsed preference update", {
       hasUpdates: result.hasUpdates,
       fieldsUpdated: result.fieldsUpdated,
-      updateType: result.updateType
+      updateType: result.updateType,
     });
 
     return result;
@@ -228,11 +257,23 @@ export class PreferenceUpdateParser {
   /**
    * Parse intensity updates
    */
-  private static parseIntensityUpdate(message: string): ParsedPreferences['intensity'] | null {
+  private static parseIntensityUpdate(
+    message: string,
+  ): ParsedPreferences["intensity"] | null {
     const patterns = [
-      { pattern: /\b(easy|easier|light|lighter|low|gentle|relax|tired)\b/i, value: 'low' as const },
-      { pattern: /\b(moderate|medium|normal|regular)\b/i, value: 'moderate' as const },
-      { pattern: /\b(hard|harder|heavy|intense|high|crush|destroy|kick\s+(my\s+)?(butt|ass)|push\s+me|challenge\s+me|bring\s+it|all\s+out)\b/i, value: 'high' as const },
+      {
+        pattern: /\b(easy|easier|light|lighter|low|gentle|relax|tired)\b/i,
+        value: "low" as const,
+      },
+      {
+        pattern: /\b(moderate|medium|normal|regular)\b/i,
+        value: "moderate" as const,
+      },
+      {
+        pattern:
+          /\b(hard|harder|heavy|intense|high|crush|destroy|kick\s+(my\s+)?(butt|ass)|push\s+me|challenge\s+me|bring\s+it|all\s+out)\b/i,
+        value: "high" as const,
+      },
     ];
 
     // Look for explicit intensity change patterns
@@ -245,7 +286,10 @@ export class PreferenceUpdateParser {
     }
 
     // Also check for simple intensity mentions with update context
-    const hasUpdateContext = /\b(actually|instead|change|make|go|feel|feeling|want|push|challenge|bring|destroy|crush|let's|need|take)\b/i.test(message);
+    const hasUpdateContext =
+      /\b(actually|instead|change|make|go|feel|feeling|want|push|challenge|bring|destroy|crush|let's|need|take)\b/i.test(
+        message,
+      );
     if (hasUpdateContext) {
       for (const { pattern, value } of patterns) {
         if (pattern.test(message)) {
@@ -260,66 +304,105 @@ export class PreferenceUpdateParser {
   /**
    * Parse session goal updates
    */
-  private static parseSessionGoalUpdate(message: string): ParsedPreferences['sessionGoal'] | undefined {
-    if (/\b(strength|strong|heavy)\b/i.test(message) && this.hasUpdateIntent(message)) {
-      return 'strength';
+  private static parseSessionGoalUpdate(
+    message: string,
+  ): ParsedPreferences["sessionGoal"] | undefined {
+    if (
+      /\b(strength|strong|heavy)\b/i.test(message) &&
+      this.hasUpdateIntent(message)
+    ) {
+      return "strength";
     }
-    if (/\b(stability|balance|control)\b/i.test(message) && this.hasUpdateIntent(message)) {
-      return 'stability';
+    if (
+      /\b(stability|balance|control)\b/i.test(message) &&
+      this.hasUpdateIntent(message)
+    ) {
+      return "stability";
     }
     return undefined;
   }
-
 
   /**
    * Parse muscle updates
    */
   private static parseMuscleUpdates(
     message: string,
-    current: ParsedPreferences
+    current: ParsedPreferences,
   ): { hasChanges: boolean; targetsToAdd: string[]; toAvoid: string[] } {
-    const result = { hasChanges: false, targetsToAdd: [] as string[], toAvoid: [] as string[] };
-    
+    const result = {
+      hasChanges: false,
+      targetsToAdd: [] as string[],
+      toAvoid: [] as string[],
+    };
+
     const musclePatterns = [
-      'chest', 'back', 'shoulders', 'arms', 'legs', 'glutes', 
-      'core', 'abs', 'triceps', 'biceps', 'quads', 'hamstrings', 
-      'calves', 'delts', 'lats', 'traps'
+      "chest",
+      "back",
+      "shoulders",
+      "arms",
+      "legs",
+      "glutes",
+      "core",
+      "abs",
+      "triceps",
+      "biceps",
+      "quads",
+      "hamstrings",
+      "calves",
+      "delts",
+      "lats",
+      "traps",
     ];
-    
-    const muscleRegex = new RegExp(`\\b(${musclePatterns.join('|')})\\b`, 'gi');
+
+    const muscleRegex = new RegExp(`\\b(${musclePatterns.join("|")})\\b`, "gi");
     const matches = message.match(muscleRegex) || [];
-    
+
     if (matches.length > 0) {
       // Check context
       const isAvoid = /\b(sore|tired|rest|avoid|skip|no)\b/i.test(message);
       const isTarget = /\b(work|hit|focus|target|add)\b/i.test(message);
-      
+
       if (isAvoid) {
-        result.toAvoid = matches.map(m => m.toLowerCase());
+        result.toAvoid = matches.map((m) => m.toLowerCase());
         result.hasChanges = true;
       } else if (isTarget) {
-        result.targetsToAdd = matches.map(m => m.toLowerCase());
+        result.targetsToAdd = matches.map((m) => m.toLowerCase());
         result.hasChanges = true;
       }
     }
-    
+
     return result;
   }
 
   /**
    * Parse joint updates
    */
-  private static parseJointUpdates(message: string, current: ParsedPreferences): string[] {
-    const jointPatterns = ['knees?', 'shoulders?', 'wrists?', 'elbows?', 'ankles?', 'hips?', 'back', 'neck'];
-    const jointRegex = new RegExp(`\\b(${jointPatterns.join('|')})\\b`, 'gi');
-    
+  private static parseJointUpdates(
+    message: string,
+    current: ParsedPreferences,
+  ): string[] {
+    const jointPatterns = [
+      "knees?",
+      "shoulders?",
+      "wrists?",
+      "elbows?",
+      "ankles?",
+      "hips?",
+      "back",
+      "neck",
+    ];
+    const jointRegex = new RegExp(`\\b(${jointPatterns.join("|")})\\b`, "gi");
+
     const matches = message.match(jointRegex) || [];
-    const hasJointIssue = /\b(hurt|hurting|pain|sore|protect|careful|issue|problem|ache|aching)\b/i.test(message);
-    
+    const hasJointIssue =
+      /\b(hurt|hurting|pain|sore|protect|careful|issue|problem|ache|aching)\b/i.test(
+        message,
+      );
+
     if (matches.length > 0 && hasJointIssue) {
-      return matches.map(m => m.toLowerCase().replace(/s$/, '')); // Remove plural 's'
+      return matches.map((m) => m.toLowerCase().replace(/s$/, "")); // Remove plural 's'
     }
-    
+
     return [];
   }
 
@@ -327,44 +410,47 @@ export class PreferenceUpdateParser {
    * Check if message has update intent
    */
   private static hasUpdateIntent(message: string): boolean {
-    const updateWords = /\b(actually|instead|change|update|switch|add|remove|also|plus|now|today|feeling|want|let's|make)\b/i;
+    const updateWords =
+      /\b(actually|instead|change|update|switch|add|remove|also|plus|now|today|feeling|want|let's|make)\b/i;
     return updateWords.test(message);
   }
 
   /**
    * Determine the type of update
    */
-  private static determineUpdateType(message: string): UpdateParseResult['updateType'] {
+  private static determineUpdateType(
+    message: string,
+  ): UpdateParseResult["updateType"] {
     const hasAdd = this.UPDATE_PATTERNS.add.test(message);
     const hasRemove = this.UPDATE_PATTERNS.remove.test(message);
     const hasChange = this.UPDATE_PATTERNS.change.test(message);
-    
-    // Check for intensity-specific phrases that indicate change
-    const hasIntensityChange = /\b(kick|push|challenge|destroy|crush|easy|light|hard)\b/i.test(message);
-    
-    if ((hasAdd || hasIntensityChange) && hasRemove) return 'mixed';
-    if (hasAdd && hasIntensityChange) return 'mixed';
-    if (hasChange || hasIntensityChange) return 'change';
-    if (hasAdd) return 'add';
-    if (hasRemove) return 'remove';
-    
-    return 'change'; // Default to change if intent is unclear
-  }
 
+    // Check for intensity-specific phrases that indicate change
+    const hasIntensityChange =
+      /\b(kick|push|challenge|destroy|crush|easy|light|hard)\b/i.test(message);
+
+    if ((hasAdd || hasIntensityChange) && hasRemove) return "mixed";
+    if (hasAdd && hasIntensityChange) return "mixed";
+    if (hasChange || hasIntensityChange) return "change";
+    if (hasAdd) return "add";
+    if (hasRemove) return "remove";
+
+    return "change"; // Default to change if intent is unclear
+  }
 
   /**
    * Generate a confirmation message for updates
    */
   static generateUpdateConfirmation(
     updateResult: UpdateParseResult,
-    targetedFollowupService: any
+    targetedFollowupService: any,
   ): string {
     if (!updateResult.hasUpdates) {
       return "I didn't catch any changes you'd like to make. Could you rephrase what you'd like to update?";
     }
 
     const { fieldsUpdated, updates } = updateResult;
-    
+
     // Use the TargetedFollowupService method for consistent messaging
     return targetedFollowupService.generateUpdateResponse(fieldsUpdated);
   }

@@ -1,5 +1,6 @@
-import { ChatOpenAI } from "@langchain/openai";
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
+import { ChatOpenAI } from "@langchain/openai";
+
 import type { SMSStateType } from "../types/smsTypes";
 
 const INTENT_PROMPT = `You are an AI assistant that interprets SMS messages from fitness clients.
@@ -17,21 +18,34 @@ Analyze the message and respond with JSON containing:
 
 // Keyword patterns for fallback intent detection
 const CHECK_IN_KEYWORDS = [
-  "here", "im here", "i'm here", "i am here",
-  "ready", "im ready", "i'm ready", "i am ready",
-  "checking in", "check in", "checkin",
-  "arrived", "im in", "i'm in", "i am in",
-  "present", "at the gym", "at gym"
+  "here",
+  "im here",
+  "i'm here",
+  "i am here",
+  "ready",
+  "im ready",
+  "i'm ready",
+  "i am ready",
+  "checking in",
+  "check in",
+  "checkin",
+  "arrived",
+  "im in",
+  "i'm in",
+  "i am in",
+  "present",
+  "at the gym",
+  "at gym",
 ];
 
 function detectIntentByKeywords(message: string) {
   const lowerMessage = message.toLowerCase().trim();
-  
+
   // Check for check-in keywords
-  if (CHECK_IN_KEYWORDS.some(keyword => lowerMessage.includes(keyword))) {
+  if (CHECK_IN_KEYWORDS.some((keyword) => lowerMessage.includes(keyword))) {
     return { type: "check_in" as const, confidence: 0.8 };
   }
-  
+
   return null;
 }
 
@@ -59,17 +73,20 @@ export async function parseIntentNode(state: SMSStateType) {
 
     const response = await model.invoke(messages);
     const content = response.content.toString();
-    
+
     // Parse JSON response
     const intent = JSON.parse(content);
-    
+
     return {
       intent,
       messages: [...state.messages, ...messages, response],
     };
   } catch (error) {
-    console.error("Error parsing intent with LLM, using keyword fallback:", error);
-    
+    console.error(
+      "Error parsing intent with LLM, using keyword fallback:",
+      error,
+    );
+
     // Final fallback - check keywords again in case of LLM failure
     const fallbackIntent = detectIntentByKeywords(state.rawMessage);
     if (fallbackIntent) {
@@ -78,7 +95,7 @@ export async function parseIntentNode(state: SMSStateType) {
         messages: state.messages,
       };
     }
-    
+
     // Default to "other" if all else fails
     return {
       intent: { type: "other" as const, confidence: 0.5 },

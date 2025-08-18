@@ -1,4 +1,4 @@
-import type { WorkoutTemplate } from './workoutTemplate';
+import type { WorkoutTemplate } from "./workoutTemplate";
 
 /**
  * Extended workout template used in filtering operations
@@ -11,6 +11,8 @@ export interface FilterWorkoutTemplate extends WorkoutTemplate {
 /**
  * Type guard to check if a workout template has the isFullBody property
  */
-export function hasFullBodyFlag(template: WorkoutTemplate | FilterWorkoutTemplate): template is FilterWorkoutTemplate {
-  return 'isFullBody' in template;
+export function hasFullBodyFlag(
+  template: WorkoutTemplate | FilterWorkoutTemplate,
+): template is FilterWorkoutTemplate {
+  return "isFullBody" in template;
 }

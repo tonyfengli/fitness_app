@@ -1,9 +1,9 @@
 import OpenAI from "openai";
-import { z } from "zod";
 import { zodResponseFormat } from "openai/helpers/zod";
+import { z } from "zod";
 
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY || 'test-key',
+  apiKey: process.env.OPENAI_API_KEY || "test-key",
 });
 
 // Schema for the parsed preferences
@@ -16,7 +16,11 @@ const PreferenceSchema = z.object({
   avoidJoints: z.array(z.string()).optional(),
   sessionGoal: z.enum(["strength", "stability"]).nullable().optional(),
   generalNotes: z.string().optional(),
-  needsFollowUp: z.boolean().describe("Whether the response needs clarification or follow-up questions"),
+  needsFollowUp: z
+    .boolean()
+    .describe(
+      "Whether the response needs clarification or follow-up questions",
+    ),
 });
 
 export type ParsedPreferences = z.infer<typeof PreferenceSchema> & {
@@ -163,7 +167,8 @@ CONFLICT RESOLUTION RULES:
 
 const FEW_SHOT_EXAMPLES = [
   {
-    input: "I'm feeling tired today. Let's keep it light. My quads are sore from yesterday.",
+    input:
+      "I'm feeling tired today. Let's keep it light. My quads are sore from yesterday.",
     output: {
       sessionGoal: null,
       intensity: "low",
@@ -172,8 +177,8 @@ const FEW_SHOT_EXAMPLES = [
       includeExercises: [],
       avoidExercises: [],
       avoidJoints: [],
-      needsFollowUp: false
-    }
+      needsFollowUp: false,
+    },
   },
   {
     input: "Can we focus on stability today? And let's do some core work.",
@@ -184,16 +189,16 @@ const FEW_SHOT_EXAMPLES = [
       includeExercises: [],
       avoidExercises: [],
       avoidJoints: [],
-      needsFollowUp: false
-    }
+      needsFollowUp: false,
+    },
   },
   {
     input: "Skip burpees today. Also nothing hard on my wrists please.",
     output: {
       avoidExercises: ["burpees"],
       avoidJoints: ["wrists"],
-      needsFollowUp: false
-    }
+      needsFollowUp: false,
+    },
   },
   {
     input: "I'm tired but let's push through. My shoulders are tight.",
@@ -205,8 +210,8 @@ const FEW_SHOT_EXAMPLES = [
       includeExercises: [],
       avoidExercises: [],
       avoidJoints: [],
-      needsFollowUp: true
-    }
+      needsFollowUp: true,
+    },
   },
   {
     input: "Feeling great today! Let's hit legs hard.",
@@ -218,8 +223,8 @@ const FEW_SHOT_EXAMPLES = [
       includeExercises: [],
       avoidExercises: [],
       avoidJoints: [],
-      needsFollowUp: false
-    }
+      needsFollowUp: false,
+    },
   },
   {
     input: "I'm feeling tired today. Don't want to do too much",
@@ -231,8 +236,8 @@ const FEW_SHOT_EXAMPLES = [
       includeExercises: [],
       avoidExercises: [],
       avoidJoints: [],
-      needsFollowUp: false
-    }
+      needsFollowUp: false,
+    },
   },
   {
     input: "My knees hurt but otherwise, kick my butt today",
@@ -244,8 +249,8 @@ const FEW_SHOT_EXAMPLES = [
       includeExercises: [],
       avoidExercises: [],
       avoidJoints: ["knees"],
-      needsFollowUp: false
-    }
+      needsFollowUp: false,
+    },
   },
   {
     input: "My shoulder is bothering me but I still want to go hard on legs",
@@ -257,18 +262,20 @@ const FEW_SHOT_EXAMPLES = [
       includeExercises: [],
       avoidExercises: [],
       avoidJoints: ["shoulders"],
-      needsFollowUp: false
-    }
+      needsFollowUp: false,
+    },
   },
   {
-    input: "Slight soreness in my hamstrings from Tuesday, so maybe take it easy on legs?",
+    input:
+      "Slight soreness in my hamstrings from Tuesday, so maybe take it easy on legs?",
     output: {
       muscleLessens: ["hamstrings", "quads", "glutes"],
-      needsFollowUp: false
-    }
+      needsFollowUp: false,
+    },
   },
   {
-    input: "My shoulders are sore from yesterday's workout but I want to train hard today",
+    input:
+      "My shoulders are sore from yesterday's workout but I want to train hard today",
     output: {
       sessionGoal: null,
       intensity: "high",
@@ -277,8 +284,8 @@ const FEW_SHOT_EXAMPLES = [
       includeExercises: [],
       avoidExercises: [],
       avoidJoints: [],
-      needsFollowUp: false
-    }
+      needsFollowUp: false,
+    },
   },
   {
     input: "I'd like to do both deadlifts and squats today",
@@ -289,25 +296,33 @@ const FEW_SHOT_EXAMPLES = [
       includeExercises: ["deadlifts", "squats"],
       avoidExercises: [],
       avoidJoints: [],
-      needsFollowUp: false
-    }
-  }
+      needsFollowUp: false,
+    },
+  },
 ];
 
-export async function parseWorkoutPreferences(userResponse: string): Promise<ParsedPreferences> {
+export async function parseWorkoutPreferences(
+  userResponse: string,
+): Promise<ParsedPreferences> {
   console.log("🚀 parseWorkoutPreferences called with:", userResponse);
-  console.log("📋 SYSTEM_PROMPT starts with:", SYSTEM_PROMPT.substring(0, 50) + "...");
-  
+  console.log(
+    "📋 SYSTEM_PROMPT starts with:",
+    SYSTEM_PROMPT.substring(0, 50) + "...",
+  );
+
   let content: string | null | undefined;
   let debugInfo: any = {
     startTime: Date.now(),
-    userInput: userResponse
+    userInput: userResponse,
   };
-  
+
   try {
-    const systemWithExamples = SYSTEM_PROMPT + "\n\nFEW-SHOT EXAMPLES:\n" + 
-      FEW_SHOT_EXAMPLES.map(ex => 
-        `Input: "${ex.input}"\nOutput: ${JSON.stringify(ex.output, null, 2)}`
+    const systemWithExamples =
+      SYSTEM_PROMPT +
+      "\n\nFEW-SHOT EXAMPLES:\n" +
+      FEW_SHOT_EXAMPLES.map(
+        (ex) =>
+          `Input: "${ex.input}"\nOutput: ${JSON.stringify(ex.output, null, 2)}`,
       ).join("\n\n");
 
     // Debug log to verify we're using the new prompt
@@ -317,7 +332,7 @@ export async function parseWorkoutPreferences(userResponse: string): Promise<Par
       model: "gpt-4o-mini",
       messages: [
         { role: "system", content: systemWithExamples },
-        { role: "user", content: userResponse }
+        { role: "user", content: userResponse },
       ],
       response_format: {
         type: "json_object",
@@ -336,56 +351,63 @@ export async function parseWorkoutPreferences(userResponse: string): Promise<Par
     console.log("🤖 LLM response:", JSON.stringify(parsed, null, 2));
     console.log("🔍 Specific fields - avoidJoints:", parsed.avoidJoints);
     console.log("🔍 Specific fields - intensity:", parsed.intensity);
-    
+
     debugInfo.parsedResponse = parsed;
     debugInfo.parseSuccess = true;
-    
+
     const validated = PreferenceSchema.parse(parsed);
     debugInfo.validationSuccess = true;
-    
+
     const result = {
       ...validated,
       systemPromptUsed: systemWithExamples,
       rawLLMResponse: parsed, // Add the raw LLM response for debugging
-      debugInfo: debugInfo
+      debugInfo: debugInfo,
     };
-    
+
     console.log("✅ Returning result:", result);
     return result;
   } catch (error) {
     console.error("Error parsing workout preferences:", error);
     console.error("Error details:", {
       errorMessage: error instanceof Error ? error.message : "Unknown error",
-      errorStack: error instanceof Error ? error.stack : undefined
+      errorStack: error instanceof Error ? error.stack : undefined,
     });
-    
+
     // Try to get raw LLM response for debugging
     let rawResponse = null;
     try {
-      if (typeof content === 'string') {
+      if (typeof content === "string") {
         rawResponse = JSON.parse(content);
       }
     } catch (parseErr) {
       console.error("Could not parse content for debugging:", parseErr);
     }
-    
+
     // Return a basic response that indicates follow-up is needed
     return {
       needsFollowUp: true,
       generalNotes: userResponse,
-      systemPromptUsed: SYSTEM_PROMPT + " [Error: " + (error instanceof Error ? error.message : "Unknown") + "]",
+      systemPromptUsed:
+        SYSTEM_PROMPT +
+        " [Error: " +
+        (error instanceof Error ? error.message : "Unknown") +
+        "]",
       rawLLMResponse: rawResponse,
       debugInfo: {
         ...debugInfo,
-        error: error instanceof Error ? {
-          message: error.message,
-          stack: error.stack,
-          name: error.name
-        } : { message: String(error) },
+        error:
+          error instanceof Error
+            ? {
+                message: error.message,
+                stack: error.stack,
+                name: error.name,
+              }
+            : { message: String(error) },
         errorOccurredAt: Date.now() - debugInfo.startTime,
         rawContent: content,
-        attemptedParse: rawResponse
-      }
+        attemptedParse: rawResponse,
+      },
     };
   }
 }

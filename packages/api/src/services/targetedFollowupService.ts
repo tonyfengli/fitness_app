@@ -1,9 +1,11 @@
 import OpenAI from "openai";
+
+import type { SMSConfig } from "@acme/ai";
+
+import type { PreferenceCollectionStep } from "../utils/preferenceStateManager";
 import { createLogger } from "../utils/logger";
 import { PreferenceStateManager } from "../utils/preferenceStateManager";
 import { TemplateSMSService } from "./sms/template-sms-service";
-import type { PreferenceCollectionStep } from "../utils/preferenceStateManager";
-import type { SMSConfig } from "@acme/ai";
 
 const logger = createLogger("TargetedFollowupService");
 
@@ -13,7 +15,7 @@ let openai: OpenAI | null = null;
 function getOpenAIClient(): OpenAI {
   if (!openai) {
     openai = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY || 'test-key',
+      apiKey: process.env.OPENAI_API_KEY || "test-key",
     });
   }
   return openai;
@@ -39,42 +41,62 @@ export class TargetedFollowupService {
   /**
    * Determines which fields to ask about based on priority and what's missing
    */
-  private static determineFieldsToAsk(preferences: ParsedPreferences): string[] {
+  private static determineFieldsToAsk(
+    preferences: ParsedPreferences,
+  ): string[] {
     const fieldsToAsk: string[] = [];
-    
+
     // Priority 1: Always ask for sessionGoal if missing
     if (!preferences.sessionGoal) {
-      fieldsToAsk.push('sessionGoal');
+      fieldsToAsk.push("sessionGoal");
     }
-    
+
     // If we already have 1 field, pick 1 more. If we have 0, pick 2.
     const additionalFieldsNeeded = fieldsToAsk.length === 0 ? 2 : 1;
-    
+
     // Priority order for additional fields (excluding intensity which has default)
     const priorityFields = [
-      { field: 'muscleTargets', check: () => !preferences.muscleTargets?.length },
-      { field: 'avoidJoints', check: () => !preferences.avoidJoints?.length },
-      { field: 'muscleLessens', check: () => !preferences.muscleLessens?.length },
-      { field: 'includeExercises', check: () => !preferences.includeExercises?.length },
-      { field: 'avoidExercises', check: () => !preferences.avoidExercises?.length },
+      {
+        field: "muscleTargets",
+        check: () => !preferences.muscleTargets?.length,
+      },
+      { field: "avoidJoints", check: () => !preferences.avoidJoints?.length },
+      {
+        field: "muscleLessens",
+        check: () => !preferences.muscleLessens?.length,
+      },
+      {
+        field: "includeExercises",
+        check: () => !preferences.includeExercises?.length,
+      },
+      {
+        field: "avoidExercises",
+        check: () => !preferences.avoidExercises?.length,
+      },
     ];
-    
+
     // Add fields based on priority until we have enough
     for (const { field, check } of priorityFields) {
-      if (fieldsToAsk.length < (fieldsToAsk.includes('sessionGoal') ? 2 : additionalFieldsNeeded)) {
+      if (
+        fieldsToAsk.length <
+        (fieldsToAsk.includes("sessionGoal") ? 2 : additionalFieldsNeeded)
+      ) {
         if (check()) {
           fieldsToAsk.push(field);
         }
       }
     }
-    
+
     return fieldsToAsk;
   }
 
   /**
    * Creates a prompt for the LLM to generate a coach-like follow-up question
    */
-  private static createFollowupPrompt(fieldsToAsk: string[], existingPreferences: ParsedPreferences): string {
+  private static createFollowupPrompt(
+    fieldsToAsk: string[],
+    existingPreferences: ParsedPreferences,
+  ): string {
     const fieldDescriptions = {
       sessionGoal: "training focus (strength, endurance, or stability)",
       muscleTargets: "specific muscle groups or areas they want to work on",
@@ -84,21 +106,34 @@ export class TargetedFollowupService {
       avoidExercises: "exercises they want to skip or avoid",
     };
 
-    const fieldsText = fieldsToAsk.map(field => fieldDescriptions[field as keyof typeof fieldDescriptions]).join(' and ');
-    
+    const fieldsText = fieldsToAsk
+      .map(
+        (field) => fieldDescriptions[field as keyof typeof fieldDescriptions],
+      )
+      .join(" and ");
+
     // Build context about what we already know
     const knownInfo: string[] = [];
     if (existingPreferences.intensity) {
-      knownInfo.push(`planning a ${existingPreferences.intensity} intensity workout`);
+      knownInfo.push(
+        `planning a ${existingPreferences.intensity} intensity workout`,
+      );
     }
     if (existingPreferences.includeExercises?.length) {
-      knownInfo.push(`including ${existingPreferences.includeExercises.join(', ')}`);
+      knownInfo.push(
+        `including ${existingPreferences.includeExercises.join(", ")}`,
+      );
     }
     if (existingPreferences.avoidExercises?.length) {
-      knownInfo.push(`avoiding ${existingPreferences.avoidExercises.join(', ')}`);
+      knownInfo.push(
+        `avoiding ${existingPreferences.avoidExercises.join(", ")}`,
+      );
     }
 
-    const contextText = knownInfo.length > 0 ? `\n\nContext: We're ${knownInfo.join(' and ')}.` : '';
+    const contextText =
+      knownInfo.length > 0
+        ? `\n\nContext: We're ${knownInfo.join(" and ")}.`
+        : "";
 
     return `You are a friendly personal trainer having a conversation with a client who just checked in for their workout session.
 ${contextText}
@@ -128,42 +163,48 @@ Generate only the question, nothing else.`;
   static async generateFollowup(
     currentState: PreferenceCollectionStep,
     preferences: ParsedPreferences,
-    smsConfig?: SMSConfig | null
+    smsConfig?: SMSConfig | null,
   ): Promise<FollowupGenerationResult> {
     try {
       // If we have a template config, use it
       if (smsConfig) {
-        const fieldsToAsk = TemplateSMSService.determineFieldsToAsk(smsConfig, preferences, 2);
-        
+        const fieldsToAsk = TemplateSMSService.determineFieldsToAsk(
+          smsConfig,
+          preferences,
+          2,
+        );
+
         if (fieldsToAsk.length === 0) {
           return {
-            followupQuestion: TemplateSMSService.getConfirmationMessage(smsConfig),
+            followupQuestion:
+              TemplateSMSService.getConfirmationMessage(smsConfig),
             fieldsAsked: [],
-            promptUsed: "Template-based confirmation"
+            promptUsed: "Template-based confirmation",
           };
         }
-        
+
         const followupQuestion = TemplateSMSService.generateTemplateFollowUp(
           smsConfig,
           fieldsToAsk,
-          preferences
+          preferences,
         );
-        
+
         return {
           followupQuestion,
           fieldsAsked: fieldsToAsk,
-          promptUsed: "Template-based follow-up"
+          promptUsed: "Template-based follow-up",
         };
       }
-      
+
       // Otherwise, use the original LLM-based approach
       const fieldsToAsk = this.determineFieldsToAsk(preferences);
-      
+
       if (fieldsToAsk.length === 0) {
         return {
-          followupQuestion: "Perfect! I've got all your preferences. Your workout will be tailored to how you're feeling today. See you in the gym!",
+          followupQuestion:
+            "Perfect! I've got all your preferences. Your workout will be tailored to how you're feeling today. See you in the gym!",
           fieldsAsked: [],
-          promptUsed: "No fields needed - returning confirmation"
+          promptUsed: "No fields needed - returning confirmation",
         };
       }
 
@@ -174,35 +215,36 @@ Generate only the question, nothing else.`;
         messages: [
           {
             role: "system",
-            content: prompt
-          }
+            content: prompt,
+          },
         ],
         temperature: 0.7,
         max_tokens: 100,
       });
 
-      const followupQuestion = completion.choices[0]?.message?.content?.trim() || 
+      const followupQuestion =
+        completion.choices[0]?.message?.content?.trim() ||
         "What's your training focus today, and any specific areas you'd like to work on?";
 
       logger.info("Generated follow-up question", {
         fieldsAsked: fieldsToAsk,
         questionLength: followupQuestion.length,
-        usedTemplate: false
+        usedTemplate: false,
       });
 
       return {
         followupQuestion,
         fieldsAsked: fieldsToAsk,
-        promptUsed: prompt
+        promptUsed: prompt,
       };
-
     } catch (error) {
       logger.error("Error generating follow-up question", error);
-      
+
       return {
-        followupQuestion: "What's your training focus today - strength, endurance, or stability? Also, any specific areas you want to work on?",
-        fieldsAsked: ['sessionGoal', 'muscleTargets'],
-        promptUsed: "Error - using fallback"
+        followupQuestion:
+          "What's your training focus today - strength, endurance, or stability? Also, any specific areas you want to work on?",
+        fieldsAsked: ["sessionGoal", "muscleTargets"],
+        promptUsed: "Error - using fallback",
       };
     }
   }
@@ -235,22 +277,22 @@ Generate only the question, nothing else.`;
     // Special responses for common updates
     if (updatedFields.length === 1) {
       switch (updatedFields[0]) {
-        case 'intensity':
+        case "intensity":
           return "Got it, I've adjusted the intensity. Let me know if you need anything else changed.";
-        case 'sessionGoal':
+        case "sessionGoal":
           return "Perfect, I've updated your training focus. Anything else you'd like to adjust?";
-        case 'avoidExercises':
+        case "avoidExercises":
           return "No problem, I'll make sure to skip those. Let me know if there's anything else.";
-        case 'includeExercises':
+        case "includeExercises":
           return "Great, I'll add those to your workout. Anything else you'd like to change?";
-        case 'avoidJoints':
+        case "avoidJoints":
           return "Noted - I'll be careful with those areas. Let me know if you need other adjustments.";
       }
     }
 
     // Multiple field updates
     const updates = updatedFields
-      .map(field => fieldNames[field as keyof typeof fieldNames] || field)
+      .map((field) => fieldNames[field as keyof typeof fieldNames] || field)
       .join(" and ");
 
     return `Updated your ${updates}. Let me know if you need any other changes.`;

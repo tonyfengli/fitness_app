@@ -148,9 +148,18 @@ export function WorkoutLiveScreen() {
               e => e.exerciseId === exercise.exerciseId
             );
             
+            // Special handling for "Unknown" exercise names - try to get the real name
+            let exerciseTitle = exercise.exerciseName;
+            if (exerciseTitle === 'Unknown' && fullExercise?.exercise?.name) {
+              console.log(`[WorkoutLiveScreen] Fixing Unknown exercise name for ${exercise.exerciseId}: ${fullExercise.exercise.name}`);
+              exerciseTitle = fullExercise.exercise.name;
+            } else if (!exerciseTitle || exerciseTitle === 'Unknown') {
+              exerciseTitle = fullExercise?.exercise?.name || 'Unknown Exercise';
+            }
+            
             exerciseMap.set(exerciseKey, {
               exerciseId: exercise.exerciseId,
-              title: exercise.exerciseName || fullExercise?.exercise?.name || 'Unknown Exercise',
+              title: exerciseTitle,
               meta: formatExerciseMetaFromScheme(exercise.scheme, fullExercise),
               assigned: []
             });

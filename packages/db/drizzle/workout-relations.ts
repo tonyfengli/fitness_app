@@ -1,12 +1,13 @@
 import { relations } from "drizzle-orm/relations";
-import { 
-  Workout, 
-  WorkoutExercise, 
-  TrainingSession, 
-  UserTrainingSession, 
-  user,
+
+import {
+  Business,
   exercises,
-  Business 
+  TrainingSession,
+  user,
+  UserTrainingSession,
+  Workout,
+  WorkoutExercise,
 } from "../src/schema";
 
 export const workoutRelations = relations(Workout, ({ one, many }) => ({
@@ -29,37 +30,46 @@ export const workoutRelations = relations(Workout, ({ one, many }) => ({
   exercises: many(WorkoutExercise),
 }));
 
-export const workoutExerciseRelations = relations(WorkoutExercise, ({ one }) => ({
-  workout: one(Workout, {
-    fields: [WorkoutExercise.workoutId],
-    references: [Workout.id],
+export const workoutExerciseRelations = relations(
+  WorkoutExercise,
+  ({ one }) => ({
+    workout: one(Workout, {
+      fields: [WorkoutExercise.workoutId],
+      references: [Workout.id],
+    }),
+    exercise: one(exercises, {
+      fields: [WorkoutExercise.exerciseId],
+      references: [exercises.id],
+    }),
   }),
-  exercise: one(exercises, {
-    fields: [WorkoutExercise.exerciseId],
-    references: [exercises.id],
-  }),
-}));
+);
 
-export const trainingSessionRelations = relations(TrainingSession, ({ one, many }) => ({
-  business: one(Business, {
-    fields: [TrainingSession.businessId],
-    references: [Business.id],
+export const trainingSessionRelations = relations(
+  TrainingSession,
+  ({ one, many }) => ({
+    business: one(Business, {
+      fields: [TrainingSession.businessId],
+      references: [Business.id],
+    }),
+    trainer: one(user, {
+      fields: [TrainingSession.trainerId],
+      references: [user.id],
+    }),
+    workouts: many(Workout),
+    userSessions: many(UserTrainingSession),
   }),
-  trainer: one(user, {
-    fields: [TrainingSession.trainerId],
-    references: [user.id],
-  }),
-  workouts: many(Workout),
-  userSessions: many(UserTrainingSession),
-}));
+);
 
-export const userTrainingSessionRelations = relations(UserTrainingSession, ({ one }) => ({
-  user: one(user, {
-    fields: [UserTrainingSession.userId],
-    references: [user.id],
+export const userTrainingSessionRelations = relations(
+  UserTrainingSession,
+  ({ one }) => ({
+    user: one(user, {
+      fields: [UserTrainingSession.userId],
+      references: [user.id],
+    }),
+    trainingSession: one(TrainingSession, {
+      fields: [UserTrainingSession.trainingSessionId],
+      references: [TrainingSession.id],
+    }),
   }),
-  trainingSession: one(TrainingSession, {
-    fields: [UserTrainingSession.trainingSessionId],
-    references: [TrainingSession.id],
-  }),
-}));
+);

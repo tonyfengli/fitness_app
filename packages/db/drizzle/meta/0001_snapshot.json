@@ -48,9 +48,7 @@
         "business_businessId_unique": {
           "name": "business_businessId_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "business_id"
-          ]
+          "columns": ["business_id"]
         }
       },
       "policies": {},
@@ -191,12 +189,8 @@
           "name": "account_user_id_user_id_fk",
           "tableFrom": "account",
           "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -266,12 +260,8 @@
           "name": "session_user_id_user_id_fk",
           "tableFrom": "session",
           "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -281,9 +271,7 @@
         "session_token_unique": {
           "name": "session_token_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "token"
-          ]
+          "columns": ["token"]
         }
       },
       "policies": {},
@@ -344,9 +332,7 @@
         "user_email_unique": {
           "name": "user_email_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "email"
-          ]
+          "columns": ["email"]
         }
       },
       "policies": {},
@@ -512,12 +498,7 @@
     "public.complexity_level": {
       "name": "complexity_level",
       "schema": "public",
-      "values": [
-        "very_low",
-        "low",
-        "moderate",
-        "high"
-      ]
+      "values": ["very_low", "low", "moderate", "high"]
     },
     "public.fatigue_profile": {
       "name": "fatigue_profile",
@@ -593,12 +574,7 @@
     "public.strength_level": {
       "name": "strength_level",
       "schema": "public",
-      "values": [
-        "very_low",
-        "low",
-        "moderate",
-        "high"
-      ]
+      "values": ["very_low", "low", "moderate", "high"]
     }
   },
   "schemas": {},

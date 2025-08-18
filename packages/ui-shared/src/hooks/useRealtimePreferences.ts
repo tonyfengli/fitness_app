@@ -53,14 +53,7 @@ export function useRealtimePreferences({
     
     // Create a channel for this session's preferences
     const channel = supabase
-      .channel(`preferences-${sessionId}`, {
-        config: {
-          timeout: 30000, // Increase timeout to 30 seconds
-          params: {
-            eventsPerSecond: 10
-          }
-        }
-      })
+      .channel(`preferences-${sessionId}`)
       .on(
         'postgres_changes',
         {

@@ -80,12 +80,8 @@
           "name": "business_exercise_business_id_business_id_fk",
           "tableFrom": "business_exercise",
           "tableTo": "business",
-          "columnsFrom": [
-            "business_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["business_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -93,12 +89,8 @@
           "name": "business_exercise_exercise_id_exercises_id_fk",
           "tableFrom": "business_exercise",
           "tableTo": "exercises",
-          "columnsFrom": [
-            "exercise_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["exercise_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -184,12 +176,8 @@
           "name": "training_session_business_id_business_id_fk",
           "tableFrom": "training_session",
           "tableTo": "business",
-          "columnsFrom": [
-            "business_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["business_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -197,12 +185,8 @@
           "name": "training_session_trainer_id_user_id_fk",
           "tableFrom": "training_session",
           "tableTo": "user",
-          "columnsFrom": [
-            "trainer_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["trainer_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -276,12 +260,8 @@
           "name": "user_profile_user_id_user_id_fk",
           "tableFrom": "user_profile",
           "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -289,12 +269,8 @@
           "name": "user_profile_business_id_business_id_fk",
           "tableFrom": "user_profile",
           "tableTo": "business",
-          "columnsFrom": [
-            "business_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["business_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -362,12 +338,8 @@
           "name": "user_training_session_user_id_user_id_fk",
           "tableFrom": "user_training_session",
           "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -375,12 +347,8 @@
           "name": "user_training_session_training_session_id_training_session_id_fk",
           "tableFrom": "user_training_session",
           "tableTo": "training_session",
-          "columnsFrom": [
-            "training_session_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["training_session_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -489,12 +457,8 @@
           "name": "workout_training_session_id_training_session_id_fk",
           "tableFrom": "workout",
           "tableTo": "training_session",
-          "columnsFrom": [
-            "training_session_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["training_session_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -502,12 +466,8 @@
           "name": "workout_user_id_user_id_fk",
           "tableFrom": "workout",
           "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -515,12 +475,8 @@
           "name": "workout_business_id_business_id_fk",
           "tableFrom": "workout",
           "tableTo": "business",
-          "columnsFrom": [
-            "business_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["business_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -528,12 +484,8 @@
           "name": "workout_created_by_trainer_id_user_id_fk",
           "tableFrom": "workout",
           "tableTo": "user",
-          "columnsFrom": [
-            "created_by_trainer_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["created_by_trainer_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -599,12 +551,8 @@
           "name": "workout_exercise_workout_id_workout_id_fk",
           "tableFrom": "workout_exercise",
           "tableTo": "workout",
-          "columnsFrom": [
-            "workout_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["workout_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -612,12 +560,8 @@
           "name": "workout_exercise_exercise_id_exercises_id_fk",
           "tableFrom": "workout_exercise",
           "tableTo": "exercises",
-          "columnsFrom": [
-            "exercise_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["exercise_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -720,12 +664,8 @@
           "name": "workout_preferences_user_id_user_id_fk",
           "tableFrom": "workout_preferences",
           "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -733,12 +673,8 @@
           "name": "workout_preferences_training_session_id_training_session_id_fk",
           "tableFrom": "workout_preferences",
           "tableTo": "training_session",
-          "columnsFrom": [
-            "training_session_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["training_session_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -746,12 +682,8 @@
           "name": "workout_preferences_business_id_business_id_fk",
           "tableFrom": "workout_preferences",
           "tableTo": "business",
-          "columnsFrom": [
-            "business_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["business_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -761,10 +693,7 @@
         "workout_preferences_userId_trainingSessionId_unique": {
           "name": "workout_preferences_userId_trainingSessionId_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "user_id",
-            "training_session_id"
-          ]
+          "columns": ["user_id", "training_session_id"]
         }
       },
       "policies": {},
@@ -860,12 +789,8 @@
           "name": "account_user_id_user_id_fk",
           "tableFrom": "account",
           "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -965,12 +890,8 @@
           "name": "user_business_id_business_id_fk",
           "tableFrom": "user",
           "tableTo": "business",
-          "columnsFrom": [
-            "business_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["business_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -980,9 +901,7 @@
         "user_email_unique": {
           "name": "user_email_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "email"
-          ]
+          "columns": ["email"]
         }
       },
       "policies": {},
@@ -1048,12 +967,8 @@
           "name": "session_user_id_user_id_fk",
           "tableFrom": "session",
           "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1063,9 +978,7 @@
         "session_token_unique": {
           "name": "session_token_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "token"
-          ]
+          "columns": ["token"]
         }
       },
       "policies": {},
@@ -1308,12 +1221,8 @@
           "name": "messages_user_id_user_id_fk",
           "tableFrom": "messages",
           "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1321,12 +1230,8 @@
           "name": "messages_business_id_business_id_fk",
           "tableFrom": "messages",
           "tableTo": "business",
-          "columnsFrom": [
-            "business_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["business_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1413,22 +1318,12 @@
     "public.session_status": {
       "name": "session_status",
       "schema": "public",
-      "values": [
-        "open",
-        "in_progress",
-        "completed",
-        "cancelled"
-      ]
+      "values": ["open", "in_progress", "completed", "cancelled"]
     },
     "public.complexity_level": {
       "name": "complexity_level",
       "schema": "public",
-      "values": [
-        "very_low",
-        "low",
-        "moderate",
-        "high"
-      ]
+      "values": ["very_low", "low", "moderate", "high"]
     },
     "public.exercise_type": {
       "name": "exercise_type",
@@ -1540,12 +1435,7 @@
     "public.strength_level": {
       "name": "strength_level",
       "schema": "public",
-      "values": [
-        "very_low",
-        "low",
-        "moderate",
-        "high"
-      ]
+      "values": ["very_low", "low", "moderate", "high"]
     }
   },
   "schemas": {},

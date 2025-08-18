@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+
 import { useTRPC } from "~/trpc/react";
 
 export interface UseGroupWorkoutBlueprintOptions {
@@ -9,29 +10,32 @@ export interface UseGroupWorkoutBlueprintOptions {
   onSuccess?: (data: any) => void;
 }
 
-export function useGroupWorkoutBlueprint(options: UseGroupWorkoutBlueprintOptions) {
+export function useGroupWorkoutBlueprint(
+  options: UseGroupWorkoutBlueprintOptions,
+) {
   const trpc = useTRPC();
-  const { 
-    sessionId, 
+  const {
+    sessionId,
     includeDiagnostics = false,
     phase1Only = false,
     enabled = true,
-    onSuccess
+    onSuccess,
   } = options;
 
-  const queryOptions = sessionId && enabled
-    ? trpc.trainingSession.generateGroupWorkoutBlueprint.queryOptions({
-        sessionId,
-        options: { includeDiagnostics, phase1Only }
-      })
-    : {
-        enabled: false,
-        queryKey: ["disabled"],
-        queryFn: () => Promise.resolve(null)
-      };
+  const queryOptions =
+    sessionId && enabled
+      ? trpc.trainingSession.generateGroupWorkoutBlueprint.queryOptions({
+          sessionId,
+          options: { includeDiagnostics, phase1Only },
+        })
+      : {
+          enabled: false,
+          queryKey: ["disabled"],
+          queryFn: () => Promise.resolve(null),
+        };
 
   // Add onSuccess if provided
-  if (onSuccess && 'onSuccess' in queryOptions) {
+  if (onSuccess && "onSuccess" in queryOptions) {
     (queryOptions as any).onSuccess = onSuccess;
   }
 
@@ -45,6 +49,6 @@ export function useGroupWorkoutBlueprint(options: UseGroupWorkoutBlueprintOption
     isLoading: query.isLoading,
     error: query.error,
     refetch: query.refetch,
-    isFetching: query.isFetching
+    isFetching: query.isFetching,
   };
 }

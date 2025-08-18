@@ -1,4 +1,8 @@
-import { UnifiedMessage, MessageResponse, MessageIntent } from '../../../types/messaging';
+import type {
+  MessageIntent,
+  MessageResponse,
+  UnifiedMessage,
+} from "../../../types/messaging";
 
 /**
  * Base class for all message handlers
@@ -7,17 +11,20 @@ export abstract class BaseMessageHandler {
   /**
    * Handle a message and return a response
    */
-  abstract handle(message: UnifiedMessage, intent: MessageIntent): Promise<MessageResponse>;
+  abstract handle(
+    message: UnifiedMessage,
+    intent: MessageIntent,
+  ): Promise<MessageResponse>;
 
   /**
    * Common utility methods for all handlers
    */
-  
+
   /**
    * Format a client name for messages
    */
   protected formatClientName(name?: string): string {
-    return name || 'there';
+    return name || "there";
   }
 
   /**
@@ -32,9 +39,9 @@ export abstract class BaseMessageHandler {
    */
   protected getChannelIdentifier(message: UnifiedMessage): string {
     switch (message.channel) {
-      case 'sms':
+      case "sms":
         return message.userPhone || message.userId;
-      case 'web':
+      case "web":
         return message.userId;
       default:
         return message.userId;

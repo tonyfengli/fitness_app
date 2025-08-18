@@ -7,11 +7,14 @@ export interface Logger {
 
 export class ConsoleLogger implements Logger {
   private enabled: boolean;
-  
-  constructor(enabled: boolean = process.env.NODE_ENV !== 'test' && process.env.DEBUG === 'true') {
+
+  constructor(
+    enabled: boolean = process.env.NODE_ENV !== "test" &&
+      process.env.DEBUG === "true",
+  ) {
     this.enabled = enabled;
   }
-  
+
   log(message: string, data?: any): void {
     if (this.enabled) {
       if (data !== undefined) {
@@ -21,7 +24,7 @@ export class ConsoleLogger implements Logger {
       }
     }
   }
-  
+
   error(message: string, error?: any): void {
     if (this.enabled) {
       if (error !== undefined) {
@@ -31,7 +34,7 @@ export class ConsoleLogger implements Logger {
       }
     }
   }
-  
+
   warn(message: string, data?: any): void {
     if (this.enabled) {
       if (data !== undefined) {
@@ -41,7 +44,7 @@ export class ConsoleLogger implements Logger {
       }
     }
   }
-  
+
   debug(message: string, data?: any): void {
     if (this.enabled && process.env.DEBUG) {
       if (data !== undefined) {

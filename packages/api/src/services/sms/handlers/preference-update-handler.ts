@@ -1,13 +1,14 @@
-import { WorkoutPreferenceService } from "../../workoutPreferenceService";
-import { PreferenceUpdateParser } from "../../preferenceUpdateParser";
-import { TargetedFollowupService } from "../../targetedFollowupService";
-import { ExerciseDisambiguationService } from "../../exerciseDisambiguationService";
-import { saveMessage } from "../../messageService";
-import { getUserByPhone } from "../../checkInService";
+import type { ParsedPreferences } from "@acme/ai";
+
 import { createLogger } from "../../../utils/logger";
 import { sessionTestDataLogger } from "../../../utils/sessionTestDataLogger";
+import { getUserByPhone } from "../../checkInService";
+import { ExerciseDisambiguationService } from "../../exerciseDisambiguationService";
+import { saveMessage } from "../../messageService";
+import { PreferenceUpdateParser } from "../../preferenceUpdateParser";
+import { TargetedFollowupService } from "../../targetedFollowupService";
+import { WorkoutPreferenceService } from "../../workoutPreferenceService";
 import { SMSResponse } from "../types";
-import type { ParsedPreferences } from "@acme/ai";
 
 const logger = createLogger("PreferenceUpdateHandler");
 
@@ -18,7 +19,7 @@ export class PreferenceUpdateHandler {
   async handle(
     phoneNumber: string,
     messageContent: string,
-    messageSid: string
+    messageSid: string,
   ): Promise<SMSResponse> {
     try {
       const userInfo = await getUserByPhone(phoneNumber);
@@ -26,20 +27,21 @@ export class PreferenceUpdateHandler {
         return {
           success: false,
           message: "No active session found. Please check in first.",
-          metadata: { reason: "no_session" }
+          metadata: { reason: "no_session" },
         };
       }
 
       // Get current preferences
       const currentPreferences = await WorkoutPreferenceService.getPreferences(
-        userInfo.trainingSessionId
+        userInfo.trainingSessionId,
       );
 
       if (!currentPreferences) {
         return {
           success: false,
-          message: "No preferences found for this session. Please send your initial preferences first.",
-          metadata: { reason: "no_preferences" }
+          message:
+            "No preferences found for this session. Please send your initial preferences first.",
+          metadata: { reason: "no_preferences" },
         };
       }
 
@@ -47,7 +49,7 @@ export class PreferenceUpdateHandler {
       const updateResult = await PreferenceUpdateParser.parseUpdate(
         messageContent,
         { ...currentPreferences, needsFollowUp: false },
-        userInfo.businessId
+        userInfo.businessId,
       );
 
       if (!updateResult.hasUpdates) {
@@ -55,47 +57,56 @@ export class PreferenceUpdateHandler {
         if (this.isGeneralQuery(messageContent)) {
           return {
             success: true,
-            message: "Your current preferences are set. If you need to change anything, just let me know!",
-            metadata: { 
+            message:
+              "Your current preferences are set. If you need to change anything, just let me know!",
+            metadata: {
               type: "general_query",
-              currentState: "preferences_active"
-            }
+              currentState: "preferences_active",
+            },
           };
         }
 
         // Couldn't parse any updates
         return {
           success: true,
-          message: "I didn't catch what you'd like to change. You can update things like intensity (easy/hard), exercises to add/skip, or areas to focus on.",
+          message:
+            "I didn't catch what you'd like to change. You can update things like intensity (easy/hard), exercises to add/skip, or areas to focus on.",
           metadata: {
             type: "parse_failed",
-            currentState: "preferences_active"
-          }
+            currentState: "preferences_active",
+          },
         };
       }
 
       // Check if disambiguation is needed
       if (updateResult.exerciseValidation?.needsDisambiguation) {
         // Get the validation result that needs disambiguation
-        const validation = updateResult.exerciseValidation.includeValidation || 
-                         updateResult.exerciseValidation.avoidValidation;
-        
+        const validation =
+          updateResult.exerciseValidation.includeValidation ||
+          updateResult.exerciseValidation.avoidValidation;
+
         // Use the already-validated matches instead of re-processing
         const disambiguationResult = {
           needsDisambiguation: true,
           disambiguationMessage: ExerciseDisambiguationService.formatMessage(
-            validation.matches.filter((m: any) => m.matchedExercises.length > 1),
+            validation.matches.filter(
+              (m: any) => m.matchedExercises.length > 1,
+            ),
             {
-              type: 'preference_update',
+              type: "preference_update",
               sessionId: userInfo.trainingSessionId,
               userId: userInfo.userId,
-              businessId: userInfo.businessId
-            }
+              businessId: userInfo.businessId,
+            },
           ),
-          ambiguousMatches: validation.matches.filter((m: any) => m.matchedExercises.length > 1),
+          ambiguousMatches: validation.matches.filter(
+            (m: any) => m.matchedExercises.length > 1,
+          ),
           allOptions: ExerciseDisambiguationService.collectAllOptions(
-            validation.matches.filter((m: any) => m.matchedExercises.length > 1)
-          )
+            validation.matches.filter(
+              (m: any) => m.matchedExercises.length > 1,
+            ),
+          ),
         };
 
         if (disambiguationResult.needsDisambiguation) {
@@ -104,74 +115,80 @@ export class PreferenceUpdateHandler {
             {
               ambiguousMatches: disambiguationResult.ambiguousMatches!,
               allOptions: disambiguationResult.allOptions!,
-              originalIntent: updateResult.updateType === 'remove' ? 'avoid' : 'include'
+              originalIntent:
+                updateResult.updateType === "remove" ? "avoid" : "include",
             },
             {
-              type: 'preference_update',
+              type: "preference_update",
               sessionId: userInfo.trainingSessionId,
               userId: userInfo.userId,
-              businessId: userInfo.businessId
-            }
+              businessId: userInfo.businessId,
+            },
           );
 
           // Log disambiguation if session logging is enabled
           if (sessionTestDataLogger.isEnabled() && userInfo.trainingSessionId) {
-            sessionTestDataLogger.initSession(userInfo.trainingSessionId, phoneNumber);
-            
+            sessionTestDataLogger.initSession(
+              userInfo.trainingSessionId,
+              phoneNumber,
+            );
+
             // Log inbound message
             sessionTestDataLogger.logMessage(userInfo.trainingSessionId, {
-              direction: 'inbound',
+              direction: "inbound",
               content: messageContent,
               metadata: {
                 messageSid,
                 currentStep: "preferences_active",
                 updateType: "preference_update",
-                requiresDisambiguation: true
-              }
+                requiresDisambiguation: true,
+              },
             });
-            
+
             // Log outbound disambiguation message
             sessionTestDataLogger.logMessage(userInfo.trainingSessionId, {
-              direction: 'outbound',
+              direction: "outbound",
               content: disambiguationResult.disambiguationMessage!,
               metadata: {
-                type: 'disambiguation_request',
+                type: "disambiguation_request",
                 ambiguousMatches: disambiguationResult.ambiguousMatches,
                 options: disambiguationResult.allOptions,
-                currentState: "preferences_active"
-              }
+                currentState: "preferences_active",
+              },
             });
-            
-            await sessionTestDataLogger.saveSessionData(userInfo.trainingSessionId);
+
+            await sessionTestDataLogger.saveSessionData(
+              userInfo.trainingSessionId,
+            );
           }
 
           // Save messages
           await saveMessage({
             userId: userInfo.userId,
             businessId: userInfo.businessId,
-            direction: 'inbound',
+            direction: "inbound",
             content: messageContent,
             phoneNumber,
             metadata: {
-              type: 'preference_update',
+              type: "preference_update",
               requiresDisambiguation: true,
               twilioMessageSid: messageSid,
             },
-            status: 'delivered',
+            status: "delivered",
           });
 
           await saveMessage({
             userId: userInfo.userId,
             businessId: userInfo.businessId,
-            direction: 'outbound',
+            direction: "outbound",
             content: disambiguationResult.disambiguationMessage!,
             phoneNumber,
             metadata: {
-              type: 'disambiguation_request',
-              updateContext: 'preference_update',
-              optionCount: disambiguationResult.allOptions?.length
+              type: "disambiguation_request",
+              updateContext: "preference_update",
+              optionCount: disambiguationResult.allOptions?.length,
             },
-            status: 'sent',
+            status: "sent",
           });
 
           return {
@@ -181,8 +198,8 @@ export class PreferenceUpdateHandler {
               userId: userInfo.userId,
               businessId: userInfo.businessId,
               requiresDisambiguation: true,
-              currentState: "preferences_active"
-            }
+              currentState: "preferences_active",
+            },
           };
         }
       }
@@ -190,7 +207,7 @@ export class PreferenceUpdateHandler {
       // Apply the updates (no disambiguation needed)
       const updatedPreferences = this.mergePreferences(
         { ...currentPreferences, needsFollowUp: false },
-        updateResult.updates
+        updateResult.updates,
       ) as ParsedPreferences;
 
       // Save the updated preferences
@@ -199,13 +216,14 @@ export class PreferenceUpdateHandler {
         userInfo.trainingSessionId,
         userInfo.businessId,
         updatedPreferences,
-        "preferences_active"
+        "preferences_active",
       );
 
       // Generate confirmation message
-      const confirmationMessage = TargetedFollowupService.generateUpdateResponse(
-        updateResult.fieldsUpdated
-      );
+      const confirmationMessage =
+        TargetedFollowupService.generateUpdateResponse(
+          updateResult.fieldsUpdated,
+        );
 
       // Save messages
       await this.saveMessages(
@@ -214,35 +232,38 @@ export class PreferenceUpdateHandler {
         messageSid,
         userInfo,
         updateResult,
-        confirmationMessage
+        confirmationMessage,
       );
 
       // Log to session test data if enabled
       if (sessionTestDataLogger.isEnabled() && userInfo.trainingSessionId) {
-        sessionTestDataLogger.initSession(userInfo.trainingSessionId, phoneNumber);
-        
+        sessionTestDataLogger.initSession(
+          userInfo.trainingSessionId,
+          phoneNumber,
+        );
+
         // Log inbound message
         sessionTestDataLogger.logMessage(userInfo.trainingSessionId, {
-          direction: 'inbound',
+          direction: "inbound",
           content: messageContent,
           metadata: {
             messageSid,
             currentStep: "preferences_active",
-            updateType: "preference_update"
-          }
+            updateType: "preference_update",
+          },
         });
-        
+
         // Log outbound response
         sessionTestDataLogger.logMessage(userInfo.trainingSessionId, {
-          direction: 'outbound',
+          direction: "outbound",
           content: confirmationMessage,
           metadata: {
             updatedPreferences,
             fieldsUpdated: updateResult.fieldsUpdated,
-            updateType: updateResult.updateType
-          }
+            updateType: updateResult.updateType,
+          },
         });
-        
+
         // Save session data
         await sessionTestDataLogger.saveSessionData(userInfo.trainingSessionId);
       }
@@ -251,7 +272,7 @@ export class PreferenceUpdateHandler {
         userId: userInfo.userId,
         sessionId: userInfo.trainingSessionId,
         fieldsUpdated: updateResult.fieldsUpdated,
-        updateType: updateResult.updateType
+        updateType: updateResult.updateType,
       });
 
       return {
@@ -262,15 +283,15 @@ export class PreferenceUpdateHandler {
           businessId: userInfo.businessId,
           fieldsUpdated: updateResult.fieldsUpdated,
           updateType: updateResult.updateType,
-          currentState: "preferences_active"
-        }
+          currentState: "preferences_active",
+        },
       };
     } catch (error) {
       logger.error("Preference update handler error", error);
       return {
         success: false,
         message: "Sorry, I couldn't update your preferences. Please try again.",
-        metadata: { error: error instanceof Error ? error.message : "unknown" }
+        metadata: { error: error instanceof Error ? error.message : "unknown" },
       };
     }
   }
@@ -283,32 +304,41 @@ export class PreferenceUpdateHandler {
       /\b(what|how|when|where|why|who)\b.*\?/i,
       /\b(am i|are we|is it|should i)\b/i,
       /\b(okay|ok|good|great|thanks|thank you|sounds good|perfect)\b/i,
-      /^(yes|no|maybe|sure)$/i
+      /^(yes|no|maybe|sure)$/i,
     ];
 
-    return queryPatterns.some(pattern => pattern.test(message));
+    return queryPatterns.some((pattern) => pattern.test(message));
   }
 
   /**
    * Merge current preferences with updates
    */
   private mergePreferences(
-    current: ParsedPreferences & { intensitySource?: "explicit" | "default" | "inherited"; sessionGoalSource?: "explicit" | "default" | "inherited" },
-    updates: Partial<ParsedPreferences>
-  ): ParsedPreferences & { intensitySource?: "explicit" | "default" | "inherited"; sessionGoalSource?: "explicit" | "default" | "inherited" } {
-    const merged: ParsedPreferences & { intensitySource?: "explicit" | "default" | "inherited"; sessionGoalSource?: "explicit" | "default" | "inherited" } = { 
-      ...current, 
-      needsFollowUp: false 
+    current: ParsedPreferences & {
+      intensitySource?: "explicit" | "default" | "inherited";
+      sessionGoalSource?: "explicit" | "default" | "inherited";
+    },
+    updates: Partial<ParsedPreferences>,
+  ): ParsedPreferences & {
+    intensitySource?: "explicit" | "default" | "inherited";
+    sessionGoalSource?: "explicit" | "default" | "inherited";
+  } {
+    const merged: ParsedPreferences & {
+      intensitySource?: "explicit" | "default" | "inherited";
+      sessionGoalSource?: "explicit" | "default" | "inherited";
+    } = {
+      ...current,
+      needsFollowUp: false,
     };
 
     // Handle simple overwrites with source tracking
     if (updates.intensity) {
       merged.intensity = updates.intensity;
-      merged.intensitySource = 'explicit'; // User explicitly updated
+      merged.intensitySource = "explicit"; // User explicitly updated
     }
     if (updates.sessionGoal !== undefined) {
       merged.sessionGoal = updates.sessionGoal;
-      merged.sessionGoalSource = 'explicit'; // User explicitly updated
+      merged.sessionGoalSource = "explicit"; // User explicitly updated
     }
 
     // Handle array merges
@@ -324,24 +354,21 @@ export class PreferenceUpdateHandler {
 
     // For muscle and joint arrays, append to existing (avoiding duplicates)
     if (updates.muscleTargets) {
-      merged.muscleTargets = Array.from(new Set([
-        ...(current.muscleTargets || []),
-        ...updates.muscleTargets
-      ]));
+      merged.muscleTargets = Array.from(
+        new Set([...(current.muscleTargets || []), ...updates.muscleTargets]),
+      );
     }
 
     if (updates.muscleLessens) {
-      merged.muscleLessens = Array.from(new Set([
-        ...(current.muscleLessens || []),
-        ...updates.muscleLessens
-      ]));
+      merged.muscleLessens = Array.from(
+        new Set([...(current.muscleLessens || []), ...updates.muscleLessens]),
+      );
     }
 
     if (updates.avoidJoints) {
-      merged.avoidJoints = Array.from(new Set([
-        ...(current.avoidJoints || []),
-        ...updates.avoidJoints
-      ]));
+      merged.avoidJoints = Array.from(
+        new Set([...(current.avoidJoints || []), ...updates.avoidJoints]),
+      );
     }
 
     return merged;
@@ -356,39 +383,39 @@ export class PreferenceUpdateHandler {
     messageSid: string,
     userInfo: { userId: string; businessId: string },
     updateResult: any,
-    confirmationMessage: string
+    confirmationMessage: string,
   ): Promise<void> {
     try {
       // Save inbound update message
       await saveMessage({
         userId: userInfo.userId,
         businessId: userInfo.businessId,
-        direction: 'inbound',
+        direction: "inbound",
         content: messageContent,
         phoneNumber,
         metadata: {
-          type: 'preference_update',
+          type: "preference_update",
           twilioMessageSid: messageSid,
           updateResult: {
             fieldsUpdated: updateResult.fieldsUpdated,
-            updateType: updateResult.updateType
-          }
+            updateType: updateResult.updateType,
+          },
         },
-        status: 'delivered',
+        status: "delivered",
       });
 
       // Save outbound confirmation
       await saveMessage({
         userId: userInfo.userId,
         businessId: userInfo.businessId,
-        direction: 'outbound',
+        direction: "outbound",
         content: confirmationMessage,
         phoneNumber,
         metadata: {
-          type: 'preference_update_confirmation',
-          fieldsUpdated: updateResult.fieldsUpdated
+          type: "preference_update_confirmation",
+          fieldsUpdated: updateResult.fieldsUpdated,
         },
-        status: 'sent',
+        status: "sent",
       });
     } catch (error) {
       logger.error("Failed to save preference update messages", error);

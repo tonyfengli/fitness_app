@@ -1,7 +1,12 @@
-import { promises as fs } from 'fs';
-import path from 'path';
-import { UnifiedMessage, MessageResponse, ProcessedMessage } from '../../types/messaging';
-import { saveMessage } from '../messageService';
+import { promises as fs } from "fs";
+import path from "path";
+
+import {
+  MessageResponse,
+  ProcessedMessage,
+  UnifiedMessage,
+} from "../../types/messaging";
+import { saveMessage } from "../messageService";
 
 export class UnifiedLogger {
   private debugEnabled: boolean;
@@ -9,9 +14,10 @@ export class UnifiedLogger {
 
   constructor() {
     // Always enable debug in development or when explicitly enabled
-    this.debugEnabled = process.env.NODE_ENV === 'development' || 
-                       process.env.SESSION_TEST_DATA_ENABLED === 'true' ||
-                       true; // Temporarily always enabled
+    this.debugEnabled =
+      process.env.NODE_ENV === "development" ||
+      process.env.SESSION_TEST_DATA_ENABLED === "true" ||
+      true; // Temporarily always enabled
   }
 
   /**
@@ -19,23 +25,26 @@ export class UnifiedLogger {
    */
   async logInbound(message: UnifiedMessage): Promise<void> {
     // Console log
-    console.log(`[${new Date().toISOString()}] [${message.channel.toUpperCase()}] Inbound message:`, {
-      userId: message.userId,
-      content: message.content,
-      sessionId: message.trainingSessionId,
-      metadata: message.metadata
-    });
+    console.log(
+      `[${new Date().toISOString()}] [${message.channel.toUpperCase()}] Inbound message:`,
+      {
+        userId: message.userId,
+        content: message.content,
+        sessionId: message.trainingSessionId,
+        metadata: message.metadata,
+      },
+    );
 
     // Save to database
-    await this.saveToDatabase(message, 'inbound');
+    await this.saveToDatabase(message, "inbound");
 
     // Add to session debug data
     if (this.debugEnabled && message.trainingSessionId) {
       this.addToSessionData(message.trainingSessionId, {
-        direction: 'inbound',
+        direction: "inbound",
         content: message.content,
         metadata: message.metadata,
-        timestamp: message.timestamp.toISOString()
+        timestamp: message.timestamp.toISOString(),
       });
     }
   }
@@ -44,27 +53,37 @@ export class UnifiedLogger {
    * Log outbound response
    */
   async logOutbound(
-    originalMessage: UnifiedMessage, 
-    response: MessageResponse
+    originalMessage: UnifiedMessage,
+    response: MessageResponse,
   ): Promise<void> {
     // Console log
-    console.log(`[${new Date().toISOString()}] [${originalMessage.channel.toUpperCase()}] Outbound response:`, {
-      userId: originalMessage.userId,
-      success: response.success,
-      messagePreview: response.message.substring(0, 100) + (response.message.length > 100 ? '...' : ''),
-      metadata: response.metadata
-    });
+    console.log(
+      `[${new Date().toISOString()}] [${originalMessage.channel.toUpperCase()}] Outbound response:`,
+      {
+        userId: originalMessage.userId,
+        success: response.success,
+        messagePreview:
+          response.message.substring(0, 100) +
+          (response.message.length > 100 ? "..." : ""),
+        metadata: response.metadata,
+      },
+    );
 
     // Save to database
-    await this.saveToDatabase(originalMessage, 'outbound', response.message, response.metadata);
+    await this.saveToDatabase(
+      originalMessage,
+      "outbound",
+      response.message,
+      response.metadata,
+    );
 
     // Add to session debug data
     if (this.debugEnabled && originalMessage.trainingSessionId) {
       this.addToSessionData(originalMessage.trainingSessionId, {
-        direction: 'outbound',
+        direction: "outbound",
         content: response.message,
         metadata: response.metadata,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       });
     }
   }
@@ -78,12 +97,14 @@ export class UnifiedLogger {
       userId: processed.originalMessage.userId,
       intent: processed.intent.type,
       success: processed.response.success,
-      processingTime: `${processed.processingTime}ms`
+      processingTime: `${processed.processingTime}ms`,
     });
 
     // Save session data to file if we have a session
     if (this.debugEnabled && processed.originalMessage.trainingSessionId) {
-      await this.saveSessionDebugFile(processed.originalMessage.trainingSessionId);
+      await this.saveSessionDebugFile(
+        processed.originalMessage.trainingSessionId,
+      );
     }
   }
 
@@ -96,7 +117,7 @@ export class UnifiedLogger {
       stack: error.stack,
       messageId: message?.id,
       userId: message?.userId,
-      channel: message?.channel
+      channel: message?.channel,
     });
   }
 
@@ -117,8 +138,8 @@ export class UnifiedLogger {
         totalMessages: 0,
         totalLLMCalls: 0,
         totalExerciseMatcherCalls: 0,
-        llmFallbackCount: 0
-      }
+        llmFallbackCount: 0,
+      },
     });
   }
 
@@ -133,7 +154,7 @@ export class UnifiedLogger {
 
     session.llmCalls.push({
       ...llmCall,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     });
     session.summary.totalLLMCalls++;
   }
@@ -142,10 +163,10 @@ export class UnifiedLogger {
    * Save message to database
    */
   private async saveToDatabase(
-    message: UnifiedMessage, 
-    direction: 'inbound' | 'outbound',
+    message: UnifiedMessage,
+    direction: "inbound" | "outbound",
     content?: string,
-    metadata?: any
+    metadata?: any,
   ): Promise<void> {
     try {
       await saveMessage({
@@ -154,17 +175,17 @@ export class UnifiedLogger {
         direction,
         content: content || message.content,
         phoneNumber: message.userPhone,
-        channel: message.channel === 'sms' ? 'sms' : 'in_app',
+        channel: message.channel === "sms" ? "sms" : "in_app",
         metadata: {
           ...message.metadata,
           ...metadata,
           channelOriginal: message.channel,
-          unifiedMessageId: message.id
+          unifiedMessageId: message.id,
         },
-        status: direction === 'inbound' ? 'delivered' : 'sent',
+        status: direction === "inbound" ? "delivered" : "sent",
       });
     } catch (error) {
-      this.logError('Failed to save message to database', error, message);
+      this.logError("Failed to save message to database", error, message);
     }
   }
 
@@ -175,9 +196,9 @@ export class UnifiedLogger {
     const session = this.sessionData.get(sessionId);
     if (!session) {
       // Initialize if not exists
-      this.initSession(sessionId, messageData.userId || 'unknown');
+      this.initSession(sessionId, messageData.userId || "unknown");
     }
-    
+
     const sessionToUpdate = this.sessionData.get(sessionId);
     if (sessionToUpdate) {
       sessionToUpdate.messages.push(messageData);
@@ -196,22 +217,21 @@ export class UnifiedLogger {
 
     try {
       // Use the same directory structure as existing session test data
-      const dirPath = path.join(process.cwd(), 'session-test-data');
+      const dirPath = path.join(process.cwd(), "session-test-data");
       await fs.mkdir(dirPath, { recursive: true });
-      
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+
+      const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
       const filename = `session_${sessionId}_${timestamp}.json`;
       const filepath = path.join(dirPath, filename);
-      
-      await fs.writeFile(
+
+      await fs.writeFile(filepath, JSON.stringify(session, null, 2), "utf-8");
+
+      console.log(
+        `[${new Date().toISOString()}] Session debug data saved:`,
         filepath,
-        JSON.stringify(session, null, 2),
-        'utf-8'
       );
-      
-      console.log(`[${new Date().toISOString()}] Session debug data saved:`, filepath);
     } catch (error) {
-      this.logError('Failed to save session debug file', error);
+      this.logError("Failed to save session debug file", error);
     }
   }
 }

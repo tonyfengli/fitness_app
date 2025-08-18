@@ -8,7 +8,7 @@ export class SMSResponseSender {
 
   constructor() {
     this.twilioPhoneNumber = process.env.TWILIO_PHONE_NUMBER || "";
-    
+
     if (!this.twilioPhoneNumber) {
       logger.error("Twilio phone number not configured");
     }
@@ -34,15 +34,15 @@ export class SMSResponseSender {
         to: toNumber,
       });
 
-      logger.info("SMS response sent", { 
+      logger.info("SMS response sent", {
         to: toNumber,
-        messageLength: message.length 
+        messageLength: message.length,
       });
     } catch (error) {
       logger.error("Failed to send SMS response", {
         error,
         to,
-        messageLength: message.length
+        messageLength: message.length,
       });
       // Don't throw - SMS sending failure shouldn't break the webhook
     }
@@ -50,7 +50,7 @@ export class SMSResponseSender {
 
   async sendResponseAsync(to: string, message: string): Promise<void> {
     // Fire and forget version
-    this.sendResponse(to, message).catch(error => {
+    this.sendResponse(to, message).catch((error) => {
       logger.error("Async SMS send failed", error);
     });
   }

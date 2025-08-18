@@ -98,6 +98,7 @@ export function WorkoutOverviewScreen() {
   const [lastSwapTime, setLastSwapTime] = useState<Date | null>(null);
   const { startWorkout, isGenerating, error: startWorkoutError, setError } = useStartWorkout();
   const [showErrorModal, setShowErrorModal] = useState(false);
+  const [workoutOrganizationReady, setWorkoutOrganizationReady] = useState(false);
   
   // Check if session already has workout organization
   const { data: sessionData, isLoading: sessionLoading } = useQuery(
@@ -254,6 +255,43 @@ export function WorkoutOverviewScreen() {
               });
             } else {
               // Show loading screen for Phase 2 organization
+              // Reset the organization ready state
+              setWorkoutOrganizationReady(false);
+              
+              // Start polling for workout organization in background
+              const pollForOrganization = async () => {
+                console.log('[TV WorkoutOverview] Starting to poll for workout organization...');
+                let attempts = 0;
+                const maxAttempts = 60; // 30 seconds max (500ms intervals)
+                
+                while (attempts < maxAttempts) {
+                  try {
+                    const session = await queryClient.fetchQuery(
+                      api.trainingSession.getSession.queryOptions({ id: sessionId })
+                    );
+                    
+                    if (session?.workoutOrganization) {
+                      console.log('[TV WorkoutOverview] ✅ Workout organization detected!');
+                      setWorkoutOrganizationReady(true);
+                      break;
+                    }
+                    
+                    attempts++;
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                  } catch (error) {
+                    console.log('[TV WorkoutOverview] Error polling for organization:', error);
+                    attempts++;
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                  }
+                }
+                
+                if (attempts >= maxAttempts) {
+                  console.log('[TV WorkoutOverview] ⚠️ Timeout waiting for workout organization');
+                }
+              };
+              
+              // Start polling and workout generation in parallel
+              pollForOrganization();
               await startWorkout(sessionId);
             }
           }}
@@ -350,7 +388,7 @@ export function WorkoutOverviewScreen() {
                       ) : (
                         <View className="flex-1 items-center justify-center">
                           <Text style={{ fontSize: 14, color: TOKENS.color.muted }}>
-                            No exercises selected yet
+                            Loading...
                           </Text>
                         </View>
                       )}
@@ -424,7 +462,7 @@ export function WorkoutOverviewScreen() {
                         ) : (
                           <View className="flex-1 items-center justify-center">
                             <Text style={{ fontSize: 14, color: TOKENS.color.muted }}>
-                              No exercises selected yet
+                              Loading...
                             </Text>
                           </View>
                         )}
@@ -508,7 +546,7 @@ export function WorkoutOverviewScreen() {
                       ) : (
                         <View className="flex-1 items-center justify-center">
                           <Text style={{ fontSize: 16, color: TOKENS.color.muted }}>
-                            No exercises selected yet
+                            Loading...
                           </Text>
                         </View>
                       )}
@@ -582,7 +620,7 @@ export function WorkoutOverviewScreen() {
                       ) : (
                         <View className="flex-1 items-center justify-center">
                           <Text style={{ fontSize: 16, color: TOKENS.color.muted }}>
-                            No exercises selected yet
+                            Loading...
                           </Text>
                         </View>
                       )}
@@ -664,7 +702,7 @@ export function WorkoutOverviewScreen() {
                       ) : (
                         <View className="flex-1 items-center justify-center">
                           <Text style={{ fontSize: 16, color: TOKENS.color.muted }}>
-                            No exercises selected yet
+                            Loading...
                           </Text>
                         </View>
                       )}
@@ -699,7 +737,11 @@ export function WorkoutOverviewScreen() {
           bottom: 0,
           zIndex: 1000,
         }}>
-          <WorkoutGenerationLoader clientNames={clients?.map(c => c.userName || 'Unknown') || []} />
+          <WorkoutGenerationLoader 
+            clientNames={clients?.map(c => c.userName || 'Unknown') || []} 
+            durationMinutes={1.67} // 1 minute 40 seconds
+            forceComplete={workoutOrganizationReady}
+          />
         </View>
       )}
 

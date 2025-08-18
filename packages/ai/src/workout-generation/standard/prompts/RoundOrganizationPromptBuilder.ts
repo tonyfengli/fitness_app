@@ -2,24 +2,24 @@
  * Prompt builder for Phase 2: Round Organization
  */
 
-import type { ExerciseSelection } from "../types";
 import type { WorkoutTemplate } from "../../../core/templates/types/dynamicBlockTypes";
+import type { ExerciseSelection } from "../types";
 
 export class RoundOrganizationPromptBuilder {
   private exerciseSelection: ExerciseSelection;
   private template: WorkoutTemplate;
   private equipment: string[];
-  
+
   constructor(
-    exerciseSelection: ExerciseSelection, 
+    exerciseSelection: ExerciseSelection,
     template: WorkoutTemplate,
-    equipment?: string[]
+    equipment?: string[],
   ) {
     this.exerciseSelection = exerciseSelection;
     this.template = template;
     this.equipment = equipment || this.getDefaultEquipment();
   }
-  
+
   build(): string {
     const sections = [
       this.buildHeader(),
@@ -27,34 +27,36 @@ export class RoundOrganizationPromptBuilder {
       this.buildConstraints(),
       this.buildRoundStructure(),
       this.buildExerciseList(),
-      this.buildOutputFormat()
+      this.buildOutputFormat(),
     ];
-    
-    return sections.join('\n\n');
+
+    return sections.join("\n\n");
   }
-  
+
   private buildHeader(): string {
-    const clientCount = Object.keys(this.exerciseSelection.clientSelections).length;
-    
+    const clientCount = Object.keys(
+      this.exerciseSelection.clientSelections,
+    ).length;
+
     return `## 🏋️ BMF Round Organization System
 
 You are organizing the selected exercises into a structured workout with specific rounds, sets, and reps. You have ${clientCount} clients with their assigned exercises that need to be organized into an effective group workout flow.`;
   }
-  
+
   private buildContext(): string {
-    const flow = this.template.metadata?.workoutFlow || 'strength-metabolic';
+    const flow = this.template.metadata?.workoutFlow || "strength-metabolic";
     const totalExercises = this.template.metadata?.totalExercisesPerClient || 8;
-    
+
     return `### 📋 Context
 
-**Workout Type:** ${flow === 'pure-strength' ? 'Pure Strength Focus' : 'Strength → Metabolic'}
+**Workout Type:** ${flow === "pure-strength" ? "Pure Strength Focus" : "Strength → Metabolic"}
 **Duration:** 45-50 minutes
 **Exercises per client:** ${totalExercises}
-**Equipment Available:** ${this.equipment.join(', ')}
+**Equipment Available:** ${this.equipment.join(", ")}
 
 The exercises have already been selected based on client needs and preferences. Your task is to organize them into rounds that create an effective workout flow while managing equipment and timing.`;
   }
-  
+
   private buildConstraints(): string {
     return `### ⚠️ Constraints
 
@@ -82,11 +84,11 @@ The exercises have already been selected based on client needs and preferences. 
    - Clients doing the same exercise should do it in the same round
    - Can have different set/rep schemes based on fitness level`;
   }
-  
+
   private buildRoundStructure(): string {
-    const flow = this.template.metadata?.workoutFlow || 'strength-metabolic';
-    
-    if (flow === 'pure-strength') {
+    const flow = this.template.metadata?.workoutFlow || "strength-metabolic";
+
+    if (flow === "pure-strength") {
       return `### 🔄 Round Structure (Pure Strength)
 
 **Round 1: Lower Body Power** (Pre-assigned)
@@ -109,7 +111,7 @@ The exercises have already been selected based on client needs and preferences. 
 - Sets/Reps: 3 sets x 8-12 reps
 - Rest: 60-75s between sets`;
     }
-    
+
     // Default: strength-metabolic
     return `### 🔄 Round Structure (Strength → Metabolic)
 
@@ -133,43 +135,47 @@ The exercises have already been selected based on client needs and preferences. 
 - Sets/Reps: 2-3 sets x 15-20 reps or time-based
 - Rest: 45-60s between sets`;
   }
-  
+
   private buildExerciseList(): string {
-    let output = '### 💪 Exercises to Organize\n\n';
-    
+    let output = "### 💪 Exercises to Organize\n\n";
+
     // List shared exercises first
-    output += '**Shared Exercises:**\n';
+    output += "**Shared Exercises:**\n";
     for (const shared of this.exerciseSelection.sharedExercises) {
-      const clients = shared.clientIds.map(id => 
-        this.exerciseSelection.clientSelections[id]?.clientName || id
-      ).join(', ');
+      const clients = shared.clientIds
+        .map(
+          (id) => this.exerciseSelection.clientSelections[id]?.clientName || id,
+        )
+        .join(", ");
       output += `- ${shared.exerciseName} (Clients: ${clients})\n`;
     }
-    
-    output += '\n**Individual Exercises by Client:**\n\n';
-    
+
+    output += "\n**Individual Exercises by Client:**\n\n";
+
     // List each client's exercises
-    for (const [clientId, selection] of Object.entries(this.exerciseSelection.clientSelections)) {
+    for (const [clientId, selection] of Object.entries(
+      this.exerciseSelection.clientSelections,
+    )) {
       output += `**${selection.clientName}:**\n`;
-      
+
       // Pre-assigned (already in rounds 1-2)
-      output += 'Pre-assigned (Rounds 1-2):\n';
+      output += "Pre-assigned (Rounds 1-2):\n";
       for (const exercise of selection.preAssigned) {
         output += `- ${exercise.exerciseName} (${exercise.source})\n`;
       }
-      
+
       // Selected exercises to be organized
-      output += 'To be organized (Rounds 3-4):\n';
+      output += "To be organized (Rounds 3-4):\n";
       for (const exercise of selection.selected) {
-        const shared = exercise.isShared ? ' [SHARED]' : '';
+        const shared = exercise.isShared ? " [SHARED]" : "";
         output += `- ${exercise.exerciseName}${shared}\n`;
       }
-      output += '\n';
+      output += "\n";
     }
-    
+
     return output;
   }
-  
+
   private buildOutputFormat(): string {
     return `### 📋 Output Format
 
@@ -214,19 +220,19 @@ Return a JSON object with this structure:
 }
 \`\`\``;
   }
-  
+
   private getDefaultEquipment(): string[] {
     return [
-      'barbell',
-      'dumbbells',
-      'kettlebells',
-      'bench',
-      'squat rack',
-      'pull-up bar',
-      'cables',
-      'bands',
-      'medicine ball',
-      'floor space'
+      "barbell",
+      "dumbbells",
+      "kettlebells",
+      "bench",
+      "squat rack",
+      "pull-up bar",
+      "cables",
+      "bands",
+      "medicine ball",
+      "floor space",
     ];
   }
 }

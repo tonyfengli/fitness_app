@@ -7,17 +7,17 @@ export const SCORING_CONFIG = {
   // Base scoring
   BASE_SCORE: 5.0,
   INCLUDE_EXERCISE_PRIORITY: 1.0,
-  
+
   // Shared exercise thresholds
-  SHARED_EXERCISE_MIN_SCORE: 6.5,  // For strength/accessory exercises
-  SHARED_EXERCISE_CORE_FINISHER_MIN_SCORE: 5.0,  // For core/capacity exercises
-  
+  SHARED_EXERCISE_MIN_SCORE: 6.5, // For strength/accessory exercises
+  SHARED_EXERCISE_CORE_FINISHER_MIN_SCORE: 5.0, // For core/capacity exercises
+
   // Muscle scoring
   MUSCLE_TARGET_PRIMARY: 3.0,
   MUSCLE_TARGET_SECONDARY: 1.5,
   MUSCLE_LESSEN_PRIMARY: -3.0,
   MUSCLE_LESSEN_SECONDARY: -1.5,
-  
+
   // Favorite exercise boost
   FAVORITE_EXERCISE_BOOST: 2.0,
 

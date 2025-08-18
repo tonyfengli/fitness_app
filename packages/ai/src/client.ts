@@ -4,47 +4,38 @@
  */
 
 // Types that are safe for client-side
-export type { 
-  Exercise
-} from "./types/exercise";
+export type { Exercise } from "./types/exercise";
 
-export type {
-  ClientContext
-} from "./types/clientContext";
+export type { ClientContext } from "./types/clientContext";
 
-export type {
-  GroupContext,
-  GroupScoredExercise
-} from "./types/groupContext";
+export type { GroupContext, GroupScoredExercise } from "./types/groupContext";
 
-export type {
-  ScoredExercise
-} from "./types/scoredExercise";
+export type { ScoredExercise } from "./types/scoredExercise";
 
 export type {
   GroupWorkoutBlueprint,
-  GroupBlockBlueprint
+  GroupBlockBlueprint,
 } from "./types/groupBlueprint";
 
 export type {
   StandardGroupWorkoutBlueprint,
   BucketedSelection,
   ClientExercisePool,
-  PreAssignedExercise
+  PreAssignedExercise,
 } from "./types/standardBlueprint";
 
 // Client-safe constants
 export {
   WorkoutType,
   BUCKET_CONFIGS,
-  type BucketConstraints
+  type BucketConstraints,
 } from "./types/clientTypes";
 
 // Muscle mapping utilities
 export {
   CONSOLIDATED_MUSCLES,
   getOldMusclesForConsolidated,
-  type ConsolidatedMuscle
+  type ConsolidatedMuscle,
 } from "./constants/muscleMapping";
 
 // Shared exercise utilities
@@ -52,5 +43,5 @@ export {
   categorizeSharedExercises,
   isCoreOrFinisherExercise,
   getExerciseCategory,
-  type CategorizedSharedExercises
+  type CategorizedSharedExercises,
 } from "./workout-generation/standard/sharedExerciseFilters";

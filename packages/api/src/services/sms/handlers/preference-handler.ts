@@ -1,13 +1,14 @@
 import { parseWorkoutPreferences } from "@acme/ai";
-import { saveMessage } from "../../messageService";
-import { getUserByPhone } from "../../checkInService";
-import { WorkoutPreferenceService } from "../../workoutPreferenceService";
-import { ExerciseValidationService } from "../../exerciseValidationService";
-import { ConversationStateService } from "../../conversationStateService";
+
 import { createLogger } from "../../../utils/logger";
-import { sessionTestDataLogger } from "../../../utils/sessionTestDataLogger";
-import { TargetedFollowupService } from "../../targetedFollowupService";
 import { PreferenceStateManager } from "../../../utils/preferenceStateManager";
+import { sessionTestDataLogger } from "../../../utils/sessionTestDataLogger";
+import { getUserByPhone } from "../../checkInService";
+import { ConversationStateService } from "../../conversationStateService";
+import { ExerciseValidationService } from "../../exerciseValidationService";
+import { saveMessage } from "../../messageService";
+import { TargetedFollowupService } from "../../targetedFollowupService";
+import { WorkoutPreferenceService } from "../../workoutPreferenceService";
 import { TemplateSMSService } from "../template-sms-service";
 import { SMSResponse } from "../types";
 
@@ -21,27 +22,30 @@ export class PreferenceHandler {
     const userId = payload.UserId;
     const channel = payload.Channel;
     const preferenceCheck = payload.intent?.data || {};
-    
+
     try {
-      logger.info("Handling preference response", { 
+      logger.info("Handling preference response", {
         phoneNumber,
         userId: preferenceCheck.userId || userId,
         trainingSessionId: preferenceCheck.trainingSessionId,
-        currentStep: preferenceCheck.currentStep
+        currentStep: preferenceCheck.currentStep,
       });
 
       // Initialize session test data logging
       if (sessionTestDataLogger.isEnabled()) {
-        sessionTestDataLogger.initSession(preferenceCheck.trainingSessionId!, phoneNumber);
-        
+        sessionTestDataLogger.initSession(
+          preferenceCheck.trainingSessionId!,
+          phoneNumber,
+        );
+
         // Log inbound message
         sessionTestDataLogger.logMessage(preferenceCheck.trainingSessionId!, {
-          direction: 'inbound',
+          direction: "inbound",
           content: messageContent,
           metadata: {
             messageSid,
-            currentStep: preferenceCheck.currentStep
-          }
+            currentStep: preferenceCheck.currentStep,
+          },
         });
       }
 
@@ -49,92 +53,135 @@ export class PreferenceHandler {
       const startTime = Date.now();
       const parsedPreferences = await parseWorkoutPreferences(messageContent);
       const parseTime = Date.now() - startTime;
-      
-      logger.info("Parsed preferences", { 
+
+      logger.info("Parsed preferences", {
         userId: preferenceCheck.userId,
         preferences: parsedPreferences,
-        parseTime
+        parseTime,
       });
 
       // Get existing preferences if available
       let existingPrefs: any = null;
       if (preferenceCheck.currentStep === "followup_sent") {
-        existingPrefs = await WorkoutPreferenceService.getPreferences(preferenceCheck.trainingSessionId!);
+        existingPrefs = await WorkoutPreferenceService.getPreferences(
+          preferenceCheck.trainingSessionId!,
+        );
       }
-      
+
       // If this is a follow-up response, merge with existing preferences
       let mergedPreferences: any;
       if (preferenceCheck.currentStep === "followup_sent") {
         if (existingPrefs) {
           logger.info("Merging follow-up preferences with existing", {
             existing: existingPrefs,
-            new: parsedPreferences
+            new: parsedPreferences,
           });
-          
+
           // Merge preferences, keeping existing values when new ones are empty/undefined
           mergedPreferences = {
             // Only update intensity if explicitly provided (not undefined)
-            intensity: parsedPreferences.intensity !== undefined 
-              ? parsedPreferences.intensity 
-              : existingPrefs.intensity,
-            intensitySource: parsedPreferences.intensity !== undefined
-              ? 'explicit'
-              : 'inherited', // If not mentioned in follow-up, it's inherited
-            muscleTargets: (parsedPreferences.muscleTargets && parsedPreferences.muscleTargets.length > 0) 
-              ? [...(existingPrefs.muscleTargets || []), ...parsedPreferences.muscleTargets]
-              : existingPrefs.muscleTargets,
-            muscleLessens: (parsedPreferences.muscleLessens && parsedPreferences.muscleLessens.length > 0)
-              ? [...(existingPrefs.muscleLessens || []), ...parsedPreferences.muscleLessens]
-              : existingPrefs.muscleLessens,
-            includeExercises: (parsedPreferences.includeExercises && parsedPreferences.includeExercises.length > 0)
-              ? [...(existingPrefs.includeExercises || []), ...parsedPreferences.includeExercises]
-              : existingPrefs.includeExercises,
-            avoidExercises: (parsedPreferences.avoidExercises && parsedPreferences.avoidExercises.length > 0)
-              ? [...(existingPrefs.avoidExercises || []), ...parsedPreferences.avoidExercises]
-              : existingPrefs.avoidExercises,
-            avoidJoints: (parsedPreferences.avoidJoints && parsedPreferences.avoidJoints.length > 0)
-              ? [...(existingPrefs.avoidJoints || []), ...parsedPreferences.avoidJoints]
-              : existingPrefs.avoidJoints,
+            intensity:
+              parsedPreferences.intensity !== undefined
+                ? parsedPreferences.intensity
+                : existingPrefs.intensity,
+            intensitySource:
+              parsedPreferences.intensity !== undefined
+                ? "explicit"
+                : "inherited", // If not mentioned in follow-up, it's inherited
+            muscleTargets:
+              parsedPreferences.muscleTargets &&
+              parsedPreferences.muscleTargets.length > 0
+                ? [
+                    ...(existingPrefs.muscleTargets || []),
+                    ...parsedPreferences.muscleTargets,
+                  ]
+                : existingPrefs.muscleTargets,
+            muscleLessens:
+              parsedPreferences.muscleLessens &&
+              parsedPreferences.muscleLessens.length > 0
+                ? [
+                    ...(existingPrefs.muscleLessens || []),
+                    ...parsedPreferences.muscleLessens,
+                  ]
+                : existingPrefs.muscleLessens,
+            includeExercises:
+              parsedPreferences.includeExercises &&
+              parsedPreferences.includeExercises.length > 0
+                ? [
+                    ...(existingPrefs.includeExercises || []),
+                    ...parsedPreferences.includeExercises,
+                  ]
+                : existingPrefs.includeExercises,
+            avoidExercises:
+              parsedPreferences.avoidExercises &&
+              parsedPreferences.avoidExercises.length > 0
+                ? [
+                    ...(existingPrefs.avoidExercises || []),
+                    ...parsedPreferences.avoidExercises,
+                  ]
+                : existingPrefs.avoidExercises,
+            avoidJoints:
+              parsedPreferences.avoidJoints &&
+              parsedPreferences.avoidJoints.length > 0
+                ? [
+                    ...(existingPrefs.avoidJoints || []),
+                    ...parsedPreferences.avoidJoints,
+                  ]
+                : existingPrefs.avoidJoints,
             // Only update sessionGoal if explicitly provided (not undefined)
-            sessionGoal: parsedPreferences.sessionGoal !== undefined 
-              ? parsedPreferences.sessionGoal 
-              : existingPrefs.sessionGoal,
-            sessionGoalSource: parsedPreferences.sessionGoal !== undefined
-              ? 'explicit'
-              : 'inherited', // If not mentioned in follow-up, it's inherited
+            sessionGoal:
+              parsedPreferences.sessionGoal !== undefined
+                ? parsedPreferences.sessionGoal
+                : existingPrefs.sessionGoal,
+            sessionGoalSource:
+              parsedPreferences.sessionGoal !== undefined
+                ? "explicit"
+                : "inherited", // If not mentioned in follow-up, it's inherited
             needsFollowUp: false, // We're resolving the follow-up
             systemPromptUsed: parsedPreferences.systemPromptUsed,
             rawLLMResponse: parsedPreferences.rawLLMResponse,
-            debugInfo: parsedPreferences.debugInfo
+            debugInfo: parsedPreferences.debugInfo,
           };
         } else {
           // No existing preferences in follow-up, use parsed with defaults
           mergedPreferences = {
             ...parsedPreferences,
-            intensitySource: parsedPreferences.intensity !== undefined ? 'explicit' : 'default',
-            sessionGoalSource: parsedPreferences.sessionGoal !== undefined ? 'explicit' : 'default'
+            intensitySource:
+              parsedPreferences.intensity !== undefined
+                ? "explicit"
+                : "default",
+            sessionGoalSource:
+              parsedPreferences.sessionGoal !== undefined
+                ? "explicit"
+                : "default",
           };
         }
       } else {
         // Initial preferences - add source tracking
         mergedPreferences = {
           ...parsedPreferences,
-          intensitySource: parsedPreferences.intensity !== undefined ? 'explicit' : 'default',
-          sessionGoalSource: parsedPreferences.sessionGoal !== undefined ? 'explicit' : 'default'
+          intensitySource:
+            parsedPreferences.intensity !== undefined ? "explicit" : "default",
+          sessionGoalSource:
+            parsedPreferences.sessionGoal !== undefined
+              ? "explicit"
+              : "default",
         };
       }
 
       // Log LLM call for preference parsing
       if (sessionTestDataLogger.isEnabled()) {
         sessionTestDataLogger.logLLMCall(preferenceCheck.trainingSessionId!, {
-          type: 'preference_parsing',
-          model: 'gpt-4o-mini',
-          systemPrompt: parsedPreferences.systemPromptUsed || 'Not available',
+          type: "preference_parsing",
+          model: "gpt-4o-mini",
+          systemPrompt: parsedPreferences.systemPromptUsed || "Not available",
           userInput: messageContent,
           rawResponse: parsedPreferences.rawLLMResponse,
           parsedResponse: parsedPreferences,
           parseTimeMs: parseTime,
-          error: parsedPreferences.debugInfo?.error ? JSON.stringify(parsedPreferences.debugInfo.error) : undefined
+          error: parsedPreferences.debugInfo?.error
+            ? JSON.stringify(parsedPreferences.debugInfo.error)
+            : undefined,
         });
       }
 
@@ -143,145 +190,168 @@ export class PreferenceHandler {
         preferenceCheck.userId!,
         preferenceCheck.trainingSessionId!,
         preferenceCheck.businessId!,
-        mergedPreferences
-      ).catch(error => {
+        mergedPreferences,
+      ).catch((error) => {
         logger.error("Failed to save simple preferences (non-blocking)", error);
       });
 
       // Validate exercises if any NEW ones were mentioned in the current message
       let validatedPreferences = { ...mergedPreferences };
       let exerciseValidationInfo: any = {};
-      
+
       // Only validate NEW exercises from the current message, not previously saved ones
       const newAvoidExercises = parsedPreferences.avoidExercises || [];
       const newIncludeExercises = parsedPreferences.includeExercises || [];
-      
+
       logger.info("Exercise arrays from parsed preferences", {
         newAvoidExercises,
         newIncludeExercises,
         currentStep: preferenceCheck.currentStep,
-        hasExistingPrefs: !!existingPrefs
+        hasExistingPrefs: !!existingPrefs,
       });
-      
+
       // Clear exercise arrays from validatedPreferences if we're going to validate them
       // to avoid duplicates when merging
       if (newAvoidExercises.length > 0) {
-        validatedPreferences.avoidExercises = existingPrefs?.avoidExercises || [];
+        validatedPreferences.avoidExercises =
+          existingPrefs?.avoidExercises || [];
       }
       if (newIncludeExercises.length > 0) {
-        validatedPreferences.includeExercises = existingPrefs?.includeExercises || [];
+        validatedPreferences.includeExercises =
+          existingPrefs?.includeExercises || [];
       }
-      
+
       if (newAvoidExercises.length > 0 || newIncludeExercises.length > 0) {
         logger.info("Starting exercise validation for NEW exercises only", {
           newAvoidExercises,
           newIncludeExercises,
-          businessId: preferenceCheck.businessId
+          businessId: preferenceCheck.businessId,
         });
 
         try {
           // Declare variables at the top of the try block
           let filteredIncludes: string[] | undefined;
           const existingIncludes = existingPrefs?.includeExercises || [];
-          
+
           // Validate NEW avoid exercises only
           if (newAvoidExercises.length > 0) {
-            const avoidValidation = await ExerciseValidationService.validateExercises(
-              newAvoidExercises,
-              preferenceCheck.businessId!,
-              "avoid",
-              preferenceCheck.trainingSessionId
-            );
-            
+            const avoidValidation =
+              await ExerciseValidationService.validateExercises(
+                newAvoidExercises,
+                preferenceCheck.businessId!,
+                "avoid",
+                preferenceCheck.trainingSessionId,
+              );
+
             // Remove any newly avoided exercises from includes
-            const validatedAvoidsLower = avoidValidation.validatedExercises.map((e: string) => e.toLowerCase());
-            filteredIncludes = existingIncludes.filter(
-              (exercise: string) => !validatedAvoidsLower.includes(exercise.toLowerCase())
+            const validatedAvoidsLower = avoidValidation.validatedExercises.map(
+              (e: string) => e.toLowerCase(),
             );
-            
+            filteredIncludes = existingIncludes.filter(
+              (exercise: string) =>
+                !validatedAvoidsLower.includes(exercise.toLowerCase()),
+            );
+
             // Update both lists
             validatedPreferences.includeExercises = filteredIncludes;
             validatedPreferences.avoidExercises = [
               ...(existingPrefs?.avoidExercises || []),
-              ...avoidValidation.validatedExercises
+              ...avoidValidation.validatedExercises,
             ];
             exerciseValidationInfo.avoidExercises = avoidValidation;
-            
+
             logger.info("NEW avoid exercises validation result", {
               input: newAvoidExercises,
               validated: avoidValidation.validatedExercises,
               matches: avoidValidation.matches,
-              removedFromIncludes: existingIncludes.length - (filteredIncludes?.length || 0)
+              removedFromIncludes:
+                existingIncludes.length - (filteredIncludes?.length || 0),
             });
           }
 
           // Validate NEW include exercises only
           if (newIncludeExercises.length > 0) {
-            const includeValidation = await ExerciseValidationService.validateExercises(
-              newIncludeExercises,
-              preferenceCheck.businessId!,
-              "include",
-              preferenceCheck.trainingSessionId
-            );
-            
+            const includeValidation =
+              await ExerciseValidationService.validateExercises(
+                newIncludeExercises,
+                preferenceCheck.businessId!,
+                "include",
+                preferenceCheck.trainingSessionId,
+              );
+
             logger.info("Include validation result", {
               newIncludeExercises,
               validationResult: {
                 validatedExercises: includeValidation.validatedExercises,
                 matchesCount: includeValidation.matches.length,
-                matches: includeValidation.matches
-              }
+                matches: includeValidation.matches,
+              },
             });
-            
+
             // Check if any exercises need disambiguation
             const ambiguousMatches = includeValidation.matches.filter(
-              match => match.matchedExercises && match.matchedExercises.length > 1
+              (match) =>
+                match.matchedExercises && match.matchedExercises.length > 1,
             );
-            
+
             logger.info("Checking for disambiguation in follow-up", {
-              includeValidationMatches: includeValidation.matches.map(m => ({
+              includeValidationMatches: includeValidation.matches.map((m) => ({
                 userInput: m.userInput,
                 matchCount: m.matchedExercises.length,
-                matches: m.matchedExercises.map((e: any) => e.name)
+                matches: m.matchedExercises.map((e: any) => e.name),
               })),
               ambiguousMatchesCount: ambiguousMatches.length,
-              currentStep: preferenceCheck.currentStep
+              currentStep: preferenceCheck.currentStep,
             });
-            
+
             if (ambiguousMatches.length > 0) {
-              logger.info("Disambiguation needed - returning disambiguation message", {
-                ambiguousMatchesCount: ambiguousMatches.length,
-                userId: preferenceCheck.userId
-              });
-              
+              logger.info(
+                "Disambiguation needed - returning disambiguation message",
+                {
+                  ambiguousMatchesCount: ambiguousMatches.length,
+                  userId: preferenceCheck.userId,
+                },
+              );
+
               // Save any validated avoid exercises AND filtered includes before handling disambiguation
-              if (validatedPreferences.avoidExercises?.length || filteredIncludes) {
+              if (
+                validatedPreferences.avoidExercises?.length ||
+                filteredIncludes
+              ) {
                 const preDisambiguationSave: any = {};
-                
+
                 if (validatedPreferences.avoidExercises?.length) {
-                  preDisambiguationSave.avoidExercises = validatedPreferences.avoidExercises;
+                  preDisambiguationSave.avoidExercises =
+                    validatedPreferences.avoidExercises;
                 }
-                
+
                 // If we filtered includes due to conflicts, save the filtered version
-                if (filteredIncludes && filteredIncludes.length !== existingIncludes.length) {
+                if (
+                  filteredIncludes &&
+                  filteredIncludes.length !== existingIncludes.length
+                ) {
                   preDisambiguationSave.includeExercises = filteredIncludes;
                 }
-                
+
                 await WorkoutPreferenceService.savePreferences(
                   preferenceCheck.userId!,
                   preferenceCheck.trainingSessionId!,
                   preferenceCheck.businessId!,
                   preDisambiguationSave,
-                  "initial_collected"
+                  "initial_collected",
                 );
-                logger.info("Saved avoid exercises and filtered includes before disambiguation", {
-                  userId: preferenceCheck.userId,
-                  avoidExercises: validatedPreferences.avoidExercises,
-                  filteredIncludes: filteredIncludes,
-                  removedFromIncludes: existingIncludes.length - (filteredIncludes?.length || 0)
-                });
+                logger.info(
+                  "Saved avoid exercises and filtered includes before disambiguation",
+                  {
+                    userId: preferenceCheck.userId,
+                    avoidExercises: validatedPreferences.avoidExercises,
+                    filteredIncludes: filteredIncludes,
+                    removedFromIncludes:
+                      existingIncludes.length - (filteredIncludes?.length || 0),
+                  },
+                );
               }
-              
+
               // Handle disambiguation needed
               return this.handleDisambiguationNeeded(
                 preferenceCheck,
@@ -291,25 +361,26 @@ export class PreferenceHandler {
                 ambiguousMatches,
                 mergedPreferences,
                 parseTime,
-                exerciseValidationInfo
+                exerciseValidationInfo,
               );
             }
-            
+
             // Merge validated new exercises with existing ones (or filtered ones if we removed some)
-            const currentIncludes = validatedPreferences.includeExercises !== undefined 
-              ? validatedPreferences.includeExercises 
-              : (existingPrefs?.includeExercises || []);
+            const currentIncludes =
+              validatedPreferences.includeExercises !== undefined
+                ? validatedPreferences.includeExercises
+                : existingPrefs?.includeExercises || [];
             validatedPreferences.includeExercises = [
               ...currentIncludes,
-              ...includeValidation.validatedExercises
+              ...includeValidation.validatedExercises,
             ];
             exerciseValidationInfo.includeExercises = includeValidation;
-            
+
             logger.info("NEW include exercises validation result", {
               input: newIncludeExercises,
               validated: includeValidation.validatedExercises,
               matches: includeValidation.matches,
-              finalMerged: validatedPreferences.includeExercises
+              finalMerged: validatedPreferences.includeExercises,
             });
           }
         } catch (error) {
@@ -318,7 +389,7 @@ export class PreferenceHandler {
             stack: error instanceof Error ? error.stack : undefined,
             currentStep: preferenceCheck.currentStep,
             newIncludeExercises,
-            newAvoidExercises
+            newAvoidExercises,
           });
           // Continue with unvalidated exercises rather than failing
         }
@@ -328,7 +399,7 @@ export class PreferenceHandler {
       const { nextStep, response } = await this.determineNextStep(
         preferenceCheck.currentStep,
         validatedPreferences,
-        preferenceCheck.trainingSessionId
+        preferenceCheck.trainingSessionId,
       );
 
       // Save preferences
@@ -338,16 +409,17 @@ export class PreferenceHandler {
         validatedPreferences: {
           ...validatedPreferences,
           avoidExercisesCount: validatedPreferences.avoidExercises?.length || 0,
-          includeExercisesCount: validatedPreferences.includeExercises?.length || 0
-        }
+          includeExercisesCount:
+            validatedPreferences.includeExercises?.length || 0,
+        },
       });
-      
+
       await WorkoutPreferenceService.savePreferences(
         preferenceCheck.userId!,
         preferenceCheck.trainingSessionId!,
         preferenceCheck.businessId!,
         validatedPreferences,
-        nextStep
+        nextStep,
       );
 
       // Save messages
@@ -360,28 +432,30 @@ export class PreferenceHandler {
         validatedPreferences,
         parseTime,
         nextStep,
-        exerciseValidationInfo
+        exerciseValidationInfo,
       );
 
       // Log outbound message and save session data
       if (sessionTestDataLogger.isEnabled()) {
         sessionTestDataLogger.logMessage(preferenceCheck.trainingSessionId!, {
-          direction: 'outbound',
+          direction: "outbound",
           content: response,
           metadata: {
             nextStep,
-            validatedPreferences
-          }
+            validatedPreferences,
+          },
         });
-        
+
         // Save the complete session data
-        await sessionTestDataLogger.saveSessionData(preferenceCheck.trainingSessionId!);
+        await sessionTestDataLogger.saveSessionData(
+          preferenceCheck.trainingSessionId!,
+        );
       }
 
-      logger.info("Preference response complete", { 
+      logger.info("Preference response complete", {
         userId: preferenceCheck.userId,
         needsFollowUp: mergedPreferences.needsFollowUp,
-        nextStep
+        nextStep,
       });
 
       return {
@@ -392,8 +466,8 @@ export class PreferenceHandler {
           businessId: preferenceCheck.businessId,
           sessionId: preferenceCheck.trainingSessionId,
           nextStep,
-          parseTime
-        }
+          parseTime,
+        },
       };
     } catch (error) {
       logger.error("Preference handler error", error);
@@ -402,26 +476,42 @@ export class PreferenceHandler {
   }
 
   private async determineNextStep(
-    currentStep: string, 
+    currentStep: string,
     validatedPreferences: any,
-    sessionId?: string
-  ): Promise<{ nextStep: "initial_collected" | "disambiguation_pending" | "disambiguation_resolved" | "followup_sent" | "preferences_active"; response: string }> {
-    let nextStep: "initial_collected" | "disambiguation_pending" | "disambiguation_resolved" | "followup_sent" | "preferences_active";
+    sessionId?: string,
+  ): Promise<{
+    nextStep:
+      | "initial_collected"
+      | "disambiguation_pending"
+      | "disambiguation_resolved"
+      | "followup_sent"
+      | "preferences_active";
+    response: string;
+  }> {
+    let nextStep:
+      | "initial_collected"
+      | "disambiguation_pending"
+      | "disambiguation_resolved"
+      | "followup_sent"
+      | "preferences_active";
     let response: string;
-    
+
     // Get template SMS config if we have a session
-    const smsConfig = sessionId 
+    const smsConfig = sessionId
       ? await TemplateSMSService.getSMSConfigForSession(sessionId)
       : null;
-    
-    if (currentStep === "not_started" || currentStep === "disambiguation_resolved") {
+
+    if (
+      currentStep === "not_started" ||
+      currentStep === "disambiguation_resolved"
+    ) {
       // Determine fields to ask based on template
       const fieldsToAsk = TemplateSMSService.determineFieldsToAsk(
         smsConfig,
         validatedPreferences,
-        2 // Ask for up to 2 fields
+        2, // Ask for up to 2 fields
       );
-      
+
       if (fieldsToAsk.length === 0) {
         // No more fields needed
         nextStep = "preferences_active";
@@ -432,13 +522,13 @@ export class PreferenceHandler {
         response = TemplateSMSService.generateTemplateFollowUp(
           smsConfig,
           fieldsToAsk,
-          validatedPreferences
+          validatedPreferences,
         );
-        
+
         logger.info("Generated template-based follow-up", {
           fieldsAsked: fieldsToAsk,
           currentStep,
-          hasTemplate: !!smsConfig
+          hasTemplate: !!smsConfig,
         });
       }
     } else if (currentStep === "followup_sent") {
@@ -448,7 +538,8 @@ export class PreferenceHandler {
     } else {
       // Default response
       nextStep = "followup_sent";
-      response = "Got it! What's your training focus today, and any specific areas you'd like to work on?";
+      response =
+        "Got it! What's your training focus today, and any specific areas you'd like to work on?";
     }
 
     return { nextStep, response };
@@ -462,32 +553,36 @@ export class PreferenceHandler {
     ambiguousMatches: any[],
     parsedPreferences: any,
     parseTime: number,
-    exerciseValidationInfo?: any
+    exerciseValidationInfo?: any,
   ): Promise<SMSResponse> {
     try {
       // For web app messages, we already have userId in preferenceCheck
-      const userInfo = preferenceCheck.userId 
-        ? { userId: preferenceCheck.userId, businessId: preferenceCheck.businessId }
+      const userInfo = preferenceCheck.userId
+        ? {
+            userId: preferenceCheck.userId,
+            businessId: preferenceCheck.businessId,
+          }
         : await getUserByPhone(phoneNumber);
       if (!userInfo) {
         throw new Error("User not found");
       }
 
       // Build disambiguation message
-      let disambiguationMessage = "I found multiple exercises matching your request. Please select by number:\n\n";
+      let disambiguationMessage =
+        "I found multiple exercises matching your request. Please select by number:\n\n";
       let optionNumber = 1;
       const allOptions: Array<{ id: string; name: string }> = [];
 
       for (const match of ambiguousMatches) {
         disambiguationMessage += `For "${match.userInput}":\n`;
-        
+
         // Show all exercise options
         for (const exercise of match.matchedExercises) {
           disambiguationMessage += `${optionNumber}. ${exercise.name}\n`;
           allOptions.push(exercise);
           optionNumber++;
         }
-        
+
         disambiguationMessage += "\n";
       }
 
@@ -496,17 +591,19 @@ export class PreferenceHandler {
       // Log disambiguation message if session logging is enabled
       if (sessionTestDataLogger.isEnabled()) {
         sessionTestDataLogger.logMessage(preferenceCheck.trainingSessionId!, {
-          direction: 'outbound',
+          direction: "outbound",
           content: disambiguationMessage,
           metadata: {
-            type: 'disambiguation_request',
+            type: "disambiguation_request",
             ambiguousMatches,
-            options: allOptions
-          }
+            options: allOptions,
+          },
         });
-        
+
         // Save session data up to this point
-        await sessionTestDataLogger.saveSessionData(preferenceCheck.trainingSessionId!);
+        await sessionTestDataLogger.saveSessionData(
+          preferenceCheck.trainingSessionId!,
+        );
       }
 
       // Save conversation state
@@ -514,55 +611,57 @@ export class PreferenceHandler {
         userInfo.userId,
         preferenceCheck.trainingSessionId!,
         preferenceCheck.businessId!,
-        ambiguousMatches.map(m => m.userInput).join(", "),
-        allOptions
+        ambiguousMatches.map((m) => m.userInput).join(", "),
+        allOptions,
       );
 
       // Save the messages
       await saveMessage({
         userId: userInfo.userId,
         businessId: userInfo.businessId,
-        direction: 'inbound',
+        direction: "inbound",
         content: messageContent,
         phoneNumber,
         metadata: {
-          type: 'preference_collection',
+          type: "preference_collection",
           requiresDisambiguation: true,
           twilioMessageSid: messageSid,
         },
-        status: 'delivered',
+        status: "delivered",
       });
 
       // Build array of all LLM calls for disambiguation
       const llmCalls = [];
-      
+
       // Add preference parsing LLM call
       llmCalls.push({
-        type: 'preference_parsing',
-        model: 'gpt-4o-mini',
-        systemPrompt: parsedPreferences.systemPromptUsed || 'Not available',
+        type: "preference_parsing",
+        model: "gpt-4o-mini",
+        systemPrompt: parsedPreferences.systemPromptUsed || "Not available",
         userInput: messageContent,
         rawResponse: parsedPreferences.rawLLMResponse || parsedPreferences,
         parsedResponse: parsedPreferences,
-        parseTimeMs: parseTime
+        parseTimeMs: parseTime,
       });
-      
+
       // Add exercise matching LLM calls
       const allMatches = [
         ...(exerciseValidationInfo.avoidExercises?.matches || []),
-        ...(exerciseValidationInfo.includeExercises?.matches || [])
+        ...(exerciseValidationInfo.includeExercises?.matches || []),
       ];
-      
+
       allMatches.forEach((match: any) => {
-        if (match.matchMethod === 'llm') {
+        if (match.matchMethod === "llm") {
           llmCalls.push({
-            type: 'exercise_matching',
-            model: match.model || 'gpt-4o-mini',
-            systemPrompt: match.systemPrompt || 'Not available',
+            type: "exercise_matching",
+            model: match.model || "gpt-4o-mini",
+            systemPrompt: match.systemPrompt || "Not available",
             userInput: match.userInput,
-            rawResponse: match.llmReasoning || { reasoning: match.llmReasoning },
+            rawResponse: match.llmReasoning || {
+              reasoning: match.llmReasoning,
+            },
             matchedExercises: match.matchedExercises,
-            parseTimeMs: match.parseTimeMs || 0
+            parseTimeMs: match.parseTimeMs || 0,
           });
         }
       });
@@ -570,22 +669,22 @@ export class PreferenceHandler {
       await saveMessage({
         userId: userInfo.userId,
         businessId: userInfo.businessId,
-        direction: 'outbound',
+        direction: "outbound",
         content: disambiguationMessage,
         phoneNumber,
         metadata: {
-          type: 'disambiguation_request',
+          type: "disambiguation_request",
           optionCount: allOptions.length,
           // Include llmCalls array for consistency
           llmCalls: llmCalls,
           // Keep llmParsing for backward compatibility
           llmParsing: {
-            model: 'gpt-4o-mini',
+            model: "gpt-4o-mini",
             parseTimeMs: parseTime,
             inputLength: messageContent.length,
             parsedData: parsedPreferences,
             rawLLMResponse: parsedPreferences.rawLLMResponse || null,
-            systemPrompt: parsedPreferences.systemPromptUsed || 'Not available',
+            systemPrompt: parsedPreferences.systemPromptUsed || "Not available",
             debugInfo: parsedPreferences.debugInfo || null,
             userInput: messageContent,
             extractedFields: {
@@ -601,30 +700,30 @@ export class PreferenceHandler {
             },
             exerciseValidation: {
               ...exerciseValidationInfo,
-              ambiguousMatches: ambiguousMatches.map(match => ({
+              ambiguousMatches: ambiguousMatches.map((match) => ({
                 userInput: match.userInput,
                 matchedExercises: match.matchedExercises,
                 confidence: match.confidence,
                 matchMethod: match.matchMethod,
-                model: match.model || 'gpt-4o-mini',
+                model: match.model || "gpt-4o-mini",
                 parseTimeMs: match.parseTimeMs,
                 llmReasoning: match.llmReasoning,
                 systemPrompt: match.systemPrompt,
-                matchCount: match.matchedExercises.length
-              }))
-            }
+                matchCount: match.matchedExercises.length,
+              })),
+            },
           },
           // Also store ambiguousMatches at top level
           ambiguousMatches: ambiguousMatches,
-          exerciseValidation: exerciseValidationInfo
+          exerciseValidation: exerciseValidationInfo,
         },
-        status: 'sent',
+        status: "sent",
       });
 
       logger.info("Disambiguation required", {
         userId: userInfo.userId,
         ambiguousCount: ambiguousMatches.length,
-        totalOptions: allOptions.length
+        totalOptions: allOptions.length,
       });
 
       return {
@@ -633,8 +732,8 @@ export class PreferenceHandler {
         metadata: {
           userId: userInfo.userId,
           businessId: userInfo.businessId,
-          requiresDisambiguation: true
-        }
+          requiresDisambiguation: true,
+        },
       };
     } catch (error) {
       logger.error("Error handling disambiguation", error);
@@ -651,14 +750,17 @@ export class PreferenceHandler {
     parsedPreferences: any,
     parseTime: number,
     nextStep: string,
-    exerciseValidationInfo: any
+    exerciseValidationInfo: any,
   ): Promise<void> {
     try {
       // For web app messages, we already have userId in preferenceCheck
-      const userInfo = preferenceCheck.userId 
-        ? { userId: preferenceCheck.userId, businessId: preferenceCheck.businessId }
+      const userInfo = preferenceCheck.userId
+        ? {
+            userId: preferenceCheck.userId,
+            businessId: preferenceCheck.businessId,
+          }
         : await getUserByPhone(phoneNumber);
-      
+
       if (!userInfo) {
         logger.warn("User not found for message saving", { phoneNumber });
         return;
@@ -668,28 +770,28 @@ export class PreferenceHandler {
       await saveMessage({
         userId: userInfo.userId,
         businessId: userInfo.businessId,
-        direction: 'inbound',
+        direction: "inbound",
         content: inboundContent,
         phoneNumber,
         metadata: {
-          type: 'preference_collection',
+          type: "preference_collection",
           step: preferenceCheck.currentStep,
           twilioMessageSid: messageSid,
         },
-        status: 'delivered',
+        status: "delivered",
       });
 
       // Build array of all LLM calls
       const llmCalls = [];
-      
+
       // First LLM call - preference parsing
       llmCalls.push({
-        model: 'gpt-4o-mini',
+        model: "gpt-4o-mini",
         parseTimeMs: parseTime,
         inputLength: inboundContent.length,
         parsedData: parsedPreferences,
         rawLLMResponse: parsedPreferences.rawLLMResponse || null,
-        systemPrompt: parsedPreferences.systemPromptUsed || 'Not available',
+        systemPrompt: parsedPreferences.systemPromptUsed || "Not available",
         debugInfo: parsedPreferences.debugInfo || null,
         extractedFields: {
           intensity: parsedPreferences.intensity || null,
@@ -705,31 +807,37 @@ export class PreferenceHandler {
         userInput: inboundContent,
         confidenceIndicators: {
           hasIntensity: !!parsedPreferences.intensity,
-          hasMuscleTargets: !!(parsedPreferences.muscleTargets?.length),
-          hasRestrictions: !!(parsedPreferences.muscleLessens?.length || parsedPreferences.avoidJoints?.length),
-          hasSpecificRequests: !!(parsedPreferences.includeExercises?.length || parsedPreferences.avoidExercises?.length),
+          hasMuscleTargets: !!parsedPreferences.muscleTargets?.length,
+          hasRestrictions: !!(
+            parsedPreferences.muscleLessens?.length ||
+            parsedPreferences.avoidJoints?.length
+          ),
+          hasSpecificRequests: !!(
+            parsedPreferences.includeExercises?.length ||
+            parsedPreferences.avoidExercises?.length
+          ),
           requiresFollowUp: parsedPreferences.needsFollowUp || false,
-        }
+        },
       });
-      
+
       // Add individual exercise matching LLM calls
       const allMatches = [
         ...(exerciseValidationInfo.avoidExercises?.matches || []),
-        ...(exerciseValidationInfo.includeExercises?.matches || [])
+        ...(exerciseValidationInfo.includeExercises?.matches || []),
       ];
-      
+
       allMatches.forEach((match: any, index: number) => {
-        if (match.matchMethod === 'llm' && match.llmReasoning) {
+        if (match.matchMethod === "llm" && match.llmReasoning) {
           llmCalls.push({
-            model: 'gpt-4o-mini',
+            model: "gpt-4o-mini",
             parseTimeMs: match.parseTimeMs,
             exerciseMatch: {
               userInput: match.userInput,
               matchMethod: match.matchMethod,
               matchCount: match.matchedExercises?.length || 0,
               matches: match.matchedExercises?.map((ex: any) => ex.name) || [],
-              reasoning: match.llmReasoning
-            }
+              reasoning: match.llmReasoning,
+            },
           });
         }
       });
@@ -738,20 +846,20 @@ export class PreferenceHandler {
       await saveMessage({
         userId: userInfo.userId,
         businessId: userInfo.businessId,
-        direction: 'outbound',
+        direction: "outbound",
         content: outboundContent,
         phoneNumber,
         metadata: {
-          type: 'preference_collection_response',
+          type: "preference_collection_response",
           step: nextStep,
           // Primary LLM parsing (for backward compatibility)
           llmParsing: llmCalls[0],
           // All LLM calls as array
           llmCalls: llmCalls,
           // Exercise validation summary
-          exerciseValidation: exerciseValidationInfo || null
+          exerciseValidation: exerciseValidationInfo || null,
         },
-        status: 'sent',
+        status: "sent",
       });
     } catch (error) {
       logger.error("Failed to save messages", error);

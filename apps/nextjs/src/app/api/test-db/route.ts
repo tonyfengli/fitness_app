@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+
 import { db } from "@acme/db/client";
 
 export async function GET() {
@@ -7,7 +8,7 @@ export async function GET() {
     const posts = await db.query.Post.findMany({
       limit: 1,
     });
-    
+
     return NextResponse.json({
       success: true,
       message: "Database connection successful!",
@@ -24,7 +25,7 @@ export async function GET() {
         timestamp: new Date().toISOString(),
         connectionTest: "❌ Failed to connect to database",
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

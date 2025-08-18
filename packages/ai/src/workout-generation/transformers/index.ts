@@ -1,6 +1,6 @@
-export { 
-  transformLLMOutputToDB, 
+export {
+  transformLLMOutputToDB,
   validateExerciseLookup,
   type LLMWorkoutOutput,
-  type WorkoutDBFormat
-} from './workoutTransformer';
+  type WorkoutDBFormat,
+} from "./workoutTransformer";

@@ -1,4 +1,5 @@
 import { validateRequest } from "twilio";
+
 import { createLogger } from "../../utils/logger";
 
 const logger = createLogger("WebhookValidator");
@@ -15,14 +16,14 @@ export class TwilioWebhookValidator {
 
   constructor() {
     this.authToken = process.env.TWILIO_AUTH_TOKEN || "";
-    this.skipValidation = 
-      process.env.SKIP_TWILIO_VALIDATION === "true" || 
+    this.skipValidation =
+      process.env.SKIP_TWILIO_VALIDATION === "true" ||
       process.env.NODE_ENV === "development";
   }
 
   async validateWebhook(
     request: Request,
-    signature: string | null
+    signature: string | null,
   ): Promise<ValidationResult> {
     try {
       // Parse form data
@@ -34,9 +35,9 @@ export class TwilioWebhookValidator {
 
       // Validate required fields
       if (!params.From || !params.Body) {
-        return { 
-          valid: false, 
-          error: "Missing required fields: From or Body" 
+        return {
+          valid: false,
+          error: "Missing required fields: From or Body",
         };
       }
 
@@ -55,9 +56,9 @@ export class TwilioWebhookValidator {
       // Validate auth token is configured
       if (!this.authToken) {
         logger.error("Missing Twilio auth token");
-        return { 
-          valid: false, 
-          error: "Service misconfigured: Missing auth token" 
+        return {
+          valid: false,
+          error: "Service misconfigured: Missing auth token",
         };
       }
 
@@ -68,7 +69,7 @@ export class TwilioWebhookValidator {
       logger.debug("Validating Twilio signature", {
         webhookUrl,
         signature: signature.substring(0, 10) + "...",
-        paramsCount: Object.keys(params).length
+        paramsCount: Object.keys(params).length,
       });
 
       // Validate signature
@@ -76,13 +77,13 @@ export class TwilioWebhookValidator {
         this.authToken,
         signature,
         webhookUrl,
-        params
+        params,
       );
 
       if (!isValid) {
-        logger.warn("Invalid Twilio signature", { 
+        logger.warn("Invalid Twilio signature", {
           signature: signature.substring(0, 10) + "...",
-          url: webhookUrl
+          url: webhookUrl,
         });
         return { valid: false, error: "Invalid webhook signature" };
       }
@@ -90,9 +91,9 @@ export class TwilioWebhookValidator {
       return { valid: true, payload: params };
     } catch (error) {
       logger.error("Webhook validation error", error);
-      return { 
-        valid: false, 
-        error: error instanceof Error ? error.message : "Validation failed" 
+      return {
+        valid: false,
+        error: error instanceof Error ? error.message : "Validation failed",
       };
     }
   }

@@ -17,9 +17,9 @@ export * from "./api/generateGroupWorkoutBlueprint";
 export * from "./core/filtering";
 export * from "./core/scoring";
 export * from "./core/templates";
-export { 
+export {
   type BlockDefinition,
-  type WorkoutTemplate
+  type WorkoutTemplate,
 } from "./core/templates/types/dynamicBlockTypes";
 
 // SMS interpretation graph
@@ -29,8 +29,10 @@ export * from "./sms/smsInterpretationGraph";
 export * from "./workout-generation";
 export * from "./workout-generation/group";
 export * from "./workout-generation/standard";
-export { WorkoutType, BUCKET_CONFIGS } from "./workout-generation/types/workoutTypes";
-
+export {
+  WorkoutType,
+  BUCKET_CONFIGS,
+} from "./workout-generation/types/workoutTypes";
 
 // Formatting utilities
 export * from "./formatting/exerciseFlags";
@@ -49,4 +51,8 @@ export { createLLM } from "./config/llm";
 
 // Prompt building
 export { WorkoutPromptBuilder } from "./workout-generation/prompts/promptBuilder";
-export type { PromptConfig, Equipment, DeterministicAssignment } from "./workout-generation/prompts/types";
+export type {
+  PromptConfig,
+  Equipment,
+  DeterministicAssignment,
+} from "./workout-generation/prompts/types";

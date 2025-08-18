@@ -2,7 +2,7 @@
  * Simple logger utility that can be controlled by environment variables
  */
 
-type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+type LogLevel = "debug" | "info" | "warn" | "error";
 
 const LOG_LEVELS: Record<LogLevel, number> = {
   debug: 0,
@@ -11,8 +11,9 @@ const LOG_LEVELS: Record<LogLevel, number> = {
   error: 3,
 };
 
-const currentLogLevel = LOG_LEVELS[(process.env.LOG_LEVEL as LogLevel) || 'error'];
-const isDevelopment = process.env.NODE_ENV !== 'production';
+const currentLogLevel =
+  LOG_LEVELS[(process.env.LOG_LEVEL as LogLevel) || "error"];
+const isDevelopment = process.env.NODE_ENV !== "production";
 
 class Logger {
   private context: string;
@@ -32,39 +33,39 @@ class Logger {
     const prefix = `[${timestamp}] [${level.toUpperCase()}] [${this.context}]`;
 
     switch (level) {
-      case 'debug':
+      case "debug":
         if (isDevelopment) {
-          console.debug(prefix, message, data || '');
+          console.debug(prefix, message, data || "");
         }
         break;
-      case 'info':
+      case "info":
         if (isDevelopment) {
-          console.info(prefix, message, data || '');
+          console.info(prefix, message, data || "");
         }
         break;
-      case 'warn':
-        console.warn(prefix, message, data || '');
+      case "warn":
+        console.warn(prefix, message, data || "");
         break;
-      case 'error':
-        console.error(prefix, message, data || '');
+      case "error":
+        console.error(prefix, message, data || "");
         break;
     }
   }
 
   debug(message: string, data?: any): void {
-    this.formatMessage('debug', message, data);
+    this.formatMessage("debug", message, data);
   }
 
   info(message: string, data?: any): void {
-    this.formatMessage('info', message, data);
+    this.formatMessage("info", message, data);
   }
 
   warn(message: string, data?: any): void {
-    this.formatMessage('warn', message, data);
+    this.formatMessage("warn", message, data);
   }
 
   error(message: string, data?: any): void {
-    this.formatMessage('error', message, data);
+    this.formatMessage("error", message, data);
   }
 
   /**

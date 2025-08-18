@@ -1,12 +1,13 @@
+import { getWorkoutTemplate } from "@acme/ai";
+import { and, eq } from "@acme/db";
 import { db } from "@acme/db/client";
 import { TrainingSession, UserTrainingSession } from "@acme/db/schema";
-import { eq, and } from "@acme/db";
-import { getWorkoutTemplate } from "@acme/ai";
+
+import type { SMSResponse } from "../types";
 import { createLogger } from "../../../utils/logger";
 import { saveMessage } from "../../messageService";
 import { ExerciseSelectionService } from "../template-services/exercise-selection-service";
 import { TemplateSMSService } from "../template-sms-service";
-import type { SMSResponse } from "../types";
 
 const logger = createLogger("TemplateCheckInHandler");
 
@@ -23,7 +24,7 @@ export class TemplateCheckInHandler {
       businessId: string;
       userName: string | null;
       trainingSessionId: string;
-    }
+    },
   ): Promise<SMSResponse> {
     try {
       // Get session details
@@ -31,7 +32,7 @@ export class TemplateCheckInHandler {
         .select({
           id: TrainingSession.id,
           templateType: TrainingSession.templateType,
-          templateConfig: TrainingSession.templateConfig
+          templateConfig: TrainingSession.templateConfig,
         })
         .from(TrainingSession)
         .where(eq(TrainingSession.id, userInfo.trainingSessionId))
@@ -40,22 +41,25 @@ export class TemplateCheckInHandler {
       if (!session) {
         return {
           success: false,
-          message: "Session not found. Please contact your trainer."
+          message: "Session not found. Please contact your trainer.",
         };
       }
 
       // Get template configuration
-      const template = session.templateType ? getWorkoutTemplate(session.templateType) : null;
-      
+      const template = session.templateType
+        ? getWorkoutTemplate(session.templateType)
+        : null;
+
       logger.info("Template check-in handler details", {
         sessionId: session.id,
         templateType: session.templateType,
         templateFound: !!template,
         hasCustomCheckIn: template?.smsConfig?.customCheckIn,
-        showDeterministicSelections: template?.smsConfig?.showDeterministicSelections,
-        templateName: template?.name
+        showDeterministicSelections:
+          template?.smsConfig?.showDeterministicSelections,
+        templateName: template?.name,
       });
-      
+
       // Check if template has custom check-in configuration
       if (template?.smsConfig?.customCheckIn) {
         return await this.handleCustomCheckIn(
@@ -64,7 +68,7 @@ export class TemplateCheckInHandler {
           messageSid,
           userInfo,
           session,
-          template
+          template,
         );
       }
 
@@ -75,14 +79,13 @@ export class TemplateCheckInHandler {
         messageSid,
         userInfo,
         session,
-        template
+        template,
       );
-
     } catch (error) {
       logger.error("Template check-in error", error);
       return {
         success: false,
-        message: "Sorry, there was an error checking you in. Please try again."
+        message: "Sorry, there was an error checking you in. Please try again.",
       };
     }
   }
@@ -101,7 +104,7 @@ export class TemplateCheckInHandler {
       trainingSessionId: string;
     },
     session: any,
-    template: any
+    template: any,
   ): Promise<SMSResponse> {
     try {
       // Save check-in message
@@ -110,52 +113,73 @@ export class TemplateCheckInHandler {
         businessId: userInfo.businessId,
         phoneNumber,
         content: messageContent,
-        direction: 'inbound' as const,
-        status: 'sent',
+        direction: "inbound" as const,
+        status: "sent",
         metadata: {
           twilioMessageSid: messageSid,
-          trainingSessionId: userInfo.trainingSessionId
-        }
+          trainingSessionId: userInfo.trainingSessionId,
+        },
       });
 
       // Update check-in status
       await db.transaction(async (tx) => {
-        await tx.update(UserTrainingSession)
+        await tx
+          .update(UserTrainingSession)
           .set({
             checkedInAt: new Date(),
-            preferenceCollectionStep: 'awaiting_initial_response'
+            preferenceCollectionStep: "awaiting_initial_response",
           })
           .where(
             and(
               eq(UserTrainingSession.userId, userInfo.userId),
-              eq(UserTrainingSession.trainingSessionId, userInfo.trainingSessionId)
-            )
+              eq(
+                UserTrainingSession.trainingSessionId,
+                userInfo.trainingSessionId,
+              ),
+            ),
           );
       });
 
       // Get deterministic preview selections for BMF templates
       let selections: any[] = [];
-      if (session.templateType === 'full_body_bmf' || template?.smsConfig?.showDeterministicSelections) {
+      if (
+        session.templateType === "full_body_bmf" ||
+        template?.smsConfig?.showDeterministicSelections
+      ) {
         logger.info("Getting exercise preview for template", {
           sessionId: session.id,
           templateType: session.templateType,
-          showDeterministicSelections: template?.smsConfig?.showDeterministicSelections
+          showDeterministicSelections:
+            template?.smsConfig?.showDeterministicSelections,
         });
-        selections = await ExerciseSelectionService.getDeterministicPreview(session.templateType);
+        selections = await ExerciseSelectionService.getDeterministicPreview(
+          session.templateType,
+        );
       }
-      
+
       // Format client name
-      const clientName = ExerciseSelectionService.formatClientName(userInfo.userName);
-      
+      const clientName = ExerciseSelectionService.formatClientName(
+        userInfo.userName,
+      );
+
       // Generate response based on selections
       let response: string;
-      
-      if (selections.length > 0 && template?.smsConfig?.showDeterministicSelections !== false) {
+
+      if (
+        selections.length > 0 &&
+        template?.smsConfig?.showDeterministicSelections !== false
+      ) {
         // Show deterministic selections
-        response = ExerciseSelectionService.formatSelectionsForSMS(selections, clientName);
+        response = ExerciseSelectionService.formatSelectionsForSMS(
+          selections,
+          clientName,
+        );
       } else if (template?.smsConfig?.checkInResponse) {
         // Use template-specific response
-        response = template.smsConfig.checkInResponse.replace('{clientName}', clientName);
+        response = template.smsConfig.checkInResponse.replace(
+          "{clientName}",
+          clientName,
+        );
       } else {
         // Default response
         response = `You're checked in, ${clientName}! What are you hoping to work on today?`;
@@ -167,23 +191,22 @@ export class TemplateCheckInHandler {
         businessId: userInfo.businessId,
         phoneNumber,
         content: response,
-        direction: 'outbound' as const,
-        status: 'sent',
+        direction: "outbound" as const,
+        status: "sent",
         metadata: {
-          trainingSessionId: userInfo.trainingSessionId
-        }
+          trainingSessionId: userInfo.trainingSessionId,
+        },
       });
 
       return {
         success: true,
         message: response,
         metadata: {
-          action: 'check_in_complete',
+          action: "check_in_complete",
           showedSelections: selections.length > 0,
-          templateType: session.templateType
-        }
+          templateType: session.templateType,
+        },
       };
-
     } catch (error) {
       logger.error("Error handling check-in with selections", error);
       throw error;
@@ -204,7 +227,7 @@ export class TemplateCheckInHandler {
       trainingSessionId: string;
     },
     session: any,
-    template: any
+    template: any,
   ): Promise<SMSResponse> {
     // This would handle completely custom check-in flows
     // For now, delegate to the selection-based handler
@@ -214,7 +237,7 @@ export class TemplateCheckInHandler {
       messageSid,
       userInfo,
       session,
-      template
+      template,
     );
   }
 }
