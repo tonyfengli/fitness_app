@@ -151,7 +151,21 @@ function ClientWorkoutOverviewContent() {
   );
   const [expandedMuscles, setExpandedMuscles] = useState<Set<string>>(new Set());
   const availableExercisesRef = useRef<any[]>([]);
+  const [hasExercises, setHasExercises] = useState(false);
 
+  // Mutation to update client status to workout_ready
+  const updateStatusMutation = useMutation({
+    ...trpc.trainingSession.updateClientReadyStatusPublic.mutationOptions({
+      onSuccess: (data) => {
+        console.log('[ClientWorkoutOverview] Status updated to:', data.newStatus);
+        // Stay on this page when status is workout_ready
+      },
+      onError: (error) => {
+        console.error("Failed to update status:", error);
+        alert("Failed to update status. Please try again.");
+      },
+    }),
+  });
 
   // Use real-time workout exercises
   useRealtimeWorkoutExercises({
@@ -209,7 +223,8 @@ function ClientWorkoutOverviewContent() {
       userId: userId || "",
     }),
     enabled: !!sessionId && !!userId,
-    refetchInterval: realtimeExercises.length > 0 ? false : 5000, // Poll every 5s until we get exercises
+    // Poll every 5s when no exercises are loaded yet
+    refetchInterval: !hasExercises ? 5000 : false,
   });
 
   // Debug visualization data
@@ -237,6 +252,8 @@ function ClientWorkoutOverviewContent() {
       clientId: userId || "",
     }),
     enabled: !!sessionId && !!userId,
+    // Poll every 5s when no exercises are loaded yet
+    refetchInterval: !hasExercises ? 5000 : false,
   });
 
   console.log("Saved selections:", savedSelections);
@@ -485,6 +502,15 @@ function ClientWorkoutOverviewContent() {
     }
   }, [realtimeExercises.length, visualizationData, refetchVisualization]);
 
+  // Update hasExercises state when exercises are loaded
+  useEffect(() => {
+    const exercisesLoaded = clientExercises.length > 0;
+    if (exercisesLoaded !== hasExercises) {
+      console.log("[ClientWorkoutOverview] Exercises loaded state changed:", exercisesLoaded);
+      setHasExercises(exercisesLoaded);
+    }
+  }, [clientExercises.length, hasExercises]);
+
   // Filter exercises for the selection modal
   const filteredExercises = useMemo(() => {
     if (!showExerciseSelection || !selectedExercise) {
@@ -694,7 +720,33 @@ function ClientWorkoutOverviewContent() {
         </div>
       </div>
 
-
+      {/* Ready Button */}
+      <div className="mx-auto mt-6 max-w-sm px-4">
+        {clientInfoResponse?.status === 'workout_ready' ? (
+          <div className="w-full rounded-lg bg-green-100 border border-green-300 py-3 text-center">
+            <span className="text-green-800 font-medium">✓ You're Ready!</span>
+          </div>
+        ) : (
+          <button
+            onClick={() => {
+              updateStatusMutation.mutate({
+                sessionId: sessionId!,
+                userId: userId!,
+                isReady: true,
+                targetStatus: 'workout_ready'
+              });
+            }}
+            disabled={updateStatusMutation.isPending}
+            className={`w-full rounded-lg py-3 font-medium transition-colors ${
+              updateStatusMutation.isPending
+                ? "bg-gray-300 text-gray-500"
+                : "bg-green-600 text-white hover:bg-green-700"
+            }`}
+          >
+            {updateStatusMutation.isPending ? "Updating..." : "Ready"}
+          </button>
+        )}
+      </div>
 
       {/* Exercise Selection Modal */}
       {showExerciseSelection && (

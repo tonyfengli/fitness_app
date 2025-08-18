@@ -331,7 +331,7 @@ export function WorkoutOverviewScreen() {
                   <MattePanel style={{ 
                     flex: 1, 
                     padding: 16,
-                    ...(clientData.status === 'ready' && {
+                    ...(clientData.status === 'workout_ready' && {
                       borderColor: TOKENS.color.accent,
                       borderWidth: 2,
                     })
@@ -414,7 +414,7 @@ export function WorkoutOverviewScreen() {
                     <MattePanel style={{ 
                       flex: 1, 
                       padding: 16,
-                      ...(clientData.status === 'ready' && {
+                      ...(clientData.status === 'workout_ready' && {
                         borderColor: TOKENS.color.accent,
                         borderWidth: 2,
                       })
@@ -503,7 +503,7 @@ export function WorkoutOverviewScreen() {
                     <MattePanel style={{ 
                       flex: 1, 
                       padding: 12,
-                      ...(clientData.status === 'ready' && {
+                      ...(clientData.status === 'workout_ready' && {
                         borderColor: TOKENS.color.accent,
                         borderWidth: 2,
                       })
@@ -586,7 +586,7 @@ export function WorkoutOverviewScreen() {
                   <MattePanel style={{ 
                     flex: 1, 
                     padding: 12,
-                    ...(clientData.status === 'ready' && {
+                    ...(clientData.status === 'workout_ready' && {
                       borderColor: TOKENS.color.accent,
                       borderWidth: 2,
                     })
@@ -675,7 +675,7 @@ export function WorkoutOverviewScreen() {
                   <MattePanel style={{ 
                     flex: 1, 
                     padding: isCompact ? 12 : 18,
-                    ...(clientData.status === 'ready' && {
+                    ...(clientData.status === 'workout_ready' && {
                       borderColor: TOKENS.color.accent,
                       borderWidth: 2,
                     })

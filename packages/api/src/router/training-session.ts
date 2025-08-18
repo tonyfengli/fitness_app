@@ -374,6 +374,25 @@ export const trainingSessionRouter = {
       }
 
       // Get checked-in and ready users
+      console.log(
+        "[API] getCheckedInClients - Fetching users with statuses: checked_in, ready, workout_ready"
+      );
+      
+      // First, let's see ALL users in this session for debugging
+      const allUsersInSession = await ctx.db
+        .select()
+        .from(UserTrainingSession)
+        .where(eq(UserTrainingSession.trainingSessionId, input.sessionId));
+      
+      console.log(
+        "[API] getCheckedInClients - ALL users in session:",
+        allUsersInSession.map(u => ({
+          userId: u.userId,
+          status: u.status,
+          checkedInAt: u.checkedInAt
+        }))
+      );
+      
       const checkedInUsers = await ctx.db
         .select()
         .from(UserTrainingSession)
@@ -383,10 +402,23 @@ export const trainingSessionRouter = {
             or(
               eq(UserTrainingSession.status, "checked_in"),
               eq(UserTrainingSession.status, "ready"),
+              eq(UserTrainingSession.status, "workout_ready"),
             ),
           ),
         )
         .orderBy(desc(UserTrainingSession.checkedInAt));
+        
+      console.log(
+        "[API] getCheckedInClients - Filtered users count:",
+        checkedInUsers.length
+      );
+      console.log(
+        "[API] getCheckedInClients - Filtered users:",
+        checkedInUsers.map(u => ({
+          userId: u.userId,
+          status: u.status
+        }))
+      );
 
       // Get user details and preferences for each checked-in user
       const usersWithDetails = await Promise.all(
@@ -431,6 +463,15 @@ export const trainingSessionRouter = {
         }),
       );
 
+      console.log(
+        "[API] getCheckedInClients - Final return data:",
+        usersWithDetails.map(u => ({
+          userId: u.userId,
+          status: u.status,
+          userName: u.userName
+        }))
+      );
+      
       return usersWithDetails;
     }),
 
@@ -1570,6 +1611,7 @@ Set your goals and preferences for today's session.`;
           or(
             eq(UserTrainingSession.status, "checked_in"),
             eq(UserTrainingSession.status, "ready"),
+            eq(UserTrainingSession.status, "workout_ready"),
           ),
         ),
       });
@@ -1650,6 +1692,7 @@ Set your goals and preferences for today's session.`;
           or(
             eq(UserTrainingSession.status, "checked_in"),
             eq(UserTrainingSession.status, "ready"),
+            eq(UserTrainingSession.status, "workout_ready"),
           ),
         ),
       });
@@ -2021,6 +2064,7 @@ Set your goals and preferences for today's session.`;
             or(
               eq(UserTrainingSession.status, "checked_in"),
               eq(UserTrainingSession.status, "ready"),
+              eq(UserTrainingSession.status, "workout_ready"),
             ),
           ),
         )
@@ -2618,6 +2662,7 @@ Set your goals and preferences for today's session.`;
         sessionId: z.string(),
         userId: z.string(),
         isReady: z.boolean(),
+        targetStatus: z.enum(["ready", "workout_ready"]).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -2629,6 +2674,7 @@ Set your goals and preferences for today's session.`;
           or(
             eq(UserTrainingSession.status, "checked_in"),
             eq(UserTrainingSession.status, "ready"),
+            eq(UserTrainingSession.status, "workout_ready"),
           ),
         ),
       });
@@ -2641,10 +2687,18 @@ Set your goals and preferences for today's session.`;
       }
 
       // Update the user's ready status
-      // This mutation is called from workout overview page
-      // isReady: true = "ready" (client confirmed preferences)
+      // This mutation is called from preferences page and workout overview page
+      // From preferences: isReady: true = "ready" (client confirmed preferences)
+      // From workout overview: targetStatus: "workout_ready" = "workout_ready" (client ready from workout overview)
       // isReady: false = "checked_in" (client went back)
-      const newStatus = input.isReady ? "ready" : "checked_in";
+      let newStatus: string;
+      if (!input.isReady) {
+        newStatus = "checked_in";
+      } else if (input.targetStatus) {
+        newStatus = input.targetStatus;
+      } else {
+        newStatus = "ready";
+      }
 
       await ctx.db
         .update(UserTrainingSession)
@@ -2872,6 +2926,7 @@ Set your goals and preferences for today's session.`;
           or(
             eq(UserTrainingSession.status, "checked_in"),
             eq(UserTrainingSession.status, "ready"),
+            eq(UserTrainingSession.status, "workout_ready"),
           ),
         ),
       });

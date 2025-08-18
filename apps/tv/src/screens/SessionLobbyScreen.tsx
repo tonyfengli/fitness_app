@@ -77,6 +77,7 @@ interface CheckedInClient {
   userName: string | null;
   userEmail: string;
   checkedInAt: Date | null;
+  status?: string;
   preferences?: {
     intensity?: string | null;
     muscleTargets?: string[] | null;

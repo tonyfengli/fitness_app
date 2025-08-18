@@ -34,6 +34,7 @@ export const workoutSelectionsRouter = {
           or(
             eq(UserTrainingSession.status, "checked_in"),
             eq(UserTrainingSession.status, "ready"),
+            eq(UserTrainingSession.status, "workout_ready"),
           ),
         ),
       });
@@ -289,6 +290,7 @@ export const workoutSelectionsRouter = {
           or(
             eq(UserTrainingSession.status, "checked_in"),
             eq(UserTrainingSession.status, "ready"),
+            eq(UserTrainingSession.status, "workout_ready"),
           ),
         ),
       });

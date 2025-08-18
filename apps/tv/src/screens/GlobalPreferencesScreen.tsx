@@ -180,8 +180,8 @@ export function GlobalPreferencesScreen() {
         const updated = prev.map(client => {
           if (client.userId === update.userId) {
             console.log('[TV GlobalPreferences] Updating status for user:', update.userId, 'to:', update.status);
-            // Mark as ready when status is 'ready'
-            return { ...client, isReady: update.status === 'ready' };
+            // Mark as ready when status is 'ready' or 'workout_ready'
+            return { ...client, isReady: update.status === 'ready' || update.status === 'workout_ready' };
           }
           return client;
         });
@@ -404,7 +404,7 @@ export function GlobalPreferencesScreen() {
             sessionGoal,
             includeFinisher
           },
-          isReady: client.status === 'ready',
+          isReady: client.status === 'ready' || client.status === 'workout_ready',
           notes: null
         };
       });
