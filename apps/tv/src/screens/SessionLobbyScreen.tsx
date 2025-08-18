@@ -98,6 +98,7 @@ export function SessionLobbyScreen() {
   const [isStartingSession, setIsStartingSession] = useState(false);
 
   // Fetch initial checked-in clients using TRPC
+  console.log('[SessionLobby] 🔍 Setting up query for sessionId:', sessionId);
   const { data: initialClients, isLoading, error: fetchError } = useQuery(
     sessionId ? api.trainingSession.getCheckedInClients.queryOptions({ sessionId }) : {
       enabled: false,
@@ -115,6 +116,13 @@ export function SessionLobbyScreen() {
       initialClients,
       clientsCount: clients.length
     });
+    
+    if (fetchError) {
+      console.error('[TV SessionLobby] ❌ Fetch error details:');
+      console.error('[TV SessionLobby] Error message:', fetchError.message);
+      console.error('[TV SessionLobby] Error stack:', fetchError.stack);
+      console.error('[TV SessionLobby] Full error:', fetchError);
+    }
   }, [sessionId, isLoading, fetchError, initialClients, clients]);
 
   // Clear clients when sessionId changes
@@ -210,42 +218,9 @@ export function SessionLobbyScreen() {
     sendStartMessagesMutation.mutate({ sessionId });
   };
 
-  const handleCloseSession = async () => {
-    if (!sessionId) return;
-    
-    Alert.alert(
-      'Close Session',
-      'Are you sure you want to close this session? This will cancel the session and return to the welcome screen.',
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-        {
-          text: 'Close Session',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              const { error } = await supabase
-                .from('training_session')
-                .update({ status: 'cancelled' })
-                .eq('id', sessionId)
-                .eq('business_id', businessId!)
-                .eq('status', 'open');
-              
-              if (error) {
-                throw error;
-              }
-              
-              navigation.navigate('Main');
-            } catch (error) {
-              console.error('[SessionLobby] Error cancelling session:', error);
-              Alert.alert('Error', 'Failed to close the session. Please try again.');
-            }
-          },
-        },
-      ],
-    );
+  const handleBack = () => {
+    console.log('[SessionLobby] Navigating back to MainScreen');
+    navigation.goBack();
   };
 
   return (
@@ -254,7 +229,7 @@ export function SessionLobbyScreen() {
       <View className="mb-6">
         <View className="flex-row justify-between items-center">
           <Pressable
-            onPress={handleCloseSession}
+            onPress={handleBack}
             focusable
           >
             {({ focused }) => (
@@ -275,7 +250,7 @@ export function SessionLobbyScreen() {
                     borderColor: TOKENS.color.focusRing,
                   }}/>
                 )}
-                <Text style={{ color: TOKENS.color.text, fontWeight: '700', fontSize: 18 }}>Close</Text>
+                <Text style={{ color: TOKENS.color.text, fontWeight: '700', fontSize: 18 }}>← Back</Text>
               </MattePanel>
             )}
           </Pressable>

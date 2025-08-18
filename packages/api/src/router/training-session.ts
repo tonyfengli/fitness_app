@@ -313,6 +313,22 @@ export const trainingSessionRouter = {
       const user = ctx.session?.user as SessionUser;
       
       // Verify session belongs to user's business
+      console.log('[API] getCheckedInClients - User:', user.email, 'BusinessId:', user.businessId);
+      console.log('[API] getCheckedInClients - Looking for session:', input.sessionId);
+      
+      // First check if session exists at all
+      const sessionExists = await ctx.db.query.TrainingSession.findFirst({
+        where: eq(TrainingSession.id, input.sessionId),
+      });
+      
+      if (sessionExists) {
+        console.log('[API] Session found with businessId:', sessionExists.businessId);
+        console.log('[API] User businessId:', user.businessId);
+        console.log('[API] Match:', sessionExists.businessId === user.businessId);
+      } else {
+        console.log('[API] Session does not exist in database');
+      }
+      
       const session = await ctx.db.query.TrainingSession.findFirst({
         where: and(
           eq(TrainingSession.id, input.sessionId),
@@ -323,7 +339,9 @@ export const trainingSessionRouter = {
       if (!session) {
         throw new TRPCError({
           code: 'NOT_FOUND',
-          message: 'Session not found',
+          message: sessionExists 
+            ? `Session belongs to different business (session business: ${sessionExists.businessId}, user business: ${user.businessId})`
+            : 'Session not found',
         });
       }
       

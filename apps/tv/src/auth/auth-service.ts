@@ -103,8 +103,20 @@ class AuthService {
 
       // Store the token for future requests
       if (signInData.token) {
+        console.log('[AuthService] 💾 Storing token, length:', signInData.token.length);
+        console.log('[AuthService] Token preview:', signInData.token.substring(0, 30) + '...');
         await AsyncStorage.setItem(TOKEN_STORAGE_KEY, signInData.token);
+        
+        // Verify it was stored
+        const verifyToken = await AsyncStorage.getItem(TOKEN_STORAGE_KEY);
+        console.log('[AuthService] Token stored successfully:', !!verifyToken);
+        console.log('[AuthService] Stored token matches:', verifyToken === signInData.token);
+      } else {
+        console.error('[AuthService] ⚠️ No token in sign-in response!');
       }
+
+      // Small delay to ensure token is propagated
+      await new Promise(resolve => setTimeout(resolve, 500));
 
       // 2. Get full session data (like web app does)
       const fullSession = await this.fetchFullSession(signInData.token);
@@ -113,6 +125,9 @@ class AuthService {
         await this.storeSession(fullSession);
         this.sessionCache = fullSession;
         return fullSession;
+      } else {
+        console.error('[AuthService] ❌ Failed to fetch full session after sign in');
+        console.log('[AuthService] Sign in data was:', JSON.stringify(signInData));
       }
 
       return null;
@@ -228,6 +243,8 @@ class AuthService {
 
       if (!response.ok) {
         console.error('[AuthService] Get session failed:', response.status);
+        const errorText = await response.text();
+        console.error('[AuthService] Error response:', errorText);
         
         // If 401, clear stored session and retry login
         if (response.status === 401) {
@@ -240,7 +257,12 @@ class AuthService {
       }
 
       const data = await response.json();
-      console.log('[AuthService] Full session data:', JSON.stringify(data, null, 2));
+      console.log('[AuthService] Full session data:', data ? 'received' : 'null');
+      
+      // Only log full data if there's an issue
+      if (!data || !data.user) {
+        console.error('[AuthService] Unexpected session response:', JSON.stringify(data, null, 2));
+      }
 
       if (!data || !data.user) {
         console.error('[AuthService] Invalid session data received');
@@ -266,6 +288,13 @@ class AuthService {
           token: authToken || '',
         },
       };
+      
+      // Log the session token status
+      console.log('[AuthService] Session constructed with token:', !!session.session.token);
+      if (session.session.token) {
+        console.log('[AuthService] Session token length:', session.session.token.length);
+        console.log('[AuthService] Session token preview:', session.session.token.substring(0, 30) + '...');
+      }
 
       // Validate we got a businessId
       if (!session.user.businessId) {

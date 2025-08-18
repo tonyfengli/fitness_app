@@ -3,6 +3,7 @@ import { expo } from "@better-auth/expo";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { username } from "better-auth/plugins";
+import { bearer } from "better-auth/plugins";
 
 import { db } from "@acme/db/client";
 
@@ -26,6 +27,7 @@ export function initAuth(options: {
     },
     plugins: [
       expo(),
+      bearer(), // Enable bearer token authentication for TV app
     ],
     user: {
       additionalFields: {
