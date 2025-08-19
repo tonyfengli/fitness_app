@@ -106,36 +106,19 @@ export function MainScreen() {
     { id: 'full_body_bmf', name: 'Deprecated', description: 'Block-based organization' },
   ];
 
-  // Cancel session mutation
-  const cancelSessionMutation = useMutation({
-    mutationFn: async (input: { sessionId: string }) => {
-      // Use the TRPC client directly to avoid serialization issues
-      try {
-        const result = await api.trainingSession.cancelSession.mutate(input);
-        return result;
-      } catch (error) {
-        // If TRPC fails, fall back to direct Supabase update
-        console.log('[MainScreen] TRPC failed, using Supabase directly');
-        const { error: supabaseError } = await supabase
-          .from('training_session')
-          .update({ status: 'cancelled' })
-          .eq('id', input.sessionId)
-          .eq('business_id', businessId);
-        
-        if (supabaseError) throw supabaseError;
-        return { success: true };
-      }
-    },
+  // Delete session mutation
+  const deleteSessionMutation = useMutation({
+    ...api.trainingSession.deleteSession.mutationOptions(),
     onSuccess: () => {
-      console.log('[MainScreen] ✅ Session cancelled successfully');
+      console.log('[MainScreen] ✅ Session deleted successfully');
       // Refresh the sessions list
       fetchOpenSessions();
     },
     onError: (error: any) => {
-      console.error('[MainScreen] ❌ Failed to cancel session:', error);
+      console.error('[MainScreen] ❌ Failed to delete session:', error);
       Alert.alert(
-        'Cancel Session Failed',
-        error.message || 'Failed to cancel session. Please try again.',
+        'Delete Session Failed',
+        error.message || 'Failed to delete session. Please try again.',
         [{ text: 'OK' }]
       );
     },
@@ -198,16 +181,16 @@ export function MainScreen() {
   // Handle close session
   const handleCloseSession = (sessionId: string) => {
     Alert.alert(
-      'Cancel Session',
-      'Are you sure you want to cancel this session? This action cannot be undone.',
+      'Delete Session',
+      'Are you sure you want to delete this session? This action cannot be undone.',
       [
         { text: 'No', style: 'cancel' },
         { 
-          text: 'Yes, Cancel Session', 
+          text: 'Yes, Delete Session', 
           style: 'destructive',
           onPress: () => {
-            console.log('[MainScreen] Cancelling session:', sessionId);
-            cancelSessionMutation.mutate({ sessionId });
+            console.log('[MainScreen] Deleting session:', sessionId);
+            deleteSessionMutation.mutate({ sessionId } as any);
           }
         }
       ]
@@ -646,7 +629,7 @@ export function MainScreen() {
                           fontSize: 18, 
                           letterSpacing: 0.2 
                         }}>
-                          Cancel Session
+                          Delete Session
                         </Text>
                       </MattePanel>
                     )}

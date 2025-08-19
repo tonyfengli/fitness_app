@@ -14,7 +14,7 @@ const baseUrl = "http://localhost:3000"; // This is just for initialization
 
 export const auth = initAuth({
   baseUrl,
-  productionUrl: `https://${env.VERCEL_PROJECT_PRODUCTION_URL ?? "turbo.t3.gg"}`,
+  productionUrl: `https://${env.VERCEL_PROJECT_PRODUCTION_URL ?? "fitness-app-nextjs-plum.vercel.app"}`,
   secret: env.AUTH_SECRET,
 });
 
