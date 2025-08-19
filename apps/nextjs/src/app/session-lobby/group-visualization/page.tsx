@@ -224,6 +224,12 @@ function GroupVisualizationPageContent() {
   const [activeTab, setActiveTab] = useState<string>("");
   const trpc = useTRPC();
 
+  // Fetch session details to check status
+  const { data: sessionData } = useQuery({
+    ...trpc.trainingSession.getById.queryOptions({ id: sessionId || "" }),
+    enabled: !!sessionId,
+  });
+
   // Check for saved visualization data first
   const savedDataQuery = useQuery({
     ...trpc.trainingSession.getSavedVisualizationData.queryOptions({
@@ -626,6 +632,7 @@ function GroupVisualizationPageContent() {
         setActiveTab={setActiveTab}
         llmDebugData={effectiveLlmDebugData}
         llmResult={data.llmResult}
+        sessionData={sessionData}
         isFromSavedData={!!savedDataQuery.data}
         isSaving={saveVisualizationMutation.isPending}
       />

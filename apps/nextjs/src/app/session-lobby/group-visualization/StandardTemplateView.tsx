@@ -28,6 +28,7 @@ interface StandardTemplateViewProps {
   llmResult?: any;
   isFromSavedData?: boolean;
   isSaving?: boolean;
+  sessionData?: any;
 }
 
 // Helper to format muscle names
@@ -48,7 +49,24 @@ export default function StandardTemplateView({
   llmResult,
   isFromSavedData = false,
   isSaving = false,
+  sessionData,
 }: StandardTemplateViewProps) {
+  // State to track which client's LLM section is expanded
+  const [expandedLLMSections, setExpandedLLMSections] = useState<Set<string>>(new Set());
+
+  // Toggle LLM section expansion
+  const toggleLLMSection = (clientId: string) => {
+    setExpandedLLMSections(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(clientId)) {
+        newSet.delete(clientId);
+      } else {
+        newSet.add(clientId);
+      }
+      return newSet;
+    });
+  };
+
   // Log what data we're receiving
   React.useEffect(() => {
     console.log("🎯 STANDARD TEMPLATE VIEW RENDERED:", {
@@ -169,16 +187,18 @@ export default function StandardTemplateView({
                 Exercise Selection
               </a>
             )}
-            <button
-              onClick={() =>
-                router.push(
-                  `/session-lobby?sessionId=${groupContext.sessionId}`,
-                )
-              }
-              className="rounded-lg border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-50"
-            >
-              Back to Lobby
-            </button>
+            {sessionData?.status !== "completed" && (
+              <button
+                onClick={() =>
+                  router.push(
+                    `/session-lobby?sessionId=${groupContext.sessionId}`,
+                  )
+                }
+                className="rounded-lg border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-50"
+              >
+                Back to Lobby
+              </button>
+            )}
           </div>
         </div>
 
@@ -266,29 +286,41 @@ export default function StandardTemplateView({
                   {/* LLM System Prompt & Output - Only show if we have LLM debug data for this client */}
                   {llmDebugData?.systemPromptsByClient?.[clientTab.id] && (
                     <div className="mb-6 rounded-lg bg-blue-50 p-4">
-                      <h4 className="mb-4 text-sm font-semibold text-gray-900">
-                        🤖 LLM System Prompt & Output
-                      </h4>
+                      <button
+                        onClick={() => toggleLLMSection(clientTab.id)}
+                        className="flex w-full items-center justify-between text-left"
+                      >
+                        <h4 className="text-sm font-semibold text-gray-900">
+                          🤖 LLM System Prompt & Output
+                        </h4>
+                        <span className="text-gray-500">
+                          {expandedLLMSections.has(clientTab.id) ? '▼' : '▶'}
+                        </span>
+                      </button>
 
-                      {/* System Prompt */}
-                      <div className="mb-4">
-                        <h5 className="mb-2 text-xs font-medium text-gray-700">
-                          System Prompt:
-                        </h5>
-                        <pre className="overflow-x-auto whitespace-pre-wrap rounded border border-blue-200 bg-white p-3 text-xs">
-                          {llmDebugData.systemPromptsByClient[clientTab.id]}
-                        </pre>
-                      </div>
+                      {expandedLLMSections.has(clientTab.id) && (
+                        <div className="mt-4">
+                          {/* System Prompt */}
+                          <div className="mb-4">
+                            <h5 className="mb-2 text-xs font-medium text-gray-700">
+                              System Prompt:
+                            </h5>
+                            <pre className="overflow-x-auto whitespace-pre-wrap rounded border border-blue-200 bg-white p-3 text-xs">
+                              {llmDebugData.systemPromptsByClient[clientTab.id]}
+                            </pre>
+                          </div>
 
-                      {/* LLM Response */}
-                      {llmDebugData.llmResponsesByClient?.[clientTab.id] && (
-                        <div>
-                          <h5 className="mb-2 text-xs font-medium text-gray-700">
-                            LLM Response:
-                          </h5>
-                          <pre className="overflow-x-auto whitespace-pre-wrap rounded border border-blue-200 bg-white p-3 text-xs">
-                            {llmDebugData.llmResponsesByClient[clientTab.id]}
-                          </pre>
+                          {/* LLM Response */}
+                          {llmDebugData.llmResponsesByClient?.[clientTab.id] && (
+                            <div>
+                              <h5 className="mb-2 text-xs font-medium text-gray-700">
+                                LLM Response:
+                              </h5>
+                              <pre className="overflow-x-auto whitespace-pre-wrap rounded border border-blue-200 bg-white p-3 text-xs">
+                                {llmDebugData.llmResponsesByClient[clientTab.id]}
+                              </pre>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>

@@ -117,6 +117,9 @@ function SessionCard({
   const endTime = getEndTime(sessionDate, session.durationMinutes);
 
   const canViewLobby = session.status === "open";
+  const canViewWorkouts = session.status === "completed";
+  const isClickable = canViewLobby || canViewWorkouts;
+  
   const statusColors = {
     open: "bg-green-100 text-green-800",
     in_progress: "bg-blue-100 text-blue-800",
@@ -124,12 +127,20 @@ function SessionCard({
     cancelled: "bg-red-100 text-red-800",
   };
 
+  const handleClick = () => {
+    if (canViewLobby) {
+      onViewLobby(session.id);
+    } else if (canViewWorkouts) {
+      onViewWorkouts(session.id);
+    }
+  };
+
   return (
     <div
       className={`rounded-xl bg-gray-50 p-4 transition-colors ${
-        canViewLobby ? "cursor-pointer hover:bg-gray-100" : ""
+        isClickable ? "cursor-pointer hover:bg-gray-100" : ""
       } ${isPast ? "opacity-70" : ""} ${isInActiveSection ? "ring-2 ring-green-500" : ""}`}
-      onClick={() => canViewLobby && onViewLobby(session.id)}
+      onClick={handleClick}
     >
       <div className="flex items-start justify-between">
         <div>
@@ -148,6 +159,9 @@ function SessionCard({
             {canViewLobby && (
               <span className="text-xs text-blue-600">Click to view lobby</span>
             )}
+            {canViewWorkouts && (
+              <span className="text-xs text-blue-600">Click to view workouts</span>
+            )}
           </div>
         </div>
       </div>
@@ -165,8 +179,8 @@ export default function SessionsPage() {
   };
 
   const handleViewWorkouts = (sessionId: string) => {
-    // Navigate to workout overview page with session ID
-    router.push(`/workout-overview?sessionId=${sessionId}`);
+    // Navigate to group visualization page for completed sessions
+    router.push(`/session-lobby/group-visualization?sessionId=${sessionId}`);
   };
 
   // Fetch sessions from API
