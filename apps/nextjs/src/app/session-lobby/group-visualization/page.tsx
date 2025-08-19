@@ -237,7 +237,10 @@ function GroupVisualizationPageContent() {
     }),
     enabled: !!sessionId,
     onSuccess: (data) => {
-      console.log("🔍 SAVED DATA LOADED:", {
+      console.log("🔍 SAVED DATA LOADED SUCCESS:", {
+        sessionId,
+        sessionStatus: sessionData?.status,
+        dataReceived: data,
         hasSavedData: !!data,
         hasBlueprint: !!data?.blueprint,
         hasClientPools: !!data?.blueprint?.clientExercisePools,
@@ -272,6 +275,23 @@ function GroupVisualizationPageContent() {
           },
         );
       }
+
+      // Additional debug for completed sessions
+      if (sessionData?.status === "completed") {
+        console.log("📊 COMPLETED SESSION DATA CHECK:", {
+          hasData: !!data,
+          dataStructure: data ? Object.keys(data) : "NO DATA",
+          rawData: data,
+        });
+      }
+    },
+    onError: (error) => {
+      console.error("❌ SAVED DATA QUERY ERROR:", {
+        sessionId,
+        sessionStatus: sessionData?.status,
+        error: error.message,
+        fullError: error,
+      });
     },
   });
 
@@ -285,7 +305,7 @@ function GroupVisualizationPageContent() {
     sessionId,
     includeDiagnostics: true,
     phase1Only: true, // Only run Phase 1 for visualization
-    enabled: !!sessionId && !savedDataQuery.data, // Only fetch if no saved data
+    enabled: !!sessionId && !savedDataQuery.data && sessionData?.status !== "completed", // Only fetch if no saved data AND session is not completed
     onSuccess: (data) => {
       console.log("🔨 NEW BLUEPRINT GENERATED:", {
         reason: savedDataQuery.data
@@ -390,6 +410,33 @@ function GroupVisualizationPageContent() {
           llmResult: blueprintQuery.llmResult,
         }
       : null;
+
+  // Debug logging for data resolution
+  useEffect(() => {
+    console.log("📊 DATA RESOLUTION DEBUG:", {
+      sessionId,
+      sessionStatus: sessionData?.status,
+      savedDataQueryStatus: {
+        isLoading: savedDataQuery.isLoading,
+        isError: savedDataQuery.isError,
+        isSuccess: savedDataQuery.isSuccess,
+        hasData: !!savedDataQuery.data,
+        error: savedDataQuery.error?.message,
+        fullError: savedDataQuery.error,
+      },
+      blueprintQueryStatus: {
+        enabled: !!sessionId && !savedDataQuery.data && sessionData?.status !== "completed",
+        isLoading: blueprintQuery.isLoading,
+        isError: blueprintQuery.error,
+        hasBlueprint: !!blueprintQuery.blueprint,
+      },
+      resolvedData: {
+        hasData: !!data,
+        dataSource: savedDataQuery.data ? "savedData" : blueprintQuery.blueprint ? "blueprintQuery" : "none",
+      },
+      willShowEmptyState: !data && sessionData?.status === "completed",
+    });
+  }, [sessionId, sessionData?.status, savedDataQuery.isLoading, savedDataQuery.isError, savedDataQuery.data, blueprintQuery.isLoading, blueprintQuery.error, blueprintQuery.blueprint, data]);
 
   // Update LLM debug data when blueprint loads with LLM result
   useEffect(() => {
@@ -579,17 +626,17 @@ function GroupVisualizationPageContent() {
         <div className="text-center">
           <div className="mx-auto h-12 w-12 animate-spin rounded-full border-b-2 border-indigo-600"></div>
           <p className="mt-4 text-lg font-medium text-gray-900">
-            Generating Workout Blueprint
+            {sessionData?.status === "completed" ? "Loading Session Data" : "Generating Workout Blueprint"}
           </p>
           <p className="mt-1 text-sm text-gray-500">
-            This includes exercise selection and AI organization
+            {sessionData?.status === "completed" ? "Fetching visualization data..." : "This includes exercise selection and AI organization"}
           </p>
         </div>
       </div>
     );
   }
 
-  if (error || !data) {
+  if (error) {
     return (
       <div className="min-h-screen bg-gray-50 p-8">
         <div className="text-center">
@@ -598,6 +645,67 @@ function GroupVisualizationPageContent() {
           </h1>
           <p className="mt-2 text-gray-600">
             {error?.message || "Failed to load group workout visualization"}
+          </p>
+          <button
+            onClick={() => router.back()}
+            className="mt-4 rounded-lg bg-gray-200 px-4 py-2 hover:bg-gray-300"
+          >
+            Go Back
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // For completed sessions without data, show empty state
+  if (!data && sessionData?.status === "completed") {
+    return (
+      <div className="min-h-screen bg-gray-50 p-8">
+        <div className="mx-auto max-w-7xl">
+          <div className="mb-8 flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">
+                Completed Session
+              </h1>
+              <p className="mt-1 text-lg text-gray-600">
+                No visualization data available for this session
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <a
+                href={`/workout-overview?sessionId=${sessionId}`}
+                className="inline-block rounded-lg bg-green-600 px-4 py-2 text-center text-white hover:bg-green-700"
+              >
+                View Workouts
+              </a>
+              <button
+                onClick={() => router.push("/sessions")}
+                className="rounded-lg border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-50"
+              >
+                Back to Sessions
+              </button>
+            </div>
+          </div>
+          <div className="rounded-lg bg-white p-8 text-center shadow-sm">
+            <p className="text-gray-500">
+              This session was completed without saving visualization data.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // For non-completed sessions without data, show error
+  if (!data) {
+    return (
+      <div className="min-h-screen bg-gray-50 p-8">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-red-600">
+            No Data Available
+          </h1>
+          <p className="mt-2 text-gray-600">
+            Unable to load workout visualization data
           </p>
           <button
             onClick={() => router.back()}

@@ -2925,17 +2925,38 @@ Set your goals and preferences for today's session.`;
       const visualizationData = templateConfig?.visualizationData;
 
       if (!visualizationData) {
+        console.log("[getSavedVisualizationData] No saved visualization data found", {
+          sessionId: input.sessionId,
+          sessionStatus: session.status,
+          hasTemplateConfig: !!templateConfig,
+          templateConfigKeys: templateConfig ? Object.keys(templateConfig) : [],
+        });
         return null;
       }
 
       // Check if data is stale (older than 30 minutes)
-      const savedAt = new Date(visualizationData.savedAt);
-      const now = new Date();
-      const diffMinutes = (now.getTime() - savedAt.getTime()) / (1000 * 60);
+      // For completed sessions, always return saved data regardless of age
+      if (session.status !== "completed") {
+        const savedAt = new Date(visualizationData.savedAt);
+        const now = new Date();
+        const diffMinutes = (now.getTime() - savedAt.getTime()) / (1000 * 60);
 
-      if (diffMinutes > 30) {
-        return null; // Force regeneration if data is too old
+        if (diffMinutes > 30) {
+          console.log("[getSavedVisualizationData] Data is stale, forcing regeneration", {
+            sessionId: input.sessionId,
+            savedAt,
+            diffMinutes,
+          });
+          return null; // Force regeneration if data is too old
+        }
       }
+
+      console.log("[getSavedVisualizationData] Returning saved data", {
+        sessionId: input.sessionId,
+        sessionStatus: session.status,
+        hasSavedData: !!visualizationData,
+        savedAt: visualizationData.savedAt,
+      });
 
       return visualizationData;
     }),
@@ -2987,17 +3008,38 @@ Set your goals and preferences for today's session.`;
       const visualizationData = templateConfig?.visualizationData;
 
       if (!visualizationData) {
+        console.log("[getSavedVisualizationData] No saved visualization data found", {
+          sessionId: input.sessionId,
+          sessionStatus: session.status,
+          hasTemplateConfig: !!templateConfig,
+          templateConfigKeys: templateConfig ? Object.keys(templateConfig) : [],
+        });
         return null;
       }
 
       // Check if data is stale (older than 30 minutes)
-      const savedAt = new Date(visualizationData.savedAt);
-      const now = new Date();
-      const diffMinutes = (now.getTime() - savedAt.getTime()) / (1000 * 60);
+      // For completed sessions, always return saved data regardless of age
+      if (session.status !== "completed") {
+        const savedAt = new Date(visualizationData.savedAt);
+        const now = new Date();
+        const diffMinutes = (now.getTime() - savedAt.getTime()) / (1000 * 60);
 
-      if (diffMinutes > 30) {
-        return null; // Force regeneration if data is too old
+        if (diffMinutes > 30) {
+          console.log("[getSavedVisualizationData] Data is stale, forcing regeneration", {
+            sessionId: input.sessionId,
+            savedAt,
+            diffMinutes,
+          });
+          return null; // Force regeneration if data is too old
+        }
       }
+
+      console.log("[getSavedVisualizationData] Returning saved data", {
+        sessionId: input.sessionId,
+        sessionStatus: session.status,
+        hasSavedData: !!visualizationData,
+        savedAt: visualizationData.savedAt,
+      });
 
       return visualizationData;
     }),
