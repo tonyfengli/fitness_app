@@ -86,12 +86,14 @@ function SessionCard({
   participants = [],
   onViewLobby,
   onViewWorkouts,
+  isInActiveSection = false,
 }: {
   session: SessionWithParticipants;
   index: number;
   participants?: Array<{ id: string; name: string | null; email: string }>;
   onViewLobby: (sessionId: string) => void;
   onViewWorkouts: (sessionId: string) => void;
+  isInActiveSection?: boolean;
 }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const trpc = useTRPC();
@@ -126,7 +128,7 @@ function SessionCard({
     <div
       className={`rounded-xl bg-gray-50 p-4 transition-colors ${
         canViewLobby ? "cursor-pointer hover:bg-gray-100" : ""
-      } ${isPast ? "opacity-70" : ""} ${isActive ? "ring-2 ring-green-500" : ""}`}
+      } ${isPast ? "opacity-70" : ""} ${isInActiveSection ? "ring-2 ring-green-500" : ""}`}
       onClick={() => canViewLobby && onViewLobby(session.id)}
     >
       <div className="flex items-start justify-between">
@@ -147,105 +149,6 @@ function SessionCard({
               <span className="text-xs text-blue-600">Click to view lobby</span>
             )}
           </div>
-        </div>
-        <div className="relative">
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setIsMenuOpen(!isMenuOpen);
-            }}
-            className="rounded-lg p-1 text-gray-500 transition-colors hover:bg-gray-200 hover:text-gray-700"
-          >
-            <Icon name="more_horiz" size={24} />
-          </button>
-
-          {isMenuOpen && (
-            <>
-              {/* Backdrop to close menu */}
-              <div
-                className="fixed inset-0 z-10"
-                onClick={() => setIsMenuOpen(false)}
-              />
-
-              {/* Dropdown menu */}
-              <div className="absolute right-0 z-20 mt-2 w-48 rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5">
-                <div className="py-1">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onViewWorkouts(session.id);
-                      setIsMenuOpen(false);
-                    }}
-                    disabled={!hasWorkouts}
-                    className={`block w-full px-4 py-2 text-left text-sm ${
-                      hasWorkouts
-                        ? "text-gray-700 hover:bg-gray-100"
-                        : "cursor-not-allowed text-gray-400"
-                    }`}
-                  >
-                    <Icon name="visibility" size={18} className="mr-2 inline" />
-                    View Workouts
-                  </button>
-
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      // TODO: Add edit functionality
-                      setIsMenuOpen(false);
-                    }}
-                    className="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100"
-                  >
-                    <Icon name="edit" size={18} className="mr-2 inline" />
-                    Edit Session
-                  </button>
-
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      // TODO: Add delete functionality
-                      setIsMenuOpen(false);
-                    }}
-                    className="block w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-gray-100"
-                  >
-                    <Icon name="delete" size={18} className="mr-2 inline" />
-                    Delete Session
-                  </button>
-                </div>
-              </div>
-            </>
-          )}
-        </div>
-      </div>
-      <div className="mt-4">
-        <p className="mb-2 text-sm font-medium text-gray-600">
-          Participants: {participants.length}
-          {session.maxParticipants && ` / ${session.maxParticipants}`}
-        </p>
-        <div className="flex flex-wrap gap-2">
-          {participants.length > 0 ? (
-            participants.map((participant, clientIndex) => {
-              const color = getClientColor(index * 10 + clientIndex);
-              const displayName =
-                participant.name || participant.email.split("@")[0];
-              const avatarUrl = `${AVATAR_API_URL}?seed=${encodeURIComponent(displayName)}`;
-
-              return (
-                <div
-                  key={participant.id}
-                  className={`flex items-center ${color.bg} ${color.text} rounded-full px-3 py-1 text-sm font-medium`}
-                >
-                  <img
-                    alt={`${displayName} Avatar`}
-                    className="mr-2 h-6 w-6 rounded-full object-cover"
-                    src={avatarUrl}
-                  />
-                  {displayName}
-                </div>
-              );
-            })
-          ) : (
-            <p className="text-sm text-gray-400">No participants yet</p>
-          )}
         </div>
       </div>
     </div>
@@ -301,13 +204,19 @@ export default function SessionsPage() {
       const active: typeof sessions = [];
 
       sessions.forEach((session) => {
-        const status = getSessionStatus(
-          session.scheduledAt,
-          session.durationMinutes,
-        );
-        if (status === "upcoming") upcoming.push(session);
-        else if (status === "past") past.push(session);
-        else active.push(session);
+        // Check if session is completed first
+        if (session.status === "completed") {
+          past.push(session);
+        } else {
+          // For non-completed sessions, use time-based categorization
+          const status = getSessionStatus(
+            session.scheduledAt,
+            session.durationMinutes,
+          );
+          if (status === "upcoming") upcoming.push(session);
+          else if (status === "past") past.push(session);
+          else if (session.status === "open") active.push(session); // Only "open" sessions can be active
+        }
       });
 
       // Sort upcoming by date (earliest first)
@@ -381,6 +290,7 @@ export default function SessionsPage() {
                         participants={[]}
                         onViewLobby={handleViewLobby}
                         onViewWorkouts={handleViewWorkouts}
+                        isInActiveSection={true}
                       />
                     );
                   })}
@@ -388,30 +298,6 @@ export default function SessionsPage() {
               </div>
             )}
 
-            {/* Upcoming Sessions */}
-            <div>
-              <h2 className="mb-4 text-xl font-bold text-gray-700">
-                Upcoming Sessions
-              </h2>
-              <div className="space-y-4">
-                {upcomingSessions.length > 0 ? (
-                  upcomingSessions.map((session, index) => (
-                    <SessionCard
-                      key={session.id}
-                      session={session}
-                      index={index + activeSessions.length}
-                      participants={[]}
-                      onViewLobby={handleViewLobby}
-                      onViewWorkouts={handleViewWorkouts}
-                    />
-                  ))
-                ) : (
-                  <p className="py-8 text-center text-gray-500">
-                    No upcoming sessions scheduled.
-                  </p>
-                )}
-              </div>
-            </div>
 
             {/* Past Sessions */}
             <div>
@@ -424,9 +310,7 @@ export default function SessionsPage() {
                     <SessionCard
                       key={session.id}
                       session={session}
-                      index={
-                        index + upcomingSessions.length + activeSessions.length
-                      }
+                      index={index + activeSessions.length}
                       participants={[]}
                       onViewLobby={handleViewLobby}
                       onViewWorkouts={handleViewWorkouts}

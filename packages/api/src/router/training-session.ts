@@ -744,10 +744,16 @@ export const trainingSessionRouter = {
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      console.log("[completeSession] Starting with input:", input);
+      console.log("[completeSession] Input type:", typeof input);
+      console.log("[completeSession] Input keys:", Object.keys(input));
+      
       const user = ctx.session?.user as SessionUser;
+      console.log("[completeSession] User:", { id: user.id, role: user.role, businessId: user.businessId });
 
       // Only trainers can complete sessions
       if (user.role !== "trainer") {
+        console.log("[completeSession] User is not a trainer, throwing error");
         throw new TRPCError({
           code: "FORBIDDEN",
           message: "Only trainers can complete sessions",
@@ -755,14 +761,28 @@ export const trainingSessionRouter = {
       }
 
       // Get the session
+      console.log("[completeSession] Fetching session from database...");
       const session = await ctx.db.query.TrainingSession.findFirst({
         where: and(
           eq(TrainingSession.id, input.sessionId),
           eq(TrainingSession.businessId, user.businessId),
         ),
       });
+      
+      console.log("[completeSession] Session found:", !!session);
+      if (session) {
+        console.log("[completeSession] Session details:", {
+          id: session.id,
+          status: session.status,
+          businessId: session.businessId,
+          scheduledAt: session.scheduledAt,
+          scheduledAtType: typeof session.scheduledAt,
+          scheduledAtIsDate: session.scheduledAt instanceof Date,
+        });
+      }
 
       if (!session) {
+        console.log("[completeSession] Session not found, throwing error");
         throw new TRPCError({
           code: "NOT_FOUND",
           message: "Session not found",
@@ -770,21 +790,34 @@ export const trainingSessionRouter = {
       }
 
       // Validate current status
-      if (session.status !== "in_progress") {
+      console.log("[completeSession] Validating session status:", session.status);
+      if (session.status !== "in_progress" && session.status !== "open") {
+        console.log("[completeSession] Invalid status for completion");
         throw new TRPCError({
           code: "BAD_REQUEST",
-          message: `Cannot complete session. Current status is ${session.status}. Session must be 'in_progress' to complete.`,
+          message: `Cannot complete session. Current status is ${session.status}. Session must be 'open' or 'in_progress' to complete.`,
         });
       }
 
       // Update status
-      const [updatedSession] = await ctx.db
-        .update(TrainingSession)
-        .set({ status: "completed" })
-        .where(eq(TrainingSession.id, input.sessionId))
-        .returning();
+      console.log("[completeSession] Updating session status to completed...");
+      try {
+        // Use raw SQL to avoid any serialization issues
+        await ctx.db.execute(
+          sql`UPDATE training_session SET status = 'completed' WHERE id = ${input.sessionId}`
+        );
+        console.log("[completeSession] Update successful");
+      } catch (error) {
+        console.error("[completeSession] Error during update:", error);
+        throw error;
+      }
 
-      return updatedSession;
+      const returnValue = { success: true, sessionId: input.sessionId };
+      console.log("[completeSession] Returning:", returnValue);
+      console.log("[completeSession] Return value type:", typeof returnValue);
+      console.log("[completeSession] Return value keys:", Object.keys(returnValue));
+      
+      return returnValue;
     }),
 
   // Cancel a session (open -> cancelled)
