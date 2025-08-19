@@ -2,6 +2,8 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useMutation } from "@tanstack/react-query";
+import { useTRPC } from "~/trpc/react";
 
 import type {
   GroupContext,
@@ -53,6 +55,10 @@ export default function StandardTemplateView({
 }: StandardTemplateViewProps) {
   // State to track which client's LLM section is expanded
   const [expandedLLMSections, setExpandedLLMSections] = useState<Set<string>>(new Set());
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  
+  const trpc = useTRPC();
 
   // Toggle LLM section expansion
   const toggleLLMSection = (clientId: string) => {
@@ -66,6 +72,21 @@ export default function StandardTemplateView({
       return newSet;
     });
   };
+
+  // Delete session mutation
+  const deleteSessionMutation = useMutation({
+    ...trpc.trainingSession.deleteSession.mutationOptions(),
+    onMutate: () => {
+      setIsDeleting(true);
+    },
+    onSuccess: () => {
+      router.push("/sessions");
+    },
+    onError: (error: any) => {
+      alert(`Failed to delete session: ${error.message}`);
+      setIsDeleting(false);
+    },
+  });
 
   // Log what data we're receiving
   React.useEffect(() => {
@@ -199,6 +220,12 @@ export default function StandardTemplateView({
                 Back to Lobby
               </button>
             )}
+            <button
+              onClick={() => setShowDeleteModal(true)}
+              className="rounded-lg border border-red-300 px-4 py-2 text-red-600 hover:bg-red-50"
+            >
+              Delete Session
+            </button>
           </div>
         </div>
 
@@ -1567,6 +1594,38 @@ export default function StandardTemplateView({
           </div>
         </div>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+          <div className="rounded-lg bg-white p-6 shadow-xl">
+            <h3 className="mb-4 text-lg font-semibold">Delete Session?</h3>
+            <p className="mb-6 text-gray-600">
+              Are you sure you want to delete this session? This action cannot be undone.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowDeleteModal(false)}
+                disabled={isDeleting}
+                className="rounded-lg border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  if (groupContext.sessionId) {
+                    deleteSessionMutation.mutate({ sessionId: groupContext.sessionId });
+                  }
+                }}
+                disabled={isDeleting}
+                className="rounded-lg bg-red-600 px-4 py-2 text-white hover:bg-red-700 disabled:opacity-50"
+              >
+                {isDeleting ? "Deleting..." : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
