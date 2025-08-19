@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useMutation } from "@tanstack/react-query";
 import { useTRPC } from "~/trpc/react";
+import { useExerciseSelections } from "~/hooks/useExerciseSelections";
 
 import type {
   GroupContext,
@@ -59,6 +60,9 @@ export default function StandardTemplateView({
   const [isDeleting, setIsDeleting] = useState(false);
   
   const trpc = useTRPC();
+  
+  // Fetch exercise selections (includes workout exercises and swap history)
+  const { selections, swapHistory } = useExerciseSelections(groupContext.sessionId);
 
   // Toggle LLM section expansion
   const toggleLLMSection = (clientId: string) => {
@@ -832,6 +836,207 @@ export default function StandardTemplateView({
                           )}
                       </div>
                     </div>
+                  </div>
+
+                  {/* Selected Exercises */}
+                  <div className="mb-6 rounded-lg bg-gray-50 p-4">
+                    <div className="mb-2 flex items-center justify-between">
+                      <button
+                        onClick={() =>
+                          toggleSection(`${clientTab.id}-selected`)
+                        }
+                        className="flex items-center gap-1 text-sm font-semibold text-gray-900 hover:text-gray-900"
+                      >
+                        <span
+                          className={`transition-transform ${expandedSections[`${clientTab.id}-selected`] ? "rotate-90" : ""}`}
+                        >
+                          ▶
+                        </span>
+                        Selected Exercises
+                      </button>
+                      <span className="text-xs font-medium text-gray-600">
+                        {selections && Array.isArray(selections) 
+                          ? selections.filter((s: any) => s.clientId === clientTab.id).length
+                          : pool.preAssigned.length + (pool.bucketedSelection?.exercises?.length || 0)
+                        } total
+                      </span>
+                    </div>
+                    {expandedSections[`${clientTab.id}-selected`] && (
+                      <div className="mt-4 space-y-3">
+                        {/* If we have workout exercises from the database, show those */}
+                        {selections && Array.isArray(selections) && selections.filter((s: any) => s.clientId === clientTab.id).length > 0 ? (
+                          <div>
+                            <h5 className="mb-2 text-xs font-medium text-gray-700">
+                              Final Workout Exercises
+                            </h5>
+                            <div className="space-y-1">
+                              {selections
+                                .filter((s: any) => s.clientId === clientTab.id)
+                                .map((selection: any, idx: number) => {
+                                  // Check if this exercise was swapped
+                                  const wasSwapped = selection.selectionSource === "manual_swap";
+                                  const swapInfo = Array.isArray(swapHistory) ? swapHistory.find((swap: any) => 
+                                    swap.clientId === clientTab.id && 
+                                    swap.newExerciseId === selection.exerciseId
+                                  ) : undefined;
+                                  
+                                  // Find the original exercise name from the available exercises
+                                  let originalExerciseName = "";
+                                  if (swapInfo && swapInfo.originalExerciseId) {
+                                    // First try to find in pre-assigned exercises
+                                    const preAssignedExercise = pool.preAssigned.find((p: any) => 
+                                      p.exercise.id === swapInfo.originalExerciseId
+                                    );
+                                    if (preAssignedExercise) {
+                                      originalExerciseName = preAssignedExercise.exercise.name;
+                                    } else {
+                                      // Try to find in available candidates
+                                      const candidateExercise = pool.availableCandidates.find((ex: any) => 
+                                        ex.id === swapInfo.originalExerciseId
+                                      );
+                                      if (candidateExercise) {
+                                        originalExerciseName = candidateExercise.name;
+                                      } else if (pool.bucketedSelection) {
+                                        // Try to find in bucketed selection
+                                        const bucketedExercise = pool.bucketedSelection.exercises.find((ex: any) => 
+                                          ex.id === swapInfo.originalExerciseId
+                                        );
+                                        if (bucketedExercise) {
+                                          originalExerciseName = bucketedExercise.name;
+                                        }
+                                      }
+                                    }
+                                  }
+                                  
+                                  return (
+                                    <div
+                                      key={selection.id}
+                                      className={`rounded border p-2 ${
+                                        wasSwapped 
+                                          ? "border-blue-200 bg-blue-50" 
+                                          : "border-gray-200 bg-white"
+                                      }`}
+                                    >
+                                      <div className="flex items-center justify-between">
+                                        <span className="text-sm font-medium text-gray-900">
+                                          {idx + 1}. {selection.exerciseName}
+                                        </span>
+                                        <div className="flex items-center gap-2">
+                                          {wasSwapped && (
+                                            <span className="inline-flex items-center rounded bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
+                                              Swapped
+                                            </span>
+                                          )}
+                                          <span className={`inline-flex items-center rounded px-2 py-0.5 text-xs font-medium ${
+                                            selection.selectionSource === "ai_selection"
+                                              ? "bg-green-100 text-green-800"
+                                              : selection.selectionSource === "pre_assigned"
+                                                ? "bg-purple-100 text-purple-800"
+                                                : "bg-gray-100 text-gray-800"
+                                          }`}>
+                                            {selection.selectionSource === "ai_selection" 
+                                              ? "AI Selected" 
+                                              : selection.selectionSource === "pre_assigned"
+                                                ? "Pre-assigned"
+                                                : selection.selectionSource.replace(/_/g, " ")}
+                                          </span>
+                                        </div>
+                                      </div>
+                                      {swapInfo && originalExerciseName && (
+                                        <div className="mt-1 text-xs text-gray-500">
+                                          Originally: {originalExerciseName}
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            {/* Show blueprint selections if no workout exercises exist yet */}
+                            {/* Pre-assigned Exercises */}
+                            {pool.preAssigned.length > 0 && (
+                              <div>
+                                <h5 className="mb-2 text-xs font-medium text-gray-700">
+                                  Pre-assigned ({pool.preAssigned.length})
+                                </h5>
+                                <div className="space-y-1">
+                                  {pool.preAssigned.map((preAssigned, idx) => (
+                                    <div
+                                      key={preAssigned.exercise.id}
+                                      className="rounded border border-purple-200 bg-purple-50 p-2"
+                                    >
+                                      <div className="flex items-center justify-between">
+                                        <span className="text-sm font-medium text-gray-900">
+                                          {idx + 1}. {preAssigned.exercise.name}
+                                        </span>
+                                        <span
+                                          className={`inline-flex items-center rounded px-2 py-0.5 text-xs font-medium ${
+                                            preAssigned.source === "Include"
+                                              ? "bg-purple-100 text-purple-800"
+                                              : preAssigned.source === "favorite"
+                                                ? "bg-yellow-100 text-yellow-800"
+                                                : "bg-gray-100 text-gray-800"
+                                          }`}
+                                        >
+                                          {preAssigned.source}
+                                        </span>
+                                      </div>
+                                      <div className="mt-1 text-xs text-gray-600">
+                                        {formatMuscleName(preAssigned.exercise.movementPattern || "")} • 
+                                        {formatMuscleName(preAssigned.exercise.primaryMuscle || "")}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Bucketed Selection */}
+                            {pool.bucketedSelection && pool.bucketedSelection.exercises.length > 0 && (
+                              <div>
+                                <h5 className="mb-2 text-xs font-medium text-gray-700">
+                                  Smart Bucketed Selection ({pool.bucketedSelection.exercises.length})
+                                </h5>
+                                <div className="space-y-1">
+                                  {pool.bucketedSelection.exercises.map((exercise, idx) => {
+                                    const assignment = pool.bucketedSelection?.bucketAssignments[exercise.id];
+                                    return (
+                                      <div
+                                        key={exercise.id}
+                                        className="rounded border border-green-200 bg-green-50 p-2"
+                                      >
+                                        <div className="flex items-center justify-between">
+                                          <span className="text-sm font-medium text-gray-900">
+                                            {pool.preAssigned.length + idx + 1}. {exercise.name}
+                                          </span>
+                                          {assignment && (
+                                            <span
+                                              className={`inline-flex items-center rounded px-2 py-0.5 text-xs font-medium ${
+                                                assignment.bucketType === "movement_pattern"
+                                                  ? "bg-purple-100 text-purple-800"
+                                                  : "bg-indigo-100 text-indigo-800"
+                                              }`}
+                                            >
+                                              {assignment.constraint.replace(/_/g, " ")}
+                                            </span>
+                                          )}
+                                        </div>
+                                        <div className="mt-1 text-xs text-gray-600">
+                                          {formatMuscleName(exercise.movementPattern || "")} • 
+                                          {formatMuscleName(exercise.primaryMuscle || "")}
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   {/* All Exercises */}
