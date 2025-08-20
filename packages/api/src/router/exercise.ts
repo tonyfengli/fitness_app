@@ -3,7 +3,7 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod/v4";
 
 import { and, desc, eq, ilike } from "@acme/db";
-import { BusinessExercise, exercises, TrainingSession } from "@acme/db/schema";
+import { BusinessExercise, exercises, TrainingSession, UserExerciseRatings } from "@acme/db/schema";
 
 import type { SessionUser } from "../types/auth";
 import { ExerciseFilterService } from "../services/exercise-filter-service";
@@ -414,7 +414,7 @@ export const exerciseRouter = {
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const sessionUser = ctx.session?.user as SessionUser;
+      const sessionUser = ctx.session.user as SessionUser;
       const exerciseService = new ExerciseService(ctx.db);
       const businessId = exerciseService.verifyUserHasBusiness(sessionUser);
 
@@ -463,5 +463,44 @@ export const exerciseRouter = {
         .orderBy(exercises.name);
 
       return { exercises: businessExercises };
+    }),
+
+  // Get user's favorite exercises
+  getUserFavorites: protectedProcedure
+    .input(
+      z.object({
+        userId: z.string(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const sessionUser = ctx.session.user as SessionUser;
+      const exerciseService = new ExerciseService(ctx.db);
+      const businessId = exerciseService.verifyUserHasBusiness(sessionUser);
+
+      // Get all favorite exercises for the user in this business
+      const favorites = await ctx.db
+        .select({
+          id: UserExerciseRatings.id,
+          exerciseId: exercises.id,
+          exerciseName: exercises.name,
+          primaryMuscle: exercises.primaryMuscle,
+          secondaryMuscles: exercises.secondaryMuscles,
+          equipment: exercises.equipment,
+          movementPattern: exercises.movementPattern,
+          modality: exercises.modality,
+          ratingType: UserExerciseRatings.ratingType,
+        })
+        .from(UserExerciseRatings)
+        .innerJoin(exercises, eq(UserExerciseRatings.exerciseId, exercises.id))
+        .where(
+          and(
+            eq(UserExerciseRatings.userId, input.userId),
+            eq(UserExerciseRatings.businessId, businessId),
+            eq(UserExerciseRatings.ratingType, "favorite")
+          )
+        )
+        .orderBy(exercises.name);
+
+      return { favorites };
     }),
 } satisfies TRPCRouterRecord;

@@ -3,16 +3,35 @@
 import React from "react";
 import { Button, Icon } from "@acme/ui-shared";
 
+interface FavoriteExercise {
+  id: string;
+  exerciseId: string;
+  exerciseName: string;
+  primaryMuscle: string;
+  secondaryMuscles: string[] | null;
+  equipment: string | null;
+  movementPattern: string | null;
+  modality: string | null;
+  ratingType: string;
+}
+
 interface FavoritesModalProps {
   isOpen: boolean;
   onClose: () => void;
   clientName: string;
+  favorites?: FavoriteExercise[];
+}
+
+// Helper to format muscle names
+function formatMuscleName(muscle: string): string {
+  return muscle.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase());
 }
 
 export default function FavoritesModal({
   isOpen,
   onClose,
   clientName,
+  favorites = [],
 }: FavoritesModalProps) {
   if (!isOpen) return null;
 
@@ -47,47 +66,37 @@ export default function FavoritesModal({
 
             {/* Content */}
             <div className="flex-1 overflow-y-auto px-8 py-6">
-              <div className="space-y-4">
-                <div className="rounded-lg border p-4 hover:bg-gray-50 transition-colors">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="font-semibold text-gray-900">Barbell Back Squat</h3>
-                      <p className="text-sm text-gray-600">Primary: Quads • Secondary: Glutes</p>
-                    </div>
-                    <Icon name="star" size={20} className="text-yellow-500" />
-                  </div>
+              {favorites.length === 0 ? (
+                <div className="text-center py-12">
+                  <Icon name="star" size={48} className="text-gray-300 mx-auto mb-4" />
+                  <p className="text-gray-500">No favorite exercises yet</p>
+                  <p className="text-sm text-gray-400 mt-2">
+                    Favorite exercises will appear here when {clientName} marks them
+                  </p>
                 </div>
-
-                <div className="rounded-lg border p-4 hover:bg-gray-50 transition-colors">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="font-semibold text-gray-900">Dumbbell Bench Press</h3>
-                      <p className="text-sm text-gray-600">Primary: Chest • Secondary: Triceps</p>
+              ) : (
+                <div className="space-y-4">
+                  {favorites.map((favorite) => (
+                    <div key={favorite.id} className="rounded-lg border p-4 hover:bg-gray-50 transition-colors">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h3 className="font-semibold text-gray-900">{favorite.exerciseName}</h3>
+                          <p className="text-sm text-gray-600">
+                            Primary: {formatMuscleName(favorite.primaryMuscle)}
+                            {favorite.secondaryMuscles && favorite.secondaryMuscles.length > 0 && (
+                              <> • Secondary: {favorite.secondaryMuscles.map(formatMuscleName).join(", ")}</>
+                            )}
+                          </p>
+                          {favorite.equipment && (
+                            <p className="text-xs text-gray-500 mt-1">Equipment: {favorite.equipment}</p>
+                          )}
+                        </div>
+                        <Icon name="star" size={20} className="text-yellow-500" />
+                      </div>
                     </div>
-                    <Icon name="star" size={20} className="text-yellow-500" />
-                  </div>
+                  ))}
                 </div>
-
-                <div className="rounded-lg border p-4 hover:bg-gray-50 transition-colors">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="font-semibold text-gray-900">Pull-ups</h3>
-                      <p className="text-sm text-gray-600">Primary: Lats • Secondary: Biceps</p>
-                    </div>
-                    <Icon name="star" size={20} className="text-yellow-500" />
-                  </div>
-                </div>
-
-                <div className="rounded-lg border p-4 hover:bg-gray-50 transition-colors">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="font-semibold text-gray-900">Romanian Deadlift</h3>
-                      <p className="text-sm text-gray-600">Primary: Hamstrings • Secondary: Glutes</p>
-                    </div>
-                    <Icon name="star" size={20} className="text-yellow-500" />
-                  </div>
-                </div>
-              </div>
+              )}
             </div>
 
             {/* Footer */}

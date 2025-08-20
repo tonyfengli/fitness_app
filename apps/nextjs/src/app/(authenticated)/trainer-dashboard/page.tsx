@@ -114,6 +114,14 @@ export default function TrainerDashboardPage() {
     trpc.exercise.all.queryOptions({ limit: 1000 }),
   );
 
+  // Fetch user favorites
+  const { data: userFavorites } = useQuery({
+    ...trpc.exercise.getUserFavorites.queryOptions({
+      userId: selectedClientId,
+    }),
+    enabled: !!selectedClientId,
+  });
+
   // Handlers
   const handleDeleteWorkout = async (workoutId: string) => {
     const workout = workouts?.find((w) => w.id === workoutId);
@@ -541,6 +549,7 @@ export default function TrainerDashboardPage() {
           isOpen={modals.favorites.isOpen}
           onClose={() => closeModal("favorites")}
           clientName={selectedClient.name}
+          favorites={userFavorites?.favorites}
         />
       )}
 
