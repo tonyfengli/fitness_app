@@ -902,7 +902,7 @@ function ClientWorkoutOverviewContent() {
                                       : 'hover:bg-gray-50'
                                   }`}
                                 >
-                                  <span className="font-medium">
+                                  <span className="font-medium text-black">
                                     {exercise.name}
                                   </span>
                                   {exercise.movementPattern && (
