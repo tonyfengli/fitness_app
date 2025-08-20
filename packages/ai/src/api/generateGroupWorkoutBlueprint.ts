@@ -24,17 +24,6 @@ export async function generateGroupWorkoutBlueprint(
 
   // Removed generateGroupWorkoutBlueprint call log
 
-  // Import logger for comprehensive error tracking
-  let groupWorkoutTestDataLogger: any;
-  try {
-    const loggerModule = await import(
-      "../../../api/src/utils/groupWorkoutTestDataLogger"
-    );
-    groupWorkoutTestDataLogger = loggerModule.groupWorkoutTestDataLogger;
-  } catch (error) {
-    // Group workout test data logger not available
-  }
-
   try {
     // Use provided exercises
     const exercisePool = exercises;
@@ -82,10 +71,7 @@ export async function generateGroupWorkoutBlueprint(
               `❌ Error processing client ${client.user_id}:`,
               error,
             );
-            groupWorkoutTestDataLogger?.addError(
-              groupContext.sessionId,
-              `Phase 1/2 error for client ${client.user_id}: ${error instanceof Error ? error.message : "Unknown error"}`,
-            );
+            // Error logging removed
             throw error;
           }
         }),
@@ -105,7 +91,7 @@ export async function generateGroupWorkoutBlueprint(
     if (!template) {
       const error = `Template ${templateId} not found`;
       console.error("❌", error);
-      groupWorkoutTestDataLogger?.addError(groupContext.sessionId, error);
+      // Error logging removed
       throw new Error(error);
     }
 
@@ -209,81 +195,13 @@ export async function generateGroupWorkoutBlueprint(
         console.warn("⚠️ Blueprint validation warnings:");
         blueprint.validationWarnings.forEach((warning) => {
           console.warn(`  - ${warning}`);
-          groupWorkoutTestDataLogger?.addWarning(
-            groupContext.sessionId,
-            warning,
-          );
+          // Warning logging removed
         });
       }
 
-      // Log Phase 3 data to test data logger
-      if (groupWorkoutTestDataLogger && groupContext.sessionId) {
-        // Create slot allocation details based on blueprint type
-        let slotAllocationDetails: any[] = [];
+      // Phase 3 logging removed
 
-        if ("blocks" in blueprint) {
-          // BMF blueprint logging
-          slotAllocationDetails = blueprint.blocks.map((block) => ({
-            blockId: block.blockId,
-            blockConfig: {
-              maxExercises: block.slots.total,
-              functionTags: block.blockConfig.functionTags,
-              constraints: {},
-            },
-            allocation: {
-              totalSlots: block.slots.total,
-              targetSharedSlots: block.slots.targetShared,
-              actualSharedAvailable: block.slots.actualSharedAvailable,
-              finalSharedSlots: block.slots.actualSharedAvailable,
-              individualSlotsPerClient: block.slots.individualPerClient,
-            },
-            candidateStats: {
-              sharedCandidatesCount:
-                block.sharedCandidates?.exercises?.length || 0,
-              sharedCandidatesQuality: {
-                excellent: 0,
-                good: 0,
-                acceptable: 0,
-              },
-              individualCandidatesPerClient: {},
-            },
-            selectionStrategy: "balanced",
-          }));
-        } else {
-          // Standard blueprint logging
-          slotAllocationDetails = [
-            {
-              templateType: blueprint.metadata.templateType,
-              workoutFlow: blueprint.metadata.workoutFlow,
-              totalExercisesPerClient:
-                blueprint.metadata.totalExercisesPerClient,
-              preAssignedCount: blueprint.metadata.preAssignedCount,
-              sharedExerciseCount: blueprint.sharedExercisePool.length,
-              clientPools: Object.entries(blueprint.clientExercisePools).map(
-                ([clientId, pool]) => ({
-                  clientId,
-                  preAssigned: pool.preAssigned.length,
-                  availableCandidates: pool.availableCandidates.length,
-                  totalNeeded: pool.totalExercisesNeeded,
-                }),
-              ),
-            },
-          ];
-        }
-
-        groupWorkoutTestDataLogger.logBlueprint(
-          groupContext.sessionId,
-          blueprint,
-          null, // No cohesion analysis for now
-          slotAllocationDetails,
-        );
-      }
-
-      groupWorkoutTestDataLogger?.updateTiming(
-        groupContext.sessionId,
-        "phase3",
-        phase3Time,
-      );
+      // Timing logging removed
 
       const totalTime = Date.now() - startTime;
       // Total group workout generation complete
@@ -291,10 +209,7 @@ export async function generateGroupWorkoutBlueprint(
       return blueprint;
     } catch (phase3Error) {
       console.error("❌ Error in Phase 3:", phase3Error);
-      groupWorkoutTestDataLogger?.addError(
-        groupContext.sessionId,
-        `Phase 3 error: ${phase3Error instanceof Error ? phase3Error.message : "Unknown error"}`,
-      );
+      // Error logging removed
       throw phase3Error;
     }
   } catch (error) {
@@ -305,12 +220,7 @@ export async function generateGroupWorkoutBlueprint(
       console.error("Stack trace:", error.stack);
     }
 
-    // Try to save whatever data we have
-    groupWorkoutTestDataLogger
-      ?.saveGroupWorkoutData(groupContext.sessionId)
-      .catch((saveError: any) => {
-        console.error("Failed to save error data:", saveError);
-      });
+    // Error data saving removed
 
     throw error;
   }
