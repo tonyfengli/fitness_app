@@ -101,9 +101,13 @@ export function WorkoutOverviewScreen() {
   const [showErrorModal, setShowErrorModal] = useState(false);
   const [workoutOrganizationReady, setWorkoutOrganizationReady] = useState(false);
   
+  // Local state for selections and clients - copying GlobalPreferencesScreen pattern
+  const [localSelections, setLocalSelections] = useState<ExerciseSelection[]>([]);
+  const [localClients, setLocalClients] = useState<any[]>([]);
+  
   // Check if session already has workout organization
   const { data: sessionData, isLoading: sessionLoading } = useQuery(
-    sessionId ? api.trainingSession.getSession.queryOptions({ id: sessionId }) : {
+    sessionId ? api.trainingSession.getById.queryOptions({ id: sessionId }) : {
       enabled: false,
       queryKey: ['disabled-session-overview'],
       queryFn: () => Promise.resolve(null)
@@ -128,23 +132,7 @@ export function WorkoutOverviewScreen() {
       console.log('[TV WorkoutOverview] Exercise swap detected:', swap);
       setLastSwapTime(new Date());
       
-      // Force refetch of exercise selections
-      queryClient.invalidateQueries({
-        queryKey: [
-          [
-            "workoutSelections",
-            "getSelections"
-          ],
-          {
-            input: {
-              sessionId: sessionId
-            },
-            type: "query"
-          }
-        ]
-      });
-      
-      // Also invalidate the specific hook's query
+      // Update local state directly - we'll refetch the data and update via useEffect
       queryClient.refetchQueries({
         predicate: (query) => {
           const queryKey = query.queryKey as any[];
@@ -172,65 +160,20 @@ export function WorkoutOverviewScreen() {
         updatedAt: update.updatedAt,
         sessionId: sessionId
       });
-      console.log('[TV WorkoutOverview] Current selections before refetch:', selections);
+      console.log('[TV WorkoutOverview] Current local clients before update:', localClients);
       
-      // Force refetch of selections to get updated status
-      console.log('[TV WorkoutOverview] Invalidating queries...');
-      
-      // Invalidate CLIENTS query (which contains status info)
-      queryClient.invalidateQueries({
-        queryKey: [
-          [
-            "trainingSession",
-            "getCheckedInClients"
-          ],
-          {
-            input: {
-              sessionId: sessionId
-            },
-            type: "query"
+      // Update local state directly instead of invalidating queries
+      setLocalClients(prev => {
+        console.log('[TV WorkoutOverview] Previous clients state:', prev);
+        const updated = prev.map(client => {
+          if (client.userId === update.userId) {
+            console.log('[TV WorkoutOverview] Updating status for user:', update.userId, 'to:', update.status);
+            return { ...client, status: update.status };
           }
-        ]
-      });
-      
-      // Also invalidate selections query
-      queryClient.invalidateQueries({
-        queryKey: [
-          [
-            "workoutSelections",
-            "getSelections"
-          ],
-          {
-            input: {
-              sessionId: sessionId
-            },
-            type: "query"
-          }
-        ]
-      });
-      
-      // Refetch both queries
-      Promise.all([
-        queryClient.refetchQueries({
-          predicate: (query) => {
-            const queryKey = query.queryKey as any[];
-            return queryKey[0] && 
-                   Array.isArray(queryKey[0]) && 
-                   queryKey[0][0] === 'trainingSession' && 
-                   queryKey[0][1] === 'getCheckedInClients';
-          }
-        }),
-        queryClient.refetchQueries({
-          predicate: (query) => {
-            const queryKey = query.queryKey as any[];
-            return queryKey[0] && 
-                   Array.isArray(queryKey[0]) && 
-                   queryKey[0][0] === 'workoutSelections' && 
-                   queryKey[0][1] === 'getSelections';
-          }
-        })
-      ]).then(() => {
-        console.log('[TV WorkoutOverview] All refetches completed');
+          return client;
+        });
+        console.log('[TV WorkoutOverview] Updated clients state:', updated);
+        return updated;
       });
       
       console.log('[TV WorkoutOverview] ========== END STATUS UPDATE ==========');
@@ -266,23 +209,38 @@ export function WorkoutOverviewScreen() {
       queryFn: () => Promise.resolve([])
     }
   );
+  
+  // Copy query data to local state - copying GlobalPreferencesScreen pattern
+  useEffect(() => {
+    if (selections && !selectionsLoading) {
+      console.log('[TV WorkoutOverview] Updating local selections from query data:', selections.length);
+      setLocalSelections(selections);
+    }
+  }, [selections, selectionsLoading]);
+  
+  useEffect(() => {
+    if (clients && !clientsLoading) {
+      console.log('[TV WorkoutOverview] Updating local clients from query data:', clients.length);
+      setLocalClients(clients);
+    }
+  }, [clients, clientsLoading]);
 
   const getAvatarUrl = (userId: string) => {
     return `https://api.dicebear.com/7.x/avataaars/png?seed=${userId}&size=128`;
   };
 
-  // Group selections by client
+  // Group selections by client - using local state instead of query data
   const groupedSelections = React.useMemo(() => {
     console.log('[TV WorkoutOverview] Computing groupedSelections...');
-    console.log('[TV WorkoutOverview] Clients data:', clients);
-    console.log('[TV WorkoutOverview] Selections data:', selections?.length || 0, 'items');
+    console.log('[TV WorkoutOverview] Local clients data:', localClients);
+    console.log('[TV WorkoutOverview] Local selections data:', localSelections?.length || 0, 'items');
     
-    if (!selections || !clients) return {};
+    if (!localSelections || !localClients || localClients.length === 0) return {};
 
     const grouped: GroupedSelections = {};
     
-    // Initialize with all clients
-    clients.forEach(client => {
+    // Initialize with all clients from local state
+    localClients.forEach(client => {
       console.log('[TV WorkoutOverview] Processing client:', {
         userId: client.userId,
         userName: client.userName,
@@ -296,8 +254,8 @@ export function WorkoutOverviewScreen() {
       };
     });
 
-    // Add exercises to each client
-    selections.forEach(selection => {
+    // Add exercises to each client from local state
+    localSelections.forEach(selection => {
       if (grouped[selection.clientId]) {
         grouped[selection.clientId].exercises.push(selection);
       }
@@ -306,7 +264,7 @@ export function WorkoutOverviewScreen() {
     console.log('[TV WorkoutOverview] Final grouped selections:', grouped);
 
     return grouped;
-  }, [selections, clients]);
+  }, [localSelections, localClients]);
 
   const isLoading = selectionsLoading || clientsLoading;
 
@@ -370,7 +328,7 @@ export function WorkoutOverviewScreen() {
                 while (attempts < maxAttempts) {
                   try {
                     const session = await queryClient.fetchQuery(
-                      api.trainingSession.getSession.queryOptions({ id: sessionId })
+                      api.trainingSession.getById.queryOptions({ id: sessionId })
                     );
                     
                     if (session?.workoutOrganization) {
@@ -876,7 +834,7 @@ export function WorkoutOverviewScreen() {
           zIndex: 1000,
         }}>
           <WorkoutGenerationLoader 
-            clientNames={clients?.map(c => c.userName || 'Unknown') || []} 
+            clientNames={localClients?.map(c => c.userName || 'Unknown') || []} 
             durationMinutes={1.67} // 1 minute 40 seconds
             forceComplete={workoutOrganizationReady}
           />

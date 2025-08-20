@@ -4408,13 +4408,19 @@ Decision
         ];
 
         const llmStartTime = Date.now();
-        console.log(`[startWorkout-v2] Phase 2 LLM call START`);
+        const llmStartTimestamp = new Date().toISOString();
+        console.log(`[startWorkout-v2] Phase 2 LLM call START at ${llmStartTimestamp}`);
+        
+        // Log the raw prompts
+        console.log(`[startWorkout-v2] Phase 2 Raw System Prompt:\n${systemPrompt}\n`);
+        console.log(`[startWorkout-v2] Phase 2 Raw User Prompt:\n${phase2Prompt}\n`);
 
         const response = await llm.invoke(messages);
 
         const llmEndTime = Date.now();
+        const llmEndTimestamp = new Date().toISOString();
         console.log(
-          `[startWorkout-v2] Phase 2 LLM call END - Duration: ${llmEndTime - llmStartTime}ms`,
+          `[startWorkout-v2] Phase 2 LLM call END at ${llmEndTimestamp} - Duration: ${llmEndTime - llmStartTime}ms`,
         );
 
         // Parse the response
@@ -4528,8 +4534,9 @@ Decision
         }
 
         // Step 5: Update database with organization
-        console.log("[startWorkout-v2] Database updates START");
         const dbUpdateStartTime = Date.now();
+        const dbStartTimestamp = new Date().toISOString();
+        console.log(`[startWorkout-v2] Database updates START at ${dbStartTimestamp}`);
 
         // Store the round organization in TrainingSession
         await ctx.db
@@ -4624,8 +4631,9 @@ Decision
           }
         }
 
+        const dbEndTimestamp = new Date().toISOString();
         console.log(
-          `[startWorkout-v2] Database updates END - Updated ${totalUpdates} exercises in ${Date.now() - dbUpdateStartTime}ms`,
+          `[startWorkout-v2] Database updates END at ${dbEndTimestamp} - Updated ${totalUpdates} exercises in ${Date.now() - dbUpdateStartTime}ms`,
         );
 
         // Extract unique clients from workoutsWithExercises
