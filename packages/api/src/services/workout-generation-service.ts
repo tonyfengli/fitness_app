@@ -231,11 +231,11 @@ export class WorkoutGenerationService {
 
     // Prepare timing data if LLM timings are available
     let timings = undefined;
-    if (llmResult?.llmTimings) {
+    if (llmResult && !('error' in llmResult) && (llmResult as any).llmTimings) {
       timings = {
         processStart: processStartTime,
         processEnd: new Date().toISOString(),
-        llmCalls: llmResult.llmTimings,
+        llmCalls: (llmResult as any).llmTimings,
       };
     }
 
