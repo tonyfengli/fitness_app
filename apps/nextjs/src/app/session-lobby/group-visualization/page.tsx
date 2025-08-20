@@ -230,6 +230,56 @@ function GroupVisualizationPageContent() {
     enabled: !!sessionId,
   });
 
+  // Log templateConfig when sessionData is loaded
+  React.useEffect(() => {
+    if (sessionData) {
+      console.log("📋 SESSION DATA & TEMPLATE CONFIG:", {
+        sessionId,
+        sessionStatus: sessionData.status,
+        hasTemplateConfig: !!sessionData.templateConfig,
+        templateConfigKeys: sessionData.templateConfig 
+          ? Object.keys(sessionData.templateConfig)
+          : "No templateConfig",
+        hasVisualizationData: !!(sessionData.templateConfig as any)?.visualizationData,
+        visualizationDataKeys: (sessionData.templateConfig as any)?.visualizationData 
+          ? Object.keys((sessionData.templateConfig as any).visualizationData)
+          : [],
+        savedAt: (sessionData.templateConfig as any)?.visualizationData?.savedAt || "No savedAt timestamp",
+        hasTimings: !!(sessionData.templateConfig as any)?.visualizationData?.timings,
+        timings: (sessionData.templateConfig as any)?.visualizationData?.timings || "No timings",
+        llmResultKeys: (sessionData.templateConfig as any)?.visualizationData?.llmResult 
+          ? Object.keys((sessionData.templateConfig as any).visualizationData.llmResult)
+          : "No llmResult",
+        hasLlmTimings: !!(sessionData.templateConfig as any)?.visualizationData?.llmResult?.llmTimings,
+        llmTimings: (sessionData.templateConfig as any)?.visualizationData?.llmResult?.llmTimings || "No llmTimings",
+        // Calculate total time from LLM timings
+        totalLLMTime: (() => {
+          const timings = (sessionData.templateConfig as any)?.visualizationData?.llmResult?.llmTimings;
+          if (!timings) return "No timing data";
+          
+          const times = Object.values(timings) as any[];
+          const starts = times.map(t => new Date(t.start).getTime());
+          const ends = times.map(t => new Date(t.end).getTime());
+          
+          const processStart = new Date(Math.min(...starts)).toISOString();
+          const processEnd = new Date(Math.max(...ends)).toISOString();
+          const totalMs = Math.max(...ends) - Math.min(...starts);
+          
+          return {
+            processStart,
+            processEnd,
+            totalDurationMs: totalMs,
+            totalDurationSeconds: (totalMs / 1000).toFixed(1)
+          };
+        })(),
+        fullTemplateConfig: sessionData.templateConfig || "No templateConfig",
+        fullSessionData: sessionData,
+      });
+    } else {
+      console.log("📋 NO SESSION DATA YET for sessionId:", sessionId);
+    }
+  }, [sessionData, sessionId]);
+
   // Check for saved visualization data first
   const savedDataQuery = useQuery({
     ...trpc.trainingSession.getSavedVisualizationData.queryOptions({
@@ -533,6 +583,8 @@ function GroupVisualizationPageContent() {
         groupContext: blueprintQuery.groupContext,
         llmResult: blueprintQuery.llmResult,
         summary: blueprintQuery.summary,
+        // Include timings if available from the blueprint query
+        ...(blueprintQuery.timings && { timings: blueprintQuery.timings }),
       };
 
       // Save the visualization data

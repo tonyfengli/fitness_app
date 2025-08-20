@@ -39,6 +39,11 @@ export interface LLMSelectionResult {
     movementPatterns: string[];
     overallReasoning: string;
   };
+  timing?: {
+    start: string;
+    end: string;
+    durationMs: number;
+  };
   debug?: {
     systemPrompt: string;
     llmResponse: string;
@@ -254,6 +259,13 @@ export class LLMExerciseSelector {
       result.debug = {
         systemPrompt: prompt,
         llmResponse: content,
+      };
+
+      // Add timing data
+      result.timing = {
+        start: llmStartISO,
+        end: llmEndISO,
+        durationMs: llmEndTime - llmStartTime,
       };
 
       return result;

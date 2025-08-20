@@ -1066,14 +1066,25 @@ export const trainingSessionRouter = {
         );
 
         const mutationEndTime = new Date().toISOString();
+        const totalDurationMs = Date.now() - Date.parse(mutationStartTime);
+        
         console.log(
           `[Timestamp] generateAndCreateGroupWorkouts mutation completed at: ${mutationEndTime}`,
         );
         console.log(
-          `[Timestamp] Total duration: ${Date.now() - Date.parse(mutationStartTime)}ms`,
+          `[Timestamp] Total duration: ${totalDurationMs}ms`,
         );
 
-        return result;
+        // Add total process timing to the result
+        return {
+          ...result,
+          totalProcessTiming: {
+            start: mutationStartTime,
+            end: mutationEndTime,
+            durationMs: totalDurationMs,
+            durationSeconds: (totalDurationMs / 1000).toFixed(1)
+          }
+        };
       } catch (error) {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
@@ -2818,6 +2829,15 @@ Set your goals and preferences for today's session.`;
           llmData: z.any().optional(),
           exerciseMetadata: z.any().optional(),
           sharedExerciseIds: z.array(z.string()).optional(),
+          timings: z.object({
+            processStart: z.string(),
+            processEnd: z.string(),
+            llmCalls: z.record(z.string(), z.object({
+              start: z.string(),
+              end: z.string(),
+              durationMs: z.number(),
+            })),
+          }).optional(),
         }),
       }),
     )

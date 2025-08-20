@@ -206,6 +206,11 @@ export class StandardWorkoutGenerator {
         string,
         { systemPrompt?: string; llmResponse?: string }
       > = {};
+      const llmTimings: Record<
+        string,
+        { start: string; end: string; durationMs: number }
+      > = {};
+      
       for (const [clientId, result] of llmSelections) {
         if (result.debug) {
           debugData[clientId] = {
@@ -213,12 +218,25 @@ export class StandardWorkoutGenerator {
             llmResponse: result.debug.llmResponse,
           };
         }
+        if (result.timing) {
+          llmTimings[clientId] = result.timing;
+        }
       }
+      
       if (Object.keys(debugData).length > 0) {
         (exerciseSelection as any).debugData = debugData;
         logger.log(
           "[StandardWorkoutGenerator] Debug data collected for clients:",
           Object.keys(debugData),
+        );
+      }
+      
+      // Add LLM timing data
+      if (Object.keys(llmTimings).length > 0) {
+        (exerciseSelection as any).llmTimings = llmTimings;
+        logger.log(
+          "[StandardWorkoutGenerator] LLM timing data collected for clients:",
+          Object.keys(llmTimings),
         );
       }
 

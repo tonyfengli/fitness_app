@@ -178,7 +178,32 @@ export default function StandardTemplateView({
               Standard Group Workout
             </h1>
             <p className="mt-1 text-lg text-gray-600">
-              Exercise pools for {summary.totalClients} clients
+              {(() => {
+                // Check for total process timing first (from new generations)
+                if (sessionData?.totalProcessTiming) {
+                  return `Total generation time: ${sessionData.totalProcessTiming.durationSeconds}s`;
+                }
+                
+                // Calculate end-to-end time from LLM start to save completion
+                if (llmResult?.llmTimings && sessionData?.templateConfig?.visualizationData?.savedAt) {
+                  const timings = Object.values(llmResult.llmTimings) as any[];
+                  if (timings.length > 0) {
+                    // Find earliest LLM start time
+                    const starts = timings.map(t => new Date(t.start).getTime());
+                    const earliestStart = Math.min(...starts);
+                    
+                    // Use savedAt as the end time
+                    const savedAt = new Date(sessionData.templateConfig.visualizationData.savedAt).getTime();
+                    
+                    // Calculate total duration
+                    const totalMs = savedAt - earliestStart;
+                    return `Total generation time: ${(totalMs / 1000).toFixed(1)}s`;
+                  }
+                }
+                
+                // Default text if no timing data
+                return `Exercise pools for ${summary.totalClients} clients`;
+              })()}
             </p>
             <div className="mt-2 flex items-center gap-2">
               {isFromSavedData && (
@@ -323,6 +348,11 @@ export default function StandardTemplateView({
                       >
                         <h4 className="text-sm font-semibold text-gray-900">
                           🤖 LLM System Prompt & Output
+                          {llmResult?.llmTimings?.[clientTab.id] && (
+                            <span className="ml-2 text-xs font-normal text-gray-600">
+                              ({(llmResult.llmTimings[clientTab.id].durationMs / 1000).toFixed(1)}s)
+                            </span>
+                          )}
                         </h4>
                         <span className="text-gray-500">
                           {expandedLLMSections.has(clientTab.id) ? '▼' : '▶'}

@@ -31,7 +31,6 @@ import {
 } from "@acme/db/schema";
 
 import type { SessionUser } from "../types/auth";
-import { groupWorkoutTestDataLogger } from "../utils/groupWorkoutTestDataLogger";
 import { createLogger } from "../utils/logger";
 import { WorkoutBlueprintService } from "./workout-blueprint-service";
 
@@ -65,6 +64,9 @@ export class WorkoutGenerationService {
     sessionId: string,
     options?: GenerateBlueprintOptions,
   ) {
+    // Capture process start time
+    const processStartTime = new Date().toISOString();
+    
     const user = this.ctx.session?.user;
 
     logger.info("Starting blueprint generation with LLM", {
@@ -134,10 +136,6 @@ export class WorkoutGenerationService {
         user.id,
       );
 
-    // Initialize test data logging if needed
-    if (options?.includeDiagnostics) {
-      groupWorkoutTestDataLogger.initSession(sessionId, groupContext);
-    }
 
     // Generate blueprint with bucketing
     const blueprint = await generateGroupWorkoutBlueprint(
@@ -204,6 +202,11 @@ export class WorkoutGenerationService {
           generationResult.debug.llmResponsesByClient;
       }
 
+      // Include LLM timing data if available
+      if (generationResult.exerciseSelection?.llmTimings) {
+        (llmResult as any).llmTimings = generationResult.exerciseSelection.llmTimings;
+      }
+
       logger.info("LLM generation completed successfully");
 
       // Save Phase 1 selections for standard templates
@@ -225,9 +228,15 @@ export class WorkoutGenerationService {
       };
     }
 
-    // Save test data if diagnostics enabled
-    if (options?.includeDiagnostics) {
-      await groupWorkoutTestDataLogger.saveGroupWorkoutData(sessionId);
+
+    // Prepare timing data if LLM timings are available
+    let timings = undefined;
+    if (llmResult?.llmTimings) {
+      timings = {
+        processStart: processStartTime,
+        processEnd: new Date().toISOString(),
+        llmCalls: llmResult.llmTimings,
+      };
     }
 
     return {
@@ -242,6 +251,7 @@ export class WorkoutGenerationService {
         selectionsStored:
           isStandardBlueprint && !!llmResult && !llmResult.error,
       },
+      ...(timings && { timings }),
     };
   }
 
