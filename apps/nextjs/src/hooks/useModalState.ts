@@ -46,6 +46,7 @@ interface ModalsState {
   duplicate: ModalState<DuplicateWorkoutData>;
   addExercise: ModalState<AddExerciseData>;
   newWorkout: ModalState<void>;
+  favorites: ModalState<void>;
 }
 
 export function useModalState() {
@@ -57,6 +58,7 @@ export function useModalState() {
     duplicate: { isOpen: false, data: null },
     addExercise: { isOpen: false, data: null },
     newWorkout: { isOpen: false, data: null },
+    favorites: { isOpen: false, data: null },
   });
 
   const openModal = <K extends keyof ModalsState>(

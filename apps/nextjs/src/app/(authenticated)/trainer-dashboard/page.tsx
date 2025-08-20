@@ -21,6 +21,7 @@ import { useModalState } from "~/hooks/useModalState";
 import { useWorkoutOperations } from "~/hooks/useWorkoutOperations";
 import { useTRPC } from "~/trpc/react";
 import NewWorkoutModal from "./new-workout-modal";
+import FavoritesModal from "./FavoritesModal";
 import { WorkoutSection } from "./WorkoutSection";
 
 // Constants
@@ -417,14 +418,24 @@ export default function TrainerDashboardPage() {
                 </h1>
                 <p className="mt-1 text-gray-500">{selectedClient.program}</p>
               </div>
-              <Button
-                onClick={() => openModal("newWorkout")}
-                size="lg"
-                className="flex items-center bg-indigo-600 px-6 py-3 text-white hover:bg-indigo-700"
-              >
-                <Icon name="add" size={20} className="mr-2" />
-                <span className="font-semibold">New Workout</span>
-              </Button>
+              <div className="flex gap-4">
+                <Button
+                  onClick={() => openModal("favorites")}
+                  size="lg"
+                  className="flex items-center bg-purple-600 px-6 py-3 text-white hover:bg-purple-700"
+                >
+                  <Icon name="star" size={20} className="mr-2" />
+                  <span className="font-semibold">See Favorites</span>
+                </Button>
+                <Button
+                  onClick={() => openModal("newWorkout")}
+                  size="lg"
+                  className="flex items-center bg-indigo-600 px-6 py-3 text-white hover:bg-indigo-700"
+                >
+                  <Icon name="add" size={20} className="mr-2" />
+                  <span className="font-semibold">New Workout</span>
+                </Button>
+              </div>
             </header>
 
             <div className="space-y-12">
@@ -522,6 +533,14 @@ export default function TrainerDashboardPage() {
           clientProfile={
             clientsData?.find((c) => c.id === selectedClient.id)?.profile
           }
+        />
+      )}
+
+      {selectedClient && (
+        <FavoritesModal
+          isOpen={modals.favorites.isOpen}
+          onClose={() => closeModal("favorites")}
+          clientName={selectedClient.name}
         />
       )}
 
