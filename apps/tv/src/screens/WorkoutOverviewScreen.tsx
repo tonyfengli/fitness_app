@@ -92,6 +92,17 @@ interface GroupedSelections {
   };
 }
 
+// Helper function to format time in 12-hour format with AM/PM
+function formatTime12Hour(date: Date): string {
+  const hours = date.getHours();
+  const minutes = date.getMinutes();
+  const seconds = date.getSeconds();
+  const ampm = hours >= 12 ? 'PM' : 'AM';
+  const hours12 = hours % 12 || 12;
+  
+  return `${hours12}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')} ${ampm}`;
+}
+
 export function WorkoutOverviewScreen() {
   const navigation = useNavigation();
   const sessionId = navigation.getParam('sessionId');
@@ -100,6 +111,8 @@ export function WorkoutOverviewScreen() {
   const { startWorkout, isGenerating, error: startWorkoutError, setError } = useStartWorkout();
   const [showErrorModal, setShowErrorModal] = useState(false);
   const [workoutOrganizationReady, setWorkoutOrganizationReady] = useState(false);
+  const [lastSuccessfulFetch, setLastSuccessfulFetch] = useState<Date | null>(null);
+  const [connectionState, setConnectionState] = useState<'connecting' | 'connected' | 'error'>('connecting');
   
   // Local state for selections and clients - copying GlobalPreferencesScreen pattern
   const [localSelections, setLocalSelections] = useState<ExerciseSelection[]>([]);
@@ -197,7 +210,7 @@ export function WorkoutOverviewScreen() {
     ? api.workoutSelections.getSelections.queryOptions({ sessionId })
     : null;
 
-  const { data: selections, isLoading: selectionsLoading } = useQuery({
+  const { data: selections, isLoading: selectionsLoading, error: selectionsError } = useQuery({
     ...selectionsQueryOptions,
     enabled: !!sessionId && !!selectionsQueryOptions,
     refetchInterval: 10000, // Poll every 10 seconds
@@ -209,7 +222,7 @@ export function WorkoutOverviewScreen() {
     ? api.trainingSession.getCheckedInClients.queryOptions({ sessionId })
     : null;
 
-  const { data: clients, isLoading: clientsLoading } = useQuery({
+  const { data: clients, isLoading: clientsLoading, error: clientsError } = useQuery({
     ...clientsQueryOptions,
     enabled: !!sessionId && !!clientsQueryOptions,
     refetchInterval: 10000, // Poll every 10 seconds
@@ -218,18 +231,42 @@ export function WorkoutOverviewScreen() {
   
   // Copy query data to local state - copying GlobalPreferencesScreen pattern
   useEffect(() => {
-    if (selections && !selectionsLoading) {
-      console.log('[TV WorkoutOverview] Updating local selections from polled data:', selections.length);
-      setLocalSelections(selections);
+    if (selections !== undefined && !selectionsLoading) {
+      console.log('[TV WorkoutOverview] Updating local selections from polled data:', selections?.length || 0);
+      
+      // Update last successful fetch timestamp on success
+      if (!selectionsError && !clientsError) {
+        const now = new Date();
+        setLastSuccessfulFetch(now);
+        setConnectionState('connected');
+      }
+      
+      setLocalSelections(selections || []);
     }
-  }, [selections, selectionsLoading]);
+  }, [selections, selectionsLoading, selectionsError, clientsError]);
   
   useEffect(() => {
-    if (clients && !clientsLoading) {
-      console.log('[TV WorkoutOverview] Updating local clients from polled data:', clients.length);
-      setLocalClients(clients);
+    if (clients !== undefined && !clientsLoading) {
+      console.log('[TV WorkoutOverview] Updating local clients from polled data:', clients?.length || 0);
+      
+      // Update last successful fetch timestamp on success
+      if (!selectionsError && !clientsError) {
+        const now = new Date();
+        setLastSuccessfulFetch(now);
+        setConnectionState('connected');
+      }
+      
+      setLocalClients(clients || []);
     }
-  }, [clients, clientsLoading]);
+  }, [clients, clientsLoading, selectionsError, clientsError]);
+  
+  // Handle fetch errors
+  useEffect(() => {
+    if ((selectionsError || clientsError) && !selectionsLoading && !clientsLoading) {
+      console.log('[TV WorkoutOverview] Fetch error detected:', { selectionsError, clientsError });
+      setConnectionState('error');
+    }
+  }, [selectionsError, clientsError, selectionsLoading, clientsLoading]);
 
   const getAvatarUrl = (userId: string) => {
     return `https://api.dicebear.com/7.x/avataaars/png?seed=${userId}&size=128`;
@@ -823,11 +860,16 @@ export function WorkoutOverviewScreen() {
       {/* Connection Status - Bottom */}
       <View className="mt-6 px-4">
         <View className="flex-row items-center">
-          <View className={`w-3 h-3 rounded-full mr-2 ${
-            swapUpdatesConnected ? 'bg-green-400' : 'bg-gray-400'
-          }`} />
+          <View 
+            className={`w-3 h-3 rounded-full mr-2 ${
+              connectionState === 'connecting' ? 'bg-gray-400' :
+              connectionState === 'connected' ? 'bg-green-400' : 'bg-red-400'
+            }`} 
+          />
           <Text style={{ fontSize: 16, color: TOKENS.color.text }}>
-            {swapUpdatesConnected ? 'Live updates active' : 'Connecting...'}
+            {connectionState === 'connecting' ? 'Connecting...' :
+             connectionState === 'connected' ? `Live - ${lastSuccessfulFetch ? formatTime12Hour(lastSuccessfulFetch) : 'connecting'}` :
+             `Last connected: ${lastSuccessfulFetch ? formatTime12Hour(lastSuccessfulFetch) : 'never'}`}
           </Text>
         </View>
       </View>
