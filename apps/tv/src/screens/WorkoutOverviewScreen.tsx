@@ -192,35 +192,41 @@ export function WorkoutOverviewScreen() {
     });
   }, [swapUpdatesConnected, statusConnected, sessionId]);
 
-  // Fetch exercise selections using the same pattern as webapp
-  const { data: selections, isLoading: selectionsLoading } = useQuery(
-    sessionId ? api.workoutSelections.getSelections.queryOptions({ sessionId }) : {
-      enabled: false,
-      queryKey: ['disabled'],
-      queryFn: () => Promise.resolve([])
-    }
-  );
+  // Set up polling for exercise selections (10 second interval)
+  const selectionsQueryOptions = sessionId 
+    ? api.workoutSelections.getSelections.queryOptions({ sessionId })
+    : null;
 
-  // Fetch client information
-  const { data: clients, isLoading: clientsLoading } = useQuery(
-    sessionId ? api.trainingSession.getCheckedInClients.queryOptions({ sessionId }) : {
-      enabled: false,
-      queryKey: ['disabled'],
-      queryFn: () => Promise.resolve([])
-    }
-  );
+  const { data: selections, isLoading: selectionsLoading } = useQuery({
+    ...selectionsQueryOptions,
+    enabled: !!sessionId && !!selectionsQueryOptions,
+    refetchInterval: 10000, // Poll every 10 seconds
+    refetchIntervalInBackground: true, // Keep polling even when tab is not focused
+  });
+
+  // Set up polling for client information (10 second interval)
+  const clientsQueryOptions = sessionId 
+    ? api.trainingSession.getCheckedInClients.queryOptions({ sessionId })
+    : null;
+
+  const { data: clients, isLoading: clientsLoading } = useQuery({
+    ...clientsQueryOptions,
+    enabled: !!sessionId && !!clientsQueryOptions,
+    refetchInterval: 10000, // Poll every 10 seconds
+    refetchIntervalInBackground: true, // Keep polling even when tab is not focused
+  });
   
   // Copy query data to local state - copying GlobalPreferencesScreen pattern
   useEffect(() => {
     if (selections && !selectionsLoading) {
-      console.log('[TV WorkoutOverview] Updating local selections from query data:', selections.length);
+      console.log('[TV WorkoutOverview] Updating local selections from polled data:', selections.length);
       setLocalSelections(selections);
     }
   }, [selections, selectionsLoading]);
   
   useEffect(() => {
     if (clients && !clientsLoading) {
-      console.log('[TV WorkoutOverview] Updating local clients from query data:', clients.length);
+      console.log('[TV WorkoutOverview] Updating local clients from polled data:', clients.length);
       setLocalClients(clients);
     }
   }, [clients, clientsLoading]);
