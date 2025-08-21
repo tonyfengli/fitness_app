@@ -99,14 +99,17 @@ export function GlobalPreferencesScreen() {
   const [generationError, setGenerationError] = useState<string | null>(null);
   
 
-  // Fetch initial preferences - using checked-in clients data
-  const { data: clientsData, isLoading } = useQuery(
-    sessionId ? api.trainingSession.getCheckedInClients.queryOptions({ sessionId }) : {
-      enabled: false,
-      queryKey: ['disabled'],
-      queryFn: () => Promise.resolve([])
-    }
-  );
+  // Set up polling for checked-in clients (10 second interval)
+  const queryOptions = sessionId 
+    ? api.trainingSession.getCheckedInClients.queryOptions({ sessionId })
+    : null;
+
+  const { data: clientsData, isLoading } = useQuery({
+    ...queryOptions,
+    enabled: !!sessionId && !!queryOptions,
+    refetchInterval: 10000, // Poll every 10 seconds
+    refetchIntervalInBackground: true, // Keep polling even when tab is not focused
+  });
 
   // Check for existing workout selections
   const { data: existingSelections, isLoading: selectionsLoading, error: selectionsError } = useQuery(
@@ -386,8 +389,9 @@ export function GlobalPreferencesScreen() {
   }, [isStatusConnected]);
 
   useEffect(() => {
-    if (clientsData) {
-      console.log('[TV GlobalPreferences] Setting initial data:', clientsData);
+    if (clientsData && !isLoading) {
+      console.log('[TV GlobalPreferences] Updating from polled data:', clientsData?.length || 0, 'clients');
+      
       // Transform the checked-in clients data to match our preference structure
       const transformedData: ClientPreference[] = clientsData.map((client: any) => {
         // Parse workoutType to determine sessionGoal and includeFinisher
@@ -408,9 +412,11 @@ export function GlobalPreferencesScreen() {
           notes: null
         };
       });
+      
+      // Update clients from polling
       setClients(transformedData);
     }
-  }, [clientsData]);
+  }, [clientsData, isLoading]);
 
   const getAvatarUrl = (userId: string) => {
     return `https://api.dicebear.com/7.x/avataaars/png?seed=${userId}&size=128`;
