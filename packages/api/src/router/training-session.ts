@@ -820,6 +820,84 @@ export const trainingSessionRouter = {
       return returnValue;
     }),
 
+  // Complete session with name update
+  completeSessionWithName: protectedProcedure
+    .input(
+      z.object({
+        sessionId: z.string().uuid(),
+        name: z.string().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      console.log("[completeSessionWithName] Starting with input:", input);
+      
+      const user = ctx.session?.user as SessionUser;
+      console.log("[completeSessionWithName] User:", { id: user.id, role: user.role, businessId: user.businessId });
+
+      // Only trainers can complete sessions
+      if (user.role !== "trainer") {
+        console.log("[completeSessionWithName] User is not a trainer, throwing error");
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Only trainers can complete sessions",
+        });
+      }
+
+      // Get the session
+      console.log("[completeSessionWithName] Fetching session from database...");
+      const session = await ctx.db.query.TrainingSession.findFirst({
+        where: and(
+          eq(TrainingSession.id, input.sessionId),
+          eq(TrainingSession.businessId, user.businessId),
+        ),
+      });
+      
+      console.log("[completeSessionWithName] Session found:", !!session);
+
+      if (!session) {
+        console.log("[completeSessionWithName] Session not found, throwing error");
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Session not found",
+        });
+      }
+
+      // Validate current status
+      console.log("[completeSessionWithName] Validating session status:", session.status);
+      if (session.status !== "in_progress" && session.status !== "open") {
+        console.log("[completeSessionWithName] Invalid status for completion");
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `Cannot complete session. Current status is ${session.status}. Session must be 'open' or 'in_progress' to complete.`,
+        });
+      }
+
+      // Update status and name
+      console.log("[completeSessionWithName] Updating session status to completed and name to:", input.name);
+      try {
+        if (input.name) {
+          // Update both status and name
+          await ctx.db.execute(
+            sql`UPDATE training_session SET status = 'completed', name = ${input.name} WHERE id = ${input.sessionId}`
+          );
+        } else {
+          // Just update status
+          await ctx.db.execute(
+            sql`UPDATE training_session SET status = 'completed' WHERE id = ${input.sessionId}`
+          );
+        }
+        console.log("[completeSessionWithName] Update successful");
+      } catch (error) {
+        console.error("[completeSessionWithName] Error during update:", error);
+        throw error;
+      }
+
+      const returnValue = { success: true, sessionId: input.sessionId };
+      console.log("[completeSessionWithName] Returning:", returnValue);
+      
+      return returnValue;
+    }),
+
   // Cancel a session (open -> cancelled)
   cancelSession: protectedProcedure
     .input(

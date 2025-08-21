@@ -1,7 +1,7 @@
-import React from 'react';
-import { View, Text, Pressable } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, Pressable, Alert, ActivityIndicator } from 'react-native';
 import { useNavigation } from '../App';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { api } from '../providers/TRPCProvider';
 
 // Design tokens - matching other screens
@@ -72,6 +72,7 @@ export function WorkoutCompleteScreen() {
   const navigation = useNavigation();
   const sessionId = navigation.getParam('sessionId');
   const totalRounds = navigation.getParam('totalRounds') || 1;
+  const [isCompleting, setIsCompleting] = useState(false);
   
   // Get the passed data to ensure we can navigate back properly
   const organization = navigation.getParam('organization');
@@ -87,6 +88,41 @@ export function WorkoutCompleteScreen() {
     }
   );
 
+  // Complete session mutation with name update
+  const completeSessionMutation = useMutation({
+    ...api.trainingSession.completeSessionWithName.mutationOptions(),
+    onSuccess: () => {
+      console.log('[WorkoutCompleteScreen] Session completed successfully');
+      // Navigate to main screen
+      navigation.navigate('Main');
+    },
+    onError: (error: any) => {
+      console.error('[WorkoutCompleteScreen] Failed to complete session:', error);
+      setIsCompleting(false);
+      Alert.alert(
+        'Complete Failed',
+        error.message || 'Failed to complete workout. Please try again.',
+        [{ text: 'OK' }]
+      );
+    },
+  });
+
+  // Function to generate session name from client names
+  const generateSessionName = () => {
+    if (!clients || clients.length === 0) return 'Training Session';
+    
+    const names = clients.map(c => c.userName || c.name || 'Unknown');
+    
+    if (names.length <= 4) {
+      return names.join(' • ');
+    } else {
+      const firstThree = names.slice(0, 3);
+      const remaining = names.length - 3;
+      return `${firstThree.join(' • ')} +${remaining} more`;
+    }
+  };
+
+
   const handleBackToLastRound = () => {
     // Navigate back to the last round with all necessary data
     navigation.navigate('WorkoutLive', { 
@@ -96,6 +132,30 @@ export function WorkoutCompleteScreen() {
       workouts,
       clients
     });
+  };
+
+  const handleCompleteWorkout = () => {
+    if (isCompleting) return;
+    
+    Alert.alert(
+      'Complete Workout',
+      'Are you sure you want to complete this workout?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Complete',
+          style: 'default',
+          onPress: () => {
+            setIsCompleting(true);
+            const sessionName = generateSessionName();
+            completeSessionMutation.mutate({ 
+              sessionId,
+              name: sessionName
+            });
+          }
+        }
+      ]
+    );
   };
 
   return (
@@ -161,13 +221,11 @@ export function WorkoutCompleteScreen() {
             )}
           </Pressable>
           
-          {/* Complete button (static for now) */}
+          {/* Complete button */}
           <Pressable
-            onPress={() => {
-              // No functionality for now as requested
-              console.log('[WorkoutCompleteScreen] Complete button pressed (no action)');
-            }}
+            onPress={handleCompleteWorkout}
             focusable
+            disabled={isCompleting}
           >
             {({ focused }) => (
               <MattePanel 
@@ -179,16 +237,21 @@ export function WorkoutCompleteScreen() {
                   borderColor: focused ? TOKENS.color.accent : TOKENS.color.borderGlass,
                   borderWidth: 2,
                   transform: focused ? [{ translateY: -1 }] : [],
+                  opacity: isCompleting ? 0.5 : 1,
                 }}
               >
-                <Text style={{ 
-                  color: focused ? TOKENS.color.bg : TOKENS.color.accent, 
-                  fontSize: 20, 
-                  letterSpacing: 0.2,
-                  fontWeight: '700'
-                }}>
-                  Complete Workout
-                </Text>
+                {isCompleting ? (
+                  <ActivityIndicator size="small" color={focused ? TOKENS.color.bg : TOKENS.color.accent} />
+                ) : (
+                  <Text style={{ 
+                    color: focused ? TOKENS.color.bg : TOKENS.color.accent, 
+                    fontSize: 20, 
+                    letterSpacing: 0.2,
+                    fontWeight: '700'
+                  }}>
+                    Complete Workout
+                  </Text>
+                )}
               </MattePanel>
             )}
           </Pressable>
