@@ -24,11 +24,12 @@ import { SessionLobbyScreen } from './screens/SessionLobbyScreen';
 import { GlobalPreferencesScreen } from './screens/GlobalPreferencesScreen';
 import { WorkoutOverviewScreen } from './screens/WorkoutOverviewScreen';
 import { WorkoutLiveScreen } from './screens/WorkoutLiveScreen';
+import { WorkoutCompleteScreen } from './screens/WorkoutCompleteScreen';
 import { SessionMonitorScreen } from './screens/SessionMonitorScreen';
 import { TestTailwindScreen } from './screens/TestTailwindScreen';
 
 
-type ScreenName = 'Main' | 'SessionLobby' | 'GlobalPreferences' | 'WorkoutOverview' | 'WorkoutLive' | 'SessionMonitor' | 'TestTailwind';
+type ScreenName = 'Main' | 'SessionLobby' | 'GlobalPreferences' | 'WorkoutOverview' | 'WorkoutLive' | 'WorkoutComplete' | 'SessionMonitor' | 'TestTailwind';
 
 interface NavigationState {
   currentScreen: ScreenName;
@@ -138,6 +139,9 @@ function NavigationContainer({ children }: { children: React.ReactNode }) {
             {console.log('[App] Rendering WorkoutLiveScreen')}
             <WorkoutLiveScreen />
           </>
+        )}
+        {navigationState.currentScreen === 'WorkoutComplete' && (
+          <WorkoutCompleteScreen />
         )}
         {navigationState.currentScreen === 'SessionMonitor' && (
           <SessionMonitorScreen />

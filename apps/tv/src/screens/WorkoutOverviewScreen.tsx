@@ -315,10 +315,13 @@ export function WorkoutOverviewScreen() {
             // Check if workout is already organized
             if (sessionData?.workoutOrganization) {
               console.log('[TV WorkoutOverview] Workout already organized, navigating directly');
-              // Navigate directly without loading screen
+              // Navigate directly without loading screen but with necessary data
               navigation.navigate('WorkoutLive', { 
                 sessionId, 
-                round: 1
+                round: 1,
+                organization: sessionData.workoutOrganization,
+                workouts: selections, // Use the current selections
+                clients: localClients // Use the local clients state
               });
             } else {
               // Show loading screen for Phase 2 organization

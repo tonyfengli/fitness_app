@@ -207,5 +207,12 @@ export function WorkoutLiveScreen() {
     );
   }
   
-  return <RoundView sessionId={sessionId} round={round} workouts={workouts} roundsData={roundsData} />;
+  return <RoundView 
+    sessionId={sessionId} 
+    round={round} 
+    workouts={workouts} 
+    roundsData={roundsData} 
+    organization={passedOrganization}
+    clients={passedClients}
+  />;
 }

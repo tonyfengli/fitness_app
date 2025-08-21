@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, Pressable } from 'react-native';
+import { useNavigation } from '../App';
 
 // Types
 type Assignment = { clientName: string; tag: string };
@@ -95,8 +96,8 @@ function MattePanel({
   );
 }
 
-// Example rounds data
-const ROUNDS: RoundData[] = [
+// Fallback/demo rounds data - only used when no real workout data is provided
+const DEMO_ROUNDS: RoundData[] = [
   {
     label: "Round 1 • Warm-Up",
     workSeconds: 180,
@@ -209,9 +210,13 @@ interface RoundViewProps {
   round?: number;
   workouts?: any[];
   roundsData?: RoundData[];
+  organization?: any;
+  clients?: any[];
 }
 
-export default function RoundView({ sessionId, round, workouts, roundsData }: RoundViewProps = {}) {
+export default function RoundView({ sessionId, round, workouts, roundsData, organization, clients }: RoundViewProps = {}) {
+  const navigation = useNavigation();
+  
   // Use real data if provided, otherwise fall back to mock data
   console.log('[RoundView] Props received:', { 
     hasSessionId: !!sessionId, 
@@ -220,8 +225,8 @@ export default function RoundView({ sessionId, round, workouts, roundsData }: Ro
     hasRoundsData: !!roundsData,
     roundsDataLength: roundsData?.length 
   });
-  const rounds = roundsData && roundsData.length > 0 ? roundsData : ROUNDS;
-  console.log('[RoundView] Using rounds:', rounds.length, 'from', roundsData?.length > 0 ? 'real data' : 'mock data');
+  const rounds = roundsData && roundsData.length > 0 ? roundsData : DEMO_ROUNDS;
+  console.log('[RoundView] Using rounds:', rounds.length, 'from', roundsData?.length > 0 ? 'real data' : 'demo data');
   
   const [currentRoundIndex, setCurrentRoundIndex] = useState(0);
   const [phase, setPhase] = useState<"work" | "rest">("work");
@@ -234,9 +239,22 @@ export default function RoundView({ sessionId, round, workouts, roundsData }: Ro
   
   // Navigation functions
   const goToNextRound = () => {
-    setCurrentRoundIndex((prev) => (prev + 1) % rounds.length);
-    setPhase("work");
-    setTimeRemaining(600); // 10 minutes
+    // Check if we're on the last round
+    if (currentRoundIndex === rounds.length - 1) {
+      // Navigate to completion screen with all necessary data
+      navigation.navigate('WorkoutComplete', { 
+        sessionId, 
+        totalRounds: rounds.length,
+        organization,
+        workouts,
+        clients
+      });
+    } else {
+      // Go to next round
+      setCurrentRoundIndex((prev) => prev + 1);
+      setPhase("work");
+      setTimeRemaining(600); // 10 minutes
+    }
   };
   
   const goToPreviousRound = () => {
