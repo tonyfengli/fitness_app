@@ -100,14 +100,7 @@ export function useRealtimePreferences({
       clearTimeout(timeoutId);
       console.log('[TV] Cleaning up preferences realtime subscription');
       if (channelRef.current) {
-        // Try unsubscribe first, then remove
         channelRef.current.unsubscribe();
-        
-        // Small delay before removal
-        setTimeout(() => {
-          supabase.removeChannel(channelRef.current!);
-        }, 50);
-        
         channelRef.current = null;
       }
       setIsConnected(false);

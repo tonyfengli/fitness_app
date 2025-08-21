@@ -119,16 +119,9 @@ export function useRealtimeCheckIns({
       if (channelRef.current) {
         const channelName = channelRef.current.topic;
         console.log(`[useRealtimeCheckIns] 🔌 Unsubscribing from channel: ${channelName}`);
-        // Try unsubscribe first, then remove
         channelRef.current.unsubscribe();
-        
-        // Small delay before removal
-        setTimeout(() => {
-          supabase.removeChannel(channelRef.current!);
-          console.log(`[useRealtimeCheckIns] ✅ Channel ${channelName} cleaned up`);
-        }, 50);
-        
         channelRef.current = null;
+        console.log(`[useRealtimeCheckIns] ✅ Channel ${channelName} cleaned up`);
       }
       setIsConnected(false);
     };
