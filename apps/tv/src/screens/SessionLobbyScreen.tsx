@@ -310,8 +310,39 @@ export function SessionLobbyScreen() {
         <MattePanel style={{ flex: 1, padding: 16 }}>
           {fetchError ? (
             <View className="flex-1 items-center justify-center p-12">
-              <Text style={{ color: '#ef4444' }}>Error loading clients</Text>
-              <Text style={{ color: TOKENS.color.muted, fontSize: 14, marginTop: 8 }}>{fetchError.message || 'Unknown error'}</Text>
+              {/* Error icon */}
+              <View className="bg-gray-800 rounded-full w-20 h-20 items-center justify-center mb-4">
+                <Icon 
+                  name={
+                    fetchError.message?.toLowerCase().includes('network') || 
+                    fetchError.message?.toLowerCase().includes('fetch failed') ||
+                    fetchError.message?.toLowerCase().includes('failed to fetch')
+                      ? "wifi-off" 
+                      : "error-outline"
+                  } 
+                  size={40} 
+                  color="#ef4444" 
+                />
+              </View>
+              
+              <Text style={{ fontSize: 20, color: '#ef4444', fontWeight: '600', marginBottom: 8 }}>
+                {fetchError.message?.toLowerCase().includes('network') || 
+                 fetchError.message?.toLowerCase().includes('fetch failed') ||
+                 fetchError.message?.toLowerCase().includes('failed to fetch')
+                  ? 'No Internet Connection'
+                  : fetchError.message?.toLowerCase().includes('timeout')
+                  ? 'Connection Timed Out'
+                  : 'Unable to Load Clients'}
+              </Text>
+              <Text style={{ color: TOKENS.color.muted, fontSize: 16, textAlign: 'center', paddingHorizontal: 24 }}>
+                {fetchError.message?.toLowerCase().includes('network') || 
+                 fetchError.message?.toLowerCase().includes('fetch failed') ||
+                 fetchError.message?.toLowerCase().includes('failed to fetch')
+                  ? 'Please check your internet connection'
+                  : fetchError.message?.toLowerCase().includes('timeout')
+                  ? 'The request took too long. Please check your connection.'
+                  : fetchError.message || 'Something went wrong while loading clients'}
+              </Text>
             </View>
           ) : isLoading || !hasLoadedInitialData ? (
             <View className="flex-1 items-center justify-center">

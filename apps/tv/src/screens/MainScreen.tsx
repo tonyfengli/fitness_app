@@ -141,7 +141,16 @@ export function MainScreen() {
       navigation.navigate('SessionLobby', { sessionId: newSession.id });
     },
     onError: (error: any) => {
-      console.error('[MainScreen] ❌ Failed to create session:', error);
+      // Enhanced error logging
+      console.error('[MainScreen] ❌ Failed to create session:', {
+        error: error,
+        errorType: error.constructor.name,
+        message: error.message,
+        code: error.code || error.data?.code,
+        httpStatus: error.data?.httpStatus,
+        stack: error.stack,
+        timestamp: new Date().toISOString()
+      });
       
       // Hide template selector
       setShowTemplates(false);
@@ -162,10 +171,56 @@ export function MainScreen() {
             onDismiss: () => console.log('[MainScreen] Alert dismissed')
           }
         );
-      } else {
+      } 
+      // Network/Connection errors
+      else if (
+        error.message?.toLowerCase().includes('fetch failed') || 
+        error.message?.toLowerCase().includes('network') ||
+        error.message?.toLowerCase().includes('failed to fetch') ||
+        error.code === 'ERR_NETWORK'
+      ) {
+        Alert.alert(
+          'No Internet Connection',
+          'Please check your internet connection and try again.',
+          [{ text: 'OK' }]
+        );
+      }
+      // Timeout errors
+      else if (
+        error.code === 'TIMEOUT' || 
+        error.message?.toLowerCase().includes('timeout')
+      ) {
+        Alert.alert(
+          'Request Timed Out',
+          'The request took too long. This might be due to a slow connection.',
+          [{ text: 'OK' }]
+        );
+      }
+      // Server errors
+      else if (error.data?.httpStatus >= 500) {
+        Alert.alert(
+          'Server Unavailable',
+          'Our servers are temporarily unavailable. Please try again in a few moments.',
+          [{ text: 'OK' }]
+        );
+      }
+      // Authentication errors
+      else if (
+        error.code === 'UNAUTHORIZED' || 
+        error.code === 'FORBIDDEN' ||
+        error.data?.code === 'UNAUTHORIZED'
+      ) {
+        Alert.alert(
+          'Authentication Required',
+          'Your session has expired. Please restart the app to sign in again.',
+          [{ text: 'OK' }]
+        );
+      }
+      // Generic error fallback
+      else {
         Alert.alert(
           'Unable to Create Session',
-          'Something went wrong while creating the session. Please try again.',
+          error.message || 'Something went wrong while creating the session. Please try again.',
           [{ text: 'OK' }]
         );
       }
