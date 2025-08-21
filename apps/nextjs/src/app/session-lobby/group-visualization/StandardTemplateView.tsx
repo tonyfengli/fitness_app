@@ -59,6 +59,9 @@ export default function StandardTemplateView({
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   
+  // State for main phase tabs
+  const [mainPhaseTab, setMainPhaseTab] = useState<"phase1" | "phase2">("phase1");
+  
   const trpc = useTRPC();
   
   // Fetch exercise selections (includes workout exercises and swap history)
@@ -258,27 +261,58 @@ export default function StandardTemplateView({
           </div>
         </div>
 
-        {/* Tabs */}
+        {/* Main Phase Tabs */}
         <div className="rounded-lg bg-white shadow-sm">
           <div className="border-b border-gray-200">
             <nav className="-mb-px flex">
-              {allTabs.map((tab) => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`px-6 py-3 text-sm font-medium ${
-                    activeTab === tab.id
-                      ? "border-b-2 border-indigo-500 text-indigo-600"
-                      : "text-gray-500 hover:text-gray-700"
-                  }`}
-                >
-                  {tab.name}
-                </button>
-              ))}
+              <button
+                onClick={() => setMainPhaseTab("phase1")}
+                className={`px-6 py-3 text-sm font-medium ${
+                  mainPhaseTab === "phase1"
+                    ? "border-b-2 border-indigo-500 text-indigo-600"
+                    : "text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                Phase 1
+              </button>
+              <button
+                onClick={() => setMainPhaseTab("phase2")}
+                className={`px-6 py-3 text-sm font-medium ${
+                  mainPhaseTab === "phase2"
+                    ? "border-b-2 border-indigo-500 text-indigo-600"
+                    : "text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                Phase 2
+              </button>
             </nav>
           </div>
 
           <div className="p-6">
+            {/* Phase 1 Content */}
+            {mainPhaseTab === "phase1" && (
+              <div>
+                {/* Sub-tabs for clients */}
+                <div className="mb-6 border-b border-gray-200">
+                  <nav className="-mb-px flex">
+                    {allTabs.map((tab) => (
+                      <button
+                        key={tab.id}
+                        onClick={() => setActiveTab(tab.id)}
+                        className={`px-4 py-2 text-sm font-medium ${
+                          activeTab === tab.id
+                            ? "border-b-2 border-indigo-500 text-indigo-600"
+                            : "text-gray-500 hover:text-gray-700"
+                        }`}
+                      >
+                        {tab.name}
+                      </button>
+                    ))}
+                  </nav>
+                </div>
+
+                {/* Phase 1 Sub-tab Content */}
+                <div>
             {/* Client Exercise Tables */}
             {clientTabs.map((clientTab) => {
               if (activeTab !== clientTab.id) return null;
@@ -1823,6 +1857,19 @@ export default function StandardTemplateView({
                       })}
                     </tbody>
                   </table>
+                </div>
+              </div>
+            )}
+                </div>
+              </div>
+            )}
+
+            {/* Phase 2 Content */}
+            {mainPhaseTab === "phase2" && (
+              <div>
+                <div className="text-center py-12">
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">Phase 2</h3>
+                  <p className="text-gray-600">Phase 2 content coming soon...</p>
                 </div>
               </div>
             )}
