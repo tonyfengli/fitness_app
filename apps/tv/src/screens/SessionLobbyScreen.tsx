@@ -90,6 +90,17 @@ interface CheckedInClient {
   isNew?: boolean;
 }
 
+// Helper function to format time in 12-hour format with AM/PM
+function formatTime12Hour(date: Date): string {
+  const hours = date.getHours();
+  const minutes = date.getMinutes();
+  const seconds = date.getSeconds();
+  const ampm = hours >= 12 ? 'PM' : 'AM';
+  const hours12 = hours % 12 || 12;
+  
+  return `${hours12}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')} ${ampm}`;
+}
+
 export function SessionLobbyScreen() {
   const navigation = useNavigation();
   const { businessId, isLoading: isBusinessLoading } = useBusiness();
@@ -98,6 +109,8 @@ export function SessionLobbyScreen() {
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected'>('disconnected');
   const [isStartingSession, setIsStartingSession] = useState(false);
   const [hasLoadedInitialData, setHasLoadedInitialData] = useState(false);
+  const [lastSuccessfulFetch, setLastSuccessfulFetch] = useState<Date | null>(null);
+  const [connectionState, setConnectionState] = useState<'connecting' | 'connected' | 'error'>('connecting');
 
   // Set up polling for checked-in clients (3 second interval)
   const queryOptions = sessionId 
@@ -142,6 +155,13 @@ export function SessionLobbyScreen() {
       console.log('[TV SessionLobby] Updating clients from polled data:', polledClients?.length || 0, 'clients');
       setHasLoadedInitialData(true);
       
+      // Update last successful fetch timestamp on success
+      if (!fetchError) {
+        const now = new Date();
+        setLastSuccessfulFetch(now);
+        setConnectionState('connected');
+      }
+      
       // Update clients list from polling, preserving the isNew flag for recently added clients
       setClients(prev => {
         const newClientIds = new Set(prev.filter(c => c.isNew).map(c => c.userId));
@@ -154,7 +174,15 @@ export function SessionLobbyScreen() {
         }));
       });
     }
-  }, [polledClients, isLoading]);
+  }, [polledClients, isLoading, fetchError]);
+  
+  // Handle fetch errors
+  useEffect(() => {
+    if (fetchError && !isLoading) {
+      console.log('[TV SessionLobby] Fetch error detected:', fetchError);
+      setConnectionState('error');
+    }
+  }, [fetchError, isLoading]);
 
   // Handle new check-ins from real-time
   const handleCheckIn = useCallback((event: { userId: string; name: string; checkedInAt: string; status?: string }) => {
@@ -413,11 +441,14 @@ export function SessionLobbyScreen() {
           <View className="flex-row items-center">
             <View 
               className={`w-3 h-3 rounded-full mr-2 ${
-                connectionStatus === 'connected' ? 'bg-green-400' : 'bg-yellow-400'
+                connectionState === 'connecting' ? 'bg-gray-400' :
+                connectionState === 'connected' ? 'bg-green-400' : 'bg-red-400'
               }`} 
             />
             <Text style={{ fontSize: 16, color: TOKENS.color.text }}>
-              {connectionStatus === 'connected' ? 'Live + Polling' : 'Polling Only'}
+              {connectionState === 'connecting' ? 'Connecting...' :
+               connectionState === 'connected' ? `Live - ${lastSuccessfulFetch ? formatTime12Hour(lastSuccessfulFetch) : 'connecting'}` :
+               `Last connected: ${lastSuccessfulFetch ? formatTime12Hour(lastSuccessfulFetch) : 'never'}`}
             </Text>
           </View>
           

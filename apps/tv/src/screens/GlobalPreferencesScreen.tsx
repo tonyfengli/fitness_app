@@ -88,15 +88,26 @@ interface ClientPreference {
   notes?: string | null;
 }
 
+// Helper function to format time in 12-hour format with AM/PM
+function formatTime12Hour(date: Date): string {
+  const hours = date.getHours();
+  const minutes = date.getMinutes();
+  const seconds = date.getSeconds();
+  const ampm = hours >= 12 ? 'PM' : 'AM';
+  const hours12 = hours % 12 || 12;
+  
+  return `${hours12}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')} ${ampm}`;
+}
+
 export function GlobalPreferencesScreen() {
   const navigation = useNavigation();
   const queryClient = useQueryClient();
   const sessionId = navigation.getParam('sessionId');
   const [clients, setClients] = useState<ClientPreference[]>([]);
-  const [connectionStatus, setConnectionStatus] = useState<'connected' | 'connecting'>('connecting');
-  const [statusConnectionStatus, setStatusConnectionStatus] = useState<'connected' | 'connecting'>('connecting');
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationError, setGenerationError] = useState<string | null>(null);
+  const [lastSuccessfulFetch, setLastSuccessfulFetch] = useState<Date | null>(null);
+  const [connectionState, setConnectionState] = useState<'connecting' | 'connected' | 'error'>('connecting');
   
 
   // Set up polling for checked-in clients (10 second interval)
@@ -104,7 +115,7 @@ export function GlobalPreferencesScreen() {
     ? api.trainingSession.getCheckedInClients.queryOptions({ sessionId })
     : null;
 
-  const { data: clientsData, isLoading } = useQuery({
+  const { data: clientsData, isLoading, error: fetchError } = useQuery({
     ...queryOptions,
     enabled: !!sessionId && !!queryOptions,
     refetchInterval: 10000, // Poll every 10 seconds
@@ -381,19 +392,18 @@ export function GlobalPreferencesScreen() {
   }, [blueprintError, isGenerating]);
 
   useEffect(() => {
-    setConnectionStatus(isConnected ? 'connected' : 'connecting');
-  }, [isConnected]);
-
-  useEffect(() => {
-    setStatusConnectionStatus(isStatusConnected ? 'connected' : 'connecting');
-  }, [isStatusConnected]);
-
-  useEffect(() => {
-    if (clientsData && !isLoading) {
+    if (clientsData !== undefined && !isLoading) {
       console.log('[TV GlobalPreferences] Updating from polled data:', clientsData?.length || 0, 'clients');
       
+      // Update last successful fetch timestamp on success
+      if (!fetchError) {
+        const now = new Date();
+        setLastSuccessfulFetch(now);
+        setConnectionState('connected');
+      }
+      
       // Transform the checked-in clients data to match our preference structure
-      const transformedData: ClientPreference[] = clientsData.map((client: any) => {
+      const transformedData: ClientPreference[] = (clientsData || []).map((client: any) => {
         // Parse workoutType to determine sessionGoal and includeFinisher
         const workoutType = client.preferences?.workoutType || 'full_body_with_finisher';
         const includeFinisher = workoutType.includes('with_finisher');
@@ -416,7 +426,15 @@ export function GlobalPreferencesScreen() {
       // Update clients from polling
       setClients(transformedData);
     }
-  }, [clientsData, isLoading]);
+  }, [clientsData, isLoading, fetchError]);
+  
+  // Handle fetch errors
+  useEffect(() => {
+    if (fetchError && !isLoading) {
+      console.log('[TV GlobalPreferences] Fetch error detected:', fetchError);
+      setConnectionState('error');
+    }
+  }, [fetchError, isLoading]);
 
   const getAvatarUrl = (userId: string) => {
     return `https://api.dicebear.com/7.x/avataaars/png?seed=${userId}&size=128`;
@@ -752,11 +770,16 @@ export function GlobalPreferencesScreen() {
       {/* Connection Status - Bottom */}
       <View className="mt-6 px-4">
         <View className="flex-row items-center">
-          <View className={`w-3 h-3 rounded-full mr-2 ${
-            connectionStatus === 'connected' && statusConnectionStatus === 'connected' ? 'bg-green-400' : 'bg-gray-400'
-          }`} />
+          <View 
+            className={`w-3 h-3 rounded-full mr-2 ${
+              connectionState === 'connecting' ? 'bg-gray-400' :
+              connectionState === 'connected' ? 'bg-green-400' : 'bg-red-400'
+            }`} 
+          />
           <Text style={{ fontSize: 16, color: TOKENS.color.text }}>
-            {connectionStatus === 'connected' && statusConnectionStatus === 'connected' ? 'Live updates active' : 'Connecting...'}
+            {connectionState === 'connecting' ? 'Connecting...' :
+             connectionState === 'connected' ? `Live - ${lastSuccessfulFetch ? formatTime12Hour(lastSuccessfulFetch) : 'connecting'}` :
+             `Last connected: ${lastSuccessfulFetch ? formatTime12Hour(lastSuccessfulFetch) : 'never'}`}
           </Text>
         </View>
       </View>
