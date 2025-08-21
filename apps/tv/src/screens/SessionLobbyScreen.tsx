@@ -99,15 +99,17 @@ export function SessionLobbyScreen() {
   const [isStartingSession, setIsStartingSession] = useState(false);
   const [hasLoadedInitialData, setHasLoadedInitialData] = useState(false);
 
-  // Fetch initial checked-in clients using TRPC
-  console.log('[SessionLobby] 🔍 Setting up query for sessionId:', sessionId);
-  const { data: initialClients, isLoading, error: fetchError } = useQuery(
-    sessionId ? api.trainingSession.getCheckedInClients.queryOptions({ sessionId }) : {
-      enabled: false,
-      queryKey: ['disabled'],
-      queryFn: () => Promise.resolve([])
-    }
-  );
+  // Set up polling for checked-in clients (3 second interval)
+  const queryOptions = sessionId 
+    ? api.trainingSession.getCheckedInClients.queryOptions({ sessionId })
+    : null;
+
+  const { data: polledClients, isLoading, error: fetchError } = useQuery({
+    ...queryOptions,
+    enabled: !!sessionId && !!queryOptions,
+    refetchInterval: 10000, // Poll every 10 seconds
+    refetchIntervalInBackground: true, // Keep polling even when tab is not focused
+  });
 
   // Debug logging
   useEffect(() => {
@@ -115,7 +117,7 @@ export function SessionLobbyScreen() {
       sessionId,
       isLoading,
       fetchError,
-      initialClients,
+      polledClients,
       clientsCount: clients.length
     });
     
@@ -125,7 +127,7 @@ export function SessionLobbyScreen() {
       console.error('[TV SessionLobby] Error stack:', fetchError.stack);
       console.error('[TV SessionLobby] Full error:', fetchError);
     }
-  }, [sessionId, isLoading, fetchError, initialClients, clients]);
+  }, [sessionId, isLoading, fetchError, polledClients, clients]);
 
   // Clear clients when sessionId changes
   useEffect(() => {
@@ -134,31 +136,25 @@ export function SessionLobbyScreen() {
     setHasLoadedInitialData(false);
   }, [sessionId]);
 
-  // Set initial clients when data loads
+  // Update clients from polling data
   useEffect(() => {
-    if (!isLoading && initialClients !== undefined) {
-      console.log('[TV SessionLobby] Setting clients from initial data:', initialClients);
-      console.log('[TV SessionLobby] Client details:');
-      initialClients?.forEach((client: any, index: number) => {
-        console.log(`[TV SessionLobby] Client ${index + 1}:`, {
-          userId: client.userId,
-          userName: client.userName,
-          status: client.status,
-          checkedInAt: client.checkedInAt,
-          hasPreferences: !!client.preferences,
-          preferenceKeys: client.preferences ? Object.keys(client.preferences) : []
-        });
-      });
+    if (!isLoading && polledClients !== undefined) {
+      console.log('[TV SessionLobby] Updating clients from polled data:', polledClients?.length || 0, 'clients');
       setHasLoadedInitialData(true);
-      if (initialClients && initialClients.length > 0) {
-        setClients(initialClients.map((client: any) => ({
+      
+      // Update clients list from polling, preserving the isNew flag for recently added clients
+      setClients(prev => {
+        const newClientIds = new Set(prev.filter(c => c.isNew).map(c => c.userId));
+        
+        return (polledClients || []).map((client: any) => ({
           ...client,
           preferences: client.preferences,
-          status: client.status // Make sure we're preserving status
-        })));
-      }
+          status: client.status,
+          isNew: newClientIds.has(client.userId) // Preserve animation flag
+        }));
+      });
     }
-  }, [initialClients, isLoading]);
+  }, [polledClients, isLoading]);
 
   // Handle new check-ins from real-time
   const handleCheckIn = useCallback((event: { userId: string; name: string; checkedInAt: string; status?: string }) => {
@@ -386,11 +382,11 @@ export function SessionLobbyScreen() {
           <View className="flex-row items-center">
             <View 
               className={`w-3 h-3 rounded-full mr-2 ${
-                connectionStatus === 'connected' ? 'bg-green-400' : 'bg-red-400'
+                connectionStatus === 'connected' ? 'bg-green-400' : 'bg-yellow-400'
               }`} 
             />
             <Text style={{ fontSize: 16, color: TOKENS.color.text }}>
-              {connectionStatus === 'connected' ? 'Connected' : 'Disconnected'}
+              {connectionStatus === 'connected' ? 'Live + Polling' : 'Polling Only'}
             </Text>
           </View>
           
