@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useTRPC } from "~/trpc/react";
 import { useExerciseSelections } from "~/hooks/useExerciseSelections";
 
@@ -37,6 +37,69 @@ interface StandardTemplateViewProps {
 // Helper to format muscle names
 function formatMuscleName(muscle: string): string {
   return muscle.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase());
+}
+
+// Phase 2 Preview Component
+function Phase2PreviewContent({ sessionId }: { sessionId: string }) {
+  const trpc = useTRPC();
+  
+  // Fetch preprocessed data
+  const { data, isLoading, error } = useQuery({
+    ...trpc.trainingSession.previewPhase2Data.queryOptions({ sessionId }),
+    enabled: !!sessionId,
+  });
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-8">
+        <div className="text-gray-500">Loading preprocessed data...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="rounded-lg bg-red-50 p-4">
+        <p className="text-sm text-red-600">Error loading data: {error.message}</p>
+      </div>
+    );
+  }
+
+  if (!data) {
+    return (
+      <div className="text-center py-8">
+        <p className="text-gray-500">No data available</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Summary Stats */}
+      <div className="rounded-lg bg-gray-50 p-4">
+        <h4 className="text-sm font-medium text-gray-700 mb-2">Summary</h4>
+        <div className="text-sm text-gray-600">
+          <p>Total Exercises: {data.totalExercises}</p>
+          <p>Preprocessed At: {new Date(data.preprocessedAt).toLocaleString()}</p>
+        </div>
+      </div>
+
+      {/* Client Exercise Counts */}
+      <div className="space-y-2">
+        <h4 className="text-sm font-medium text-gray-700">Client Exercise Counts</h4>
+        {data.clients.map((client) => (
+          <div key={client.clientId} className="rounded-lg border border-gray-200 bg-white p-3">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium text-gray-900">{client.clientName}</span>
+              <span className="text-sm text-gray-600">
+                Total exercises: {client.exerciseCount}
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 export default function StandardTemplateView({
@@ -1867,9 +1930,9 @@ export default function StandardTemplateView({
             {/* Phase 2 Content */}
             {mainPhaseTab === "phase2" && (
               <div>
-                <div className="text-center py-12">
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">Phase 2</h3>
-                  <p className="text-gray-600">Phase 2 content coming soon...</p>
+                <div className="p-6">
+                  <h3 className="text-lg font-medium text-gray-900 mb-4">Phase 2 - Preprocessed Data</h3>
+                  <Phase2PreviewContent sessionId={groupContext.sessionId} />
                 </div>
               </div>
             )}

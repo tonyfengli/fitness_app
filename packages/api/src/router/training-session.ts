@@ -123,6 +123,62 @@ function getEquipmentFromExercise(exerciseName: string): string[] {
   return equipment.length > 0 ? equipment : ["none"];
 }
 
+/**
+ * Preprocesses Phase 2 data for improved LLM performance
+ * This function reorganizes and structures the workout data before sending to LLM
+ * 
+ * @param ctx - Database context
+ * @param sessionId - Training session ID
+ * @returns Preprocessed data ready for LLM input or visualization
+ */
+async function preprocessPhase2Data(
+  ctx: any,
+  sessionId: string
+): Promise<{
+  clients: Array<{
+    clientId: string;
+    clientName: string;
+    exerciseCount: number;
+  }>;
+  totalExercises: number;
+  preprocessedAt: string;
+}> {
+  // Get all workouts for this session
+  const workouts = await ctx.db.query.Workout.findMany({
+    where: eq(Workout.trainingSessionId, sessionId),
+  });
+
+  // Get exercises count and user info for each workout
+  const clientsData = await Promise.all(
+    workouts.map(async (workout) => {
+      // Get workout exercises count
+      const workoutExercises = await ctx.db.query.WorkoutExercise.findMany({
+        where: eq(WorkoutExercise.workoutId, workout.id),
+      });
+
+      // Get user info
+      const user = await ctx.db.query.user.findFirst({
+        where: eq(userTable.id, workout.userId),
+      });
+
+      return {
+        clientId: workout.userId,
+        clientName: user?.name || user?.email?.split('@')[0] || "Unknown",
+        exerciseCount: workoutExercises.length,
+      };
+    }),
+  );
+
+  // Calculate total exercises
+  const totalExercises = clientsData.reduce((sum, client) => sum + client.exerciseCount, 0);
+
+  return {
+    clients: clientsData,
+    totalExercises,
+    preprocessedAt: new Date().toISOString(),
+  };
+}
+
 export const trainingSessionRouter = {
   // Get deterministic exercise selections for a session
   getDeterministicSelections: protectedProcedure
@@ -3972,5 +4028,13 @@ Decision
               : "Failed to organize workout",
         });
       }
+    }),
+
+  // Temporary endpoint for testing Phase 2 preprocessing
+  previewPhase2Data: protectedProcedure
+    .input(z.object({ sessionId: z.string().uuid() }))
+    .query(async ({ ctx, input }) => {
+      const data = await preprocessPhase2Data(ctx, input.sessionId);
+      return data;
     }),
 } satisfies TRPCRouterRecord;
