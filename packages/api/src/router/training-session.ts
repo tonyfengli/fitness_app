@@ -28,6 +28,8 @@ import {
 
 import type { SessionUser } from "../types/auth";
 import { protectedProcedure, publicProcedure } from "../trpc";
+import { calculateRoundOrganization, calculateBundleSkeletons, type RoundOrganizationResult } from "../utils/roundOrganization";
+import { assignExerciseTiers, type ExerciseWithTier } from "../utils/exerciseTiers";
 
 // Helper function to calculate score distribution
 function calculateScoreDistribution(
@@ -142,19 +144,27 @@ async function preprocessPhase2Data(
   }>;
   totalExercises: number;
   preprocessedAt: string;
+  roundOrganization: RoundOrganizationResult;
+  exercisesWithTiers: ExerciseWithTier[];
 }> {
   // Get all workouts for this session
   const workouts = await ctx.db.query.Workout.findMany({
     where: eq(Workout.trainingSessionId, sessionId),
   });
 
-  // Get exercises count and user info for each workout
-  const clientsData = await Promise.all(
+  // Get exercises with details and user info for each workout
+  const clientsDataWithExercises = await Promise.all(
     workouts.map(async (workout) => {
-      // Get workout exercises count
-      const workoutExercises = await ctx.db.query.WorkoutExercise.findMany({
-        where: eq(WorkoutExercise.workoutId, workout.id),
-      });
+      // Get workout exercises with full exercise details
+      const workoutExercises = await ctx.db
+        .select({
+          id: WorkoutExercise.id,
+          exerciseId: WorkoutExercise.exerciseId,
+          exercise: exercises,
+        })
+        .from(WorkoutExercise)
+        .innerJoin(exercises, eq(WorkoutExercise.exerciseId, exercises.id))
+        .where(eq(WorkoutExercise.workoutId, workout.id));
 
       // Get user info
       const user = await ctx.db.query.user.findFirst({
@@ -165,17 +175,52 @@ async function preprocessPhase2Data(
         clientId: workout.userId,
         clientName: user?.name || user?.email?.split('@')[0] || "Unknown",
         exerciseCount: workoutExercises.length,
+        exercises: workoutExercises.map(we => ({
+          exerciseId: we.exerciseId,
+          clientId: workout.userId,
+          movementPattern: we.exercise.movementPattern,
+          equipment: we.exercise.equipment,
+          functionTags: we.exercise.functionTags,
+          primaryMuscle: we.exercise.primaryMuscle,
+          modality: we.exercise.modality,
+        })),
       };
     }),
   );
 
+  // Extract client data for round organization
+  const clientsData = clientsDataWithExercises.map(({ clientId, clientName, exerciseCount }) => ({
+    clientId,
+    clientName,
+    exerciseCount,
+  }));
+
+  // Collect all exercises across all clients
+  const allExercises = clientsDataWithExercises.flatMap(client => client.exercises);
+  
+  // Assign tiers to all exercises
+  const exercisesWithTiers = assignExerciseTiers(allExercises);
+
   // Calculate total exercises
   const totalExercises = clientsData.reduce((sum, client) => sum + client.exerciseCount, 0);
+
+  // Calculate round organization
+  let roundOrganization = calculateRoundOrganization(
+    clientsData.map(client => ({
+      clientId: client.clientId,
+      exerciseCount: client.exerciseCount,
+    }))
+  );
+
+  // Calculate bundle skeletons
+  roundOrganization = calculateBundleSkeletons(roundOrganization);
 
   return {
     clients: clientsData,
     totalExercises,
     preprocessedAt: new Date().toISOString(),
+    roundOrganization,
+    exercisesWithTiers,
   };
 }
 
