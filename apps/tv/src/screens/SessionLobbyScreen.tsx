@@ -105,33 +105,61 @@ export function SessionLobbyScreen() {
   const navigation = useNavigation();
   const { businessId, isLoading: isBusinessLoading } = useBusiness();
   const sessionId = navigation.getParam('sessionId');
+  const prefetchedData = navigation.getParam('prefetchedData');
+  const isNewSession = navigation.getParam('isNewSession');
+  
+  // Initial mount logging
+  console.log('[TV SessionLobby] 🚀 Component mounting with params:', {
+    sessionId,
+    isNewSession,
+    hasPrefetchedData: !!prefetchedData,
+    timestamp: new Date().toISOString()
+  });
+  
   const [clients, setClients] = useState<CheckedInClient[]>([]);
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected'>('disconnected');
   const [isStartingSession, setIsStartingSession] = useState(false);
-  const [hasLoadedInitialData, setHasLoadedInitialData] = useState(false);
+  // Initialize hasLoadedInitialData based on whether this is a new session
+  const [hasLoadedInitialData, setHasLoadedInitialData] = useState(() => {
+    const initialValue = isNewSession === true;
+    console.log('[TV SessionLobby] 📊 Initial hasLoadedInitialData:', initialValue, 'isNewSession:', isNewSession);
+    return initialValue;
+  });
   const [lastSuccessfulFetch, setLastSuccessfulFetch] = useState<Date | null>(null);
-  const [connectionState, setConnectionState] = useState<'connecting' | 'connected' | 'error'>('connecting');
+  const [connectionState, setConnectionState] = useState<'connecting' | 'connected' | 'error'>(() => {
+    const initialState = isNewSession ? 'connected' : 'connecting';
+    console.log('[TV SessionLobby] 🔌 Initial connectionState:', initialState);
+    return initialState;
+  });
 
   // Set up polling for checked-in clients (3 second interval)
   const queryOptions = sessionId 
     ? api.trainingSession.getCheckedInClients.queryOptions({ sessionId })
-    : null;
+    : {
+        queryKey: ['disabled-getCheckedInClients'],
+        queryFn: () => Promise.resolve([]),
+        enabled: false
+      };
 
   const { data: polledClients, isLoading, error: fetchError } = useQuery({
     ...queryOptions,
-    enabled: !!sessionId && !!queryOptions,
+    enabled: !!sessionId,
     refetchInterval: 10000, // Poll every 10 seconds
     refetchIntervalInBackground: true, // Keep polling even when tab is not focused
   });
 
   // Debug logging
   useEffect(() => {
-    console.log('[TV SessionLobby] Data state:', {
+    console.log('[TV SessionLobby] 🔍 Component state:', {
       sessionId,
+      isNewSession,
+      hasLoadedInitialData,
       isLoading,
       fetchError,
       polledClients,
-      clientsCount: clients.length
+      clientsCount: clients.length,
+      shouldShowLoading: (isLoading || !hasLoadedInitialData) && !isNewSession,
+      timestamp: new Date().toISOString()
     });
     
     if (fetchError) {
@@ -142,12 +170,30 @@ export function SessionLobbyScreen() {
     }
   }, [sessionId, isLoading, fetchError, polledClients, clients]);
 
+  // Initialize with pre-fetched data if available
+  useEffect(() => {
+    if (prefetchedData?.checkedInClients && !hasLoadedInitialData) {
+      console.log('[TV SessionLobby] Using pre-fetched data:', prefetchedData.checkedInClients.length, 'clients');
+      setClients(prefetchedData.checkedInClients);
+      setHasLoadedInitialData(true);
+      setConnectionState('connected');
+      setLastSuccessfulFetch(new Date());
+    } else if (isNewSession && !hasLoadedInitialData) {
+      console.log('[TV SessionLobby] New session created - skipping loading state');
+      setClients([]);
+      setHasLoadedInitialData(true);
+      setConnectionState('connected');
+    }
+  }, [prefetchedData, isNewSession, hasLoadedInitialData]);
+
   // Clear clients when sessionId changes
   useEffect(() => {
     console.log('[TV SessionLobby] Session changed, clearing clients. New sessionId:', sessionId);
-    setClients([]);
-    setHasLoadedInitialData(false);
-  }, [sessionId]);
+    if (!prefetchedData?.checkedInClients) {
+      setClients([]);
+      setHasLoadedInitialData(false);
+    }
+  }, [sessionId, prefetchedData]);
 
   // Update clients from polling data
   useEffect(() => {
@@ -372,12 +418,19 @@ export function SessionLobbyScreen() {
                   : fetchError.message || 'Something went wrong while loading clients'}
               </Text>
             </View>
-          ) : isLoading || !hasLoadedInitialData ? (
+          ) : (isLoading || !hasLoadedInitialData) && !isNewSession ? (
             <View className="flex-1 items-center justify-center">
+              {console.log('[TV SessionLobby] 🔄 Showing loading state:', { 
+                isLoading, 
+                hasLoadedInitialData,
+                isNewSession,
+                reason: isLoading ? 'isLoading=true' : 'hasLoadedInitialData=false'
+              })}
               <Text style={{ color: TOKENS.color.muted }}>Loading clients...</Text>
             </View>
           ) : clients.length === 0 ? (
             <View className="flex-1 items-center justify-center p-12">
+              {console.log('[TV SessionLobby] 📭 Showing empty state for new session')}
               {/* Icon placeholder - smaller size */}
               <View className="bg-gray-800 rounded-full w-20 h-20 items-center justify-center mb-4">
                 <Icon name="group-off" size={40} color={TOKENS.color.muted} />

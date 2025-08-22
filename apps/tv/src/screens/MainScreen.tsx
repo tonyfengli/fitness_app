@@ -5,7 +5,7 @@ import { useAuth } from '../providers/AuthProvider';
 import { supabase } from '../lib/supabase';
 import { useNavigation } from '../App';
 import { api } from '../providers/TRPCProvider';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 // Design tokens - matching TV app theme
 const TOKENS = {
@@ -92,12 +92,15 @@ interface TrainingSession {
 
 export function MainScreen() {
   const navigation = useNavigation();
+  const queryClient = useQueryClient();
   const { businessId } = useBusiness();
   const { user, isLoading: isAuthLoading, isAuthenticated, error: authError, retry, switchAccount, currentEnvironment } = useAuth();
   const [openSessions, setOpenSessions] = useState<TrainingSession[]>([]);
   const [isLoadingSessions, setIsLoadingSessions] = useState(false);
   const [isSwitching, setIsSwitching] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
+  const [loadingSessionId, setLoadingSessionId] = useState<string | null>(null);
+  const [sessionError, setSessionError] = useState<{ id: string; message: string } | null>(null);
   const firstTemplateRef = useRef<any>(null);
 
   // Template options matching the webapp
@@ -137,8 +140,11 @@ export function MainScreen() {
       // Refresh the sessions list
       fetchOpenSessions();
       
-      // Navigate to the new session
-      navigation.navigate('SessionLobby', { sessionId: newSession.id });
+      // Navigate to the new session with isNewSession flag
+      navigation.navigate('SessionLobby', { 
+        sessionId: newSession.id,
+        isNewSession: true 
+      });
     },
     onError: (error: any) => {
       // Enhanced error logging
@@ -366,8 +372,8 @@ export function MainScreen() {
     }
   };
 
-  const handleSessionClick = (session: TrainingSession) => {
-    console.log('[MainScreen] 📱 Navigating to session:', session.id);
+  const handleSessionClick = async (session: TrainingSession) => {
+    console.log('[MainScreen] 📱 Opening session:', session.id);
     console.log('[MainScreen] Session details:', {
       id: session.id,
       business_id: session.business_id,
@@ -376,6 +382,9 @@ export function MainScreen() {
       currentUser: user?.email,
       currentUserBusinessId: user?.businessId
     });
+    
+    // Clear any previous errors
+    setSessionError(null);
     
     // Verify session belongs to current business
     if (session.business_id !== businessId) {
@@ -390,7 +399,60 @@ export function MainScreen() {
       return; // Don't navigate!
     }
     
-    navigation.navigate('SessionLobby', { sessionId: session.id });
+    // Set loading state
+    setLoadingSessionId(session.id);
+    
+    try {
+      // Create a timeout promise
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Request timed out. Please check your connection and try again.')), 30000);
+      });
+      
+      // Fetch session details and checked-in clients in parallel
+      const fetchPromise = Promise.all([
+        queryClient.fetchQuery(api.trainingSession.getById.queryOptions({ id: session.id })),
+        queryClient.fetchQuery(api.trainingSession.getCheckedInClients.queryOptions({ sessionId: session.id }))
+      ]);
+      
+      // Race between fetch and timeout
+      const [sessionData, checkedInClients] = await Promise.race([
+        fetchPromise,
+        timeoutPromise
+      ]) as [any, any];
+      
+      console.log('[MainScreen] ✅ Data fetched successfully:', {
+        sessionId: session.id,
+        hasSessionData: !!sessionData,
+        clientCount: checkedInClients?.length || 0
+      });
+      
+      // Navigate with pre-fetched data
+      navigation.navigate('SessionLobby', { 
+        sessionId: session.id,
+        prefetchedData: {
+          session: sessionData,
+          checkedInClients: checkedInClients || []
+        }
+      });
+      
+    } catch (error: any) {
+      console.error('[MainScreen] ❌ Failed to open session:', error);
+      
+      // Set error state
+      setSessionError({
+        id: session.id,
+        message: error.message || 'Failed to open session. Please try again.'
+      });
+      
+      // Show alert
+      Alert.alert(
+        'Unable to Open Session',
+        error.message || 'Failed to open session. Please try again.',
+        [{ text: 'OK' }]
+      );
+    } finally {
+      setLoadingSessionId(null);
+    }
   };
 
   const formatSessionTime = (dateString: string | null) => {
@@ -635,6 +697,7 @@ export function MainScreen() {
                   <Pressable
                     onPress={() => handleSessionClick(session)}
                     focusable
+                    disabled={loadingSessionId === session.id}
                     style={{ flex: 1 }}
                   >
                     {({ focused }) => (
@@ -648,15 +711,29 @@ export function MainScreen() {
                           borderColor: focused ? 'rgba(255,255,255,0.45)' : TOKENS.color.borderGlass,
                           borderWidth: focused ? 1 : 1,
                           transform: focused ? [{ translateY: -1 }] : [],
+                          opacity: loadingSessionId === session.id ? 0.7 : 1,
                         }}
                       >
-                        <Text style={{ 
-                          color: TOKENS.color.text, 
-                          fontSize: 18, 
-                          letterSpacing: 0.2 
-                        }}>
-                          Open Session
-                        </Text>
+                        {loadingSessionId === session.id ? (
+                          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            <ActivityIndicator size="small" color={TOKENS.color.accent} style={{ marginRight: 8 }} />
+                            <Text style={{ 
+                              color: TOKENS.color.accent, 
+                              fontSize: 18, 
+                              letterSpacing: 0.2 
+                            }}>
+                              Opening...
+                            </Text>
+                          </View>
+                        ) : (
+                          <Text style={{ 
+                            color: TOKENS.color.text, 
+                            fontSize: 18, 
+                            letterSpacing: 0.2 
+                          }}>
+                            Open Session
+                          </Text>
+                        )}
                       </MattePanel>
                     )}
                   </Pressable>
@@ -690,6 +767,15 @@ export function MainScreen() {
                     )}
                   </Pressable>
                 </View>
+                
+                {/* Error message if this session had an error */}
+                {sessionError?.id === session.id && (
+                  <View style={styles.errorContainer}>
+                    <Text style={styles.errorText}>
+                      {sessionError.message}
+                    </Text>
+                  </View>
+                )}
               </View>
             ))}
           </View>
@@ -978,5 +1064,19 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginTop: 8,
     opacity: 0.7,
+  },
+  errorContainer: {
+    marginTop: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.3)',
+  },
+  errorText: {
+    color: TOKENS.color.danger,
+    fontSize: 14,
+    textAlign: 'center',
   },
 });
