@@ -178,6 +178,7 @@ async function preprocessPhase2Data(
         exercises: workoutExercises.map(we => ({
           exerciseId: we.exerciseId,
           clientId: workout.userId,
+          name: we.exercise.name,
           movementPattern: we.exercise.movementPattern,
           equipment: we.exercise.equipment,
           functionTags: we.exercise.functionTags,

@@ -155,10 +155,58 @@ export class WorkoutGenerationService {
       warnings: blueprint.validationWarnings,
     });
 
+    // Check if workout exercises already exist for this session
+    const existingWorkoutsRaw = await this.ctx.db
+      .select()
+      .from(Workout)
+      .where(eq(Workout.trainingSessionId, sessionId));
+
+    // For each workout, fetch its exercises with exercise details
+    const existingWorkouts = await Promise.all(
+      existingWorkoutsRaw.map(async (workout) => {
+        const workoutExercises = await this.ctx.db
+          .select({
+            id: WorkoutExercise.id,
+            exerciseId: WorkoutExercise.exerciseId,
+            orderIndex: WorkoutExercise.orderIndex,
+            groupName: WorkoutExercise.groupName,
+            selectionSource: WorkoutExercise.selectionSource,
+            scheme: WorkoutExercise.scheme,
+            reasoning: WorkoutExercise.reasoning,
+            exercise: exercises,
+          })
+          .from(WorkoutExercise)
+          .innerJoin(exercises, eq(WorkoutExercise.exerciseId, exercises.id))
+          .where(eq(WorkoutExercise.workoutId, workout.id))
+          .orderBy(WorkoutExercise.orderIndex);
+
+        return {
+          ...workout,
+          exercises: workoutExercises,
+        };
+      }),
+    );
+
     // Generate LLM workout assignments
     let llmResult = null;
-    try {
-      logger.info("Starting LLM generation");
+    
+    // If we're in phase1Only mode and exercises already exist, skip LLM call
+    if (options?.phase1Only && existingWorkouts.length > 0) {
+      logger.info("Skipping Phase 1 LLM call - workout exercises already exist", {
+        sessionId,
+        workoutCount: existingWorkouts.length,
+      });
+
+      // Format existing exercises as LLM result
+      llmResult = await this.formatExistingExercisesAsLLMResult(
+        existingWorkouts,
+        blueprint,
+        groupContext,
+        clientContexts,
+      );
+    } else {
+      try {
+        logger.info("Starting LLM generation");
 
       // Enable debug mode if diagnostics requested
       if (options?.includeDiagnostics) {
@@ -218,14 +266,15 @@ export class WorkoutGenerationService {
           exercisePool,
         );
       }
-    } catch (error) {
-      logger.error("LLM generation failed", error);
-      // Don't fail the whole request if LLM fails
-      llmResult = {
-        error: error instanceof Error ? error.message : "LLM generation failed",
-        deterministicAssignments: null,
-        llmAssignments: null,
-      };
+      } catch (error) {
+        logger.error("LLM generation failed", error);
+        // Don't fail the whole request if LLM fails
+        llmResult = {
+          error: error instanceof Error ? error.message : "LLM generation failed",
+          deterministicAssignments: null,
+          llmAssignments: null,
+        };
+      }
     }
 
 
@@ -1458,5 +1507,83 @@ export class WorkoutGenerationService {
         `Phase 2 sequencing failed: ${error instanceof Error ? error.message : "Unknown error"}`,
       );
     }
+  }
+
+  /**
+   * Format existing workout exercises as LLM result for Phase 1 visualization
+   */
+  private async formatExistingExercisesAsLLMResult(
+    existingWorkouts: any[],
+    blueprint: AnyGroupWorkoutBlueprint,
+    groupContext: GroupContext,
+    clientContexts: ClientContext[],
+  ): Promise<any> {
+    logger.info("Formatting existing exercises as LLM result");
+
+    // For standard blueprints, format the exercise selection
+    if ("clientExercisePools" in blueprint) {
+      const exerciseSelection: any = {
+        selectedExercises: {},
+        llmTimings: {},
+      };
+
+      // Group exercises by client
+      for (const workout of existingWorkouts) {
+        const clientId = workout.userId;
+        const client = clientContexts.find(c => c.user_id === clientId);
+        if (!client) continue;
+
+        exerciseSelection.selectedExercises[clientId] = workout.exercises.map((we: any) => ({
+          exercise: {
+            id: we.exercise.id,
+            name: we.exercise.name,
+            equipment: we.exercise.equipment,
+            movementPattern: we.exercise.movementPattern,
+            primaryMuscle: we.exercise.primaryMuscle,
+            secondaryMuscles: we.exercise.secondaryMuscles,
+            modality: we.exercise.modality,
+            functionTags: we.exercise.functionTags,
+          },
+          source: we.selectionSource || "existing",
+          round: we.groupName || "Block A",
+          scheme: we.scheme,
+          reasoning: we.reasoning || "Loaded from existing workout",
+          orderIndex: we.orderIndex,
+        }));
+
+        // Add mock timing data
+        exerciseSelection.llmTimings[clientId] = {
+          startTime: new Date().toISOString(),
+          endTime: new Date().toISOString(),
+          durationMs: 0,
+          fromCache: true,
+        };
+      }
+
+      return {
+        systemPrompt: "Loaded from existing workout exercises",
+        userMessage: "Loaded from existing workout exercises",
+        llmOutput: "Loaded from existing workout exercises",
+        exerciseSelection,
+        metadata: {
+          loadedFromExisting: true,
+          workoutCount: existingWorkouts.length,
+          message: "Skipped Phase 1 LLM call - using existing workout exercises",
+        },
+      };
+    }
+
+    // For BMF blueprints, return a simpler structure
+    return {
+      systemPrompt: "Loaded from existing workout exercises",
+      userMessage: "Loaded from existing workout exercises",
+      llmOutput: "Loaded from existing workout exercises",
+      deterministicAssignments: null,
+      llmAssignments: null,
+      metadata: {
+        loadedFromExisting: true,
+        workoutCount: existingWorkouts.length,
+      },
+    };
   }
 }

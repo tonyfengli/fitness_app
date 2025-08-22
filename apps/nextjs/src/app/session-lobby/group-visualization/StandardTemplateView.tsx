@@ -88,6 +88,8 @@ function Phase2PreviewContent({ sessionId }: { sessionId: string }) {
         <h4 className="text-sm font-medium text-gray-700">Client Round Plans</h4>
         {data.roundOrganization?.perClientPlan.map((plan) => {
           const clientInfo = data.clients.find(c => c.clientId === plan.clientId);
+          const clientExercises = data.exercisesWithTiers?.filter(e => e.clientId === plan.clientId) || [];
+          
           return (
             <div key={plan.clientId} className="rounded-lg border border-gray-200 bg-white p-3">
               <div className="space-y-2">
@@ -123,57 +125,47 @@ function Phase2PreviewContent({ sessionId }: { sessionId: string }) {
                       )}
                     </div>
                   )}
+                  
+                  {/* Exercise Details with Tiers */}
+                  {clientExercises.length > 0 && (
+                    <div className="mt-2 pt-2 border-t border-gray-200">
+                      <p className="font-medium text-gray-700 mb-2">Exercises:</p>
+                      <div className="space-y-1">
+                        {clientExercises
+                          .sort((a, b) => a.tier - b.tier)
+                          .map((exercise, idx) => (
+                            <div key={idx} className="flex items-start gap-2 text-xs">
+                              <span className={`px-2 py-0.5 rounded font-medium shrink-0 ${
+                                exercise.tier === 1 ? 'bg-red-100 text-red-700' :
+                                exercise.tier === 1.5 ? 'bg-orange-100 text-orange-700' :
+                                exercise.tier === 2 ? 'bg-yellow-100 text-yellow-700' :
+                                'bg-gray-100 text-gray-700'
+                              }`}>
+                                T{exercise.tier}
+                              </span>
+                              <div className="flex-1">
+                                <div className="font-medium text-gray-900">{exercise.name || 'Unknown Exercise'}</div>
+                                <div className="text-gray-600 mt-0.5">
+                                  {exercise.movementPattern && <span>{exercise.movementPattern}</span>}
+                                  {exercise.equipment && exercise.equipment.length > 0 && (
+                                    <span> • {exercise.equipment.join(', ')}</span>
+                                  )}
+                                  {exercise.primaryMuscle && (
+                                    <span> • {exercise.primaryMuscle}</span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
           );
         })}
       </div>
-
-      {/* Exercise Tiers Display */}
-      {data.exercisesWithTiers && (
-        <div className="mt-4 space-y-2">
-          <h4 className="text-sm font-medium text-gray-700">Exercise Tier Assignment</h4>
-          <div className="space-y-4">
-            {/* Group exercises by client */}
-            {Object.entries(
-              data.exercisesWithTiers.reduce((acc, exercise) => {
-                if (!acc[exercise.clientId]) acc[exercise.clientId] = [];
-                acc[exercise.clientId].push(exercise);
-                return acc;
-              }, {} as Record<string, typeof data.exercisesWithTiers>)
-            ).map(([clientId, exercises]) => {
-              const clientInfo = data.clients.find(c => c.clientId === clientId);
-              return (
-                <div key={clientId} className="rounded-lg border border-gray-200 bg-white p-3">
-                  <div className="text-sm font-medium text-gray-900 mb-2">
-                    {clientInfo?.clientName || 'Unknown'}
-                  </div>
-                  <div className="space-y-1">
-                    {exercises
-                      .sort((a, b) => a.tier - b.tier)
-                      .map((exercise, idx) => (
-                        <div key={idx} className="flex items-center gap-2 text-xs">
-                          <span className={`px-2 py-0.5 rounded font-medium ${
-                            exercise.tier === 1 ? 'bg-red-100 text-red-700' :
-                            exercise.tier === 1.5 ? 'bg-orange-100 text-orange-700' :
-                            exercise.tier === 2 ? 'bg-yellow-100 text-yellow-700' :
-                            'bg-gray-100 text-gray-700'
-                          }`}>
-                            T{exercise.tier}
-                          </span>
-                          <span className="text-gray-600">
-                            {exercise.movementPattern || 'N/A'} • {exercise.equipment?.join(', ') || 'N/A'}
-                          </span>
-                        </div>
-                      ))}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

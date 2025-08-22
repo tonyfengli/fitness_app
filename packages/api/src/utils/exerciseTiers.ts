@@ -10,6 +10,7 @@
 export interface ExerciseWithTier {
   exerciseId: string;
   clientId: string;
+  name?: string;
   tier: number;
   movementPattern?: string;
   equipment?: string[];
@@ -45,22 +46,8 @@ export function assignExerciseTier(exercise: {
   const equipment = exercise.equipment || [];
   const modality = exercise.modality?.toLowerCase();
 
-  // Check for isolation movements - always Tier 3
-  if (movementPattern && ISOLATION_PATTERNS.includes(movementPattern)) {
-    return 3;
-  }
-
-  // Check for conditioning modality - Tier 3
-  if (modality === "conditioning") {
-    return 3;
-  }
-
-  // Check for core or accessory function tags - Tier 3
-  if (functionTags.includes("core") || functionTags.includes("accessory")) {
-    return 3;
-  }
-
-  // Check for Tier 1: Lower body compounds
+  // PRIORITY 1: Check for Tier 1 - Lower body compounds
+  // These take precedence even if tagged as accessory
   if (movementPattern && TIER1_MOVEMENT_PATTERNS.includes(movementPattern)) {
     // Must have proper equipment
     const hasProperEquipment = equipment.some(eq => 
@@ -68,21 +55,23 @@ export function assignExerciseTier(exercise: {
     );
     
     if (hasProperEquipment) {
-      // Must have strength tags (primary or secondary)
+      // Accept primary_strength OR secondary_strength for lower body compounds
       if (functionTags.includes("primary_strength") || 
           functionTags.includes("secondary_strength")) {
         return 1;
       }
       
-      // Log warning for missing function tags on likely compound
+      // Even without strength tags, if it's a lower body compound with proper equipment,
+      // default to Tier 1 (with warning)
       console.warn(
         `Exercise with pattern '${movementPattern}' and equipment '${equipment.join(', ')}' ` +
-        `missing function tags - defaulting to Tier 2`
+        `missing strength tags - still assigning Tier 1`
       );
+      return 1;
     }
   }
 
-  // Check for Tier 1.5: Upper body barbell compounds
+  // PRIORITY 2: Check for Tier 1.5 - Upper body barbell compounds
   if (movementPattern && TIER1_5_MOVEMENT_PATTERNS.includes(movementPattern)) {
     // Must have barbell or landmine
     const hasBarbell = equipment.some(eq => 
@@ -94,9 +83,31 @@ export function assignExerciseTier(exercise: {
     }
   }
 
-  // Check for Tier 2: Secondary strength
-  if (functionTags.includes("secondary_strength")) {
-    return 2;
+  // PRIORITY 3: Check for true isolation movements - Tier 3
+  // Only if movement pattern is explicitly isolation
+  if (movementPattern && ISOLATION_PATTERNS.includes(movementPattern)) {
+    return 3;
+  }
+
+  // PRIORITY 4: Check for conditioning modality - Tier 3
+  if (modality === "conditioning") {
+    return 3;
+  }
+
+  // PRIORITY 5: Check for Tier 2 - Secondary compounds and upper body accessories
+  // This includes secondary_strength that isn't lower body compound
+  if (functionTags.includes("secondary_strength") || 
+      functionTags.includes("accessory")) {
+    // If it has a compound movement pattern (push/pull) it's Tier 2
+    if (movementPattern && 
+        ["vertical_push", "horizontal_push", "vertical_pull", "horizontal_pull", "row"].includes(movementPattern)) {
+      return 2;
+    }
+  }
+
+  // PRIORITY 6: Core-specific exercises - Tier 3
+  if (functionTags.includes("core")) {
+    return 3;
   }
 
   // Default to Tier 2 for everything else
