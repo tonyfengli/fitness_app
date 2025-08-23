@@ -55,19 +55,12 @@ export function assignExerciseTier(exercise: {
     );
     
     if (hasProperEquipment) {
-      // Accept primary_strength OR secondary_strength for lower body compounds
-      if (functionTags.includes("primary_strength") || 
-          functionTags.includes("secondary_strength")) {
+      // Only accept primary_strength for Tier 1
+      if (functionTags.includes("primary_strength")) {
         return 1;
       }
       
-      // Even without strength tags, if it's a lower body compound with proper equipment,
-      // default to Tier 1 (with warning)
-      console.warn(
-        `Exercise with pattern '${movementPattern}' and equipment '${equipment.join(', ')}' ` +
-        `missing strength tags - still assigning Tier 1`
-      );
-      return 1;
+      // Lower body compounds without primary_strength fall through to lower tiers
     }
   }
 

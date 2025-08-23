@@ -30,6 +30,8 @@ import type { SessionUser } from "../types/auth";
 import { protectedProcedure, publicProcedure } from "../trpc";
 import { calculateRoundOrganization, calculateBundleSkeletons, type RoundOrganizationResult } from "../utils/roundOrganization";
 import { assignExerciseTiers, type ExerciseWithTier } from "../utils/exerciseTiers";
+import { buildAllowedSlots, type AllowedSlotsResult } from "../utils/buildAllowedSlots";
+import { getBusinessEquipmentCapacity, type EquipmentCapacityMap } from "../config/equipmentCapacity";
 
 // Helper function to calculate score distribution
 function calculateScoreDistribution(
@@ -146,7 +148,19 @@ async function preprocessPhase2Data(
   preprocessedAt: string;
   roundOrganization: RoundOrganizationResult;
   exercisesWithTiers: ExerciseWithTier[];
+  allowedSlots: AllowedSlotsResult;
+  businessId: string;
+  equipmentCapacity: EquipmentCapacityMap;
 }> {
+  // Get session details to get business ID
+  const session = await ctx.db.query.TrainingSession.findFirst({
+    where: eq(TrainingSession.id, sessionId),
+  });
+
+  if (!session) {
+    throw new Error(`Session ${sessionId} not found`);
+  }
+
   // Get all workouts for this session
   const workouts = await ctx.db.query.Workout.findMany({
     where: eq(Workout.trainingSessionId, sessionId),
@@ -216,12 +230,26 @@ async function preprocessPhase2Data(
   // Calculate bundle skeletons
   roundOrganization = calculateBundleSkeletons(roundOrganization);
 
+  // Get equipment capacity for the business
+  const equipmentCapacity = getBusinessEquipmentCapacity(session.businessId);
+
+  // Build allowed slots using equipment constraints
+  const allowedSlots = buildAllowedSlots(
+    exercisesWithTiers,
+    roundOrganization.perClientPlan,
+    equipmentCapacity,
+    roundOrganization.majorityRounds
+  );
+
   return {
     clients: clientsData,
     totalExercises,
     preprocessedAt: new Date().toISOString(),
     roundOrganization,
     exercisesWithTiers,
+    allowedSlots,
+    businessId: session.businessId,
+    equipmentCapacity,
   };
 }
 

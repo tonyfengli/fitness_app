@@ -40,6 +40,27 @@ function formatMuscleName(muscle: string): string {
 }
 
 // Phase 2 Preview Component
+// Helper function to get equipment icon
+function getEquipmentIcon(equipment: string): string {
+  const icons: Record<string, string> = {
+    dumbbells: "🏋️",
+    barbell: "🏋️‍♂️",
+    bench: "🪑",
+    cable_machine: "🔗",
+    back_machine: "🔙",
+    landmine: "⚓",
+    pull_up_bar: "🏃",
+    bands: "🎗️",
+    bosu_ball: "⚪",
+    swiss_ball: "⚫",
+    kettlebell: "🔔",
+    ab_wheel: "☸️",
+    box: "📦",
+    trx: "🎯",
+  };
+  return icons[equipment] || "📎";
+}
+
 function Phase2PreviewContent({ sessionId }: { sessionId: string }) {
   const trpc = useTRPC();
   
@@ -73,6 +94,23 @@ function Phase2PreviewContent({ sessionId }: { sessionId: string }) {
     );
   }
 
+  // Calculate per-round capacity usage from fixed assignments
+  const roundCapacityUsage: Record<number, Record<string, number>> = {};
+  if (data.allowedSlots?.fixedAssignments) {
+    data.allowedSlots.fixedAssignments.forEach(assignment => {
+      if (!roundCapacityUsage[assignment.round]) {
+        roundCapacityUsage[assignment.round] = {};
+      }
+      Object.entries(assignment.resources).forEach(([equipment, count]) => {
+        roundCapacityUsage[assignment.round][equipment] = 
+          (roundCapacityUsage[assignment.round][equipment] || 0) + count;
+      });
+    });
+  }
+
+  // Get capacity map from the backend data (tied to the business)
+  const capacityMap = data.equipmentCapacity || {};
+
   return (
     <div className="space-y-4">
       {/* Summary Stats */}
@@ -80,6 +118,244 @@ function Phase2PreviewContent({ sessionId }: { sessionId: string }) {
         <h4 className="text-sm font-medium text-gray-700 mb-2">Summary</h4>
         <div className="text-sm text-gray-600">
           <p>Rounds Selected: {data.roundOrganization?.majorityRounds || 'N/A'}</p>
+          <p>Business ID: {data.businessId || 'N/A'}</p>
+        </div>
+      </div>
+
+      {/* 1. Per-Round Capacity Strip */}
+      <div className="rounded-lg bg-white border border-gray-200 p-4">
+        <h4 className="text-sm font-medium text-gray-700 mb-3">Per-Round Capacity Usage (Fixed Only)</h4>
+        <div className="space-y-2">
+          {Array.from({ length: data.roundOrganization?.majorityRounds || 0 }, (_, i) => i + 1).map(round => {
+            const usage = roundCapacityUsage[round] || {};
+            return (
+              <div key={round} className="flex items-center gap-2">
+                <span className="text-sm font-medium text-gray-700 w-8">R{round}:</span>
+                <div className="flex flex-wrap gap-2">
+                  {Object.entries(capacityMap).map(([equipment, capacity]) => {
+                    const used = usage[equipment] || 0;
+                    const isAtCapacity = used >= capacity;
+                    const hasUsage = used > 0;
+                    
+                    if (!hasUsage && !isAtCapacity) return null;
+                    
+                    return (
+                      <span
+                        key={equipment}
+                        className={`px-2 py-1 text-xs rounded ${
+                          isAtCapacity 
+                            ? 'bg-red-100 text-red-700 font-medium' 
+                            : hasUsage 
+                              ? 'bg-blue-100 text-blue-700'
+                              : 'bg-gray-100 text-gray-600'
+                        }`}
+                      >
+                        {equipment} {used}/{capacity}
+                      </span>
+                    );
+                  }).filter(Boolean)}
+                  {Object.keys(usage).length === 0 && (
+                    <span className="text-xs text-gray-500 italic">No equipment used</span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* 2. Capacity Map Reference */}
+      <div className="rounded-lg bg-gray-50 p-4">
+        <h4 className="text-sm font-medium text-gray-700 mb-2">Gym Equipment Capacity</h4>
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 text-xs">
+          {Object.entries(capacityMap).map(([equipment, capacity]) => (
+            <div key={equipment} className="flex items-center gap-1">
+              <span className="text-gray-600">{getEquipmentIcon(equipment)}</span>
+              <span className="text-gray-700">{equipment}:</span>
+              <span className="font-medium text-gray-900">{capacity}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* 3. Shared Exercises Summary */}
+      {(() => {
+        // Group fixed assignments by exerciseId to find shared exercises
+        const sharedExercises = new Map<string, any[]>();
+        data.allowedSlots?.fixedAssignments?.forEach(assignment => {
+          if (assignment.fixedReason === 'shared_exercise') {
+            if (!sharedExercises.has(assignment.exerciseId)) {
+              sharedExercises.set(assignment.exerciseId, []);
+            }
+            sharedExercises.get(assignment.exerciseId).push(assignment);
+          }
+        });
+        
+        return sharedExercises.size > 0 && (
+          <div className="rounded-lg bg-blue-50 p-4">
+            <h4 className="text-sm font-medium text-gray-700 mb-2">Shared Exercises Detected</h4>
+            <div className="space-y-2 text-xs">
+              {Array.from(sharedExercises.entries()).map(([exerciseId, assignments]) => {
+                const exercise = data.exercisesWithTiers?.find(e => e.exerciseId === exerciseId);
+                const rounds = [...new Set(assignments.map(a => a.round))].sort();
+                const clients = assignments.map(a => 
+                  data.clients.find(c => c.clientId === a.clientId)?.clientName || a.clientId
+                );
+                
+                return (
+                  <div key={exerciseId} className="text-gray-700">
+                    <span className="font-medium">{exercise?.name || 'Unknown'}:</span>
+                    <span className="ml-2">{clients.length} clients ({clients.join(', ')})</span>
+                    <span className="ml-2">→ Rounds: {rounds.map(r => `R${r}`).join(', ')}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* 4. Fixed Assignments Ledger */}
+      {data.allowedSlots?.fixedAssignments && data.allowedSlots.fixedAssignments.length > 0 && (
+        <div className="rounded-lg bg-green-50 p-4">
+          <h4 className="text-sm font-medium text-gray-700 mb-2">Fixed Assignments Ledger</h4>
+          <div className="space-y-1 text-xs">
+            {data.allowedSlots.fixedAssignments
+              .sort((a, b) => a.round - b.round || a.clientId.localeCompare(b.clientId))
+              .map((assignment, idx) => {
+                const exercise = data.exercisesWithTiers?.find(e => 
+                  e.exerciseId === assignment.exerciseId && e.clientId === assignment.clientId
+                );
+                const client = data.clients.find(c => c.clientId === assignment.clientId);
+                const resourceList = Object.entries(assignment.resources)
+                  .map(([eq, count]) => `${eq}:${count}`)
+                  .join(', ');
+                
+                return (
+                  <div key={idx} className="text-gray-700 flex items-center gap-2">
+                    <span className="font-medium">R{assignment.round}</span> — 
+                    <span className="font-medium">{client?.clientName}</span>: 
+                    <span>{exercise?.name || 'Unknown'}</span>
+                    {resourceList && <span className="text-gray-600">({resourceList})</span>}
+                    {assignment.fixedReason && (
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                        assignment.fixedReason === 'tier_priority' 
+                          ? 'bg-green-100 text-green-700'
+                          : assignment.fixedReason === 'singleton'
+                          ? 'bg-orange-100 text-orange-700'
+                          : assignment.fixedReason === 'shared_exercise'
+                          ? 'bg-blue-100 text-blue-700'
+                          : 'bg-amber-100 text-amber-700'
+                      }`}>
+                        {assignment.fixedReason === 'tier_priority' ? 'Tier' : 
+                         assignment.fixedReason === 'singleton' ? 'Singleton' : 
+                         assignment.fixedReason === 'shared_exercise' ? 'Shared' :
+                         `Cascade ${assignment.singletonIteration}`}
+                      </span>
+                    )}
+                    {assignment.warning && (
+                      <span className="text-xs text-red-600 italic">{assignment.warning}</span>
+                    )}
+                  </div>
+                );
+              })}
+          </div>
+        </div>
+      )}
+
+      {/* 4. Client × Round Grid */}
+      <div className="rounded-lg bg-white border border-gray-200 p-4">
+        <h4 className="text-sm font-medium text-gray-700 mb-3">Client × Round Grid</h4>
+        <div className="overflow-x-auto">
+          <table className="min-w-full">
+            <thead>
+              <tr>
+                <th className="text-xs font-medium text-gray-700 text-left p-2">Client</th>
+                {Array.from({ length: data.roundOrganization?.majorityRounds || 0 }, (_, i) => (
+                  <th key={i + 1} className="text-xs font-medium text-gray-700 text-center p-2 min-w-[100px]">
+                    R{i + 1}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {data.clients.map(client => {
+                const plan = data.roundOrganization?.perClientPlan.find(p => p.clientId === client.clientId);
+                const clientFixed = data.allowedSlots?.fixedAssignments.filter(f => f.clientId === client.clientId) || [];
+                const clientOptions = data.allowedSlots?.exerciseOptions.filter(e => e.clientId === client.clientId) || [];
+                
+                return (
+                  <tr key={client.clientId} className="border-t border-gray-200">
+                    <td className="text-xs font-medium text-gray-900 p-2">{client.clientName}</td>
+                    {Array.from({ length: data.roundOrganization?.majorityRounds || 0 }, (_, roundIdx) => {
+                      const round = roundIdx + 1;
+                      const skeleton = plan?.bundleSkeleton?.[roundIdx] || 0;
+                      const fixed = clientFixed.find(f => f.round === round);
+                      const optionsForRound = clientOptions.filter(opt => opt.allowedRounds.includes(round));
+                      
+                      if (skeleton === 0) {
+                        return <td key={round} className="text-xs text-gray-400 text-center p-2">-</td>;
+                      }
+                      
+                      if (fixed) {
+                        const exercise = data.exercisesWithTiers?.find(e => 
+                          e.exerciseId === fixed.exerciseId && e.clientId === fixed.clientId
+                        );
+                        return (
+                          <td key={round} className="p-2">
+                            <div className="text-xs">
+                              <div className={`px-2 py-1 rounded text-center font-medium mb-1 ${
+                                fixed.fixedReason === 'tier_priority'
+                                  ? 'bg-green-100 text-green-800'
+                                  : fixed.fixedReason === 'singleton'
+                                  ? 'bg-orange-100 text-orange-800'
+                                  : fixed.fixedReason === 'shared_exercise'
+                                  ? 'bg-blue-100 text-blue-800'
+                                  : 'bg-amber-100 text-amber-800'
+                              }`}>
+                                {fixed.fixedReason === 'tier_priority' ? 'Tier Fixed' : 
+                                 fixed.fixedReason === 'singleton' ? 'Singleton' : 
+                                 fixed.fixedReason === 'shared_exercise' ? 'Shared' :
+                                 `Cascade ${fixed.singletonIteration}`}
+                              </div>
+                              <div className="text-gray-700 text-center">{exercise?.name || 'Unknown'}</div>
+                              {fixed.warning && (
+                                <div className="text-xs text-red-600 text-center mt-1" title={fixed.warning}>⚠️</div>
+                              )}
+                              <div className="flex justify-center gap-1 mt-1">
+                                {Object.keys(fixed.resources).map(eq => (
+                                  <span key={eq} className="text-gray-500" title={eq}>
+                                    {getEquipmentIcon(eq)}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          </td>
+                        );
+                      }
+                      
+                      if (optionsForRound.length > 0) {
+                        return (
+                          <td key={round} className="p-2">
+                            <div className="text-xs">
+                              <div className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-center mb-1">
+                                Option
+                              </div>
+                              <div className="text-gray-600 text-center">
+                                {optionsForRound.length} exercise{optionsForRound.length > 1 ? 's' : ''}
+                              </div>
+                            </div>
+                          </td>
+                        );
+                      }
+                      
+                      return <td key={round} className="text-xs text-gray-400 text-center p-2">Empty</td>;
+                    })}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       </div>
 
@@ -133,30 +409,104 @@ function Phase2PreviewContent({ sessionId }: { sessionId: string }) {
                       <div className="space-y-1">
                         {clientExercises
                           .sort((a, b) => a.tier - b.tier)
-                          .map((exercise, idx) => (
-                            <div key={idx} className="flex items-start gap-2 text-xs">
-                              <span className={`px-2 py-0.5 rounded font-medium shrink-0 ${
-                                exercise.tier === 1 ? 'bg-red-100 text-red-700' :
-                                exercise.tier === 1.5 ? 'bg-orange-100 text-orange-700' :
-                                exercise.tier === 2 ? 'bg-yellow-100 text-yellow-700' :
-                                'bg-gray-100 text-gray-700'
-                              }`}>
-                                T{exercise.tier}
-                              </span>
-                              <div className="flex-1">
-                                <div className="font-medium text-gray-900">{exercise.name || 'Unknown Exercise'}</div>
-                                <div className="text-gray-600 mt-0.5">
-                                  {exercise.movementPattern && <span>{exercise.movementPattern}</span>}
-                                  {exercise.equipment && exercise.equipment.length > 0 && (
-                                    <span> • {exercise.equipment.join(', ')}</span>
+                          .map((exercise, idx) => {
+                            // Find if this exercise is fixed
+                            const fixedAssignment = data.allowedSlots?.fixedAssignments.find(
+                              f => f.exerciseId === exercise.exerciseId && f.clientId === exercise.clientId
+                            );
+                            // Find allowed rounds for this exercise
+                            const exerciseOption = data.allowedSlots?.exerciseOptions.find(
+                              e => e.exerciseId === exercise.exerciseId && e.clientId === exercise.clientId
+                            );
+                            
+                            // Debug logging for exercises without placement info
+                            if (!fixedAssignment && !exerciseOption) {
+                              console.warn(`Exercise without placement info:`, {
+                                exerciseId: exercise.exerciseId,
+                                clientId: exercise.clientId,
+                                name: exercise.name,
+                                tier: exercise.tier,
+                                hasAllowedSlots: !!data.allowedSlots,
+                                fixedAssignmentsCount: data.allowedSlots?.fixedAssignments.length,
+                                exerciseOptionsCount: data.allowedSlots?.exerciseOptions.length
+                              });
+                            }
+                            
+                            return (
+                              <div key={idx} className="flex items-start gap-2 text-xs">
+                                <span className={`px-2 py-0.5 rounded font-medium shrink-0 ${
+                                  exercise.tier === 1 ? 'bg-red-100 text-red-700' :
+                                  exercise.tier === 1.5 ? 'bg-orange-100 text-orange-700' :
+                                  exercise.tier === 2 ? 'bg-yellow-100 text-yellow-700' :
+                                  'bg-gray-100 text-gray-700'
+                                }`}>
+                                  T{exercise.tier}
+                                </span>
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2">
+                                    <div className="font-medium text-gray-900">{exercise.name || 'Unknown Exercise'}</div>
+                                    {/* Equipment Resource Badges */}
+                                    {exercise.equipment && exercise.equipment.length > 0 && (
+                                      <div className="flex gap-1">
+                                        {exercise.equipment.map((eq, eqIdx) => (
+                                          <span 
+                                            key={eqIdx} 
+                                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-gray-100 text-xs"
+                                            title={eq}
+                                          >
+                                            {getEquipmentIcon(eq)}
+                                            <span className="text-gray-600">{eq}</span>
+                                          </span>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                  <div className="text-gray-600 mt-0.5">
+                                    {exercise.movementPattern && <span>{exercise.movementPattern}</span>}
+                                    {exercise.primaryMuscle && (
+                                      <span> • {exercise.primaryMuscle}</span>
+                                    )}
+                                  </div>
+                                  {/* Show placement info */}
+                                  {fixedAssignment && (
+                                    <div className="flex items-center gap-2 mt-0.5">
+                                      <span className={`${
+                                        fixedAssignment.fixedReason === 'tier_priority' ? 'text-green-600' :
+                                        fixedAssignment.fixedReason === 'singleton' ? 'text-orange-600' :
+                                        'text-amber-600'
+                                      }`}>
+                                        Fixed → Round {fixedAssignment.round}
+                                      </span>
+                                      <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${
+                                        fixedAssignment.fixedReason === 'tier_priority' 
+                                          ? 'bg-green-100 text-green-700'
+                                          : fixedAssignment.fixedReason === 'singleton'
+                                          ? 'bg-orange-100 text-orange-700'
+                                          : fixedAssignment.fixedReason === 'shared_exercise'
+                                          ? 'bg-blue-100 text-blue-700'
+                                          : 'bg-amber-100 text-amber-700'
+                                      }`}>
+                                        {fixedAssignment.fixedReason === 'tier_priority' ? 'Tier' : 
+                                         fixedAssignment.fixedReason === 'singleton' ? 'Singleton' : 
+                                         fixedAssignment.fixedReason === 'shared_exercise' ? 'Shared' :
+                                         `Cascade ${fixedAssignment.singletonIteration}`}
+                                      </span>
+                                    </div>
                                   )}
-                                  {exercise.primaryMuscle && (
-                                    <span> • {exercise.primaryMuscle}</span>
+                                  {exerciseOption && exerciseOption.allowedRounds.length > 0 && (
+                                    <div className="text-blue-600 mt-0.5">
+                                      Allowed rounds: {exerciseOption.allowedRounds.join(', ')}
+                                    </div>
+                                  )}
+                                  {!fixedAssignment && !exerciseOption && (
+                                    <div className="text-red-600 mt-0.5">
+                                      ⚠️ No placement information available
+                                    </div>
                                   )}
                                 </div>
                               </div>
-                            </div>
-                          ))}
+                            );
+                          })}
                       </div>
                     </div>
                   )}
