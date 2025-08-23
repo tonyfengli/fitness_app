@@ -1,9 +1,12 @@
 /**
  * Exercise tier classification for deterministic round placement
  * 
- * Tier 1: Lower body compound movements (highest priority)
+ * Tier 1: 
+ *   - High fatigue exercises (high_local/high_systemic) with proper equipment (excluding capacity/core)
+ *   - Lower body compound movements with primary_strength tag
  * Tier 1.5: Upper body barbell compounds
- * Tier 2: Secondary compounds and accessories
+ * Tier 2: Lower body movements without primary_strength or proper equipment
+ * Tier 2.5: Upper body secondary compounds and accessories
  * Tier 3: Isolation, core, and finishers
  */
 
@@ -17,13 +20,14 @@ export interface ExerciseWithTier {
   functionTags?: string[];
   primaryMuscle?: string;
   modality?: string;
+  fatigueProfile?: string;
 }
 
 // Lower body compound patterns that qualify for Tier 1
 const TIER1_MOVEMENT_PATTERNS = ["squat", "deadlift", "hinge", "lunge"];
 
 // Equipment that qualifies for Tier 1 when combined with lower body compounds
-const TIER1_EQUIPMENT = ["barbell", "landmine", "kettlebell", "dumbbells", "trap_bar"];
+const TIER1_EQUIPMENT = ["barbell", "landmine", "kettlebell", "dumbbells", "trap_bar", "pull_up_bar"];
 
 // Upper body patterns for Tier 1.5
 const TIER1_5_MOVEMENT_PATTERNS = ["vertical_push", "horizontal_push", "row"];
@@ -40,11 +44,40 @@ export function assignExerciseTier(exercise: {
   equipment?: string[];
   functionTags?: string[];
   modality?: string;
+  fatigueProfile?: string;
+  name?: string;
 }): number {
   const movementPattern = exercise.movementPattern?.toLowerCase();
   const functionTags = exercise.functionTags || [];
   const equipment = exercise.equipment || [];
   const modality = exercise.modality?.toLowerCase();
+  const fatigueProfile = exercise.fatigueProfile?.toLowerCase();
+  
+  // Log Pull-Ups specifically for debugging
+  if (exercise.name?.toLowerCase().includes('pull-up') || exercise.name?.toLowerCase().includes('pull up')) {
+    console.log(`=== TIER ASSIGNMENT FOR ${exercise.name} ===`);
+    console.log(`  - Movement Pattern: ${movementPattern}`);
+    console.log(`  - Equipment: ${JSON.stringify(equipment)}`);
+    console.log(`  - Function Tags: ${JSON.stringify(functionTags)}`);
+    console.log(`  - Fatigue Profile: ${fatigueProfile || 'MISSING'}`);
+    console.log(`  - Has high fatigue: ${fatigueProfile === 'high_local' || fatigueProfile === 'high_systemic'}`);
+    console.log(`  - Has proper Tier 1 equipment: ${equipment.some(eq => TIER1_EQUIPMENT.includes(eq.toLowerCase()))}`);
+  }
+
+  // PRIORITY 0: Check for high fatigue exercises (excluding capacity/core)
+  // High fatigue exercises with proper equipment get Tier 1
+  if ((fatigueProfile === 'high_local' || fatigueProfile === 'high_systemic') && 
+      !functionTags.includes('capacity') && 
+      !functionTags.includes('core')) {
+    // Must have proper equipment
+    const hasProperEquipment = equipment.some(eq => 
+      TIER1_EQUIPMENT.includes(eq.toLowerCase())
+    );
+    
+    if (hasProperEquipment) {
+      return 1;
+    }
+  }
 
   // PRIORITY 1: Check for Tier 1 - Lower body compounds
   // These take precedence even if tagged as accessory
@@ -60,8 +93,12 @@ export function assignExerciseTier(exercise: {
         return 1;
       }
       
-      // Lower body compounds without primary_strength fall through to lower tiers
+      // Lower body compounds without primary_strength fall through to Tier 2
+      return 2;
     }
+    
+    // Lower body patterns without proper equipment also get Tier 2
+    return 2;
   }
 
   // PRIORITY 2: Check for Tier 1.5 - Upper body barbell compounds
@@ -87,14 +124,14 @@ export function assignExerciseTier(exercise: {
     return 3;
   }
 
-  // PRIORITY 5: Check for Tier 2 - Secondary compounds and upper body accessories
+  // PRIORITY 5: Check for Tier 2.5 - Upper body secondary compounds and accessories
   // This includes secondary_strength that isn't lower body compound
   if (functionTags.includes("secondary_strength") || 
       functionTags.includes("accessory")) {
-    // If it has a compound movement pattern (push/pull) it's Tier 2
+    // If it has an upper body compound movement pattern (push/pull) it's Tier 2.5
     if (movementPattern && 
         ["vertical_push", "horizontal_push", "vertical_pull", "horizontal_pull", "row"].includes(movementPattern)) {
-      return 2;
+      return 2.5;
     }
   }
 
@@ -103,8 +140,15 @@ export function assignExerciseTier(exercise: {
     return 3;
   }
 
-  // Default to Tier 2 for everything else
-  return 2;
+  // Default to Tier 2.5 for everything else
+  const finalTier = 2.5;
+  
+  // Log final tier assignment for Pull-Ups
+  if (exercise.name?.toLowerCase().includes('pull-up') || exercise.name?.toLowerCase().includes('pull up')) {
+    console.log(`  => FINAL TIER: ${finalTier}`);
+  }
+  
+  return finalTier;
 }
 
 /**
@@ -119,6 +163,7 @@ export function assignExerciseTiers(
     functionTags?: string[];
     primaryMuscle?: string;
     modality?: string;
+    fatigueProfile?: string;
   }>
 ): ExerciseWithTier[] {
   return exercises.map(exercise => ({

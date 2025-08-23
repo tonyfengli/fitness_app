@@ -25,18 +25,13 @@ export interface LegalityCheckResult {
  * Examples:
  * ["dumbbells"] → { dumbbells: 1 }
  * ["dumbbells", "bench"] → { dumbbells: 1, bench: 1 }
- * ["platform", "barbell"] → { barbell: 1 } (platform is unmetered)
+ * ["platform", "barbell"] → { platform: 1, barbell: 1 }
  */
 export function normalizeEquipmentToResources(equipment: string[]): ExerciseResources {
   const resources: ExerciseResources = {};
   
   for (const item of equipment) {
     const normalized = item.toLowerCase();
-    
-    // Skip platform as it's unmetered
-    if (normalized === 'platform') {
-      continue;
-    }
     
     // Default to 1 unit per equipment type
     resources[normalized] = 1;

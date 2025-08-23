@@ -72,7 +72,7 @@ export interface FixedAssignment {
   clientId: string;
   round: number;
   resources: ExerciseResources;
-  fixedReason: 'tier_priority' | 'singleton' | 'singleton_cascade' | 'shared_exercise';
+  fixedReason: 'tier_priority' | 'singleton' | 'singleton_cascade' | 'shared_exercise' | 'last_exercise_auto_assign';
   singletonIteration?: number;
   warning?: string;
 }
@@ -85,6 +85,7 @@ export interface AllowedSlotsResult {
     allowedRounds: number[];
     tier: number;
     resources: ExerciseResources;
+    placementIssue?: 'singleton_no_slots' | 'shared_no_slots';
   }>;
   roundCapacityUse: ExerciseResources[];
   clientUsedSlots: Record<string, number[]>;
@@ -105,6 +106,10 @@ function isUpperBodyMovement(pattern: string | undefined): boolean {
 
 function isCoreMovement(pattern: string | undefined): boolean {
   return pattern?.toLowerCase() === CORE_PATTERN;
+}
+
+function isCapacityExercise(exercise: { functionTags?: string[] }): boolean {
+  return exercise.functionTags?.includes('capacity') || false;
 }
 
 function isSimilarMovementPattern(pattern1: string | undefined, pattern2: string | undefined): boolean {
@@ -162,15 +167,23 @@ export function buildAllowedSlots(
     // Get all exercises for this client
     const clientExercises = exercisesWithResources.filter(ex => ex.clientId === clientId);
     
+    // Log if any capacity exercises are being excluded
+    const capacityExercises = clientExercises.filter(ex => isCapacityExercise(ex));
+    if (capacityExercises.length > 0) {
+      console.log(`Client ${clientId} has ${capacityExercises.length} capacity exercises that will be excluded from Round 1`);
+    }
+    
     // Try to pin the best exercise for this client
     let exercisePinned = false;
     
-    // Go through tiers in order: 1, 1.5, 2, 3
-    for (const tier of [1, 1.5, 2, 3]) {
+    // Go through tiers in order: 1, 1.5, 2, 2.5, 3
+    for (const tier of [1, 1.5, 2, 2.5, 3]) {
       if (exercisePinned) break;
       
-      // Get all exercises of this tier
-      const tierExercises = clientExercises.filter(ex => ex.tier === tier);
+      // Get all exercises of this tier, excluding capacity exercises
+      const tierExercises = clientExercises.filter(ex => 
+        ex.tier === tier && !isCapacityExercise(ex)
+      );
       
       // Sort by equipment scarcity within the tier
       tierExercises.sort((a, b) => {
@@ -222,6 +235,13 @@ export function buildAllowedSlots(
     }
   }
   
+  // Log Phase 1 results
+  console.log('=== PHASE 1 RESULTS ===');
+  console.log(`Total exercises pinned in Phase 1: ${pinnedExercises.size}`);
+  fixedAssignments.forEach(fa => {
+    console.log(`  - ${fa.clientId} R${fa.round}: ${fa.exerciseId} (${fa.fixedReason})`);
+  });
+  
   // Phase 2: Detect and assign shared exercises
   
   // Group exercises by exerciseId to find shared ones
@@ -241,17 +261,18 @@ export function buildAllowedSlots(
       clients: group,
       resources: group[0].resources, // All should have same resources
       movementPattern: group[0].movementPattern,
+      functionTags: group[0].functionTags,
       equipmentCount: Object.keys(group[0].resources).length,
       equipmentScarcity: getEquipmentScarcityScore(group[0].resources, capacityMap)
     }));
   
   // Sort shared exercises to maximize successful placements
   sharedExerciseGroups.sort((a, b) => {
-    // 1. Prioritize core exercises (they all target R5, so process together)
-    const aIsCore = isCoreMovement(a.movementPattern);
-    const bIsCore = isCoreMovement(b.movementPattern);
-    if (aIsCore !== bIsCore) {
-      return aIsCore ? -1 : 1; // Core exercises first
+    // 1. Prioritize core and capacity exercises (they target last round, so process together)
+    const aIsLastRound = isCoreMovement(a.movementPattern) || isCapacityExercise(a);
+    const bIsLastRound = isCoreMovement(b.movementPattern) || isCapacityExercise(b);
+    if (aIsLastRound !== bIsLastRound) {
+      return aIsLastRound ? -1 : 1; // Core/capacity exercises first
     }
     
     // 2. Within same movement type, prioritize by equipment constraints
@@ -293,6 +314,7 @@ export function buildAllowedSlots(
     // Skip if we don't have at least 2 clients who can participate
     if (availableClients.length < 2) {
       console.log(`Skipping shared exercise ${sharedGroup.exerciseId} - only ${availableClients.length} clients have available slots`);
+      // Don't process as shared, but these exercises will be available for singleton processing
       continue;
     }
     
@@ -318,8 +340,27 @@ export function buildAllowedSlots(
     
     // Determine target round based on baseline rules
     let targetRound: number;
-    if (isCoreMovement(sharedGroup.movementPattern)) {
-      targetRound = 5; // Core exercises go to R5
+    if (isCoreMovement(sharedGroup.movementPattern) || isCapacityExercise(sharedGroup)) {
+      // For core and capacity exercises, find the minimum last round among all participating clients
+      // Note: Capacity exercises are excluded from Round 1 in Phase 1
+      let minLastRound = totalRounds;
+      for (const client of sharedGroup.clients) {
+        const clientPlan = clientPlans.find(p => p.clientId === client.clientId);
+        if (clientPlan?.bundleSkeleton) {
+          // Find the last round this client participates in
+          let clientLastRound = 0;
+          for (let i = clientPlan.bundleSkeleton.length - 1; i >= 0; i--) {
+            if (clientPlan.bundleSkeleton[i] > 0) {
+              clientLastRound = i + 1; // Convert to 1-based
+              break;
+            }
+          }
+          if (clientLastRound > 0 && clientLastRound < minLastRound) {
+            minLastRound = clientLastRound;
+          }
+        }
+      }
+      targetRound = minLastRound; // Core and capacity exercises go to minimum last round
     } else {
       // Check if similar movement to any client's R1
       const hasSimilarToR1 = Array.from(clientR1Movements.values()).some(
@@ -453,9 +494,161 @@ export function buildAllowedSlots(
     }
   }
   
-  // Process remaining exercises that aren't shared or pinned
+  // Log Phase 2 results
+  console.log('=== PHASE 2 RESULTS ===');
+  const phase2Assignments = fixedAssignments.filter(fa => fa.fixedReason === 'shared_exercise');
+  console.log(`Total exercises pinned in Phase 2: ${phase2Assignments.length}`);
+  phase2Assignments.forEach(fa => {
+    console.log(`  - ${fa.clientId} R${fa.round}: ${fa.exerciseId} (${fa.fixedReason})`);
+  });
+  console.log(`Total pinned after Phase 2: ${pinnedExercises.size}`);
+  
+  // Track exercises that failed placement
+  const failedPlacements = new Map<string, 'singleton_no_slots' | 'shared_no_slots'>();
+  
+  // Phase 3: Process singleton exercises (equipment with capacity = 1)
+  
+  // Find remaining exercises that use singleton equipment
   const remainingExercises = exercisesWithResources.filter(ex => !pinnedExercises.has(getPinnedKey(ex.exerciseId, ex.clientId)));
-  const exerciseOptions = remainingExercises.map(exercise => {
+  
+  console.log('=== PHASE 3: SINGLETON EXERCISE DETECTION ===');
+  console.log(`Total remaining exercises: ${remainingExercises.length}`);
+  
+  // Log all remaining exercises with their equipment
+  console.log('Remaining exercises:');
+  remainingExercises.forEach(ex => {
+    console.log(`  - ${ex.name || ex.exerciseId} (${ex.clientId}) - Equipment: ${JSON.stringify(ex.resources)}, Tier: ${ex.tier}`);
+  });
+  
+  // Log equipment capacities for singleton equipment
+  const singletonEquipment = Object.entries(capacityMap).filter(([_, cap]) => cap === 1);
+  console.log('Singleton equipment (capacity = 1):', singletonEquipment.map(([eq, cap]) => `${eq}:${cap}`).join(', '));
+  
+  // Group by equipment that has capacity = 1
+  const singletonExercises = remainingExercises.filter(exercise => {
+    // Check if any equipment used has capacity = 1
+    const hasSingletonEquipment = Object.entries(exercise.resources).some(([equipment, _]) => {
+      const capacity = capacityMap[equipment as keyof EquipmentCapacityMap];
+      return capacity === 1;
+    });
+    
+    if (hasSingletonEquipment) {
+      console.log(`Found singleton exercise: ${exercise.name || exercise.exerciseId} (${exercise.clientId}) - Equipment: ${JSON.stringify(exercise.resources)}`);
+    }
+    
+    return hasSingletonEquipment;
+  });
+  
+  console.log(`Total singleton exercises found: ${singletonExercises.length}`);
+  
+  
+  // Sort singleton exercises by tier and equipment scarcity
+  singletonExercises.sort((a, b) => {
+    // Sort by tier first (lower tier = higher priority)
+    if (a.tier !== b.tier) return a.tier - b.tier;
+    
+    // Then by equipment scarcity
+    const aScore = getEquipmentScarcityScore(a.resources, capacityMap);
+    const bScore = getEquipmentScarcityScore(b.resources, capacityMap);
+    if (aScore !== bScore) return aScore - bScore;
+    
+    // Finally by exerciseId for consistency
+    return a.exerciseId.localeCompare(b.exerciseId);
+  });
+  
+  // Process each singleton exercise
+  for (const exercise of singletonExercises) {
+    // Skip if already pinned
+    if (pinnedExercises.has(getPinnedKey(exercise.exerciseId, exercise.clientId))) {
+      continue;
+    }
+    
+    // Get client's R1 movement pattern
+    const r1Assignment = fixedAssignments.find(
+      a => a.clientId === exercise.clientId && a.round === 1
+    );
+    let r1MovementPattern: string | undefined;
+    if (r1Assignment) {
+      const r1Exercise = exercisesWithResources.find(
+        ex => ex.exerciseId === r1Assignment.exerciseId && ex.clientId === r1Assignment.clientId
+      );
+      r1MovementPattern = r1Exercise?.movementPattern;
+    }
+    
+    // Determine target round based on baseline rules
+    let targetRound: number;
+    if (isCoreMovement(exercise.movementPattern)) {
+      targetRound = 5; // Core exercises go to R5
+    } else if (r1MovementPattern && isSimilarMovementPattern(exercise.movementPattern, r1MovementPattern)) {
+      targetRound = 3; // Similar movement to R1 goes to R3
+    } else {
+      targetRound = 2; // Different movement from R1 goes to R2
+    }
+    
+    // Try to place in target round or next available
+    let placed = false;
+    for (let round = targetRound; round <= totalRounds && !placed; round++) {
+      const roundIndex = round - 1;
+      
+      // Check client slot availability
+      const clientPlan = clientPlans.find(p => p.clientId === exercise.clientId);
+      const maxSlots = clientPlan?.bundleSkeleton?.[roundIndex] || 0;
+      const usedSlots = clientUsedSlots[exercise.clientId]?.[roundIndex] || 0;
+      
+      if (usedSlots >= maxSlots) continue;
+      
+      // Check equipment capacity
+      let canPlace = true;
+      for (const [equipment, needed] of Object.entries(exercise.resources)) {
+        const currentUse = roundCapacityUse[roundIndex][equipment] || 0;
+        const capacity = capacityMap[equipment as keyof EquipmentCapacityMap] || 0;
+        
+        if (currentUse + needed > capacity) {
+          canPlace = false;
+          break;
+        }
+      }
+      
+      if (canPlace) {
+        // Place the singleton exercise
+        fixedAssignments.push({
+          exerciseId: exercise.exerciseId,
+          clientId: exercise.clientId,
+          round: round,
+          resources: exercise.resources,
+          fixedReason: 'singleton',
+          warning: round !== targetRound 
+            ? `Moved from R${targetRound} to R${round} due to availability`
+            : undefined
+        });
+        
+        // Update tracking
+        pinnedExercises.add(getPinnedKey(exercise.exerciseId, exercise.clientId));
+        clientUsedSlots[exercise.clientId][roundIndex]++;
+        
+        // Update capacity use
+        for (const [equipment, needed] of Object.entries(exercise.resources)) {
+          roundCapacityUse[roundIndex][equipment] = 
+            (roundCapacityUse[roundIndex][equipment] || 0) + needed;
+        }
+        
+        placed = true;
+      }
+    }
+    
+    if (!placed) {
+      console.warn(
+        `Could not place singleton exercise ${exercise.name || exercise.exerciseId} for client ${exercise.clientId}. ` +
+        `Equipment constraints too restrictive.`
+      );
+      // Track this failed placement
+      failedPlacements.set(getPinnedKey(exercise.exerciseId, exercise.clientId), 'singleton_no_slots');
+    }
+  }
+  
+  // Update remaining exercises to exclude processed singletons
+  const finalRemainingExercises = exercisesWithResources.filter(ex => !pinnedExercises.has(getPinnedKey(ex.exerciseId, ex.clientId)));
+  const exerciseOptions = finalRemainingExercises.map(exercise => {
     // Calculate allowed rounds based on client slots and capacity
     const allowedRounds: number[] = [];
     const clientPlan = clientPlans.find(p => p.clientId === exercise.clientId);
@@ -485,13 +678,97 @@ export function buildAllowedSlots(
       }
     }
     
+    const key = getPinnedKey(exercise.exerciseId, exercise.clientId);
+    const placementIssue = failedPlacements.get(key);
+    
     return {
       exerciseId: exercise.exerciseId,
       clientId: exercise.clientId,
       allowedRounds: allowedRounds.length > 0 ? allowedRounds : [1], // Fallback to R1 if no rounds available
       tier: exercise.tier,
-      resources: exercise.resources
+      resources: exercise.resources,
+      ...(placementIssue && { placementIssue })
     };
+  });
+  
+  // Phase 4: Last Exercise Auto-Assignment
+  // If a client has exactly 1 unassigned exercise and only 1 available slot, auto-assign it
+  console.log('=== PHASE 4: LAST EXERCISE AUTO-ASSIGNMENT ===');
+  
+  // Group remaining exercises by client
+  const clientRemainingExercises = new Map<string, ExerciseWithResources[]>();
+  for (const exercise of finalRemainingExercises) {
+    if (!clientRemainingExercises.has(exercise.clientId)) {
+      clientRemainingExercises.set(exercise.clientId, []);
+    }
+    clientRemainingExercises.get(exercise.clientId)!.push(exercise);
+  }
+  
+  // Check each client
+  for (const [clientId, remainingExercises] of clientRemainingExercises) {
+    // Only process if client has exactly 1 exercise left
+    if (remainingExercises.length !== 1) {
+      continue;
+    }
+    
+    const exercise = remainingExercises[0];
+    const clientPlan = clientPlans.find(p => p.clientId === clientId);
+    if (!clientPlan) continue;
+    
+    // Count available slots for this client
+    const availableSlots: number[] = [];
+    for (let round = 1; round <= totalRounds; round++) {
+      const roundIndex = round - 1;
+      const maxSlots = clientPlan.bundleSkeleton?.[roundIndex] || 0;
+      const usedSlots = clientUsedSlots[clientId]?.[roundIndex] || 0;
+      
+      if (usedSlots < maxSlots) {
+        availableSlots.push(round);
+      }
+    }
+    
+    // If exactly 1 slot available, auto-assign
+    if (availableSlots.length === 1 && exercise) {
+      const targetRound = availableSlots[0]!;
+      const roundIndex = targetRound - 1;
+      
+      console.log(`Client ${clientId} has 1 exercise (${exercise.name || exercise.exerciseId}) and 1 slot (R${targetRound}) - auto-assigning`);
+      
+      // Create fixed assignment (ignoring capacity constraints)
+      fixedAssignments.push({
+        exerciseId: exercise.exerciseId,
+        clientId: exercise.clientId,
+        round: targetRound,
+        resources: exercise.resources,
+        fixedReason: 'last_exercise_auto_assign',
+        warning: 'Auto-assigned last exercise to only available slot (capacity constraints ignored)'
+      });
+      
+      // Update tracking
+      pinnedExercises.add(getPinnedKey(exercise.exerciseId, exercise.clientId));
+      clientUsedSlots[clientId][roundIndex]++;
+      
+      // Update capacity use (even though we're ignoring constraints, we still track usage)
+      for (const [equipment, needed] of Object.entries(exercise.resources)) {
+        roundCapacityUse[roundIndex][equipment] = 
+          (roundCapacityUse[roundIndex][equipment] || 0) + needed;
+      }
+      
+      // Remove from exerciseOptions
+      const optionIndex = exerciseOptions.findIndex(
+        opt => opt.exerciseId === exercise.exerciseId && opt.clientId === exercise.clientId
+      );
+      if (optionIndex >= 0) {
+        exerciseOptions.splice(optionIndex, 1);
+      }
+    }
+  }
+  
+  // Log Phase 4 results
+  const phase4Assignments = fixedAssignments.filter(fa => fa.fixedReason === 'last_exercise_auto_assign');
+  console.log(`Total exercises auto-assigned in Phase 4: ${phase4Assignments.length}`);
+  phase4Assignments.forEach(fa => {
+    console.log(`  - ${fa.clientId} R${fa.round}: ${fa.exerciseId} (${fa.fixedReason})`);
   });
   
   return {

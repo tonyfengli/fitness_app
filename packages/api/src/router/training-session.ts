@@ -198,6 +198,7 @@ async function preprocessPhase2Data(
           functionTags: we.exercise.functionTags,
           primaryMuscle: we.exercise.primaryMuscle,
           modality: we.exercise.modality,
+          fatigueProfile: we.exercise.fatigueProfile,
         })),
       };
     }),
@@ -212,6 +213,16 @@ async function preprocessPhase2Data(
 
   // Collect all exercises across all clients
   const allExercises = clientsDataWithExercises.flatMap(client => client.exercises);
+  
+  // Log sample exercises to check if fatigueProfile is present
+  console.log('=== PHASE 2 PREPROCESSING - SAMPLE EXERCISES ===');
+  allExercises.slice(0, 3).forEach(ex => {
+    console.log(`Exercise: ${ex.name}`);
+    console.log(`  - Equipment: ${JSON.stringify(ex.equipment)}`);
+    console.log(`  - Movement Pattern: ${ex.movementPattern}`);
+    console.log(`  - Function Tags: ${JSON.stringify(ex.functionTags)}`);
+    console.log(`  - Fatigue Profile: ${ex.fatigueProfile || 'MISSING'}`);
+  });
   
   // Assign tiers to all exercises
   const exercisesWithTiers = assignExerciseTiers(allExercises);

@@ -245,11 +245,14 @@ function Phase2PreviewContent({ sessionId }: { sessionId: string }) {
                           ? 'bg-orange-100 text-orange-700'
                           : assignment.fixedReason === 'shared_exercise'
                           ? 'bg-blue-100 text-blue-700'
+                          : assignment.fixedReason === 'last_exercise_auto_assign'
+                          ? 'bg-purple-100 text-purple-700'
                           : 'bg-amber-100 text-amber-700'
                       }`}>
                         {assignment.fixedReason === 'tier_priority' ? 'Tier' : 
                          assignment.fixedReason === 'singleton' ? 'Singleton' : 
                          assignment.fixedReason === 'shared_exercise' ? 'Shared' :
+                         assignment.fixedReason === 'last_exercise_auto_assign' ? 'Auto-Assigned' :
                          `Cascade ${assignment.singletonIteration}`}
                       </span>
                     )}
@@ -311,11 +314,14 @@ function Phase2PreviewContent({ sessionId }: { sessionId: string }) {
                                   ? 'bg-orange-100 text-orange-800'
                                   : fixed.fixedReason === 'shared_exercise'
                                   ? 'bg-blue-100 text-blue-800'
+                                  : fixed.fixedReason === 'last_exercise_auto_assign'
+                                  ? 'bg-purple-100 text-purple-800'
                                   : 'bg-amber-100 text-amber-800'
                               }`}>
                                 {fixed.fixedReason === 'tier_priority' ? 'Tier Fixed' : 
                                  fixed.fixedReason === 'singleton' ? 'Singleton' : 
                                  fixed.fixedReason === 'shared_exercise' ? 'Shared' :
+                                 fixed.fixedReason === 'last_exercise_auto_assign' ? 'Auto-Assigned' :
                                  `Cascade ${fixed.singletonIteration}`}
                               </div>
                               <div className="text-gray-700 text-center">{exercise?.name || 'Unknown'}</div>
@@ -473,6 +479,7 @@ function Phase2PreviewContent({ sessionId }: { sessionId: string }) {
                                       <span className={`${
                                         fixedAssignment.fixedReason === 'tier_priority' ? 'text-green-600' :
                                         fixedAssignment.fixedReason === 'singleton' ? 'text-orange-600' :
+                                        fixedAssignment.fixedReason === 'last_exercise_auto_assign' ? 'text-purple-600' :
                                         'text-amber-600'
                                       }`}>
                                         Fixed → Round {fixedAssignment.round}
@@ -484,11 +491,14 @@ function Phase2PreviewContent({ sessionId }: { sessionId: string }) {
                                           ? 'bg-orange-100 text-orange-700'
                                           : fixedAssignment.fixedReason === 'shared_exercise'
                                           ? 'bg-blue-100 text-blue-700'
+                                          : fixedAssignment.fixedReason === 'last_exercise_auto_assign'
+                                          ? 'bg-purple-100 text-purple-700'
                                           : 'bg-amber-100 text-amber-700'
                                       }`}>
                                         {fixedAssignment.fixedReason === 'tier_priority' ? 'Tier' : 
                                          fixedAssignment.fixedReason === 'singleton' ? 'Singleton' : 
                                          fixedAssignment.fixedReason === 'shared_exercise' ? 'Shared' :
+                                         fixedAssignment.fixedReason === 'last_exercise_auto_assign' ? 'Auto-Assigned' :
                                          `Cascade ${fixedAssignment.singletonIteration}`}
                                       </span>
                                     </div>
@@ -496,6 +506,13 @@ function Phase2PreviewContent({ sessionId }: { sessionId: string }) {
                                   {exerciseOption && exerciseOption.allowedRounds.length > 0 && (
                                     <div className="text-blue-600 mt-0.5">
                                       Allowed rounds: {exerciseOption.allowedRounds.join(', ')}
+                                      {exerciseOption.placementIssue && (
+                                        <span className="ml-2 text-xs text-orange-600 italic">
+                                          {exerciseOption.placementIssue === 'singleton_no_slots' 
+                                            ? '(singleton equipment - no slots available)'
+                                            : '(shared exercise - insufficient slots)'}
+                                        </span>
+                                      )}
                                     </div>
                                   )}
                                   {!fixedAssignment && !exerciseOption && (
