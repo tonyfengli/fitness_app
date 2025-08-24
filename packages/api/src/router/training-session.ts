@@ -168,7 +168,7 @@ async function preprocessPhase2Data(
 
   // Get exercises with details and user info for each workout
   const clientsDataWithExercises = await Promise.all(
-    workouts.map(async (workout) => {
+    workouts.map(async (workout: typeof Workout.$inferSelect) => {
       // Get workout exercises with full exercise details
       const workoutExercises = await ctx.db
         .select({
@@ -189,7 +189,7 @@ async function preprocessPhase2Data(
         clientId: workout.userId,
         clientName: user?.name || user?.email?.split('@')[0] || "Unknown",
         exerciseCount: workoutExercises.length,
-        exercises: workoutExercises.map(we => ({
+        exercises: workoutExercises.map((we: typeof workoutExercises[number]) => ({
           exerciseId: we.exerciseId,
           clientId: workout.userId,
           name: we.exercise.name,

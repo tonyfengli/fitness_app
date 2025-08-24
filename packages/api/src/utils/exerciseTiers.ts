@@ -186,11 +186,11 @@ export function groupExercisesByTier(
     }
     
     const tier = exercise.tier;
-    if (!grouped[exercise.clientId][tier]) {
-      grouped[exercise.clientId][tier] = [];
+    if (!grouped[exercise.clientId]![tier]) {
+      grouped[exercise.clientId]![tier] = [];
     }
     
-    grouped[exercise.clientId][tier].push(exercise);
+    grouped[exercise.clientId]![tier]!.push(exercise);
   }
   
   return grouped;

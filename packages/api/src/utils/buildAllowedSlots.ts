@@ -199,7 +199,7 @@ export function buildAllowedSlots(
         let canPlace = true;
         
         for (const [equipment, needed] of Object.entries(exercise.resources)) {
-          const currentUse = roundCapacityUse[0][equipment] || 0;
+          const currentUse = roundCapacityUse[0]?.[equipment] || 0;
           const capacity = capacityMap[equipment as keyof EquipmentCapacityMap] || 0;
           
           if (currentUse + needed > capacity) {
@@ -220,13 +220,15 @@ export function buildAllowedSlots(
           
           // Update capacity tracking
           for (const [equipment, needed] of Object.entries(exercise.resources)) {
-            roundCapacityUse[0][equipment] = (roundCapacityUse[0][equipment] || 0) + needed;
+            if (roundCapacityUse[0]) {
+              roundCapacityUse[0][equipment] = (roundCapacityUse[0][equipment] || 0) + needed;
+            }
           }
           
           // Mark as pinned
           pinnedExercises.add(getPinnedKey(exercise.exerciseId, exercise.clientId));
           clientUsedSlots[clientId] = clientUsedSlots[clientId] || Array(totalRounds).fill(0);
-          clientUsedSlots[clientId][0]++;
+          clientUsedSlots[clientId]![0]++;
           
           exercisePinned = true;
           break;
@@ -259,11 +261,11 @@ export function buildAllowedSlots(
     .map(([exerciseId, group]) => ({
       exerciseId,
       clients: group,
-      resources: group[0].resources, // All should have same resources
-      movementPattern: group[0].movementPattern,
-      functionTags: group[0].functionTags,
-      equipmentCount: Object.keys(group[0].resources).length,
-      equipmentScarcity: getEquipmentScarcityScore(group[0].resources, capacityMap)
+      resources: group[0]?.resources || {}, // All should have same resources
+      movementPattern: group[0]?.movementPattern,
+      functionTags: group[0]?.functionTags,
+      equipmentCount: Object.keys(group[0]?.resources || {}).length,
+      equipmentScarcity: getEquipmentScarcityScore(group[0]?.resources || {}, capacityMap)
     }));
   
   // Sort shared exercises to maximize successful placements
@@ -350,7 +352,7 @@ export function buildAllowedSlots(
           // Find the last round this client participates in
           let clientLastRound = 0;
           for (let i = clientPlan.bundleSkeleton.length - 1; i >= 0; i--) {
-            if (clientPlan.bundleSkeleton[i] > 0) {
+            if ((clientPlan.bundleSkeleton[i] ?? 0) > 0) {
               clientLastRound = i + 1; // Convert to 1-based
               break;
             }
@@ -425,7 +427,7 @@ export function buildAllowedSlots(
         // Check equipment capacity
         if (canPlaceCohort) {
           for (const [equipment, needed] of Object.entries(sharedGroup.resources)) {
-            const currentUse = roundCapacityUse[roundIndex][equipment] || 0;
+            const currentUse = roundCapacityUse[roundIndex]?.[equipment] || 0;
             const capacity = capacityMap[equipment as keyof EquipmentCapacityMap] || 0;
             const totalNeeded = needed * cohortClients.length;
             
@@ -452,12 +454,16 @@ export function buildAllowedSlots(
             
             // Update tracking
             pinnedExercises.add(getPinnedKey(client.exerciseId, client.clientId));
-            clientUsedSlots[client.clientId][roundIndex]++;
+            if (clientUsedSlots[client.clientId]?.[roundIndex] !== undefined) {
+              clientUsedSlots[client.clientId]![roundIndex]++;
+            }
             
             // Update capacity use
             for (const [equipment, needed] of Object.entries(client.resources)) {
-              roundCapacityUse[roundIndex][equipment] = 
-                (roundCapacityUse[roundIndex][equipment] || 0) + needed;
+              if (roundCapacityUse[roundIndex]) {
+                roundCapacityUse[roundIndex][equipment] = 
+                  (roundCapacityUse[roundIndex]?.[equipment] || 0) + needed;
+              }
             }
           }
           
@@ -600,7 +606,7 @@ export function buildAllowedSlots(
       // Check equipment capacity
       let canPlace = true;
       for (const [equipment, needed] of Object.entries(exercise.resources)) {
-        const currentUse = roundCapacityUse[roundIndex][equipment] || 0;
+        const currentUse = roundCapacityUse[roundIndex]?.[equipment] || 0;
         const capacity = capacityMap[equipment as keyof EquipmentCapacityMap] || 0;
         
         if (currentUse + needed > capacity) {
@@ -624,12 +630,16 @@ export function buildAllowedSlots(
         
         // Update tracking
         pinnedExercises.add(getPinnedKey(exercise.exerciseId, exercise.clientId));
-        clientUsedSlots[exercise.clientId][roundIndex]++;
+        if (clientUsedSlots[exercise.clientId]?.[roundIndex] !== undefined) {
+          clientUsedSlots[exercise.clientId]![roundIndex]++;
+        }
         
         // Update capacity use
         for (const [equipment, needed] of Object.entries(exercise.resources)) {
-          roundCapacityUse[roundIndex][equipment] = 
-            (roundCapacityUse[roundIndex][equipment] || 0) + needed;
+          if (roundCapacityUse[roundIndex]) {
+            roundCapacityUse[roundIndex][equipment] = 
+              (roundCapacityUse[roundIndex]?.[equipment] || 0) + needed;
+          }
         }
         
         placed = true;
@@ -664,7 +674,7 @@ export function buildAllowedSlots(
       // Check equipment capacity
       let hasCapacity = true;
       for (const [equipment, needed] of Object.entries(exercise.resources)) {
-        const currentUse = roundCapacityUse[roundIndex][equipment] || 0;
+        const currentUse = roundCapacityUse[roundIndex]?.[equipment] || 0;
         const capacity = capacityMap[equipment as keyof EquipmentCapacityMap] || 0;
         
         if (currentUse + needed > capacity) {
@@ -746,12 +756,16 @@ export function buildAllowedSlots(
       
       // Update tracking
       pinnedExercises.add(getPinnedKey(exercise.exerciseId, exercise.clientId));
-      clientUsedSlots[clientId][roundIndex]++;
+      if (clientUsedSlots[clientId]?.[roundIndex] !== undefined) {
+        clientUsedSlots[clientId]![roundIndex]++;
+      }
       
       // Update capacity use (even though we're ignoring constraints, we still track usage)
       for (const [equipment, needed] of Object.entries(exercise.resources)) {
-        roundCapacityUse[roundIndex][equipment] = 
-          (roundCapacityUse[roundIndex][equipment] || 0) + needed;
+        if (roundCapacityUse[roundIndex]) {
+          roundCapacityUse[roundIndex][equipment] = 
+            (roundCapacityUse[roundIndex]?.[equipment] || 0) + needed;
+        }
       }
       
       // Remove from exerciseOptions

@@ -25,9 +25,9 @@ function calculateMedian(numbers: number[]): number {
   const mid = Math.floor(sorted.length / 2);
   
   if (sorted.length % 2 === 0) {
-    return Math.ceil((sorted[mid - 1] + sorted[mid]) / 2);
+    return Math.ceil(((sorted[mid - 1] ?? 0) + (sorted[mid] ?? 0)) / 2);
   }
-  return sorted[mid];
+  return sorted[mid] ?? 0;
 }
 
 /**
@@ -101,6 +101,8 @@ function calculateClientBundleSkeleton(
   const usedRounds = new Set<number>();
   
   for (const candidate of candidateRounds) {
+    if (candidate === undefined) continue;
+    
     // Check if this would create back-to-back supersets
     const wouldBeBackToBack = 
       usedRounds.has(candidate - 1) || 
