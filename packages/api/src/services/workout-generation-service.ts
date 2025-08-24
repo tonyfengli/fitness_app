@@ -559,7 +559,7 @@ export class WorkoutGenerationService {
         return result;
       }
 
-      // Otherwise, run both phases as normal
+      // Run Phase 1 only for now (Phase 2 removed)
       const workoutPlan = await generator.generate(
         blueprint,
         groupContext,
@@ -569,15 +569,15 @@ export class WorkoutGenerationService {
 
       logger.info("Standard workout plan generated successfully", {
         sharedExercises: workoutPlan.exerciseSelection.sharedExercises.length,
-        rounds: workoutPlan.roundOrganization.rounds.length,
+        hasRoundOrganization: false, // Phase 2 removed
       });
 
       // Return in format compatible with createWorkouts
       const result: any = {
         exerciseSelection: workoutPlan.exerciseSelection,
-        roundOrganization: workoutPlan.roundOrganization,
-        systemPrompt: "Two-phase generation - prompts in individual phases",
-        userMessage: "Two-phase generation - see individual phases",
+        roundOrganization: null, // Phase 2 removed - will be built separately
+        systemPrompt: "Phase 1 generation only - Phase 2 to be implemented",
+        userMessage: "Phase 1 exercise selection",
         llmOutput: JSON.stringify(workoutPlan, null, 2),
         metadata: workoutPlan.metadata,
       };
@@ -1317,6 +1317,65 @@ export class WorkoutGenerationService {
     const allExercises = [];
     const { exerciseSelection, roundOrganization } = generationResult;
 
+    // If no round organization (Phase 2 removed), create exercises from selection only
+    if (!roundOrganization) {
+      logger.info("No round organization - creating exercises from Phase 1 selection only");
+      
+      // Process each client's selected exercises
+      for (const [clientId, clientSelection] of Object.entries(exerciseSelection.clientSelections)) {
+        const workoutId = clientWorkouts.get(clientId);
+        if (!workoutId) continue;
+
+        const clientData = clientSelection as any;
+        let orderIndex = 0;
+
+        // Add pre-assigned exercises first
+        for (const exercise of clientData.preAssigned || []) {
+          const dbExercise = exercisePool.find(
+            (ex: Exercise) =>
+              ex.id === exercise.exerciseId ||
+              ex.name.toLowerCase() === exercise.exerciseName.toLowerCase(),
+          );
+
+          if (dbExercise) {
+            allExercises.push({
+              workoutId: workoutId,
+              exerciseId: dbExercise.id,
+              orderIndex: orderIndex++,
+              setsCompleted: 3,
+              groupName: "Unorganized",
+              selectionSource: exercise.source || "pre_assigned",
+            });
+          }
+        }
+
+        // Add selected exercises
+        for (const exercise of clientData.selected || []) {
+          const dbExercise = exercisePool.find(
+            (ex: Exercise) =>
+              ex.id === exercise.exerciseId ||
+              ex.name.toLowerCase() === exercise.exerciseName.toLowerCase(),
+          );
+
+          if (dbExercise) {
+            allExercises.push({
+              workoutId: workoutId,
+              exerciseId: dbExercise.id,
+              orderIndex: orderIndex++,
+              setsCompleted: 3,
+              groupName: "Unorganized",
+              isShared: exercise.isShared || false,
+              sharedWithClients: exercise.sharedWith || null,
+              selectionSource: "llm_phase1",
+            });
+          }
+        }
+      }
+
+      return allExercises;
+    }
+
+    // Original logic for when round organization exists
     // Process each round
     for (const round of roundOrganization.rounds) {
       // Process each client's exercises in this round
@@ -1372,6 +1431,7 @@ export class WorkoutGenerationService {
 
   /**
    * Generate Phase 2 sequencing based on saved selections
+   * @deprecated Phase 2 is being reimplemented
    */
   async generatePhase2Sequencing(
     sessionId: string,
@@ -1464,49 +1524,11 @@ export class WorkoutGenerationService {
       }
     }
 
-    // Now run Phase 2 using StandardWorkoutGenerator
-    const generator = new StandardWorkoutGenerator();
-
-    try {
-      // Use the private method through a workaround
-      const roundOrganization = await (generator as any).organizeIntoRounds(
-        exerciseSelection,
-        template,
-        groupContext,
-      );
-
-      logger.info("Phase 2 sequencing completed", {
-        rounds: roundOrganization.rounds.length,
-        totalDuration: roundOrganization.workoutSummary.totalDuration,
-      });
-
-      // Create workouts with the complete data
-      const generationResult = {
-        exerciseSelection,
-        roundOrganization,
-        systemPrompt: "Phase 2 only - see round organization",
-        userMessage: "Organize exercises into rounds",
-        llmOutput: JSON.stringify(roundOrganization),
-      };
-
-      const workoutIds = await this.createWorkouts(
-        sessionId,
-        generationResult,
-        groupContext,
-        exercisePool,
-      );
-
-      return {
-        success: true,
-        workoutIds,
-        roundOrganization,
-      };
-    } catch (error) {
-      logger.error("Error in Phase 2 sequencing:", error);
-      throw new Error(
-        `Phase 2 sequencing failed: ${error instanceof Error ? error.message : "Unknown error"}`,
-      );
-    }
+    // Phase 2 has been removed and needs to be reimplemented
+    throw new Error(
+      "Phase 2 round organization has been removed and is being reimplemented. " +
+      "Please use the new Phase 2 implementation once available."
+    );
   }
 
   /**

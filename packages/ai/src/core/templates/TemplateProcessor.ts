@@ -591,8 +591,7 @@ export class TemplateProcessor {
       sharedExercisePool,
       metadata: {
         templateType: this.template.id,
-        workoutFlow:
-          this.template.metadata?.workoutFlow || "strength-metabolic",
+        // workoutFlow removed - Phase 2 will handle round organization
         totalExercisesPerClient,
         preAssignedCount,
       },

@@ -107,37 +107,19 @@ Client has "chest" as muscle target and pre-assigned exercises are squat + pull.
   }
 
   private buildWorkoutFlow(): string {
-    const flow = this.blueprint.metadata.workoutFlow;
+    // Workout flow removed - Phase 2 will handle round organization
+    return `### 🏃 Workout Structure
 
-    if (flow === "pure-strength") {
-      return `### 🏃 Workout Flow
+**Full-Body Balanced Approach**
 
-**Pure Strength Focus**
-
-"workoutFlow": {
-  "structure": "Full-body strength-focused workout with progressive loading",
+"workoutStructure": {
+  "structure": "Full-body workout with balanced exercise selection",
   "exerciseRoles": [
     "2 pre-assigned: lower body and pull (completed)",
-    "Need 1-2: primary pushing/pressing movements (upper body balance)",
-    "Need 1-2: accessory strength work (isolation or compound variations)"
+    "Need 3-4: balanced selection across movement patterns",
+    "Need 1-2: core/stabilization work"
   ],
-  "guidance": "Select exercises that complement the pre-assigned work and build comprehensive strength across all muscle groups. Consider including core stability work."
-}`;
-    }
-
-    // Default: strength-metabolic
-    return `### 🏃 Workout Flow
-
-**Strength → Metabolic**
-
-"workoutFlow": {
-  "structure": "Full-body workout progressing from strength to metabolic",
-  "exerciseRoles": [
-    "2 pre-assigned: lower body and pull (completed)",
-    "Need 1-2: primary strength work (compound movements, heavier loads)",
-    "Need 1-2: conditioning/metabolic finishers (higher rep, cardio effect)"
-  ],
-  "guidance": "Select exercises that create a natural progression from strength-focused to metabolic-focused work. Aim to include at least one core-focused exercise."
+  "guidance": "Select exercises that complement the pre-assigned work and create a well-rounded workout. Focus on movement pattern variety and muscle group balance."
 }`;
   }
 

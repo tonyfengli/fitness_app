@@ -3294,7 +3294,6 @@ Set your goals and preferences for today's session.`;
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const mutationStartTime = Date.now();
       console.log(
         `[startWorkout-v2] START - Session: ${input.sessionId} at ${new Date().toISOString()}`,
       );
@@ -3369,7 +3368,7 @@ Set your goals and preferences for today's session.`;
               id: workout.id,
               userId: workout.userId,
               userName: user?.name || null,
-              userEmail: user?.email || "",
+              userEmail: user?.email ?? "",
               exercises: exercisesWithMetadata,
             };
           }),
@@ -3398,721 +3397,71 @@ Set your goals and preferences for today's session.`;
         };
       }
 
-      // If not organized, we need to run the Phase 2 organization
-      // We'll run the same logic as the legacy endpoint but return full data
-
-      // Get saved visualization data (contains Phase 1 selections)
-      const templateConfig = session.templateConfig as any;
-      const visualizationData = templateConfig?.visualizationData;
-
-      if (!visualizationData?.llmResult?.exerciseSelection) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message:
-            "No exercise selections found. Please generate workouts first.",
-        });
-      }
-
-      // Check if this template uses Phase 2 LLM organization
-      const isStandardTemplate =
-        session.templateType === "standard" ||
-        session.templateType === "standard_strength";
-
-      if (!isStandardTemplate) {
-        // For BMF and other templates, the workout is already organized
-        console.log(
-          `[startWorkout-v2] SKIP Phase 2 - Non-standard template: ${session.templateType}`,
-        );
-
-        // Fetch and return the data using direct queries
-        const workouts = await ctx.db.query.Workout.findMany({
-          where: eq(Workout.trainingSessionId, input.sessionId),
-        });
-
-        // For each workout, get exercises with full metadata
-        const workoutsWithExercises = await Promise.all(
-          workouts.map(async (workout) => {
-            const workoutExercises =
-              await ctx.db.query.WorkoutExercise.findMany({
-                where: eq(WorkoutExercise.workoutId, workout.id),
-              });
-
-            const exercisesWithMetadata = await Promise.all(
-              workoutExercises.map(async (we) => {
-                const exercise = await ctx.db.query.exercises.findFirst({
-                  where: eq(exercises.id, we.exerciseId),
-                });
-                return {
-                  ...we,
-                  exercise: exercise,
-                };
-              }),
-            );
-
-            // Get user info
-            const user = await ctx.db.query.user.findFirst({
-              where: eq(userTable.id, workout.userId),
-            });
-
-            return {
-              id: workout.id,
-              userId: workout.userId,
-              userName: user?.name || null,
-              userEmail: user?.email || "",
-              exercises: exercisesWithMetadata,
-            };
-          }),
-        );
-
-        // Extract unique clients
-        const uniqueClients = new Map();
-        workoutsWithExercises.forEach((workout) => {
-          if (!uniqueClients.has(workout.userId)) {
-            uniqueClients.set(workout.userId, {
-              userId: workout.userId,
-              name: workout.userName,
-              email: workout.userEmail,
-            });
-          }
-        });
-
-        return {
-          success: true,
-          message: "Workout ready (no Phase 2 organization needed)",
-          templateType: session.templateType,
-          workoutOrganization: session.workoutOrganization,
-          workouts: workoutsWithExercises,
-          clients: Array.from(uniqueClients.values()),
-        };
-      }
-
-      // For standard templates, we need to run Phase 2
+      // For all templates, the workout is already organized
       console.log(
-        "[startWorkout-v2] Starting Phase 2 organization for standard template",
+        `[startWorkout-v2] SKIP Phase 2 - Template: ${session.templateType}`,
       );
 
-      // Get saved visualization data (contains Phase 1 selections)
-      const sessionTemplateConfig = session.templateConfig as any;
-      const sessionVisualizationData = sessionTemplateConfig?.visualizationData;
+      // Fetch and return the data using direct queries
+      const workouts = await ctx.db.query.Workout.findMany({
+        where: eq(Workout.trainingSessionId, input.sessionId),
+      });
 
-      if (!sessionVisualizationData?.llmResult?.exerciseSelection) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message:
-            "No exercise selections found. Please generate workouts first.",
-        });
-      }
-
-      try {
-        // Step 1: Get all workouts and exercises for this session
-        // Get all workouts for this session
-        const workouts = await ctx.db.query.Workout.findMany({
-          where: eq(Workout.trainingSessionId, input.sessionId),
-        });
-
-        // For each workout, get exercises with full metadata
-        const workoutsWithExercises = await Promise.all(
-          workouts.map(async (workout) => {
-            // Get workout exercises
-            const workoutExercises =
-              await ctx.db.query.WorkoutExercise.findMany({
-                where: eq(WorkoutExercise.workoutId, workout.id),
-              });
-
-            // Get full exercise metadata for each
-            const exercisesWithMetadata = await Promise.all(
-              workoutExercises.map(async (we) => {
-                const exercise = await ctx.db.query.exercises.findFirst({
-                  where: eq(exercises.id, we.exerciseId),
-                });
-                return {
-                  ...we,
-                  exercise: exercise,
-                };
-              }),
-            );
-
-            return {
-              workout,
-              exercises: exercisesWithMetadata,
-            };
-          }),
-        );
-
-        console.log(
-          `[startWorkout-v2] Found ${workoutsWithExercises.length} clients, ${workoutsWithExercises.reduce((sum, w) => sum + w.exercises.length, 0)} total exercises`,
-        );
-
-        // Log specific exercise we're tracking
-        workoutsWithExercises.forEach(({ workout, exercises }) => {
-          exercises.forEach((e) => {
-            if (e.exerciseId === "144e1124-e7d596-4f62-9d0b-78f624ae4102") {
-              console.log(
-                `[startWorkout-v2] FOUND Kettlebell Deadlift in workout for client ${workout.userId}`,
-              );
-              console.log(
-                `[startWorkout-v2] Exercise data available:`,
-                !!e.exercise,
-              );
-              console.log(
-                `[startWorkout-v2] Exercise name from DB:`,
-                e.exercise?.name,
-              );
-            }
-          });
-        });
-
-        // Step 2: Extract client context and prepare for LLM
-        const groupContext = sessionVisualizationData.groupContext;
-        const exerciseSelection =
-          sessionVisualizationData.llmResult.exerciseSelection;
-
-        // Create exercise catalog (each exercise listed once)
-        const exerciseCatalog = new Map();
-        let missingExerciseCount = 0;
-        workoutsWithExercises.forEach(({ exercises }) => {
-          exercises.forEach((e) => {
-            if (!exerciseCatalog.has(e.exerciseId)) {
-              if (!e.exercise) {
-                missingExerciseCount++;
-                console.warn(
-                  `[startWorkout-v2] Exercise ${e.exerciseId} has no metadata - will show as Unknown`,
-                );
-              }
-              exerciseCatalog.set(e.exerciseId, {
-                id: e.exerciseId,
-                name: e.exercise?.name || "",
-                movementPattern: e.exercise?.movementPattern || "",
-                primaryMuscle: e.exercise?.primaryMuscle || "",
-                secondaryMuscles: e.exercise?.secondaryMuscles || [],
-                equipment: e.exercise?.equipment || [],
-              });
-            }
-          });
-        });
-
-        if (missingExerciseCount > 0) {
-          console.error(
-            `[startWorkout-v2] WARNING: ${missingExerciseCount} exercises missing from database`,
-          );
-        }
-
-        const phase2Input = {
-          templateType: session.templateType,
-          exerciseCatalog: Array.from(exerciseCatalog.values()),
-          clients: workoutsWithExercises.map(({ workout, exercises }) => {
-            const client = groupContext.clients.find(
-              (c: any) => c.user_id === workout.userId,
-            );
-            return {
-              clientId: workout.userId,
-              clientName: client?.name || "Unknown",
-              fitnessGoal: client?.primary_goal || "general_fitness",
-              intensity: client?.intensity || "moderate",
-              wantsFinisher:
-                client?.workoutType === "full_body_with_finisher" ||
-                client?.workoutType === "targeted_with_finisher",
-              exercises: exercises.map((e) => e.exerciseId),
-            };
-          }),
-          sharedExercises: exerciseSelection.sharedExercises || [],
-        };
-
-        console.log(
-          `[startWorkout-v2] Phase 2 input: ${phase2Input.clients.length} clients, ${phase2Input.exerciseCatalog.length} unique exercises`,
-        );
-
-        // Step 3: Call Phase 2 LLM
-        const equipmentInventory = {
-          barbell_rack: 2,
-          barbell: 4,
-          dumbbell: 10,
-          kettlebell: 6,
-          cable_station: 2,
-          pull_up_bar: 3,
-          bench: 4,
-          box: 4,
-        };
-
-        const anyClientWantsFinisher = phase2Input.clients.some(
-          (client) => client.wantsFinisher,
-        );
-
-        const phase2Prompt = `exerciseCatalog:${JSON.stringify(phase2Input.exerciseCatalog)}
-clients:${JSON.stringify(phase2Input.clients)}
-equipment:${JSON.stringify(equipmentInventory)}
-finisher:${anyClientWantsFinisher}
-
-Build rounds per rules. Output JSON only.`;
-
-        // Import LLM client
-        const { createLLM } = await import("@acme/ai");
-        const { HumanMessage, SystemMessage } = await import(
-          "@langchain/core/messages"
-        );
-
-        const llmConfig = {
-          modelName: "gpt-5",
-          maxTokens: 2500,
-          reasoning_effort: "low" as const,
-        };
-
-        const llm = createLLM(llmConfig);
-
-        // Use the same system prompt from legacy endpoint
-        const systemPrompt = `Abbreviations:
-- ph: phase → MS=Main Strength, AC=Accessory, CO=Core, PC=Power/Conditioning
-- rot: rotation → PAI=Pair, CIR=Circuit, STA=Station
-- pol: policy → SOLO=Single Client, ALT=Alternate, TOG=Together
-- mov: movement; prim: primary muscle; sec: secondary; eq: equipment
-- se: sets; rp: reps; wk: work; rt: rest; rd: number of rounds
-
-SYSTEM — Group Workout Orchestrator (v2.6.2)
-Role: Build group rounds from given clients/exercises/inventory. Return the smallest valid JSON.
-
-Abbreviations:
-- ph: phase → MS=Main Strength, AC=Accessory, CO=Core, PC=Power/Conditioning
-- mov: movementPattern; se: sets; rp: reps; wk: work; rt: rest
-
-GLOBAL PER-ROUND CONSTRAINT
-- Each client may appear at most once per round. Never output two assignments for the same (clientId, round).
-
-HARD RULES — priority order
-
-1) Mandatory coverage (highest)
-- Every exercise in each client's \`exercises\` list MUST appear exactly once per occurrence (count duplicates).
-- Duplicate IDs for a client = separate assignments in different rounds (same phase). No omissions.
-
-2) Block logic & mixed finisher policy
-- Classify by movementPattern:
-  • PC = conditioning/power intervals (finisher/capacity).
-  • NON-PC = everything else (MS, AC, CO).
-- Mixed finisher handling (per client):
-  • If \`wantsFinisher=false\`: schedule ALL items (MS, AC, CO) entirely in Block A; they do NOT appear in Block B.
-  • If \`wantsFinisher=true\`:
-      – Let \`coreCount\` be the number of CO items in their list.
-      – If \`intensity!="high"\`:
-          ▸ **Defer exactly ONE** CO item to Block B (choose the most mergeable/common or highest-intensity core for finisher flow).
-          ▸ Keep any remaining CO items for that client in Block A.
-      – If \`intensity=="high"\`:
-          ▸ You may **defer multiple** CO items to Block B (all, if station/time allows).
-- Compute \`nonPcRounds = max NON-PC count across clients\` **after** applying the deferral above (duplicates count).
-
-Block A — NON-PC (rounds 1..nonPcRounds)
-- Mix MS + AC + CO (but CO for finisher clients is included here only if it was **not deferred** by the rule above). Do NOT serialize MS before AC/CO.
-- **Round 1 priority:** If available, assign each client's heaviest lower-body compound (squat/hinge/lunge; barbell preferred) in Round 1, capacity permitting.
-- Breadth-first packing: in each Block-A round, assign exactly ONE pending NON-PC exercise per active client.
-- **Programming practices (when choosing among a client's eligible options):**
-  1) Alternate movement patterns across rounds for that client (avoid same pattern back-to-back).
-  2) Prefer Lower → Upper alternation across rounds when their list allows.
-  3) Heavy before accessory (choose compound/multi-joint before isolation) unless doing so violates 1 or 2.
-- If multiple clients have the same exerciseId in a round, they share ONE station.
-- Clients with no remaining NON-PC drop out of later Block-A rounds (no filler).
-- **Anti-solo:** If the final Block-A round would contain a single client, move that client's remaining NON-PC into the earliest prior Block-A round where they do not already have NON-PC. If none, allow that client TWO NON-PC assignments in the last multi-client round (but still one per client per round overall).
-
-Block B — Finisher / capacity (REQUIRED iff any \`wantsFinisher=true\`)
-- Round number = \`nonPcRounds + 1\` (add Block-B-2 only if needed; see below).
-- Participants: ONLY finisher clients who have at least one **deferred CO** or an explicit **PC** item.
-- Contents:
-  • Include each participating client's **deferred CO** and any explicit **PC** items from the catalog.
-  • **One assignment per client per Block-B round.** If a client has >1 deferred CO:
-      – Default: choose ONE as their station and convert remaining core volume to **+rounds** (if time-based) or **+sets** (if reps-based) on that station.
-      – If \`intensity=="high"\` and distinct movements are desired, open a second Block-B round (Block-B-2) and place one core per client per round (still max one per client per round).
-- **Baseline dose:** In each Block-B round, all participating clients share the SAME time scheme (e.g., work "30–40s", rest "15–20s", rounds 3–4).
-- **Extra capacity:** Only for clients with higher workload (> group median total exercises) or \`intensity:"high"\`. Prefer +1 round/set over adding stations.
-
-3) Phase labeling
-- Label each assignment by phase:
-  • MS: compound squat/hinge/lunge/push/pull; barbell multi-joint rows
-  • AC: isolation/assistance (shoulder/leg/arm isolates; dumbbell/bench/bird-dog/TRX rows)
-  • CO: core/anti_rotation/anti_extension
-  • PC: conditioning/power intervals
-
-4) Participation & capacity
-- Maximize clients per round in Block A. Avoid single-client rounds (see anti-solo).
-- Per-round stations ≤ active clients that round.
-
-5) Schemes
-- MS/AC/CO default to **reps-only** (no rest). If a catalog core item is explicitly time-based, time is allowed.
-- PC and all Block-B rounds are **time-based** (work+rest+rounds).
-
-6) Other constraints
-- Use only provided exercise IDs; no inventions.
-- Early finishers: a client may skip later rounds only AFTER all their listed exercises are scheduled.
-- Target duration: 45–60 min (based on the client with the most exercises).
-
-Inputs:
-- exerciseCatalog: [{id, name, movementPattern, primaryMuscle, secondaryMuscles[], equipment[]}]
-- clients: [{clientId, clientName, fitnessGoal, intensity, wantsFinisher, exercises:[exerciseId, ...]}]
-- equipment: {barbell_rack: 2, kettlebell: 6, ...}
-
-Output Format (v2.6.2-compact):
-{
-  "schemaVersion": "2.6.2",
-  "assignments": [
-    {
-      "clientId": "uuid",
-      "exerciseId": "uuid",
-      "round": 1,
-      "phase": "main_strength|accessory|core|power_conditioning",
-      "scheme": {"type":"reps","sets":3,"reps":"8-10"} | {"type":"time","work":"30s","rest":"15s","rounds":3},
-      "reasoning": ""
-    }
-  ]
-}
-
-Validation (single pass before output)
-- For each client, count(assignments matching their \`exercises\`, counting duplicates) == length of that array.
-- No duplicate (clientId, round). If found, consolidate per Block-B rules or open Block-B-2 if \`intensity=="high"\`.
-- If any missing, append minimal additional assignments in the correct block, then output.
-
-Brevity
-- Use the fewest tokens possible. Prefer \`reasoning: ""\`.
-
-Decision
-- Be decisive. First valid solution only. No alternatives.
-- JSON only. Stop after JSON. End with: END`;
-
-        const messages = [
-          new SystemMessage(systemPrompt),
-          new HumanMessage(phase2Prompt),
-        ];
-
-        const llmStartTime = Date.now();
-        const llmStartTimestamp = new Date().toISOString();
-        console.log(`[startWorkout-v2] Phase 2 LLM call START at ${llmStartTimestamp}`);
-        
-        // Log the raw prompts
-        console.log(`[startWorkout-v2] Phase 2 Raw System Prompt:\n${systemPrompt}\n`);
-        console.log(`[startWorkout-v2] Phase 2 Raw User Prompt:\n${phase2Prompt}\n`);
-
-        const response = await llm.invoke(messages);
-
-        const llmEndTime = Date.now();
-        const llmEndTimestamp = new Date().toISOString();
-        console.log(
-          `[startWorkout-v2] Phase 2 LLM call END at ${llmEndTimestamp} - Duration: ${llmEndTime - llmStartTime}ms`,
-        );
-
-        // Parse the response
-        let parsedResponse;
-        try {
-          let content = response.content;
-
-          if (typeof content === "string") {
-            content = content
-              .replace(/```json\s*/g, "")
-              .replace(/```\s*/g, "")
-              .trim();
-            if (content.endsWith("END")) {
-              content = content.slice(0, -3).trim();
-            }
-          }
-
-          parsedResponse = JSON.parse(content);
-          console.log(
-            `[startWorkout-v2] Phase 2 Response - Schema: ${parsedResponse.schemaVersion}, Assignments: ${parsedResponse.assignments?.length || 0}`,
-          );
-        } catch (parseError) {
-          console.error(
-            "[startWorkout-v2] Failed to parse LLM response:",
-            parseError,
-          );
-          throw new TRPCError({
-            code: "INTERNAL_SERVER_ERROR",
-            message: "Failed to parse workout organization",
-          });
-        }
-
-        // Step 4: Transform assignments into round organization
-        let roundOrganization;
-        if (
-          parsedResponse.schemaVersion === "2.6.2" ||
-          parsedResponse.schemaVersion === "2.6"
-        ) {
-          // Transform flat assignments into round structure
-          const roundsMap = new Map();
-
-          for (const assignment of parsedResponse.assignments) {
-            const roundKey = assignment.round;
-
-            if (!roundsMap.has(roundKey)) {
-              roundsMap.set(roundKey, {
-                roundNumber: assignment.round,
-                name: `Round ${assignment.round}`,
-                phase: assignment.phase,
-                scheme: assignment.scheme,
-                exercisesByClient: {},
-              });
-            }
-
-            const round = roundsMap.get(roundKey);
-            if (!round.exercisesByClient[assignment.clientId]) {
-              round.exercisesByClient[assignment.clientId] = [];
-            }
-
-            // Find exercise info from catalog
-            const exerciseInfo = phase2Input.exerciseCatalog.find(
-              (e) => e.id === assignment.exerciseId,
-            );
-
-            // Log if exercise name will be Unknown
-            if (!exerciseInfo || !exerciseInfo.name) {
-              console.warn(
-                `[startWorkout-v2] Exercise ${assignment.exerciseId} will show as Unknown - found: ${!!exerciseInfo}, name: "${exerciseInfo?.name}"`,
-              );
-            }
-
-            round.exercisesByClient[assignment.clientId].push({
-              exerciseId: assignment.exerciseId,
-              exerciseName: exerciseInfo?.name || "Unknown",
-              scheme: assignment.scheme,
-              orderIndex: round.exercisesByClient[assignment.clientId].length,
-              reasoning: assignment.reasoning || "",
+      // For each workout, get exercises with full metadata
+      const workoutsWithExercises = await Promise.all(
+        workouts.map(async (workout) => {
+          const workoutExercises =
+            await ctx.db.query.WorkoutExercise.findMany({
+              where: eq(WorkoutExercise.workoutId, workout.id),
             });
-          }
 
-          const rounds = Array.from(roundsMap.values()).sort(
-            (a, b) => a.roundNumber - b.roundNumber,
+          const exercisesWithMetadata = await Promise.all(
+            workoutExercises.map(async (we) => {
+              const exercise = await ctx.db.query.exercises.findFirst({
+                where: eq(exercises.id, we.exerciseId),
+              });
+              return {
+                ...we,
+                exercise: exercise,
+              };
+            }),
           );
 
-          // Update round names based on phase
-          rounds.forEach((round) => {
-            const phaseNames = {
-              main_strength: "Main Strength",
-              accessory: "Accessory",
-              core: "Core",
-              power_conditioning: "Power/Conditioning",
-            };
-            round.name = `Round ${round.roundNumber} - ${phaseNames[round.phase as keyof typeof phaseNames] || round.phase}`;
+          // Get user info
+          const user = await ctx.db.query.user.findFirst({
+            where: eq(userTable.id, workout.userId),
           });
 
-          roundOrganization = {
-            schemaVersion: "2.0",
-            rounds: rounds,
-            totalDuration: "~45 min",
-            finisher: {
-              included: rounds.some((r) => r.phase === "power_conditioning"),
-            },
+          return {
+            id: workout.id,
+            userId: workout.userId,
+            userName: user?.name || null,
+            userEmail: user?.email || "",
+            exercises: exercisesWithMetadata,
           };
+        }),
+      );
 
-          console.log(
-            `[startWorkout-v2] Transformed into ${rounds.length} rounds`,
-          );
-        } else {
-          // Use existing format as-is
-          roundOrganization = parsedResponse;
+      // Extract unique clients
+      const uniqueClients = new Map();
+      workoutsWithExercises.forEach((workout) => {
+        if (!uniqueClients.has(workout.userId)) {
+          uniqueClients.set(workout.userId, {
+            userId: workout.userId,
+            name: workout.userName,
+            email: workout.userEmail,
+          });
         }
+      });
 
-        // Step 5: Update database with organization
-        const dbUpdateStartTime = Date.now();
-        const dbStartTimestamp = new Date().toISOString();
-        console.log(`[startWorkout-v2] Database updates START at ${dbStartTimestamp}`);
-
-        // Store the round organization in TrainingSession
-        await ctx.db
-          .update(TrainingSession)
-          .set({
-            workoutOrganization: roundOrganization,
-            updatedAt: new Date(),
-          })
-          .where(eq(TrainingSession.id, input.sessionId));
-
-        // Reset all workout exercises first
-        for (const { workout } of workoutsWithExercises) {
-          await ctx.db
-            .update(WorkoutExercise)
-            .set({
-              groupName: null,
-              orderIndex: 999,
-            })
-            .where(eq(WorkoutExercise.workoutId, workout.id));
-        }
-
-        // Update workout_exercise records with round information
-        let totalUpdates = 0;
-        let globalOrderCounter = 0;
-        const roundOrderOffsets = new Map<number, number>();
-
-        // Calculate order offsets for each round
-        for (const round of roundOrganization.rounds) {
-          let maxOrderInRound = -1;
-          for (const exercises of Object.values(
-            round.exercisesByClient,
-          ) as any[]) {
-            for (const exercise of exercises) {
-              maxOrderInRound = Math.max(maxOrderInRound, exercise.orderIndex);
-            }
-          }
-          roundOrderOffsets.set(round.roundNumber, globalOrderCounter);
-          globalOrderCounter += maxOrderInRound + 1;
-        }
-
-        // Update exercises with round information
-        for (const round of roundOrganization.rounds) {
-          const roundName = round.name;
-          const roundPhase = round.phase;
-          const roundNumber = round.roundNumber;
-          const roundOffset = roundOrderOffsets.get(roundNumber) || 0;
-
-          for (const [clientId, exercises] of Object.entries(
-            round.exercisesByClient,
-          ) as [string, any][]) {
-            const clientWorkout = workoutsWithExercises.find(
-              (w) => w.workout.userId === clientId,
-            );
-            if (!clientWorkout) continue;
-
-            for (
-              let exerciseIndex = 0;
-              exerciseIndex < exercises.length;
-              exerciseIndex++
-            ) {
-              const roundExercise = exercises[exerciseIndex];
-
-              // Find matching workout_exercise record that hasn't been updated
-              const matchingExercises = clientWorkout.exercises.filter(
-                (we) => we.exerciseId === roundExercise.exerciseId,
-              );
-
-              const workoutExercise =
-                matchingExercises.find((we) => we.orderIndex === 999) ||
-                matchingExercises[0];
-
-              if (workoutExercise) {
-                const orderIndex = roundOffset + roundExercise.orderIndex;
-                const setsCompleted =
-                  roundExercise.scheme.sets || roundExercise.scheme.rounds || 1;
-
-                await ctx.db
-                  .update(WorkoutExercise)
-                  .set({
-                    groupName: roundName,
-                    setsCompleted: setsCompleted,
-                    orderIndex: orderIndex,
-                    phase: roundPhase,
-                    scheme: roundExercise.scheme,
-                    reasoning: roundExercise.reasoning,
-                  })
-                  .where(eq(WorkoutExercise.id, workoutExercise.id));
-
-                totalUpdates++;
-              }
-            }
-          }
-        }
-
-        const dbEndTimestamp = new Date().toISOString();
-        console.log(
-          `[startWorkout-v2] Database updates END at ${dbEndTimestamp} - Updated ${totalUpdates} exercises in ${Date.now() - dbUpdateStartTime}ms`,
-        );
-
-        // Extract unique clients from workoutsWithExercises
-        // This avoids the Drizzle query issues and uses data we already have
-        const uniqueClients = new Map();
-
-        // Extract unique client info from workouts
-        for (const { workout } of workoutsWithExercises) {
-          if (!uniqueClients.has(workout.userId)) {
-            // Find the client name from the phase2Input.clients array
-            const clientInfo = phase2Input.clients.find(
-              (c) => c.clientId === workout.userId,
-            );
-            uniqueClients.set(workout.userId, {
-              userId: workout.userId,
-              user: {
-                name: clientInfo?.clientName || null,
-                email: "", // We don't have email in phase2Input, but that's okay
-              },
-            });
-          }
-        }
-
-        const clients = Array.from(uniqueClients.values());
-        console.log(
-          `[startWorkout-v2] Extracted ${clients.length} unique clients from workouts`,
-        );
-
-        console.log(
-          `[startWorkout-v2] END - Total duration: ${Date.now() - mutationStartTime}ms`,
-        );
-
-        // Debug: Test each part separately to find circular reference
-        try {
-          console.log(
-            "[startWorkout-v2] Testing roundOrganization serialization...",
-          );
-          JSON.stringify(roundOrganization);
-          console.log("[startWorkout-v2] roundOrganization OK");
-        } catch (e) {
-          console.error(
-            "[startWorkout-v2] roundOrganization has circular reference:",
-            e,
-          );
-        }
-
-        try {
-          console.log(
-            "[startWorkout-v2] Testing workoutsWithExercises serialization...",
-          );
-          JSON.stringify(workoutsWithExercises);
-          console.log("[startWorkout-v2] workoutsWithExercises OK");
-        } catch (e) {
-          console.error(
-            "[startWorkout-v2] workoutsWithExercises has circular reference:",
-            e,
-          );
-        }
-
-        // Return with full data for efficient TV loading
-        return {
-          success: true,
-          message: "Workout organized successfully",
-          alreadyOrganized: false,
-          templateType: session.templateType,
-          workoutOrganization: roundOrganization,
-          workouts: workoutsWithExercises.map((w) => ({
-            id: w.workout.id,
-            userId: w.workout.userId,
-            trainingSessionId: w.workout.trainingSessionId,
-            businessId: w.workout.businessId,
-            exercises: w.exercises.map((e) => ({
-              id: e.id,
-              workoutId: e.workoutId,
-              exerciseId: e.exerciseId,
-              orderIndex: e.orderIndex,
-              setsCompleted: e.setsCompleted,
-              groupName: e.groupName,
-              phase: e.phase,
-              scheme: e.scheme,
-              isShared: e.isShared,
-              sharedWithClients: e.sharedWithClients,
-              exercise: {
-                id: e.exercise?.id,
-                name: e.exercise?.name,
-                primaryMuscle: e.exercise?.primaryMuscle,
-                movementPattern: e.exercise?.movementPattern,
-                equipment: e.exercise?.equipment,
-                secondaryMuscles: e.exercise?.secondaryMuscles,
-              },
-            })),
-          })),
-          clients: clients.map((c) => ({
-            userId: c.userId,
-            name: c.user?.name || null,
-            email: c.user?.email || "",
-          })),
-        };
-      } catch (error) {
-        console.error("[startWorkout-v2] Error in Phase 2:", error);
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message:
-            error instanceof Error
-              ? error.message
-              : "Failed to organize workout",
-        });
-      }
+      return {
+        success: true,
+        message: "Workout ready (no Phase 2 organization needed)",
+        templateType: session.templateType,
+        workoutOrganization: session.workoutOrganization,
+        workouts: workoutsWithExercises,
+        clients: Array.from(uniqueClients.values()),
+      };
     }),
 
   // Temporary endpoint for testing Phase 2 preprocessing

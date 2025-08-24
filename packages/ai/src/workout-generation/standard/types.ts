@@ -43,46 +43,47 @@ export interface ExerciseSelection {
 
 /**
  * Round organization from second LLM call
+ * REMOVED - Phase 2 being replaced with new implementation
  */
-export interface WorkoutRoundOrganization {
-  rounds: {
-    id: string;
-    name: string;
-    focus: string; // e.g., "Strength", "Metabolic", "Core"
-    exercises: {
-      [clientId: string]: {
-        exerciseId: string;
-        exerciseName: string;
-        sets: number;
-        reps: string; // e.g., "8-10", "30s", "AMRAP"
-        restBetweenSets: string; // e.g., "60s", "90s"
-        equipment: string[];
-        notes?: string;
-      }[];
-    };
-    roundDuration: string; // Estimated time
-    equipmentRotation?: {
-      station: number;
-      equipment: string;
-      clientRotation: string[][]; // Array of client ID arrays per rotation
-    }[];
-  }[];
-
-  workoutSummary: {
-    totalDuration: string;
-    equipmentNeeded: string[];
-    flowDescription: string;
-  };
-
-  organizationReasoning: string;
-}
+// export interface WorkoutRoundOrganization {
+//   rounds: {
+//     id: string;
+//     name: string;
+//     focus: string; // e.g., "Strength", "Metabolic", "Core"
+//     exercises: {
+//       [clientId: string]: {
+//         exerciseId: string;
+//         exerciseName: string;
+//         sets: number;
+//         reps: string; // e.g., "8-10", "30s", "AMRAP"
+//         restBetweenSets: string; // e.g., "60s", "90s"
+//         equipment: string[];
+//         notes?: string;
+//       }[];
+//     };
+//     roundDuration: string; // Estimated time
+//     equipmentRotation?: {
+//       station: number;
+//       equipment: string;
+//       clientRotation: string[][]; // Array of client ID arrays per rotation
+//     }[];
+//   }[];
+// 
+//   workoutSummary: {
+//     totalDuration: string;
+//     equipmentNeeded: string[];
+//     flowDescription: string;
+//   };
+// 
+//   organizationReasoning: string;
+// }
 
 /**
  * Combined result from both LLM phases
  */
 export interface StandardWorkoutPlan {
   exerciseSelection: ExerciseSelection;
-  roundOrganization: WorkoutRoundOrganization;
+  // roundOrganization: WorkoutRoundOrganization; // REMOVED - Phase 2 being replaced
   metadata: {
     templateType: string;
     clientCount: number;
@@ -93,7 +94,7 @@ export interface StandardWorkoutPlan {
   debug?: {
     systemPromptsByClient?: Record<string, string>;
     llmResponsesByClient?: Record<string, string>;
-    roundOrgSystemPrompt?: string;
-    roundOrgLlmResponse?: string;
+    // roundOrgSystemPrompt?: string; // REMOVED - Phase 2 being replaced
+    // roundOrgLlmResponse?: string; // REMOVED - Phase 2 being replaced
   };
 }

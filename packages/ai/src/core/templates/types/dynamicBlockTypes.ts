@@ -119,7 +119,7 @@ export interface WorkoutTemplate {
     llmStrategy?: "single-phase" | "two-phase";
     totalExercisesPerClient?: number;
     preAssignedCount?: number;
-    workoutFlow?: "strength-metabolic" | "pure-strength";
+    // workoutFlow?: "strength-metabolic" | "pure-strength"; // REMOVED - Phase 2 being replaced
     exerciseRoles?: Record<string, number>;
   };
 }

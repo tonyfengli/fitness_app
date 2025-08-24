@@ -19,7 +19,7 @@ export const standardTemplate: WorkoutTemplate = {
     llmStrategy: "two-phase",
     totalExercisesPerClient: 8,
     preAssignedCount: 0, // Changed from 2 to 0 temporarily
-    workoutFlow: "strength-metabolic",
+    // workoutFlow: "strength-metabolic", // REMOVED - Phase 2 being replaced
     exerciseRoles: {
       strength: 4,
       metabolic: 4,
@@ -34,7 +34,7 @@ export const standardStrengthTemplate: WorkoutTemplate = {
   name: "Standard Strength Focus",
   metadata: {
     ...standardTemplate.metadata,
-    workoutFlow: "pure-strength",
+    // workoutFlow: "pure-strength", // REMOVED - Phase 2 being replaced
     exerciseRoles: {
       strength: 5,
       accessory: 1,

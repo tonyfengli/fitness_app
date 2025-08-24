@@ -25,7 +25,7 @@ import { applyFullBodyBucketing } from "../bucketing/fullBodyBucketing";
 import { WorkoutType } from "../types/workoutTypes";
 import { LLMExerciseSelector } from "./LLMExerciseSelector";
 import { ExerciseSelectionPromptBuilder } from "./prompts/ExerciseSelectionPromptBuilder";
-import { RoundOrganizationPromptBuilder } from "./prompts/RoundOrganizationPromptBuilder";
+// import { RoundOrganizationPromptBuilder } from "./prompts/RoundOrganizationPromptBuilder"; // REMOVED - Phase 2 being replaced
 
 const logger = getLogger();
 
@@ -70,22 +70,22 @@ export class StandardWorkoutGenerator {
       groupContext,
     );
 
-    // Phase 2: Round Organization
-    const roundOrganization = await this.organizeIntoRounds(
-      exerciseSelection,
-      template,
-      groupContext,
-    );
+    // Phase 2: Round Organization - REMOVED for new implementation
+    // const roundOrganization = await this.organizeIntoRounds(
+    //   exerciseSelection,
+    //   template,
+    //   groupContext,
+    // );
 
     const totalDuration = Date.now() - startTime;
-    logger.log("[StandardWorkoutGenerator] Two-phase generation complete", {
+    logger.log("[StandardWorkoutGenerator] Phase 1 generation complete", {
       totalDurationMs: totalDuration,
       sessionId,
     });
 
     const result: StandardWorkoutPlan = {
       exerciseSelection,
-      roundOrganization,
+      // roundOrganization, // Removed - will be handled by new Phase 2
       metadata: {
         templateType: template.id,
         clientCount: groupContext.clients.length,
@@ -271,7 +271,9 @@ export class StandardWorkoutGenerator {
   /**
    * Phase 2: Organize exercises into rounds
    * Made public to allow external access for the startWorkout flow
+   * REMOVED - Being replaced with new Phase 2 implementation
    */
+  /*
   public async organizeIntoRounds(
     exerciseSelection: ExerciseSelection,
     template: WorkoutTemplate,
@@ -354,6 +356,7 @@ export class StandardWorkoutGenerator {
       throw new Error(errorMessage);
     }
   }
+  */
 
   /**
    * Get expected total exercises based on intensity
@@ -428,7 +431,9 @@ export class StandardWorkoutGenerator {
 
   /**
    * Validate round organization response
+   * REMOVED - Part of old Phase 2 implementation
    */
+  /*
   private validateRoundOrganization(
     organization: WorkoutRoundOrganization,
     exerciseSelection: ExerciseSelection,
@@ -457,6 +462,7 @@ export class StandardWorkoutGenerator {
       }
     }
   }
+  */
 
   /**
    * Extract equipment from context or use defaults

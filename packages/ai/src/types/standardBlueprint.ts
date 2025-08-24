@@ -59,7 +59,7 @@ export interface StandardGroupWorkoutBlueprint {
 
   metadata: {
     templateType: string;
-    workoutFlow: "strength-metabolic" | "pure-strength";
+    // workoutFlow: "strength-metabolic" | "pure-strength"; // REMOVED - Phase 2 being replaced
     totalExercisesPerClient: number;
     preAssignedCount: number;
   };
