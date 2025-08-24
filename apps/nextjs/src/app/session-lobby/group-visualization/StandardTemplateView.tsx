@@ -113,6 +113,9 @@ function Phase2PreviewContent({ sessionId }: { sessionId: string }) {
 
   return (
     <div className="space-y-4">
+      {/* Phase 2 LLM Generation Section */}
+      <Phase2LLMSection sessionId={sessionId} />
+
       {/* Summary Stats */}
       <div className="rounded-lg bg-gray-50 p-4">
         <h4 className="text-sm font-medium text-gray-700 mb-2">Summary</h4>
@@ -533,6 +536,238 @@ function Phase2PreviewContent({ sessionId }: { sessionId: string }) {
           );
         })}
       </div>
+    </div>
+  );
+}
+
+function Phase2LLMSection({ sessionId }: { sessionId: string }) {
+  const trpc = useTRPC();
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [expandedSections, setExpandedSections] = useState<{
+    input: boolean;
+    output: boolean;
+  }>({ input: true, output: true });
+  const [timestamps, setTimestamps] = useState<{
+    startedAt?: string;
+    completedAt?: string;
+    durationSeconds?: number;
+  }>({});
+  const [llmData, setLlmData] = useState<{
+    systemPrompt?: string;
+    humanMessage?: string;
+    llmResponse?: string;
+    selections?: any;
+  }>({});
+
+  const generatePhase2Mutation = useMutation({
+    ...trpc.trainingSession.generatePhase2Selections.mutationOptions(),
+    onMutate: () => {
+      setIsGenerating(true);
+      const startTime = new Date();
+      setTimestamps({
+        startedAt: startTime.toISOString(),
+        completedAt: undefined,
+        durationSeconds: undefined,
+      });
+    },
+    onSuccess: (data) => {
+      const endTime = new Date();
+      const startTime = timestamps.startedAt ? new Date(timestamps.startedAt) : new Date();
+      const durationMs = endTime.getTime() - startTime.getTime();
+      
+      setLlmData({
+        systemPrompt: data.systemPrompt,
+        humanMessage: data.humanMessage,
+        llmResponse: data.llmResponse,
+        selections: data.selections,
+      });
+      
+      setTimestamps(prev => ({
+        ...prev,
+        completedAt: endTime.toISOString(),
+        durationSeconds: Number((durationMs / 1000).toFixed(1)),
+      }));
+      
+      setIsGenerating(false);
+    },
+    onError: (error: any) => {
+      alert(`Failed to generate Phase 2 selections: ${error.message}`);
+      setIsGenerating(false);
+      
+      // Still update completed timestamp on error
+      const endTime = new Date();
+      const startTime = timestamps.startedAt ? new Date(timestamps.startedAt) : new Date();
+      const durationMs = endTime.getTime() - startTime.getTime();
+      
+      setTimestamps(prev => ({
+        ...prev,
+        completedAt: endTime.toISOString(),
+        durationSeconds: Number((durationMs / 1000).toFixed(1)),
+      }));
+    },
+  });
+
+  const handleGenerate = () => {
+    generatePhase2Mutation.mutate({ sessionId });
+  };
+
+  const toggleSection = (section: 'input' | 'output') => {
+    setExpandedSections(prev => ({
+      ...prev,
+      [section]: !prev[section]
+    }));
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Generate Button */}
+      <div className="rounded-lg bg-white border border-gray-200 p-4">
+        <div className="flex items-center justify-between">
+          <div className="flex-1">
+            <h4 className="text-sm font-medium text-gray-700">Phase 2 LLM Selection</h4>
+            <p className="text-xs text-gray-500 mt-1">
+              Use LLM to select remaining exercises for each client/round
+            </p>
+            {/* Timestamps */}
+            <div className="mt-2 text-xs text-gray-600 space-y-0.5">
+              {timestamps.startedAt && (
+                <div>Started: {new Date(timestamps.startedAt).toLocaleTimeString()}</div>
+              )}
+              {timestamps.completedAt && (
+                <div>Completed: {new Date(timestamps.completedAt).toLocaleTimeString()}</div>
+              )}
+              {timestamps.durationSeconds !== undefined && (
+                <div className="font-medium text-indigo-600">
+                  Duration: {timestamps.durationSeconds}s
+                </div>
+              )}
+            </div>
+          </div>
+          <button
+            onClick={handleGenerate}
+            disabled={isGenerating}
+            className={`px-4 py-2 text-sm font-medium rounded-md ${
+              isGenerating
+                ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                : "bg-indigo-600 text-white hover:bg-indigo-700"
+            }`}
+          >
+            {isGenerating ? "Generating..." : "Generate Phase 2 LLM Selection"}
+          </button>
+        </div>
+      </div>
+
+      {/* LLM Input Section */}
+      {(llmData.systemPrompt || llmData.humanMessage) && (
+        <div className="rounded-lg bg-gray-50 border border-gray-200 p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h4 className="text-sm font-medium text-gray-700">LLM Input</h4>
+            <button
+              onClick={() => toggleSection('input')}
+              className="text-gray-500 hover:text-gray-700"
+            >
+              <svg
+                className={`w-5 h-5 transform transition-transform ${
+                  expandedSections.input ? 'rotate-90' : ''
+                }`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 5l7 7-7 7"
+                />
+              </svg>
+            </button>
+          </div>
+          
+          {expandedSections.input && (
+            <>
+              {/* System Prompt */}
+              {llmData.systemPrompt && (
+                <div className="mb-4">
+                  <h5 className="text-xs font-medium text-gray-600 mb-2">System Prompt:</h5>
+                  <pre className="bg-white p-3 rounded border border-gray-200 text-xs overflow-x-auto whitespace-pre-wrap">
+                    {llmData.systemPrompt}
+                  </pre>
+                </div>
+              )}
+
+              {/* Human Message */}
+              {llmData.humanMessage && (
+                <div>
+                  <h5 className="text-xs font-medium text-gray-600 mb-2">Human Message (Compact Input):</h5>
+                  <pre className="bg-white p-3 rounded border border-gray-200 text-xs overflow-x-auto">
+                    {llmData.humanMessage}
+                  </pre>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* LLM Output Section */}
+      {llmData.llmResponse && (
+        <div className="rounded-lg bg-blue-50 border border-blue-200 p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h4 className="text-sm font-medium text-gray-700">LLM Output</h4>
+            <button
+              onClick={() => toggleSection('output')}
+              className="text-gray-500 hover:text-gray-700"
+            >
+              <svg
+                className={`w-5 h-5 transform transition-transform ${
+                  expandedSections.output ? 'rotate-90' : ''
+                }`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 5l7 7-7 7"
+                />
+              </svg>
+            </button>
+          </div>
+          
+          {expandedSections.output && (
+            <>
+              {/* Raw Response */}
+              <div className="mb-4">
+                <h5 className="text-xs font-medium text-gray-600 mb-2">Raw Response:</h5>
+                <pre className="bg-white p-3 rounded border border-gray-200 text-xs overflow-x-auto">
+                  {llmData.llmResponse}
+                </pre>
+              </div>
+
+              {/* Parsed Selections */}
+              {llmData.selections && (
+                <div>
+                  <h5 className="text-xs font-medium text-gray-600 mb-2">Parsed Selections:</h5>
+                  <div className="bg-white p-3 rounded border border-gray-200">
+                    <div className="space-y-1 text-xs">
+                      {llmData.selections.placements?.map(([id, round]: [string, number], idx: number) => (
+                        <div key={idx} className="flex items-center gap-2">
+                          <span className="font-medium text-gray-700">{id}</span>
+                          <span className="text-gray-500">→</span>
+                          <span className="font-medium text-indigo-600">Round {round}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }

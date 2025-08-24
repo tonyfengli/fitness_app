@@ -3471,4 +3471,56 @@ Set your goals and preferences for today's session.`;
       const data = await preprocessPhase2Data(ctx, input.sessionId);
       return data;
     }),
+
+  generatePhase2Selections: protectedProcedure
+    .input(z.object({ sessionId: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      const { sessionId } = input;
+      
+      // Get preprocessing data
+      const preprocessData = await preprocessPhase2Data(ctx, sessionId);
+      
+      // Get session and template config
+      const session = await ctx.db.query.TrainingSession.findFirst({
+        where: eq(TrainingSession.id, sessionId),
+      });
+      
+      if (!session) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Training session not found",
+        });
+      }
+      
+      // Get workouts and exercises for metadata
+      const workouts = await ctx.db.query.Workout.findMany({
+        where: eq(Workout.trainingSessionId, sessionId),
+      });
+      
+      // Get all exercises with metadata - they're already in preprocessData
+      const exercisesWithMetadata = preprocessData.exercisesWithTiers;
+      
+      // Get client plans from roundOrganization
+      const clientPlans = preprocessData.roundOrganization.perClientPlan;
+      
+      // Import and create StandardWorkoutGenerator
+      const { StandardWorkoutGenerator } = await import("@acme/ai");
+      const generator = new StandardWorkoutGenerator();
+      
+      // Call Phase 2 selection
+      const phase2Result = await generator.selectRemainingExercises(
+        preprocessData.allowedSlots,
+        exercisesWithMetadata,
+        preprocessData.roundOrganization.majorityRounds,
+        clientPlans
+      );
+      
+      return {
+        success: true,
+        systemPrompt: phase2Result.systemPrompt,
+        humanMessage: phase2Result.humanMessage,
+        llmResponse: phase2Result.llmResponse,
+        selections: phase2Result.selections,
+      };
+    }),
 } satisfies TRPCRouterRecord;

@@ -25,6 +25,9 @@ import { applyFullBodyBucketing } from "../bucketing/fullBodyBucketing";
 import { WorkoutType } from "../types/workoutTypes";
 import { LLMExerciseSelector } from "./LLMExerciseSelector";
 import { ExerciseSelectionPromptBuilder } from "./prompts/ExerciseSelectionPromptBuilder";
+import { Phase2SelectionPromptBuilder } from "./prompts/Phase2SelectionPromptBuilder";
+import { AllowedSlotsResult, Phase2SelectionResult } from "../../types/phase2Types";
+import { ExerciseWithTier } from "../../types/exerciseTiers";
 // import { RoundOrganizationPromptBuilder } from "./prompts/RoundOrganizationPromptBuilder"; // REMOVED - Phase 2 being replaced
 
 const logger = getLogger();
@@ -708,5 +711,138 @@ export class StandardWorkoutGenerator {
     });
 
     return count > 0 ? total / count : 0;
+  }
+
+  /**
+   * Phase 2: Select remaining exercises for each client/round
+   * Takes preprocessing results and uses LLM to make final selections
+   */
+  public async selectRemainingExercises(
+    preprocessingResult: AllowedSlotsResult,
+    exercises: ExerciseWithTier[],
+    totalRounds: number,
+    clientPlans: Array<{ clientId: string; bundleSkeleton: number[] }>
+  ): Promise<{
+    systemPrompt: string;
+    humanMessage: string;
+    llmResponse: string;
+    selections: Phase2SelectionResult;
+  }> {
+    const startTime = Date.now();
+    const promptBuilder = new Phase2SelectionPromptBuilder();
+
+    // Build system prompt
+    const systemPrompt = promptBuilder.buildSystemPrompt();
+
+    // Transform preprocessing data to compact format
+    // First, update slots remaining with actual client plan data
+    const compactInput = promptBuilder.transformToCompactFormat(
+      preprocessingResult,
+      exercises,
+      totalRounds
+    );
+
+    // Override slots remaining with actual bundle skeleton data
+    clientPlans.forEach(plan => {
+      if (!compactInput.slotsRemaining[plan.clientId]) {
+        compactInput.slotsRemaining[plan.clientId] = Array(totalRounds).fill(0);
+      }
+      
+      // Calculate actual slots remaining based on bundle skeleton and used slots
+      plan.bundleSkeleton.forEach((maxSlots, roundIndex) => {
+        const usedSlots = preprocessingResult.clientUsedSlots[plan.clientId]?.[roundIndex] || 0;
+        compactInput.slotsRemaining[plan.clientId][roundIndex] = maxSlots - usedSlots;
+      });
+    });
+
+    // Build human message
+    const humanMessage = promptBuilder.buildHumanMessage(compactInput);
+
+    try {
+      // Call LLM with gpt-5-mini (same as Phase 1)
+      const llm = createLLM({
+        modelName: "gpt-5-mini",
+        maxTokens: 1000,
+        reasoning_effort: "medium",
+        verbosity: "low",
+      });
+
+      logger.log("[Phase2] Calling LLM for exercise selection", {
+        totalOptions: compactInput.options.length,
+        totalRounds,
+        clients: Object.keys(compactInput.slotsRemaining).length,
+      });
+
+      const messages = [
+        new SystemMessage(systemPrompt),
+        new HumanMessage(humanMessage),
+      ];
+
+      const response = await llm.invoke(messages);
+      const llmResponse = response.content as string;
+
+      logger.log("[Phase2] LLM response received", {
+        responseLength: llmResponse.length,
+        duration: Date.now() - startTime,
+      });
+
+      // Parse response
+      const selections = this.parsePhase2Response(llmResponse);
+
+      return {
+        systemPrompt,
+        humanMessage,
+        llmResponse,
+        selections,
+      };
+    } catch (error) {
+      logger.error("[Phase2] Error in LLM call", error);
+      throw new Error(
+        `Phase 2 selection failed: ${error instanceof Error ? error.message : "Unknown error"}`
+      );
+    }
+  }
+
+  /**
+   * Parse Phase 2 LLM response
+   */
+  private parsePhase2Response(response: string): Phase2SelectionResult {
+    try {
+      // Try to extract JSON from markdown code blocks first
+      const jsonMatch = response.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
+      const jsonStr = jsonMatch ? jsonMatch[1] : response;
+
+      // Parse JSON
+      const parsed = JSON.parse(jsonStr);
+
+      // Validate structure
+      if (!parsed.placements || !Array.isArray(parsed.placements)) {
+        throw new Error("Response missing 'placements' array");
+      }
+
+      // Validate each placement
+      const validPlacements: Array<[string, number]> = [];
+      for (const placement of parsed.placements) {
+        if (
+          Array.isArray(placement) &&
+          placement.length === 2 &&
+          typeof placement[0] === "string" &&
+          typeof placement[1] === "number"
+        ) {
+          validPlacements.push(placement as [string, number]);
+        } else {
+          logger.warn("[Phase2] Invalid placement format", placement);
+        }
+      }
+
+      return {
+        placements: validPlacements,
+      };
+    } catch (error) {
+      logger.error("[Phase2] Failed to parse LLM response", { response, error });
+      throw new Error(
+        `Failed to parse Phase 2 response: ${error instanceof Error ? error.message : "Invalid JSON"}`
+      );
+    }
   }
 }
