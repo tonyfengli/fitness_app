@@ -228,7 +228,8 @@ export function buildAllowedSlots(
           // Mark as pinned
           pinnedExercises.add(getPinnedKey(exercise.exerciseId, exercise.clientId));
           clientUsedSlots[clientId] = clientUsedSlots[clientId] || Array(totalRounds).fill(0);
-          clientUsedSlots[clientId]![0]++;
+          const currentSlots = clientUsedSlots[clientId];
+          currentSlots[0] = (currentSlots[0] || 0) + 1;
           
           exercisePinned = true;
           break;
@@ -454,8 +455,9 @@ export function buildAllowedSlots(
             
             // Update tracking
             pinnedExercises.add(getPinnedKey(client.exerciseId, client.clientId));
-            if (clientUsedSlots[client.clientId]?.[roundIndex] !== undefined) {
-              clientUsedSlots[client.clientId]![roundIndex]++;
+            const clientSlots = clientUsedSlots[client.clientId];
+            if (clientSlots && clientSlots[roundIndex] !== undefined) {
+              clientSlots[roundIndex]++;
             }
             
             // Update capacity use
@@ -630,8 +632,9 @@ export function buildAllowedSlots(
         
         // Update tracking
         pinnedExercises.add(getPinnedKey(exercise.exerciseId, exercise.clientId));
-        if (clientUsedSlots[exercise.clientId]?.[roundIndex] !== undefined) {
-          clientUsedSlots[exercise.clientId]![roundIndex]++;
+        const exerciseClientSlots = clientUsedSlots[exercise.clientId];
+        if (exerciseClientSlots && exerciseClientSlots[roundIndex] !== undefined) {
+          exerciseClientSlots[roundIndex]++;
         }
         
         // Update capacity use
