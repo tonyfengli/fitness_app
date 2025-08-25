@@ -733,14 +733,14 @@ export class WorkoutGenerationService {
       )) {
         const clientData = clientSelection as any;
         const workoutId = clientWorkoutMap.get(clientId);
-        if (!workoutId) continue;
+        if (!workoutId || !clientData) continue;
 
         // Process pre-assigned exercises
         for (const exercise of clientData.preAssigned || []) {
           const dbExercise = exercisePool.find(
             (e) =>
               e.id === exercise.exerciseId ||
-              e.name.toLowerCase() === exercise.exerciseName.toLowerCase(),
+              (exercise.exerciseName && e.name.toLowerCase() === exercise.exerciseName.toLowerCase()),
           );
 
           if (dbExercise) {
@@ -751,7 +751,7 @@ export class WorkoutGenerationService {
               setsCompleted: 0,
               groupName: null,
               isShared: false,
-              sharedWithClients: null,
+              sharedWithClients: null as string[] | null,
               selectionSource: "pre_assigned",
             });
           }
@@ -762,7 +762,7 @@ export class WorkoutGenerationService {
           const dbExercise = exercisePool.find(
             (e) =>
               e.id === exercise.exerciseId ||
-              e.name.toLowerCase() === exercise.exerciseName.toLowerCase(),
+              (exercise.exerciseName && e.name.toLowerCase() === exercise.exerciseName.toLowerCase()),
           );
 
           if (dbExercise) {
@@ -785,7 +785,7 @@ export class WorkoutGenerationService {
         const dbExercise = exercisePool.find(
           (e) =>
             e.id === sharedExercise.exerciseId ||
-            e.name.toLowerCase() === sharedExercise.exerciseName.toLowerCase(),
+            (sharedExercise.exerciseName && e.name.toLowerCase() === sharedExercise.exerciseName.toLowerCase()),
         );
 
         if (dbExercise) {

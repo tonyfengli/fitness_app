@@ -5,7 +5,6 @@
 export { StandardWorkoutGenerator } from "./StandardWorkoutGenerator";
 export type {
   ExerciseSelection,
-  WorkoutRoundOrganization,
   StandardWorkoutPlan,
 } from "./types";
 

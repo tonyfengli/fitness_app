@@ -17,7 +17,6 @@ import type {
 import type {
   ExerciseSelection,
   StandardWorkoutPlan,
-  WorkoutRoundOrganization,
 } from "./types";
 import { createLLM } from "../../config/llm";
 import { getLogger } from "../../utils/logger";
@@ -751,7 +750,10 @@ export class StandardWorkoutGenerator {
       // Calculate actual slots remaining based on bundle skeleton and used slots
       plan.bundleSkeleton.forEach((maxSlots, roundIndex) => {
         const usedSlots = preprocessingResult.clientUsedSlots[plan.clientId]?.[roundIndex] || 0;
-        compactInput.slotsRemaining[plan.clientId][roundIndex] = maxSlots - usedSlots;
+        const slotsRemaining = compactInput.slotsRemaining[plan.clientId];
+        if (slotsRemaining) {
+          slotsRemaining[roundIndex] = maxSlots - usedSlots;
+        }
       });
     });
 
@@ -764,7 +766,7 @@ export class StandardWorkoutGenerator {
         modelName: "gpt-5-mini",
         maxTokens: 1000,
         reasoning_effort: "medium",
-        verbosity: "low",
+        verbosity: "concise",
       });
 
       logger.log("[Phase2] Calling LLM for exercise selection", {
@@ -810,7 +812,7 @@ export class StandardWorkoutGenerator {
     try {
       // Try to extract JSON from markdown code blocks first
       const jsonMatch = response.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
-      const jsonStr = jsonMatch ? jsonMatch[1] : response;
+      const jsonStr = jsonMatch?.[1] || response;
 
       // Parse JSON
       const parsed = JSON.parse(jsonStr);
