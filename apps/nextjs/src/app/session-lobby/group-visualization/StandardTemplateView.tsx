@@ -690,8 +690,6 @@ function Phase2LLMSection({
   // Load saved LLM data if it exists
   useEffect(() => {
     if (preprocessData?.savedLlmData) {
-      console.log('[Phase2LLMSection] Loading saved LLM data:', preprocessData.savedLlmData);
-      
       setLlmData({
         systemPrompt: preprocessData.savedLlmData.systemPrompt,
         humanMessage: preprocessData.savedLlmData.humanMessage,
@@ -750,16 +748,6 @@ function Phase2LLMSection({
       });
     },
     onSuccess: (data) => {
-      console.log('[Phase2LLMSection] generatePhase2Mutation.onSuccess received data:', {
-        hasData: !!data,
-        dataKeys: data ? Object.keys(data) : [],
-        hasSystemPrompt: !!data?.systemPrompt,
-        hasHumanMessage: !!data?.humanMessage,
-        hasLlmResponse: !!data?.llmResponse,
-        hasSelections: !!data?.selections,
-        hasTiming: !!data?.timing,
-      });
-      
       const endTime = new Date();
       const startTime = timestamps.startedAt ? new Date(timestamps.startedAt) : new Date();
       const durationMs = endTime.getTime() - startTime.getTime();
@@ -860,17 +848,6 @@ function Phase2LLMSection({
           llmResponse: data.llmResponse,
           timing: data.timing,
         };
-        
-        console.log('[Phase2LLMSection] Saving to database with llmData:', {
-          hasSystemPrompt: !!llmData.systemPrompt,
-          hasHumanMessage: !!llmData.humanMessage,
-          hasLlmResponse: !!llmData.llmResponse,
-          hasTiming: !!llmData.timing,
-          systemPromptLength: llmData.systemPrompt?.length,
-          humanMessageLength: llmData.humanMessage?.length,
-          llmResponseLength: llmData.llmResponse?.length,
-          timing: llmData.timing,
-        });
         
         updatePhase2Mutation.mutate({
           sessionId,
@@ -1212,29 +1189,30 @@ export default function StandardTemplateView({
 
   // Log what data we're receiving
   React.useEffect(() => {
-    console.log("🎯 STANDARD TEMPLATE VIEW RENDERED:", {
-      isFromSavedData,
-      hasBlueprint: !!blueprint,
-      hasClientPools: !!blueprint?.clientExercisePools,
-      timestamp: new Date().toISOString(),
+    // Log the llmDebugData
+    console.log("🔍 LLM DEBUG DATA IN STANDARD TEMPLATE VIEW:", {
+      hasLlmDebugData: !!llmDebugData,
+      hasSystemPromptsByClient: !!llmDebugData?.systemPromptsByClient,
+      hasLlmResponsesByClient: !!llmDebugData?.llmResponsesByClient,
+      systemPromptsByClientKeys: llmDebugData?.systemPromptsByClient ? Object.keys(llmDebugData.systemPromptsByClient) : [],
+      llmResponsesByClientKeys: llmDebugData?.llmResponsesByClient ? Object.keys(llmDebugData.llmResponsesByClient) : [],
+      llmDebugDataStructure: llmDebugData
     });
 
     if (blueprint?.clientExercisePools) {
       Object.entries(blueprint.clientExercisePools).forEach(
         ([clientId, pool]: [string, any]) => {
-          console.log(`  Client ${clientId} in StandardTemplateView:`, {
-            hasBucketedSelection: !!pool.bucketedSelection,
-            bucketedExerciseCount:
-              pool.bucketedSelection?.exercises?.length || 0,
-            bucketedExercises:
-              pool.bucketedSelection?.exercises
-                ?.map((e: any) => e.name)
-                .slice(0, 5) || "NONE",
+          // Check if we have debug data for this specific client
+          console.log(`  🔍 Client ${clientId} LLM debug data:`, {
+            hasSystemPrompt: !!llmDebugData?.systemPromptsByClient?.[clientId],
+            hasLlmResponse: !!llmDebugData?.llmResponsesByClient?.[clientId],
+            systemPromptLength: llmDebugData?.systemPromptsByClient?.[clientId]?.length || 0,
+            llmResponseLength: llmDebugData?.llmResponsesByClient?.[clientId]?.length || 0
           });
         },
       );
     }
-  }, [blueprint, isFromSavedData]);
+  }, [blueprint, isFromSavedData, llmDebugData]);
 
   // Create tab options: one per client + shared tab
   const clientTabs = groupContext.clients.map((client) => ({

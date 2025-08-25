@@ -73,6 +73,22 @@ function PreferencesPageContent() {
   const handleGenerateAndNavigate = async () => {
     if (!sessionId) return;
 
+    // First check if workouts already exist (from TV app)
+    // If they do, just navigate directly to visualization
+    try {
+      const existingSelections = await trpc.workoutSelections.getSelections.query({
+        sessionId,
+      });
+      
+      if (existingSelections && existingSelections.length > 0) {
+        console.log("Found existing workout selections, navigating directly to visualization");
+        router.push(`/session-lobby/group-visualization?sessionId=${sessionId}`);
+        return;
+      }
+    } catch (error) {
+      console.error("Error checking existing selections:", error);
+    }
+
     setGenerationProgress({
       isGenerating: true,
       currentStep: "Generating blueprint...",

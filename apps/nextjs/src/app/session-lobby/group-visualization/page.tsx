@@ -211,6 +211,10 @@ function GroupVisualizationPageContent() {
   const searchParams = useSearchParams();
   const sessionId = searchParams.get("sessionId");
   const router = useRouter();
+  
+  console.log('[Web GroupVisualization] 🎨 PAGE LOADED');
+  console.log('[Web GroupVisualization] Session ID:', sessionId);
+  console.log('[Web GroupVisualization] Timestamp:', new Date().toISOString());
 
   const [selectedBlock, setSelectedBlock] = useState<string>("");
   const [showRawData, setShowRawData] = useState(false);
@@ -287,10 +291,11 @@ function GroupVisualizationPageContent() {
     }),
     enabled: !!sessionId,
     onSuccess: (data) => {
-      console.log("🔍 SAVED DATA LOADED SUCCESS:", {
-        sessionId,
-        sessionStatus: sessionData?.status,
-        dataReceived: data,
+      console.log('[Web GroupVisualization] 💾 SAVED DATA LOADED SUCCESS');
+      console.log('[Web GroupVisualization] Data source: getSavedVisualizationData');
+      console.log('[Web GroupVisualization] Session:', sessionId);
+      console.log('[Web GroupVisualization] Session status:', sessionData?.status);
+      console.log('[Web GroupVisualization] Data structure:', {
         hasSavedData: !!data,
         hasBlueprint: !!data?.blueprint,
         hasClientPools: !!data?.blueprint?.clientExercisePools,
@@ -357,6 +362,9 @@ function GroupVisualizationPageContent() {
     phase1Only: true, // Only run Phase 1 for visualization
     enabled: !!sessionId && !savedDataQuery.data && sessionData?.status !== "completed", // Only fetch if no saved data AND session is not completed
     onSuccess: (data) => {
+      console.log('[Web GroupVisualization] 🔨 NEW BLUEPRINT GENERATED');
+      console.log('[Web GroupVisualization] Data source: useGroupWorkoutBlueprint');
+      console.log('[Web GroupVisualization] Reason:', savedDataQuery.data ? 'Should not happen - saved data exists!' : 'No saved data found');
       console.log("🔨 NEW BLUEPRINT GENERATED:", {
         reason: savedDataQuery.data
           ? "Should not happen - saved data exists!"

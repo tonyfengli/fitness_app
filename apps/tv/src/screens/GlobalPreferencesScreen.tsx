@@ -228,32 +228,9 @@ export function GlobalPreferencesScreen() {
   });
 
   const handleContinue = async () => {
-    console.log('[TV GlobalPreferences] ========== CONTINUE BUTTON CLICKED ==========');
-    console.log('[TV GlobalPreferences] Session ID:', sessionId);
-    console.log('[TV GlobalPreferences] Current state:', {
-      isGenerating,
-      shouldGenerateBlueprint,
-      blueprintResult: !!blueprintResult,
-      isBlueprintLoading
-    });
-    
-    // Log query data
-    console.log('[TV GlobalPreferences] Existing selections:', {
-      data: existingSelections,
-      length: existingSelections?.length,
-      isEmpty: !existingSelections || existingSelections.length === 0
-    });
-    
-    console.log('[TV GlobalPreferences] Session data:', {
-      hasData: !!sessionData,
-      hasWorkoutOrganization: !!sessionData?.workoutOrganization,
-      hasVisualizationData: !!sessionData?.templateConfig?.visualizationData,
-      hasExerciseSelection: !!sessionData?.templateConfig?.visualizationData?.llmResult?.exerciseSelection
-    });
     
     // Check if we already have workout exercises
     if (existingSelections && existingSelections.length > 0) {
-      console.log('[TV GlobalPreferences] ✅ Found', existingSelections.length, 'existing exercises, navigating directly to overview');
       // Skip loading screen and navigate directly
       navigation.navigate('WorkoutOverview', { sessionId });
       return;
@@ -261,21 +238,15 @@ export function GlobalPreferencesScreen() {
     
     // If no selections but session has visualization data (Phase 1 completed), something is wrong - still go to overview
     if (sessionData?.templateConfig?.visualizationData?.llmResult?.exerciseSelection) {
-      console.log('[TV GlobalPreferences] ⚠️ No selections but session has Phase 1 data, navigating to overview anyway');
       // Skip loading screen and navigate directly
       navigation.navigate('WorkoutOverview', { sessionId });
       return;
     }
     
-    console.log('[TV GlobalPreferences] ❌ No existing exercises found, proceeding with generation');
-    console.log('[TV GlobalPreferences] Setting state: isGenerating=true, shouldGenerateBlueprint=true');
-    
     // No existing exercises, proceed with generation - this WILL show the loading screen
     setIsGenerating(true);
     setGenerationError(null);
     setShouldGenerateBlueprint(true);
-    
-    console.log('[TV GlobalPreferences] ========== END CONTINUE HANDLER ==========');
   };
 
 
@@ -284,39 +255,58 @@ export function GlobalPreferencesScreen() {
     let isMounted = true;
     
     const processBlueprint = async () => {
-      console.log('[TV GlobalPreferences] processBlueprint called:', {
-        blueprintResult: !!blueprintResult,
-        isGenerating,
-        shouldGenerateBlueprint,
-        isMounted
-      });
-      
       if (blueprintResult && isGenerating && shouldGenerateBlueprint && isMounted) {
-        console.log('[TV GlobalPreferences] Blueprint result structure:', blueprintResult);
         try {
           // Immediately mark as processing to prevent re-runs
           setShouldGenerateBlueprint(false);
           
-          // Validate result - check what's actually in the result
-          console.log('[TV GlobalPreferences] Checking llmResult:', !!blueprintResult?.llmResult);
-          if (!blueprintResult?.llmResult) {
-            console.warn('[TV GlobalPreferences] No llmResult found, but continuing anyway');
-            // throw new Error('Failed to generate workout - no LLM result');
+          // Deep log the actual debug data - they're at the top level of llmResult, not in a debug property
+          if (blueprintResult?.llmResult?.systemPromptsByClient || blueprintResult?.llmResult?.llmResponsesByClient) {
+            console.log('[TV GlobalPreferences] 🔍 DEBUG DATA CONTENT:');
+            console.log('[TV GlobalPreferences] systemPromptsByClient keys:', Object.keys(blueprintResult.llmResult.systemPromptsByClient || {}));
+            console.log('[TV GlobalPreferences] llmResponsesByClient keys:', Object.keys(blueprintResult.llmResult.llmResponsesByClient || {}));
+            
+            // Log sample of actual content
+            const firstClientId = Object.keys(blueprintResult.llmResult.systemPromptsByClient || {})[0];
+            if (firstClientId) {
+              console.log('[TV GlobalPreferences] Sample system prompt length:', blueprintResult.llmResult.systemPromptsByClient?.[firstClientId]?.length || 0);
+              console.log('[TV GlobalPreferences] Sample LLM response length:', blueprintResult.llmResult.llmResponsesByClient?.[firstClientId]?.length || 0);
+            }
+          } else {
+            console.log('[TV GlobalPreferences] ⚠️ NO DEBUG DATA IN LLM RESULT');
           }
           
           // Save visualization data
-          console.log('[TV GlobalPreferences] Saving visualization data...');
+          
+          // Ensure the debug data is included in the llmResult
+          const llmResultWithDebug = {
+            ...blueprintResult.llmResult,
+            // The debug data should be wrapped in a debug property for the visualization page
+            debug: {
+              systemPromptsByClient: blueprintResult.llmResult?.systemPromptsByClient || {},
+              llmResponsesByClient: blueprintResult.llmResult?.llmResponsesByClient || {}
+            }
+          };
+          
+          console.log('[TV GlobalPreferences] 📦 LLM RESULT WITH DEBUG:', {
+            hasDebug: !!llmResultWithDebug.debug,
+            debugKeys: llmResultWithDebug.debug ? Object.keys(llmResultWithDebug.debug) : [],
+            systemPromptsByClientKeys: llmResultWithDebug.debug?.systemPromptsByClient ? Object.keys(llmResultWithDebug.debug.systemPromptsByClient) : [],
+            llmResponsesByClientKeys: llmResultWithDebug.debug?.llmResponsesByClient ? Object.keys(llmResultWithDebug.debug.llmResponsesByClient) : []
+          });
+          
           await saveVisualization.mutateAsync({
             sessionId: sessionId!,
             visualizationData: {
               blueprint: blueprintResult.blueprint,
               groupContext: blueprintResult.groupContext,
-              llmResult: blueprintResult.llmResult,
+              llmResult: llmResultWithDebug,
               summary: blueprintResult.summary,
               exerciseMetadata: blueprintResult.blueprint?.clientExercisePools || undefined,
               sharedExerciseIds: blueprintResult.blueprint?.sharedExercisePool?.map((e: any) => e.id) || undefined
             }
           });
+          console.log('[TV GlobalPreferences] ✅ Visualization data saved successfully');
           
           // Poll for exercise selections to be ready
           console.log('[TV GlobalPreferences] Waiting for exercise selections to be saved...');
@@ -350,19 +340,11 @@ export function GlobalPreferencesScreen() {
           }
           
           // Add a small delay for loader animation
-          console.log('[TV GlobalPreferences] Waiting for loader animation to complete...');
           await new Promise(resolve => setTimeout(resolve, 500));
           
           // Navigate after selections are confirmed
-          console.log('[TV GlobalPreferences] About to navigate to WorkoutOverview with sessionId:', sessionId);
-          try {
-            navigation.navigate('WorkoutOverview', { sessionId });
-            console.log('[TV GlobalPreferences] Navigation called successfully');
-          } catch (navError) {
-            console.error('[TV GlobalPreferences] Navigation error:', navError);
-          }
+          navigation.navigate('WorkoutOverview', { sessionId });
         } catch (error: any) {
-          console.error('[TV GlobalPreferences] Error processing workout:', error);
           if (isMounted) {
             setGenerationError(error.message || 'Failed to generate workout. Please try again.');
           }
@@ -384,7 +366,6 @@ export function GlobalPreferencesScreen() {
   // Handle blueprint error
   useEffect(() => {
     if (blueprintError && isGenerating) {
-      console.error('[TV GlobalPreferences] Blueprint error:', blueprintError);
       setGenerationError('Failed to generate workout. Please try again.');
       setIsGenerating(false);
       setShouldGenerateBlueprint(false);
@@ -393,8 +374,6 @@ export function GlobalPreferencesScreen() {
 
   useEffect(() => {
     if (clientsData !== undefined && !isLoading) {
-      console.log('[TV GlobalPreferences] Updating from polled data:', clientsData?.length || 0, 'clients');
-      
       // Update last successful fetch timestamp on success
       if (!fetchError) {
         const now = new Date();

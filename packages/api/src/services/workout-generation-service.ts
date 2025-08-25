@@ -156,10 +156,16 @@ export class WorkoutGenerationService {
     });
 
     // Check if workout exercises already exist for this session
+    console.log('[WorkoutGenerationService.generateBlueprint] 🔍 Checking for existing workouts...');
+    console.log('[WorkoutGenerationService.generateBlueprint] Session ID:', sessionId);
+    console.log('[WorkoutGenerationService.generateBlueprint] Options:', options);
+    
     const existingWorkoutsRaw = await this.ctx.db
       .select()
       .from(Workout)
       .where(eq(Workout.trainingSessionId, sessionId));
+    
+    console.log('[WorkoutGenerationService.generateBlueprint] Found existing workouts:', existingWorkoutsRaw.length);
 
     // For each workout, fetch its exercises with exercise details
     const existingWorkouts = await Promise.all(
@@ -192,6 +198,11 @@ export class WorkoutGenerationService {
     
     // If we're in phase1Only mode and exercises already exist, skip LLM call
     if (options?.phase1Only && existingWorkouts.length > 0) {
+      console.log('[WorkoutGenerationService.generateBlueprint] ⚠️ PHASE1 ONLY WITH EXISTING WORKOUTS');
+      console.log('[WorkoutGenerationService.generateBlueprint] Will create MOCK LLM result from existing data');
+      console.log('[WorkoutGenerationService.generateBlueprint] Existing workout IDs:', existingWorkoutsRaw.map(w => w.id));
+      console.log('[WorkoutGenerationService.generateBlueprint] Total exercises found:', existingWorkouts.reduce((sum, w) => sum + w.exercises.length, 0));
+      
       logger.info("Skipping Phase 1 LLM call - workout exercises already exist", {
         sessionId,
         workoutCount: existingWorkouts.length,
@@ -204,6 +215,14 @@ export class WorkoutGenerationService {
         groupContext,
         clientContexts,
       );
+      
+      console.log('[WorkoutGenerationService.generateBlueprint] Created mock LLM result:', {
+        hasSystemPrompt: !!llmResult.systemPrompt,
+        hasLlmOutput: !!llmResult.llmOutput,
+        hasExerciseSelection: !!llmResult.exerciseSelection,
+        hasDebug: !!(llmResult as any).debug,
+        debugKeys: (llmResult as any).debug ? Object.keys((llmResult as any).debug) : []
+      });
     } else {
       try {
         logger.info("Starting LLM generation");
@@ -222,6 +241,10 @@ export class WorkoutGenerationService {
         });
       }
 
+      console.log('[WorkoutGenerationService.generateBlueprint] 🤖 Starting LLM generation...');
+      console.log('[WorkoutGenerationService.generateBlueprint] Phase1Only:', options?.phase1Only);
+      console.log('[WorkoutGenerationService.generateBlueprint] Include diagnostics:', options?.includeDiagnostics);
+      
       const generationResult = await this.generateWithLLM(
         blueprint,
         groupContext,
@@ -229,6 +252,14 @@ export class WorkoutGenerationService {
         sessionId,
         { phase1Only: options?.phase1Only },
       );
+      
+      console.log('[WorkoutGenerationService.generateBlueprint] ✅ LLM generation complete:', {
+        hasSystemPrompt: !!generationResult.systemPrompt,
+        hasLlmOutput: !!generationResult.llmOutput,
+        hasExerciseSelection: !!generationResult.exerciseSelection,
+        hasDebug: !!generationResult.debug,
+        debugKeys: generationResult.debug ? Object.keys(generationResult.debug) : []
+      });
 
       // Structure the result properly
       llmResult = {
@@ -605,6 +636,16 @@ export class WorkoutGenerationService {
     groupContext: GroupContext,
     exercisePool: Exercise[],
   ) {
+    console.log('[WorkoutGenerationService.savePhase1Selections] 🔍 Starting Phase 1 save...');
+    console.log('[WorkoutGenerationService.savePhase1Selections] Session ID:', sessionId);
+    console.log('[WorkoutGenerationService.savePhase1Selections] Client count:', groupContext.clients.length);
+    console.log('[WorkoutGenerationService.savePhase1Selections] Exercise selection structure:', {
+      hasClientSelections: !!exerciseSelection.clientSelections,
+      clientSelectionKeys: Object.keys(exerciseSelection.clientSelections || {}),
+      hasSharedExercises: !!exerciseSelection.sharedExercises,
+      sharedExerciseCount: exerciseSelection.sharedExercises?.length || 0
+    });
+    
     logger.info("Saving Phase 1 selections - creating draft workouts", {
       sessionId,
     });
@@ -624,6 +665,8 @@ export class WorkoutGenerationService {
         );
 
       if (existingWorkouts.length > 0) {
+        console.log('[WorkoutGenerationService.savePhase1Selections] ⚠️ Draft workouts already exist, skipping creation');
+        console.log('[WorkoutGenerationService.savePhase1Selections] Existing workout count:', existingWorkouts.length);
         logger.info(
           `Draft workouts already exist for session ${sessionId}, skipping creation`,
         );
@@ -650,11 +693,20 @@ export class WorkoutGenerationService {
         });
       }
 
+      console.log('[WorkoutGenerationService.savePhase1Selections] 📦 Creating draft workouts...');
+      console.log('[WorkoutGenerationService.savePhase1Selections] Records to create:', workoutRecords.length);
+      
       const createdWorkouts = await tx
         .insert(Workout)
         .values(workoutRecords)
         .returning({ id: Workout.id, userId: Workout.userId });
 
+      console.log('[WorkoutGenerationService.savePhase1Selections] ✅ Created draft workouts:', {
+        count: createdWorkouts.length,
+        workoutIds: createdWorkouts.map((w) => w.id),
+        userIds: createdWorkouts.map((w) => w.userId)
+      });
+      
       logger.info(
         `[savePhase1Selections] Created ${createdWorkouts.length} draft workouts`,
         {
@@ -1540,6 +1592,12 @@ export class WorkoutGenerationService {
     groupContext: GroupContext,
     clientContexts: ClientContext[],
   ): Promise<any> {
+    console.log('[WorkoutGenerationService.formatExistingExercisesAsLLMResult] 🎭 Creating MOCK LLM result');
+    console.log('[WorkoutGenerationService.formatExistingExercisesAsLLMResult] Existing workouts:', existingWorkouts.length);
+    console.log('[WorkoutGenerationService.formatExistingExercisesAsLLMResult] Total exercises:', 
+      existingWorkouts.reduce((sum, w) => sum + (w.exercises?.length || 0), 0)
+    );
+    
     logger.info("Formatting existing exercises as LLM result");
 
     // For standard blueprints, format the exercise selection
@@ -1582,7 +1640,7 @@ export class WorkoutGenerationService {
         };
       }
 
-      return {
+      const result = {
         systemPrompt: "Loaded from existing workout exercises",
         userMessage: "Loaded from existing workout exercises",
         llmOutput: "Loaded from existing workout exercises",
@@ -1592,7 +1650,23 @@ export class WorkoutGenerationService {
           workoutCount: existingWorkouts.length,
           message: "Skipped Phase 1 LLM call - using existing workout exercises",
         },
+        // Add empty debug structure to match real LLM result
+        debug: {
+          systemPromptsByClient: {},
+          llmResponsesByClient: {}
+        }
       };
+      
+      console.log('[WorkoutGenerationService.formatExistingExercisesAsLLMResult] ✅ Mock result created:', {
+        hasSystemPrompt: !!result.systemPrompt,
+        hasLlmOutput: !!result.llmOutput,
+        hasExerciseSelection: !!result.exerciseSelection,
+        hasDebug: !!result.debug,
+        debugKeys: Object.keys(result.debug),
+        selectedExerciseClients: Object.keys(exerciseSelection.selectedExercises)
+      });
+      
+      return result;
     }
 
     // For BMF blueprints, return a simpler structure

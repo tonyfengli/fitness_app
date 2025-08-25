@@ -214,15 +214,6 @@ async function preprocessPhase2Data(
   // Collect all exercises across all clients
   const allExercises = clientsDataWithExercises.flatMap(client => client.exercises);
   
-  // Log sample exercises to check if fatigueProfile is present
-  console.log('=== PHASE 2 PREPROCESSING - SAMPLE EXERCISES ===');
-  allExercises.slice(0, 3).forEach(ex => {
-    console.log(`Exercise: ${ex.name}`);
-    console.log(`  - Equipment: ${JSON.stringify(ex.equipment)}`);
-    console.log(`  - Movement Pattern: ${ex.movementPattern}`);
-    console.log(`  - Function Tags: ${JSON.stringify(ex.functionTags)}`);
-    console.log(`  - Fatigue Profile: ${ex.fatigueProfile || 'MISSING'}`);
-  });
   
   // Assign tiers to all exercises
   const exercisesWithTiers = assignExerciseTiers(allExercises);
@@ -468,35 +459,12 @@ export const trainingSessionRouter = {
       const user = ctx.session?.user as SessionUser;
 
       // Verify session belongs to user's business
-      console.log(
-        "[API] getCheckedInClients - User:",
-        user.email,
-        "BusinessId:",
-        user.businessId,
-      );
-      console.log(
-        "[API] getCheckedInClients - Looking for session:",
-        input.sessionId,
-      );
 
       // First check if session exists at all
       const sessionExists = await ctx.db.query.TrainingSession.findFirst({
         where: eq(TrainingSession.id, input.sessionId),
       });
 
-      if (sessionExists) {
-        console.log(
-          "[API] Session found with businessId:",
-          sessionExists.businessId,
-        );
-        console.log("[API] User businessId:", user.businessId);
-        console.log(
-          "[API] Match:",
-          sessionExists.businessId === user.businessId,
-        );
-      } else {
-        console.log("[API] Session does not exist in database");
-      }
 
       const session = await ctx.db.query.TrainingSession.findFirst({
         where: and(
@@ -515,24 +483,6 @@ export const trainingSessionRouter = {
       }
 
       // Get checked-in and ready users
-      console.log(
-        "[API] getCheckedInClients - Fetching users with statuses: checked_in, ready, workout_ready"
-      );
-      
-      // First, let's see ALL users in this session for debugging
-      const allUsersInSession = await ctx.db
-        .select()
-        .from(UserTrainingSession)
-        .where(eq(UserTrainingSession.trainingSessionId, input.sessionId));
-      
-      console.log(
-        "[API] getCheckedInClients - ALL users in session:",
-        allUsersInSession.map(u => ({
-          userId: u.userId,
-          status: u.status,
-          checkedInAt: u.checkedInAt
-        }))
-      );
       
       const checkedInUsers = await ctx.db
         .select()
@@ -548,18 +498,6 @@ export const trainingSessionRouter = {
           ),
         )
         .orderBy(desc(UserTrainingSession.checkedInAt));
-        
-      console.log(
-        "[API] getCheckedInClients - Filtered users count:",
-        checkedInUsers.length
-      );
-      console.log(
-        "[API] getCheckedInClients - Filtered users:",
-        checkedInUsers.map(u => ({
-          userId: u.userId,
-          status: u.status
-        }))
-      );
 
       // Get user details and preferences for each checked-in user
       const usersWithDetails = await Promise.all(
@@ -604,15 +542,6 @@ export const trainingSessionRouter = {
         }),
       );
 
-      console.log(
-        "[API] getCheckedInClients - Final return data:",
-        usersWithDetails.map(u => ({
-          userId: u.userId,
-          status: u.status,
-          userName: u.userName
-        }))
-      );
-      
       return usersWithDetails;
     }),
 
@@ -3112,6 +3041,17 @@ Set your goals and preferences for today's session.`;
             }))
           : [],
       });
+      
+      // Log the LLM debug data being saved
+      console.log("🔍 LLM DEBUG DATA BEING SAVED:", {
+        hasLlmResult: !!input.visualizationData.llmResult,
+        hasDebug: !!input.visualizationData.llmResult?.debug,
+        debugKeys: input.visualizationData.llmResult?.debug ? Object.keys(input.visualizationData.llmResult.debug) : [],
+        systemPromptsByClientKeys: input.visualizationData.llmResult?.debug?.systemPromptsByClient ? 
+          Object.keys(input.visualizationData.llmResult.debug.systemPromptsByClient) : [],
+        llmResponsesByClientKeys: input.visualizationData.llmResult?.debug?.llmResponsesByClient ? 
+          Object.keys(input.visualizationData.llmResult.debug.llmResponsesByClient) : []
+      });
 
       // Update the session with the visualization data
       await ctx.db
@@ -3164,12 +3104,6 @@ Set your goals and preferences for today's session.`;
       const visualizationData = templateConfig?.visualizationData;
 
       if (!visualizationData) {
-        console.log("[getSavedVisualizationData] No saved visualization data found", {
-          sessionId: input.sessionId,
-          sessionStatus: session.status,
-          hasTemplateConfig: !!templateConfig,
-          templateConfigKeys: templateConfig ? Object.keys(templateConfig) : [],
-        });
         return null;
       }
 
@@ -3181,20 +3115,26 @@ Set your goals and preferences for today's session.`;
         const diffMinutes = (now.getTime() - savedAt.getTime()) / (1000 * 60);
 
         if (diffMinutes > 30) {
-          console.log("[getSavedVisualizationData] Data is stale, forcing regeneration", {
-            sessionId: input.sessionId,
-            savedAt,
-            diffMinutes,
-          });
           return null; // Force regeneration if data is too old
         }
       }
 
-      console.log("[getSavedVisualizationData] Returning saved data", {
-        sessionId: input.sessionId,
-        sessionStatus: session.status,
-        hasSavedData: !!visualizationData,
-        savedAt: visualizationData.savedAt,
+      // Add detailed logging for debug data
+      console.log("🔍 [getSavedVisualizationData] LLM DEBUG DATA CHECK:", {
+        hasLlmResult: !!visualizationData.llmResult,
+        hasDebug: !!visualizationData.llmResult?.debug,
+        debugKeys: visualizationData.llmResult?.debug ? Object.keys(visualizationData.llmResult.debug) : [],
+        systemPromptsByClientKeys: visualizationData.llmResult?.debug?.systemPromptsByClient ? 
+          Object.keys(visualizationData.llmResult?.debug?.systemPromptsByClient) : [],
+        llmResponsesByClientKeys: visualizationData.llmResult?.debug?.llmResponsesByClient ? 
+          Object.keys(visualizationData.llmResult?.debug?.llmResponsesByClient) : [],
+        // Also check if they're at the top level (old format)
+        hasTopLevelSystemPrompts: !!visualizationData.llmResult?.systemPromptsByClient,
+        hasTopLevelLlmResponses: !!visualizationData.llmResult?.llmResponsesByClient,
+        topLevelSystemPromptsKeys: visualizationData.llmResult?.systemPromptsByClient ? 
+          Object.keys(visualizationData.llmResult?.systemPromptsByClient) : [],
+        topLevelLlmResponsesKeys: visualizationData.llmResult?.llmResponsesByClient ? 
+          Object.keys(visualizationData.llmResult?.llmResponsesByClient) : []
       });
 
       return visualizationData;
@@ -3247,12 +3187,6 @@ Set your goals and preferences for today's session.`;
       const visualizationData = templateConfig?.visualizationData;
 
       if (!visualizationData) {
-        console.log("[getSavedVisualizationData] No saved visualization data found", {
-          sessionId: input.sessionId,
-          sessionStatus: session.status,
-          hasTemplateConfig: !!templateConfig,
-          templateConfigKeys: templateConfig ? Object.keys(templateConfig) : [],
-        });
         return null;
       }
 
@@ -3264,20 +3198,26 @@ Set your goals and preferences for today's session.`;
         const diffMinutes = (now.getTime() - savedAt.getTime()) / (1000 * 60);
 
         if (diffMinutes > 30) {
-          console.log("[getSavedVisualizationData] Data is stale, forcing regeneration", {
-            sessionId: input.sessionId,
-            savedAt,
-            diffMinutes,
-          });
           return null; // Force regeneration if data is too old
         }
       }
 
-      console.log("[getSavedVisualizationData] Returning saved data", {
-        sessionId: input.sessionId,
-        sessionStatus: session.status,
-        hasSavedData: !!visualizationData,
-        savedAt: visualizationData.savedAt,
+      // Add detailed logging for debug data
+      console.log("🔍 [getSavedVisualizationData] LLM DEBUG DATA CHECK:", {
+        hasLlmResult: !!visualizationData.llmResult,
+        hasDebug: !!visualizationData.llmResult?.debug,
+        debugKeys: visualizationData.llmResult?.debug ? Object.keys(visualizationData.llmResult.debug) : [],
+        systemPromptsByClientKeys: visualizationData.llmResult?.debug?.systemPromptsByClient ? 
+          Object.keys(visualizationData.llmResult?.debug?.systemPromptsByClient) : [],
+        llmResponsesByClientKeys: visualizationData.llmResult?.debug?.llmResponsesByClient ? 
+          Object.keys(visualizationData.llmResult?.debug?.llmResponsesByClient) : [],
+        // Also check if they're at the top level (old format)
+        hasTopLevelSystemPrompts: !!visualizationData.llmResult?.systemPromptsByClient,
+        hasTopLevelLlmResponses: !!visualizationData.llmResult?.llmResponsesByClient,
+        topLevelSystemPromptsKeys: visualizationData.llmResult?.systemPromptsByClient ? 
+          Object.keys(visualizationData.llmResult?.systemPromptsByClient) : [],
+        topLevelLlmResponsesKeys: visualizationData.llmResult?.llmResponsesByClient ? 
+          Object.keys(visualizationData.llmResult?.llmResponsesByClient) : []
       });
 
       return visualizationData;
