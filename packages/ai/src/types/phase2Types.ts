@@ -28,4 +28,5 @@ export interface AllowedSlotsResult {
 
 export interface Phase2SelectionResult {
   placements: Array<[string, number]>;
+  roundNames?: Record<string, string>;
 }

@@ -837,6 +837,7 @@ export class StandardWorkoutGenerator {
 
       return {
         placements: validPlacements,
+        roundNames: parsed.roundNames || {},
       };
     } catch (error) {
       logger.error("[Phase2] Failed to parse LLM response", { response, error });

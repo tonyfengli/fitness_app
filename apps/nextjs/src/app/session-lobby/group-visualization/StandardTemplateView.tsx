@@ -63,12 +63,36 @@ function getEquipmentIcon(equipment: string): string {
 
 function Phase2PreviewContent({ sessionId }: { sessionId: string }) {
   const trpc = useTRPC();
+  const [llmSelections, setLlmSelections] = useState<Array<[string, number]> | null>(null);
+  const [roundNames, setRoundNames] = useState<Record<string, string> | null>(null);
   
   // Fetch preprocessed data
   const { data, isLoading, error } = useQuery({
     ...trpc.trainingSession.previewPhase2Data.queryOptions({ sessionId }),
     enabled: !!sessionId,
   });
+
+  // If Phase 2 data exists, use it for display
+  useEffect(() => {
+    if (data?.hasPhase2Data && data?.savedRoundNames) {
+      setRoundNames(data.savedRoundNames);
+      // For saved data, we'll construct selections from the workout exercises
+      // This will be used for display in the Client × Round Grid
+      if (data.workouts) {
+        const selections: Array<[string, number]> = [];
+        data.workouts.forEach((workout: any) => {
+          workout.workoutExercises?.forEach((exercise: any) => {
+            if (exercise.orderIndex >= 1 && exercise.orderIndex <= 5) {
+              // Create the selection ID format expected by the grid
+              const selectionId = `${workout.userId}_${exercise.name?.toLowerCase().replace(/\s+/g, '_')}`;
+              selections.push([selectionId, exercise.orderIndex]);
+            }
+          });
+        });
+        setLlmSelections(selections);
+      }
+    }
+  }, [data]);
 
   if (isLoading) {
     return (
@@ -114,7 +138,12 @@ function Phase2PreviewContent({ sessionId }: { sessionId: string }) {
   return (
     <div className="space-y-4">
       {/* Phase 2 LLM Generation Section */}
-      <Phase2LLMSection sessionId={sessionId} />
+      <Phase2LLMSection 
+        sessionId={sessionId} 
+        onSelectionsUpdate={setLlmSelections}
+        onRoundNamesUpdate={setRoundNames}
+        hasPhase2Data={data.hasPhase2Data || false}
+      />
 
       {/* Summary Stats */}
       <div className="rounded-lg bg-gray-50 p-4">
@@ -271,17 +300,35 @@ function Phase2PreviewContent({ sessionId }: { sessionId: string }) {
 
       {/* 4. Client × Round Grid */}
       <div className="rounded-lg bg-white border border-gray-200 p-4">
-        <h4 className="text-sm font-medium text-gray-700 mb-3">Client × Round Grid</h4>
+        <h4 className="text-sm font-medium text-gray-700 mb-3">
+          Client × Round Grid
+          {data.hasPhase2Data && (
+            <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
+              Using saved data
+            </span>
+          )}
+        </h4>
         <div className="overflow-x-auto">
           <table className="min-w-full">
             <thead>
               <tr>
                 <th className="text-xs font-medium text-gray-700 text-left p-2">Client</th>
-                {Array.from({ length: data.roundOrganization?.majorityRounds || 0 }, (_, i) => (
-                  <th key={i + 1} className="text-xs font-medium text-gray-700 text-center p-2 min-w-[100px]">
-                    R{i + 1}
-                  </th>
-                ))}
+                {Array.from({ length: data.roundOrganization?.majorityRounds || 0 }, (_, i) => {
+                  const roundNum = i + 1;
+                  const roundName = roundNames?.[roundNum.toString()];
+                  return (
+                    <th key={roundNum} className="text-xs font-medium text-gray-700 text-center p-2 min-w-[120px]">
+                      <div>
+                        <div className="font-semibold">R{roundNum}</div>
+                        {roundName && (
+                          <div className="font-normal text-[10px] text-purple-600 mt-0.5">
+                            {roundName}
+                          </div>
+                        )}
+                      </div>
+                    </th>
+                  );
+                })}
               </tr>
             </thead>
             <tbody>
@@ -341,6 +388,54 @@ function Phase2PreviewContent({ sessionId }: { sessionId: string }) {
                             </div>
                           </td>
                         );
+                      }
+                      
+                      // Check if LLM has made a selection for this client/round
+                      if (llmSelections && optionsForRound.length > 0) {
+                        // Find any LLM selection for this client and round
+                        const llmPick = llmSelections.find(([id, r]) => {
+                          // The LLM returns IDs starting with client UUID
+                          return id.startsWith(client.clientId) && r === round;
+                        });
+
+                        if (llmPick) {
+                          // Extract exercise name from the LLM ID
+                          const exerciseNameFromId = llmPick[0]
+                            .replace(client.clientId + '_', '')
+                            .replace(/_/g, ' ')
+                            .toLowerCase();
+
+                          // Find the matching exercise option
+                          const selectedOption = optionsForRound.find(opt => {
+                            const exercise = data.exercisesWithTiers?.find(e => 
+                              e.exerciseId === opt.exerciseId && e.clientId === opt.clientId
+                            );
+                            return exercise?.name?.toLowerCase() === exerciseNameFromId;
+                          });
+
+                          if (selectedOption) {
+                            const exercise = data.exercisesWithTiers?.find(e => 
+                              e.exerciseId === selectedOption.exerciseId && e.clientId === selectedOption.clientId
+                            );
+                            return (
+                              <td key={round} className="p-2">
+                                <div className="text-xs">
+                                  <div className="bg-indigo-100 text-indigo-800 px-2 py-1 rounded text-center font-medium mb-1">
+                                    LLM Selected
+                                  </div>
+                                  <div className="text-gray-700 text-center font-medium">{exercise?.name || 'Unknown'}</div>
+                                  <div className="flex justify-center gap-1 mt-1">
+                                    {Object.keys(selectedOption.resources).map(eq => (
+                                      <span key={eq} className="text-gray-500" title={eq}>
+                                        {getEquipmentIcon(eq)}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                              </td>
+                            );
+                          }
+                        }
                       }
                       
                       if (optionsForRound.length > 0) {
@@ -540,9 +635,25 @@ function Phase2PreviewContent({ sessionId }: { sessionId: string }) {
   );
 }
 
-function Phase2LLMSection({ sessionId }: { sessionId: string }) {
+function Phase2LLMSection({ 
+  sessionId, 
+  onSelectionsUpdate,
+  onRoundNamesUpdate,
+  hasPhase2Data
+}: { 
+  sessionId: string;
+  onSelectionsUpdate: (selections: Array<[string, number]> | null) => void;
+  onRoundNamesUpdate: (names: Record<string, string> | null) => void;
+  hasPhase2Data: boolean;
+}) {
   const trpc = useTRPC();
   const [isGenerating, setIsGenerating] = useState(false);
+  
+  // Fetch preprocessed data to get fixed assignments
+  const { data: preprocessData } = useQuery({
+    ...trpc.trainingSession.previewPhase2Data.queryOptions({ sessionId }),
+    enabled: !!sessionId,
+  });
   const [expandedSections, setExpandedSections] = useState<{
     input: boolean;
     output: boolean;
@@ -558,6 +669,60 @@ function Phase2LLMSection({ sessionId }: { sessionId: string }) {
     llmResponse?: string;
     selections?: any;
   }>({});
+  const [validationErrors, setValidationErrors] = useState<string[]>([]);
+  const [isSaving, setIsSaving] = useState(false);
+  const [savedSuccessfully, setSavedSuccessfully] = useState(false);
+  
+  // Load saved LLM data if it exists
+  useEffect(() => {
+    if (preprocessData?.savedLlmData) {
+      console.log('[Phase2LLMSection] Loading saved LLM data:', preprocessData.savedLlmData);
+      
+      setLlmData({
+        systemPrompt: preprocessData.savedLlmData.systemPrompt,
+        humanMessage: preprocessData.savedLlmData.humanMessage,
+        llmResponse: preprocessData.savedLlmData.llmResponse,
+        selections: preprocessData.savedRoundNames ? {
+          placements: preprocessData.workouts ? 
+            // Reconstruct placements from saved workouts
+            preprocessData.workouts.flatMap((w: any) => 
+              w.workoutExercises
+                ?.filter((ex: any) => ex.orderIndex >= 1 && ex.orderIndex <= 5)
+                ?.map((ex: any) => [
+                  `${w.userId}_${ex.name.toLowerCase().replace(/\s+/g, '_')}`,
+                  ex.orderIndex
+                ]) || []
+            ) : [],
+          roundNames: preprocessData.savedRoundNames,
+        } : undefined,
+      });
+      
+      if (preprocessData.savedLlmData.timing) {
+        setTimestamps({
+          startedAt: preprocessData.savedLlmData.timing.startedAt,
+          completedAt: preprocessData.savedLlmData.timing.completedAt,
+          durationSeconds: preprocessData.savedLlmData.timing.durationSeconds,
+        });
+      }
+      
+      // Also update parent component with the loaded data
+      if (preprocessData.savedRoundNames) {
+        onRoundNamesUpdate(preprocessData.savedRoundNames);
+      }
+      if (preprocessData.workouts) {
+        // Reconstruct selections for parent component
+        const selections = preprocessData.workouts.flatMap((w: any) => 
+          w.workoutExercises
+            ?.filter((ex: any) => ex.orderIndex >= 1 && ex.orderIndex <= 5)
+            ?.map((ex: any) => [
+              `${w.userId}_${ex.name.toLowerCase().replace(/\s+/g, '_')}`,
+              ex.orderIndex
+            ]) || []
+        );
+        onSelectionsUpdate(selections);
+      }
+    }
+  }, [preprocessData, onSelectionsUpdate, onRoundNamesUpdate]);
 
   const generatePhase2Mutation = useMutation({
     ...trpc.trainingSession.generatePhase2Selections.mutationOptions(),
@@ -571,6 +736,16 @@ function Phase2LLMSection({ sessionId }: { sessionId: string }) {
       });
     },
     onSuccess: (data) => {
+      console.log('[Phase2LLMSection] generatePhase2Mutation.onSuccess received data:', {
+        hasData: !!data,
+        dataKeys: data ? Object.keys(data) : [],
+        hasSystemPrompt: !!data?.systemPrompt,
+        hasHumanMessage: !!data?.humanMessage,
+        hasLlmResponse: !!data?.llmResponse,
+        hasSelections: !!data?.selections,
+        hasTiming: !!data?.timing,
+      });
+      
       const endTime = new Date();
       const startTime = timestamps.startedAt ? new Date(timestamps.startedAt) : new Date();
       const durationMs = endTime.getTime() - startTime.getTime();
@@ -587,6 +762,110 @@ function Phase2LLMSection({ sessionId }: { sessionId: string }) {
         completedAt: endTime.toISOString(),
         durationSeconds: Number((durationMs / 1000).toFixed(1)),
       }));
+      
+      // Validate LLM selections
+      const errors: string[] = [];
+      if (data.selections?.placements && data.humanMessage) {
+        try {
+          const inputData = JSON.parse(data.humanMessage.match(/\{[\s\S]*\}/)?.[0] || '{}');
+          const placements = data.selections.placements;
+          
+          // Check 1: Find missed exercises (options that weren't placed)
+          const placedIds = new Set(placements.map(([id]: [string, number]) => id));
+          const missedExercises = inputData.options?.filter((opt: any) => 
+            !placedIds.has(opt.id)
+          );
+          
+          if (missedExercises?.length > 0) {
+            missedExercises.forEach((missed: any) => {
+              errors.push(`⚠️ Missed exercise: ${missed.id} (client has empty slot)`);
+            });
+          }
+          
+          // Check 2: Verify slots remaining are respected
+          const slotUsage: Record<string, Record<number, number>> = {};
+          placements.forEach(([id, round]: [string, number]) => {
+            const clientId = id.split('_')[0];
+            if (!slotUsage[clientId]) slotUsage[clientId] = {};
+            slotUsage[clientId][round] = (slotUsage[clientId][round] || 0) + 1;
+          });
+          
+          Object.entries(slotUsage).forEach(([clientId, rounds]) => {
+            Object.entries(rounds).forEach(([round, used]) => {
+              const available = inputData.slotsRemaining?.[clientId]?.[parseInt(round) - 1] || 0;
+              if (used > available) {
+                errors.push(`❌ Overfilled: Client ${clientId} R${round} - used ${used} slots but only ${available} available`);
+              }
+            });
+          });
+          
+          // Check 3: Verify exercises placed in allowed rounds only
+          placements.forEach(([id, round]: [string, number]) => {
+            const exercise = inputData.options?.find((opt: any) => opt.id === id);
+            if (exercise && !exercise.allowed.includes(round)) {
+              errors.push(`❌ Invalid placement: ${id} placed in R${round} but allowed rounds are [${exercise.allowed.join(', ')}]`);
+            }
+          });
+          
+          // Check 4: Check for duplicate placements
+          const placementStrings = placements.map(([id, round]: [string, number]) => `${id}_${round}`);
+          const duplicates = placementStrings.filter((item, index) => placementStrings.indexOf(item) !== index);
+          if (duplicates.length > 0) {
+            duplicates.forEach(dup => {
+              errors.push(`❌ Duplicate placement: ${dup}`);
+            });
+          }
+        } catch (e) {
+          errors.push('⚠️ Could not validate LLM response - parsing error');
+        }
+      }
+      
+      setValidationErrors(errors);
+      
+      // Update parent component with selections and round names
+      if (data.selections?.placements) {
+        onSelectionsUpdate(data.selections.placements);
+      }
+      if (data.selections?.roundNames) {
+        onRoundNamesUpdate(data.selections.roundNames);
+      }
+      
+      // Automatically save to database if generation was successful
+      if (data.selections?.placements && data.selections?.roundNames && errors.length === 0) {
+        // Prepare fixed assignments from preprocessing data
+        const fixedAssignments = preprocessData?.allowedSlots?.fixedAssignments?.map(fa => ({
+          exerciseId: fa.exerciseId,
+          clientId: fa.clientId,
+          round: fa.round,
+        })) || [];
+        
+        // Include LLM data with timing information
+        const llmData = {
+          systemPrompt: data.systemPrompt,
+          humanMessage: data.humanMessage,
+          llmResponse: data.llmResponse,
+          timing: data.timing,
+        };
+        
+        console.log('[Phase2LLMSection] Saving to database with llmData:', {
+          hasSystemPrompt: !!llmData.systemPrompt,
+          hasHumanMessage: !!llmData.humanMessage,
+          hasLlmResponse: !!llmData.llmResponse,
+          hasTiming: !!llmData.timing,
+          systemPromptLength: llmData.systemPrompt?.length,
+          humanMessageLength: llmData.humanMessage?.length,
+          llmResponseLength: llmData.llmResponse?.length,
+          timing: llmData.timing,
+        });
+        
+        updatePhase2Mutation.mutate({
+          sessionId,
+          placements: data.selections.placements,
+          roundNames: data.selections.roundNames || {},
+          fixedAssignments: fixedAssignments,
+          llmData: llmData,
+        });
+      }
       
       setIsGenerating(false);
     },
@@ -607,8 +886,26 @@ function Phase2LLMSection({ sessionId }: { sessionId: string }) {
     },
   });
 
+  const updatePhase2Mutation = useMutation({
+    ...trpc.trainingSession.updatePhase2Exercises.mutationOptions(),
+    onMutate: () => {
+      setIsSaving(true);
+    },
+    onSuccess: () => {
+      setSavedSuccessfully(true);
+      setIsSaving(false);
+      // Show success for 3 seconds
+      setTimeout(() => setSavedSuccessfully(false), 3000);
+    },
+    onError: (error: any) => {
+      alert(`Failed to save Phase 2 updates: ${error.message}`);
+      setIsSaving(false);
+    },
+  });
+
   const handleGenerate = () => {
     generatePhase2Mutation.mutate({ sessionId });
+    setSavedSuccessfully(false); // Reset save status when generating new
   };
 
   const toggleSection = (section: 'input' | 'output') => {
@@ -624,12 +921,24 @@ function Phase2LLMSection({ sessionId }: { sessionId: string }) {
       <div className="rounded-lg bg-white border border-gray-200 p-4">
         <div className="flex items-center justify-between">
           <div className="flex-1">
-            <h4 className="text-sm font-medium text-gray-700">Phase 2 LLM Selection</h4>
+            <h4 className="text-sm font-medium text-gray-700">
+              Phase 2 LLM Selection
+              {hasPhase2Data && (
+                <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
+                  Using saved data
+                </span>
+              )}
+            </h4>
             <p className="text-xs text-gray-500 mt-1">
               Use LLM to select remaining exercises for each client/round
             </p>
             {/* Timestamps */}
             <div className="mt-2 text-xs text-gray-600 space-y-0.5">
+              {hasPhase2Data && preprocessData?.generatedAt && (
+                <div className="text-gray-600">
+                  Generated: {new Date(preprocessData.generatedAt).toLocaleString()}
+                </div>
+              )}
               {timestamps.startedAt && (
                 <div>Started: {new Date(timestamps.startedAt).toLocaleTimeString()}</div>
               )}
@@ -641,19 +950,35 @@ function Phase2LLMSection({ sessionId }: { sessionId: string }) {
                   Duration: {timestamps.durationSeconds}s
                 </div>
               )}
+              {isSaving && (
+                <div className="text-blue-600 font-medium">
+                  Saving to database...
+                </div>
+              )}
+              {savedSuccessfully && (
+                <div className="text-green-600 font-medium">
+                  ✓ Saved to database
+                </div>
+              )}
             </div>
           </div>
-          <button
-            onClick={handleGenerate}
-            disabled={isGenerating}
-            className={`px-4 py-2 text-sm font-medium rounded-md ${
-              isGenerating
-                ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                : "bg-indigo-600 text-white hover:bg-indigo-700"
-            }`}
-          >
-            {isGenerating ? "Generating..." : "Generate Phase 2 LLM Selection"}
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={handleGenerate}
+              disabled={isGenerating || hasPhase2Data}
+              className={`px-4 py-2 text-sm font-medium rounded-md ${
+                isGenerating || hasPhase2Data
+                  ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                  : "bg-indigo-600 text-white hover:bg-indigo-700"
+              }`}
+            >
+              {hasPhase2Data 
+                ? "Phase 2 Already Generated" 
+                : isGenerating 
+                ? "Generating..." 
+                : "Generate Phase 2 LLM Selection"}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -661,7 +986,14 @@ function Phase2LLMSection({ sessionId }: { sessionId: string }) {
       {(llmData.systemPrompt || llmData.humanMessage) && (
         <div className="rounded-lg bg-gray-50 border border-gray-200 p-4">
           <div className="flex items-center justify-between mb-3">
-            <h4 className="text-sm font-medium text-gray-700">LLM Input</h4>
+            <h4 className="text-sm font-medium text-gray-700">
+              LLM Input
+              {hasPhase2Data && (
+                <span className="ml-2 text-xs font-normal text-gray-500">
+                  (from saved generation)
+                </span>
+              )}
+            </h4>
             <button
               onClick={() => toggleSection('input')}
               className="text-gray-500 hover:text-gray-700"
@@ -710,11 +1042,30 @@ function Phase2LLMSection({ sessionId }: { sessionId: string }) {
         </div>
       )}
 
+      {/* Validation Errors */}
+      {validationErrors.length > 0 && (
+        <div className="rounded-lg bg-red-50 border border-red-200 p-4">
+          <h4 className="text-sm font-medium text-red-800 mb-2">LLM Validation Errors</h4>
+          <div className="space-y-1">
+            {validationErrors.map((error, idx) => (
+              <div key={idx} className="text-xs text-red-700">{error}</div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* LLM Output Section */}
       {llmData.llmResponse && (
         <div className="rounded-lg bg-blue-50 border border-blue-200 p-4">
           <div className="flex items-center justify-between mb-3">
-            <h4 className="text-sm font-medium text-gray-700">LLM Output</h4>
+            <h4 className="text-sm font-medium text-gray-700">
+              LLM Output
+              {hasPhase2Data && (
+                <span className="ml-2 text-xs font-normal text-gray-500">
+                  (from saved generation)
+                </span>
+              )}
+            </h4>
             <button
               onClick={() => toggleSection('output')}
               className="text-gray-500 hover:text-gray-700"
@@ -762,6 +1113,23 @@ function Phase2LLMSection({ sessionId }: { sessionId: string }) {
                       ))}
                     </div>
                   </div>
+                  
+                  {/* Round Names */}
+                  {llmData.selections.roundNames && Object.keys(llmData.selections.roundNames).length > 0 && (
+                    <div className="mt-3">
+                      <h5 className="text-xs font-medium text-gray-600 mb-2">Round Names:</h5>
+                      <div className="bg-white p-3 rounded border border-gray-200">
+                        <div className="space-y-1 text-xs">
+                          {Object.entries(llmData.selections.roundNames).map(([round, name]) => (
+                            <div key={round} className="flex items-center gap-2">
+                              <span className="font-medium text-gray-700">Round {round}:</span>
+                              <span className="font-medium text-purple-600">{name}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </>

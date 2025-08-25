@@ -110,7 +110,6 @@ export function WorkoutOverviewScreen() {
   const [lastSwapTime, setLastSwapTime] = useState<Date | null>(null);
   const { startWorkout, isGenerating, error: startWorkoutError, setError } = useStartWorkout();
   const [showErrorModal, setShowErrorModal] = useState(false);
-  const [workoutOrganizationReady, setWorkoutOrganizationReady] = useState(false);
   const [lastSuccessfulFetch, setLastSuccessfulFetch] = useState<Date | null>(null);
   const [connectionState, setConnectionState] = useState<'connecting' | 'connected' | 'error'>('connecting');
   
@@ -349,58 +348,11 @@ export function WorkoutOverviewScreen() {
         
         <Pressable
           onPress={async () => {
-            // Check if workout is already organized
-            if (sessionData?.workoutOrganization) {
-              console.log('[TV WorkoutOverview] Workout already organized, navigating directly');
-              // Navigate directly without loading screen but with necessary data
-              navigation.navigate('WorkoutLive', { 
-                sessionId, 
-                round: 1,
-                organization: sessionData.workoutOrganization,
-                workouts: selections, // Use the current selections
-                clients: localClients // Use the local clients state
-              });
-            } else {
-              // Show loading screen for Phase 2 organization
-              // Reset the organization ready state
-              setWorkoutOrganizationReady(false);
-              
-              // Start polling for workout organization in background
-              const pollForOrganization = async () => {
-                console.log('[TV WorkoutOverview] Starting to poll for workout organization...');
-                let attempts = 0;
-                const maxAttempts = 60; // 30 seconds max (500ms intervals)
-                
-                while (attempts < maxAttempts) {
-                  try {
-                    const session = await queryClient.fetchQuery(
-                      api.trainingSession.getById.queryOptions({ id: sessionId })
-                    );
-                    
-                    if (session?.workoutOrganization) {
-                      console.log('[TV WorkoutOverview] ✅ Workout organization detected!');
-                      setWorkoutOrganizationReady(true);
-                      break;
-                    }
-                    
-                    attempts++;
-                    await new Promise(resolve => setTimeout(resolve, 500));
-                  } catch (error) {
-                    console.log('[TV WorkoutOverview] Error polling for organization:', error);
-                    attempts++;
-                    await new Promise(resolve => setTimeout(resolve, 500));
-                  }
-                }
-                
-                if (attempts >= maxAttempts) {
-                  console.log('[TV WorkoutOverview] ⚠️ Timeout waiting for workout organization');
-                }
-              };
-              
-              // Start polling and workout generation in parallel
-              pollForOrganization();
-              await startWorkout(sessionId);
-            }
+            // The startWorkout hook now handles all the logic:
+            // 1. Checks if workout is already organized
+            // 2. If yes, navigates directly to WorkoutLive
+            // 3. If no, generates Phase 2 and then navigates
+            await startWorkout(sessionId);
           }}
           focusable
           disabled={!sessionId || isGenerating}
@@ -887,7 +839,6 @@ export function WorkoutOverviewScreen() {
           <WorkoutGenerationLoader 
             clientNames={localClients?.map(c => c.userName || 'Unknown') || []} 
             durationMinutes={1.67} // 1 minute 40 seconds
-            forceComplete={workoutOrganizationReady}
           />
         </View>
       )}

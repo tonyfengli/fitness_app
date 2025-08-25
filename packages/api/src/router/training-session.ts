@@ -3469,13 +3469,89 @@ Set your goals and preferences for today's session.`;
     .input(z.object({ sessionId: z.string().uuid() }))
     .query(async ({ ctx, input }) => {
       const data = await preprocessPhase2Data(ctx, input.sessionId);
-      return data;
+      
+      // Get session to check for saved workout organization
+      const session = await ctx.db.query.TrainingSession.findFirst({
+        where: eq(TrainingSession.id, input.sessionId),
+      });
+      
+      // Check if Phase 2 has already been run by looking at workout exercises
+      const workouts = await ctx.db.query.Workout.findMany({
+        where: eq(Workout.trainingSessionId, input.sessionId),
+      });
+      
+      // Get workout exercises with exercise details
+      const workoutsWithExercises = await Promise.all(
+        workouts.map(async (workout) => {
+          const workoutExercises = await ctx.db
+            .select({
+              id: WorkoutExercise.id,
+              exerciseId: WorkoutExercise.exerciseId,
+              orderIndex: WorkoutExercise.orderIndex,
+              groupName: WorkoutExercise.groupName,
+              exercise: exercises,
+            })
+            .from(WorkoutExercise)
+            .innerJoin(exercises, eq(WorkoutExercise.exerciseId, exercises.id))
+            .where(eq(WorkoutExercise.workoutId, workout.id));
+            
+          return {
+            userId: workout.userId,
+            workoutExercises: workoutExercises.map(we => ({
+              ...we,
+              name: we.exercise.name,
+              orderIndex: we.orderIndex,
+              groupName: we.groupName,
+            })),
+          };
+        })
+      );
+      
+      // Check if any exercises have been assigned to rounds (orderIndex 1-5)
+      let hasPhase2Data = false;
+      let savedRoundNames: Record<string, string> = {};
+      
+      for (const workout of workoutsWithExercises) {
+        for (const exercise of workout.workoutExercises) {
+          if (exercise.orderIndex >= 1 && exercise.orderIndex <= 5) {
+            hasPhase2Data = true;
+            // Extract round names from groupName (format: "Round X - Name")
+            if (exercise.groupName) {
+              const match = exercise.groupName.match(/Round (\d+) - (.+)/);
+              if (match) {
+                savedRoundNames[match[1]] = match[2];
+              }
+            }
+          }
+        }
+      }
+      
+      // Get saved LLM data from session if it exists
+      let savedLlmData = null;
+      let generatedAt = null;
+      if (hasPhase2Data && session?.workoutOrganization) {
+        const workoutOrg = session.workoutOrganization as any;
+        savedLlmData = workoutOrg.llmData || null;
+        generatedAt = workoutOrg.generatedAt || null;
+      }
+      
+      return {
+        ...data,
+        hasPhase2Data,
+        savedRoundNames: hasPhase2Data ? savedRoundNames : null,
+        workouts: hasPhase2Data ? workoutsWithExercises : undefined,
+        savedLlmData: savedLlmData,
+        generatedAt: generatedAt,
+      };
     }),
 
   generatePhase2Selections: protectedProcedure
     .input(z.object({ sessionId: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
       const { sessionId } = input;
+      
+      // Record start time
+      const startTime = new Date();
       
       // Get preprocessing data
       const preprocessData = await preprocessPhase2Data(ctx, sessionId);
@@ -3515,12 +3591,220 @@ Set your goals and preferences for today's session.`;
         clientPlans
       );
       
+      // Record end time
+      const endTime = new Date();
+      const durationMs = endTime.getTime() - startTime.getTime();
+      
       return {
         success: true,
         systemPrompt: phase2Result.systemPrompt,
         humanMessage: phase2Result.humanMessage,
         llmResponse: phase2Result.llmResponse,
         selections: phase2Result.selections,
+        timing: {
+          startedAt: startTime.toISOString(),
+          completedAt: endTime.toISOString(),
+          durationMs: durationMs,
+          durationSeconds: Number((durationMs / 1000).toFixed(1)),
+        },
+      };
+    }),
+
+  updatePhase2Exercises: protectedProcedure
+    .input(z.object({ 
+      sessionId: z.string().uuid(),
+      placements: z.array(z.tuple([z.string(), z.number()])),
+      roundNames: z.record(z.string(), z.string()),
+      fixedAssignments: z.array(z.object({
+        exerciseId: z.string(),
+        clientId: z.string(),
+        round: z.number(),
+      })).optional(),
+      llmData: z.object({
+        systemPrompt: z.string(),
+        humanMessage: z.string(),
+        llmResponse: z.string(),
+        timing: z.object({
+          startedAt: z.string(),
+          completedAt: z.string(),
+          durationMs: z.number(),
+          durationSeconds: z.number(),
+        }),
+      }).optional()
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const { sessionId, placements, roundNames, fixedAssignments, llmData } = input;
+      
+      // Get all workouts for this session
+      const workouts = await ctx.db.query.Workout.findMany({
+        where: eq(Workout.trainingSessionId, sessionId),
+      });
+      
+      // Create a map of userId to workoutId
+      const userWorkoutMap = new Map<string, string>();
+      workouts.forEach(w => userWorkoutMap.set(w.userId, w.id));
+      
+      // Process fixed assignments first
+      if (fixedAssignments && fixedAssignments.length > 0) {
+        for (const fixed of fixedAssignments) {
+          const workoutId = userWorkoutMap.get(fixed.clientId);
+          if (!workoutId) continue;
+          
+          // Find the workout exercise matching this fixed assignment
+          const workoutExercise = await ctx.db.query.WorkoutExercise.findFirst({
+            where: and(
+              eq(WorkoutExercise.workoutId, workoutId),
+              eq(WorkoutExercise.exerciseId, fixed.exerciseId)
+            ),
+          });
+          
+          if (workoutExercise) {
+            const roundName = roundNames[fixed.round.toString()] || `Round ${fixed.round}`;
+            const groupName = `Round ${fixed.round} - ${roundName}`;
+            
+            await ctx.db
+              .update(WorkoutExercise)
+              .set({
+                orderIndex: fixed.round,
+                groupName: groupName,
+                phase: groupName,
+                updatedAt: new Date(),
+              })
+              .where(eq(WorkoutExercise.id, workoutExercise.id));
+          }
+        }
+      }
+      
+      // Process each placement
+      for (const [placementId, round] of placements) {
+        // Extract clientId from the placement ID (format: "clientId_exercise_name")
+        const clientId = placementId.split('_')[0];
+        const exerciseName = placementId.replace(clientId + '_', '').replace(/_/g, ' ');
+        
+        const workoutId = userWorkoutMap.get(clientId);
+        if (!workoutId) continue;
+        
+        // Find the workout exercise by matching exercise name
+        const workoutExercises = await ctx.db.query.WorkoutExercise.findMany({
+          where: eq(WorkoutExercise.workoutId, workoutId),
+        });
+        
+        for (const we of workoutExercises) {
+          const exercise = await ctx.db.query.exercises.findFirst({
+            where: eq(exercises.id, we.exerciseId),
+          });
+          
+          if (exercise?.name.toLowerCase() === exerciseName.toLowerCase()) {
+            // Update this workout exercise
+            const roundName = roundNames[round.toString()] || `Round ${round}`;
+            const groupName = `Round ${round} - ${roundName}`;
+            
+            await ctx.db
+              .update(WorkoutExercise)
+              .set({
+                orderIndex: round,
+                groupName: groupName,
+                phase: groupName,
+                updatedAt: new Date(),
+              })
+              .where(eq(WorkoutExercise.id, we.id));
+            
+            break;
+          }
+        }
+      }
+      
+      // Handle shared exercises - find exercises that appear in multiple placements
+      const exerciseOccurrences = new Map<string, string[]>();
+      
+      for (const [placementId, round] of placements) {
+        const clientId = placementId.split('_')[0];
+        const exerciseName = placementId.replace(clientId + '_', '').replace(/_/g, ' ');
+        
+        const key = `${exerciseName}_${round}`;
+        if (!exerciseOccurrences.has(key)) {
+          exerciseOccurrences.set(key, []);
+        }
+        exerciseOccurrences.get(key)!.push(clientId);
+      }
+      
+      // Update shared_with_clients for exercises that appear for multiple clients
+      for (const [key, clientIds] of exerciseOccurrences) {
+        if (clientIds.length > 1) {
+          const [exerciseName, roundStr] = key.split('_');
+          
+          for (const clientId of clientIds) {
+            const workoutId = userWorkoutMap.get(clientId);
+            if (!workoutId) continue;
+            
+            const workoutExercises = await ctx.db.query.WorkoutExercise.findMany({
+              where: eq(WorkoutExercise.workoutId, workoutId),
+            });
+            
+            for (const we of workoutExercises) {
+              const exercise = await ctx.db.query.exercises.findFirst({
+                where: eq(exercises.id, we.exerciseId),
+              });
+              
+              if (exercise?.name.toLowerCase() === exerciseName.toLowerCase()) {
+                // Update with other client IDs
+                const otherClients = clientIds.filter(id => id !== clientId);
+                
+                await ctx.db
+                  .update(WorkoutExercise)
+                  .set({
+                    sharedWithClients: otherClients,
+                    updatedAt: new Date(),
+                  })
+                  .where(eq(WorkoutExercise.id, we.id));
+                
+                break;
+              }
+            }
+          }
+        }
+      }
+      
+      // Update the session with workout organization to mark Phase 2 as complete
+      // This allows the TV app to skip Phase 2 generation on subsequent "Start Workout" clicks
+      console.log('[updatePhase2Exercises] llmData received:', {
+        hasLlmData: !!llmData,
+        hasSystemPrompt: !!llmData?.systemPrompt,
+        hasHumanMessage: !!llmData?.humanMessage,
+        hasLlmResponse: !!llmData?.llmResponse,
+        hasTiming: !!llmData?.timing,
+        systemPromptLength: llmData?.systemPrompt?.length,
+        humanMessageLength: llmData?.humanMessage?.length,
+        llmResponseLength: llmData?.llmResponse?.length,
+      });
+      
+      const workoutOrganization = {
+        llmData: llmData || undefined,
+        placements: placements,
+        fixedAssignments: fixedAssignments,
+        roundNames: roundNames,
+        generatedAt: new Date().toISOString(),
+      };
+      
+      console.log('[updatePhase2Exercises] workoutOrganization to save:', {
+        hasLlmData: !!workoutOrganization.llmData,
+        placementsCount: workoutOrganization.placements.length,
+        fixedAssignmentsCount: workoutOrganization.fixedAssignments.length,
+        roundNamesCount: Object.keys(workoutOrganization.roundNames).length,
+      });
+      
+      await ctx.db
+        .update(TrainingSession)
+        .set({
+          workoutOrganization: workoutOrganization,
+          updatedAt: new Date(),
+        })
+        .where(eq(TrainingSession.id, sessionId));
+      
+      return {
+        success: true,
+        message: "Workout exercises updated with Phase 2 selections",
+        workoutOrganization: workoutOrganization,
       };
     }),
 } satisfies TRPCRouterRecord;

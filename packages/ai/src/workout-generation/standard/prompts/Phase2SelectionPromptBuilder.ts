@@ -56,11 +56,27 @@ PROCESS:
   4. Client's other exercises
 
 OUTPUT FORMAT:
-Return ONLY a JSON object with placements:
-{ "placements": [["exercise_id", round_number], ...] }
+Return a JSON object with:
+1. "placements": array of [exercise_id, round_number] pairs
+2. "roundNames": object mapping round numbers to creative 3-word names
 
-Example:
-{ "placements": [["s_db_press", 2], ["s_row", 3], ["s_deadbug", 5]] }`;
+Round naming guidelines:
+- Maximum 3 words per name
+- Reflect the focus/theme of ALL exercises in that round (both fixed and your selections)
+- Be creative but professional (examples: "Hip Drive Flow", "Push Pull Power", "Core Stability Work")
+- Consider movement patterns, muscle groups, and training intent
+
+Example output:
+{
+  "placements": [["s_db_press", 2], ["s_row", 3], ["s_deadbug", 5]],
+  "roundNames": {
+    "1": "Heavy Hip Drive",
+    "2": "Upper Body Power",
+    "3": "Row Flow Series",
+    "4": "Accessory Work",
+    "5": "Core Finisher"
+  }
+}`;
   }
 
   /**

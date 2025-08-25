@@ -1,23 +1,35 @@
 import { useState } from 'react';
 import { useNavigation } from '../App';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../providers/TRPCProvider';
 
 export function useStartWorkout() {
   const navigation = useNavigation();
+  const queryClient = useQueryClient();
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loadingMessage, setLoadingMessage] = useState<string | null>(null);
   
-  // Create mutation following TV app pattern
-  const startWorkoutMutation = useMutation({
-    ...api.trainingSession.startWorkout.mutationOptions(),
+  // Create mutations following TV app pattern
+  const generatePhase2Mutation = useMutation({
+    ...api.trainingSession.generatePhase2Selections.mutationOptions(),
     onError: (error: any) => {
-      console.error('[TV useStartWorkout] Mutation error:', error);
-      setError(error.message || 'Failed to start workout');
+      console.error('[TV useStartWorkout] Phase 2 generation error:', error);
+      setError(error.message || 'Failed to generate Phase 2 organization');
     },
     onSuccess: (data) => {
-      console.log('[TV useStartWorkout] Mutation succeeded with data:', data);
+      console.log('[TV useStartWorkout] Phase 2 generation succeeded with data:', data);
+    }
+  });
+
+  const updatePhase2Mutation = useMutation({
+    ...api.trainingSession.updatePhase2Exercises.mutationOptions(),
+    onError: (error: any) => {
+      console.error('[TV useStartWorkout] Phase 2 update error:', error);
+      setError(error.message || 'Failed to save Phase 2 updates');
+    },
+    onSuccess: () => {
+      console.log('[TV useStartWorkout] Phase 2 exercises updated successfully');
     }
   });
   
@@ -29,69 +41,127 @@ export function useStartWorkout() {
     try {
       console.log('[TV useStartWorkout] Starting workout for session:', sessionId);
       
-      // Call the mutation - if already organized, this will return quickly
-      const result = await startWorkoutMutation.mutateAsync({ sessionId });
+      // First, check if workout organization already exists
+      const sessionQuery = await queryClient.fetchQuery(
+        api.trainingSession.getById.queryOptions({ id: sessionId })
+      );
       
-      console.log('[TV useStartWorkout] Result:', {
-        success: result.success,
-        alreadyOrganized: result.alreadyOrganized,
-        templateType: result.templateType,
-        workoutsCount: result.workouts?.length,
-        hasOrganization: !!result.workoutOrganization
+      if (sessionQuery?.workoutOrganization) {
+        console.log('[TV useStartWorkout] ✅ Workout already organized - skipping Phase 2 LLM');
+        setLoadingMessage('Loading workout...');
+        
+        // Fetch the full workout data
+        const workouts = await queryClient.fetchQuery(
+          api.workoutSelections.getSelections.queryOptions({ sessionId })
+        );
+        const clients = await queryClient.fetchQuery(
+          api.trainingSession.getCheckedInClients.queryOptions({ sessionId })
+        );
+        
+        // Navigate directly to WorkoutLive
+        setTimeout(() => {
+          navigation.navigate('WorkoutLive', { 
+            sessionId, 
+            round: 1,
+            organization: sessionQuery.workoutOrganization,
+            workouts: workouts,
+            clients: clients
+          });
+          setTimeout(() => setIsGenerating(false), 100);
+        }, 0);
+        
+        return {
+          success: true,
+          alreadyOrganized: true,
+          workoutOrganization: sessionQuery.workoutOrganization
+        };
+      }
+      
+      // No existing organization - need to generate Phase 2
+      console.log('[TV useStartWorkout] No existing organization - generating Phase 2');
+      setLoadingMessage('Organizing workout rounds...');
+      
+      // Get preprocessing data for fixed assignments
+      const preprocessData = await queryClient.fetchQuery(
+        api.trainingSession.previewPhase2Data.queryOptions({ sessionId })
+      );
+      
+      // Generate Phase 2 selections
+      const phase2Result = await generatePhase2Mutation.mutateAsync({ sessionId });
+      
+      console.log('[TV useStartWorkout] Phase 2 generation result:', {
+        hasSelections: !!phase2Result.selections,
+        placementsCount: phase2Result.selections?.placements?.length,
+        hasRoundNames: !!phase2Result.selections?.roundNames
       });
       
-      // Log timing for already organized sessions
-      if (result.alreadyOrganized) {
-        console.log('[TV useStartWorkout] ✅ Workout was already organized - skipped Phase 2 LLM');
-        setLoadingMessage('Loading workout...');
-      } else {
-        setLoadingMessage('Organizing workout rounds...');
-      }
+      // Prepare fixed assignments from preprocessing data
+      const fixedAssignments = preprocessData?.allowedSlots?.fixedAssignments?.map(fa => ({
+        exerciseId: fa.exerciseId,
+        clientId: fa.clientId,
+        round: fa.round,
+      })) || [];
       
-      // For non-standard templates or already organized sessions, go directly
-      if (result.alreadyOrganized || (result.templateType && result.templateType !== 'standard')) {
-        console.log('[TV useStartWorkout] Skipping Phase 2, navigating directly to WorkoutLive');
-        console.log('[TV useStartWorkout] Already organized, passing existing data');
-        // Keep loading screen visible during navigation
-        setTimeout(() => {
-          navigation.navigate('WorkoutLive', { 
-            sessionId, 
-            round: 1,
-            // Pass the existing organization data for efficient loading
-            organization: result.workoutOrganization,
-            workouts: result.workouts,
-            clients: result.clients
-          });
-          // Dismiss loading screen after navigation starts
-          setTimeout(() => setIsGenerating(false), 100);
-        }, 0);
-      } else if (result.workoutOrganization) {
-        // For standard templates with organization data
-        console.log('[TV useStartWorkout] Phase 2 complete, navigating with organization data');
-        console.log('[TV useStartWorkout] Workouts to pass:', result.workouts?.length);
-        // Keep loading screen visible during navigation
-        setTimeout(() => {
-          navigation.navigate('WorkoutLive', { 
-            sessionId, 
-            round: 1,
-            // Pass the organization data for efficient loading
-            organization: result.workoutOrganization,
-            workouts: result.workouts,
-            clients: result.clients
-          });
-          // Dismiss loading screen after navigation starts
-          setTimeout(() => setIsGenerating(false), 100);
-        }, 0);
-      } else {
-        // This shouldn't happen with the current implementation
-        throw new Error('Unexpected state: no organization data returned');
-      }
+      // Include LLM data from the Phase 2 result
+      const llmData = {
+        systemPrompt: phase2Result.systemPrompt,
+        humanMessage: phase2Result.humanMessage,
+        llmResponse: phase2Result.llmResponse,
+        timing: phase2Result.timing,
+      };
       
-      return result;
+      // Update database with Phase 2 results
+      await updatePhase2Mutation.mutateAsync({
+        sessionId,
+        placements: phase2Result.selections.placements,
+        roundNames: phase2Result.selections.roundNames || {},
+        fixedAssignments: fixedAssignments,
+        llmData: llmData,
+      });
+      
+      console.log('[TV useStartWorkout] Phase 2 saved to database');
+      
+      // Invalidate and refetch session data to get the updated workoutOrganization
+      await queryClient.invalidateQueries({
+        queryKey: [["trainingSession", "getById"], { input: { id: sessionId } }]
+      });
+      
+      const updatedSession = await queryClient.fetchQuery(
+        api.trainingSession.getById.queryOptions({ id: sessionId })
+      );
+      
+      // Fetch the updated workout data
+      const workouts = await queryClient.fetchQuery(
+        api.workoutSelections.getSelections.queryOptions({ sessionId })
+      );
+      const clients = await queryClient.fetchQuery(
+        api.trainingSession.getCheckedInClients.queryOptions({ sessionId })
+      );
+      
+      console.log('[TV useStartWorkout] Phase 2 complete, navigating with organization data');
+      
+      // Navigate to WorkoutLive with the updated data
+      setTimeout(() => {
+        navigation.navigate('WorkoutLive', { 
+          sessionId, 
+          round: 1,
+          organization: updatedSession?.workoutOrganization || phase2Result.selections,
+          workouts: workouts,
+          clients: clients
+        });
+        setTimeout(() => setIsGenerating(false), 100);
+      }, 0);
+      
+      return {
+        success: true,
+        alreadyOrganized: false,
+        workoutOrganization: updatedSession?.workoutOrganization || phase2Result.selections
+      };
+      
     } catch (e: any) {
       console.error('[TV useStartWorkout] Error:', e);
       setError(e.message || 'Failed to start workout');
-      setIsGenerating(false); // Only set false on error
+      setIsGenerating(false);
       throw e;
     }
   };
