@@ -3458,7 +3458,7 @@ Set your goals and preferences for today's session.`;
             // Extract round names from groupName (format: "Round X - Name")
             if (exercise.groupName) {
               const match = exercise.groupName.match(/Round (\d+) - (.+)/);
-              if (match) {
+              if (match && match[1] && match[2]) {
                 savedRoundNames[match[1]] = match[2];
               }
             }
@@ -3551,12 +3551,20 @@ Set your goals and preferences for today's session.`;
       const { StandardWorkoutGenerator } = await import("@acme/ai");
       const generator = new StandardWorkoutGenerator();
       
+      // Filter and transform client plans to ensure bundleSkeleton is defined
+      const validClientPlans = clientPlans
+        .filter(plan => plan.bundleSkeleton !== undefined)
+        .map(plan => ({
+          clientId: plan.clientId,
+          bundleSkeleton: plan.bundleSkeleton!
+        }));
+      
       // Call Phase 2 selection
       const phase2Result = await generator.selectRemainingExercises(
         preprocessData.allowedSlots,
         exercisesWithMetadata,
         preprocessData.roundOrganization.majorityRounds,
-        clientPlans
+        validClientPlans
       );
       
       // Record end time
@@ -3636,7 +3644,6 @@ Set your goals and preferences for today's session.`;
                 orderIndex: fixed.round,
                 groupName: groupName,
                 phase: groupName,
-                updatedAt: new Date(),
               })
               .where(eq(WorkoutExercise.id, workoutExercise.id));
           }
@@ -3646,7 +3653,8 @@ Set your goals and preferences for today's session.`;
       // Process each placement
       for (const [placementId, round] of placements) {
         // Extract clientId from the placement ID (format: "clientId_exercise_name")
-        const clientId = placementId.split('_')[0];
+        const splitResult = placementId.split('_');
+        const clientId = splitResult[0] || '';
         const exerciseName = placementId.replace(clientId + '_', '').replace(/_/g, ' ');
         
         const workoutId = userWorkoutMap.get(clientId);
@@ -3673,7 +3681,6 @@ Set your goals and preferences for today's session.`;
                 orderIndex: round,
                 groupName: groupName,
                 phase: groupName,
-                updatedAt: new Date(),
               })
               .where(eq(WorkoutExercise.id, we.id));
             
@@ -3686,7 +3693,8 @@ Set your goals and preferences for today's session.`;
       const exerciseOccurrences = new Map<string, string[]>();
       
       for (const [placementId, round] of placements) {
-        const clientId = placementId.split('_')[0];
+        const splitResult = placementId.split('_');
+        const clientId = splitResult[0] || '';
         const exerciseName = placementId.replace(clientId + '_', '').replace(/_/g, ' ');
         
         const key = `${exerciseName}_${round}`;
@@ -3699,7 +3707,9 @@ Set your goals and preferences for today's session.`;
       // Update shared_with_clients for exercises that appear for multiple clients
       for (const [key, clientIds] of exerciseOccurrences) {
         if (clientIds.length > 1) {
-          const [exerciseName, roundStr] = key.split('_');
+          const splitKey = key.split('_');
+          const exerciseName = splitKey[0] || '';
+          const roundStr = splitKey[1] || '';
           
           for (const clientId of clientIds) {
             const workoutId = userWorkoutMap.get(clientId);
@@ -3722,7 +3732,6 @@ Set your goals and preferences for today's session.`;
                   .update(WorkoutExercise)
                   .set({
                     sharedWithClients: otherClients,
-                    updatedAt: new Date(),
                   })
                   .where(eq(WorkoutExercise.id, we.id));
                 
@@ -3749,7 +3758,7 @@ Set your goals and preferences for today's session.`;
       const workoutOrganization = {
         llmData: llmData || undefined,
         placements: placements,
-        fixedAssignments: fixedAssignments,
+        fixedAssignments: fixedAssignments || [],
         roundNames: roundNames,
         generatedAt: new Date().toISOString(),
       };
