@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, ActivityIndicator } from 'react-native';
 import { useNavigation } from '../App';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../providers/TRPCProvider';
 import RoundView from './RoundView';
+import { transformWorkoutDataForLiveView } from '../utils/workoutDataTransformer';
 
 // Design tokens - matching other screens
 const TOKENS = {
@@ -23,22 +24,28 @@ export function WorkoutLiveScreen() {
   const round = navigation.getParam('round') || 1;
   
   // Get any passed organization data for efficiency
-  const passedOrganization = navigation.getParam('organization');
-  const passedWorkouts = navigation.getParam('workouts');
-  const passedClients = navigation.getParam('clients');
+  const [passedOrganization, setPassedOrganization] = useState(navigation.getParam('organization'));
+  const [passedWorkouts, setPassedWorkouts] = useState(navigation.getParam('workouts'));
+  const [passedClients] = useState(navigation.getParam('clients'));
+  const [isPhase2Loading, setIsPhase2Loading] = useState(navigation.getParam('isPhase2Loading') || false);
+  const [phase2Error, setPhase2Error] = useState(navigation.getParam('phase2Error'));
   
-  console.log('[WorkoutLiveScreen] Params:', {
-    sessionId,
-    round,
-    hasOrganization: !!passedOrganization,
-    hasWorkouts: !!passedWorkouts,
-    workoutsCount: passedWorkouts?.length,
-    hasClients: !!passedClients,
-    clientsCount: passedClients?.length
-  });
+  // Update state when params change
+  useEffect(() => {
+    const org = navigation.getParam('organization');
+    const workouts = navigation.getParam('workouts');
+    const loading = navigation.getParam('isPhase2Loading');
+    const error = navigation.getParam('phase2Error');
+    
+    if (org !== passedOrganization) setPassedOrganization(org);
+    if (workouts !== passedWorkouts) setPassedWorkouts(workouts);
+    if (loading !== isPhase2Loading) setIsPhase2Loading(loading || false);
+    if (error !== phase2Error) setPhase2Error(error);
+  }, [navigation]);
+  
   
   // Fetch workout data - only if not passed via navigation
-  const { data: sessionWorkouts, isLoading, error } = useQuery(
+  const { data: sessionWorkouts, isLoading: workoutsLoading, error: workoutsError } = useQuery(
     sessionId && !passedWorkouts ? 
       api.workout.sessionWorkoutsWithExercises.queryOptions({ sessionId }) : {
         enabled: false,
@@ -48,8 +55,49 @@ export function WorkoutLiveScreen() {
       }
   );
   
+  // Fetch clients data - only if not passed via navigation
+  const { data: fetchedClients, isLoading: clientsLoading, error: clientsError } = useQuery(
+    sessionId && !passedClients ? 
+      api.trainingSession.getCheckedInClients.queryOptions({ sessionId }) : {
+        enabled: false,
+        queryKey: ['disabled-clients'],
+        queryFn: () => Promise.resolve(passedClients || []),
+        initialData: passedClients
+      }
+  );
+  
   // Use passed data if available, otherwise use fetched data
   const workouts = passedWorkouts || sessionWorkouts || [];
+  const clients = passedClients || fetchedClients || [];
+  
+  const isLoading = workoutsLoading || clientsLoading;
+  const error = workoutsError || clientsError;
+  
+  // Poll for session data to detect Phase 2 completion
+  const { data: sessionData, isLoading: sessionLoading, error: sessionError } = useQuery({
+    ...api.trainingSession.getById.queryOptions({ id: sessionId }),
+    enabled: !!sessionId && isPhase2Loading,
+    refetchInterval: 2000, // Poll every 2 seconds while Phase 2 is loading
+    refetchIntervalInBackground: true,
+  });
+  
+  // Update organization when Phase 2 completes
+  useEffect(() => {
+    if (sessionData?.workoutOrganization && isPhase2Loading && !sessionLoading) {
+      
+      // Transform the complete organization
+      const completeOrganization = transformWorkoutDataForLiveView(
+        sessionData.workoutOrganization,
+        passedWorkouts || []
+      );
+      
+      // Update local state
+      setPassedOrganization(completeOrganization);
+      setIsPhase2Loading(false);
+    }
+  }, [sessionData, isPhase2Loading, sessionLoading, passedWorkouts]);
+  
+  
   
   // Helper function to format exercise metadata
   const formatExerciseMeta = (exercise: any): string => {
@@ -101,11 +149,8 @@ export function WorkoutLiveScreen() {
 
   // Transform workouts data into rounds format for RoundView
   const roundsData = React.useMemo(() => {
-    console.log('[WorkoutLiveScreen] Transforming data with organization:', !!passedOrganization);
-    console.log('[WorkoutLiveScreen] Workouts:', workouts?.length);
     
     if (!passedOrganization || !workouts || workouts.length === 0) {
-      console.log('[WorkoutLiveScreen] Missing organization or workouts');
       return [];
     }
     
@@ -120,69 +165,98 @@ export function WorkoutLiveScreen() {
       const roundName = roundMatch ? roundMatch[2] : round.name;
       
       const roundData = {
-        label: `R${roundNumber}: ${roundName}`, // "R1: Heavy Lower Strength"
+        label: roundName, // "Heavy Lower Strength"
         workSeconds: 600, // 10 minutes
         restSeconds: 60,  // 1 minute rest
         phase: "work" as const,
         exercises: [] as any[]
       };
       
-      // Create a map to store exercises grouped by client for this round
-      const clientExerciseGroups = new Map();
+      // First, group exercises by exercise ID to handle shared exercises
+      const exerciseGroups = new Map();
       
-      // Process each client's exercises for this round
+      // Process all clients' exercises to group by exercise
       Object.entries(round.exercisesByClient).forEach(([clientId, clientExercises]) => {
-        // Find the workout for this client
-        const clientWorkout = workouts.find(w => w.userId === clientId);
-        
-        // Try to get client name from various sources
-        const clientData = passedClients?.find((c: any) => c.userId === clientId);
-        const clientName = clientData?.userName || 
-                         clientWorkout?.userName || 
-                         clientWorkout?.userEmail?.split('@')[0] || 
-                         'Unknown';
-        
-        // Get all exercises for this client
-        const exercisesForClient = (clientExercises as any[]).map(exercise => {
-          // Find the full exercise details from the workout exercises
-          const fullExercise = clientWorkout?.exercises?.find(
-            e => e.exerciseId === exercise.exerciseId
-          );
+        (clientExercises as any[]).forEach(exercise => {
+          const key = exercise.exerciseId;
           
-          // Special handling for "Unknown" exercise names
-          let exerciseTitle = exercise.exerciseName;
-          if (exerciseTitle === 'Unknown' && fullExercise?.exercise?.name) {
-            console.log(`[WorkoutLiveScreen] Fixing Unknown exercise name for ${exercise.exerciseId}: ${fullExercise.exercise.name}`);
-            exerciseTitle = fullExercise.exercise.name;
-          } else if (!exerciseTitle || exerciseTitle === 'Unknown') {
-            exerciseTitle = fullExercise?.exercise?.name || 'Unknown Exercise';
+          if (!exerciseGroups.has(key)) {
+            exerciseGroups.set(key, {
+              exerciseId: exercise.exerciseId,
+              exerciseName: exercise.exerciseName,
+              isShared: exercise.isShared || false,
+              clients: [],
+              scheme: exercise.scheme
+            });
           }
           
-          return {
-            exerciseId: exercise.exerciseId,
-            title: exerciseTitle,
-            meta: formatExerciseMetaFromScheme(exercise.scheme, fullExercise),
-          };
+          // Find client info
+          const clientData = clients?.find((c: any) => c.userId === clientId);
+          const clientWorkout = workouts.find(w => {
+            if (w.userId === clientId) return true;
+            if (w.user?.id === clientId) return true;
+            if (w.workout?.userId === clientId) return true;
+            return false;
+          });
+          
+          const clientName = clientData?.userName || 
+                           clientWorkout?.user?.name ||
+                           clientWorkout?.userName || 
+                           clientWorkout?.user?.email?.split('@')[0] ||
+                           clientWorkout?.userEmail?.split('@')[0] || 
+                           'Unknown';
+          
+          exerciseGroups.get(key).clients.push({
+            clientId,
+            clientName
+          });
         });
-        
-        // Store client's exercises (could be a superset if multiple exercises)
-        if (exercisesForClient.length > 0) {
-          clientExerciseGroups.set(clientId, {
-            clientName,
-            exercises: exercisesForClient
+      });
+      
+      // Now create exercise cards - one per unique exercise (shared exercises will have multiple clients)
+      exerciseGroups.forEach(exerciseGroup => {
+        // For non-shared exercises, create individual cards for each client
+        if (!exerciseGroup.isShared || exerciseGroup.clients.length === 1) {
+          exerciseGroup.clients.forEach(client => {
+            // Find this client's specific exercises (for supersets)
+            const clientExercises = (round.exercisesByClient[client.clientId] || [])
+              .filter(ex => ex.exerciseId === exerciseGroup.exerciseId);
+            
+            if (clientExercises.length > 0) {
+              const exerciseDetails = clientExercises.map(ex => ({
+                exerciseId: ex.exerciseId,
+                title: ex.exerciseName || exerciseGroup.exerciseName || 'Unknown Exercise',
+                meta: formatExerciseMetaFromScheme(ex.scheme || exerciseGroup.scheme),
+              }));
+              
+              roundData.exercises.push({
+                title: exerciseDetails.map(e => e.title).join(' + '),
+                meta: exerciseDetails.map(e => e.meta).filter(m => m).join(' | '),
+                assigned: [{ clientName: client.clientName, tag: '' }],
+                exerciseDetails: exerciseDetails
+              });
+            }
+          });
+        } else {
+          // For shared exercises, create one card with all clients
+          const exerciseDetails = [{
+            exerciseId: exerciseGroup.exerciseId,
+            title: exerciseGroup.exerciseName || 'Unknown Exercise',
+            meta: formatExerciseMetaFromScheme(exerciseGroup.scheme),
+          }];
+          
+          roundData.exercises.push({
+            title: exerciseDetails[0].title,
+            meta: exerciseDetails[0].meta,
+            assigned: exerciseGroup.clients.map(client => ({ 
+              clientName: client.clientName, 
+              tag: '' 
+            })),
+            exerciseDetails: exerciseDetails,
+            isShared: true
           });
         }
       });
-      
-      // Convert to the format expected by RoundView
-      // Each "exercise" in the array will represent a client's workout (could be superset)
-      roundData.exercises = Array.from(clientExerciseGroups.values()).map(clientGroup => ({
-        title: clientGroup.exercises.map(e => e.title).join(' + '), // Join titles for supersets
-        meta: clientGroup.exercises.map(e => e.meta).filter(m => m).join(' | '), // Join meta info
-        assigned: [{ clientName: clientGroup.clientName, tag: '' }],
-        // Store the individual exercises for custom rendering
-        exerciseDetails: clientGroup.exercises
-      }));
       
       // Only add rounds that have exercises
       if (roundData.exercises.length > 0) {
@@ -190,7 +264,6 @@ export function WorkoutLiveScreen() {
       }
     });
     
-    console.log('[WorkoutLiveScreen] Transformed rounds:', roundsList.length, roundsList);
     return roundsList;
   }, [passedOrganization, workouts]);
   
@@ -215,12 +288,15 @@ export function WorkoutLiveScreen() {
     );
   }
   
+  
   return <RoundView 
     sessionId={sessionId} 
     round={round} 
     workouts={workouts} 
     roundsData={roundsData} 
     organization={passedOrganization}
-    clients={passedClients}
+    clients={clients}
+    isPhase2Loading={isPhase2Loading}
+    phase2Error={phase2Error}
   />;
 }

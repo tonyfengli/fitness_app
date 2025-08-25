@@ -104,7 +104,7 @@ function MattePanel({
 // Fallback/demo rounds data - only used when no real workout data is provided
 const DEMO_ROUNDS: RoundData[] = [
   {
-    label: "Round 1 • Warm-Up",
+    label: "Warm-Up",
     workSeconds: 180,
     restSeconds: 30,
     phase: "work",
@@ -130,7 +130,7 @@ const DEMO_ROUNDS: RoundData[] = [
     ]
   },
   {
-    label: "Round 2 • Upper",
+    label: "Upper",
     workSeconds: 180,
     restSeconds: 45,
     phase: "work",
@@ -156,7 +156,7 @@ const DEMO_ROUNDS: RoundData[] = [
     ]
   },
   {
-    label: "Round 3 • Core",
+    label: "Core",
     workSeconds: 180,
     restSeconds: 45,
     phase: "work",
@@ -183,7 +183,7 @@ const DEMO_ROUNDS: RoundData[] = [
     ]
   },
   {
-    label: "Round 4 • Finisher",
+    label: "Finisher",
     workSeconds: 120,
     restSeconds: 60,
     phase: "work",
@@ -217,27 +217,28 @@ interface RoundViewProps {
   roundsData?: RoundData[];
   organization?: any;
   clients?: any[];
+  isPhase2Loading?: boolean;
+  phase2Error?: string;
 }
 
-export default function RoundView({ sessionId, round, workouts, roundsData, organization, clients }: RoundViewProps = {}) {
+export default function RoundView({ sessionId, round, workouts, roundsData, organization, clients, isPhase2Loading, phase2Error }: RoundViewProps = {}) {
   const navigation = useNavigation();
   
   // Use real data if provided, otherwise fall back to mock data
-  console.log('[RoundView] Props received:', { 
-    hasSessionId: !!sessionId, 
-    round, 
-    hasWorkouts: !!workouts, 
-    hasRoundsData: !!roundsData,
-    roundsDataLength: roundsData?.length 
-  });
   const rounds = roundsData && roundsData.length > 0 ? roundsData : DEMO_ROUNDS;
-  console.log('[RoundView] Using rounds:', rounds.length, 'from', roundsData?.length > 0 ? 'real data' : 'demo data');
   
   const [currentRoundIndex, setCurrentRoundIndex] = useState(0);
   const [phase, setPhase] = useState<"work" | "rest">("work");
   const [timeRemaining, setTimeRemaining] = useState(600); // 10 minutes
-  const [isPaused, setIsPaused] = useState(false);
+  const [isPaused, setIsPaused] = useState(isPhase2Loading || false); // Start paused if Phase 2 is loading
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Unpause when Phase 2 completes
+  useEffect(() => {
+    if (!isPhase2Loading && isPaused && currentRoundIndex === 0) {
+      setIsPaused(false);
+    }
+  }, [isPhase2Loading]);
   
   const currentRound = rounds[currentRoundIndex];
   const nextRound = rounds[(currentRoundIndex + 1) % rounds.length];
@@ -277,23 +278,24 @@ export default function RoundView({ sessionId, round, workouts, roundsData, orga
 
   // Timer logic
   useEffect(() => {
+    if (!isPaused && timeRemaining === 0) {
+      // Time's up, transition to next phase
+      if (phase === "work") {
+        // Work phase is done, auto-advance to next round
+        goToNextRound();
+      } else {
+        // Rest is over, move to next round
+        setPhase("work");
+        setCurrentRoundIndex((prevIndex) => (prevIndex + 1) % rounds.length);
+        setTimeRemaining(600); // 10 minutes
+      }
+    }
+  }, [timeRemaining, phase, isPaused]);
+
+  useEffect(() => {
     if (!isPaused) {
       intervalRef.current = setInterval(() => {
-        setTimeRemaining((prev) => {
-          if (prev <= 1) {
-            // Time's up, transition to next phase
-            if (phase === "work") {
-              setPhase("rest");
-              return currentRound.restSeconds;
-            } else {
-              // Rest is over, move to next round
-              setPhase("work");
-              setCurrentRoundIndex((prevIndex) => (prevIndex + 1) % rounds.length);
-              return 600; // 10 minutes
-            }
-          }
-          return prev - 1;
-        });
+        setTimeRemaining((prev) => Math.max(0, prev - 1));
       }, 1000);
     }
 
@@ -302,7 +304,7 @@ export default function RoundView({ sessionId, round, workouts, roundsData, orga
         clearInterval(intervalRef.current);
       }
     };
-  }, [phase, currentRoundIndex, currentRound.restSeconds, isPaused]);
+  }, [isPaused]);
 
   // Header subline text
   const getSublineText = (): string => {
@@ -318,15 +320,36 @@ export default function RoundView({ sessionId, round, workouts, roundsData, orga
 
       {/* Header row with title and timer */}
       <View className="flex-row justify-between items-center">
-        <Text style={{ 
-          fontSize: 48, 
-          fontWeight: '900', 
-          letterSpacing: -0.4,
-          lineHeight: 48 * 1.05,
-          color: TOKENS.color.text 
-        }}>
-          {currentRound.label}
-        </Text>
+        <View>
+          <Text style={{ 
+            fontSize: 48, 
+            fontWeight: '900', 
+            letterSpacing: -0.4,
+            lineHeight: 48 * 1.05,
+            color: TOKENS.color.text 
+          }}>
+            {isPhase2Loading && currentRoundIndex === 0 ? 'Finalizing Workout...' : `R${currentRoundIndex + 1}: ${currentRound.label.replace(/^R\d+:\s*/, '')}`}
+          </Text>
+          {/* Round indicator dots */}
+          <View className="flex-row items-center" style={{ gap: 8, marginTop: 12 }}>
+            {rounds.map((_, index) => (
+              <View
+                key={index}
+                style={{
+                  width: index === currentRoundIndex ? 10 : 8,
+                  height: index === currentRoundIndex ? 10 : 8,
+                  borderRadius: 5,
+                  backgroundColor: index === currentRoundIndex 
+                    ? TOKENS.color.accent
+                    : index < currentRoundIndex 
+                      ? 'rgba(156, 176, 255, 0.6)' // muted color with opacity for completed
+                      : 'rgba(156, 176, 255, 0.25)', // even more muted for future
+                  transform: index === currentRoundIndex ? [{ scale: 1.25 }] : [],
+                }}
+              />
+            ))}
+          </View>
+        </View>
         <Text style={{ 
           fontSize: 88, 
           fontWeight: '900',
@@ -433,7 +456,8 @@ export default function RoundView({ sessionId, round, workouts, roundsData, orga
       <View className="flex-row justify-center items-center mt-6" style={{ gap: 24 }}>
         <Pressable
           onPress={goToPreviousRound}
-          focusable
+          focusable={!isPhase2Loading}
+          disabled={isPhase2Loading}
         >
           {({ focused }) => (
             <MattePanel 
@@ -445,6 +469,7 @@ export default function RoundView({ sessionId, round, workouts, roundsData, orga
                 borderColor: focused ? 'rgba(255,255,255,0.45)' : TOKENS.color.borderGlass,
                 borderWidth: focused ? 1 : 1,
                 transform: focused ? [{ translateY: -1 }] : [],
+                opacity: isPhase2Loading ? 0.5 : 1,
               }}
             >
               <Text style={{ color: TOKENS.color.text, fontSize: 18, letterSpacing: 0.2 }}>Previous</Text>
@@ -477,7 +502,8 @@ export default function RoundView({ sessionId, round, workouts, roundsData, orga
         
         <Pressable
           onPress={goToNextRound}
-          focusable
+          focusable={!isPhase2Loading}
+          disabled={isPhase2Loading}
         >
           {({ focused }) => (
             <MattePanel 
@@ -489,6 +515,7 @@ export default function RoundView({ sessionId, round, workouts, roundsData, orga
                 borderColor: focused ? 'rgba(255,255,255,0.45)' : TOKENS.color.borderGlass,
                 borderWidth: focused ? 1 : 1,
                 transform: focused ? [{ translateY: -1 }] : [],
+                opacity: isPhase2Loading ? 0.5 : 1,
               }}
             >
               <Text style={{ color: TOKENS.color.text, fontSize: 18, letterSpacing: 0.2 }}>Next</Text>

@@ -3535,8 +3535,36 @@ Set your goals and preferences for today's session.`;
         generatedAt = workoutOrg.generatedAt || null;
       }
       
+      // Enhance fixed assignments with exercise names and shared info
+      const enhancedFixedAssignments = data.allowedSlots.fixedAssignments.map(fa => {
+        // Find the exercise details from exercisesWithTiers
+        const exercise = data.exercisesWithTiers.find(ex => 
+          ex.exerciseId === fa.exerciseId && ex.clientId === fa.clientId
+        );
+        
+        // Check if this exercise is shared with other clients
+        const sharedWithClients = data.allowedSlots.fixedAssignments
+          .filter(otherFa => 
+            otherFa.exerciseId === fa.exerciseId && 
+            otherFa.clientId !== fa.clientId &&
+            otherFa.round === fa.round
+          )
+          .map(otherFa => otherFa.clientId);
+        
+        return {
+          ...fa,
+          exerciseName: exercise?.name || 'Unknown Exercise',
+          isShared: sharedWithClients.length > 0,
+          sharedWithClients: sharedWithClients
+        };
+      });
+      
       return {
         ...data,
+        allowedSlots: {
+          ...data.allowedSlots,
+          fixedAssignments: enhancedFixedAssignments
+        },
         hasPhase2Data,
         savedRoundNames: hasPhase2Data ? savedRoundNames : null,
         workouts: hasPhase2Data ? workoutsWithExercises : undefined,

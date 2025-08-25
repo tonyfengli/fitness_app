@@ -19,7 +19,6 @@ export function useStartWorkout() {
       setError(error.message || 'Failed to generate Phase 2 organization');
     },
     onSuccess: (data) => {
-      console.log('[TV useStartWorkout] Phase 2 generation succeeded with data:', data);
     }
   });
 
@@ -30,17 +29,15 @@ export function useStartWorkout() {
       setError(error.message || 'Failed to save Phase 2 updates');
     },
     onSuccess: () => {
-      console.log('[TV useStartWorkout] Phase 2 exercises updated successfully');
     }
   });
   
   const startWorkout = async (sessionId: string) => {
-    setIsGenerating(true);
+    setIsGenerating(true);  // Show loading state on button
     setError(null);
     setLoadingMessage('Preparing workout...');
     
     try {
-      console.log('[TV useStartWorkout] Starting workout for session:', sessionId);
       
       // First, check if workout organization already exists
       const sessionQuery = await queryClient.fetchQuery(
@@ -48,7 +45,6 @@ export function useStartWorkout() {
       );
       
       if (sessionQuery?.workoutOrganization) {
-        console.log('[TV useStartWorkout] ✅ Workout already organized - skipping Phase 2 LLM');
         setLoadingMessage('Loading workout...');
         
         // Fetch the full workout data
@@ -59,23 +55,23 @@ export function useStartWorkout() {
           api.trainingSession.getCheckedInClients.queryOptions({ sessionId })
         );
         
+        
         // Transform the data for WorkoutLive screen
         const transformedOrganization = transformWorkoutDataForLiveView(
           sessionQuery.workoutOrganization,
           workouts
         );
         
+        setIsGenerating(false); // Hide loading state
+        
         // Navigate directly to WorkoutLive
-        setTimeout(() => {
-          navigation.navigate('WorkoutLive', { 
-            sessionId, 
-            round: 1,
-            organization: transformedOrganization,
-            workouts: workouts,
-            clients: clients
-          });
-          setTimeout(() => setIsGenerating(false), 100);
-        }, 0);
+        navigation.navigate('WorkoutLive', { 
+          sessionId, 
+          round: 1,
+          organization: transformedOrganization,
+          workouts: workouts,
+          clients: clients
+        });
         
         return {
           success: true,
@@ -85,59 +81,14 @@ export function useStartWorkout() {
       }
       
       // No existing organization - need to generate Phase 2
-      console.log('[TV useStartWorkout] No existing organization - generating Phase 2');
-      setLoadingMessage('Organizing workout rounds...');
+      setLoadingMessage('Preparing workout data...');
       
-      // Get preprocessing data for fixed assignments
+      // Get preprocessing data for fixed assignments  
       const preprocessData = await queryClient.fetchQuery(
         api.trainingSession.previewPhase2Data.queryOptions({ sessionId })
       );
       
-      // Generate Phase 2 selections
-      const phase2Result = await generatePhase2Mutation.mutateAsync({ sessionId });
-      
-      console.log('[TV useStartWorkout] Phase 2 generation result:', {
-        hasSelections: !!phase2Result.selections,
-        placementsCount: phase2Result.selections?.placements?.length,
-        hasRoundNames: !!phase2Result.selections?.roundNames
-      });
-      
-      // Prepare fixed assignments from preprocessing data
-      const fixedAssignments = preprocessData?.allowedSlots?.fixedAssignments?.map(fa => ({
-        exerciseId: fa.exerciseId,
-        clientId: fa.clientId,
-        round: fa.round,
-      })) || [];
-      
-      // Include LLM data from the Phase 2 result
-      const llmData = {
-        systemPrompt: phase2Result.systemPrompt,
-        humanMessage: phase2Result.humanMessage,
-        llmResponse: phase2Result.llmResponse,
-        timing: phase2Result.timing,
-      };
-      
-      // Update database with Phase 2 results
-      await updatePhase2Mutation.mutateAsync({
-        sessionId,
-        placements: phase2Result.selections.placements,
-        roundNames: phase2Result.selections.roundNames || {},
-        fixedAssignments: fixedAssignments,
-        llmData: llmData,
-      });
-      
-      console.log('[TV useStartWorkout] Phase 2 saved to database');
-      
-      // Invalidate and refetch session data to get the updated workoutOrganization
-      await queryClient.invalidateQueries({
-        queryKey: [["trainingSession", "getById"], { input: { id: sessionId } }]
-      });
-      
-      const updatedSession = await queryClient.fetchQuery(
-        api.trainingSession.getById.queryOptions({ id: sessionId })
-      );
-      
-      // Fetch the updated workout data
+      // Get initial workouts and clients data
       const workouts = await queryClient.fetchQuery(
         api.workoutSelections.getSelections.queryOptions({ sessionId })
       );
@@ -145,44 +96,117 @@ export function useStartWorkout() {
         api.trainingSession.getCheckedInClients.queryOptions({ sessionId })
       );
       
-      console.log('[TV useStartWorkout] Phase 2 complete, navigating with organization data');
+      // Get total rounds from preprocessing
+      const totalRounds = preprocessData?.roundOrganization?.majorityRounds || 5;
       
-      // Transform the data for WorkoutLive screen
-      const organizationData = updatedSession?.workoutOrganization || {
-        placements: phase2Result.selections.placements,
-        roundNames: phase2Result.selections.roundNames,
-        fixedAssignments: fixedAssignments,
-        llmData: llmData,
-        generatedAt: new Date().toISOString()
+      // Create a complete organization with Round 1 from preprocessing
+      // Include empty round names for all rounds so dots render correctly
+      const roundNames: Record<string, string> = {};
+      for (let i = 1; i <= totalRounds; i++) {
+        roundNames[i.toString()] = `Round ${i}`;
+      }
+      
+      const round1Organization = {
+        placements: [],
+        roundNames: roundNames,
+        fixedAssignments: preprocessData?.allowedSlots?.fixedAssignments || [],
+        isLoading: true, // Flag to indicate Phase 2 is still running
+        totalRounds: totalRounds
       };
       
-      const transformedOrganization = transformWorkoutDataForLiveView(
-        organizationData,
+      // Transform the Round 1 data
+      const transformedRound1Organization = transformWorkoutDataForLiveView(
+        round1Organization,
         workouts
       );
       
-      // Navigate to WorkoutLive with the updated data
-      setTimeout(() => {
-        navigation.navigate('WorkoutLive', { 
-          sessionId, 
-          round: 1,
-          organization: transformedOrganization,
-          workouts: workouts,
-          clients: clients
+      setIsGenerating(false); // Hide loading state on button
+      // Navigate to WorkoutLive with Round 1 data
+      navigation.navigate('WorkoutLive', { 
+        sessionId, 
+        round: 1,
+        organization: transformedRound1Organization,
+        workouts: workouts,
+        clients: clients,
+        isPhase2Loading: true, // Flag to show "Finalizing Workout..."
+        totalRounds: totalRounds
+      });
+      
+      // Continue with Phase 2 generation in the background
+      // Generate Phase 2 in the background without blocking
+      generatePhase2Mutation.mutateAsync({ sessionId })
+        .then(async (phase2Result) => {
+          
+          // Prepare fixed assignments from preprocessing data
+          const fixedAssignments = preprocessData?.allowedSlots?.fixedAssignments?.map(fa => ({
+            exerciseId: fa.exerciseId,
+            clientId: fa.clientId,
+            round: fa.round,
+          })) || [];
+          
+          // Include LLM data from the Phase 2 result
+          const llmData = {
+            systemPrompt: phase2Result.systemPrompt,
+            humanMessage: phase2Result.humanMessage,
+            llmResponse: phase2Result.llmResponse,
+            timing: phase2Result.timing,
+          };
+          
+          // Update database with Phase 2 results
+          await updatePhase2Mutation.mutateAsync({
+            sessionId,
+            placements: phase2Result.selections.placements,
+            roundNames: phase2Result.selections.roundNames || {},
+            fixedAssignments: fixedAssignments,
+            llmData: llmData,
+          });
+          
+          // Invalidate and refetch session data to get the updated workoutOrganization
+          await queryClient.invalidateQueries({
+            queryKey: [["trainingSession", "getById"], { input: { id: sessionId } }]
+          });
+          
+          const updatedSession = await queryClient.fetchQuery(
+            api.trainingSession.getById.queryOptions({ id: sessionId })
+          );
+          
+          // Fetch the updated workout data
+          const updatedWorkouts = await queryClient.fetchQuery(
+            api.workoutSelections.getSelections.queryOptions({ sessionId })
+          );
+          
+          // Transform the complete data
+          const organizationData = updatedSession?.workoutOrganization || {
+            placements: phase2Result.selections.placements,
+            roundNames: phase2Result.selections.roundNames,
+            fixedAssignments: fixedAssignments,
+            llmData: llmData,
+            generatedAt: new Date().toISOString()
+          };
+          
+          const transformedOrganization = transformWorkoutDataForLiveView(
+            organizationData,
+            updatedWorkouts
+          );
+          
+          // Since navigation.setParams is not available in TV app, 
+          // the WorkoutLive screen will need to poll for updates
+        })
+        .catch((phase2Error) => {
+          console.error('[TV useStartWorkout] Phase 2 generation failed:', phase2Error);
+          // Can't update params, WorkoutLive will need to handle this
         });
-        setTimeout(() => setIsGenerating(false), 100);
-      }, 0);
       
       return {
         success: true,
         alreadyOrganized: false,
-        workoutOrganization: updatedSession?.workoutOrganization || phase2Result.selections
+        workoutOrganization: null // Phase 2 will complete asynchronously
       };
       
     } catch (e: any) {
       console.error('[TV useStartWorkout] Error:', e);
       setError(e.message || 'Failed to start workout');
-      setIsGenerating(false);
+      setIsGenerating(false); // Hide loading state on error
       throw e;
     }
   };

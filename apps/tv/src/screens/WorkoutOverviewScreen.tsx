@@ -7,7 +7,6 @@ import { api } from '../providers/TRPCProvider';
 import { useRealtimeExerciseSwaps, useRealtimeStatus } from '@acme/ui-shared';
 import { supabase } from '../lib/supabase';
 import { useStartWorkout } from '../hooks/useStartWorkout';
-import { WorkoutGenerationLoader } from '../components/WorkoutGenerationLoader';
 
 // Design tokens - matching other screens
 const TOKENS = {
@@ -370,7 +369,14 @@ export function WorkoutOverviewScreen() {
                 transform: focused ? [{ translateY: -1 }] : [],
               }}
             >
-              <Text style={{ color: TOKENS.color.text, fontSize: 18, letterSpacing: 0.2 }}>Start Workout</Text>
+              {isGenerating ? (
+                <View className="flex-row items-center">
+                  <ActivityIndicator size="small" color={TOKENS.color.text} style={{ marginRight: 8 }} />
+                  <Text style={{ color: TOKENS.color.text, fontSize: 18, letterSpacing: 0.2 }}>Preparing...</Text>
+                </View>
+              ) : (
+                <Text style={{ color: TOKENS.color.text, fontSize: 18, letterSpacing: 0.2 }}>Start Workout</Text>
+              )}
             </MattePanel>
           )}
         </Pressable>
@@ -826,22 +832,6 @@ export function WorkoutOverviewScreen() {
         </View>
       </View>
 
-      {/* Loading overlay when generating workout */}
-      {isGenerating && (
-        <View style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          zIndex: 1000,
-        }}>
-          <WorkoutGenerationLoader 
-            clientNames={localClients?.map(c => c.userName || 'Unknown') || []} 
-            durationMinutes={1.67} // 1 minute 40 seconds
-          />
-        </View>
-      )}
 
       {/* Error Modal */}
       {(showErrorModal || startWorkoutError) && (

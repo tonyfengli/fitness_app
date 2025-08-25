@@ -7,6 +7,9 @@ interface Phase2Organization {
     exerciseId: string;
     clientId: string;
     round: number;
+    exerciseName?: string;
+    isShared?: boolean;
+    sharedWithClients?: string[];
   }>;
   llmData?: any;
   generatedAt?: string;
@@ -30,6 +33,8 @@ interface TransformedRound {
     exerciseId: string;
     exerciseName: string;
     scheme?: any;
+    isShared?: boolean;
+    sharedWithClients?: string[];
   }>>;
 }
 
@@ -43,21 +48,6 @@ export function transformWorkoutDataForLiveView(
   organization: Phase2Organization,
   workouts: SelectionExercise[]  // This is actually a flat array of exercises from getSelections
 ): TransformedOrganization {
-  console.log('[workoutDataTransformer] Starting transformation:', {
-    placementsCount: organization.placements?.length,
-    fixedAssignmentsCount: organization.fixedAssignments?.length,
-    workoutsCount: workouts?.length,
-    roundNamesCount: Object.keys(organization.roundNames || {}).length,
-  });
-  
-  // Debug: Log the structure of workouts
-  console.log('[workoutDataTransformer] First few exercises:', 
-    workouts?.slice(0, 3).map(ex => ({
-      clientId: ex.clientId,
-      exerciseId: ex.exerciseId,
-      exerciseName: ex.exerciseName
-    }))
-  );
 
   // Create a map of clientId -> exerciseId -> exercise for quick lookup
   const exercisesByClient = new Map<string, Map<string, SelectionExercise>>();
@@ -71,10 +61,18 @@ export function transformWorkoutDataForLiveView(
   // Determine the number of rounds
   const roundNumbers = new Set<number>();
   
-  // Add rounds from placements
-  organization.placements?.forEach(([_, round]) => roundNumbers.add(round));
+  // Add all rounds from roundNames (this ensures we get all rounds even if empty)
+  if (organization.roundNames) {
+    Object.keys(organization.roundNames).forEach(roundStr => {
+      const roundNum = parseInt(roundStr);
+      if (!isNaN(roundNum)) {
+        roundNumbers.add(roundNum);
+      }
+    });
+  }
   
-  // Add rounds from fixed assignments
+  // Also add rounds from placements and fixed assignments (in case roundNames is incomplete)
+  organization.placements?.forEach(([_, round]) => roundNumbers.add(round));
   organization.fixedAssignments?.forEach(fa => roundNumbers.add(fa.round));
   
   // Create rounds array
@@ -88,23 +86,60 @@ export function transformWorkoutDataForLiveView(
       exercisesByClient: {}
     };
     
-    // Process fixed assignments for this round
+    // Group fixed assignments by exercise to handle shared exercises
+    const exerciseGroups = new Map<string, {
+      exerciseId: string;
+      exerciseName: string;
+      clientIds: string[];
+      isShared: boolean;
+    }>();
+    
+    // First pass: group clients by exercise for this round
     organization.fixedAssignments?.forEach(fa => {
       if (fa.round === roundNum) {
-        if (!round.exercisesByClient[fa.clientId]) {
-          round.exercisesByClient[fa.clientId] = [];
+        const key = fa.exerciseId;
+        
+        if (!exerciseGroups.has(key)) {
+          // Use enhanced exercise name if available, otherwise fall back to lookup
+          let exerciseName = fa.exerciseName;
+          if (!exerciseName) {
+            const clientExercises = exercisesByClient.get(fa.clientId);
+            const exercise = clientExercises?.get(fa.exerciseId);
+            exerciseName = exercise?.exerciseName || 'Unknown Exercise';
+          }
+          
+          exerciseGroups.set(key, {
+            exerciseId: fa.exerciseId,
+            exerciseName: exerciseName,
+            clientIds: [],
+            isShared: fa.isShared || false
+          });
         }
         
-        // Find the exercise details from the flat exercises array
-        const clientExercises = exercisesByClient.get(fa.clientId);
-        const exercise = clientExercises?.get(fa.exerciseId);
-        
-        round.exercisesByClient[fa.clientId].push({
-          exerciseId: fa.exerciseId,
-          exerciseName: exercise?.exerciseName || 'Unknown Exercise',
-          scheme: undefined // getSelections doesn't include scheme data
-        });
+        exerciseGroups.get(key)!.clientIds.push(fa.clientId);
       }
+    });
+    
+    // Update isShared flag based on actual grouping
+    exerciseGroups.forEach(group => {
+      group.isShared = group.clientIds.length > 1;
+    });
+    
+    // Second pass: assign exercises to clients
+    exerciseGroups.forEach(group => {
+      group.clientIds.forEach(clientId => {
+        if (!round.exercisesByClient[clientId]) {
+          round.exercisesByClient[clientId] = [];
+        }
+        
+        round.exercisesByClient[clientId].push({
+          exerciseId: group.exerciseId,
+          exerciseName: group.exerciseName,
+          scheme: undefined, // getSelections doesn't include scheme data
+          isShared: group.isShared,
+          sharedWithClients: group.isShared ? group.clientIds.filter(id => id !== clientId) : []
+        });
+      });
     });
     
     // Process placements for this round
@@ -153,15 +188,6 @@ export function transformWorkoutDataForLiveView(
     if (Object.keys(round.exercisesByClient).length > 0) {
       rounds.push(round);
     }
-  });
-  
-  console.log('[workoutDataTransformer] Transformation complete:', {
-    roundsCount: rounds.length,
-    rounds: rounds.map(r => ({
-      name: r.name,
-      clientCount: Object.keys(r.exercisesByClient).length,
-      exerciseCount: Object.values(r.exercisesByClient).reduce((sum, exercises) => sum + exercises.length, 0)
-    }))
   });
   
   return {
