@@ -7,7 +7,7 @@ export interface LLMConfig {
   timeout?: number;
   // GPT-5 specific parameters
   reasoning_effort?: "minimal" | "low" | "medium" | "high";
-  verbosity?: "concise" | "normal" | "verbose";
+  verbosity?: "low" | "normal" | "verbose";
 }
 
 export interface LLMProvider {

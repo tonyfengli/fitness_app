@@ -766,7 +766,7 @@ export class StandardWorkoutGenerator {
         modelName: "gpt-5-mini",
         maxTokens: 1000,
         reasoning_effort: "medium",
-        verbosity: "concise",
+        verbosity: "low",
       });
 
       logger.log("[Phase2] Calling LLM for exercise selection", {
