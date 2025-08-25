@@ -13,6 +13,7 @@ import {
   formatMuscleLabel,
   getFilteredExercises,
   MUSCLE_GROUPS_ALPHABETICAL,
+  MuscleModal,
   PlusIcon,
   PreferenceListItem,
   SearchIcon,
@@ -228,176 +229,6 @@ const ExerciseChangeModal = ({
   );
 };
 
-// Muscle Target/Limit Modal Component
-const MuscleModal = ({
-  isOpen,
-  onClose,
-  onConfirm,
-  isLoading = false,
-  existingTargets = [],
-  existingLimits = [],
-  initialTab = "target",
-}: {
-  isOpen: boolean;
-  onClose: () => void;
-  onConfirm?: (muscle: string, type: "target" | "limit") => void;
-  isLoading?: boolean;
-  existingTargets?: string[];
-  existingLimits?: string[];
-  initialTab?: "target" | "limit";
-}) => {
-  const [activeTab, setActiveTab] = useState<"target" | "limit">(initialTab);
-  const [selectedMuscle, setSelectedMuscle] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState<string>("");
-
-  // Reset state when modal closes
-  useEffect(() => {
-    if (!isOpen) {
-      setActiveTab(initialTab);
-      setSelectedMuscle(null);
-      setSearchQuery("");
-    }
-  }, [isOpen, initialTab]);
-
-  // Use shared muscle groups constant
-  const muscleGroups = MUSCLE_GROUPS_ALPHABETICAL;
-
-  // Get already selected muscles based on active tab
-  const alreadySelected =
-    activeTab === "target" ? existingTargets : existingLimits;
-
-  // Filter muscles by search and remove already selected
-  const filteredMuscles = muscleGroups.filter((muscle) => {
-    const matchesSearch = muscle.label
-      .toLowerCase()
-      .includes(searchQuery.toLowerCase());
-    const notAlreadySelected = !alreadySelected.includes(muscle.value);
-    return matchesSearch && notAlreadySelected;
-  });
-
-  if (!isOpen) return null;
-
-  return (
-    <>
-      {/* Background overlay */}
-      <div
-        className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm"
-        onClick={onClose}
-      />
-
-      {/* Modal */}
-      <div className="fixed inset-x-4 top-1/2 z-50 mx-auto flex max-h-[80vh] max-w-lg -translate-y-1/2 flex-col rounded-2xl bg-white shadow-2xl">
-        {/* Header */}
-        <div className="flex-shrink-0 border-b border-gray-200 px-6 py-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-bold text-gray-900">
-              Add Muscle Group
-            </h2>
-            <button
-              onClick={onClose}
-              className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
-            >
-              <XIcon />
-            </button>
-          </div>
-        </div>
-
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto">
-          {/* Search Bar */}
-          <div className="sticky top-0 z-10 border-b bg-gray-50 px-6 py-4">
-            <div className="relative">
-              <SearchIcon className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Search muscle group"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 bg-white py-2 pl-10 pr-4 text-gray-900 placeholder-gray-400 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              />
-            </div>
-          </div>
-
-          <div className="p-6">
-            {/* No results message */}
-            {searchQuery.trim() && filteredMuscles.length === 0 && (
-              <div className="py-8 text-center">
-                <p className="text-gray-500">
-                  No muscle groups found matching "{searchQuery}"
-                </p>
-              </div>
-            )}
-
-            {/* Muscle List */}
-            {filteredMuscles.length > 0 && (
-              <div className="space-y-2">
-                {filteredMuscles.map((muscle) => (
-                  <button
-                    key={muscle.value}
-                    className={`flex w-full items-center justify-between rounded-lg p-3 text-left transition-all ${
-                      selectedMuscle === muscle.value
-                        ? "border-2 border-indigo-500 bg-indigo-100 shadow-sm"
-                        : "border-2 border-transparent bg-gray-50 hover:bg-gray-100"
-                    }`}
-                    onClick={() => setSelectedMuscle(muscle.value)}
-                  >
-                    <span
-                      className={`font-medium ${
-                        selectedMuscle === muscle.value
-                          ? "text-indigo-900"
-                          : "text-gray-900"
-                      }`}
-                    >
-                      {muscle.label}
-                    </span>
-                    {selectedMuscle === muscle.value && (
-                      <div className="flex h-5 w-5 items-center justify-center rounded-full bg-indigo-600">
-                        <CheckIcon className="h-3 w-3 text-white" />
-                      </div>
-                    )}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="flex flex-shrink-0 justify-end gap-3 border-t bg-gray-50 px-6 py-4">
-          <button
-            onClick={onClose}
-            disabled={isLoading}
-            className="px-4 py-2 text-gray-700 transition-colors hover:text-gray-900 disabled:opacity-50"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={() => {
-              if (selectedMuscle && onConfirm) {
-                onConfirm(selectedMuscle, activeTab);
-              }
-            }}
-            disabled={!selectedMuscle || isLoading}
-            className={`flex items-center gap-2 rounded-lg px-4 py-2 transition-colors ${
-              selectedMuscle && !isLoading
-                ? "bg-indigo-600 text-white hover:bg-indigo-700"
-                : "cursor-not-allowed bg-gray-300 text-gray-500"
-            }`}
-          >
-            {isLoading ? (
-              <>
-                <SpinnerIcon className="h-4 w-4 animate-spin text-white" />
-                Adding...
-              </>
-            ) : (
-              "Add"
-            )}
-          </button>
-        </div>
-      </div>
-    </>
-  );
-};
 
 // Notes Modal Component
 const NotesModal = ({
@@ -855,86 +686,145 @@ export default function ClientPreferencePage() {
                 <h4 className="font-medium text-gray-900">Workout Focus</h4>
               </div>
 
-              {/* Workout Type - Full Body Only */}
+              {/* Workout Type Selection */}
               <div className="mb-8">
-                <p className="mb-3 text-sm font-medium text-gray-700">
-                  Workout Type
-                </p>
-                <div className="space-y-2">
-                  <label className="flex cursor-default items-center rounded-lg border border-gray-300 bg-gray-50 p-3">
-                    <input
-                      type="radio"
-                      name="workoutType"
-                      value="full_body"
-                      checked={true}
-                      readOnly
-                      className="h-4 w-4 border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                    />
-                    <span className="ml-3 text-gray-700">Full Body</span>
-                  </label>
-                </div>
-              </div>
+                <div className="space-y-4">
+                  {/* Full Body Option */}
+                  <button
+                    onClick={() => {
+                      const includeCore = workoutPreferences?.workoutType?.includes("with_core");
+                      const workoutType = includeCore 
+                        ? "full_body_without_finisher_with_core"
+                        : "full_body_without_finisher";
+                      handlePreferenceUpdate({
+                        ...workoutPreferences,
+                        workoutType: workoutType,
+                      });
+                      updateWorkoutTypeMutation.mutate({
+                        sessionId,
+                        userId,
+                        workoutType,
+                      });
+                    }}
+                    className={`relative rounded-xl border-2 p-6 text-center transition-all ${
+                      !workoutPreferences?.workoutType?.includes("targeted")
+                        ? "border-indigo-500 bg-indigo-50 shadow-md"
+                        : "border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm"
+                    }`}
+                  >
+                    <div className="mb-2 text-lg font-semibold text-gray-900">
+                      Full Body
+                    </div>
+                    <p className="text-sm text-gray-600">
+                      Balanced workout targeting all major muscle groups
+                    </p>
+                    {!workoutPreferences?.workoutType?.includes("targeted") && (
+                      <div className="absolute -right-1 -top-1 flex h-6 w-6 items-center justify-center rounded-full bg-indigo-500 text-white">
+                        <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                        </svg>
+                      </div>
+                    )}
+                  </button>
 
-              {/* Include Finisher */}
-              <div className="mb-8">
-                <p className="mb-3 text-sm font-medium text-gray-700">
-                  Include Finisher?
-                </p>
-                <div className="space-y-2">
-                  <label className="flex cursor-pointer items-center rounded-lg border border-gray-300 p-3 transition-colors hover:bg-gray-50">
-                    <input
-                      type="radio"
-                      name="includeFinisher"
-                      value="no"
-                      checked={
-                        !workoutPreferences?.workoutType?.includes(
-                          "with_finisher",
-                        ) ?? true
-                      }
-                      onChange={(e) => {
-                        const workoutType = "full_body_without_finisher";
+                  {/* Targeted Option */}
+                  <div className="space-y-3">
+                    <button
+                      onClick={() => {
+                        const includeCore = workoutPreferences?.workoutType?.includes("with_core");
+                        const workoutType = includeCore 
+                          ? "targeted_without_finisher_with_core"
+                          : "targeted_without_finisher";
                         handlePreferenceUpdate({
                           ...workoutPreferences,
                           workoutType: workoutType,
                         });
-                        // Update in database
                         updateWorkoutTypeMutation.mutate({
                           sessionId,
                           userId,
                           workoutType,
                         });
                       }}
-                      className="h-4 w-4 border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                    />
-                    <span className="ml-3 text-gray-700">No</span>
-                  </label>
-                  <label className="flex cursor-pointer items-center rounded-lg border border-gray-300 p-3 transition-colors hover:bg-gray-50">
-                    <input
-                      type="radio"
-                      name="includeFinisher"
-                      value="yes"
-                      checked={
-                        workoutPreferences?.workoutType?.includes(
-                          "with_finisher",
-                        ) ?? false
-                      }
-                      onChange={(e) => {
-                        const workoutType = "full_body_with_finisher";
-                        handlePreferenceUpdate({
-                          ...workoutPreferences,
-                          workoutType: workoutType,
-                        });
-                        // Update in database
-                        updateWorkoutTypeMutation.mutate({
-                          sessionId,
-                          userId,
-                          workoutType,
-                        });
-                      }}
-                      className="h-4 w-4 border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                    />
-                    <span className="ml-3 text-gray-700">Yes</span>
-                  </label>
+                      className={`relative w-full rounded-xl border-2 p-6 text-center transition-all ${
+                        workoutPreferences?.workoutType?.includes("targeted")
+                          ? "border-indigo-500 bg-indigo-50 shadow-md"
+                          : "border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm"
+                      }`}
+                    >
+                      <div className="mb-2 text-lg font-semibold text-gray-900">
+                        Targeted
+                      </div>
+                      <p className="text-sm text-gray-600">
+                        Focus on specific muscle groups for specialized training
+                      </p>
+                      {workoutPreferences?.workoutType?.includes("targeted") && (
+                        <div className="absolute -right-1 -top-1 flex h-6 w-6 items-center justify-center rounded-full bg-indigo-500 text-white">
+                          <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                          </svg>
+                        </div>
+                      )}
+                    </button>
+                    
+                    {/* Core Toggle - Always show */}
+                    <div className="rounded-lg border border-gray-200 bg-white p-4 transition-all">
+                      <p className="mb-3 text-sm font-medium text-gray-700">
+                        Include a core exercise?
+                      </p>
+                      <div className="flex gap-3">
+                        <button
+                          onClick={() => {
+                            // Update workout type to include core
+                            const isTargeted = workoutPreferences?.workoutType?.includes("targeted");
+                            const workoutType = isTargeted
+                              ? "targeted_without_finisher_with_core"
+                              : "full_body_without_finisher_with_core";
+                            handlePreferenceUpdate({
+                              ...workoutPreferences,
+                              workoutType: workoutType,
+                            });
+                            updateWorkoutTypeMutation.mutate({
+                              sessionId,
+                              userId,
+                              workoutType,
+                            });
+                          }}
+                          className={`flex-1 rounded-lg border-2 px-4 py-2 text-sm font-medium transition-all ${
+                            workoutPreferences?.workoutType?.includes("with_core")
+                              ? "border-indigo-500 bg-indigo-50 text-indigo-700"
+                              : "border-gray-200 bg-white text-gray-700 hover:border-gray-300"
+                          }`}
+                        >
+                          Yes
+                        </button>
+                        <button
+                          onClick={() => {
+                            // Update workout type to NOT include core
+                            const isTargeted = workoutPreferences?.workoutType?.includes("targeted");
+                            const workoutType = isTargeted
+                              ? "targeted_without_finisher"
+                              : "full_body_without_finisher";
+                            handlePreferenceUpdate({
+                              ...workoutPreferences,
+                              workoutType: workoutType,
+                            });
+                            updateWorkoutTypeMutation.mutate({
+                              sessionId,
+                              userId,
+                              workoutType,
+                            });
+                          }}
+                          className={`flex-1 rounded-lg border-2 px-4 py-2 text-sm font-medium transition-all ${
+                            !workoutPreferences?.workoutType?.includes("with_core")
+                              ? "border-indigo-500 bg-indigo-50 text-indigo-700"
+                              : "border-gray-200 bg-white text-gray-700 hover:border-gray-300"
+                          }`}
+                        >
+                          No
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -962,7 +852,9 @@ export default function ClientPreferencePage() {
               <p className="mb-4 text-sm text-gray-600">
                 Select muscles you want to focus on during the workout
                 <span className="mt-1 block text-xs text-gray-500">
-                  Full Body workouts: Maximum 2 muscles
+                  {workoutPreferences?.workoutType?.includes("targeted")
+                    ? "Targeted workouts: 2-4 muscles required"
+                    : "Full Body workouts: Maximum 2 muscles"}
                 </span>
               </p>
               <div className="space-y-3">
@@ -982,7 +874,9 @@ export default function ClientPreferencePage() {
                 {/* Add button */}
                 {(() => {
                   const muscleCount = displayData.muscleFocus.length;
-                  const canAddMore = muscleCount < 2;
+                  const isTargeted = workoutPreferences?.workoutType?.includes("targeted");
+                  const maxAllowed = isTargeted ? 4 : 2;
+                  const canAddMore = muscleCount < maxAllowed;
 
                   return (
                     <button
@@ -1002,7 +896,7 @@ export default function ClientPreferencePage() {
                       {muscleCount === 0
                         ? "Add Target Muscle"
                         : !canAddMore
-                          ? `Maximum reached (${muscleCount}/2)`
+                          ? `Maximum reached (${muscleCount}/${maxAllowed})`
                           : "Add More"}
                     </button>
                   );
@@ -1232,30 +1126,27 @@ export default function ClientPreferencePage() {
       <MuscleModal
         isOpen={muscleModal.isOpen}
         onClose={muscleModal.close}
-        onConfirm={async (muscle, type) => {
-          // Check constraints before adding
-          if (type === "target") {
-            const currentTargets =
-              clientData?.user?.preferences?.muscleTargets || [];
-            const isFullBody =
-              workoutPreferences?.workoutType?.startsWith("full_body");
-            const maxAllowed = isFullBody ? 2 : 3;
-
-            if (currentTargets.length >= maxAllowed) {
-              console.warn(
-                `Cannot add more than ${maxAllowed} muscle targets for ${isFullBody ? "full body" : "targeted"} workouts`,
-              );
-              return;
-            }
+        onConfirm={async (muscles) => {
+          // Add all selected muscles
+          const type = currentStep === 2 ? "target" : "limit";
+          for (const muscle of muscles) {
+            await handleAddMusclePreference(muscle, type);
           }
-
-          await handleAddMusclePreference(muscle, type);
           muscleModal.close();
         }}
         isLoading={isAddingMuscle}
-        existingTargets={clientData?.user?.preferences?.muscleTargets || []}
-        existingLimits={clientData?.user?.preferences?.muscleLessens || []}
-        initialTab={currentStep === 2 ? "target" : "limit"}
+        existingMuscles={
+          currentStep === 2 
+            ? (clientData?.user?.preferences?.muscleTargets || [])
+            : (clientData?.user?.preferences?.muscleLessens || [])
+        }
+        modalType={currentStep === 2 ? "target" : "limit"}
+        workoutType={workoutPreferences?.workoutType || "full_body"}
+        disabledMuscles={
+          currentStep === 3 
+            ? (clientData?.user?.preferences?.muscleTargets || [])
+            : []
+        }
       />
 
       {/* Notes Modal */}

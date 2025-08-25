@@ -6,8 +6,11 @@
 export enum WorkoutType {
   FULL_BODY_WITH_FINISHER = "full_body_with_finisher",
   FULL_BODY_WITHOUT_FINISHER = "full_body_without_finisher",
+  FULL_BODY_WITHOUT_FINISHER_WITH_CORE = "full_body_without_finisher_with_core",
   TARGETED_WITH_FINISHER = "targeted_with_finisher",
   TARGETED_WITHOUT_FINISHER = "targeted_without_finisher",
+  TARGETED_WITHOUT_FINISHER_WITH_CORE = "targeted_without_finisher_with_core",
+  TARGETED_WITH_FINISHER_WITH_CORE = "targeted_with_finisher_with_core",
 }
 
 export interface BucketConstraints {
@@ -58,6 +61,25 @@ export const BUCKET_CONFIGS: Record<WorkoutType, BucketConstraints> = {
     totalExercises: 15,
   },
 
+  [WorkoutType.FULL_BODY_WITHOUT_FINISHER_WITH_CORE]: {
+    movementPatterns: {
+      horizontal_push: { min: 1, max: 1 },
+      horizontal_pull: { min: 1, max: 1 },
+      vertical_push: { min: 1, max: 1 },
+      vertical_pull: { min: 1, max: 1 },
+      squat: { min: 1, max: 1 },
+      hinge: { min: 1, max: 1 },
+      lunge: { min: 1, max: 1 },
+      core: { min: 3, max: 3 },
+    },
+    functionalRequirements: {
+      capacity: 0,
+      muscle_target: 3,
+    },
+    flexSlots: 2,
+    totalExercises: 15,
+  },
+
   [WorkoutType.TARGETED_WITH_FINISHER]: {
     movementPatterns: {
       horizontal_push: { min: 1, max: 1 },
@@ -89,6 +111,42 @@ export const BUCKET_CONFIGS: Record<WorkoutType, BucketConstraints> = {
     },
     functionalRequirements: {
       strength: 2,
+    },
+    flexSlots: 3,
+    totalExercises: 13,
+  },
+
+  [WorkoutType.TARGETED_WITHOUT_FINISHER_WITH_CORE]: {
+    movementPatterns: {
+      horizontal_push: { min: 1, max: 1 },
+      horizontal_pull: { min: 1, max: 1 },
+      vertical_push: { min: 1, max: 1 },
+      vertical_pull: { min: 1, max: 1 },
+      squat: { min: 1, max: 1 },
+      hinge: { min: 1, max: 1 },
+      lunge: { min: 1, max: 1 },
+      core: { min: 3, max: 3 },
+    },
+    functionalRequirements: {
+      strength: 1,
+    },
+    flexSlots: 3,
+    totalExercises: 13,
+  },
+
+  [WorkoutType.TARGETED_WITH_FINISHER_WITH_CORE]: {
+    movementPatterns: {
+      horizontal_push: { min: 1, max: 1 },
+      horizontal_pull: { min: 1, max: 1 },
+      vertical_push: { min: 1, max: 1 },
+      vertical_pull: { min: 1, max: 1 },
+      squat: { min: 1, max: 1 },
+      hinge: { min: 1, max: 1 },
+      lunge: { min: 1, max: 1 },
+      core: { min: 3, max: 3 },
+    },
+    functionalRequirements: {
+      capacity: 1,
     },
     flexSlots: 3,
     totalExercises: 13,

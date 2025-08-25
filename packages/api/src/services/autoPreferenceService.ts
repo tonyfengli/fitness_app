@@ -90,8 +90,8 @@ export async function createDefaultPreferencesIfNeeded(
         // Default to moderate intensity
         intensity: "moderate",
         intensitySource: "default",
-        // Default to full body with finisher
-        workoutType: "full_body_with_finisher",
+        // Default to full body without finisher with core
+        workoutType: "full_body_without_finisher_with_core",
         // Empty arrays for targets - will be filled by preference prompt
         muscleTargets: [],
         muscleLessens: [],

@@ -257,8 +257,11 @@ export const CreateWorkoutPreferencesSchema = createInsertSchema(
       .enum([
         "full_body_with_finisher",
         "full_body_without_finisher",
+        "full_body_without_finisher_with_core",
         "targeted_with_finisher",
         "targeted_without_finisher",
+        "targeted_without_finisher_with_core",
+        "targeted_with_finisher_with_core",
       ])
       .optional(),
     intensitySource: z

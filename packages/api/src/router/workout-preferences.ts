@@ -71,8 +71,11 @@ export const workoutPreferencesRouter = createTRPCRouter({
           .enum([
             "full_body_with_finisher",
             "full_body_without_finisher",
+            "full_body_without_finisher_with_core",
             "targeted_with_finisher",
             "targeted_without_finisher",
+            "targeted_without_finisher_with_core",
+            "targeted_with_finisher_with_core",
           ])
           .optional(),
       }),
@@ -420,11 +423,11 @@ export const workoutPreferencesRouter = createTRPCRouter({
             });
           }
 
-          if (isTargeted && currentTargets.length >= 3) {
+          if (isTargeted && currentTargets.length >= 4) {
             throw new TRPCError({
               code: "BAD_REQUEST",
               message:
-                "Targeted workouts can have a maximum of 3 muscle targets",
+                "Targeted workouts can have a maximum of 4 muscle targets",
             });
           }
 
@@ -887,8 +890,11 @@ export const workoutPreferencesRouter = createTRPCRouter({
         workoutType: z.enum([
           "full_body_with_finisher",
           "full_body_without_finisher",
+          "full_body_without_finisher_with_core",
           "targeted_with_finisher",
           "targeted_without_finisher",
+          "targeted_without_finisher_with_core",
+          "targeted_with_finisher_with_core",
         ]),
       }),
     )

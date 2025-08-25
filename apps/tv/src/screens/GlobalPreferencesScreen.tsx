@@ -486,7 +486,18 @@ export function GlobalPreferencesScreen() {
             </Text>
           </View>
           <Text style={{ fontSize: isCompact ? 10 : 12, color: TOKENS.color.text }} numberOfLines={1}>
-            {client.preferences?.sessionGoal === 'targeted' ? 'Targeted' : 'Full Body'} • {client.preferences?.includeFinisher ? 'Finisher' : 'No Finisher'}
+            {(() => {
+              const workoutType = client.preferences?.workoutType || 'full_body_without_finisher';
+              if (workoutType.includes('targeted') && workoutType.includes('with_core')) {
+                return 'Targeted • Core';
+              } else if (workoutType.includes('targeted')) {
+                return 'Targeted • No Core';
+              } else if (workoutType.includes('full_body') && workoutType.includes('with_core')) {
+                return 'Full Body • Core';
+              } else {
+                return 'Full Body • No Core';
+              }
+            })()}
           </Text>
         </View>
 

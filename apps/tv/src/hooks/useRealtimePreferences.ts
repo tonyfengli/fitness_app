@@ -10,6 +10,7 @@ interface PreferenceUpdateEvent {
     muscleLessens?: string[] | null;
     sessionGoal?: string | null;
     includeFinisher?: boolean | null;
+    workoutType?: string | null;
   } | null;
   isReady: boolean;
 }
@@ -73,7 +74,8 @@ export function useRealtimePreferences({
                 muscleTargets: preference.muscle_targets,
                 muscleLessens: preference.muscle_lessens,
                 sessionGoal: preference.workout_type?.includes('targeted') ? 'targeted' : 'full-body',
-                includeFinisher: preference.workout_type?.includes('with_finisher') ?? true
+                includeFinisher: preference.workout_type?.includes('with_finisher') ?? true,
+                workoutType: preference.workout_type
               },
               isReady: false // This would need to come from user_training_session table
             };
