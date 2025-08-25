@@ -4,7 +4,12 @@ import { useNavigation } from '../App';
 
 // Types
 type Assignment = { clientName: string; tag: string };
-type Exercise = { title: string; meta: string; assigned: Assignment[] };
+type Exercise = { 
+  title: string; 
+  meta: string; 
+  assigned: Assignment[]; 
+  exerciseDetails?: Array<{ exerciseId: string; title: string; meta: string }> 
+};
 type RoundData = {
   label: string;
   workSeconds: number;
@@ -354,25 +359,55 @@ export default function RoundView({ sessionId, round, workouts, roundsData, orga
                     }}/>
                   )}
 
-                  {/* Title */}
-                  <Text style={{ 
-                    fontSize: 20, 
-                    color: TOKENS.color.text, 
-                    fontWeight: '900', 
-                    letterSpacing: 0.2,
-                    lineHeight: 24,
-                    marginBottom: 4 
-                  }}>
-                    {exercise.title}
-                  </Text>
-
-                  {/* Meta */}
-                  <Text style={{ fontSize: 15, color: TOKENS.color.text, marginBottom: 8 }}>
-                    {exercise.meta}
-                  </Text>
+                  {/* Check if this is a superset */}
+                  {exercise.exerciseDetails && exercise.exerciseDetails.length > 1 ? (
+                    // Render superset with stacked exercises
+                    <View>
+                      {exercise.exerciseDetails.map((detail, detailIndex) => (
+                        <View key={detail.exerciseId} style={{ marginBottom: detailIndex < exercise.exerciseDetails.length - 1 ? 12 : 0 }}>
+                          <Text style={{ 
+                            fontSize: 20, 
+                            color: TOKENS.color.text, 
+                            fontWeight: '900', 
+                            letterSpacing: 0.2,
+                            lineHeight: 24,
+                            marginBottom: 4 
+                          }}>
+                            {detail.title}
+                          </Text>
+                          <Text style={{ fontSize: 15, color: TOKENS.color.text }}>
+                            {detail.meta}
+                          </Text>
+                          {/* Add superset indicator */}
+                          {detailIndex < exercise.exerciseDetails.length - 1 && (
+                            <Text style={{ fontSize: 14, color: TOKENS.color.muted, textAlign: 'center', marginTop: 4 }}>
+                              +
+                            </Text>
+                          )}
+                        </View>
+                      ))}
+                    </View>
+                  ) : (
+                    // Render single exercise
+                    <>
+                      <Text style={{ 
+                        fontSize: 20, 
+                        color: TOKENS.color.text, 
+                        fontWeight: '900', 
+                        letterSpacing: 0.2,
+                        lineHeight: 24,
+                        marginBottom: 4 
+                      }}>
+                        {exercise.exerciseDetails?.[0]?.title || exercise.title}
+                      </Text>
+                      <Text style={{ fontSize: 15, color: TOKENS.color.text, marginBottom: 8 }}>
+                        {exercise.exerciseDetails?.[0]?.meta || exercise.meta}
+                      </Text>
+                    </>
+                  )}
 
                   {/* Assignment chips */}
-                  <View className="flex-row flex-wrap" style={{ gap: 6 }}>
+                  <View className="flex-row flex-wrap" style={{ gap: 6, marginTop: 8 }}>
                     {exercise.assigned.map((a, chipIndex) => (
                       <View key={chipIndex} className="flex-row items-center border"
                         style={{

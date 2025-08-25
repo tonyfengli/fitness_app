@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigation } from '../App';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../providers/TRPCProvider';
+import { transformWorkoutDataForLiveView } from '../utils/workoutDataTransformer';
 
 export function useStartWorkout() {
   const navigation = useNavigation();
@@ -58,12 +59,18 @@ export function useStartWorkout() {
           api.trainingSession.getCheckedInClients.queryOptions({ sessionId })
         );
         
+        // Transform the data for WorkoutLive screen
+        const transformedOrganization = transformWorkoutDataForLiveView(
+          sessionQuery.workoutOrganization,
+          workouts
+        );
+        
         // Navigate directly to WorkoutLive
         setTimeout(() => {
           navigation.navigate('WorkoutLive', { 
             sessionId, 
             round: 1,
-            organization: sessionQuery.workoutOrganization,
+            organization: transformedOrganization,
             workouts: workouts,
             clients: clients
           });
@@ -140,12 +147,26 @@ export function useStartWorkout() {
       
       console.log('[TV useStartWorkout] Phase 2 complete, navigating with organization data');
       
+      // Transform the data for WorkoutLive screen
+      const organizationData = updatedSession?.workoutOrganization || {
+        placements: phase2Result.selections.placements,
+        roundNames: phase2Result.selections.roundNames,
+        fixedAssignments: fixedAssignments,
+        llmData: llmData,
+        generatedAt: new Date().toISOString()
+      };
+      
+      const transformedOrganization = transformWorkoutDataForLiveView(
+        organizationData,
+        workouts
+      );
+      
       // Navigate to WorkoutLive with the updated data
       setTimeout(() => {
         navigation.navigate('WorkoutLive', { 
           sessionId, 
           round: 1,
-          organization: updatedSession?.workoutOrganization || phase2Result.selections,
+          organization: transformedOrganization,
           workouts: workouts,
           clients: clients
         });

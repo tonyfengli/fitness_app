@@ -343,117 +343,131 @@ function Phase2PreviewContent({ sessionId }: { sessionId: string }) {
                     {Array.from({ length: data.roundOrganization?.majorityRounds || 0 }, (_, roundIdx) => {
                       const round = roundIdx + 1;
                       const skeleton = plan?.bundleSkeleton?.[roundIdx] || 0;
-                      const fixed = clientFixed.find(f => f.round === round);
-                      const optionsForRound = clientOptions.filter(opt => opt.allowedRounds.includes(round));
                       
-                      if (skeleton === 0) {
-                        return <td key={round} className="text-xs text-gray-400 text-center p-2">-</td>;
-                      }
+                      // Collect ALL exercises for this client in this round
+                      const exercisesInRound: Array<{
+                        exercise: any;
+                        type: 'fixed' | 'llm';
+                        reason?: string;
+                        warning?: string;
+                        resources: Record<string, number>;
+                      }> = [];
                       
-                      if (fixed) {
+                      // Get all fixed assignments for this round
+                      const fixedInRound = clientFixed.filter(f => f.round === round);
+                      fixedInRound.forEach(fixed => {
                         const exercise = data.exercisesWithTiers?.find(e => 
                           e.exerciseId === fixed.exerciseId && e.clientId === fixed.clientId
                         );
-                        return (
-                          <td key={round} className="p-2">
-                            <div className="text-xs">
-                              <div className={`px-2 py-1 rounded text-center font-medium mb-1 ${
-                                fixed.fixedReason === 'tier_priority'
-                                  ? 'bg-green-100 text-green-800'
-                                  : fixed.fixedReason === 'singleton'
-                                  ? 'bg-orange-100 text-orange-800'
-                                  : fixed.fixedReason === 'shared_exercise'
-                                  ? 'bg-blue-100 text-blue-800'
-                                  : fixed.fixedReason === 'last_exercise_auto_assign'
-                                  ? 'bg-purple-100 text-purple-800'
-                                  : 'bg-amber-100 text-amber-800'
-                              }`}>
-                                {fixed.fixedReason === 'tier_priority' ? 'Tier Fixed' : 
-                                 fixed.fixedReason === 'singleton' ? 'Singleton' : 
-                                 fixed.fixedReason === 'shared_exercise' ? 'Shared' :
-                                 fixed.fixedReason === 'last_exercise_auto_assign' ? 'Auto-Assigned' :
-                                 `Cascade ${fixed.singletonIteration}`}
-                              </div>
-                              <div className="text-gray-700 text-center">{exercise?.name || 'Unknown'}</div>
-                              {fixed.warning && (
-                                <div className="text-xs text-red-600 text-center mt-1" title={fixed.warning}>⚠️</div>
-                              )}
-                              <div className="flex justify-center gap-1 mt-1">
-                                {Object.keys(fixed.resources).map(eq => (
-                                  <span key={eq} className="text-gray-500" title={eq}>
-                                    {getEquipmentIcon(eq)}
-                                  </span>
-                                ))}
-                              </div>
-                            </div>
-                          </td>
-                        );
-                      }
+                        if (exercise || fixed) {
+                          exercisesInRound.push({
+                            exercise,
+                            type: 'fixed',
+                            reason: fixed.fixedReason,
+                            warning: fixed.warning,
+                            resources: fixed.resources
+                          });
+                        }
+                      });
                       
-                      // Check if LLM has made a selection for this client/round
-                      if (llmSelections && optionsForRound.length > 0) {
-                        // Find any LLM selection for this client and round
-                        const llmPick = llmSelections.find(([id, r]) => {
-                          // The LLM returns IDs starting with client UUID
+                      // Get all LLM selections for this round
+                      if (llmSelections) {
+                        const llmPicksForRound = llmSelections.filter(([id, r]) => {
                           return id.startsWith(client.clientId) && r === round;
                         });
-
-                        if (llmPick) {
-                          // Extract exercise name from the LLM ID
+                        
+                        llmPicksForRound.forEach(llmPick => {
                           const exerciseNameFromId = llmPick[0]
                             .replace(client.clientId + '_', '')
                             .replace(/_/g, ' ')
                             .toLowerCase();
-
-                          // Find the matching exercise option
+                          
+                          const optionsForRound = clientOptions.filter(opt => opt.allowedRounds.includes(round));
                           const selectedOption = optionsForRound.find(opt => {
                             const exercise = data.exercisesWithTiers?.find(e => 
                               e.exerciseId === opt.exerciseId && e.clientId === opt.clientId
                             );
                             return exercise?.name?.toLowerCase() === exerciseNameFromId;
                           });
-
+                          
                           if (selectedOption) {
                             const exercise = data.exercisesWithTiers?.find(e => 
                               e.exerciseId === selectedOption.exerciseId && e.clientId === selectedOption.clientId
                             );
-                            return (
-                              <td key={round} className="p-2">
-                                <div className="text-xs">
-                                  <div className="bg-indigo-100 text-indigo-800 px-2 py-1 rounded text-center font-medium mb-1">
-                                    LLM Selected
-                                  </div>
-                                  <div className="text-gray-700 text-center font-medium">{exercise?.name || 'Unknown'}</div>
-                                  <div className="flex justify-center gap-1 mt-1">
-                                    {Object.keys(selectedOption.resources).map(eq => (
-                                      <span key={eq} className="text-gray-500" title={eq}>
-                                        {getEquipmentIcon(eq)}
-                                      </span>
-                                    ))}
-                                  </div>
-                                </div>
-                              </td>
-                            );
+                            exercisesInRound.push({
+                              exercise,
+                              type: 'llm',
+                              resources: selectedOption.resources
+                            });
                           }
-                        }
+                        });
                       }
                       
-                      if (optionsForRound.length > 0) {
-                        return (
-                          <td key={round} className="p-2">
-                            <div className="text-xs">
-                              <div className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-center mb-1">
-                                Option
-                              </div>
-                              <div className="text-gray-600 text-center">
-                                {optionsForRound.length} exercise{optionsForRound.length > 1 ? 's' : ''}
-                              </div>
-                            </div>
-                          </td>
-                        );
+                      if (skeleton === 0 || exercisesInRound.length === 0) {
+                        return <td key={round} className="text-xs text-gray-400 text-center p-2">-</td>;
                       }
                       
-                      return <td key={round} className="text-xs text-gray-400 text-center p-2">Empty</td>;
+                      // Display all exercises for this round (including supersets)
+                      return (
+                        <td key={round} className="p-2">
+                          <div className="space-y-2">
+                            {exercisesInRound.map((item, idx) => (
+                              <div key={idx} className="text-xs">
+                                <div className={`px-2 py-1 rounded text-center font-medium mb-1 ${
+                                  item.type === 'llm'
+                                    ? 'bg-indigo-100 text-indigo-800'
+                                    : item.reason === 'tier_priority'
+                                    ? 'bg-green-100 text-green-800'
+                                    : item.reason === 'singleton'
+                                    ? 'bg-orange-100 text-orange-800'
+                                    : item.reason === 'shared_exercise'
+                                    ? 'bg-blue-100 text-blue-800'
+                                    : item.reason === 'last_exercise_auto_assign'
+                                    ? 'bg-purple-100 text-purple-800'
+                                    : 'bg-amber-100 text-amber-800'
+                                }`}>
+                                  {item.type === 'llm' 
+                                    ? 'LLM Selected'
+                                    : item.reason === 'tier_priority' ? 'Tier Fixed' : 
+                                      item.reason === 'singleton' ? 'Singleton' : 
+                                      item.reason === 'shared_exercise' ? 'Shared' :
+                                      item.reason === 'last_exercise_auto_assign' ? 'Auto-Assigned' :
+                                      `Cascade ${item.reason}`}
+                                </div>
+                                <div className="text-gray-700 text-center font-medium">
+                                  {item.exercise?.name || 'Unknown'}
+                                </div>
+                                {item.warning && (
+                                  <div className="text-xs text-red-600 text-center mt-1" title={item.warning}>⚠️</div>
+                                )}
+                                <div className="flex justify-center gap-1 mt-1">
+                                  {Object.keys(item.resources || {}).map(eq => (
+                                    <span key={eq} className="text-gray-500" title={eq}>
+                                      {getEquipmentIcon(eq)}
+                                    </span>
+                                  ))}
+                                </div>
+                                {/* Add superset indicator if this is not the last exercise */}
+                                {idx < exercisesInRound.length - 1 && (
+                                  <div className="text-center text-gray-400 mt-1">+</div>
+                                )}
+                              </div>
+                            ))}
+                            
+                            {/* Show options if no exercises were selected/fixed */}
+                            {exercisesInRound.length === 0 && skeleton > 0 && (
+                              <div className="text-xs">
+                                <div className="bg-gray-100 text-gray-800 px-2 py-1 rounded text-center mb-1">
+                                  Option
+                                </div>
+                                <div className="text-gray-600 text-center">
+                                  {clientOptions.filter(opt => opt.allowedRounds.includes(round)).length} available
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </td>
+                      );
                     })}
                   </tr>
                 );

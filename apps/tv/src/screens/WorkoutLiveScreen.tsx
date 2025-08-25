@@ -114,16 +114,21 @@ export function WorkoutLiveScreen() {
     
     // Process each round from the organization
     passedOrganization.rounds?.forEach(round => {
+      // Extract round number and name
+      const roundMatch = round.name.match(/Round (\d+) - (.+)/);
+      const roundNumber = roundMatch ? roundMatch[1] : '1';
+      const roundName = roundMatch ? roundMatch[2] : round.name;
+      
       const roundData = {
-        label: round.name.split(' - ')[0], // "Round 1" from "Round 1 - Main Strength"
+        label: `R${roundNumber}: ${roundName}`, // "R1: Heavy Lower Strength"
         workSeconds: 600, // 10 minutes
         restSeconds: 60,  // 1 minute rest
         phase: "work" as const,
         exercises: [] as any[]
       };
       
-      // Create a map to store unique exercises for this round
-      const exerciseMap = new Map();
+      // Create a map to store exercises grouped by client for this round
+      const clientExerciseGroups = new Map();
       
       // Process each client's exercises for this round
       Object.entries(round.exercisesByClient).forEach(([clientId, clientExercises]) => {
@@ -131,50 +136,53 @@ export function WorkoutLiveScreen() {
         const clientWorkout = workouts.find(w => w.userId === clientId);
         
         // Try to get client name from various sources
-        // First check if we have clients data passed
         const clientData = passedClients?.find((c: any) => c.userId === clientId);
-        const clientName = clientData?.name || 
+        const clientName = clientData?.userName || 
                          clientWorkout?.userName || 
                          clientWorkout?.userEmail?.split('@')[0] || 
                          'Unknown';
         
-        // Process each exercise for this client in this round
-        (clientExercises as any[]).forEach(exercise => {
-          const exerciseKey = exercise.exerciseId;
+        // Get all exercises for this client
+        const exercisesForClient = (clientExercises as any[]).map(exercise => {
+          // Find the full exercise details from the workout exercises
+          const fullExercise = clientWorkout?.exercises?.find(
+            e => e.exerciseId === exercise.exerciseId
+          );
           
-          if (!exerciseMap.has(exerciseKey)) {
-            // Find the full exercise details from the workout exercises
-            const fullExercise = clientWorkout?.exercises?.find(
-              e => e.exerciseId === exercise.exerciseId
-            );
-            
-            // Special handling for "Unknown" exercise names - try to get the real name
-            let exerciseTitle = exercise.exerciseName;
-            if (exerciseTitle === 'Unknown' && fullExercise?.exercise?.name) {
-              console.log(`[WorkoutLiveScreen] Fixing Unknown exercise name for ${exercise.exerciseId}: ${fullExercise.exercise.name}`);
-              exerciseTitle = fullExercise.exercise.name;
-            } else if (!exerciseTitle || exerciseTitle === 'Unknown') {
-              exerciseTitle = fullExercise?.exercise?.name || 'Unknown Exercise';
-            }
-            
-            exerciseMap.set(exerciseKey, {
-              exerciseId: exercise.exerciseId,
-              title: exerciseTitle,
-              meta: formatExerciseMetaFromScheme(exercise.scheme, fullExercise),
-              assigned: []
-            });
+          // Special handling for "Unknown" exercise names
+          let exerciseTitle = exercise.exerciseName;
+          if (exerciseTitle === 'Unknown' && fullExercise?.exercise?.name) {
+            console.log(`[WorkoutLiveScreen] Fixing Unknown exercise name for ${exercise.exerciseId}: ${fullExercise.exercise.name}`);
+            exerciseTitle = fullExercise.exercise.name;
+          } else if (!exerciseTitle || exerciseTitle === 'Unknown') {
+            exerciseTitle = fullExercise?.exercise?.name || 'Unknown Exercise';
           }
           
-          // Add this client to the exercise's assigned list
-          exerciseMap.get(exerciseKey).assigned.push({
-            clientName: clientName,
-            tag: '' // No longer using tags
-          });
+          return {
+            exerciseId: exercise.exerciseId,
+            title: exerciseTitle,
+            meta: formatExerciseMetaFromScheme(exercise.scheme, fullExercise),
+          };
         });
+        
+        // Store client's exercises (could be a superset if multiple exercises)
+        if (exercisesForClient.length > 0) {
+          clientExerciseGroups.set(clientId, {
+            clientName,
+            exercises: exercisesForClient
+          });
+        }
       });
       
-      // Convert exercise map to array
-      roundData.exercises = Array.from(exerciseMap.values());
+      // Convert to the format expected by RoundView
+      // Each "exercise" in the array will represent a client's workout (could be superset)
+      roundData.exercises = Array.from(clientExerciseGroups.values()).map(clientGroup => ({
+        title: clientGroup.exercises.map(e => e.title).join(' + '), // Join titles for supersets
+        meta: clientGroup.exercises.map(e => e.meta).filter(m => m).join(' | '), // Join meta info
+        assigned: [{ clientName: clientGroup.clientName, tag: '' }],
+        // Store the individual exercises for custom rendering
+        exerciseDetails: clientGroup.exercises
+      }));
       
       // Only add rounds that have exercises
       if (roundData.exercises.length > 0) {
