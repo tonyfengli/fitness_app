@@ -10,6 +10,7 @@ import type { PreAssignedExercise } from "../../../types/standardBlueprint";
 import type { PromptStrategy } from "./strategies/PromptStrategy";
 import { WorkoutType } from "../../types/workoutTypes";
 import { FullBodyPromptStrategy } from "./strategies/FullBodyPromptStrategy";
+import { TargetedPromptStrategy } from "./strategies/TargetedPromptStrategy";
 
 export interface ClientPromptConfig {
   client: ClientContext;
@@ -55,12 +56,14 @@ export class ClientExerciseSelectionPromptBuilder {
     switch (this.config.workoutType) {
       case WorkoutType.FULL_BODY_WITH_FINISHER:
       case WorkoutType.FULL_BODY_WITHOUT_FINISHER:
+      case WorkoutType.FULL_BODY_WITHOUT_FINISHER_WITH_CORE:
         return new FullBodyPromptStrategy(strategyConfig);
 
       case WorkoutType.TARGETED_WITH_FINISHER:
       case WorkoutType.TARGETED_WITHOUT_FINISHER:
-        // TODO: Implement TargetedPromptStrategy
-        throw new Error(`Targeted workout prompts not yet implemented`);
+      case WorkoutType.TARGETED_WITHOUT_FINISHER_WITH_CORE:
+      case WorkoutType.TARGETED_WITH_FINISHER_WITH_CORE:
+        return new TargetedPromptStrategy(strategyConfig);
 
       default:
         throw new Error(`Unknown workout type: ${this.config.workoutType}`);

@@ -4,6 +4,7 @@ import type { ScoredExercise } from "../../types/scoredExercise";
 import type { PreAssignedExercise } from "../../types/standardBlueprint";
 import { WorkoutType } from "../../types/clientTypes";
 import { categorizeSharedExercises } from "../../workout-generation/standard/sharedExerciseFilters";
+import { mapMuscleToConsolidated, type ConsolidatedMuscle } from "../../constants/muscleMapping";
 
 /**
  * Constraints for pre-assignment based on workout type
@@ -570,8 +571,8 @@ export class PreAssignmentService {
   }
 
   /**
-   * Process pre-assignments for full body workouts with shared exercise logic
-   * This is the new implementation for Exercise #1, #2, and #3 selection
+   * Process pre-assignments for full body and targeted workouts with shared exercise logic
+   * This handles Exercise #1 and #2 selection with the new muscle-based constraints
    */
   static processFullBodyPreAssignmentsWithShared(
     clientsData: Map<
@@ -591,11 +592,16 @@ export class PreAssignmentService {
     // Step 1: Each client selects Exercise #1 (highest favorite)
     const exercise1Selections = new Map<
       string,
-      { exercise: ScoredExercise; bodyCategory: BodyCategory }
+      { 
+        exercise: ScoredExercise; 
+        muscleGroup: ConsolidatedMuscle | null;
+        workoutType: WorkoutType;
+        muscleTargets?: ConsolidatedMuscle[];
+      }
     >();
 
     for (const [clientId, data] of clientsData) {
-      const { exercises, favoriteIds } = data;
+      const { context, exercises, favoriteIds } = data;
 
       // Get favorites sorted by score
       const favorites = exercises
@@ -608,9 +614,23 @@ export class PreAssignmentService {
         const selected = tied[Math.floor(Math.random() * tied.length)];
 
         if (selected) {
+          // Map primary muscle to consolidated muscle group
+          const muscleGroup = selected.primaryMuscle 
+            ? mapMuscleToConsolidated(selected.primaryMuscle)
+            : null;
+          
+          // Get client's muscle targets if targeted workout
+          const clientWorkoutType = (context.workoutType || workoutType) as WorkoutType;
+          const isTargeted = clientWorkoutType.includes("targeted");
+          const muscleTargets = isTargeted && context.muscle_target
+            ? context.muscle_target.map(m => mapMuscleToConsolidated(m))
+            : undefined;
+
           exercise1Selections.set(clientId, {
             exercise: selected,
-            bodyCategory: this.getBodyCategory(selected),
+            muscleGroup,
+            workoutType: clientWorkoutType,
+            muscleTargets
           });
 
           result.set(clientId, [
@@ -631,49 +651,121 @@ export class PreAssignmentService {
     const categorized = categorizeSharedExercises(sharedExercisePool);
     const otherSharedExercises = categorized.other; // Only use "Other Shared", not Core & Finisher
 
-    // Determine which clients need shared exercises and their constraints
-    const clientConstraints = new Map<string, "upper" | "lower" | null>();
+    // Build constraints for each client based on workout type
+    interface ClientConstraint {
+      type: "exclude" | "include";
+      muscles: ConsolidatedMuscle[];
+      isTargeted: boolean;
+    }
+    
+    const clientConstraints = new Map<string, ClientConstraint>();
 
     for (const [clientId, selection] of exercise1Selections) {
-      const exercise1BodyType = selection.bodyCategory;
-
-      if (exercise1BodyType === "upper") {
-        clientConstraints.set(clientId, "lower");
-      } else if (exercise1BodyType === "lower") {
-        clientConstraints.set(clientId, "upper");
+      const isTargeted = selection.workoutType.includes("targeted");
+      
+      if (isTargeted) {
+        // Targeted: Exercise #2 must be one of their muscle targets AND not same muscle as Exercise #1
+        const excludeMuscles = selection.muscleGroup ? [selection.muscleGroup] : [];
+        const includeMuscles = selection.muscleTargets || [];
+        
+        // Filter out the Exercise #1 muscle from the include list
+        const filteredIncludeMuscles = includeMuscles.filter(m => !excludeMuscles.includes(m));
+        
+        clientConstraints.set(clientId, {
+          type: "include",
+          muscles: filteredIncludeMuscles,
+          isTargeted: true
+        });
       } else {
-        // core_full can be either upper or lower
-        clientConstraints.set(clientId, null);
+        // Full Body: Exercise #2 cannot be the same muscle group as Exercise #1
+        clientConstraints.set(clientId, {
+          type: "exclude",
+          muscles: selection.muscleGroup ? [selection.muscleGroup] : [],
+          isTargeted: false
+        });
       }
     }
 
     // Try cascading selection for shared Exercise #2
     let sharedExercise2: GroupScoredExercise | null = null;
     let participatingClients: string[] = [];
+    let bestScore = -1;
+    const SCORE_DIFFERENCE_THRESHOLD = 1.0; // Larger groups win unless score difference exceeds this
 
     console.log("[PreAssignment] Starting shared Exercise #2 selection");
-    console.log(
-      "[PreAssignment] Client constraints:",
-      Array.from(clientConstraints.entries())
-        .map(
-          ([id, constraint]) =>
-            `${clientsData.get(id)?.context.name}: ${constraint || "any"}`,
-        )
-        .join(", "),
-    );
+    
+    // Log constraints
+    const constraintsSummary = Array.from(clientConstraints.entries()).map(([id, constraint]) => {
+      const clientName = clientsData.get(id)?.context.name;
+      const exercise1 = exercise1Selections.get(id);
+      const exercise1Muscle = exercise1?.muscleGroup;
+      
+      if (constraint.type === "exclude") {
+        return `${clientName}: exclude ${constraint.muscles.join(", ")}`;
+      } else {
+        // For targeted, show that we're excluding Exercise #1's muscle from options
+        const muscleList = constraint.muscles.join(" or ");
+        const excludeNote = exercise1Muscle ? ` (excluding ${exercise1Muscle} from Ex#1)` : "";
+        return `${clientName}: must be ${muscleList}${excludeNote}`;
+      }
+    });
+    console.log("[PreAssignment] Client constraints:", constraintsSummary.join(", "));
+
+    // Helper function to check if an exercise satisfies all constraints for a subset of clients
+    const satisfiesConstraints = (exercise: GroupScoredExercise, clientSubset: string[]): boolean => {
+      const exerciseMuscle = exercise.primaryMuscle 
+        ? mapMuscleToConsolidated(exercise.primaryMuscle)
+        : null;
+      
+      if (!exerciseMuscle) return false;
+
+      // Check if this exercise is already Exercise #1 for any client in the subset
+      for (const clientId of clientSubset) {
+        const exercise1 = exercise1Selections.get(clientId);
+        if (exercise1 && exercise1.exercise.id === exercise.id) {
+          return false; // Cannot select same exercise as Exercise #1
+        }
+      }
+
+      for (const clientId of clientSubset) {
+        const constraint = clientConstraints.get(clientId);
+        if (!constraint) continue;
+
+        if (constraint.type === "exclude") {
+          // Full Body: muscle cannot be in exclusion list
+          if (constraint.muscles.includes(exerciseMuscle)) {
+            return false;
+          }
+        } else {
+          // Targeted: muscle must be in inclusion list
+          if (!constraint.muscles.includes(exerciseMuscle)) {
+            return false;
+          }
+        }
+      }
+      
+      return true;
+    };
+
+    // Sort clients: Full Body first, then Targeted (so targeted are removed first)
+    const sortedClientIds = [...allClientIds].sort((a, b) => {
+      const aIsTargeted = clientConstraints.get(a)?.isTargeted || false;
+      const bIsTargeted = clientConstraints.get(b)?.isTargeted || false;
+      return aIsTargeted === bIsTargeted ? 0 : aIsTargeted ? 1 : -1;
+    });
 
     // Start with exercises shared by all clients, then cascade down
     for (let shareCount = allClientIds.length; shareCount >= 2; shareCount--) {
       // For partial sharing, we need to find valid client subsets
       if (shareCount < allClientIds.length) {
-        // Try different combinations of clients that can share
+        // Generate combinations prioritizing removal of targeted clients
         const clientCombinations = this.getCombinations(
-          allClientIds,
+          sortedClientIds,
           shareCount,
         );
 
         for (const clientSubset of clientCombinations) {
-          // Find exercises shared by exactly this subset of clients
+          // Find exercises shared by this subset of clients
           const candidatesForSubset = otherSharedExercises
             .filter((ex) => {
               // Exercise must be available for all clients in subset
@@ -681,80 +773,79 @@ export class PreAssignmentService {
                 ex.clientsSharing.includes(clientId),
               );
             })
-            .filter((ex) => {
-              // Check constraints only for the subset we're considering
-              const bodyCategory = this.getBodyCategory(ex);
-
-              for (const clientId of clientSubset) {
-                const constraint = clientConstraints.get(clientId);
-                if (constraint === "upper" && bodyCategory !== "upper")
-                  return false;
-                if (constraint === "lower" && bodyCategory !== "lower")
-                  return false;
-              }
-
-              return true;
-            })
+            .filter((ex) => satisfiesConstraints(ex, clientSubset))
             .sort((a, b) => b.groupScore - a.groupScore);
 
           if (candidatesForSubset.length > 0) {
+            // Check if this is better than our current best
+            const topCandidate = candidatesForSubset[0]!;
+            
+            // Prefer larger groups unless score difference is significant
+            const scoreDifference = bestScore - topCandidate.groupScore;
+            const isBetter = topCandidate.groupScore > bestScore || 
+              (shareCount > participatingClients.length && scoreDifference < SCORE_DIFFERENCE_THRESHOLD);
+            
+            if (isBetter) {
+              // Update our best option but don't break - keep searching
+              const tied = candidatesForSubset.filter(
+                (ex) => ex.groupScore === topCandidate.groupScore,
+              );
+              const selected = tied[Math.floor(Math.random() * tied.length)];
+              if (selected) {
+                sharedExercise2 = selected;
+                participatingClients = clientSubset;
+                bestScore = selected.groupScore;
+                console.log(
+                  `[PreAssignment] Found candidate ${shareCount}-way shared exercise: ${selected.name} (score: ${selected.groupScore}) for clients:`,
+                  clientSubset
+                    .map((id) => clientsData.get(id)?.context.name)
+                    .join(", "),
+                );
+              }
+            }
+          }
+        }
+      } else {
+        // All clients case
+        const candidatesAtLevel = otherSharedExercises
+          .filter((ex) => ex.clientsSharing.length >= shareCount)
+          .filter((ex) => satisfiesConstraints(ex, allClientIds))
+          .sort((a, b) => b.groupScore - a.groupScore);
+
+        if (candidatesAtLevel.length > 0) {
+          // Check if this is better than our current best
+          const topCandidate = candidatesAtLevel[0]!;
+          
+          // Prefer larger groups unless score difference is significant
+          const scoreDifference = bestScore - topCandidate.groupScore;
+          const isBetter = topCandidate.groupScore > bestScore || 
+            (shareCount > participatingClients.length && scoreDifference < SCORE_DIFFERENCE_THRESHOLD);
+          
+          if (isBetter) {
             // Select highest scoring with tie-breaking
-            const tied = candidatesForSubset.filter(
-              (ex) => ex.groupScore === candidatesForSubset[0]!.groupScore,
+            const tied = candidatesAtLevel.filter(
+              (ex) => ex.groupScore === topCandidate.groupScore,
             );
             const selected = tied[Math.floor(Math.random() * tied.length)];
             if (selected) {
               sharedExercise2 = selected;
-              participatingClients = clientSubset;
+              participatingClients = allClientIds;
+              bestScore = selected.groupScore;
               console.log(
-                `[PreAssignment] Found ${shareCount}-way shared exercise: ${selected.name} for clients:`,
-                clientSubset
-                  .map((id) => clientsData.get(id)?.context.name)
-                  .join(", "),
+                `[PreAssignment] Found candidate ${shareCount}-way shared exercise: ${selected.name} (score: ${selected.groupScore}) for all clients`
               );
-              break;
             }
           }
-        }
-
-        if (sharedExercise2) break;
-      } else {
-        // Original logic for all clients
-        const candidatesAtLevel = otherSharedExercises
-          .filter((ex) => ex.clientsSharing.length >= shareCount)
-          .filter((ex) => {
-            // Check if this exercise satisfies constraints for all clients
-            const bodyCategory = this.getBodyCategory(ex);
-
-            for (const clientId of allClientIds) {
-              const constraint = clientConstraints.get(clientId);
-              if (constraint === "upper" && bodyCategory !== "upper")
-                return false;
-              if (constraint === "lower" && bodyCategory !== "lower")
-                return false;
-            }
-
-            return true;
-          })
-          .sort((a, b) => b.groupScore - a.groupScore);
-
-        if (candidatesAtLevel.length > 0) {
-          // Select highest scoring with tie-breaking
-          const tied = candidatesAtLevel.filter(
-            (ex) => ex.groupScore === candidatesAtLevel[0]!.groupScore,
-          );
-          const selected = tied[Math.floor(Math.random() * tied.length)];
-          if (selected) {
-            sharedExercise2 = selected;
-            participatingClients = allClientIds;
-          }
-          break;
         }
       }
     }
 
     // Step 3: Assign Exercise #2 to participating clients
     if (sharedExercise2) {
+      console.log(
+        `[PreAssignment] Selected OPTIMAL shared Exercise #2: ${sharedExercise2.name} (score: ${bestScore}) for ${participatingClients.length} clients:`,
+        participatingClients.map((id) => clientsData.get(id)?.context.name).join(", ")
+      );
       for (const clientId of participatingClients) {
         const currentPreAssigned = result.get(clientId) || [];
         const clientExercise = clientsData
@@ -772,76 +863,13 @@ export class PreAssignmentService {
       }
     }
 
-    // Step 4: Handle "left behind" clients (those who couldn't participate in shared)
+    // Step 4: Log any clients who couldn't participate in shared Exercise #2
     for (const [clientId, data] of clientsData) {
       const currentPreAssigned = result.get(clientId) || [];
-
-      // If client has less than 2 exercises, they were "left behind"
       if (currentPreAssigned.length < 2) {
         console.log(
-          `[PreAssignment] Client ${data.context.name} needs individual Exercise #2 selection`,
+          `[PreAssignment] Client ${data.context.name} has no shared Exercise #2 - will only have 1 pre-assigned exercise`,
         );
-        const { exercises, favoriteIds } = data;
-        const usedIds = new Set(currentPreAssigned.map((p) => p.exercise.id));
-
-        // Get remaining favorites
-        const remainingFavorites = exercises
-          .filter((ex) => favoriteIds.includes(ex.id) && !usedIds.has(ex.id))
-          .sort((a, b) => b.score - a.score);
-
-        // If Exercise #1 exists, apply body type constraint for Exercise #2
-        if (currentPreAssigned.length === 1) {
-          const exercise1BodyType = this.getBodyCategory(
-            currentPreAssigned[0]!.exercise,
-          );
-          let constrainedFavorites = remainingFavorites;
-
-          if (exercise1BodyType === "upper") {
-            constrainedFavorites = remainingFavorites.filter(
-              (ex) => this.getBodyCategory(ex) === "lower",
-            );
-          } else if (exercise1BodyType === "lower") {
-            constrainedFavorites = remainingFavorites.filter(
-              (ex) => this.getBodyCategory(ex) === "upper",
-            );
-          }
-
-          // Use constrained if available, otherwise fall back to any favorite
-          const candidatesForExercise2 =
-            constrainedFavorites.length > 0
-              ? constrainedFavorites
-              : remainingFavorites;
-
-          if (candidatesForExercise2.length > 0) {
-            const tied = candidatesForExercise2.filter(
-              (ex) => ex.score === candidatesForExercise2[0]!.score,
-            );
-            const selected = tied[Math.floor(Math.random() * tied.length)];
-
-            if (selected) {
-              currentPreAssigned.push({
-                exercise: selected,
-                source: "favorite",
-                tiedCount: tied.length > 1 ? tied.length : undefined,
-              });
-            }
-          }
-        } else if (currentPreAssigned.length === 0) {
-          // No Exercise #1, select up to 2 favorites
-          const topTwo = this.selectTopWithTieBreakingAndCount(
-            remainingFavorites,
-            2,
-          );
-          topTwo.forEach(({ exercise, tiedCount }) => {
-            currentPreAssigned.push({
-              exercise,
-              source: "favorite",
-              tiedCount,
-            });
-          });
-        }
-
-        result.set(clientId, currentPreAssigned);
       }
     }
 

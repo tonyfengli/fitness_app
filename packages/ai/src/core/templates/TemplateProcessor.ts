@@ -24,6 +24,7 @@ import {
 } from "../../workout-generation/strategies/workoutTypeStrategies";
 import { SCORING_CONFIG } from "../scoring/scoringConfig";
 import { PreAssignmentService } from "./preAssignmentService";
+import { mapMuscleToConsolidated } from "../../constants/muscleMapping";
 
 /**
  * Simple, clean template processor for organizing exercises into blocks
@@ -450,21 +451,54 @@ export class TemplateProcessor {
     // Keep essential standard group processing summary
     // Processing standard template: ${this.template.id} for ${clientExercises.size} clients
 
-    // Step 1: Calculate shared exercise pool first (needed for new pre-assignment logic)
-    const sharedExercisePool = this.findAllSharedExercises(clientExercises);
+    // Step 1: First determine Exercise #1 selections for constraint calculation
+    const exercise1Selections = new Map<string, { exercise: ScoredExercise; workoutType: WorkoutType }>();
+    
+    if (groupContext && favoritesByClient) {
+      // Pre-calculate Exercise #1 for each client (highest favorite)
+      for (const [clientId, exercises] of clientExercises) {
+        const client = groupContext.clients.find((c) => c.user_id === clientId);
+        if (!client) continue;
+        
+        const favoriteIds = favoritesByClient.get(clientId) || [];
+        const favorites = exercises
+          .filter((ex) => favoriteIds.includes(ex.id))
+          .sort((a, b) => b.score - a.score);
+          
+        if (favorites.length > 0) {
+          const tied = favorites.filter((ex) => ex.score === favorites[0]!.score);
+          const selected = tied[Math.floor(Math.random() * tied.length)];
+          
+          if (selected) {
+            exercise1Selections.set(clientId, {
+              exercise: selected,
+              workoutType: (client.workoutType || WorkoutType.FULL_BODY_WITHOUT_FINISHER) as WorkoutType,
+            });
+          }
+        }
+      }
+    }
 
-    // Step 2: Determine pre-assigned exercises
+    // Step 2: Calculate shared exercise pool with constraints applied
+    const sharedExercisePool = this.findAllSharedExercises(clientExercises, groupContext, exercise1Selections);
+
+    // Step 3: Determine pre-assigned exercises
     const preAssignedByClient = new Map<string, PreAssignedExercise[]>();
 
-    // Check if ALL clients have full body workout types to use shared logic
-    const allClientsHaveFullBody = groupContext?.clients.every(
+    // Use new shared logic for all workout types (handles both Full Body and Targeted)
+    const hasValidWorkoutTypes = groupContext?.clients.every(
       (client) =>
         client.workoutType === WorkoutType.FULL_BODY_WITH_FINISHER ||
-        client.workoutType === WorkoutType.FULL_BODY_WITHOUT_FINISHER,
+        client.workoutType === WorkoutType.FULL_BODY_WITHOUT_FINISHER ||
+        client.workoutType === WorkoutType.FULL_BODY_WITHOUT_FINISHER_WITH_CORE ||
+        client.workoutType === WorkoutType.TARGETED_WITH_FINISHER ||
+        client.workoutType === WorkoutType.TARGETED_WITHOUT_FINISHER ||
+        client.workoutType === WorkoutType.TARGETED_WITHOUT_FINISHER_WITH_CORE ||
+        client.workoutType === WorkoutType.TARGETED_WITH_FINISHER_WITH_CORE,
     );
 
-    if (groupContext && favoritesByClient && allClientsHaveFullBody) {
-      // Use new shared exercise logic for full body workouts
+    if (groupContext && favoritesByClient && hasValidWorkoutTypes) {
+      // Use new shared exercise logic for both full body and targeted workouts
       const clientsData = new Map<
         string,
         {
@@ -650,9 +684,12 @@ export class TemplateProcessor {
   /**
    * Find ALL shared exercises across the entire exercise pool
    * Not limited to specific blocks - for standard template
+   * Now applies Exercise #2 constraints if provided
    */
   private findAllSharedExercises(
     clientPools: Map<string, ScoredExercise[]>,
+    groupContext?: GroupContext,
+    exercise1Selections?: Map<string, { exercise: ScoredExercise; workoutType: WorkoutType }>,
   ): GroupScoredExercise[] {
     const exerciseClientMap = new Map<string, Set<string>>();
     const exerciseMap = new Map<string, ScoredExercise>();
@@ -673,6 +710,40 @@ export class TemplateProcessor {
         // Only include if score meets the appropriate threshold
         if (exercise.score < threshold) {
           continue;
+        }
+
+        // Apply Exercise #2 constraints if we have the necessary context
+        if (groupContext && exercise1Selections) {
+          const client = groupContext.clients.find(c => c.user_id === clientId);
+          const exercise1Data = exercise1Selections.get(clientId);
+          
+          if (client && exercise1Data) {
+            const isTargeted = exercise1Data.workoutType.includes("targeted");
+            const exerciseMuscle = exercise.primaryMuscle ? 
+              mapMuscleToConsolidated(exercise.primaryMuscle) : null;
+            
+            if (exerciseMuscle) {
+              // Skip if this is Exercise #1 for this client
+              if (exercise.id === exercise1Data.exercise.id) {
+                continue;
+              }
+              
+              if (isTargeted) {
+                // Targeted: primary muscle must be in muscle targets
+                const targetMuscles = client.muscle_target?.map(m => mapMuscleToConsolidated(m)) || [];
+                if (!targetMuscles.includes(exerciseMuscle)) {
+                  continue;
+                }
+              } else {
+                // Full Body: primary muscle cannot be same as Exercise #1
+                const exercise1Muscle = exercise1Data.exercise.primaryMuscle ? 
+                  mapMuscleToConsolidated(exercise1Data.exercise.primaryMuscle) : null;
+                if (exercise1Muscle && exerciseMuscle === exercise1Muscle) {
+                  continue;
+                }
+              }
+            }
+          }
         }
 
         if (!exerciseClientMap.has(exercise.id)) {

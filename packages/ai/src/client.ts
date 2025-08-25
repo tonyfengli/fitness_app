@@ -35,6 +35,7 @@ export {
 export {
   CONSOLIDATED_MUSCLES,
   getOldMusclesForConsolidated,
+  mapMuscleToConsolidated,
   type ConsolidatedMuscle,
 } from "./constants/muscleMapping";
 

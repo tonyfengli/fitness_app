@@ -15,6 +15,7 @@ import {
   BUCKET_CONFIGS,
   categorizeSharedExercises,
   getOldMusclesForConsolidated,
+  mapMuscleToConsolidated,
   WorkoutType,
 } from "@acme/ai/client";
 
@@ -2727,47 +2728,7 @@ export default function StandardTemplateView({
                     Analysis
                   </h4>
 
-                  <div className="grid grid-cols-3 gap-4">
-                    {/* Movement Pattern Distribution */}
-                    <div>
-                      <h5 className="mb-2 text-xs font-medium text-gray-700">
-                        Movement Patterns
-                      </h5>
-                      <div className="space-y-1">
-                        {(() => {
-                          const currentExercises =
-                            sharedSubTab === "coreFinisher"
-                              ? categorizedSharedExercises.coreAndFinisher
-                              : categorizedSharedExercises.other;
-                          const patterns = currentExercises.reduce(
-                            (acc, ex) => {
-                              const pattern = ex.movementPattern || "unknown";
-                              acc[pattern] = (acc[pattern] || 0) + 1;
-                              return acc;
-                            },
-                            {} as Record<string, number>,
-                          );
-
-                          return Object.entries(patterns)
-                            .sort(([, a], [, b]) => b - a)
-                            .slice(0, 5)
-                            .map(([pattern, count]) => (
-                              <div
-                                key={pattern}
-                                className="flex justify-between text-xs"
-                              >
-                                <span className="text-gray-600">
-                                  {formatMuscleName(pattern)}
-                                </span>
-                                <span className="font-medium text-gray-900">
-                                  {count}
-                                </span>
-                              </div>
-                            ));
-                        })()}
-                      </div>
-                    </div>
-
+                  <div className="grid grid-cols-2 gap-4">
                     {/* Client Sharing Distribution */}
                     <div>
                       <h5 className="mb-2 text-xs font-medium text-gray-700">
@@ -2806,25 +2767,58 @@ export default function StandardTemplateView({
                       </div>
                     </div>
 
-                    {/* Selection Strategy */}
+                    {/* Exercise #2 Constraints */}
                     <div>
                       <h5 className="mb-2 text-xs font-medium text-gray-700">
-                        Selection Priority
+                        Exercise #2 Constraints
                       </h5>
-                      <div className="space-y-1 text-xs text-gray-600">
-                        <p>1. Take top 2 per movement pattern</p>
-                        <p>2. Ensure 3-5 per function type</p>
-                        <p>3. Verify muscle diversity</p>
-                        <p className="mt-2 font-medium text-gray-900">
-                          Target:{" "}
-                          {Math.floor(
-                            (sharedSubTab === "coreFinisher"
-                              ? categorizedSharedExercises.coreAndFinisher
-                                  .length
-                              : categorizedSharedExercises.other.length) * 0.4,
-                          )}{" "}
-                          exercises (40%)
-                        </p>
+                      <div className="space-y-2">
+                        {groupContext.clients.map((client) => {
+                          // Get Exercise #1 from pre-assigned
+                          const clientPool = blueprint.clientExercisePools[client.user_id];
+                          const exercise1 = clientPool?.preAssigned.find(p => p.source === "favorite" || p.source === "Favorite");
+                          const isTargeted = client.workoutType?.includes("targeted");
+                          
+                          return (
+                            <details key={client.user_id} className="group">
+                              <summary className="cursor-pointer text-xs text-gray-700 hover:text-gray-900">
+                                <span className="font-medium">{client.name.split(" ")[0]}</span>
+                                <span className="ml-1 text-gray-500">
+                                  ({isTargeted ? "Targeted" : "Full Body"})
+                                </span>
+                              </summary>
+                              <div className="mt-1 ml-4 space-y-1 text-xs">
+                                <div className="text-gray-600">
+                                  <span className="font-medium">Type:</span> {isTargeted ? "Targeted" : "Full Body"}
+                                </div>
+                                {exercise1 && (
+                                  <div className="text-gray-600">
+                                    <span className="font-medium">Ex #1:</span> {exercise1.exercise.name}
+                                    {exercise1.exercise.primaryMuscle && (
+                                      <span className="text-gray-500"> ({formatMuscleName(exercise1.exercise.primaryMuscle)})</span>
+                                    )}
+                                  </div>
+                                )}
+                                <div className="text-gray-600">
+                                  <span className="font-medium">Constraint:</span>{" "}
+                                  {isTargeted ? (
+                                    <span className="text-green-700">
+                                      Must be: {client.muscle_target?.map(m => {
+                                        const consolidated = mapMuscleToConsolidated(m);
+                                        return formatMuscleName(consolidated);
+                                      }).join(" or ") || "N/A"}
+                                    </span>
+                                  ) : (
+                                    <span className="text-red-700">
+                                      Cannot be: {exercise1?.exercise.primaryMuscle ? 
+                                        formatMuscleName(mapMuscleToConsolidated(exercise1.exercise.primaryMuscle)) : "N/A"}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </details>
+                          );
+                        })}
                       </div>
                     </div>
                   </div>

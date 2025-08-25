@@ -80,18 +80,20 @@ export const WORKOUT_TYPE_STRATEGIES: Record<WorkoutType, WorkoutTypeStrategy> =
       constraints: BUCKET_CONFIGS[WorkoutType.TARGETED_WITH_FINISHER],
       preAssignmentRules: [
         { type: "include", count: 10, priority: 1 },
+        // Priority 2: Add 1 favorite (same as Full Body Ex #1)
+        { type: "favorite", count: 1, priority: 2 },
         // Pre-assign exercises targeting user's muscle focus
         {
           type: "muscle_target",
-          count: 2,
-          priority: 2,
+          count: 1,
+          priority: 3,
           filter: (ex, client) => targetsMuscle(client)(ex),
         },
         // Ensure at least one capacity exercise
         {
           type: "function_tag",
           count: 1,
-          priority: 3,
+          priority: 4,
           filter: hasFunctionTag("capacity"),
         },
       ],
@@ -102,12 +104,50 @@ export const WORKOUT_TYPE_STRATEGIES: Record<WorkoutType, WorkoutTypeStrategy> =
       constraints: BUCKET_CONFIGS[WorkoutType.TARGETED_WITHOUT_FINISHER],
       preAssignmentRules: [
         { type: "include", count: 10, priority: 1 },
-        // Focus on muscle targets for targeted workout
+        // Priority 2: Add 1 favorite (same as Full Body Ex #1)
+        { type: "favorite", count: 1, priority: 2 },
+      ],
+      maxPreAssignments: 1,
+    },
+
+    [WorkoutType.FULL_BODY_WITHOUT_FINISHER_WITH_CORE]: {
+      constraints: BUCKET_CONFIGS[WorkoutType.FULL_BODY_WITHOUT_FINISHER_WITH_CORE],
+      preAssignmentRules: [
+        { type: "include", count: 10, priority: 1 },
+        { type: "favorite", count: 2, priority: 2 },
+      ],
+      maxPreAssignments: 2,
+    },
+
+    [WorkoutType.TARGETED_WITHOUT_FINISHER_WITH_CORE]: {
+      constraints: BUCKET_CONFIGS[WorkoutType.TARGETED_WITHOUT_FINISHER_WITH_CORE],
+      preAssignmentRules: [
+        { type: "include", count: 10, priority: 1 },
+        // Priority 2: Add 1 favorite (same as Full Body Ex #1)
+        { type: "favorite", count: 1, priority: 2 },
+      ],
+      maxPreAssignments: 1,
+    },
+
+    [WorkoutType.TARGETED_WITH_FINISHER_WITH_CORE]: {
+      constraints: BUCKET_CONFIGS[WorkoutType.TARGETED_WITH_FINISHER_WITH_CORE],
+      preAssignmentRules: [
+        { type: "include", count: 10, priority: 1 },
+        // Priority 2: Add 1 favorite (same as Full Body Ex #1)
+        { type: "favorite", count: 1, priority: 2 },
+        // Pre-assign exercises targeting user's muscle focus
         {
           type: "muscle_target",
-          count: 3,
-          priority: 2,
+          count: 1,
+          priority: 3,
           filter: (ex, client) => targetsMuscle(client)(ex),
+        },
+        // Ensure at least one capacity exercise
+        {
+          type: "function_tag",
+          count: 1,
+          priority: 4,
+          filter: hasFunctionTag("capacity"),
         },
       ],
       maxPreAssignments: 4,
