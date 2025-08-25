@@ -6,6 +6,8 @@ export * from "./types/scoredExercise";
 export * from "./types/groupContext";
 export * from "./types/groupBlueprint";
 export * from "./types/clientTypes";
+export * from "./types/phase2Types";
+export * from "./types/exerciseTiers";
 
 // API functions
 export * from "./api/filterExercisesFromInput";
