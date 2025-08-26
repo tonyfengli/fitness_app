@@ -138,11 +138,16 @@ export class PreAssignmentService {
   }
 
   /**
-   * Check if an exercise is a core exercise based on movement pattern
+   * Check if an exercise is a core exercise based on movement pattern AND primary muscle
    */
   private static isCoreExercise(exercise: ScoredExercise): boolean {
     const movementPattern = exercise.movementPattern?.toLowerCase() || "";
-    return movementPattern === "core";
+    const primaryMuscle = exercise.primaryMuscle?.toLowerCase() || "";
+    
+    const hasCoreMuscle = ["core", "obliques", "abductors", "adductors"].includes(primaryMuscle);
+    const hasCoreMovement = movementPattern === "core";
+    
+    return hasCoreMovement && hasCoreMuscle;
   }
 
   /**

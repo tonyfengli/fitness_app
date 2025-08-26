@@ -1237,14 +1237,19 @@ function Exercise3Content({
       coreGroupScore: Array.from(data.scores.values()).reduce((a, b) => a + b, 0) / data.scores.size
     }));
   
-  // Filter for core movement pattern
+  // Filter for core movement pattern AND core muscles
   const coreExercises = sharedByCoreClients.filter((ex) => {
     const movementPattern = ex.movementPattern?.toLowerCase() || "";
-    const isCore = movementPattern === "core";
+    const primaryMuscle = ex.primaryMuscle?.toLowerCase() || "";
+    
+    const hasCoreMuscle = ["core", "obliques", "abductors", "adductors"].includes(primaryMuscle);
+    const hasCoreMovement = movementPattern === "core";
+    
+    const isCore = hasCoreMovement && hasCoreMuscle;
     
     // Check if this is the selected Exercise #3
     if (selectedExercise3Ids.has(ex.id)) {
-      console.log(`[Exercise3] Selected exercise "${ex.name}" has movement pattern "${movementPattern}" - isCore: ${isCore}`);
+      console.log(`[Exercise3] Selected exercise "${ex.name}" - movement: "${movementPattern}", muscle: "${primaryMuscle}" - isCore: ${isCore}`);
     }
     
     return isCore;
@@ -1560,7 +1565,7 @@ export default function StandardTemplateView({
   };
 
   // State for shared exercise sub-tabs
-  const [sharedSubTab, setSharedSubTab] = useState<"coreFinisher" | "other" | "exercise3">(
+  const [sharedSubTab, setSharedSubTab] = useState<"other" | "exercise3">(
     "other",
   );
 
@@ -3012,7 +3017,7 @@ export default function StandardTemplateView({
                   be selected to increase group cohesion.
                 </p>
 
-                {/* Sub-tabs for Core & Finisher vs Other */}
+                {/* Sub-tabs for Other vs Exercise #3 */}
                 <div className="mb-6">
                   <div className="border-b border-gray-200">
                     <nav className="-mb-px flex space-x-8" aria-label="Tabs">
@@ -3026,17 +3031,6 @@ export default function StandardTemplateView({
                       >
                         Other Shared Exercises (
                         {categorizedSharedExercises.other.length})
-                      </button>
-                      <button
-                        onClick={() => setSharedSubTab("coreFinisher")}
-                        className={`${
-                          sharedSubTab === "coreFinisher"
-                            ? "border-indigo-500 text-indigo-600"
-                            : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700"
-                        } whitespace-nowrap border-b-2 px-1 py-2 text-sm font-medium`}
-                      >
-                        Core & Finisher (
-                        {categorizedSharedExercises.coreAndFinisher.length})
                       </button>
                       <button
                         onClick={() => setSharedSubTab("exercise3")}
@@ -3065,10 +3059,7 @@ export default function StandardTemplateView({
                     {/* Smart Bucketing Analysis for Shared Pool */}
                     <div className="mb-6 rounded-lg bg-gray-50 p-4">
                   <h4 className="mb-3 text-sm font-semibold text-gray-900">
-                    {sharedSubTab === "coreFinisher"
-                      ? "Core & Finisher"
-                      : "Other Exercises"}{" "}
-                    Analysis
+                    Other Exercises Analysis
                   </h4>
 
                   <div className="grid grid-cols-2 gap-4">
@@ -3079,10 +3070,7 @@ export default function StandardTemplateView({
                       </h5>
                       <div className="space-y-1">
                         {(() => {
-                          const currentExercises =
-                            sharedSubTab === "coreFinisher"
-                              ? categorizedSharedExercises.coreAndFinisher
-                              : categorizedSharedExercises.other;
+                          const currentExercises = categorizedSharedExercises.other;
                           const distribution = currentExercises.reduce(
                             (acc, ex) => {
                               const count = ex.clientsSharing.length;
@@ -3198,10 +3186,7 @@ export default function StandardTemplateView({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200 bg-white">
-                      {(sharedSubTab === "coreFinisher"
-                        ? categorizedSharedExercises.coreAndFinisher
-                        : categorizedSharedExercises.other
-                      ).map((exercise, idx) => {
+                      {categorizedSharedExercises.other.map((exercise, idx) => {
                         // Check if this exercise was selected as pre-assigned for any client
                         const isSelected = Object.values(
                           blueprint.clientExercisePools,
@@ -3209,10 +3194,7 @@ export default function StandardTemplateView({
                           pool.preAssigned.some(
                             (p) =>
                               p.exercise.id === exercise.id &&
-                              (sharedSubTab === "coreFinisher"
-                                ? p.source === "shared_core_finisher" ||
-                                  p.source === "finisher"
-                                : p.source === "shared_other"),
+                              p.source === "shared_other",
                           ),
                         );
 
