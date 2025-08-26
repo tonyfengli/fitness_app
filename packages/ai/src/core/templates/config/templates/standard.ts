@@ -18,7 +18,7 @@ export const standardTemplate: WorkoutTemplate = {
   metadata: {
     llmStrategy: "two-phase",
     totalExercisesPerClient: 8,
-    preAssignedCount: 0, // Changed from 2 to 0 temporarily
+    preAssignedCount: 2, // Re-enabled to support Exercise #1, #2, and #3 selection
     // workoutFlow: "strength-metabolic", // REMOVED - Phase 2 being replaced
     exerciseRoles: {
       strength: 4,

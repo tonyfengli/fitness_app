@@ -1132,6 +1132,329 @@ function Phase2LLMSection({
   );
 }
 
+// Exercise #3 Content Component
+function Exercise3Content({ 
+  groupContext, 
+  blueprint, 
+  clients,
+  formatMuscleName 
+}: {
+  groupContext: GroupContext;
+  blueprint: StandardGroupWorkoutBlueprint;
+  clients: ClientContext[];
+  formatMuscleName: (muscle: string) => string;
+}) {
+  // Check if any clients have WITH_CORE workout types
+  const coreClients = groupContext.clients.filter((client) => {
+    const workoutType = client.workoutType as WorkoutType;
+    return (
+      workoutType === WorkoutType.FULL_BODY_WITHOUT_FINISHER_WITH_CORE ||
+      workoutType === WorkoutType.TARGETED_WITHOUT_FINISHER_WITH_CORE ||
+      workoutType === WorkoutType.TARGETED_WITH_FINISHER_WITH_CORE
+    );
+  });
+
+  const nonCoreClients = groupContext.clients.filter(
+    (client) => !coreClients.includes(client)
+  );
+
+  if (coreClients.length === 0) {
+    return (
+      <div className="text-center py-8 text-gray-500">
+        <p>No clients have core-focused workout types.</p>
+        <p className="text-sm mt-2">
+          Core exercise selection (Exercise #3) is only available for:
+        </p>
+        <ul className="text-sm mt-2 space-y-1">
+          <li>• Full Body Without Finisher With Core</li>
+          <li>• Targeted Without Finisher With Core</li>
+          <li>• Targeted With Finisher With Core</li>
+        </ul>
+      </div>
+    );
+  }
+
+  // Process core exercises for clients with WITH_CORE workout types
+  const coreClientIds = coreClients.map(c => c.user_id);
+  
+  // Check which exercise was selected as Exercise #3
+  const selectedExercise3Ids = new Set<string>();
+  Object.entries(blueprint.clientExercisePools).forEach(([clientId, pool]) => {
+    const exercise3 = pool.preAssigned.find(
+      (p) => p.source === "shared_core"
+    );
+    if (exercise3) {
+      selectedExercise3Ids.add(exercise3.exercise.id);
+      console.log(`[Exercise3] Client ${clientId} has Exercise #3: ${exercise3.exercise.name} (${exercise3.exercise.id})`);
+    } else {
+      // Check if this client should have Exercise #3
+      if (coreClientIds.includes(clientId)) {
+        console.log(`[Exercise3] Client ${clientId} should have Exercise #3 but none found in preAssigned`);
+      }
+    }
+  });
+  console.log(`[Exercise3] Selected Exercise #3 IDs:`, Array.from(selectedExercise3Ids));
+  
+  // Get all exercises from WITH_CORE clients only
+  const coreClientExercises = new Map<string, {exercise: any, clients: Set<string>, scores: Map<string, number>}>();
+  
+  // Build a map of exercises available to WITH_CORE clients
+  coreClientIds.forEach(clientId => {
+    const clientPool = blueprint.clientExercisePools[clientId];
+    
+    // Check both availableCandidates AND availableExercises
+    const exercises = clientPool?.availableCandidates || clientPool?.availableExercises || [];
+    
+    // Also check if the selected Exercise #3 is in preAssigned but not in available lists
+    const exercise3 = clientPool?.preAssigned.find(p => p.source === "shared_core");
+    if (exercise3 && !exercises.find(ex => ex.id === exercise3.exercise.id)) {
+      console.log(`[Exercise3] Adding selected Exercise #3 "${exercise3.exercise.name}" to exercise map for client ${clientId}`);
+      exercises.push(exercise3.exercise);
+    }
+    
+    exercises.forEach(ex => {
+      if (!coreClientExercises.has(ex.id)) {
+        coreClientExercises.set(ex.id, {
+          exercise: ex,
+          clients: new Set(),
+          scores: new Map()
+        });
+      }
+      const data = coreClientExercises.get(ex.id)!;
+      data.clients.add(clientId);
+      data.scores.set(clientId, ex.score);
+    });
+    
+    console.log(`[Exercise3] Client ${clientId} has ${exercises.length} available exercises`);
+  });
+  
+  // Filter for exercises shared by ALL WITH_CORE clients
+  const sharedByCoreClients = Array.from(coreClientExercises.values())
+    .filter(data => data.clients.size === coreClientIds.length)
+    .map(data => ({
+      ...data.exercise,
+      clientsSharing: Array.from(data.clients),
+      coreGroupScore: Array.from(data.scores.values()).reduce((a, b) => a + b, 0) / data.scores.size
+    }));
+  
+  // Filter for core movement pattern
+  const coreExercises = sharedByCoreClients.filter((ex) => {
+    const movementPattern = ex.movementPattern?.toLowerCase() || "";
+    const isCore = movementPattern === "core";
+    
+    // Check if this is the selected Exercise #3
+    if (selectedExercise3Ids.has(ex.id)) {
+      console.log(`[Exercise3] Selected exercise "${ex.name}" has movement pattern "${movementPattern}" - isCore: ${isCore}`);
+    }
+    
+    return isCore;
+  });
+  
+  console.log(`[Exercise3] Found ${sharedByCoreClients.length} exercises shared by all WITH_CORE clients`);
+  console.log(`[Exercise3] Found ${coreExercises.length} core exercises after filtering by movement pattern`);
+  
+  // Log a few examples of shared exercises to see their movement patterns
+  sharedByCoreClients.slice(0, 5).forEach(ex => {
+    console.log(`[Exercise3] Example shared exercise: "${ex.name}" - movement: "${ex.movementPattern}"`);
+  });
+  
+  // Filter by score threshold (using core group score)
+  const eligibleCoreExercises = coreExercises.filter((ex) => {
+    return ex.coreGroupScore >= 5.0;
+  });
+  
+  // Add selected Exercise #3 if it's not already in the list
+  let exercisesToDisplay = [...eligibleCoreExercises];
+  
+  // Check if selected exercise is missing from our filtered list
+  selectedExercise3Ids.forEach(selectedId => {
+    if (!eligibleCoreExercises.find(ex => ex.id === selectedId)) {
+      // Find the selected exercise in the original shared list
+      const selectedExercise = Array.from(coreClientExercises.values()).find(
+        data => data.exercise.id === selectedId
+      );
+      if (selectedExercise) {
+        console.log(`[Exercise3] Adding selected exercise "${selectedExercise.exercise.name}" to display (movement: ${selectedExercise.exercise.movementPattern})`);
+        exercisesToDisplay.push({
+          ...selectedExercise.exercise,
+          coreGroupScore: Array.from(selectedExercise.scores.values()).reduce((a, b) => a + b, 0) / selectedExercise.scores.size,
+          clientsSharing: Array.from(selectedExercise.clients)
+        });
+      }
+    }
+  });
+  
+  // Sort by core group score and prepare for display
+  const sharedCoreExercises = exercisesToDisplay
+    .sort((a, b) => b.coreGroupScore - a.coreGroupScore)
+    .map(ex => {
+      return {
+        ...ex,
+        groupScore: ex.coreGroupScore,
+        clientScores: coreClientIds.map(clientId => {
+          const exerciseData = coreClientExercises.get(ex.id);
+          const score = exerciseData?.scores.get(clientId) || ex.score;
+          return {
+            clientId,
+            individualScore: score
+          };
+        })
+      };
+    });
+
+  return (
+    <div className="space-y-6">
+      <div className="mb-4 rounded-lg bg-blue-50 p-4">
+        <div className="flex items-start justify-between">
+          <div className="flex-1">
+            <h4 className="text-sm font-medium text-blue-900">
+              {coreClients.length} of {groupContext.clients.length} clients have core-focused workout types. Exercise #3 will be selected for these clients only.
+            </h4>
+            <div className="mt-2 grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <p className="font-medium text-blue-800">WITH_CORE clients:</p>
+                <ul className="text-blue-700 mt-1">
+                  {coreClients.map((client) => (
+                    <li key={client.user_id}>• {client.name}</li>
+                  ))}
+                </ul>
+              </div>
+              {nonCoreClients.length > 0 && (
+                <div>
+                  <p className="font-medium text-gray-600">Other clients:</p>
+                  <ul className="text-gray-500 mt-1">
+                    {nonCoreClients.map((client) => (
+                      <li key={client.user_id}>• {client.name} (no Exercise #3)</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+        <p className="text-sm text-blue-700 mt-2">Exercise #3 will be the highest-scoring core exercise shared by all WITH_CORE clients.</p>
+      </div>
+
+      {sharedCoreExercises.length === 0 ? (
+        <div className="text-center py-8 text-gray-500">
+          <p>No eligible shared core exercises found.</p>
+          <p className="text-sm mt-2">Requirements:</p>
+          <ul className="text-sm mt-2 space-y-1">
+            <li>• Must be available for ALL clients with WITH_CORE workout types</li>
+            <li>• Movement pattern must be core</li>
+            <li>• Group score must be ≥ 5.0</li>
+          </ul>
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                  #
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                  Exercise Name
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                  Movement Pattern
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                  Primary Muscle
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                  Secondary Muscles
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                  Group Score
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                  Individual Scores
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                  Shared By
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200 bg-white">
+              {sharedCoreExercises.map((exercise, idx) => {
+                const isSelected = selectedExercise3Ids.has(exercise.id);
+
+                return (
+                  <tr
+                    key={exercise.id}
+                    className={isSelected ? "bg-green-50" : ""}
+                  >
+                    <td className="px-4 py-2 text-sm text-gray-900">
+                      {idx + 1}
+                    </td>
+                    <td className="px-4 py-2 text-sm font-medium text-gray-900">
+                      {exercise.name}
+                      {isSelected && (
+                        <span className="ml-2 inline-flex items-center rounded bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800">
+                          Selected as Exercise #3
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-2 text-sm text-gray-600">
+                      {formatMuscleName(exercise.movementPattern || "")}
+                    </td>
+                    <td className="px-4 py-2 text-sm text-gray-600">
+                      {formatMuscleName(exercise.primaryMuscle || "")}
+                    </td>
+                    <td className="px-4 py-2 text-sm text-gray-600">
+                      {exercise.secondaryMuscles && exercise.secondaryMuscles.length > 0
+                        ? exercise.secondaryMuscles.map(formatMuscleName).join(", ")
+                        : "-"}
+                    </td>
+                    <td className="px-4 py-2 text-sm text-gray-900">
+                      {exercise.groupScore.toFixed(1)}
+                    </td>
+                    <td className="px-4 py-2 text-sm">
+                      <div className="flex flex-wrap gap-1">
+                        {exercise.clientScores.map((clientScore) => {
+                          const client = groupContext.clients.find(
+                            (c) => c.user_id === clientScore.clientId
+                          );
+                          return (
+                            <span
+                              key={clientScore.clientId}
+                              className="inline-flex items-center rounded bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700"
+                            >
+                              {client?.name.split(" ")[0]}: {clientScore.individualScore.toFixed(1)}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </td>
+                    <td className="px-4 py-2 text-sm">
+                      <div className="flex flex-wrap gap-1">
+                        {coreClientIds.map((clientId) => {
+                          const client = groupContext.clients.find(
+                            (c) => c.user_id === clientId
+                          );
+                          return (
+                            <span
+                              key={clientId}
+                              className="inline-flex items-center rounded bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800"
+                            >
+                              {client?.name || clientId}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function StandardTemplateView({
   groupContext,
   blueprint,
@@ -1237,7 +1560,7 @@ export default function StandardTemplateView({
   };
 
   // State for shared exercise sub-tabs
-  const [sharedSubTab, setSharedSubTab] = useState<"coreFinisher" | "other">(
+  const [sharedSubTab, setSharedSubTab] = useState<"coreFinisher" | "other" | "exercise3">(
     "other",
   );
 
@@ -2715,12 +3038,32 @@ export default function StandardTemplateView({
                         Core & Finisher (
                         {categorizedSharedExercises.coreAndFinisher.length})
                       </button>
+                      <button
+                        onClick={() => setSharedSubTab("exercise3")}
+                        className={`${
+                          sharedSubTab === "exercise3"
+                            ? "border-indigo-500 text-indigo-600"
+                            : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700"
+                        } whitespace-nowrap border-b-2 px-1 py-2 text-sm font-medium`}
+                      >
+                        Exercise #3 (Core)
+                      </button>
                     </nav>
                   </div>
                 </div>
 
-                {/* Smart Bucketing Analysis for Shared Pool */}
-                <div className="mb-6 rounded-lg bg-gray-50 p-4">
+                {/* Exercise #3 Content */}
+                {sharedSubTab === "exercise3" ? (
+                  <Exercise3Content 
+                    groupContext={groupContext}
+                    blueprint={blueprint}
+                    clients={groupContext.clients}
+                    formatMuscleName={formatMuscleName}
+                  />
+                ) : (
+                  <>
+                    {/* Smart Bucketing Analysis for Shared Pool */}
+                    <div className="mb-6 rounded-lg bg-gray-50 p-4">
                   <h4 className="mb-3 text-sm font-semibold text-gray-900">
                     {sharedSubTab === "coreFinisher"
                       ? "Core & Finisher"
@@ -2945,6 +3288,8 @@ export default function StandardTemplateView({
                     </tbody>
                   </table>
                 </div>
+                  </>
+                )}
               </div>
             )}
                 </div>

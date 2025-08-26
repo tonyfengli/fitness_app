@@ -16,6 +16,7 @@ export interface PreAssignedExercise {
     | "Include"
     | "favorite"
     | "shared_other"
+    | "shared_core"
     | "shared_core_finisher"
     | string; // Which round it came from
   tiedCount?: number; // Number of exercises tied at the same score (for favorites)
