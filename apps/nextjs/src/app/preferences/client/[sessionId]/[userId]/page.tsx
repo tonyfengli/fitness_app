@@ -798,7 +798,7 @@ export default function ClientPreferencePage() {
                           Yes
                         </button>
                         <button
-                          onClick={() => {
+                          onClick={async () => {
                             // Update workout type to NOT include core
                             const isTargeted = workoutPreferences?.workoutType?.includes("targeted");
                             const workoutType = isTargeted
@@ -813,6 +813,15 @@ export default function ClientPreferencePage() {
                               userId,
                               workoutType,
                             });
+                            
+                            // Add core and obliques as muscle limits if not already present
+                            const currentLimits = clientData?.user?.preferences?.muscleLessens || [];
+                            if (!currentLimits.includes("core")) {
+                              await handleAddMusclePreference("core", "limit");
+                            }
+                            if (!currentLimits.includes("obliques")) {
+                              await handleAddMusclePreference("obliques", "limit");
+                            }
                           }}
                           className={`flex-1 rounded-lg border-2 px-4 py-2 text-sm font-medium transition-all ${
                             !workoutPreferences?.workoutType?.includes("with_core")
@@ -853,8 +862,8 @@ export default function ClientPreferencePage() {
                 Select muscles you want to focus on during the workout
                 <span className="mt-1 block text-xs text-gray-500">
                   {workoutPreferences?.workoutType?.includes("targeted")
-                    ? "Targeted workouts: 2-4 muscles required"
-                    : "Full Body workouts: Maximum 2 muscles"}
+                    ? "Targeted workouts: 2-4 muscles required (minimum 2)"
+                    : "Full Body workouts: Maximum 2 muscles (optional)"}
                 </span>
               </p>
               <div className="space-y-3">
@@ -912,10 +921,31 @@ export default function ClientPreferencePage() {
                   Back
                 </button>
                 <button
-                  onClick={() => setCurrentStep(3)}
-                  className="rounded-lg bg-indigo-600 px-6 py-2 font-medium text-white transition-colors hover:bg-indigo-700"
+                  onClick={() => {
+                    const isTargeted = workoutPreferences?.workoutType?.includes("targeted");
+                    const muscleCount = displayData.muscleFocus.length;
+                    
+                    // Prevent skipping if targeted workout and less than 2 muscles
+                    if (isTargeted && muscleCount < 2) {
+                      return; // Do nothing if requirements not met
+                    }
+                    
+                    setCurrentStep(3);
+                  }}
+                  disabled={
+                    workoutPreferences?.workoutType?.includes("targeted") && 
+                    displayData.muscleFocus.length < 2
+                  }
+                  className={`rounded-lg px-6 py-2 font-medium transition-colors ${
+                    workoutPreferences?.workoutType?.includes("targeted") && 
+                    displayData.muscleFocus.length < 2
+                      ? "cursor-not-allowed bg-gray-300 text-gray-500"
+                      : "bg-indigo-600 text-white hover:bg-indigo-700"
+                  }`}
                 >
-                  {displayData.muscleFocus.length === 0 ? "Skip" : "Next"}
+                  {displayData.muscleFocus.length === 0 && !workoutPreferences?.workoutType?.includes("targeted") 
+                    ? "Skip" 
+                    : "Next"}
                 </button>
               </div>
             </div>
