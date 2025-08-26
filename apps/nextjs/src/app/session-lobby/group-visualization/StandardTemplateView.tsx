@@ -1528,6 +1528,27 @@ export default function StandardTemplateView({
       llmDebugDataStructure: llmDebugData
     });
 
+    // Log bucketing data for all clients
+    console.log("🪣 [Bucketing Debug] Blueprint overview:", {
+      clientCount: groupContext.clients.length,
+      clientWorkoutTypes: groupContext.clients.map(c => ({
+        name: c.name,
+        workoutType: c.workoutType,
+        clientId: c.user_id
+      })),
+      blueprintClientIds: Object.keys(blueprint?.clientExercisePools || {}),
+      bucketingStatus: Object.entries(blueprint?.clientExercisePools || {}).map(([clientId, pool]) => {
+        const client = groupContext.clients.find(c => c.user_id === clientId);
+        return {
+          clientName: client?.name || 'Unknown',
+          clientId,
+          workoutType: client?.workoutType,
+          hasBucketedSelection: !!pool.bucketedSelection,
+          bucketedCount: pool.bucketedSelection?.exercises?.length || 0
+        };
+      })
+    });
+
     if (blueprint?.clientExercisePools) {
       Object.entries(blueprint.clientExercisePools).forEach(
         ([clientId, pool]: [string, any]) => {
@@ -2480,6 +2501,28 @@ export default function StandardTemplateView({
                             )}
 
                             {/* Bucketed Selection */}
+                            {(() => {
+                              console.log(`[Bucketing Debug] Client ${client.name} (${client.workoutType}):`, {
+                                clientId: client.user_id,
+                                hasBucketedSelection: !!pool.bucketedSelection,
+                                bucketedExerciseCount: pool.bucketedSelection?.exercises?.length || 0,
+                                bucketAssignments: pool.bucketedSelection?.bucketAssignments || {},
+                                workoutType: client.workoutType,
+                                poolKeys: Object.keys(pool),
+                                pool: pool,
+                                preAssignedCount: pool.preAssigned?.length || 0,
+                                availableCandidatesCount: pool.availableCandidates?.length || 0,
+                                blueprintClientIds: Object.keys(blueprint.clientExercisePools),
+                              });
+                              // Log the first bucketed exercise if any
+                              if (pool.bucketedSelection?.exercises?.length > 0) {
+                                console.log('[Bucketing Debug] First bucketed exercise:', pool.bucketedSelection.exercises[0]);
+                                console.log('[Bucketing Debug] All bucket assignments:', pool.bucketedSelection.bucketAssignments);
+                              } else {
+                                console.log('[Bucketing Debug] NO BUCKETED SELECTION for', client.name);
+                              }
+                              return null;
+                            })()}
                             {pool.bucketedSelection && pool.bucketedSelection.exercises.length > 0 && (
                               <div>
                                 <h5 className="mb-2 text-xs font-medium text-gray-700">
@@ -2498,15 +2541,31 @@ export default function StandardTemplateView({
                                             {pool.preAssigned.length + idx + 1}. {exercise.name}
                                           </span>
                                           {assignment && (
-                                            <span
-                                              className={`inline-flex items-center rounded px-2 py-0.5 text-xs font-medium ${
-                                                assignment.bucketType === "movement_pattern"
-                                                  ? "bg-purple-100 text-purple-800"
-                                                  : "bg-indigo-100 text-indigo-800"
-                                              }`}
-                                            >
-                                              {assignment.constraint.replace(/_/g, " ")}
-                                            </span>
+                                            <div className="flex items-center gap-1">
+                                              <span
+                                                className={`inline-flex items-center rounded px-2 py-0.5 text-xs font-medium ${
+                                                  assignment.bucketType === "movement_pattern"
+                                                    ? "bg-purple-100 text-purple-800"
+                                                    : assignment.bucketType === "muscle_target"
+                                                    ? "bg-blue-100 text-blue-800"
+                                                    : assignment.bucketType === "movement_diversity"
+                                                    ? "bg-teal-100 text-teal-800"
+                                                    : "bg-indigo-100 text-indigo-800"
+                                                }`}
+                                              >
+                                                {assignment.constraint.replace(/_/g, " ")}
+                                              </span>
+                                              {assignment.selectionRound && (
+                                                <span className="inline-flex items-center rounded bg-gray-100 px-1.5 py-0.5 text-xs font-medium text-gray-600">
+                                                  R{assignment.selectionRound}
+                                                </span>
+                                              )}
+                                              {assignment.tiedCount && assignment.tiedCount > 1 && (
+                                                <span className="inline-flex items-center rounded bg-yellow-100 px-1.5 py-0.5 text-xs font-medium text-yellow-800">
+                                                  {assignment.tiedCount} tied
+                                                </span>
+                                              )}
+                                            </div>
                                           )}
                                         </div>
                                         <div className="mt-1 text-xs text-gray-600">
@@ -2819,20 +2878,24 @@ export default function StandardTemplateView({
                                           <div className="flex items-center gap-1">
                                             <span
                                               className={`inline-flex items-center rounded px-2 py-0.5 text-xs font-medium ${
-                                                assignment.bucketType ===
-                                                "movement_pattern"
+                                                assignment.bucketType === "movement_pattern"
                                                   ? "bg-purple-100 text-purple-800"
-                                                  : assignment.bucketType ===
-                                                      "functional"
-                                                    ? "bg-indigo-100 text-indigo-800"
-                                                    : "bg-gray-100 text-gray-800"
+                                                  : assignment.bucketType === "muscle_target"
+                                                  ? "bg-blue-100 text-blue-800"
+                                                  : assignment.bucketType === "movement_diversity"
+                                                  ? "bg-teal-100 text-teal-800"
+                                                  : assignment.bucketType === "functional"
+                                                  ? "bg-indigo-100 text-indigo-800"
+                                                  : "bg-gray-100 text-gray-800"
                                               }`}
                                             >
-                                              {assignment.constraint.replace(
-                                                /_/g,
-                                                " ",
-                                              )}
+                                              {assignment.constraint.replace(/_/g, " ")}
                                             </span>
+                                            {assignment.selectionRound && (
+                                              <span className="inline-flex items-center rounded bg-gray-100 px-1.5 py-0.5 text-xs font-medium text-gray-600">
+                                                R{assignment.selectionRound}
+                                              </span>
+                                            )}
                                             {assignment.tiedCount &&
                                               assignment.tiedCount > 1 && (
                                                 <span className="inline-flex items-center rounded bg-yellow-100 px-1.5 py-0.5 text-xs font-medium text-yellow-800">

@@ -21,6 +21,7 @@ import type {
 import { createLLM } from "../../config/llm";
 import { getLogger } from "../../utils/logger";
 import { applyFullBodyBucketing } from "../bucketing/fullBodyBucketing";
+import { applyTargetedBucketing } from "../bucketing/targetedBucketing";
 import { WorkoutType } from "../types/workoutTypes";
 import { LLMExerciseSelector } from "./LLMExerciseSelector";
 import { ExerciseSelectionPromptBuilder } from "./prompts/ExerciseSelectionPromptBuilder";
@@ -494,38 +495,80 @@ export class StandardWorkoutGenerator {
   ): Promise<Map<string, ReturnType<typeof applyFullBodyBucketing>>> {
     const results = new Map();
 
-    // Get workout type from first client for checking
-    const workoutType = groupContext.clients[0]?.workoutType as WorkoutType;
+    logger.log("[Bucketing Debug] Starting applyBucketingToAllClients", {
+      clientCount: groupContext.clients.length,
+      clientWorkoutTypes: groupContext.clients.map(c => ({
+        name: c.name,
+        workoutType: c.workoutType
+      }))
+    });
 
-    // Only apply bucketing for Full Body workout types
-    if (
-      workoutType !== WorkoutType.FULL_BODY_WITH_FINISHER &&
-      workoutType !== WorkoutType.FULL_BODY_WITHOUT_FINISHER
-    ) {
-      logger.log(
-        "[StandardWorkoutGenerator] Skipping bucketing for non-Full Body workout type",
-      );
-      return results;
-    }
+    logger.log("[Bucketing Debug] Processing individual clients");
 
     for (const [clientId, pool] of Object.entries(
       blueprint.clientExercisePools,
     )) {
       const client = groupContext.clients.find((c) => c.user_id === clientId);
-      if (!client) continue;
+      if (!client) {
+        logger.log(`[Bucketing Debug] Client ${clientId} not found in groupContext`);
+        continue;
+      }
 
       // Get favorite IDs for this client
       const clientFavoriteIds = this.favoritesByClient?.get(clientId) || [];
 
-      // Apply bucketing using client's specific workout type
-      const bucketingResult = applyFullBodyBucketing(
-        pool.availableCandidates,
-        pool.preAssigned,
-        client,
-        (client.workoutType as WorkoutType) ||
-          WorkoutType.FULL_BODY_WITH_FINISHER,
-        clientFavoriteIds,
-      );
+      // Apply appropriate bucketing based on THIS client's workout type
+      const clientWorkoutType = (client.workoutType as WorkoutType) ||
+        WorkoutType.FULL_BODY_WITH_FINISHER;
+      
+      // Check if THIS client's workout type is Full Body or Targeted
+      const isClientFullBody = [
+        WorkoutType.FULL_BODY_WITH_FINISHER,
+        WorkoutType.FULL_BODY_WITHOUT_FINISHER,
+        WorkoutType.FULL_BODY_WITHOUT_FINISHER_WITH_CORE
+      ].includes(clientWorkoutType);
+      
+      const isClientTargeted = [
+        WorkoutType.TARGETED_WITH_FINISHER,
+        WorkoutType.TARGETED_WITHOUT_FINISHER,
+        WorkoutType.TARGETED_WITHOUT_FINISHER_WITH_CORE,
+        WorkoutType.TARGETED_WITH_FINISHER_WITH_CORE
+      ].includes(clientWorkoutType);
+
+      if (!isClientFullBody && !isClientTargeted) {
+        logger.log(
+          `[Bucketing Debug] Skipping bucketing for client ${client.name} - unsupported workout type: ${clientWorkoutType}`
+        );
+        continue;
+      }
+
+      logger.log(`[Bucketing Debug] Applying bucketing for client ${client.name}`, {
+        workoutType: clientWorkoutType,
+        isFullBody: isClientFullBody,
+        isTargeted: isClientTargeted
+      });
+      
+      const bucketingResult = isClientFullBody
+        ? applyFullBodyBucketing(
+            pool.availableCandidates,
+            pool.preAssigned,
+            client,
+            clientWorkoutType,
+            clientFavoriteIds,
+          )
+        : applyTargetedBucketing(
+            pool.availableCandidates,
+            pool.preAssigned,
+            client,
+            clientWorkoutType,
+            clientFavoriteIds,
+          );
+
+      // Store the bucketing result in the pool for frontend visualization
+      pool.bucketedSelection = {
+        exercises: bucketingResult.exercises,
+        bucketAssignments: bucketingResult.bucketAssignments,
+      };
 
       results.set(clientId, bucketingResult);
     }

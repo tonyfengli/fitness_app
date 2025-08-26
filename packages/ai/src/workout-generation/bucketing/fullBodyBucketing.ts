@@ -63,10 +63,11 @@ export function applyFullBodyBucketing(
   workoutType: WorkoutType,
   favoriteIds: string[] = [],
 ): BucketingResult {
-  // Only process Full Body workout types
+  // Only process Full Body workout types (including WITH_CORE variants)
   if (
     workoutType !== WorkoutType.FULL_BODY_WITH_FINISHER &&
-    workoutType !== WorkoutType.FULL_BODY_WITHOUT_FINISHER
+    workoutType !== WorkoutType.FULL_BODY_WITHOUT_FINISHER &&
+    workoutType !== WorkoutType.FULL_BODY_WITHOUT_FINISHER_WITH_CORE
   ) {
     return {
       exercises: [],
