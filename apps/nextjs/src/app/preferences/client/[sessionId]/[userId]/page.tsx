@@ -863,7 +863,7 @@ export default function ClientPreferencePage() {
                 <span className="mt-1 block text-xs text-gray-500">
                   {workoutPreferences?.workoutType?.includes("targeted")
                     ? "Targeted workouts: 2-4 muscles required (minimum 2)"
-                    : "Full Body workouts: Maximum 2 muscles (optional)"}
+                    : "Full Body workouts: Maximum 3 muscles (optional)"}
                 </span>
               </p>
               <div className="space-y-3">
@@ -884,7 +884,7 @@ export default function ClientPreferencePage() {
                 {(() => {
                   const muscleCount = displayData.muscleFocus.length;
                   const isTargeted = workoutPreferences?.workoutType?.includes("targeted");
-                  const maxAllowed = isTargeted ? 4 : 2;
+                  const maxAllowed = isTargeted ? 4 : 3;
                   const canAddMore = muscleCount < maxAllowed;
 
                   return (

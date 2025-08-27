@@ -415,11 +415,11 @@ export const workoutPreferencesRouter = createTRPCRouter({
           const isFullBody = preference.workoutType?.startsWith("full_body");
           const isTargeted = preference.workoutType?.startsWith("targeted");
 
-          if (isFullBody && currentTargets.length >= 2) {
+          if (isFullBody && currentTargets.length >= 3) {
             throw new TRPCError({
               code: "BAD_REQUEST",
               message:
-                "Full body workouts can have a maximum of 2 muscle targets",
+                "Full body workouts can have a maximum of 3 muscle targets",
             });
           }
 

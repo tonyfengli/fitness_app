@@ -11,38 +11,9 @@ export class TargetedPromptStrategy implements PromptStrategy {
   constructor(private config: PromptStrategyConfig) {}
 
   buildConstraints(): string {
-    const withFinisher =
-      this.config.workoutType === WorkoutType.TARGETED_WITH_FINISHER ||
-      this.config.workoutType === WorkoutType.TARGETED_WITH_FINISHER_WITH_CORE;
-
-    return `### ✅ MUST Follow (Hard Constraints) - TARGETED WORKOUT
-
-1. **Movement Pattern Coverage**
-   - Ensure variety across different movement patterns
-   - ${withFinisher ? "Include at least one high-intensity finisher exercise" : "Focus on balanced strength movements"}
-   - Avoid selecting multiple exercises from the same movement pattern unless targeting specific muscles
-
-2. **🎯 Muscle Target Requirements (Final) - TARGETED WORKOUT FOCUS**
-   - You MUST include exercises for all muscle_targets provided by the client
-   - TARGETED WORKOUT: Focus heavily on the client's specified muscle targets
-   - If only one muscle is targeted, assign at least one exercise that trains that muscle as a primary mover, and a second exercise that targets it either as a primary or secondary mover
-   - If two or more muscles are targeted, assign at least one primary exercise for each target muscle
-   - ❗ MAXIMUM 2 exercises per primary muscle group across your entire selection to ensure balanced programming
-   - Consider compound movements that hit multiple targets efficiently
-   - If the client has no specific muscle targets, ensure exercises are distributed evenly across upper body, lower body, and core, without overloading any single region
-   - ❗ Do not include more than 1 compound lower-body movement (squat, deadlift, lunge variations) unless the client specifically targets lower body. Count pre-assigned exercises toward this limit
-
-3. **Avoid Muscle Lessens**
-   - DO NOT select exercises that significantly work "lessen" muscles
-   - Check both primary and secondary muscle groups
-
-4. **Joint Safety**
-   - Avoid exercises that stress joints marked as "avoid"
-   - Consider exercise modifications if needed
-
-5. **No Duplicates**
-   - Do not select exercises already in the pre-assigned list
-   - Each exercise can only appear once per client`;
+    // This method is not used in the new condensed prompt format
+    // Constraints are now integrated into the main prompt
+    return "";
   }
 
   buildWorkoutFlow(): string {

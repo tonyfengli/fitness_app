@@ -136,7 +136,7 @@ export class LLMExerciseSelector {
       new Date().toISOString(),
     );
 
-    // Combine bucketed + additional candidates to get 15 total
+    // Use all provided candidates (13 from bucketing)
     const allCandidates = [
       ...input.bucketedCandidates,
       ...input.additionalCandidates,

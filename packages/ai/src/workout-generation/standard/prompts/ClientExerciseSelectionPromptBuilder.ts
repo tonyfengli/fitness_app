@@ -16,7 +16,7 @@ export interface ClientPromptConfig {
   client: ClientContext;
   workoutType: WorkoutType;
   preAssigned: PreAssignedExercise[];
-  candidates: ScoredExercise[]; // The 15 bucketed candidates
+  candidates: ScoredExercise[]; // The 13 bucketed candidates
   sharedExercises: GroupScoredExercise[]; // Shared pool info
   otherClientsInfo: Array<{
     // Basic info about other clients for context
@@ -107,6 +107,19 @@ export class ClientExerciseSelectionPromptBuilder {
   build(): string {
     const exercisesToSelect = this.getExercisesToSelect();
 
+    // Check if this is a targeted workout
+    const isTargeted = [
+      WorkoutType.TARGETED_WITH_FINISHER,
+      WorkoutType.TARGETED_WITHOUT_FINISHER,
+      WorkoutType.TARGETED_WITHOUT_FINISHER_WITH_CORE,
+      WorkoutType.TARGETED_WITH_FINISHER_WITH_CORE,
+    ].includes(this.config.workoutType);
+
+    if (isTargeted) {
+      return this.buildTargetedPrompt(exercisesToSelect);
+    }
+
+    // Original full body prompt
     return `SYSTEM PROMPT — Phase 1 Exercise Selector (Condensed)
 You are selecting EXACTLY ${exercisesToSelect} exercises for a single client from a curated list. These will complement the client's pre-assigned exercises to complete today's workout.
 
@@ -126,28 +139,24 @@ Select exactly ${exercisesToSelect} new exercises (not pre-assigned).
 
 Names must match exactly (case-sensitive).
 
-${this.buildClientConstraints()}
+Full body workouts MUST include at least one upper-body exercise (push or pull) among selections.
 
-Movement & muscle balance: Complement pre-assigned patterns/muscles; avoid stacking duplicates unless required by targets.
+${this.buildClientConstraints()}
 
 ${this.buildMuscleTargetRules()}
 
-Max 2 exercises per primary muscle across the whole session (including pre-assigned).
+Max 3 exercises per primary muscle across the whole session (including pre-assigned).
 
-Lower-body compound limit: Do not exceed 1 compound lower-body movement (squat/deadlift/lunge family) across pre-assigned + selected unless the client explicitly targets lower body.
+Lower-body compound limit: Do not exceed 1 compound lower-body movement (squat/deadlift/lunge family) unless the client explicitly targets lower body.
 
-Prefer higher score among equally valid choices.
-
-Avoid unnecessary complexity; pick options appropriate for ${this.config.client.intensity} intensity.
+For non-target muscles, prefer compound over isolation; limit to one isolation unless required.
 
 Selection Priorities (apply in order)
-Satisfy muscle target requirements.
+For full body: Ensure upper/lower balance first, then satisfy muscle targets within that balance.
 
-Fill gaps from pre-assigned (patterns/muscles).
+Fill movement pattern gaps: prioritize missing patterns (push/pull/vertical).
 
-Maintain variety (push/pull, upper/lower, core vs non-core).
-
-Prefer higher score ties.
+Prefer higher scores when choices are equally valid.
 
 Output (JSON only)
 Return only this JSON. Keep reasoning short (≤ 20 words). No extra keys.
@@ -250,7 +259,31 @@ Stop after selecting the first valid high-scoring exercise combination that sati
     }
 
     const targets = this.config.client.muscle_target;
+    const isFullBody = this.config.workoutType.toLowerCase().includes("full_body");
 
+    if (isFullBody) {
+      // Count how many pre-assigned exercises already hit the target muscles
+      const targetsCoveredByPreAssigned = new Set<string>();
+      this.config.preAssigned.forEach(pa => {
+        const primaryMuscle = pa.exercise.primaryMuscle?.toLowerCase();
+        const secondaryMuscles = pa.exercise.secondaryMuscles?.map(m => m.toLowerCase()) || [];
+        
+        targets.forEach(target => {
+          if (primaryMuscle === target.toLowerCase() || 
+              secondaryMuscles.includes(target.toLowerCase())) {
+            targetsCoveredByPreAssigned.add(target.toLowerCase());
+          }
+        });
+      });
+
+      if (targetsCoveredByPreAssigned.size === targets.length) {
+        return `Muscle targets in full body: ${targets.join(", ")} already well-covered by pre-assigned. Prioritize other body regions.`;
+      } else {
+        return `Muscle targets in full body: ${targets.join(", ")} → ensure coverage but maintain full-body balance.`;
+      }
+    }
+
+    // Original targeted workout logic
     if (targets.length === 1) {
       return `Muscle targets: ${targets[0]} → pick one primary for that muscle + one that hits it primary or secondary.`;
     } else {
@@ -375,5 +408,119 @@ Return a JSON object with exactly ${exercisesToSelect} selected exercises:
   // Helper methods
   private formatWorkoutType(type: WorkoutType): string {
     return type.replace(/_/g, "_").toLowerCase();
+  }
+
+  private buildTargetedPrompt(exercisesToSelect: number): string {
+    const totalExercises = this.config.preAssigned.length + exercisesToSelect;
+
+    return `SYSTEM PROMPT — Targeted Exercise Selector (Final)
+You are selecting EXACTLY ${exercisesToSelect} exercises from a curated list to complete a client's targeted workout. These will complement the client's pre-assigned exercises to complete today's workout.
+
+Inputs (filled at runtime)
+Client: ${this.buildClientInfo()}
+
+Pre-assigned exercises: ${this.config.preAssigned.length} items (do not re-select)
+${this.buildPreAssignedList()}
+
+Movement patterns already covered: ${this.getPreAssignedMovementPatterns()}
+
+Available options: ${this.config.candidates.length} items
+${this.buildCandidatesList()}
+
+Must Include (at least 1 each): ${this.getMustIncludeMuscles()}
+
+Must Include muscles must be satisfied by exercises where that muscle is listed as the primary, not just secondary.
+
+Workout type: ${this.formatWorkoutType(this.config.workoutType)}
+
+Total exercises for this workout: ${totalExercises} (${this.config.preAssigned.length} pre-assigned + ${exercisesToSelect} to select)
+
+Rules
+Select exactly ${exercisesToSelect} new exercises (not pre-assigned).
+
+Must satisfy the "Must Include" muscle constraints.
+
+Prioritize movement pattern variety across the full session (avoid patterns listed above).
+
+Ensure at least one compound/foundational anchor is present — if already pre-assigned, build accessories around it.
+
+At least one selected exercise should be a complementary compound (e.g., hinge/squat) unless already well represented.
+
+If all pre-assigned exercises are isolations, include at least one compound or foundational pattern (press, row, squat, hinge, or lunge) among the selections to serve as an anchor.
+
+Avoid selecting more than one isolation exercise for the same target muscle unless no other valid options remain.
+
+Avoid selecting more than 2 isolations across the whole session unless required for target coverage.
+
+Avoid selecting more than one new exercise for the same must-include muscle unless they target clearly different planes or functions (e.g., horizontal vs vertical pull for back).
+
+When the total number of target muscles is fewer than 3, do not allocate all remaining slots to a single target once it is already covered; use at least one slot for complementary balance outside those targets.
+
+If multiple exercises target the same muscle, prefer different angles or patterns (e.g., vertical vs horizontal, isolation vs compound).
+
+Prefer compound > isolation when variety is needed.
+
+Prefer higher score if equally valid.
+
+Selections should feel like a cohesive, trainer-designed workout, not random or redundant.
+
+${this.buildClientConstraints()}
+
+Output (JSON only)
+Return only this JSON. Keep reasoning short (≤ 20 words). No extra keys.
+
+\`\`\`json
+{
+  "selectedExercises": [${this.buildTargetedExerciseTemplate(exercisesToSelect)}
+  ],
+  "summary": {
+    "totalSelected": ${exercisesToSelect},
+    "muscleTargetsCovered": ["<targets across pre-assigned + selected>"],
+    "movementPatterns": ["<patterns across pre-assigned + selected>"],
+    "overallReasoning": "≤25 words why this is a cohesive targeted workout."
+  }
+}
+\`\`\``;
+  }
+
+  private getPreAssignedMovementPatterns(): string {
+    const patterns = this.config.preAssigned
+      .map(pa => pa.exercise.movementPattern?.toLowerCase())
+      .filter(p => p)
+      .filter((p, i, arr) => arr.indexOf(p) === i); // unique only
+    
+    return patterns.length > 0 ? patterns.join(", ") : "none";
+  }
+
+  private getMustIncludeMuscles(): string {
+    if (!this.config.client.muscle_target || this.config.client.muscle_target.length === 0) {
+      return "none";
+    }
+
+    // Get muscles already covered by pre-assigned
+    const coveredMuscles = new Set(
+      this.config.preAssigned.map(pa => pa.exercise.primaryMuscle?.toLowerCase()).filter(m => m)
+    );
+
+    // Find uncovered target muscles
+    const uncoveredTargets = this.config.client.muscle_target
+      .filter(target => !coveredMuscles.has(target.toLowerCase()));
+
+    return uncoveredTargets.length > 0 ? uncoveredTargets.join(", ") : "all targets already covered";
+  }
+
+  private buildTargetedExerciseTemplate(count: number): string {
+    const templates = [];
+    for (let i = 0; i < count; i++) {
+      templates.push(`
+    {
+      "exerciseName": "<exact from list>",
+      "movementPattern": "<pattern>",
+      "primaryMuscle": "<muscle>",
+      "satisfiesConstraints": ["muscle_target", "movement_variety"],
+      "reasoning": "≤20 words why it satisfies target/variety/cohesion."
+    }`);
+    }
+    return templates.join(",");
   }
 }

@@ -595,31 +595,25 @@ export class StandardWorkoutGenerator {
       const bucketingResult = bucketingResults.get(clientId);
 
       if (bucketingResult) {
-        // Use bucketing results
+        // Use bucketing results - only the 13 bucketed exercises
         const bucketedCandidates = bucketingResult.exercises;
-
-        // Add 2 more high-scoring exercises to reach 15
-        const bucketedIds = new Set(bucketedCandidates.map((ex) => ex.id));
-        const additionalCandidates = pool.availableCandidates
-          .filter((ex) => !bucketedIds.has(ex.id))
-          .slice(0, 2);
 
         inputs.push({
           clientId,
           client,
           preAssigned: pool.preAssigned,
           bucketedCandidates,
-          additionalCandidates,
+          additionalCandidates: [], // No additional candidates
         });
       } else {
-        // Fallback: use top 15 from available candidates if no bucketing
-        const candidates = pool.availableCandidates.slice(0, 15);
+        // Fallback: use top 13 from available candidates if no bucketing
+        const candidates = pool.availableCandidates.slice(0, 13);
         inputs.push({
           clientId,
           client,
           preAssigned: pool.preAssigned,
-          bucketedCandidates: candidates.slice(0, 13),
-          additionalCandidates: candidates.slice(13, 15),
+          bucketedCandidates: candidates,
+          additionalCandidates: [], // No additional candidates
         });
       }
     }

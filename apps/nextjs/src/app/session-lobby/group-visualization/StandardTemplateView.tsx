@@ -1816,6 +1816,168 @@ export default function StandardTemplateView({
                     </div>
                   </div>
 
+                  {/* Muscle Distribution Calculator for Targeted Workouts */}
+                  {(() => {
+                    console.log(`[MuscleDistCalc] Client ${client.name}:`, {
+                      workoutType: client.workoutType,
+                      isTargeted: client.workoutType?.toLowerCase().includes("targeted"),
+                      muscleTargets: client.muscle_target
+                    });
+                    return null;
+                  })()}
+                  {client.workoutType?.toLowerCase().includes("targeted") && (
+                    <div className="mb-6 rounded-lg bg-purple-50 p-4">
+                      <h4 className="mb-3 text-sm font-semibold text-gray-900">
+                        💪 Muscle Distribution Calculator
+                      </h4>
+                      {(() => {
+                        // Calculate muscle distribution for this client
+                        const totalExercises = (() => {
+                          switch (client.intensity) {
+                            case "low": return 4;
+                            case "moderate": return 5;
+                            case "high": return 6;
+                            case "intense": return 7;
+                            default: return 5;
+                          }
+                        })();
+                        
+                        // Get pre-assigned muscles
+                        const preAssignedMuscles: string[] = [];
+                        pool.preAssigned.forEach((pa) => {
+                          const muscle = pa.exercise.primaryMuscle?.toLowerCase();
+                          if (muscle) {
+                            preAssignedMuscles.push(muscle);
+                          }
+                        });
+                        
+                        // Get target muscles
+                        const targetMuscles = client.muscle_target?.map(m => m.toLowerCase()) || [];
+                        
+                        // Simplified muscle distribution logic (matching the calculator)
+                        const remainingSlots = totalExercises - preAssignedMuscles.length;
+                        
+                        // Count current exercises per muscle
+                        const currentPerMuscle: Record<string, number> = {};
+                        targetMuscles.forEach(muscle => {
+                          currentPerMuscle[muscle] = 0;
+                        });
+                        preAssignedMuscles.forEach(muscle => {
+                          if (targetMuscles.includes(muscle)) {
+                            currentPerMuscle[muscle] = (currentPerMuscle[muscle] || 0) + 1;
+                          }
+                        });
+                        
+                        // Generate distribution options
+                        const uncoveredMuscles = targetMuscles.filter(m => currentPerMuscle[m] === 0);
+                        
+                        // Create a simple balanced distribution
+                        const distribution: Record<string, number> = {};
+                        let slotsLeft = remainingSlots;
+                        
+                        // For targeted workouts: only ensure each uncovered muscle gets 1
+                        uncoveredMuscles.forEach(muscle => {
+                          if (slotsLeft > 0) {
+                            distribution[muscle] = 1;
+                            slotsLeft--;
+                          }
+                        });
+                        
+                        // Remaining slots should be used for movement pattern variety
+                        // Rather than assigning specific muscles, provide guidance
+                        const movementPatternGuidance = slotsLeft;
+                        
+                        return (
+                          <div className="space-y-3 text-sm">
+                            <div className="grid grid-cols-2 gap-2 text-xs">
+                              <div>
+                                <span className="font-medium">Total Exercises:</span> {totalExercises}
+                              </div>
+                              <div>
+                                <span className="font-medium">Pre-assigned:</span> {preAssignedMuscles.length}
+                              </div>
+                              <div>
+                                <span className="font-medium">Target Muscles:</span> {targetMuscles.map(formatMuscleName).join(", ")}
+                              </div>
+                              <div>
+                                <span className="font-medium">Remaining Slots:</span> {remainingSlots}
+                              </div>
+                            </div>
+                            
+                            {/* Pre-assigned breakdown */}
+                            <div className="border-t pt-2">
+                              <div className="text-xs font-medium text-gray-700 mb-1">Pre-assigned Exercises:</div>
+                              {pool.preAssigned.map((pa, idx) => (
+                                <div key={idx} className="text-xs text-gray-600 ml-2">
+                                  • {pa.exercise.name} ({formatMuscleName(pa.exercise.primaryMuscle || "unknown")})
+                                  {pa.source === "favorite" && " - Favorite"}
+                                  {pa.source === "shared_other" && " - Shared"}
+                                  {pa.source === "shared_core" && " - Core"}
+                                </div>
+                              ))}
+                            </div>
+                            
+                            {/* Distribution to LLM */}
+                            <div className="border-t pt-2">
+                              <div className="text-xs font-medium text-gray-700 mb-1">LLM Requirements:</div>
+                              <div className="space-y-2">
+                                {/* Muscle requirements */}
+                                {uncoveredMuscles.length > 0 && (
+                                  <div className="bg-purple-100 rounded px-3 py-2">
+                                    <div className="text-xs font-medium mb-1">Must Include (at least 1 each):</div>
+                                    <div className="font-mono text-xs">
+                                      {uncoveredMuscles.map(muscle => formatMuscleName(muscle)).join(", ")}
+                                    </div>
+                                  </div>
+                                )}
+                                
+                                {/* Movement variety guidance */}
+                                {movementPatternGuidance > 0 && (
+                                  <div className="bg-blue-100 rounded px-3 py-2">
+                                    <div className="text-xs font-medium mb-1">Additional {movementPatternGuidance} exercise{movementPatternGuidance > 1 ? 's' : ''} for movement variety:</div>
+                                    <div className="text-xs text-gray-700">
+                                      • Prioritize different movement patterns<br/>
+                                      • Consider compound movements<br/>
+                                      • Avoid duplicating existing patterns
+                                    </div>
+                                  </div>
+                                )}
+                                
+                                {remainingSlots === 0 && (
+                                  <div className="text-xs text-gray-500 italic">No additional exercises needed</div>
+                                )}
+                              </div>
+                            </div>
+                            
+                            {/* Current muscle coverage */}
+                            <div className="border-t pt-2">
+                              <div className="text-xs font-medium text-gray-700 mb-1">Muscle Coverage Status:</div>
+                              <div className="space-y-1">
+                                {targetMuscles.map(muscle => {
+                                  const preCount = currentPerMuscle[muscle];
+                                  const needsCoverage = preCount === 0;
+                                  return (
+                                    <div key={muscle} className="flex items-center justify-between text-xs">
+                                      <span className="text-gray-600">{formatMuscleName(muscle)}:</span>
+                                      <span className={`font-medium ${needsCoverage ? 'text-orange-600' : 'text-green-600'}`}>
+                                        {preCount > 0 ? `✓ Covered (${preCount} pre-assigned)` : '⚠ Needs coverage'}
+                                      </span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                              {movementPatternGuidance > 0 && (
+                                <div className="mt-2 text-xs text-gray-600">
+                                  + {movementPatternGuidance} additional exercise{movementPatternGuidance > 1 ? 's' : ''} for movement variety
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
+
                   {/* LLM System Prompt & Output - Only show if we have LLM debug data for this client */}
                   {llmDebugData?.systemPromptsByClient?.[clientTab.id] && (
                     <div className="mb-6 rounded-lg bg-blue-50 p-4">

@@ -47,7 +47,7 @@ export const MuscleModal: React.FC<MuscleModalProps> = ({
   // Calculate constraints
   const isTargeted = workoutType?.includes('targeted');
   const minRequired = modalType === 'target' && isTargeted ? 2 : 0;
-  const maxAllowed = modalType === 'target' ? (isTargeted ? 4 : 2) : 999; // No limit for muscle limits
+  const maxAllowed = modalType === 'target' ? (isTargeted ? 4 : 3) : 999; // No limit for muscle limits
   
   // Calculate if we can select more
   const totalSelected = existingMuscles.length + selectedMuscles.length;
