@@ -70,7 +70,10 @@ export function calculateMuscleDistribution(
     // Can only cover some muscles, return single option
     const distribution: MuscleDistribution = {};
     for (let i = 0; i < remainingSlots && i < uncoveredMuscles.length; i++) {
-      distribution[uncoveredMuscles[i]] = 1;
+      const muscle = uncoveredMuscles[i];
+      if (muscle) {
+        distribution[muscle] = 1;
+      }
     }
     return { options: [distribution] };
   }
@@ -238,7 +241,9 @@ function areDistributionsEqual(
   }
   
   for (let i = 0; i < keys1.length; i++) {
-    if (keys1[i] !== keys2[i] || dist1[keys1[i]] !== dist2[keys2[i]]) {
+    const key1 = keys1[i];
+    const key2 = keys2[i];
+    if (key1 && key2 && (key1 !== key2 || dist1[key1] !== dist2[key2])) {
       return false;
     }
   }

@@ -30,8 +30,10 @@ export interface BucketedSelection {
   exercises: ScoredExercise[];
   bucketAssignments: {
     [exerciseId: string]: {
-      bucketType: "movement_pattern" | "functional" | "flex";
+      bucketType: "movement_pattern" | "functional" | "flex" | "muscle_target" | "movement_diversity";
       constraint: string;
+      tiedCount?: number;
+      selectionRound?: number;
     };
   };
 }

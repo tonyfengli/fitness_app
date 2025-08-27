@@ -31,8 +31,11 @@ export interface ClientContext {
   workoutType?:
     | "full_body_with_finisher"
     | "full_body_without_finisher"
+    | "full_body_without_finisher_with_core"
     | "targeted_with_finisher"
-    | "targeted_without_finisher"; // Client's specific workout type preference
+    | "targeted_without_finisher"
+    | "targeted_without_finisher_with_core"
+    | "targeted_with_finisher_with_core"; // Client's specific workout type preference
 }
 
 /**
