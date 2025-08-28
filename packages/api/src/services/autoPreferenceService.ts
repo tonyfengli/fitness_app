@@ -177,7 +177,6 @@ async function syncAvoidExercisesInBackground(
         .update(WorkoutPreferences)
         .set({
           avoidExercises: avoidExerciseNames,
-          updatedAt: new Date(),
         })
         .where(eq(WorkoutPreferences.id, preferenceId));
 
