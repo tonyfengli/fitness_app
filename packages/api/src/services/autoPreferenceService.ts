@@ -6,7 +6,13 @@
 import { getWorkoutTemplate } from "@acme/ai";
 import { and, eq } from "@acme/db";
 import { db } from "@acme/db/client";
-import { TrainingSession, user, WorkoutPreferences } from "@acme/db/schema";
+import { 
+  TrainingSession, 
+  user, 
+  WorkoutPreferences,
+  UserExerciseRatings,
+  exercises 
+} from "@acme/db/schema";
 
 import { createLogger } from "../utils/logger";
 
@@ -109,6 +115,17 @@ export async function createDefaultPreferencesIfNeeded(
       preferenceId: newPref?.id,
     });
 
+    // Sync avoid exercises in the background - don't await
+    if (newPref?.id) {
+      syncAvoidExercisesInBackground(userId, businessId, newPref.id)
+        .then(() => {
+          logger.info("Background sync completed", { userId, preferenceId: newPref.id });
+        })
+        .catch((error) => {
+          logger.error("Background sync failed", { error, userId, preferenceId: newPref.id });
+        });
+    }
+
     return true;
   } catch (error) {
     logger.error("Error creating default preferences", {
@@ -117,5 +134,73 @@ export async function createDefaultPreferencesIfNeeded(
       sessionId,
     });
     return false;
+  }
+}
+
+/**
+ * Sync user's avoid exercise ratings to workout preferences in the background
+ * This runs asynchronously to not block the check-in flow
+ */
+async function syncAvoidExercisesInBackground(
+  userId: string,
+  businessId: string,
+  preferenceId: string
+): Promise<void> {
+  try {
+    logger.info("Starting background sync of avoid exercises", {
+      userId,
+      businessId,
+      preferenceId,
+    });
+
+    // Get all avoid ratings for the user in this business
+    const avoidRatings = await db
+      .select({
+        exerciseId: UserExerciseRatings.exerciseId,
+        exerciseName: exercises.name,
+      })
+      .from(UserExerciseRatings)
+      .innerJoin(exercises, eq(UserExerciseRatings.exerciseId, exercises.id))
+      .where(
+        and(
+          eq(UserExerciseRatings.userId, userId),
+          eq(UserExerciseRatings.businessId, businessId),
+          eq(UserExerciseRatings.ratingType, "avoid")
+        )
+      );
+
+    const avoidExerciseNames = avoidRatings.map(r => r.exerciseName);
+
+    if (avoidExerciseNames.length > 0) {
+      // Update the preferences with avoid exercises
+      await db
+        .update(WorkoutPreferences)
+        .set({
+          avoidExercises: avoidExerciseNames,
+          updatedAt: new Date(),
+        })
+        .where(eq(WorkoutPreferences.id, preferenceId));
+
+      logger.info("Successfully synced avoid exercises to preferences", {
+        userId,
+        businessId,
+        preferenceId,
+        avoidCount: avoidExerciseNames.length,
+        exercises: avoidExerciseNames,
+      });
+    } else {
+      logger.info("No avoid exercises found for user", {
+        userId,
+        businessId,
+      });
+    }
+  } catch (error) {
+    // Log error but don't throw - this is a background operation
+    logger.error("Failed to sync avoid exercises in background", {
+      error,
+      userId,
+      businessId,
+      preferenceId,
+    });
   }
 }
