@@ -962,6 +962,98 @@ export const trainingSessionRouter = {
         throw error;
       }
 
+      // Send feedback form links to all checked-in clients
+      console.log("[completeSessionWithName] Sending feedback form links to clients");
+      
+      try {
+        // Get all checked-in clients with their phone numbers
+        const checkedInClients = await db
+          .select({
+            userId: UserTrainingSession.userId,
+            userName: userTable.name,
+            userPhone: userTable.phone,
+          })
+          .from(UserTrainingSession)
+          .innerJoin(userTable, eq(UserTrainingSession.userId, userTable.id))
+          .where(
+            and(
+              eq(UserTrainingSession.trainingSessionId, input.sessionId),
+              eq(UserTrainingSession.status, "checked_in")
+            )
+          );
+
+        console.log("[completeSessionWithName] Found checked-in clients:", checkedInClients.length);
+
+        // Import required services
+        const { twilioClient } = await import("../services/twilio");
+        const { messages } = await import("@acme/db/schema");
+
+        // Send messages to all checked-in clients
+        const sendPromises = checkedInClients.map(async (client) => {
+          try {
+            // Generate feedback link - use SMS_BASE_URL for mobile access
+            const baseUrl = process.env.SMS_BASE_URL || process.env.NEXTAUTH_URL || "http://localhost:3000";
+            const feedbackUrl = `${baseUrl}/feedback/client/${input.sessionId}/${client.userId}`;
+            
+            const messageBody = `Thanks for completing today's workout! Please rate the exercises to help us improve your future workouts: ${feedbackUrl}`;
+            
+            // Store message in database
+            await db.insert(messages).values({
+              userId: client.userId,
+              businessId: user.businessId,
+              direction: "outbound",
+              channel: "sms",
+              content: messageBody,
+              phoneNumber: client.userPhone,
+              metadata: {
+                sessionId: input.sessionId,
+                feedbackUrl,
+                sentAt: new Date().toISOString(),
+                sentBy: user.id,
+                messageType: "post_workout_feedback",
+              },
+              status: "sent",
+            });
+
+            // Send via Twilio if phone number exists
+            if (client.userPhone && twilioClient) {
+              await twilioClient.messages.create({
+                body: messageBody,
+                to: client.userPhone,
+                from: process.env.TWILIO_PHONE_NUMBER,
+              });
+              console.log(`[completeSessionWithName] Sent feedback SMS to ${client.userName} (${client.userPhone})`);
+            } else {
+              console.log(`[completeSessionWithName] Created in-app message for ${client.userName} (no phone)`);
+            }
+
+            return {
+              success: true,
+              userId: client.userId,
+              userName: client.userName,
+              phone: client.userPhone,
+            };
+          } catch (error) {
+            console.error(`[completeSessionWithName] Failed to send to ${client.userName}:`, error);
+            return {
+              success: false,
+              userId: client.userId,
+              error: error instanceof Error ? error.message : "Unknown error",
+            };
+          }
+        });
+
+        const results = await Promise.allSettled(sendPromises);
+        const successCount = results.filter(
+          (r) => r.status === "fulfilled" && r.value.success
+        ).length;
+
+        console.log(`[completeSessionWithName] Sent feedback links to ${successCount} out of ${checkedInClients.length} clients`);
+      } catch (error) {
+        // Log error but don't fail the completion
+        console.error("[completeSessionWithName] Error sending feedback links:", error);
+      }
+
       const returnValue = { success: true, sessionId: input.sessionId };
       console.log("[completeSessionWithName] Returning:", returnValue);
       
