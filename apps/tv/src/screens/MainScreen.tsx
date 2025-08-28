@@ -106,7 +106,7 @@ export function MainScreen() {
   // Template options matching the webapp
   const templates = [
     { id: 'standard', name: 'Strength', description: 'Client-pooled organization' },
-    { id: 'full_body_bmf', name: 'Deprecated', description: 'Block-based organization' },
+    { id: 'circuit', name: 'Circuit', description: 'Time-based circuit training' },
   ];
 
   // Delete session mutation

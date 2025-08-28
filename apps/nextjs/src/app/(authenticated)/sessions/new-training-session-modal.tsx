@@ -24,13 +24,13 @@ const STEPS = [
   { number: 2, label: "Session Details" },
 ];
 
-// Template options - currently only BMF, but new templates coming soon
+// Template options for workout generation
 const WORKOUT_TEMPLATES = [
   {
-    value: "full_body_bmf",
-    label: "Full Body BMF",
+    value: "circuit",
+    label: "Circuit Training",
     description:
-      "Bold Movement Fitness full body workout with 4 sequential rounds",
+      "Time-based circuit workout with multiple rounds of exercises",
   },
   {
     value: "standard",
