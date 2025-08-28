@@ -119,7 +119,7 @@ export const TrainingSession = pgTable("training_session", (t) => ({
   durationMinutes: t.integer(),
   maxParticipants: t.integer(), // null = unlimited
   status: sessionStatusEnum("status").notNull().default("open"),
-  templateType: t.varchar({ length: 50 }).default("full_body_bmf"), // workout template type
+  templateType: t.varchar({ length: 50 }).default("full_body_bmf").$type<"full_body_bmf" | "standard" | "circuit">(), // workout template type
   templateConfig: t.jsonb(), // Stores group workout blueprint and other template configuration
   workoutOrganization: t.jsonb(), // Stores Phase 2 round organization from LLM
   createdAt: t.timestamp().defaultNow().notNull(),

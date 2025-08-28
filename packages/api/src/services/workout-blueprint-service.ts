@@ -255,7 +255,7 @@ export class WorkoutBlueprintService {
           | "low"
           | "moderate"
           | "high",
-        template: "full_body" as "standard" | "circuit" | "full_body", // Always use full_body for BMF
+        template: session.templateType as "full_body_bmf" | "standard" | "circuit", // Use actual session template type
         includeExercises: clientContext.exercise_requests?.include || [],
         avoidExercises: clientContext.exercise_requests?.avoid || [],
         muscleTarget: clientContext.muscle_target || [],
@@ -294,7 +294,7 @@ export class WorkoutBlueprintService {
       sessionId,
       businessId,
       templateType: (session.templateType ||
-        "full_body_bmf") as "full_body_bmf",
+        "full_body_bmf") as "full_body_bmf" | "standard" | "circuit",
       // Removed workoutType from group level - it's now in each ClientContext
     };
 

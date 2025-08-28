@@ -68,6 +68,7 @@ export async function filterExercisesFromInput(
       clientContext,
       includeScoring: true, // Always enable scoring for proper organization
       scoringCriteria,
+      templateType: clientContext?.templateType as 'full_body_bmf' | 'standard' | 'circuit' | undefined,
     });
     const filterEndTime = performance.now();
     // console.log(`⏱️ Filtering took: ${(filterEndTime - filterStartTime).toFixed(2)}ms`);

@@ -10,6 +10,7 @@ import {
 } from "../../utils/fetchExercises";
 import { scoreAndSortExercises } from "../scoring/scoreExercises";
 import { applyClientFilters } from "./applyClientFilters";
+import { mapTemplateTypeToExerciseFilter } from "../templates/constants";
 
 export interface DirectFilterOptions {
   exercises?: Exercise[]; // Optional: provide exercises directly
@@ -18,6 +19,7 @@ export interface DirectFilterOptions {
   includeScoring?: boolean; // Whether to apply scoring and sorting
   scoringCriteria?: ScoringCriteria; // Scoring criteria for Phase 2
   enhancedMode?: boolean; // Enable enhanced debug mode
+  templateType?: 'full_body_bmf' | 'standard' | 'circuit'; // Template type for filtering
   customFilterFunction?: (
     exercises: Exercise[],
     criteria: ClientContext,
@@ -44,6 +46,7 @@ export async function filterExercises(
     includeScoring = false,
     scoringCriteria,
     enhancedMode = false,
+    templateType,
     customFilterFunction,
   } = options;
 
@@ -62,6 +65,19 @@ export async function filterExercises(
   if (!exercises || exercises.length === 0) {
     // No exercises available to filter
     return [];
+  }
+
+  // Apply template-based filtering FIRST (if templateType provided)
+  if (templateType) {
+    const exerciseTemplateType = mapTemplateTypeToExerciseFilter(templateType);
+    exercises = exercises.filter(exercise => {
+      // If exercise has no templateType or empty array, exclude it
+      if (!exercise.templateType || exercise.templateType.length === 0) {
+        return false;
+      }
+      // Check if current template is in exercise's allowed templates
+      return exercise.templateType.includes(exerciseTemplateType);
+    });
   }
 
   // Use provided context or create default

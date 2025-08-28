@@ -99,6 +99,7 @@ export async function enhancedFilterExercisesFromInput(
       clientContext,
       exercises,
       enhancedMode: enableDebug,
+      templateType: clientContext?.templateType as 'full_body_bmf' | 'standard' | 'circuit' | undefined,
       customFilterFunction: filterCriteria
         ? (exercises, _) => {
             return applyAllFiltersEnhanced(

@@ -12,5 +12,6 @@ export interface Exercise {
   complexityLevel: string;
   equipment: string[] | null;
   strengthLevel: string;
+  templateType?: string[];
   createdAt: Date;
 }

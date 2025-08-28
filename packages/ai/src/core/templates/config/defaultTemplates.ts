@@ -12,6 +12,7 @@ import {
   standardStrengthTemplate,
   standardTemplate,
 } from "./templates/standard";
+import { circuitTemplate } from "./templates/circuit";
 
 // Removed non-BMF templates - only BMF template remains
 
@@ -92,6 +93,7 @@ export const WORKOUT_TEMPLATES: Record<string, WorkoutTemplate> = {
   full_body_bmf: FULL_BODY_BMF_TEMPLATE,
   standard: standardTemplate,
   standard_strength: standardStrengthTemplate,
+  circuit: circuitTemplate,
 };
 
 /**

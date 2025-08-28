@@ -25,7 +25,7 @@ export interface ClientContext {
   exercise_requests?: ExerciseRequests;
   avoid_joints?: string[]; // Array of joint names to avoid (for injuries/limitations)
   business_id?: string; // UUID of the business this client belongs to
-  templateType?: "standard" | "circuit" | "full_body"; // Workout template type
+  templateType?: "full_body_bmf" | "standard" | "circuit"; // Workout template type
   default_sets?: number; // Default number of sets for this client's workouts
   favoriteExerciseIds?: string[]; // Array of exercise IDs marked as favorites by the client
   workoutType?:

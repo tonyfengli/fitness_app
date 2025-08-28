@@ -42,7 +42,7 @@ export interface WorkoutGenerationInput {
   clientId: string;
   sessionGoal: "strength" | "stability";
   intensity: "low" | "moderate" | "high";
-  template: "standard" | "circuit" | "full_body";
+  template: "full_body_bmf" | "standard" | "circuit";
   includeExercises: string[];
   avoidExercises: string[];
   muscleTarget: string[];
@@ -300,7 +300,6 @@ export class ExerciseFilterService {
           includeExercises: input.includeExercises,
           avoidExercises: input.avoidExercises,
           sessionGoal: input.primaryGoal,
-          isFullBody: input.isFullBody,
         },
         results: {
           totalExercises: filteredExercises.length,
@@ -394,10 +393,9 @@ export class ExerciseFilterService {
       includeExercises: input.includeExercises,
       avoidExercises: input.avoidExercises,
       avoidJoints: input.avoidJoints,
-      isFullBody: input.template === "full_body",
       debug: input.debug,
-      template: input.template, // Pass template for backward compatibility
       favoriteExerciseIds: input.favoriteExerciseIds,
+      template: input.template,
     };
 
     // Use the main filter method - pass clientId as userId for workout generation

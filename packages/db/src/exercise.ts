@@ -208,6 +208,7 @@ export const exercises = pgTable("exercises", {
     ],
   }).array(),
   strengthLevel: strengthLevelEnum("strength_level").notNull(),
+  templateType: text("template_type").array().$type<string[]>(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
