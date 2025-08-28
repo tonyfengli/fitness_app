@@ -386,9 +386,11 @@ export const CreateWorkoutExerciseSchema = createInsertSchema(WorkoutExercise, {
 // Create rating type enum
 export const exerciseRatingTypeEnum = pgEnum("exercise_rating_type", [
   "favorite",
+  "avoid",
+  "maybe_later",
 ]);
 
-// User exercise ratings (simplified - just favorites for now)
+// User exercise ratings - tracks favorites, avoid, and maybe later preferences
 export const UserExerciseRatings = pgTable(
   "user_exercise_ratings",
   (t) => ({
@@ -405,9 +407,9 @@ export const UserExerciseRatings = pgTable(
       .uuid()
       .notNull()
       .references(() => Business.id, { onDelete: "cascade" }),
-    ratingType: exerciseRatingTypeEnum("rating_type")
-      .notNull()
-      .default("favorite"),
+    ratingType: exerciseRatingTypeEnum("rating_type").notNull(),
+    createdAt: t.timestamp().notNull().defaultNow(),
+    updatedAt: t.timestamp().notNull().defaultNow(),
   }),
   (table) => ({
     // Unique constraint: one rating per user per exercise per business
@@ -425,10 +427,12 @@ export const CreateUserExerciseRatingsSchema = createInsertSchema(
     userId: z.string(),
     exerciseId: z.string().uuid(),
     businessId: z.string().uuid(),
-    ratingType: z.enum(["favorite"]).default("favorite"),
+    ratingType: z.enum(["favorite", "avoid", "maybe_later"]),
   },
 ).omit({
   id: true,
+  createdAt: true,
+  updatedAt: true,
 });
 
 // Export all relations from the relations file

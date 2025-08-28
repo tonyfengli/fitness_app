@@ -1481,7 +1481,7 @@ export default function StandardTemplateView({
   const [isDeleting, setIsDeleting] = useState(false);
   
   // State for main phase tabs
-  const [mainPhaseTab, setMainPhaseTab] = useState<"phase1" | "phase2">("phase1");
+  const [mainPhaseTab, setMainPhaseTab] = useState<"phase1" | "phase2" | "feedback">("phase1");
   
   const trpc = useTRPC();
   
@@ -1727,6 +1727,16 @@ export default function StandardTemplateView({
                 }`}
               >
                 Phase 2
+              </button>
+              <button
+                onClick={() => setMainPhaseTab("feedback")}
+                className={`px-6 py-3 text-sm font-medium ${
+                  mainPhaseTab === "feedback"
+                    ? "border-b-2 border-indigo-500 text-indigo-600"
+                    : "text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                Feedback
               </button>
             </nav>
           </div>
@@ -3509,6 +3519,44 @@ export default function StandardTemplateView({
                 <div className="p-6">
                   <h3 className="text-lg font-medium text-gray-900 mb-4">Phase 2 - Preprocessed Data</h3>
                   <Phase2PreviewContent sessionId={groupContext.sessionId} />
+                </div>
+              </div>
+            )}
+
+            {/* Feedback Content */}
+            {mainPhaseTab === "feedback" && (
+              <div className="p-6">
+                <h3 className="text-lg font-medium text-gray-900 mb-6">Post-Workout Feedback</h3>
+                <div className="space-y-4">
+                  <p className="text-sm text-gray-600 mb-4">
+                    Collect feedback from each client about their workout experience
+                  </p>
+                  <div className="space-y-3">
+                    {groupContext.clients.map((client) => (
+                      <div 
+                        key={client.user_id} 
+                        className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                      >
+                        <div className="flex items-center gap-3">
+                          <img
+                            src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${client.user_id}`}
+                            alt={client.name}
+                            className="h-10 w-10 rounded-full"
+                          />
+                          <span className="font-medium text-gray-900">{client.name}</span>
+                        </div>
+                        <Link
+                          href={`/feedback/client/${groupContext.sessionId}/${client.user_id}`}
+                          className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-indigo-600 bg-white rounded-lg border border-indigo-200 hover:bg-indigo-50 hover:border-indigo-300 transition-colors"
+                        >
+                          Provide Feedback
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                          </svg>
+                        </Link>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
             )}

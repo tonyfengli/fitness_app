@@ -76,6 +76,7 @@ export function initAuth(options: {
       options.productionUrl,
       // Allow localhost for development
       "http://localhost:3000",
+      "http://localhost:3001",
     ],
   } satisfies BetterAuthOptions;
 

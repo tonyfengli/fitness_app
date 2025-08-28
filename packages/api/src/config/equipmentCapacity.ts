@@ -22,6 +22,7 @@ export interface EquipmentCapacityMap {
   box: number;
   trx: number;
   platform: number;
+  med_ball: number;
 }
 
 // Default capacity for businesses without specific configuration
@@ -41,6 +42,7 @@ const DEFAULT_CAPACITY: EquipmentCapacityMap = {
   box: 3,
   trx: 1,
   platform: 2,
+  med_ball: 2,
 };
 
 // Business-specific capacity configurations
@@ -62,6 +64,7 @@ const BUSINESS_CAPACITIES: Record<string, EquipmentCapacityMap> = {
     box: 3,
     trx: 1,
     platform: 2,
+    med_ball: 2,
   },
   
   // Tony Gym
@@ -81,6 +84,7 @@ const BUSINESS_CAPACITIES: Record<string, EquipmentCapacityMap> = {
     box: 3,
     trx: 1,
     platform: 2,
+    med_ball: 2,
   },
   
   // Add more businesses as needed

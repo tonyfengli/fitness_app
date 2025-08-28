@@ -503,4 +503,127 @@ export const exerciseRouter = {
 
       return { favorites };
     }),
+
+  // Get all user exercise ratings (favorites, avoid, maybe_later)
+  getUserRatings: protectedProcedure
+    .input(
+      z.object({
+        userId: z.string(),
+        ratingType: z.enum(["favorite", "avoid", "maybe_later"]).optional(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const sessionUser = ctx.session.user as SessionUser;
+      const exerciseService = new ExerciseService(ctx.db);
+      const businessId = exerciseService.verifyUserHasBusiness(sessionUser);
+
+      const conditions = [
+        eq(UserExerciseRatings.userId, input.userId),
+        eq(UserExerciseRatings.businessId, businessId),
+      ];
+
+      // Add rating type filter if provided
+      if (input.ratingType) {
+        conditions.push(eq(UserExerciseRatings.ratingType, input.ratingType));
+      }
+
+      const ratings = await ctx.db
+        .select({
+          id: UserExerciseRatings.id,
+          exerciseId: exercises.id,
+          exerciseName: exercises.name,
+          primaryMuscle: exercises.primaryMuscle,
+          secondaryMuscles: exercises.secondaryMuscles,
+          equipment: exercises.equipment,
+          movementPattern: exercises.movementPattern,
+          modality: exercises.modality,
+          ratingType: UserExerciseRatings.ratingType,
+          createdAt: UserExerciseRatings.createdAt,
+          updatedAt: UserExerciseRatings.updatedAt,
+        })
+        .from(UserExerciseRatings)
+        .innerJoin(exercises, eq(UserExerciseRatings.exerciseId, exercises.id))
+        .where(and(...conditions))
+        .orderBy(desc(UserExerciseRatings.updatedAt));
+
+      return { ratings };
+    }),
+
+  // Set or update exercise rating (favorite, avoid, maybe_later)
+  setRating: protectedProcedure
+    .input(
+      z.object({
+        userId: z.string(),
+        exerciseId: z.string().uuid(),
+        ratingType: z.enum(["favorite", "avoid", "maybe_later"]),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const sessionUser = ctx.session.user as SessionUser;
+      const exerciseService = new ExerciseService(ctx.db);
+      const businessId = exerciseService.verifyUserHasBusiness(sessionUser);
+
+      // Check if rating already exists
+      const existingRating = await ctx.db.query.UserExerciseRatings.findFirst({
+        where: and(
+          eq(UserExerciseRatings.userId, input.userId),
+          eq(UserExerciseRatings.exerciseId, input.exerciseId),
+          eq(UserExerciseRatings.businessId, businessId)
+        ),
+      });
+
+      if (existingRating) {
+        // Update existing rating
+        const [updated] = await ctx.db
+          .update(UserExerciseRatings)
+          .set({
+            ratingType: input.ratingType,
+            updatedAt: new Date(),
+          })
+          .where(eq(UserExerciseRatings.id, existingRating.id))
+          .returning();
+        
+        return { rating: updated, action: "updated" };
+      } else {
+        // Create new rating
+        const [created] = await ctx.db
+          .insert(UserExerciseRatings)
+          .values({
+            userId: input.userId,
+            exerciseId: input.exerciseId,
+            businessId,
+            ratingType: input.ratingType,
+          })
+          .returning();
+        
+        return { rating: created, action: "created" };
+      }
+    }),
+
+  // Remove exercise rating
+  removeRating: protectedProcedure
+    .input(
+      z.object({
+        userId: z.string(),
+        exerciseId: z.string().uuid(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const sessionUser = ctx.session.user as SessionUser;
+      const exerciseService = new ExerciseService(ctx.db);
+      const businessId = exerciseService.verifyUserHasBusiness(sessionUser);
+
+      const deleted = await ctx.db
+        .delete(UserExerciseRatings)
+        .where(
+          and(
+            eq(UserExerciseRatings.userId, input.userId),
+            eq(UserExerciseRatings.exerciseId, input.exerciseId),
+            eq(UserExerciseRatings.businessId, businessId)
+          )
+        )
+        .returning();
+
+      return { deleted: deleted.length > 0 };
+    }),
 } satisfies TRPCRouterRecord;

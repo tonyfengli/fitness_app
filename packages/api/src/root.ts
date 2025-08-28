@@ -1,6 +1,7 @@
 import { authRouter } from "./router/auth";
 import { businessRouter } from "./router/business";
 import { exerciseRouter } from "./router/exercise";
+import { postWorkoutFeedbackRouter } from "./router/post-workout-feedback";
 import { trainingSessionRouter } from "./router/training-session";
 import { workoutRouter } from "./router/workout";
 import { workoutPreferencesRouter } from "./router/workout-preferences";
@@ -12,6 +13,7 @@ export const appRouter = createTRPCRouter({
   auth: authRouter,
   business: businessRouter,
   exercise: exerciseRouter,
+  postWorkoutFeedback: postWorkoutFeedbackRouter,
   trainingSession: trainingSessionRouter,
   workout: workoutRouter,
   workoutPreferences: workoutPreferencesRouter,

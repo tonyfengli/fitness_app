@@ -114,13 +114,23 @@ export default function TrainerDashboardPage() {
     trpc.exercise.all.queryOptions({ limit: 1000 }),
   );
 
-  // Fetch user favorites
-  const { data: userFavorites } = useQuery({
-    ...trpc.exercise.getUserFavorites.queryOptions({
+  // Fetch user exercise ratings (favorites and avoid)
+  const { data: userRatingsData } = useQuery({
+    ...trpc.exercise.getUserRatings.queryOptions({
       userId: selectedClientId,
     }),
     enabled: !!selectedClientId,
   });
+
+  // Transform ratings data into favorites and avoidExercises
+  const userRatings = React.useMemo(() => {
+    if (!userRatingsData?.ratings) return null;
+    
+    const favorites = userRatingsData.ratings.filter(r => r.ratingType === 'favorite');
+    const avoidExercises = userRatingsData.ratings.filter(r => r.ratingType === 'avoid');
+    
+    return { favorites, avoidExercises };
+  }, [userRatingsData]);
 
   // Handlers
   const handleDeleteWorkout = async (workoutId: string) => {
@@ -433,7 +443,7 @@ export default function TrainerDashboardPage() {
                   className="flex items-center bg-purple-600 px-6 py-3 text-white hover:bg-purple-700"
                 >
                   <Icon name="star" size={20} className="mr-2" />
-                  <span className="font-semibold">See Favorites</span>
+                  <span className="font-semibold">Exercise Preferences</span>
                 </Button>
                 <Button
                   onClick={() => openModal("newWorkout")}
@@ -549,7 +559,8 @@ export default function TrainerDashboardPage() {
           isOpen={modals.favorites.isOpen}
           onClose={() => closeModal("favorites")}
           clientName={selectedClient.name}
-          favorites={userFavorites?.favorites}
+          favorites={userRatings?.favorites}
+          avoidExercises={userRatings?.avoidExercises}
         />
       )}
 
