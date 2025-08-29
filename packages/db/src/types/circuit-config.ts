@@ -11,6 +11,7 @@ export interface CircuitConfig {
     workDuration: number;        // Work duration in seconds (e.g., 45)
     restDuration: number;        // Rest duration between exercises in seconds (e.g., 15)
     restBetweenRounds: number;   // Rest duration between rounds in seconds (e.g., 60)
+    repeatRounds?: boolean;      // Whether to repeat the entire circuit (doubles the rounds)
   };
   // Metadata
   lastUpdated?: string;  // ISO date string
@@ -37,6 +38,7 @@ export const DEFAULT_CIRCUIT_CONFIG: CircuitConfig = {
     exercisesPerRound: 6,
     workDuration: 45,
     restDuration: 15,
-    restBetweenRounds: 60
+    restBetweenRounds: 60,
+    repeatRounds: false
   }
 };

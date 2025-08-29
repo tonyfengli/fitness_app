@@ -74,6 +74,7 @@ export default function CircuitConfigPage() {
   useEffect(() => {
     if (initialConfig) {
       setConfig(initialConfig);
+      setRepeatRounds(initialConfig.config.repeatRounds || false);
       setIsLoading(false);
     }
   }, [initialConfig]);
@@ -182,7 +183,10 @@ export default function CircuitConfigPage() {
                 rounds={config.config.rounds}
                 repeatRounds={repeatRounds}
                 onRoundsChange={(rounds) => updateConfig({ rounds })}
-                onRepeatToggle={setRepeatRounds}
+                onRepeatToggle={(value) => {
+                  setRepeatRounds(value);
+                  updateConfig({ repeatRounds: value });
+                }}
                 isSaving={isSaving}
               />
             )}
@@ -214,7 +218,6 @@ export default function CircuitConfigPage() {
               <ReviewStep
                 config={config}
                 repeatRounds={repeatRounds}
-                onReset={() => resetConfigMutation.mutate({ sessionId })}
               />
             )}
 

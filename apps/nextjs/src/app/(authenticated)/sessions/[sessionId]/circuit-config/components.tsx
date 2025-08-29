@@ -220,10 +220,9 @@ function TimingOption({
 interface ReviewStepProps {
   config: CircuitConfig;
   repeatRounds: boolean;
-  onReset: () => void;
 }
 
-export function ReviewStep({ config, repeatRounds, onReset }: ReviewStepProps) {
+export function ReviewStep({ config, repeatRounds }: ReviewStepProps) {
   const totalRounds = repeatRounds ? config.config.rounds * 2 : config.config.rounds;
   const totalExercises = totalRounds * config.config.exercisesPerRound;
   const totalWorkTime = totalExercises * config.config.workDuration;
@@ -273,16 +272,6 @@ export function ReviewStep({ config, repeatRounds, onReset }: ReviewStepProps) {
           <span className="text-muted-foreground">Total workout time</span>
           <span className="font-medium text-lg">{formatTime(totalTime)}</span>
         </div>
-      </div>
-
-      <div className="pt-4 border-t">
-        <Button
-          variant="outline"
-          onClick={onReset}
-          className="w-full"
-        >
-          Reset to Defaults
-        </Button>
       </div>
     </div>
   );

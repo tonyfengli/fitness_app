@@ -53,6 +53,7 @@ export const CircuitConfigSchema = z.object({
     workDuration: CircuitWorkDurationSchema,
     restDuration: CircuitRestDurationSchema,
     restBetweenRounds: CircuitRestBetweenRoundsSchema,
+    repeatRounds: z.boolean().optional().default(false),
   }),
   lastUpdated: z.string().optional(),
   updatedBy: z.string().optional(),
@@ -65,6 +66,7 @@ export const UpdateCircuitConfigSchema = z.object({
   workDuration: CircuitWorkDurationSchema.optional(),
   restDuration: CircuitRestDurationSchema.optional(),
   restBetweenRounds: CircuitRestBetweenRoundsSchema.optional(),
+  repeatRounds: z.boolean().optional(),
 });
 
 // Input schema for TRPC endpoints

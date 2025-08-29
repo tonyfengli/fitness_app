@@ -132,6 +132,17 @@ export function SessionLobbyScreen() {
     return initialState;
   });
 
+  // Query session data if not in prefetchedData
+  const { data: sessionData } = useQuery({
+    ...api.trainingSession.getById.queryOptions({ id: sessionId || '' }),
+    enabled: !!sessionId && !prefetchedData?.session,
+    staleTime: 30000, // Cache for 30 seconds
+  });
+
+  // Use prefetched session data if available, otherwise use queried data
+  const currentSession = prefetchedData?.session || sessionData;
+  const templateType = currentSession?.templateType;
+
   // Set up polling for checked-in clients (3 second interval)
   const queryOptions = sessionId 
     ? api.trainingSession.getCheckedInClients.queryOptions({ sessionId })
@@ -158,6 +169,7 @@ export function SessionLobbyScreen() {
       fetchError,
       polledClients,
       clientsCount: clients.length,
+      templateType,
       shouldShowLoading: (isLoading || !hasLoadedInitialData) && !isNewSession,
       timestamp: new Date().toISOString()
     });
@@ -275,8 +287,12 @@ export function SessionLobbyScreen() {
     ...api.trainingSession.sendSessionStartMessages.mutationOptions(),
     onSuccess: (data) => {
       console.log('[TV SessionLobby] SMS send result:', data);
-      // Navigate to preferences after successful SMS send
-      navigation.navigate('GlobalPreferences', { sessionId });
+      // Navigate based on template type
+      if (templateType === 'circuit') {
+        navigation.navigate('CircuitPreferences', { sessionId });
+      } else {
+        navigation.navigate('GlobalPreferences', { sessionId });
+      }
     },
     onError: (error: any) => {
       console.error('[TV SessionLobby] Failed to send start messages:', error);
@@ -288,7 +304,13 @@ export function SessionLobbyScreen() {
           { text: 'Cancel', style: 'cancel' },
           {
             text: 'Continue',
-            onPress: () => navigation.navigate('GlobalPreferences', { sessionId })
+            onPress: () => {
+              if (templateType === 'circuit') {
+                navigation.navigate('CircuitPreferences', { sessionId });
+              } else {
+                navigation.navigate('GlobalPreferences', { sessionId });
+              }
+            }
           }
         ]
       );
