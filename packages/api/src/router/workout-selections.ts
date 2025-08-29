@@ -399,6 +399,107 @@ export const workoutSelectionsRouter = {
       });
     }),
 
+  // Swap an exercise in a circuit workout (updates for all participants)
+  swapCircuitExercise: publicProcedure
+    .input(
+      z.object({
+        sessionId: z.string(),
+        roundName: z.string(), // e.g., "Round 1"
+        exerciseIndex: z.number(), // orderIndex of the exercise
+        originalExerciseId: z.string(),
+        newExerciseId: z.string(),
+        reason: z.string().optional(),
+        swappedBy: z.string(), // clientId of who initiated the swap
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      console.log("[swapCircuitExercise] Starting circuit swap with input:", input);
+
+      // Get the new exercise details
+      const newExercise = await ctx.db.query.exercises.findFirst({
+        where: eq(exercises.id, input.newExerciseId),
+      });
+
+      if (!newExercise) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "New exercise not found",
+        });
+      }
+
+      return await ctx.db.transaction(async (tx) => {
+        // 1. Find all workout exercises that match this round and position
+        const { Workout } = await import("@acme/db/schema");
+        
+        // Get all workouts for this session
+        const workouts = await tx
+          .select()
+          .from(Workout)
+          .where(
+            and(
+              eq(Workout.trainingSessionId, input.sessionId),
+              or(
+                eq(Workout.status, "draft"),
+                eq(Workout.status, "ready"),
+              ),
+            ),
+          );
+
+        if (workouts.length === 0) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "No workouts found for this session",
+          });
+        }
+
+        const workoutIds = workouts.map((w) => w.id);
+
+        // 2. Update all matching workout exercises across all clients
+        const updateResult = await tx
+          .update(WorkoutExercise)
+          .set({
+            exerciseId: input.newExerciseId,
+            selectionSource: "manual_swap",
+            // Keep isShared as true for circuit exercises
+            isShared: true,
+          })
+          .where(
+            and(
+              sql`${WorkoutExercise.workoutId} IN (${sql.join(
+                workoutIds.map((id) => sql`${id}`),
+                sql`, `,
+              )})`,
+              eq(WorkoutExercise.groupName, input.roundName),
+              eq(WorkoutExercise.orderIndex, input.exerciseIndex),
+              eq(WorkoutExercise.exerciseId, input.originalExerciseId),
+            ),
+          );
+
+        console.log("[swapCircuitExercise] Updated exercises across all workouts");
+
+        // 3. Log the swap for each affected client
+        // This ensures real-time updates trigger for everyone
+        for (const workout of workouts) {
+          await tx.insert(workoutExerciseSwaps).values({
+            trainingSessionId: input.sessionId,
+            clientId: workout.userId,
+            originalExerciseId: input.originalExerciseId,
+            newExerciseId: input.newExerciseId,
+            swapReason: input.reason || `Circuit swap by participant`,
+            swappedBy: input.swappedBy,
+          });
+        }
+
+        console.log("[swapCircuitExercise] Logged swaps for all participants:", workouts.length);
+
+        return { 
+          success: true, 
+          affectedClients: workouts.length,
+          newExerciseName: newExercise.name 
+        };
+      });
+    }),
+
   // Get available alternatives for swapping
   getSwapAlternatives: protectedProcedure
     .input(

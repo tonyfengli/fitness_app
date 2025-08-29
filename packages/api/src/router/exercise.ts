@@ -453,6 +453,7 @@ export const exerciseRouter = {
           equipment: exercises.equipment,
           movementPattern: exercises.movementPattern,
           modality: exercises.modality,
+          templateType: exercises.templateType,
         })
         .from(exercises)
         .innerJoin(

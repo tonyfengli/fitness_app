@@ -1,9 +1,18 @@
 "use client";
 
-import React, { Suspense, useEffect, useMemo, useState } from "react";
+import React, { Suspense, useEffect, useMemo, useState, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Card, Button, Loader2Icon as Loader2, useRealtimeExerciseSwaps } from "@acme/ui-shared";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { 
+  Card, 
+  Button, 
+  Loader2Icon as Loader2, 
+  useRealtimeExerciseSwaps,
+  SearchIcon,
+  SpinnerIcon,
+  XIcon,
+  filterExercisesBySearch,
+} from "@acme/ui-shared";
 import { supabase } from "~/lib/supabase";
 import { useTRPC } from "~/trpc/react";
 
@@ -17,6 +26,33 @@ interface RoundData {
   }>;
 }
 
+// Group exercises by muscle
+const groupByMuscle = (exercises: any[]) => {
+  const grouped = exercises.reduce((acc, exercise) => {
+    const muscle = exercise.primaryMuscle || "Other";
+    if (!acc[muscle]) acc[muscle] = [];
+    acc[muscle].push(exercise);
+    return acc;
+  }, {} as Record<string, any[]>);
+  
+  // Sort by muscle name
+  return Object.entries(grouped).sort(([a], [b]) => a.localeCompare(b));
+};
+
+// Badge colors for movement patterns
+const MOVEMENT_PATTERN_COLORS: Record<string, string> = {
+  horizontal_push: "bg-blue-100 text-blue-800",
+  horizontal_pull: "bg-green-100 text-green-800",
+  vertical_push: "bg-purple-100 text-purple-800",
+  vertical_pull: "bg-indigo-100 text-indigo-800",
+  squat: "bg-red-100 text-red-800",
+  hinge: "bg-orange-100 text-orange-800",
+  lunge: "bg-pink-100 text-pink-800",
+  core: "bg-yellow-100 text-yellow-800",
+  carry: "bg-teal-100 text-teal-800",
+  isolation: "bg-gray-100 text-gray-800",
+};
+
 function CircuitWorkoutOverviewContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -26,6 +62,71 @@ function CircuitWorkoutOverviewContent() {
   
   const [roundsData, setRoundsData] = useState<RoundData[]>([]);
   const [hasExercises, setHasExercises] = useState(false);
+  
+  // Modal state
+  const [showExerciseSelection, setShowExerciseSelection] = useState(false);
+  const [selectedExercise, setSelectedExercise] = useState<any>(null);
+  const [selectedRound, setSelectedRound] = useState<string>("");
+  const [selectedExerciseIndex, setSelectedExerciseIndex] = useState<number>(0);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedReplacement, setSelectedReplacement] = useState<string | null>(null);
+  const [expandedMuscles, setExpandedMuscles] = useState<Set<string>>(new Set());
+  const availableExercisesRef = useRef<any[]>([]);
+
+  // Set up the swap mutation for circuits
+  const swapExerciseMutation = useMutation({
+    ...trpc.workoutSelections.swapCircuitExercise.mutationOptions(),
+    onMutate: async ({ roundName, exerciseIndex, originalExerciseId, newExerciseId }) => {
+      // Cancel any outgoing refetches
+      await queryClient.cancelQueries({
+        queryKey: [["workoutSelections", "getSelections"]],
+      });
+
+      // Find the new exercise details
+      const newExercise = availableExercisesRef.current.find(
+        (ex) => ex.id === newExerciseId,
+      );
+      if (!newExercise) return;
+
+      // Optimistically update the local state
+      setRoundsData((prev) => 
+        prev.map((round) => {
+          if (round.roundName === roundName) {
+            return {
+              ...round,
+              exercises: round.exercises.map((ex, idx) => {
+                if (idx === exerciseIndex && ex.exerciseId === originalExerciseId) {
+                  return {
+                    ...ex,
+                    exerciseId: newExerciseId,
+                    exerciseName: newExercise.name,
+                  };
+                }
+                return ex;
+              }),
+            };
+          }
+          return round;
+        })
+      );
+    },
+    onSuccess: () => {
+      // Close modal
+      setShowExerciseSelection(false);
+      setSelectedExercise(null);
+      setSelectedReplacement(null);
+
+      // Invalidate queries to ensure fresh data
+      queryClient.invalidateQueries({
+        queryKey: [["workoutSelections", "getSelections"]],
+      });
+    },
+    onError: (error) => {
+      console.error("Failed to swap exercise:", error);
+      // Revert will happen automatically via query invalidation
+      alert("Failed to swap exercise. Please try again.");
+    },
+  });
 
   // Use real-time exercise swap updates
   useRealtimeExerciseSwaps({
@@ -60,6 +161,32 @@ function CircuitWorkoutOverviewContent() {
     enabled: !!sessionId,
     refetchInterval: !hasExercises ? 5000 : false, // Poll when no exercises
   });
+
+  // Get any user from the saved selections to use for fetching exercises
+  // Since circuit exercises are shared, we just need any valid userId from the session
+  const dummyUserId = useMemo(() => {
+    if (savedSelections && savedSelections.length > 0) {
+      // Get the first clientId we find
+      return savedSelections[0]?.clientId || "";
+    }
+    return "";
+  }, [savedSelections]);
+
+  // Fetch available exercises when modal is open
+  const { data: exercisesData, isLoading: isLoadingExercises } = useQuery({
+    ...trpc.exercise.getAvailablePublic.queryOptions({
+      sessionId: sessionId || "",
+      userId: dummyUserId || "",
+    }),
+    enabled: !!sessionId && !!dummyUserId && showExerciseSelection,
+  });
+
+  const availableExercises = exercisesData?.exercises || [];
+
+  // Keep ref updated with available exercises
+  useEffect(() => {
+    availableExercisesRef.current = availableExercises;
+  }, [availableExercises]);
 
   // Process selections into rounds
   useEffect(() => {
@@ -118,6 +245,63 @@ function CircuitWorkoutOverviewContent() {
       setHasExercises(true);
     }
   }, [savedSelections, circuitConfig]);
+
+  // Filter exercises for the selection modal
+  const filteredExercises = useMemo(() => {
+    if (!showExerciseSelection || !selectedExercise) {
+      return [];
+    }
+
+    // Get already selected exercise IDs from all rounds
+    const selectedIds = new Set(
+      roundsData.flatMap(round => round.exercises.map(ex => ex.exerciseId))
+    );
+
+    // First filter by template type - only show exercises suitable for circuit
+    const templateFiltered = availableExercises.filter((exercise) => {
+      // If exercise has no templateType, include it (backwards compatibility)
+      if (!exercise.templateType || exercise.templateType.length === 0) {
+        return true;
+      }
+      // Check if exercise is tagged for circuit template
+      return exercise.templateType.includes('circuit');
+    });
+
+    // Then filter by search query
+    const searchFiltered = searchQuery.trim()
+      ? filterExercisesBySearch(templateFiltered, searchQuery)
+      : templateFiltered;
+
+    // Finally remove already selected exercises
+    return searchFiltered.filter((exercise) => !selectedIds.has(exercise.id));
+  }, [availableExercises, searchQuery, showExerciseSelection, selectedExercise, roundsData]);
+
+  // Group filtered exercises by muscle
+  const groupedExercises = useMemo(() => {
+    return groupByMuscle(filteredExercises);
+  }, [filteredExercises]);
+
+  // Toggle muscle group expansion
+  const toggleMuscleGroup = (muscle: string) => {
+    const newExpanded = new Set(expandedMuscles);
+    if (newExpanded.has(muscle)) {
+      newExpanded.delete(muscle);
+    } else {
+      newExpanded.add(muscle);
+    }
+    setExpandedMuscles(newExpanded);
+  };
+
+  // Reset states when modal closes
+  useEffect(() => {
+    if (!showExerciseSelection) {
+      setSelectedExercise(null);
+      setSelectedRound("");
+      setSelectedExerciseIndex(0);
+      setSelectedReplacement(null);
+      setSearchQuery("");
+    }
+  }, [showExerciseSelection]);
 
   if (isLoadingSelections) {
     return (
@@ -208,7 +392,12 @@ function CircuitWorkoutOverviewContent() {
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => console.log('Replace exercise:', exercise.exerciseName)}
+                          onClick={() => {
+                            setSelectedExercise(exercise);
+                            setSelectedRound(round.roundName);
+                            setSelectedExerciseIndex(exercise.orderIndex);
+                            setShowExerciseSelection(true);
+                          }}
                           className="h-8 px-3 font-medium"
                         >
                           Replace
@@ -257,6 +446,212 @@ function CircuitWorkoutOverviewContent() {
           </Card>
         )}
       </div>
+
+      {/* Exercise Selection Modal */}
+      {showExerciseSelection && (
+        <>
+          {/* Background overlay */}
+          <div
+            className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm"
+            onClick={() => {
+              setShowExerciseSelection(false);
+              setSelectedReplacement(null);
+            }}
+          />
+
+          {/* Modal */}
+          <div className="fixed inset-x-4 top-1/2 z-50 mx-auto flex h-[80vh] max-w-lg -translate-y-1/2 flex-col rounded-2xl bg-white shadow-2xl">
+            {/* Header */}
+            <div className="flex-shrink-0 border-b border-gray-200 px-6 py-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-bold text-gray-900">
+                    Change Exercise
+                  </h2>
+                  <p className="mt-1 text-sm text-gray-500">
+                    Replacing: {selectedExercise?.exerciseName}
+                  </p>
+                  <p className="text-xs text-amber-600 font-medium mt-1">
+                    This will update the exercise for all participants
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowExerciseSelection(false);
+                    setSelectedReplacement(null);
+                  }}
+                  className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
+                >
+                  <XIcon />
+                </button>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 overflow-y-auto">
+              {/* Search Bar */}
+              <div className="sticky top-0 z-10 border-b bg-gray-50 px-6 py-4">
+                <div className="relative">
+                  <SearchIcon className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Search exercises..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    disabled={isLoadingExercises}
+                    className="w-full rounded-lg border border-gray-300 bg-white py-2 pl-10 pr-4 text-gray-900 placeholder-gray-400 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-100 disabled:text-gray-500"
+                  />
+                </div>
+              </div>
+
+              <div className="p-6">
+                {/* Loading state */}
+                {isLoadingExercises && (
+                  <div className="py-8 text-center">
+                    <SpinnerIcon className="mx-auto mb-4 h-8 w-8 animate-spin text-indigo-600" />
+                    <p className="text-gray-500">Loading exercises...</p>
+                  </div>
+                )}
+
+                {/* No results message */}
+                {!isLoadingExercises &&
+                  searchQuery.trim() &&
+                  filteredExercises.length === 0 && (
+                    <div className="py-8 text-center">
+                      <p className="text-gray-500">
+                        No exercises found matching "{searchQuery}"
+                      </p>
+                    </div>
+                  )}
+
+                {/* All exercises grouped by muscle */}
+                {!isLoadingExercises && filteredExercises.length > 0 && (
+                  <div className="space-y-3">
+                    {groupedExercises.map(([muscle, exercises]) => (
+                      <div key={muscle} className="rounded-lg border border-gray-200 bg-white">
+                        {/* Muscle group header */}
+                        <button
+                          onClick={() => toggleMuscleGroup(muscle)}
+                          className="flex w-full items-center justify-between px-4 py-3 text-left transition-colors hover:bg-gray-50"
+                        >
+                          <span className="font-medium text-gray-900 capitalize">
+                            {muscle.toLowerCase().replace(/_/g, ' ')}
+                          </span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm text-gray-500">
+                              {exercises.length} exercise{exercises.length !== 1 ? 's' : ''}
+                            </span>
+                            <svg
+                              className={`h-5 w-5 text-gray-400 transition-transform ${
+                                expandedMuscles.has(muscle) ? 'rotate-180' : ''
+                              }`}
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M19 9l-7 7-7-7"
+                              />
+                            </svg>
+                          </div>
+                        </button>
+                        
+                        {/* Exercise list */}
+                        {expandedMuscles.has(muscle) && (
+                          <div className="border-t border-gray-100 px-4 py-2">
+                            <div className="space-y-2">
+                              {exercises.map((exercise: any) => (
+                                <button
+                                  key={exercise.id}
+                                  onClick={() => setSelectedReplacement(exercise.id)}
+                                  className={`flex w-full items-center justify-between rounded-md px-3 py-2.5 text-left transition-colors ${
+                                    selectedReplacement === exercise.id
+                                      ? 'bg-indigo-50 text-indigo-700'
+                                      : 'hover:bg-gray-50'
+                                  }`}
+                                >
+                                  <span className="font-medium text-black">
+                                    {exercise.name}
+                                  </span>
+                                  {exercise.movementPattern && (
+                                    <span className={`text-xs px-2 py-1 rounded-full ${
+                                      MOVEMENT_PATTERN_COLORS[exercise.movementPattern] || 'bg-gray-100 text-gray-800'
+                                    }`}>
+                                      {exercise.movementPattern.replace(/_/g, ' ')}
+                                    </span>
+                                  )}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Empty state when no exercises available */}
+                {!isLoadingExercises &&
+                  !searchQuery.trim() &&
+                  filteredExercises.length === 0 && (
+                    <div className="py-8 text-center">
+                      <p className="text-gray-500">No exercises available</p>
+                    </div>
+                  )}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="flex flex-shrink-0 justify-end gap-3 border-t bg-gray-50 px-6 py-4">
+              <button
+                onClick={() => {
+                  setShowExerciseSelection(false);
+                  setSelectedReplacement(null);
+                }}
+                className="px-4 py-2 text-gray-700 transition-colors hover:text-gray-900"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  if (!selectedReplacement || !selectedExercise) return;
+
+                  // Call the circuit swap mutation
+                  swapExerciseMutation.mutate({
+                    sessionId: sessionId!,
+                    roundName: selectedRound,
+                    exerciseIndex: selectedExerciseIndex,
+                    originalExerciseId: selectedExercise.exerciseId,
+                    newExerciseId: selectedReplacement,
+                    reason: "Circuit exercise swap",
+                    swappedBy: dummyUserId || "unknown",
+                  });
+                }}
+                disabled={
+                  !selectedReplacement || swapExerciseMutation.isPending
+                }
+                className={`flex items-center gap-2 rounded-lg px-4 py-2 transition-colors ${
+                  selectedReplacement && !swapExerciseMutation.isPending
+                    ? "bg-indigo-600 text-white hover:bg-indigo-700"
+                    : "cursor-not-allowed bg-gray-300 text-gray-500"
+                }`}
+              >
+                {swapExerciseMutation.isPending ? (
+                  <>
+                    <SpinnerIcon className="h-4 w-4 animate-spin text-white" />
+                    Updating...
+                  </>
+                ) : (
+                  "Confirm Change"
+                )}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

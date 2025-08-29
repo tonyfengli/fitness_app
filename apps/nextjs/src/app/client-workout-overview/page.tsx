@@ -549,13 +549,23 @@ function ClientWorkoutOverviewContent() {
     // Get already selected exercise IDs
     const selectedIds = new Set(clientExercises.map((ex) => ex.id));
 
-    // Filter available exercises based on search
-    const filtered = searchQuery.trim()
-      ? filterExercisesBySearch(availableExercises, searchQuery)
-      : availableExercises;
+    // First filter by template type - only show exercises suitable for standard template
+    const templateFiltered = availableExercises.filter((exercise) => {
+      // If exercise has no templateType, include it (backwards compatibility)
+      if (!exercise.templateType || exercise.templateType.length === 0) {
+        return true;
+      }
+      // Check if exercise is tagged for standard template
+      return exercise.templateType.includes('standard');
+    });
 
-    // Remove already selected exercises
-    return filtered.filter((exercise) => !selectedIds.has(exercise.id));
+    // Then filter by search query
+    const searchFiltered = searchQuery.trim()
+      ? filterExercisesBySearch(templateFiltered, searchQuery)
+      : templateFiltered;
+
+    // Finally remove already selected exercises
+    return searchFiltered.filter((exercise) => !selectedIds.has(exercise.id));
   }, [
     availableExercises,
     searchQuery,
