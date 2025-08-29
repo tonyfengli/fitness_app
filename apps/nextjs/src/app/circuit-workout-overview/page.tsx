@@ -73,57 +73,37 @@ function CircuitWorkoutOverviewContent() {
   const [expandedMuscles, setExpandedMuscles] = useState<Set<string>>(new Set());
   const availableExercisesRef = useRef<any[]>([]);
 
+  // Set up the reorder mutation for circuits
+  const reorderExerciseMutation = useMutation({
+    ...trpc.workoutSelections.reorderCircuitExercise.mutationOptions(),
+    onSuccess: () => {
+      // Invalidate queries to refresh data
+      queryClient.invalidateQueries({
+        queryKey: [["workoutSelections", "getSelections"]],
+      });
+    },
+    onError: (error) => {
+      console.error("Failed to reorder exercise:", error);
+      alert("Failed to reorder exercise. Please try again.");
+    },
+  });
+
   // Set up the swap mutation for circuits
   const swapExerciseMutation = useMutation({
     ...trpc.workoutSelections.swapCircuitExercise.mutationOptions(),
-    onMutate: async ({ roundName, exerciseIndex, originalExerciseId, newExerciseId }) => {
-      // Cancel any outgoing refetches
-      await queryClient.cancelQueries({
-        queryKey: [["workoutSelections", "getSelections"]],
-      });
-
-      // Find the new exercise details
-      const newExercise = availableExercisesRef.current.find(
-        (ex) => ex.id === newExerciseId,
-      );
-      if (!newExercise) return;
-
-      // Optimistically update the local state
-      setRoundsData((prev) => 
-        prev.map((round) => {
-          if (round.roundName === roundName) {
-            return {
-              ...round,
-              exercises: round.exercises.map((ex, idx) => {
-                if (idx === exerciseIndex && ex.exerciseId === originalExerciseId) {
-                  return {
-                    ...ex,
-                    exerciseId: newExerciseId,
-                    exerciseName: newExercise.name,
-                  };
-                }
-                return ex;
-              }),
-            };
-          }
-          return round;
-        })
-      );
-    },
     onSuccess: () => {
       // Close modal
       setShowExerciseSelection(false);
       setSelectedExercise(null);
       setSelectedReplacement(null);
 
-      // Invalidate queries to ensure fresh data
+      // Invalidate queries to refresh data
       queryClient.invalidateQueries({
         queryKey: [["workoutSelections", "getSelections"]],
       });
     },
     onError: (error) => {
       console.error("Failed to swap exercise:", error);
-      // Revert will happen automatically via query invalidation
       alert("Failed to swap exercise. Please try again.");
     },
   });
@@ -366,8 +346,15 @@ function CircuitWorkoutOverviewContent() {
                         <Button
                           size="sm"
                           variant="outline"
-                          disabled={idx === 0}
-                          onClick={() => console.log('Move up:', exercise.exerciseName)}
+                          disabled={idx === 0 || reorderExerciseMutation.isPending}
+                          onClick={() => {
+                            reorderExerciseMutation.mutate({
+                              sessionId: sessionId!,
+                              roundName: round.roundName,
+                              currentIndex: exercise.orderIndex,
+                              direction: "up",
+                            });
+                          }}
                           className="h-8 w-8 p-0 disabled:opacity-50"
                         >
                           <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2">
@@ -379,8 +366,15 @@ function CircuitWorkoutOverviewContent() {
                         <Button
                           size="sm"
                           variant="outline"
-                          disabled={idx === round.exercises.length - 1}
-                          onClick={() => console.log('Move down:', exercise.exerciseName)}
+                          disabled={idx === round.exercises.length - 1 || reorderExerciseMutation.isPending}
+                          onClick={() => {
+                            reorderExerciseMutation.mutate({
+                              sessionId: sessionId!,
+                              roundName: round.roundName,
+                              currentIndex: exercise.orderIndex,
+                              direction: "down",
+                            });
+                          }}
                           className="h-8 w-8 p-0 disabled:opacity-50"
                         >
                           <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2">

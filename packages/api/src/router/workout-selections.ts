@@ -500,6 +500,116 @@ export const workoutSelectionsRouter = {
       });
     }),
 
+  // Reorder exercises in a circuit workout (up/down movement)
+  reorderCircuitExercise: publicProcedure
+    .input(
+      z.object({
+        sessionId: z.string(),
+        roundName: z.string(), // e.g., "Round 1"
+        currentIndex: z.number(), // Current orderIndex
+        direction: z.enum(["up", "down"]), // Direction to move
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      console.log("[reorderCircuitExercise] Starting reorder with input:", input);
+
+      const { currentIndex, direction } = input;
+      // Calculate the target index
+      const targetIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
+      
+      console.log("[reorderCircuitExercise] Swapping indices:", {
+        currentIndex,
+        targetIndex,
+        direction
+      });
+
+      return await ctx.db.transaction(async (tx) => {
+        // 1. Get all workouts for this session
+        const { Workout } = await import("@acme/db/schema");
+        
+        const workouts = await tx
+          .select()
+          .from(Workout)
+          .where(
+            and(
+              eq(Workout.trainingSessionId, input.sessionId),
+              or(
+                eq(Workout.status, "draft"),
+                eq(Workout.status, "ready"),
+              ),
+            ),
+          );
+
+        if (workouts.length === 0) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "No workouts found for this session",
+          });
+        }
+
+        const workoutIds = workouts.map((w) => w.id);
+
+        // 2. First set the current exercise to a temporary index to avoid conflicts
+        const tempIndex = 999;
+        await tx
+          .update(WorkoutExercise)
+          .set({
+            orderIndex: tempIndex,
+          })
+          .where(
+            and(
+              sql`${WorkoutExercise.workoutId} IN (${sql.join(
+                workoutIds.map((id) => sql`${id}`),
+                sql`, `,
+              )})`,
+              eq(WorkoutExercise.groupName, input.roundName),
+              eq(WorkoutExercise.orderIndex, currentIndex),
+            ),
+          );
+
+        // 3. Move the target exercise to the current position
+        await tx
+          .update(WorkoutExercise)
+          .set({
+            orderIndex: currentIndex,
+          })
+          .where(
+            and(
+              sql`${WorkoutExercise.workoutId} IN (${sql.join(
+                workoutIds.map((id) => sql`${id}`),
+                sql`, `,
+              )})`,
+              eq(WorkoutExercise.groupName, input.roundName),
+              eq(WorkoutExercise.orderIndex, targetIndex),
+            ),
+          );
+
+        // 4. Move the original exercise to the target position
+        await tx
+          .update(WorkoutExercise)
+          .set({
+            orderIndex: targetIndex,
+          })
+          .where(
+            and(
+              sql`${WorkoutExercise.workoutId} IN (${sql.join(
+                workoutIds.map((id) => sql`${id}`),
+                sql`, `,
+              )})`,
+              eq(WorkoutExercise.groupName, input.roundName),
+              eq(WorkoutExercise.orderIndex, tempIndex),
+            ),
+          );
+
+        console.log("[reorderCircuitExercise] Reordered exercises successfully");
+
+        return { 
+          success: true, 
+          affectedClients: workouts.length,
+        };
+      });
+    }),
+
   // Get available alternatives for swapping
   getSwapAlternatives: protectedProcedure
     .input(
