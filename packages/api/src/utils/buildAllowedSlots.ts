@@ -314,7 +314,8 @@ export function buildAllowedSlots(
       return false; // Client has no slots available
     });
     
-    // Skip if we don't have at least 2 clients who can participate
+    // Skip if we don't have at least 2 clients who can participate (for shared exercises)
+    // This is just for shared exercise logic, not a minimum client requirement
     if (availableClients.length < 2) {
       console.log(`Skipping shared exercise ${sharedGroup.exerciseId} - only ${availableClients.length} clients have available slots`);
       // Don't process as shared, but these exercises will be available for singleton processing

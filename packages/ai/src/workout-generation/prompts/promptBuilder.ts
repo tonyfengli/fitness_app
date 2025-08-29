@@ -13,6 +13,7 @@ import {
   generateStructureConstraints,
 } from "./sections/dynamicStructure";
 import { generateBMFGroupPrompt } from "./sections/group/bmfPrompt";
+import { generateCircuitGroupPrompt } from "./sections/group/circuitPrompt";
 
 export class WorkoutPromptBuilder {
   protected config: PromptConfig;
@@ -108,6 +109,8 @@ export class WorkoutPromptBuilder {
     switch (templateType) {
       case "full_body_bmf":
         return generateBMFGroupPrompt(this.config.groupConfig);
+      case "circuit":
+        return generateCircuitGroupPrompt(this.config.groupConfig);
       default:
         throw new Error(`Unsupported group template type: ${templateType}`);
     }

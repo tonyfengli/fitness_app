@@ -42,6 +42,7 @@ export interface GroupWorkoutConfig {
   blueprint: GroupBlockBlueprint[];
   deterministicAssignments?: Record<string, DeterministicAssignment[]>;
   templateType?: string;
+  circuitConfig?: any; // Circuit configuration for circuit templates
 }
 
 export interface PromptConfig {

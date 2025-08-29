@@ -106,8 +106,8 @@ export class WorkoutGenerationService {
         ),
       );
 
-    if (checkedInClients.length < 2) {
-      throw new Error("Need at least 2 checked-in clients for group workout");
+    if (checkedInClients.length < 1) {
+      throw new Error("Need at least 1 checked-in client for workout generation");
     }
 
     // Get preferences for each client
@@ -371,6 +371,12 @@ export class WorkoutGenerationService {
       return this.generateBMFWorkouts(blueprint, groupContext, sessionId);
     }
 
+    // Circuit template with single-phase LLM
+    if (groupContext.templateType === "circuit") {
+      logger.info("Using Circuit workout generator (single-phase)");
+      return this.generateCircuitWorkouts(blueprint, groupContext, sessionId);
+    }
+
     // Other templates not yet implemented
     throw new Error(
       `Template ${groupContext.templateType} not yet implemented`,
@@ -461,6 +467,79 @@ export class WorkoutGenerationService {
       userMessage,
       llmOutput,
       // Removed exercisePool to avoid Date serialization issues
+    };
+  }
+
+  /**
+   * Circuit template workout generation with single-phase LLM
+   */
+  private async generateCircuitWorkouts(
+    blueprint: GroupWorkoutBlueprint,
+    groupContext: GroupContext,
+    sessionId: string,
+  ) {
+    // Get circuit config from the training session
+    const session = await this.ctx.db.query.TrainingSession.findFirst({
+      where: eq(TrainingSession.id, sessionId),
+    });
+
+    let circuitConfig = undefined;
+    if (
+      session?.templateType === "circuit" &&
+      session.templateConfig &&
+      typeof session.templateConfig === "object" &&
+      "type" in session.templateConfig &&
+      session.templateConfig.type === "circuit"
+    ) {
+      circuitConfig = session.templateConfig;
+    }
+
+    // Build prompt for LLM
+    const promptBuilder = new WorkoutPromptBuilder({
+      workoutType: "group",
+      groupConfig: {
+        clients: groupContext.clients,
+        blueprint: blueprint.blocks,
+        equipment: this.getDefaultEquipment(),
+        templateType: "circuit",
+        circuitConfig, // Pass circuit configuration
+      },
+    });
+
+    const systemPrompt = promptBuilder.build();
+    const userMessage = "Generate the circuit workout with exercise assignments for all stations.";
+
+    // Call LLM
+    const llm = createLLM({
+      modelName: "gpt-4",
+      temperature: 0.5,
+      maxTokens: 2000,
+    });
+    
+    const response = await llm.invoke([
+      new SystemMessage(systemPrompt),
+      new HumanMessage(userMessage),
+    ]);
+
+    const llmOutput = response.content.toString();
+
+    // Parse response
+    const jsonMatch = llmOutput.match(/```json\n([\s\S]*?)\n```/);
+    if (!jsonMatch?.[1]) {
+      throw new Error("Failed to parse LLM response for circuit");
+    }
+
+    const parsedResponse = JSON.parse(jsonMatch[1]);
+
+    return {
+      systemPrompt,
+      userMessage,
+      llmOutput,
+      llmAssignments: parsedResponse,
+      metadata: {
+        templateType: "circuit",
+        circuitConfig: circuitConfig || null,
+      },
     };
   }
 
@@ -849,14 +928,21 @@ export class WorkoutGenerationService {
     return await this.ctx.db.transaction(async (tx) => {
       // Skip storing blueprint summary - not needed
 
+      // Determine workout type based on template
+      const templateType = generationResult.metadata?.templateType || groupContext.templateType || "full_body_bmf";
+      const workoutType = templateType === "circuit" ? "circuit" : "full_body_bmf";
+      const workoutNotes = templateType === "circuit" 
+        ? `Circuit Training - ${new Date().toLocaleDateString()}`
+        : `BMF - ${new Date().toLocaleDateString()}`;
+
       // Create workout records for each client
       const workoutValues = groupContext.clients.map((client) => ({
         trainingSessionId: sessionId,
         userId: client.user_id,
         businessId: user.businessId,
         createdByTrainerId: user.id,
-        notes: `BMF - ${new Date().toLocaleDateString()}`,
-        workoutType: "full_body_bmf",
+        notes: workoutNotes,
+        workoutType: workoutType,
         totalPlannedSets: 99,
         llmOutput: {
           systemPrompt: generationResult.systemPrompt,
@@ -865,6 +951,7 @@ export class WorkoutGenerationService {
           parsedResponse: generationResult.llmAssignments,
           llmModel: "gpt-4o",
           timestamp: new Date().toISOString(),
+          metadata: generationResult.metadata,
         },
         context: "group" as const,
       }));
@@ -950,14 +1037,12 @@ export class WorkoutGenerationService {
       );
 
       // Step 3: Create workouts
-      // COMMENTED OUT FOR DEBUGGING - Skip saving to database
-      // const workoutIds = await this.createWorkouts(
-      //   sessionId,
-      //   generationResult,
-      //   groupContext,
-      //   exercisePool
-      // );
-      const workoutIds: string[] = [];
+      const workoutIds = await this.createWorkouts(
+        sessionId,
+        generationResult,
+        groupContext,
+        exercisePool
+      );
 
       logger.info("Workout generation completed", {
         sessionId,
@@ -1116,6 +1201,17 @@ export class WorkoutGenerationService {
       generationResult.roundOrganization
     ) {
       return this.createStandardExerciseRecords(
+        tx,
+        clientWorkouts,
+        generationResult,
+        groupContext,
+        exercisePool,
+      );
+    }
+
+    // Check if this is circuit template result
+    if (generationResult.metadata?.templateType === "circuit") {
+      return this.createCircuitExerciseRecords(
         tx,
         clientWorkouts,
         generationResult,
@@ -1581,6 +1677,66 @@ export class WorkoutGenerationService {
       "Phase 2 round organization has been removed and is being reimplemented. " +
       "Please use the new Phase 2 implementation once available."
     );
+  }
+
+  /**
+   * Create circuit exercise records
+   */
+  private async createCircuitExerciseRecords(
+    tx: any,
+    clientWorkouts: Map<string, string>,
+    generationResult: any,
+    groupContext: GroupContext,
+    exercisePool: Exercise[],
+  ) {
+    const allExercises = [];
+    const { llmAssignments } = generationResult;
+    
+    // Circuit workouts have rounds with exercises
+    const circuitRounds = llmAssignments.circuit?.rounds || [];
+    
+    // Create exercise records for each client
+    for (const client of groupContext.clients) {
+      const workoutId = clientWorkouts.get(client.user_id);
+      if (!workoutId) continue;
+      
+      let globalIndex = 1;
+      
+      // Process each round
+      circuitRounds.forEach((round: any) => {
+        const roundNumber = round.round;
+        
+        // Process each exercise in the round
+        round.exercises.forEach((circuitEx: any) => {
+          const exercise = exercisePool.find(
+            (ex: Exercise) => ex.name === circuitEx.name,
+          );
+          
+          if (exercise) {
+            allExercises.push({
+              workoutId: workoutId,
+              exerciseId: exercise.id,
+              orderIndex: globalIndex++,
+              setsCompleted: 0,
+              groupName: `Round ${roundNumber}`,
+              isShared: true, // All circuit exercises are shared
+              sharedWithClients: groupContext.clients
+                .filter(c => c.user_id !== client.user_id)
+                .map(c => c.user_id),
+              // Store additional circuit metadata
+              metadata: {
+                round: roundNumber,
+                position: circuitEx.position,
+                movementPattern: circuitEx.movementPattern,
+                transitionNote: circuitEx.transitionNote,
+              }
+            });
+          }
+        });
+      });
+    }
+    
+    return allExercises;
   }
 
   /**

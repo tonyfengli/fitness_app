@@ -3898,4 +3898,21 @@ Set your goals and preferences for today's session.`;
         workoutOrganization: workoutOrganization,
       };
     }),
+
+  getSession: publicProcedure
+    .input(z.object({ id: z.string().uuid() }))
+    .query(async ({ ctx, input }) => {
+      const session = await ctx.db.query.TrainingSession.findFirst({
+        where: eq(TrainingSession.id, input.id),
+      });
+
+      if (!session) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Session not found",
+        });
+      }
+
+      return session;
+    }),
 } satisfies TRPCRouterRecord;

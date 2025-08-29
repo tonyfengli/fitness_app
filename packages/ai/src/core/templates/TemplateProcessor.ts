@@ -548,10 +548,12 @@ export class TemplateProcessor {
         const favoriteIds = favoritesByClient?.get(clientId) || [];
 
         // Use original strategy-based pre-assignment with client's workout type
+        // Default to FULL_BODY_WITHOUT_FINISHER if workoutType is not specified
+        const workoutType = client.workoutType || WorkoutType.FULL_BODY_WITHOUT_FINISHER;
         const selectedExercises = processPreAssignments(
           exercises,
           client,
-          client.workoutType as WorkoutType,
+          workoutType as WorkoutType,
           includeIds,
           favoriteIds,
         );

@@ -4,31 +4,24 @@ export const circuitTemplate: WorkoutTemplate = {
   id: 'circuit',
   name: 'Circuit Training',
   description: 'Time-based circuit workout with configurable work/rest intervals',
-  useTwoPhaseGeneration: true, // Use standard two-phase generation flow
   
-  // Use two-phase LLM generation like standard template
+  // Use single-phase LLM generation like BMF
   metadata: {
-    llmStrategy: "two-phase" as const,
+    llmStrategy: "single-phase" as const,
   },
   
-  // Minimal configuration for circuit template
-  // Future implementation will add:
-  // - rounds configuration
-  // - work/rest intervals
-  // - exercise selection criteria
-  // - circuit-specific constraints
-  
-  // For now, use simple block structure
+  // Circuit blocks will be dynamically configured based on circuit config
+  // The actual round structure comes from the circuit configuration
   blocks: [
     {
-      id: 'Round1',
-      name: 'Round 1',
+      id: 'circuit_exercises',
+      name: 'Circuit Exercises',
       functionTags: [], // No specific function tags for circuits
-      maxExercises: 8, // Allow up to 8 exercises per round
-      candidateCount: 15, // Show more candidates for variety
-      selectionStrategy: "randomized" as const,
+      maxExercises: 100, // Allow all available exercises
+      candidateCount: 100, // Show all available exercises
+      selectionStrategy: "deterministic" as const,
     }
   ],
   
-  blockOrder: ['Round1']
+  blockOrder: ['circuit_exercises']
 };

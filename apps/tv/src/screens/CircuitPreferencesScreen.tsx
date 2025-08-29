@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, ActivityIndicator, Pressable } from 'react-native';
+import { View, Text, ActivityIndicator, Pressable, Alert } from 'react-native';
 import { useNavigation } from '../App';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../providers/TRPCProvider';
 import { useRealtimeCircuitConfig } from '../hooks/useRealtimeCircuitConfig';
+import { WorkoutGenerationLoader } from '../components/WorkoutGenerationLoader';
 import type { CircuitConfig } from '@acme/db';
 
 // Design tokens - matching other screens
@@ -79,10 +80,14 @@ function formatDuration(seconds: number): string {
 
 export function CircuitPreferencesScreen() {
   const navigation = useNavigation();
+  const queryClient = useQueryClient();
   const sessionId = navigation.getParam('sessionId');
   const [lastSuccessfulFetch, setLastSuccessfulFetch] = useState<Date | null>(null);
   const [connectionState, setConnectionState] = useState<'connecting' | 'connected' | 'error'>('connecting');
   const [realtimeConfig, setRealtimeConfig] = useState<CircuitConfig | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generationError, setGenerationError] = useState<string | null>(null);
+  const [shouldGenerateBlueprint, setShouldGenerateBlueprint] = useState(false);
 
   // Poll for circuit config every 10 seconds as fallback
   const { data: pollingData, isLoading, error: fetchError } = useQuery({
@@ -106,6 +111,45 @@ export function CircuitPreferencesScreen() {
 
   // Use realtime data if available, otherwise fall back to polling
   const circuitConfig = realtimeConfig || pollingData;
+
+  // Check for existing workout selections
+  const { data: existingSelections } = useQuery(
+    sessionId ? api.workoutSelections.getSelections.queryOptions({ sessionId }) : {
+      enabled: false,
+      queryKey: ['disabled-selections'],
+      queryFn: () => Promise.resolve([])
+    }
+  );
+
+  // Check session data for existing workout organization
+  const { data: sessionData } = useQuery(
+    sessionId ? api.trainingSession.getSession.queryOptions({ id: sessionId }) : {
+      enabled: false,
+      queryKey: ['disabled-session'],
+      queryFn: () => Promise.resolve(null)
+    }
+  );
+
+  // Blueprint generation query - triggered manually
+  const { data: blueprintResult, isLoading: isBlueprintLoading, error: blueprintError, refetch: refetchBlueprint } = useQuery({
+    ...api.trainingSession.generateGroupWorkoutBlueprint.queryOptions({
+      sessionId: sessionId || '',
+      options: {
+        includeDiagnostics: true,
+        phase1Only: true
+      }
+    }),
+    enabled: shouldGenerateBlueprint && !!sessionId,
+    retry: false
+  });
+
+  // Save visualization mutation
+  const saveVisualization = useMutation({
+    ...api.trainingSession.saveVisualizationData.mutationOptions(),
+    onError: (error) => {
+      console.error('[CircuitPreferences] Save visualization error:', error);
+    }
+  });
 
   // Update connection state based on polling success
   useEffect(() => {
@@ -137,12 +181,136 @@ export function CircuitPreferencesScreen() {
     return `${hours12}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')} ${ampm}`;
   }
 
+  const handleContinue = async () => {
+    console.log('[CircuitPreferences] handleContinue called');
+    console.log('[CircuitPreferences] Session ID:', sessionId);
+    console.log('[CircuitPreferences] Circuit Config:', circuitConfig);
+    console.log('[CircuitPreferences] Existing Selections:', existingSelections);
+    console.log('[CircuitPreferences] Session Data:', sessionData);
+    
+    // Check if we already have workout exercises
+    if (existingSelections && existingSelections.length > 0) {
+      console.log('[CircuitPreferences] Found existing selections, navigating to WorkoutOverview');
+      // Skip loading screen and navigate directly
+      navigation.navigate('WorkoutOverview', { sessionId });
+      return;
+    }
+    
+    // If no selections but session has visualization data (Phase 1 completed), something is wrong - still go to overview
+    if (sessionData?.templateConfig?.visualizationData?.llmResult?.exerciseSelection) {
+      console.log('[CircuitPreferences] Found visualization data, navigating to WorkoutOverview');
+      // Skip loading screen and navigate directly
+      navigation.navigate('WorkoutOverview', { sessionId });
+      return;
+    }
+    
+    console.log('[CircuitPreferences] No existing data, starting blueprint generation');
+    // No existing exercises, proceed with generation
+    setIsGenerating(true);
+    setGenerationError(null);
+    setShouldGenerateBlueprint(true);
+  };
+
+  // Handle blueprint generation result
+  useEffect(() => {
+    let isMounted = true;
+    
+    const processBlueprint = async () => {
+      console.log('[CircuitPreferences] processBlueprint effect triggered');
+      console.log('[CircuitPreferences] blueprintResult:', !!blueprintResult);
+      console.log('[CircuitPreferences] isGenerating:', isGenerating);
+      console.log('[CircuitPreferences] shouldGenerateBlueprint:', shouldGenerateBlueprint);
+      
+      if (blueprintResult && isGenerating && shouldGenerateBlueprint && isMounted) {
+        console.log('[CircuitPreferences] Processing blueprint result');
+        console.log('[CircuitPreferences] Blueprint data:', blueprintResult);
+        
+        try {
+          // Immediately mark as processing to prevent re-runs
+          setShouldGenerateBlueprint(false);
+          
+          // Save visualization data
+          const llmResultWithDebug = {
+            ...blueprintResult.llmResult,
+            // Wrap debug data if it exists
+            debug: {
+              systemPromptsByClient: blueprintResult.llmResult?.systemPromptsByClient || {},
+              llmResponsesByClient: blueprintResult.llmResult?.llmResponsesByClient || {}
+            }
+          };
+          
+          console.log('[CircuitPreferences] Saving visualization data...');
+          await saveVisualization.mutateAsync({
+            sessionId: sessionId!,
+            visualizationData: {
+              blueprint: blueprintResult.blueprint,
+              groupContext: blueprintResult.groupContext,
+              llmResult: llmResultWithDebug,
+              summary: blueprintResult.summary,
+              exerciseMetadata: blueprintResult.blueprint?.clientExercisePools || undefined,
+              sharedExerciseIds: blueprintResult.blueprint?.sharedExercisePool?.map((e: any) => e.id) || undefined
+            }
+          });
+          console.log('[CircuitPreferences] ✅ Visualization data saved successfully');
+          
+          // For now, just stop here to show visualization
+          // Later we'll add navigation to WorkoutOverview
+          setIsGenerating(false);
+          
+          // Show success message
+          Alert.alert(
+            'Success',
+            'Circuit workout blueprint generated! Check the visualization page.',
+            [{ text: 'OK' }]
+          );
+        } catch (error: any) {
+          console.error('[CircuitPreferences] Error processing blueprint:', error);
+          if (isMounted) {
+            setGenerationError(error.message || 'Failed to generate workout. Please try again.');
+            setIsGenerating(false);
+          }
+        }
+      }
+    };
+    
+    processBlueprint();
+    
+    return () => {
+      isMounted = false;
+    };
+  }, [blueprintResult, isGenerating, shouldGenerateBlueprint, sessionId, navigation, saveVisualization]);
+  
+  // Handle blueprint error
+  useEffect(() => {
+    if (blueprintError && isGenerating) {
+      setGenerationError('Failed to generate workout. Please try again.');
+      setIsGenerating(false);
+      setShouldGenerateBlueprint(false);
+    }
+  }, [blueprintError, isGenerating]);
+
   if (isLoading && !circuitConfig) {
     return (
       <View className="flex-1 items-center justify-center" style={{ backgroundColor: TOKENS.color.bg }}>
         <ActivityIndicator size="large" color={TOKENS.color.accent} />
         <Text style={{ fontSize: 24, color: TOKENS.color.muted, marginTop: 16 }}>Loading circuit configuration...</Text>
       </View>
+    );
+  }
+
+  // Show loading screen when generating workout
+  if (isGenerating) {
+    return (
+      <WorkoutGenerationLoader
+        clientNames={[]} // Circuit workouts don't need client names for now
+        durationMinutes={1}
+        forceComplete={!!blueprintResult}
+        onCancel={() => {
+          setIsGenerating(false);
+          setShouldGenerateBlueprint(false);
+          setGenerationError(null);
+        }}
+      />
     );
   }
 
@@ -190,14 +358,33 @@ export function CircuitPreferencesScreen() {
           )}
         </Pressable>
         
-        <MattePanel style={{ 
-          paddingHorizontal: 32,
-          paddingVertical: 12,
-          opacity: 0.6,
-          backgroundColor: 'rgba(255,255,255,0.05)',
-        }}>
-          <Text style={{ color: TOKENS.color.muted, fontSize: 18 }}>Configurations Locked</Text>
-        </MattePanel>
+        <Pressable
+          onPress={handleContinue}
+          focusable
+          disabled={isGenerating}
+        >
+          {({ focused }) => (
+            <MattePanel 
+              focused={focused}
+              style={{ 
+                paddingHorizontal: 32,
+                paddingVertical: 12,
+                backgroundColor: focused ? 'rgba(124,255,181,0.2)' : TOKENS.color.card,
+                borderColor: focused ? TOKENS.color.accent : TOKENS.color.borderGlass,
+                borderWidth: 1,
+                transform: focused ? [{ translateY: -1 }] : [],
+              }}
+            >
+              <Text style={{ 
+                color: focused ? TOKENS.color.accent : TOKENS.color.text, 
+                fontSize: 18,
+                fontWeight: focused ? '600' : '400'
+              }}>
+                Continue
+              </Text>
+            </MattePanel>
+          )}
+        </Pressable>
       </View>
 
       {/* Center Stage */}

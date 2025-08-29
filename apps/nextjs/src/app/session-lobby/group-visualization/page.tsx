@@ -11,6 +11,7 @@ import { useGenerateGroupWorkout } from "~/hooks/useGenerateGroupWorkout";
 import { useGroupWorkoutBlueprint } from "~/hooks/useGroupWorkoutBlueprint";
 import { useTRPC } from "~/trpc/react";
 import StandardTemplateView from "./StandardTemplateView";
+import CircuitTemplateView from "./CircuitTemplateView";
 
 // Constants
 const SCORE_THRESHOLDS = {
@@ -785,6 +786,26 @@ function GroupVisualizationPageContent() {
 
   // Detect blueprint type
   const isStandardBlueprint = !!(blueprint as any).clientExercisePools;
+  const isCircuitTemplate = groupContext.templateType === 'circuit';
+
+  // For circuit templates, use the CircuitTemplateView
+  if (isCircuitTemplate) {
+    return (
+      <CircuitTemplateView
+        groupContext={groupContext}
+        blueprint={blueprint}
+        summary={summary}
+        generateWorkout={generateWorkout}
+        isGenerating={isGenerating}
+        router={router}
+        llmDebugData={effectiveLlmDebugData}
+        llmResult={data.llmResult}
+        sessionData={sessionData}
+        isFromSavedData={!!savedDataQuery.data}
+        isSaving={saveVisualizationMutation.isPending}
+      />
+    );
+  }
 
   // For standard blueprints, use the StandardTemplateView
   if (isStandardBlueprint) {
