@@ -116,7 +116,8 @@ export default function CircuitConfigPage() {
 
   const handleComplete = () => {
     toast.success("Circuit configuration saved!");
-    // Stay on the page as per requirements
+    // Navigate to circuit workout overview
+    router.push(`/circuit-workout-overview?sessionId=${sessionId}`);
   };
 
   if (isLoading || isLoadingConfig) {
