@@ -125,7 +125,12 @@ export function generateCircuitGroupPrompt(config: CircuitPromptConfig): string 
   // Session Parameters (from configuration - no flexibility)
   sections.push("## Session Parameters");
   sections.push(`- Work: ${workDuration}s, Rest: ${restDuration}s`);
-  sections.push(`- Total rounds: ${totalRounds}${repeatRounds ? ' (includes repeat rounds)' : ''}`);
+  if (repeatRounds) {
+    sections.push(`- Rounds: ${rounds} (will be repeated twice for ${totalRounds} total rounds)`);
+    sections.push(`- Design ${rounds} rounds considering they will be performed back-to-back twice`);
+  } else {
+    sections.push(`- Total rounds: ${rounds}`);
+  }
   sections.push(`- Each round = ${exercisesPerRound} exercises`);
   sections.push("");
   
@@ -184,12 +189,17 @@ export function generateCircuitGroupPrompt(config: CircuitPromptConfig): string 
   
   // Task
   sections.push("## Task:");
-  sections.push(`Create ${totalRounds} rounds with ${exercisesPerRound} exercises per round.`);
+  if (repeatRounds) {
+    sections.push(`Create ${rounds} rounds with ${exercisesPerRound} exercises per round.`);
+    sections.push(`IMPORTANT: These ${rounds} rounds will be repeated twice in sequence, so design them to work well when performed back-to-back.`);
+  } else {
+    sections.push(`Create ${rounds} rounds with ${exercisesPerRound} exercises per round.`);
+  }
   sections.push("");
   sections.push("You MUST:");
-  sections.push(`1. Generate EXACTLY ${totalRounds} complete rounds`);
+  sections.push(`1. Generate EXACTLY ${rounds} complete rounds`);
   sections.push(`2. Each round MUST have EXACTLY ${exercisesPerRound} exercises`);
-  sections.push(`3. Total exercises needed: ${totalRounds * exercisesPerRound}`);
+  sections.push(`3. Total exercises needed: ${rounds * exercisesPerRound}`);
   sections.push("4. Ensure no movement pattern repeats within a round");
   sections.push("5. Balance movement patterns across the entire circuit");
   sections.push("6. Consider equipment flow and transitions");

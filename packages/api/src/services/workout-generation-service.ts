@@ -1759,7 +1759,12 @@ export class WorkoutGenerationService {
     exercisePool: Exercise[],
   ) {
     const allExercises = [];
-    const { llmAssignments } = generationResult;
+    const { llmAssignments, metadata } = generationResult;
+    
+    // Check if repeat is enabled
+    const repeatRounds = metadata?.circuitConfig?.config?.repeatRounds || 
+                        metadata?.circuitConfig?.repeatRounds || 
+                        false;
     
     logger.info("createCircuitExerciseRecords - checking data structure", {
       hasLlmAssignments: !!llmAssignments,
@@ -1767,6 +1772,7 @@ export class WorkoutGenerationService {
       hasCircuitKey: !!llmAssignments?.circuit,
       hasRoundsKey: !!llmAssignments?.circuit?.rounds,
       roundsCount: llmAssignments?.circuit?.rounds?.length || 0,
+      repeatRounds,
     });
     
     // Circuit workouts have rounds with exercises
@@ -1783,38 +1789,48 @@ export class WorkoutGenerationService {
       
       let globalIndex = 1;
       
-      // Process each round
-      circuitRounds.forEach((round: any) => {
-        const roundNumber = round.round;
-        
-        // Process each exercise in the round
-        round.exercises.forEach((circuitEx: any) => {
-          const exercise = exercisePool.find(
-            (ex: Exercise) => ex.name === circuitEx.name,
-          );
+      // If repeat is enabled, we'll process rounds twice
+      const iterations = repeatRounds ? 2 : 1;
+      
+      for (let iteration = 0; iteration < iterations; iteration++) {
+        // Process each round
+        circuitRounds.forEach((round: any) => {
+          const roundNumber = round.round;
+          const displayRoundNumber = repeatRounds && iteration === 1 
+            ? roundNumber + circuitRounds.length 
+            : roundNumber;
           
-          if (exercise) {
-            allExercises.push({
-              workoutId: workoutId,
-              exerciseId: exercise.id,
-              orderIndex: globalIndex++,
-              setsCompleted: 0,
-              groupName: `Round ${roundNumber}`,
-              isShared: true, // All circuit exercises are shared
-              sharedWithClients: groupContext.clients
-                .filter(c => c.user_id !== client.user_id)
-                .map(c => c.user_id),
-              // Store additional circuit metadata
-              metadata: {
-                round: roundNumber,
-                position: circuitEx.position,
-                movementPattern: circuitEx.movementPattern,
-                transitionNote: circuitEx.transitionNote,
-              }
-            });
-          }
+          // Process each exercise in the round
+          round.exercises.forEach((circuitEx: any) => {
+            const exercise = exercisePool.find(
+              (ex: Exercise) => ex.name === circuitEx.name,
+            );
+            
+            if (exercise) {
+              allExercises.push({
+                workoutId: workoutId,
+                exerciseId: exercise.id,
+                orderIndex: globalIndex++,
+                setsCompleted: 0,
+                groupName: `Round ${displayRoundNumber}`,
+                isShared: true, // All circuit exercises are shared
+                sharedWithClients: groupContext.clients
+                  .filter(c => c.user_id !== client.user_id)
+                  .map(c => c.user_id),
+                // Store additional circuit metadata
+                metadata: {
+                  round: displayRoundNumber,
+                  position: circuitEx.position,
+                  movementPattern: circuitEx.movementPattern,
+                  transitionNote: circuitEx.transitionNote,
+                  isRepeat: iteration > 0,
+                  originalRound: roundNumber,
+                }
+              });
+            }
+          });
         });
-      });
+      }
     }
     
     return allExercises;

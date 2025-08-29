@@ -105,24 +105,80 @@ function RoundContent({ round, isCompact }: {
   const exercisesToShow = hasOverflow ? round.exercises.slice(0, maxExercises) : round.exercises;
   const overflowCount = round.exercises.length - maxExercises;
   
-  // Calculate if we need ultra-compact mode (6 exercises)
-  const exerciseCount = exercisesToShow.length;
-  const isUltraCompact = exerciseCount >= 6;
+  // For compact mode (4-6+ rounds), use columns if 4+ exercises
+  const shouldUseColumns = isCompact && exercisesToShow.length >= 4;
   
-  // Adjust font sizes based on exercise count and compact mode
-  const getTitleSize = () => {
-    if (isUltraCompact) return isCompact ? 20 : 22;
-    return isCompact ? 24 : 28;
-  };
+  // Adjust font sizes based on compact mode
+  const getTitleSize = () => isCompact ? 20 : 28;
+  const getExerciseSize = () => isCompact ? 16 : 20;
   
-  const getExerciseSize = () => {
-    if (isUltraCompact) return isCompact ? 16 : 17;
-    return isCompact ? 18 : 20;
-  };
-  
-  const getGap = () => {
-    if (isUltraCompact) return isCompact ? 12 : 14;
-    return isCompact ? 16 : 20;
+  // Render exercises in columns for compact mode with 4+ exercises
+  const renderExercises = () => {
+    if (shouldUseColumns) {
+      const midPoint = Math.ceil(exercisesToShow.length / 2);
+      const leftColumn = exercisesToShow.slice(0, midPoint);
+      const rightColumn = exercisesToShow.slice(midPoint);
+      
+      return (
+        <View style={{ flexDirection: 'row', gap: 16 }}>
+          {/* Left column */}
+          <View style={{ flex: 1, gap: 12 }}>
+            {leftColumn.map((exercise) => (
+              <Text 
+                key={exercise.id} 
+                style={{ 
+                  fontSize: getExerciseSize(),
+                  color: TOKENS.color.text,
+                  lineHeight: getExerciseSize() * 1.2,
+                }}
+                numberOfLines={1}
+                ellipsizeMode="tail"
+              >
+                {exercise.exerciseName}
+              </Text>
+            ))}
+          </View>
+          
+          {/* Right column */}
+          <View style={{ flex: 1, gap: 12 }}>
+            {rightColumn.map((exercise) => (
+              <Text 
+                key={exercise.id} 
+                style={{ 
+                  fontSize: getExerciseSize(),
+                  color: TOKENS.color.text,
+                  lineHeight: getExerciseSize() * 1.2,
+                }}
+                numberOfLines={1}
+                ellipsizeMode="tail"
+              >
+                {exercise.exerciseName}
+              </Text>
+            ))}
+          </View>
+        </View>
+      );
+    }
+    
+    // Single column for 1-3 exercises or non-compact mode
+    return (
+      <View style={{ gap: isCompact ? 12 : 20 }}>
+        {exercisesToShow.map((exercise) => (
+          <Text 
+            key={exercise.id} 
+            style={{ 
+              fontSize: getExerciseSize(),
+              color: TOKENS.color.text,
+              lineHeight: getExerciseSize() * 1.2,
+            }}
+            numberOfLines={1}
+            ellipsizeMode="tail"
+          >
+            {exercise.exerciseName}
+          </Text>
+        ))}
+      </View>
+    );
   };
   
   return (
@@ -131,28 +187,13 @@ function RoundContent({ round, isCompact }: {
         fontSize: getTitleSize(), 
         fontWeight: '700', 
         color: TOKENS.color.text,
-        marginBottom: isUltraCompact ? 16 : (isCompact ? 20 : 24)
+        marginBottom: isCompact ? 16 : 24
       }}>
         {round.roundName}
       </Text>
       
       <View style={{ flex: 1, justifyContent: 'space-between' }}>
-        <View style={{ gap: getGap() }}>
-          {exercisesToShow.map((exercise) => (
-            <Text 
-              key={exercise.id} 
-              style={{ 
-                fontSize: getExerciseSize(),
-                color: TOKENS.color.text,
-                lineHeight: getExerciseSize() * 1.2,
-              }}
-              numberOfLines={1}
-              ellipsizeMode="tail"
-            >
-              {exercise.exerciseName}
-            </Text>
-          ))}
-        </View>
+        {renderExercises()}
         
         {hasOverflow && (
           <View style={{ 
@@ -284,7 +325,7 @@ export function CircuitWorkoutOverviewScreen() {
       console.log('[CircuitWorkoutOverview] Rounds found:', Array.from(roundsMap.keys()));
       
       // Sort exercises within each round and create final structure
-      const rounds: RoundData[] = Array.from(roundsMap.entries())
+      let rounds: RoundData[] = Array.from(roundsMap.entries())
         .map(([roundName, exercises]) => ({
           roundName,
           exercises: exercises.sort((a, b) => a.orderIndex - b.orderIndex)
@@ -296,13 +337,21 @@ export function CircuitWorkoutOverviewScreen() {
           return aNum - bNum;
         });
       
+      // If repeat is enabled, only show the first half of rounds
+      // (backend creates Round 1-4, then Round 5-8 for repeat)
+      if (circuitConfig?.config?.repeatRounds) {
+        const baseRoundCount = Math.floor(rounds.length / 2);
+        rounds = rounds.slice(0, baseRoundCount);
+        console.log('[CircuitWorkoutOverview] Repeat mode: showing only first', baseRoundCount, 'rounds');
+      }
+      
       console.log('[CircuitWorkoutOverview] Final rounds structure:', rounds);
       
       setRoundsData(rounds);
       setConnectionState('connected');
       setLastSuccessfulFetch(new Date());
     }
-  }, [selections]);
+  }, [selections, circuitConfig]);
   
   // Update connection state based on errors
   useEffect(() => {
@@ -441,7 +490,7 @@ export function CircuitWorkoutOverviewScreen() {
             return (
               <View style={{ flex: 1, flexDirection: 'column', gap: 24 }}>
                 {/* Top Row */}
-                <View style={{ flex: 1, flexDirection: 'row', gap: 24 }}>
+                <View style={{ flex: 1.05, flexDirection: 'row', gap: 24 }}>
                   {roundsData.slice(0, topRowCount).map((round) => (
                     <MattePanel key={round.roundName} style={{ flex: 1, padding: 20 }}>
                       <RoundContent round={round} isCompact={true} />
@@ -450,7 +499,7 @@ export function CircuitWorkoutOverviewScreen() {
                 </View>
                 
                 {/* Bottom Row */}
-                <View style={{ flex: 1, flexDirection: 'row', gap: 24 }}>
+                <View style={{ flex: 1.05, flexDirection: 'row', gap: 24 }}>
                   {roundsData.slice(topRowCount, topRowCount + bottomRowCount).map((round) => (
                     <MattePanel key={round.roundName} style={{ flex: 1, padding: 20 }}>
                       <RoundContent round={round} isCompact={true} />
@@ -479,10 +528,13 @@ export function CircuitWorkoutOverviewScreen() {
         })()}
       </View>
       
-      {/* Bottom Bar - Connection Status */}
+      {/* Bottom Bar - Connection Status and Repeat Indicator */}
       <View style={{ 
         paddingHorizontal: 48,
-        paddingVertical: 24,
+        paddingVertical: 12,
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
       }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           <View 
@@ -505,6 +557,20 @@ export function CircuitWorkoutOverviewScreen() {
              `Disconnected`}
           </Text>
         </View>
+        
+        {/* Repeat Indicator */}
+        {circuitConfig?.config?.repeatRounds && (
+          <Text style={{
+            fontSize: 18,
+            color: TOKENS.color.text,
+            fontWeight: '800',
+            letterSpacing: 1,
+            textTransform: 'uppercase',
+            opacity: 0.9,
+          }}>
+            REPEAT 2×
+          </Text>
+        )}
       </View>
       
       {/* Error Modal - Simple version */}
