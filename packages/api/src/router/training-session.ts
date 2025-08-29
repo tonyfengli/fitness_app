@@ -401,13 +401,26 @@ export const trainingSessionRouter = {
         });
       }
 
+      // Add default circuit config if creating a circuit session
+      const sessionData = {
+        ...input,
+        trainerId: user.id,
+        status: "open" as const, // Explicitly set to open
+      };
+
+      // Add default circuit config for circuit templates
+      if (input.templateType === "circuit") {
+        const { DEFAULT_CIRCUIT_CONFIG } = await import("@acme/db");
+        sessionData.templateConfig = {
+          ...DEFAULT_CIRCUIT_CONFIG,
+          lastUpdated: new Date(),
+          updatedBy: user.id,
+        };
+      }
+
       const [session] = await ctx.db
         .insert(TrainingSession)
-        .values({
-          ...input,
-          trainerId: user.id,
-          status: "open", // Explicitly set to open
-        })
+        .values(sessionData)
         .returning();
 
       return session;
@@ -1702,18 +1715,27 @@ export const trainingSessionRouter = {
         // Send messages to all checked-in clients
         const sendPromises = checkedInClients.map(async (client) => {
           try {
-            // Generate preference link - use SMS_BASE_URL for mobile access (e.g., ngrok URL)
+            // Generate appropriate link based on template type
             const baseUrl =
               process.env.SMS_BASE_URL ||
               process.env.NEXTAUTH_URL ||
               "http://192.168.68.133:3000";
-            const preferenceLink = `${baseUrl}/preferences/client/${session.id}/${client.userId}`;
+            
+            let messageBody: string;
+            
+            if (session.templateType === "circuit") {
+              const circuitConfigLink = `${baseUrl}/sessions/${session.id}/circuit-config`;
+              messageBody = `Your circuit workout is ready to configure: 
+${circuitConfigLink}
 
-            // Simple message for all templates
-            const messageBody = `Your workout preferences are ready to customize: 
+Set up your rounds, exercises, and timing for today's session.`;
+            } else {
+              const preferenceLink = `${baseUrl}/preferences/client/${session.id}/${client.userId}`;
+              messageBody = `Your workout preferences are ready to customize: 
 ${preferenceLink}
 
 Set your goals and preferences for today's session.`;
+            }
 
             // Create message record in database for all clients
             await db.insert(messages).values({

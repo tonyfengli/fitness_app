@@ -15,6 +15,7 @@ export { useRealtimePreferences } from './useRealtimePreferences';
 export { useRealtimeStatus } from './useRealtimeStatus';
 export { useRealtimeWorkoutExercises } from './useRealtimeWorkoutExercises';
 export { useRealtimeExerciseSwaps } from './useRealtimeExerciseSwaps';
+export { useRealtimeCircuitConfig } from './useRealtimeCircuitConfig';
 
 // UI state hooks
 export { useModalState, useMultipleModals } from './useModalState';

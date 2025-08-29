@@ -173,8 +173,14 @@ export class CheckInHandler extends BaseMessageHandler {
         },
       );
 
-      // Build simple check-in response
-      const responseMessage = `Welcome, ${this.formatClientName(message.userName)}! You're checked in. We'll get started once everyone joins.`;
+      // Build check-in response based on template type
+      let responseMessage: string;
+      
+      if (openSession.templateType === "circuit") {
+        responseMessage = `Hello${message.userName ? ` ${message.userName}` : ""}! You're checked in for the circuit training session. We'll get started once everyone joins.`;
+      } else {
+        responseMessage = `Welcome, ${this.formatClientName(message.userName)}! You're checked in. We'll get started once everyone joins.`;
+      }
 
       return {
         success: true,

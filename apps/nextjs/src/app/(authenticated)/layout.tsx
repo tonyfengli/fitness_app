@@ -1,3 +1,6 @@
+"use client";
+
+import { usePathname } from "next/navigation";
 import { Navigation } from "../_components/navigation";
 
 export default function AuthenticatedLayout({
@@ -5,9 +8,12 @@ export default function AuthenticatedLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const pathname = usePathname();
+  const isCircuitConfigPage = pathname?.includes("/circuit-config");
+
   return (
     <div className="flex h-screen flex-col">
-      <Navigation />
+      {!isCircuitConfigPage && <Navigation />}
       <div className="flex-1 overflow-auto">{children}</div>
     </div>
   );

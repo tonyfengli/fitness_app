@@ -6,3 +6,6 @@ export const unused = z.string().describe(
    with back and frontend, you can put them in here
   `,
 );
+
+// Export circuit-config validators
+export * from "./circuit-config";

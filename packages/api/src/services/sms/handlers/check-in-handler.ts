@@ -85,8 +85,12 @@ export class CheckInHandler {
             isBMF: session?.templateType === "full_body_bmf",
           });
 
+          // Handle circuit template
+          if (session?.templateType === "circuit") {
+            responseMessage = `Hello${userName ? ` ${userName}` : ""}! You're checked in for the circuit training session. We'll get started once everyone joins.`;
+          }
           // Show deterministic exercise preview for BMF templates
-          if (
+          else if (
             session?.templateType === "full_body_bmf" ||
             template?.smsConfig?.showDeterministicSelections
           ) {
