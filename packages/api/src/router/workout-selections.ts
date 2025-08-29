@@ -89,6 +89,8 @@ export const workoutSelectionsRouter = {
         isShared: row.we.isShared || false,
         sharedWithClients: row.we.sharedWithClients,
         selectionSource: row.we.selectionSource,
+        groupName: row.we.groupName,
+        orderIndex: row.we.orderIndex,
       }));
     }),
 
@@ -183,6 +185,8 @@ export const workoutSelectionsRouter = {
         isShared: row.we.isShared || false,
         sharedWithClients: row.we.sharedWithClients,
         selectionSource: row.we.selectionSource,
+        groupName: row.we.groupName,
+        orderIndex: row.we.orderIndex,
       }));
     }),
 

@@ -185,51 +185,37 @@ export function generateCircuitGroupPrompt(config: CircuitPromptConfig): string 
   // Task
   sections.push("## Task:");
   sections.push(`Create ${totalRounds} rounds with ${exercisesPerRound} exercises per round.`);
+  sections.push("");
   sections.push("You MUST:");
-  sections.push(`1. Select exactly ${totalRounds * exercisesPerRound} exercises total`);
-  sections.push("2. Assign each exercise to a specific round and position");
-  sections.push("3. Ensure no movement pattern repeats within a round");
-  sections.push("4. Balance movement patterns across the entire circuit");
-  sections.push("5. Consider equipment flow and transitions");
-  sections.push("6. Place exercises logically (easier → harder, standing → floor)");
+  sections.push(`1. Generate EXACTLY ${totalRounds} complete rounds`);
+  sections.push(`2. Each round MUST have EXACTLY ${exercisesPerRound} exercises`);
+  sections.push(`3. Total exercises needed: ${totalRounds * exercisesPerRound}`);
+  sections.push("4. Ensure no movement pattern repeats within a round");
+  sections.push("5. Balance movement patterns across the entire circuit");
+  sections.push("6. Consider equipment flow and transitions");
+  sections.push("7. Place exercises logically (easier → harder, standing → floor)");
   
   sections.push("");
   
   // Output Format
   sections.push("## Output Format:");
+  sections.push("Return ONLY exercise names from the provided list. Do not include movement patterns, muscles, equipment, or notes.");
+  sections.push("Use abbreviated keys to minimize tokens. Total JSON must be < 1,500 characters.");
+  sections.push("");
   sections.push("```json");
   sections.push("{");
-  sections.push('  "circuit": {');
-  sections.push('    "rounds": [');
-  sections.push('      {');
-  sections.push('        "round": 1,');
-  sections.push('        "exercises": [');
-  sections.push('          {');
-  sections.push('            "position": 1,');
-  sections.push('            "name": "exercise name from the list",');
-  sections.push('            "movementPattern": "squat|hinge|push|pull|core|conditioning",');
-  sections.push('            "primaryMuscle": "muscle group",');
-  sections.push('            "equipment": ["equipment needed"],');
-  sections.push('            "transitionNote": "quick setup/transition tip"');
-  sections.push('          }');
-  sections.push('          // ... repeat for all exercises in round');
-  sections.push('        ]');
-  sections.push('      }');
-  sections.push('      // ... repeat for all rounds');
-  sections.push('    ],');
-  sections.push('    "patternBalance": {');
-  sections.push('      "squat": count,');
-  sections.push('      "hinge": count,');
-  sections.push('      "push": count,');
-  sections.push('      "pull": count,');
-  sections.push('      "core": count,');
-  sections.push('      "conditioning": count');
-  sections.push('    },');
-  sections.push('    "equipmentFlow": "description of equipment organization strategy",');
-  sections.push('    "reasoning": "brief explanation of exercise placement and flow decisions"');
-  sections.push('  }');
+  sections.push('  "rounds": [');
+  sections.push('    {"r":1,"ex":["Goblet Squat","Push-Ups","Single-Leg Glute Bridge","Upright Row","Dead Bug","Banded Suitcase Marches"]},');
+  sections.push('    {"r":2,"ex":["exercise1","exercise2","exercise3","exercise4","exercise5","exercise6"]},');
+  sections.push('    {"r":3,"ex":["exercise1","exercise2","exercise3","exercise4","exercise5","exercise6"]},');
+  sections.push('    {"r":4,"ex":["exercise1","exercise2","exercise3","exercise4","exercise5","exercise6"]},');
+  sections.push('    {"r":5,"ex":["exercise1","exercise2","exercise3","exercise4","exercise5","exercise6"]},');
+  sections.push('    {"r":6,"ex":["exercise1","exercise2","exercise3","exercise4","exercise5","exercise6"]}');
+  sections.push('  ]');
   sections.push("}");
   sections.push("```");
+  sections.push("");
+  sections.push("Optional: Include a single 'notes' field (≤140 chars) for any critical guidance.");
   
   return sections.join("\n");
 }

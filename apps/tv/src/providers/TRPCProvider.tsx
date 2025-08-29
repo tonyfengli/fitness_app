@@ -89,6 +89,9 @@ export const api = createTRPCOptionsProxy<AppRouter>({
   queryClient,
 });
 
+// Export the raw client for direct mutations if needed
+export { trpcClient };
+
 export function TRPCProvider({ children }: { children: React.ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>

@@ -373,7 +373,10 @@ export class WorkoutGenerationService {
 
     // Circuit template with single-phase LLM
     if (groupContext.templateType === "circuit") {
-      logger.info("Using Circuit workout generator (single-phase)");
+      logger.info("Using Circuit workout generator (single-phase)", {
+        phase1Only: options?.phase1Only,
+        willGenerateExercises: true, // Circuit always generates exercises
+      });
       return this.generateCircuitWorkouts(blueprint, groupContext, sessionId);
     }
 
@@ -508,6 +511,11 @@ export class WorkoutGenerationService {
 
     const systemPrompt = promptBuilder.build();
     const userMessage = "Generate the circuit workout with exercise assignments for all stations.";
+    
+    logger.info("Circuit workout generation prompt", {
+      promptLength: systemPrompt.length,
+      fullPrompt: systemPrompt,
+    });
 
     // Call LLM
     const llm = createLLM({
@@ -523,19 +531,51 @@ export class WorkoutGenerationService {
 
     const llmOutput = response.content.toString();
 
-    // Parse response
-    const jsonMatch = llmOutput.match(/```json\n([\s\S]*?)\n```/);
+    // Parse response - simple regex extraction
+    const jsonMatch = llmOutput.match(/```json\s*([\s\S]*?)\s*```/);
     if (!jsonMatch?.[1]) {
-      throw new Error("Failed to parse LLM response for circuit");
+      logger.error("Failed to extract JSON from LLM response", {
+        llmOutputLength: llmOutput.length,
+        first500Chars: llmOutput.substring(0, 500),
+      });
+      throw new Error("No JSON block found in LLM response");
     }
 
-    const parsedResponse = JSON.parse(jsonMatch[1]);
+    let parsedResponse;
+    try {
+      parsedResponse = JSON.parse(jsonMatch[1]);
+    } catch (parseError) {
+      logger.error("Failed to parse JSON from LLM response", {
+        error: parseError.message,
+        extractedJson: jsonMatch[1].substring(0, 500),
+      });
+      throw new Error(`Failed to parse LLM JSON response: ${parseError.message}`);
+    }
+    
+    // Transform minimal format to expected structure
+    const normalizedResponse = {
+      circuit: {
+        rounds: parsedResponse.rounds.map((round: any) => ({
+          round: round.r,
+          exercises: round.ex.map((name: string, idx: number) => ({
+            position: idx + 1,
+            name: name
+          }))
+        })),
+        notes: parsedResponse.notes
+      }
+    };
+
+    logger.info("Circuit LLM response parsed", {
+      roundsCount: normalizedResponse.circuit.rounds.length,
+      firstRoundExercises: normalizedResponse.circuit.rounds[0]?.exercises.length || 0,
+    });
 
     return {
       systemPrompt,
       userMessage,
       llmOutput,
-      llmAssignments: parsedResponse,
+      llmAssignments: normalizedResponse,
       metadata: {
         templateType: "circuit",
         circuitConfig: circuitConfig || null,
@@ -979,7 +1019,18 @@ export class WorkoutGenerationService {
         exercisePool,
       );
 
-      await tx.insert(WorkoutExercise).values(allExercises);
+      logger.info("Exercise records created", {
+        count: allExercises.length,
+        hasExercises: allExercises.length > 0,
+      });
+
+      // Only insert if we have exercises
+      if (allExercises.length > 0) {
+        await tx.insert(WorkoutExercise).values(allExercises);
+      } else {
+        logger.error("No exercises to insert!");
+        throw new Error("Failed to create exercise records - no exercises generated");
+      }
 
       return createdWorkouts.map((w) => w.id);
     });
@@ -1194,12 +1245,23 @@ export class WorkoutGenerationService {
     exercisePool: Exercise[],
   ) {
     const allExercises = [];
+    
+    // Log what we're working with
+    logger.info("createExerciseRecords called", {
+      hasExerciseSelection: !!generationResult.exerciseSelection,
+      hasRoundOrganization: !!generationResult.roundOrganization,
+      metadataTemplateType: generationResult.metadata?.templateType,
+      groupContextTemplateType: groupContext.templateType,
+      hasDeterministicAssignments: !!generationResult.deterministicAssignments,
+      hasLlmAssignments: !!generationResult.llmAssignments,
+    });
 
     // Check if this is standard template result
     if (
       generationResult.exerciseSelection &&
       generationResult.roundOrganization
     ) {
+      logger.info("Using standard exercise record creation");
       return this.createStandardExerciseRecords(
         tx,
         clientWorkouts,
@@ -1210,7 +1272,8 @@ export class WorkoutGenerationService {
     }
 
     // Check if this is circuit template result
-    if (generationResult.metadata?.templateType === "circuit") {
+    if (generationResult.metadata?.templateType === "circuit" || groupContext.templateType === "circuit") {
+      logger.info("Using circuit exercise record creation");
       return this.createCircuitExerciseRecords(
         tx,
         clientWorkouts,
@@ -1222,6 +1285,12 @@ export class WorkoutGenerationService {
 
     // BMF template processing
     const { deterministicAssignments, llmAssignments } = generationResult;
+    
+    // If no deterministic assignments (shouldn't happen for BMF but let's be safe)
+    if (!deterministicAssignments) {
+      logger.warn("No deterministic assignments found for BMF template");
+      return allExercises;
+    }
 
     for (const client of groupContext.clients) {
       const workoutId = clientWorkouts.get(client.user_id);
@@ -1692,8 +1761,20 @@ export class WorkoutGenerationService {
     const allExercises = [];
     const { llmAssignments } = generationResult;
     
+    logger.info("createCircuitExerciseRecords - checking data structure", {
+      hasLlmAssignments: !!llmAssignments,
+      llmAssignmentsKeys: llmAssignments ? Object.keys(llmAssignments) : [],
+      hasCircuitKey: !!llmAssignments?.circuit,
+      hasRoundsKey: !!llmAssignments?.circuit?.rounds,
+      roundsCount: llmAssignments?.circuit?.rounds?.length || 0,
+    });
+    
     // Circuit workouts have rounds with exercises
-    const circuitRounds = llmAssignments.circuit?.rounds || [];
+    const circuitRounds = llmAssignments?.circuit?.rounds || [];
+    
+    if (circuitRounds.length === 0) {
+      logger.warn("No circuit rounds found in LLM assignments");
+    }
     
     // Create exercise records for each client
     for (const client of groupContext.clients) {

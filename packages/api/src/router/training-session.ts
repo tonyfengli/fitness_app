@@ -32,6 +32,7 @@ import { calculateRoundOrganization, calculateBundleSkeletons, type RoundOrganiz
 import { assignExerciseTiers, type ExerciseWithTier } from "../utils/exerciseTiers";
 import { buildAllowedSlots, type AllowedSlotsResult } from "../utils/buildAllowedSlots";
 import { getBusinessEquipmentCapacity, type EquipmentCapacityMap } from "../config/equipmentCapacity";
+import { WorkoutGenerationService } from "../services/workout-generation-service";
 
 // Helper function to calculate score distribution
 function calculateScoreDistribution(
@@ -3914,5 +3915,68 @@ Set your goals and preferences for today's session.`;
       }
 
       return session;
+    }),
+
+  createWorkoutsFromBlueprint: protectedProcedure
+    .input(
+      z.object({
+        sessionId: z.string().uuid(),
+        blueprintData: z.object({
+          blueprint: z.any(),
+          groupContext: z.any(),
+          llmResult: z.any(),
+          summary: z.any(),
+        }),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const { sessionId, blueprintData } = input;
+      
+      console.log("[createWorkoutsFromBlueprint] Starting workout creation from blueprint");
+      console.log("[createWorkoutsFromBlueprint] Session ID:", sessionId);
+      
+      // Initialize the workout generation service
+      const workoutGenerationService = new WorkoutGenerationService(ctx);
+      
+      // Get the exercise pool from the blueprint
+      const exercisePool: Exercise[] = [];
+      if (blueprintData.blueprint.blocks) {
+        // For BMF/Circuit style blueprints
+        blueprintData.blueprint.blocks.forEach((block: any) => {
+          // Add shared exercises
+          if (block.sharedCandidates?.exercises) {
+            exercisePool.push(...block.sharedCandidates.exercises);
+          }
+          // Add individual exercises
+          Object.values(block.individualCandidates || {}).forEach((clientData: any) => {
+            if (clientData.exercises) {
+              exercisePool.push(...clientData.exercises);
+            }
+          });
+        });
+      }
+      
+      // Remove duplicates
+      const uniqueExercisePool = Array.from(
+        new Map(exercisePool.map(ex => [ex.id, ex])).values()
+      );
+      
+      console.log("[createWorkoutsFromBlueprint] Exercise pool size:", uniqueExercisePool.length);
+      
+      // Create workouts using the blueprint's LLM result
+      const workoutIds = await workoutGenerationService.createWorkouts(
+        sessionId,
+        blueprintData.llmResult,
+        blueprintData.groupContext,
+        uniqueExercisePool
+      );
+      
+      console.log("[createWorkoutsFromBlueprint] Created workouts:", workoutIds);
+      
+      return {
+        success: true,
+        workoutIds,
+        message: "Workouts created successfully",
+      };
     }),
 } satisfies TRPCRouterRecord;
