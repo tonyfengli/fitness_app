@@ -14,6 +14,8 @@ import {
   useRealtimeWorkoutExercises,
   useRealtimeStatus,
   XIcon,
+  MuscleHistoryModal,
+  useModalState,
 } from "@acme/ui-shared";
 
 import { supabase } from "~/lib/supabase";
@@ -154,6 +156,7 @@ function ClientWorkoutOverviewContent() {
   const availableExercisesRef = useRef<any[]>([]);
   const [hasExercises, setHasExercises] = useState(false);
   const [isReady, setIsReady] = useState(false);
+  const muscleHistoryModal = useModalState();
 
   // Mutation to update client status to workout_ready
   const updateStatusMutation = useMutation({
@@ -711,27 +714,35 @@ function ClientWorkoutOverviewContent() {
 
   return (
     <div className="min-h-screen bg-gray-50 p-4">
-      <div className="mx-auto mt-4 w-full max-w-sm">
-        <div className="rounded-lg border border-gray-200 bg-white shadow-sm">
-          {/* Header with avatar */}
-          <div className="border-b border-gray-200 p-4">
-            <div className="flex items-center space-x-3">
-              <img
-                src={avatarUrl}
-                alt={`${userName} avatar`}
-                className="h-12 w-12 rounded-full"
-              />
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900">
-                  {userName}
-                </h3>
-                <p className="text-sm text-gray-500">
-                  These exercises have been picked for you, but you can replace any of them.
-                </p>
-              </div>
-            </div>
+      <div className="mx-auto max-w-md p-4 pb-20">
+        {/* Header with Client info and Muscle History button */}
+        <div className="mb-6 mt-4 flex items-center justify-between">
+          <div className="flex items-center">
+            <img
+              src={avatarUrl}
+              alt={userName}
+              className="mr-3 h-10 w-10 rounded-full"
+            />
+            <h2 className="text-lg font-semibold text-gray-900">
+              {userName}
+            </h2>
           </div>
+          
+          {/* Muscle History Button */}
+          <button
+            onClick={() => muscleHistoryModal.open()}
+            className="flex items-center gap-2 rounded-full bg-indigo-600 px-3 py-2 text-white shadow-md active:scale-95 transition-all hover:bg-indigo-700"
+            aria-label="View Muscle History"
+          >
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+            </svg>
+            <span className="text-sm font-medium">Targets to Hit</span>
+          </button>
+        </div>
 
+        {/* Client Card */}
+        <div className="rounded-lg border border-gray-200 bg-white shadow-sm">
           {/* Exercise list */}
           <div className="p-4">
             <div className="space-y-6">
@@ -759,34 +770,34 @@ function ClientWorkoutOverviewContent() {
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Ready Button */}
-      <div className="mx-auto mt-6 max-w-sm px-4">
-        {isReady ? (
-          <div className="w-full rounded-lg bg-green-100 border border-green-300 py-3 text-center">
-            <span className="text-green-800 font-medium">✓ You're Ready!</span>
-          </div>
-        ) : (
-          <button
-            onClick={() => {
-              updateStatusMutation.mutate({
-                sessionId: sessionId!,
-                userId: userId!,
-                isReady: true,
-                targetStatus: 'workout_ready'
-              });
-            }}
-            disabled={updateStatusMutation.isPending}
-            className={`w-full rounded-lg py-3 font-medium transition-colors ${
-              updateStatusMutation.isPending
-                ? "bg-gray-300 text-gray-500"
-                : "bg-green-600 text-white hover:bg-green-700"
-            }`}
-          >
-            {updateStatusMutation.isPending ? "Updating..." : "Ready"}
-          </button>
-        )}
+        {/* Ready Button */}
+        <div className="mt-6">
+          {isReady ? (
+            <div className="w-full rounded-lg bg-green-100 border border-green-300 py-3 text-center">
+              <span className="text-green-800 font-medium">✓ You're Ready!</span>
+            </div>
+          ) : (
+            <button
+              onClick={() => {
+                updateStatusMutation.mutate({
+                  sessionId: sessionId!,
+                  userId: userId!,
+                  isReady: true,
+                  targetStatus: 'workout_ready'
+                });
+              }}
+              disabled={updateStatusMutation.isPending}
+              className={`w-full rounded-lg py-3 font-medium transition-colors ${
+                updateStatusMutation.isPending
+                  ? "bg-gray-300 text-gray-500"
+                  : "bg-green-600 text-white hover:bg-green-700"
+              }`}
+            >
+              {updateStatusMutation.isPending ? "Updating..." : "Ready"}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Exercise Selection Modal */}
@@ -996,6 +1007,15 @@ function ClientWorkoutOverviewContent() {
           </div>
         </>
       )}
+
+      {/* Muscle History Modal */}
+      <MuscleHistoryModal
+        isOpen={muscleHistoryModal.isOpen}
+        onClose={muscleHistoryModal.close}
+        clientName={userName}
+        clientId={userId || ''}
+        api={trpc}
+      />
     </div>
   );
 }

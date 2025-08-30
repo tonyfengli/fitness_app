@@ -1,25 +1,16 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { BaseModal } from './BaseModal';
 
 interface MuscleHistoryModalProps {
   isOpen: boolean;
   onClose: () => void;
   clientName?: string;
+  clientId: string;
+  api: any; // tRPC client instance
 }
-
-// Hardcoded workout history data
-const WORKOUT_HISTORY = [
-  { date: '2025-08-23', muscle: 'Chest' },
-  { date: '2025-08-24', muscle: 'Quads' },
-  { date: '2025-08-24', muscle: 'Glutes' },
-  { date: '2025-08-25', muscle: 'Back' },
-  { date: '2025-08-26', muscle: 'Shoulders' },
-  { date: '2025-08-27', muscle: 'Core' },
-  { date: '2025-08-28', muscle: 'Quads' },
-  { date: '2025-08-29', muscle: 'Back' }
-];
 
 // Simplified muscle groups for UI (unified from 13 system muscles)
 const MUSCLES = [
@@ -53,13 +44,15 @@ type TimeRange = '7' | '14' | '30' | 'custom';
 export const MuscleHistoryModal: React.FC<MuscleHistoryModalProps> = ({
   isOpen,
   onClose,
-  clientName
+  clientName,
+  clientId,
+  api
 }) => {
   const [selectedRange, setSelectedRange] = useState<TimeRange>('7');
   const [isWeeklyMode, setIsWeeklyMode] = useState(true); // Default to This Week
 
-  // Calculate date range and muscle coverage
-  const calculateCoverage = () => {
+  // Calculate date range
+  const calculateDateRange = () => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     
@@ -81,28 +74,45 @@ export const MuscleHistoryModal: React.FC<MuscleHistoryModalProps> = ({
       startDate.setDate(startDate.getDate() - (Number(selectedRange) - 1));
     }
 
-    // Filter workouts in date range
-    const workoutsInRange = WORKOUT_HISTORY.filter(workout => {
-      const workoutDate = new Date(workout.date);
-      workoutDate.setHours(0, 0, 0, 0);
-      return workoutDate >= startDate && workoutDate <= endDate;
-    });
-
-    // Count workouts per muscle (with unification)
-    const muscleCounts = Object.fromEntries(MUSCLES.map(m => [m, 0]));
-    workoutsInRange.forEach(workout => {
-      // Check if this muscle should be unified to another
-      const unifiedMuscle = MUSCLE_UNIFICATION[workout.muscle] || workout.muscle;
-      
-      if (muscleCounts[unifiedMuscle] !== undefined) {
-        muscleCounts[unifiedMuscle]++;
-      }
-    });
-
-    return { startDate, endDate, muscleCounts };
+    return { startDate, endDate };
   };
 
-  const { startDate, endDate, muscleCounts } = calculateCoverage();
+  const { startDate, endDate } = calculateDateRange();
+
+  // Fetch muscle coverage data using React Query
+  const { data: muscleData, isLoading } = useQuery({
+    ...api.muscleCoverage.getClientMuscleCoverage.queryOptions({
+      clientId,
+      startDate,
+      endDate,
+    }),
+    enabled: isOpen && !!clientId,
+    select: (data) => {
+      // Process the muscle scores with unification
+      const processedCounts: Record<string, number> = {};
+      
+      // Initialize all muscles to 0
+      MUSCLES.forEach(muscle => {
+        processedCounts[muscle] = 0;
+      });
+
+      // Add scores from API, applying unification
+      if (data?.muscleScores) {
+        Object.entries(data.muscleScores).forEach(([muscle, score]) => {
+          const muscleKey = muscle.charAt(0).toUpperCase() + muscle.slice(1);
+          const unifiedMuscle = MUSCLE_UNIFICATION[muscleKey] || muscleKey;
+          
+          if (processedCounts[unifiedMuscle] !== undefined) {
+            processedCounts[unifiedMuscle] += score as number;
+          }
+        });
+      }
+
+      return processedCounts;
+    }
+  });
+
+  const muscleCounts = muscleData || {};
 
   const formatDateRange = (start: Date, end: Date) => {
     const formatDate = (date: Date) => 
@@ -123,18 +133,36 @@ export const MuscleHistoryModal: React.FC<MuscleHistoryModalProps> = ({
     return `Last ${selectedRange} days • ${formatDate(start)} – ${formatDate(end)}`;
   };
 
-  const MuscleProgressDots = ({ count }: { count: number }) => (
-    <div className="flex gap-1">
-      {[0, 1, 2].map((i) => (
-        <div
-          key={i}
-          className={`h-2 w-2 rounded-full ${
-            count > i ? 'bg-green-500' : 'bg-gray-200'
-          }`}
-        />
-      ))}
-    </div>
-  );
+  const MuscleProgressDots = ({ count }: { count: number }) => {
+    // Calculate full and partial bubbles
+    const fullBubbles = Math.floor(count);
+    const hasPartialBubble = count % 1 !== 0;
+    const partialValue = count % 1;
+    
+    // Show at least 3 bubbles for aesthetics, more if needed
+    const totalBubbles = Math.max(3, Math.ceil(count));
+    
+    return (
+      <div className="flex gap-1">
+        {Array.from({ length: totalBubbles }, (_, i) => {
+          let bubbleClass = 'h-2 w-2 rounded-full transition-all ';
+          
+          if (i < fullBubbles) {
+            // Full green bubble
+            bubbleClass += 'bg-green-500';
+          } else if (i === fullBubbles && hasPartialBubble) {
+            // Partial bubble with 30% opacity
+            bubbleClass += 'bg-green-500 opacity-30';
+          } else {
+            // Empty bubble
+            bubbleClass += 'bg-gray-200';
+          }
+          
+          return <div key={i} className={bubbleClass} />;
+        })}
+      </div>
+    );
+  };
 
   const MuscleCard = ({ muscle, count }: { muscle: string; count: number }) => (
     <div
@@ -152,6 +180,19 @@ export const MuscleHistoryModal: React.FC<MuscleHistoryModalProps> = ({
   const content = (
     <div className="flex-1 overflow-y-auto">
       <div className="px-6 py-4">
+        {/* Loading state */}
+        {isLoading && (
+          <div className="flex items-center justify-center py-12">
+            <div className="text-center">
+              <div className="mx-auto h-8 w-8 animate-spin rounded-full border-b-2 border-indigo-600"></div>
+              <p className="mt-2 text-sm text-gray-600">Loading muscle data...</p>
+            </div>
+          </div>
+        )}
+        
+        {/* Content when loaded */}
+        {!isLoading && (
+          <>
         {/* Date range label */}
         <p className="text-sm text-gray-600 mb-4">
           {formatDateRange(startDate, endDate)}
@@ -269,6 +310,8 @@ export const MuscleHistoryModal: React.FC<MuscleHistoryModalProps> = ({
             </div>
           </div>
         </div>
+        </>
+        )}
       </div>
     </div>
   );

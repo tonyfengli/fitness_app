@@ -1212,6 +1212,8 @@ export default function ClientPreferencePage() {
         isOpen={muscleHistoryModal.isOpen}
         onClose={muscleHistoryModal.close}
         clientName={clientData?.user?.name}
+        clientId={userId}
+        api={trpc}
       />
     </div>
   );
