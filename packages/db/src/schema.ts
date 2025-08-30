@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgEnum, pgTable, unique } from "drizzle-orm/pg-core";
+import { pgEnum, pgTable, unique, numeric, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -433,6 +433,68 @@ export const CreateUserExerciseRatingsSchema = createInsertSchema(
   id: true,
   createdAt: true,
   updatedAt: true,
+});
+
+// Exercise performance log - tracks weight lifted for progressive overload
+export const ExercisePerformanceLog = pgTable(
+  "exercise_performance_log",
+  (t) => ({
+    id: t.uuid().notNull().primaryKey().defaultRandom(),
+    userId: t
+      .text()
+      .notNull()
+      .references(() => user.id),
+    exerciseId: t
+      .uuid()
+      .notNull()
+      .references(() => exercises.id),
+    workoutId: t
+      .uuid()
+      .notNull()
+      .references(() => Workout.id),
+    workoutExerciseId: t
+      .uuid()
+      .notNull()
+      .references(() => WorkoutExercise.id),
+    businessId: t
+      .uuid()
+      .notNull()
+      .references(() => Business.id),
+    
+    // Performance data
+    weightLbs: numeric("weight_lbs", { precision: 6, scale: 2 }),
+    setsCompleted: t.integer("sets_completed"),
+    repsCompleted: t.integer("reps_completed").array(),
+    
+    // PR flags
+    isWeightPr: t.boolean("is_weight_pr").default(false),
+    previousBestWeightLbs: numeric("previous_best_weight_lbs", { precision: 6, scale: 2 }),
+    
+    // Metadata
+    createdAt: t.timestamp().defaultNow().notNull(),
+  }),
+  (table) => ({
+    userExerciseIdx: index("idx_user_exercise").on(table.userId, table.exerciseId),
+  })
+);
+
+export const CreateExercisePerformanceLogSchema = createInsertSchema(
+  ExercisePerformanceLog,
+  {
+    userId: z.string(),
+    exerciseId: z.string().uuid(),
+    workoutId: z.string().uuid(),
+    workoutExerciseId: z.string().uuid(),
+    businessId: z.string().uuid(),
+    weightLbs: z.number().positive().optional(),
+    setsCompleted: z.number().int().positive().optional(),
+    repsCompleted: z.array(z.number().int().positive()).optional(),
+    isWeightPr: z.boolean().optional(),
+    previousBestWeightLbs: z.number().positive().optional(),
+  }
+).omit({
+  id: true,
+  createdAt: true,
 });
 
 // Export all relations from the relations file

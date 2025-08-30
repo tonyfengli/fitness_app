@@ -39,6 +39,22 @@ export default function PostWorkoutFeedbackPage() {
   });
   const { data: feedbackData, isLoading, error } = useQuery(feedbackQuery);
 
+  // Initialize weights from fetched data
+  React.useEffect(() => {
+    if (feedbackData?.exercises) {
+      const initialWeights: Record<string, number> = {};
+      feedbackData.exercises.forEach((exercise: any) => {
+        if (exercise.latestWeight) {
+          initialWeights[exercise.exerciseId] = exercise.latestWeight;
+        }
+      });
+      setExerciseWeights(prev => ({
+        ...initialWeights,
+        ...prev, // Preserve any user edits
+      }));
+    }
+  }, [feedbackData]);
+
   // Log query state only when it changes
   React.useEffect(() => {
     console.log("PostWorkoutFeedbackPage - Query state:", {
@@ -60,16 +76,6 @@ export default function PostWorkoutFeedbackPage() {
       console.log("PostWorkoutFeedbackPage - Full feedbackData:", feedbackData);
     }
   }, [isLoading, error, feedbackData]);
-
-  // Initialize first exercise with weight when data loads
-  React.useEffect(() => {
-    if (feedbackData?.exercises?.[0] && !exerciseWeights[feedbackData.exercises[0].exerciseId]) {
-      setExerciseWeights(prev => ({
-        ...prev,
-        [feedbackData.exercises[0].exerciseId]: 135
-      }));
-    }
-  }, [feedbackData]);
 
   // We don't need a separate ratings query anymore since ratings come with the exercises
 
@@ -180,6 +186,121 @@ export default function PostWorkoutFeedbackPage() {
     },
   });
 
+  // Mutation for saving exercise performance (weight)
+  const savePerformanceMutation = useMutation({
+    mutationFn: async ({ exerciseId, weightLbs }: { exerciseId: string; weightLbs: number }) => {
+      const response = await fetch('/api/trpc/postWorkoutFeedback.saveExercisePerformance', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          json: {
+            sessionId,
+            userId,
+            exerciseId,
+            weightLbs,
+          },
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to save performance');
+      }
+      
+      const result = await response.json();
+      return result.result?.data?.json;
+    },
+    onMutate: async ({ exerciseId, weightLbs }) => {
+      // Cancel any outgoing refetches
+      await queryClient.cancelQueries({ queryKey });
+      
+      // Snapshot the previous value
+      const previousData = queryClient.getQueryData(queryKey);
+      
+      // Optimistically update
+      queryClient.setQueryData(queryKey, (old: any) => {
+        if (!old) return old;
+        
+        // Update the exercises array with new performance data
+        const updatedExercises = old.exercises.map((exercise: any) => {
+          if (exercise.exerciseId === exerciseId) {
+            return {
+              ...exercise,
+              latestWeight: weightLbs,
+              // We don't know if it's a PR yet, so keep existing value
+              isPersonalRecord: exercise.isPersonalRecord,
+              previousBestWeight: exercise.previousBestWeight,
+            };
+          }
+          return exercise;
+        });
+        
+        return {
+          ...old,
+          exercises: updatedExercises,
+          exercisesByType: {
+            swapped: updatedExercises.filter((e: any) => e.feedbackType === "swapped_out"),
+            performed: updatedExercises.filter((e: any) => e.feedbackType === "performed"),
+          },
+        };
+      });
+      
+      return { previousData, exerciseId, weightLbs };
+    },
+    onSuccess: (data, { exerciseId }) => {
+      console.log(`[Performance] Saved weight for exercise ${exerciseId}:`, data);
+      
+      // Update with actual PR status from server
+      queryClient.setQueryData(queryKey, (old: any) => {
+        if (!old) return old;
+        
+        const updatedExercises = old.exercises.map((exercise: any) => {
+          if (exercise.exerciseId === exerciseId) {
+            return {
+              ...exercise,
+              isPersonalRecord: data.isNewRecord,
+              previousBestWeight: data.previousBest,
+            };
+          }
+          return exercise;
+        });
+        
+        return {
+          ...old,
+          exercises: updatedExercises,
+          exercisesByType: {
+            swapped: updatedExercises.filter((e: any) => e.feedbackType === "swapped_out"),
+            performed: updatedExercises.filter((e: any) => e.feedbackType === "performed"),
+          },
+        };
+      });
+      
+      // Collapse the card after successful save
+      setExpandedCards(prev => {
+        const next = new Set(prev);
+        next.delete(exerciseId);
+        return next;
+      });
+      
+      // Show success indicator (the weight value acts as saved indicator)
+      if (data.isNewRecord) {
+        console.log(`[Performance] New PR! Previous best: ${data.previousBest} lbs`);
+      }
+    },
+    onError: (error, { exerciseId }, context) => {
+      console.error('Failed to save performance:', error);
+      
+      // Rollback on error
+      if (context?.previousData) {
+        queryClient.setQueryData(queryKey, context.previousData);
+      }
+      
+      // Keep the card expanded on error so user can retry
+    },
+  });
+
   // Handle button clicks
   const handleRating = (exerciseId: string, ratingType: "favorite" | "avoid" | "not_sure") => {
     // Always save to backend
@@ -253,7 +374,17 @@ export default function PostWorkoutFeedbackPage() {
   );
 
   // Separate component for weight controls to prevent re-animation
-  const WeightControls = React.memo(({ exerciseId, exerciseName }: { exerciseId: string; exerciseName: string }) => {
+  const WeightControls = React.memo(({ 
+    exerciseId, 
+    exerciseName,
+    savePerformanceMutation,
+    exercise
+  }: { 
+    exerciseId: string; 
+    exerciseName: string;
+    savePerformanceMutation: any;
+    exercise: any;
+  }) => {
     const weight = exerciseWeights[exerciseId] || 0;
     
     const handleIncrement = () => {
@@ -277,10 +408,13 @@ export default function PostWorkoutFeedbackPage() {
     };
     
     const handleSaveWeight = () => {
-      // TODO: Implement save functionality
       console.log(`[Weight Slider] Saving weight for ${exerciseName}: ${weight} lbs`);
-      // For demo purposes, just keep the weight in state
-      // In real implementation, this would save to backend
+      
+      // Call the save mutation
+      savePerformanceMutation.mutate({ 
+        exerciseId, 
+        weightLbs: weight 
+      });
     };
     
     return (
@@ -289,8 +423,29 @@ export default function PostWorkoutFeedbackPage() {
           <span className="text-xs text-gray-500 font-medium">Weight</span>
           <div className="flex items-center gap-2">
             <span className="text-sm font-semibold text-gray-900">{weight} lbs</span>
-            {weight > 0 && (
-              <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Saved</span>
+            {/* Show saved status if weight has been previously saved */}
+            {exercise?.latestWeight && exercise?.latestWeight === weight && !savePerformanceMutation.isSuccess && (
+              exercise?.isPersonalRecord ? (
+                <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full font-semibold">
+                  🏆 PR!
+                </span>
+              ) : (
+                <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
+                  Saved
+                </span>
+              )
+            )}
+            {/* Show save status for new saves */}
+            {savePerformanceMutation.isSuccess && savePerformanceMutation.variables?.exerciseId === exerciseId && (
+              savePerformanceMutation.data?.isNewRecord ? (
+                <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full font-semibold animate-pulse">
+                  🏆 New PR!
+                </span>
+              ) : (
+                <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
+                  Saved
+                </span>
+              )
             )}
           </div>
         </div>
@@ -330,9 +485,16 @@ export default function PostWorkoutFeedbackPage() {
             
             <button
               onClick={handleSaveWeight}
-              className="px-4 py-3 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 active:scale-95 text-white text-sm font-semibold rounded-lg shadow-sm transition-all"
+              disabled={savePerformanceMutation.isPending && savePerformanceMutation.variables?.exerciseId === exerciseId}
+              className={`px-4 py-3 text-white text-sm font-semibold rounded-lg shadow-sm transition-all ${
+                savePerformanceMutation.isPending && savePerformanceMutation.variables?.exerciseId === exerciseId
+                  ? 'bg-gray-400 cursor-not-allowed'
+                  : 'bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 active:scale-95'
+              }`}
             >
-              Save
+              {savePerformanceMutation.isPending && savePerformanceMutation.variables?.exerciseId === exerciseId 
+                ? 'Saving...' 
+                : 'Save'}
             </button>
           </div>
         </div>
@@ -464,7 +626,12 @@ export default function PostWorkoutFeedbackPage() {
             isExpanded ? 'max-h-40 opacity-100' : 'max-h-0 opacity-0'
           }`}
         >
-          <WeightControls exerciseId={exercise.exerciseId} exerciseName={exercise.exerciseName} />
+          <WeightControls 
+            exerciseId={exercise.exerciseId} 
+            exerciseName={exercise.exerciseName}
+            savePerformanceMutation={savePerformanceMutation}
+            exercise={exercise}
+          />
         </div>
       </div>
     );

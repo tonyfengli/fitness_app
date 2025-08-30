@@ -1,4 +1,4 @@
-import { and, eq, inArray, notInArray } from "@acme/db";
+import { and, eq, inArray, notInArray, desc } from "@acme/db";
 import type { Database } from "@acme/db/client";
 import {
   Workout,
@@ -7,6 +7,7 @@ import {
   exercises,
   UserExerciseRatings,
   UserTrainingSession,
+  ExercisePerformanceLog,
 } from "@acme/db/schema";
 
 export interface FeedbackExercise {
@@ -19,6 +20,9 @@ export interface FeedbackExercise {
   originalExerciseId?: string;
   originalExerciseName?: string;
   existingRating?: string | null;
+  latestWeight?: number | null;
+  isPersonalRecord?: boolean;
+  previousBestWeight?: number | null;
 }
 
 export interface GetFeedbackExercisesInput {
@@ -207,11 +211,58 @@ export class PostWorkoutFeedbackService {
       ratings: Array.from(existingRatingsMap.entries()),
     });
 
+    // Step 6.5: Get latest performance logs for all exercises
+    let performanceLogsMap = new Map<string, { weight: number; isPr: boolean; previousBest: number | null }>();
+    
+    if (allExerciseIds.length > 0 && workout) {
+      // Get all performance logs for this workout
+      const performanceLogs = await this.db
+        .select({
+          exerciseId: ExercisePerformanceLog.exerciseId,
+          weightLbs: ExercisePerformanceLog.weightLbs,
+          isWeightPr: ExercisePerformanceLog.isWeightPr,
+          previousBestWeightLbs: ExercisePerformanceLog.previousBestWeightLbs,
+          createdAt: ExercisePerformanceLog.createdAt,
+        })
+        .from(ExercisePerformanceLog)
+        .where(
+          and(
+            eq(ExercisePerformanceLog.userId, userId),
+            eq(ExercisePerformanceLog.workoutId, workout.id),
+            inArray(ExercisePerformanceLog.exerciseId, allExerciseIds)
+          )
+        )
+        .orderBy(desc(ExercisePerformanceLog.createdAt));
+      
+      // Group by exercise and take the latest entry for each
+      const latestPerformanceByExercise = new Map<string, typeof performanceLogs[0]>();
+      performanceLogs.forEach(log => {
+        if (!latestPerformanceByExercise.has(log.exerciseId)) {
+          latestPerformanceByExercise.set(log.exerciseId, log);
+        }
+      });
+      
+      // Convert to our map format
+      latestPerformanceByExercise.forEach((log, exerciseId) => {
+        performanceLogsMap.set(exerciseId, {
+          weight: Number(log.weightLbs),
+          isPr: log.isWeightPr,
+          previousBest: log.previousBestWeightLbs ? Number(log.previousBestWeightLbs) : null,
+        });
+      });
+    }
+    
+    console.log("[PostWorkoutFeedbackService] Performance logs:", {
+      count: performanceLogsMap.size,
+      logs: Array.from(performanceLogsMap.entries()),
+    });
+
     // Step 7: Build feedback exercise list (include ALL exercises)
     const feedbackExercises: FeedbackExercise[] = [];
 
     // Add swapped exercises (include rated ones)
     swappedExercises.forEach(ex => {
+      const performanceData = performanceLogsMap.get(ex.exerciseId);
       feedbackExercises.push({
         exerciseId: ex.exerciseId,
         exerciseName: ex.exerciseName,
@@ -220,6 +271,9 @@ export class PostWorkoutFeedbackService {
         feedbackType: "swapped_out",
         swapReason: ex.swapReason,
         existingRating: existingRatingsMap.get(ex.exerciseId) || null,
+        latestWeight: performanceData?.weight || null,
+        isPersonalRecord: performanceData?.isPr || false,
+        previousBestWeight: performanceData?.previousBest || null,
       });
     });
 
@@ -227,6 +281,7 @@ export class PostWorkoutFeedbackService {
     const swappedIds = new Set(swappedExercises.map(e => e.exerciseId));
     performedExercises.forEach(ex => {
       if (!swappedIds.has(ex.exerciseId)) {
+        const performanceData = performanceLogsMap.get(ex.exerciseId);
         feedbackExercises.push({
           exerciseId: ex.exerciseId,
           exerciseName: ex.exerciseName,
@@ -234,6 +289,9 @@ export class PostWorkoutFeedbackService {
           movementPattern: ex.movementPattern,
           feedbackType: "performed",
           existingRating: existingRatingsMap.get(ex.exerciseId) || null,
+          latestWeight: performanceData?.weight || null,
+          isPersonalRecord: performanceData?.isPr || false,
+          previousBestWeight: performanceData?.previousBest || null,
         });
       }
     });

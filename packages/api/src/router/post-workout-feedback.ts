@@ -2,8 +2,14 @@ import type { TRPCRouterRecord } from "@trpc/server";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
-import { and, eq } from "@acme/db";
-import { TrainingSession, UserExerciseRatings } from "@acme/db/schema";
+import { and, eq, desc } from "@acme/db";
+import { 
+  TrainingSession, 
+  UserExerciseRatings, 
+  ExercisePerformanceLog,
+  Workout,
+  WorkoutExercise 
+} from "@acme/db/schema";
 
 import type { SessionUser } from "../types/auth";
 import { PostWorkoutFeedbackService } from "../services/post-workout-feedback-service";
@@ -211,5 +217,81 @@ export const postWorkoutFeedbackRouter = {
         userId: input.userId,
         businessId: session.businessId,
       });
+    }),
+
+  // Save exercise performance (weight lifted)
+  saveExercisePerformance: publicProcedure
+    .input(
+      z.object({
+        sessionId: z.string().uuid(),
+        userId: z.string(),
+        exerciseId: z.string().uuid(),
+        weightLbs: z.number().positive(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      // Get the workout for this session and user
+      const workout = await ctx.db.query.Workout.findFirst({
+        where: and(
+          eq(Workout.trainingSessionId, input.sessionId),
+          eq(Workout.userId, input.userId)
+        ),
+      });
+
+      if (!workout) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Workout not found for this session and user",
+        });
+      }
+
+      // Get the workout exercise record
+      const workoutExercise = await ctx.db.query.WorkoutExercise.findFirst({
+        where: and(
+          eq(WorkoutExercise.workoutId, workout.id),
+          eq(WorkoutExercise.exerciseId, input.exerciseId)
+        ),
+      });
+
+      if (!workoutExercise) {
+        throw new TRPCError({
+          code: "NOT_FOUND", 
+          message: "Exercise not found in workout",
+        });
+      }
+
+      // Check if this is a PR by finding the previous best
+      const previousBest = await ctx.db.query.ExercisePerformanceLog.findFirst({
+        where: and(
+          eq(ExercisePerformanceLog.userId, input.userId),
+          eq(ExercisePerformanceLog.exerciseId, input.exerciseId)
+        ),
+        orderBy: [desc(ExercisePerformanceLog.weightLbs)],
+      });
+
+      const isWeightPr = !previousBest || input.weightLbs > Number(previousBest.weightLbs);
+      const previousBestWeight = previousBest ? Number(previousBest.weightLbs) : null;
+
+      // Insert the performance log
+      const [performanceLog] = await ctx.db
+        .insert(ExercisePerformanceLog)
+        .values({
+          userId: input.userId,
+          exerciseId: input.exerciseId,
+          workoutId: workout.id,
+          workoutExerciseId: workoutExercise.id,
+          businessId: workout.businessId,
+          weightLbs: input.weightLbs.toString(),
+          isWeightPr,
+          previousBestWeightLbs: previousBestWeight?.toString(),
+        })
+        .returning();
+
+      return {
+        success: true,
+        performanceLog,
+        isNewRecord: isWeightPr,
+        previousBest: previousBestWeight,
+      };
     }),
 } satisfies TRPCRouterRecord;
