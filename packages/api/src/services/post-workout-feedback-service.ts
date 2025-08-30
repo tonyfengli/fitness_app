@@ -18,6 +18,7 @@ export interface FeedbackExercise {
   swapReason?: string | null;
   originalExerciseId?: string;
   originalExerciseName?: string;
+  existingRating?: string | null;
 }
 
 export interface GetFeedbackExercisesInput {
@@ -177,13 +178,14 @@ export class PostWorkoutFeedbackService {
       exerciseIds: allExerciseIds,
     });
 
-    // Step 6: Get existing ratings to exclude
-    let existingRatings: { exerciseId: string }[] = [];
+    // Step 6: Get existing ratings (but don't exclude them)
+    let existingRatingsMap = new Map<string, string>();
     
     if (allExerciseIds.length > 0) {
-      existingRatings = await this.db
+      const existingRatings = await this.db
         .select({
           exerciseId: UserExerciseRatings.exerciseId,
+          ratingType: UserExerciseRatings.ratingType,
         })
         .from(UserExerciseRatings)
         .where(
@@ -193,42 +195,45 @@ export class PostWorkoutFeedbackService {
             inArray(UserExerciseRatings.exerciseId, allExerciseIds)
           )
         );
+      
+      // Create a map of exercise ID to rating type
+      existingRatings.forEach(rating => {
+        existingRatingsMap.set(rating.exerciseId, rating.ratingType);
+      });
     }
-
-    const ratedExerciseIds = new Set(existingRatings.map(r => r.exerciseId));
     
     console.log("[PostWorkoutFeedbackService] Existing ratings:", {
-      count: existingRatings.length,
-      ratedExerciseIds: Array.from(ratedExerciseIds),
+      count: existingRatingsMap.size,
+      ratings: Array.from(existingRatingsMap.entries()),
     });
 
-    // Step 7: Build feedback exercise list
+    // Step 7: Build feedback exercise list (include ALL exercises)
     const feedbackExercises: FeedbackExercise[] = [];
 
-    // Add swapped exercises (not yet rated)
+    // Add swapped exercises (include rated ones)
     swappedExercises.forEach(ex => {
-      if (!ratedExerciseIds.has(ex.exerciseId)) {
-        feedbackExercises.push({
-          exerciseId: ex.exerciseId,
-          exerciseName: ex.exerciseName,
-          primaryMuscle: ex.primaryMuscle,
-          movementPattern: ex.movementPattern,
-          feedbackType: "swapped_out",
-          swapReason: ex.swapReason,
-        });
-      }
+      feedbackExercises.push({
+        exerciseId: ex.exerciseId,
+        exerciseName: ex.exerciseName,
+        primaryMuscle: ex.primaryMuscle,
+        movementPattern: ex.movementPattern,
+        feedbackType: "swapped_out",
+        swapReason: ex.swapReason,
+        existingRating: existingRatingsMap.get(ex.exerciseId) || null,
+      });
     });
 
-    // Add performed exercises (not yet rated and not swapped)
+    // Add performed exercises (include rated ones, but exclude swapped)
     const swappedIds = new Set(swappedExercises.map(e => e.exerciseId));
     performedExercises.forEach(ex => {
-      if (!ratedExerciseIds.has(ex.exerciseId) && !swappedIds.has(ex.exerciseId)) {
+      if (!swappedIds.has(ex.exerciseId)) {
         feedbackExercises.push({
           exerciseId: ex.exerciseId,
           exerciseName: ex.exerciseName,
           primaryMuscle: ex.primaryMuscle,
           movementPattern: ex.movementPattern,
           feedbackType: "performed",
+          existingRating: existingRatingsMap.get(ex.exerciseId) || null,
         });
       }
     });

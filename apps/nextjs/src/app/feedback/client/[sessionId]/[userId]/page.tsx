@@ -6,6 +6,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { useTRPC } from "~/trpc/react";
 
+
 export default function PostWorkoutFeedbackPage() {
   const params = useParams();
   const router = useRouter();
@@ -16,46 +17,62 @@ export default function PostWorkoutFeedbackPage() {
   
   // Track loading state for individual exercises
   const [loadingExercises, setLoadingExercises] = useState<Set<string>>(new Set());
-  const [hiddenExercises, setHiddenExercises] = useState<Set<string>>(new Set());
+  // Track exercise weights locally
+  const [exerciseWeights, setExerciseWeights] = useState<Record<string, number>>({});
 
   // Log initial params
-  console.log("PostWorkoutFeedbackPage - Initial params:", {
-    sessionId,
-    userId,
-    timestamp: new Date().toISOString(),
-  });
-
-  // Fetch exercises for feedback
-  const { data: feedbackData, isLoading, error } = useQuery({
-    ...trpc.postWorkoutFeedback.getExercisesForFeedbackPublic.queryOptions({
+  // Only log on mount, not every render
+  React.useEffect(() => {
+    console.log("PostWorkoutFeedbackPage - Initial params:", {
       sessionId,
       userId,
-    }),
+      timestamp: new Date().toISOString(),
+    });
+  }, [sessionId, userId]);
+
+  // Fetch exercises for feedback
+  const feedbackQuery = trpc.postWorkoutFeedback.getExercisesForFeedbackPublic.queryOptions({
+    sessionId,
+    userId,
   });
+  const { data: feedbackData, isLoading, error } = useQuery(feedbackQuery);
 
-  // Log query state
-  console.log("PostWorkoutFeedbackPage - Query state:", {
-    isLoading,
-    hasError: !!error,
-    errorMessage: error?.message,
-    hasData: !!feedbackData,
-    dataDetails: feedbackData ? {
-      exercisesCount: feedbackData.exercises?.length,
-      hasExercisesByType: !!feedbackData.exercisesByType,
-      swappedCount: feedbackData.exercisesByType?.swapped?.length,
-      performedCount: feedbackData.exercisesByType?.performed?.length,
-    } : null,
-    timestamp: new Date().toISOString(),
-  });
+  // Log query state only when it changes
+  React.useEffect(() => {
+    console.log("PostWorkoutFeedbackPage - Query state:", {
+      isLoading,
+      hasError: !!error,
+      errorMessage: error?.message,
+      hasData: !!feedbackData,
+      dataDetails: feedbackData ? {
+        exercisesCount: feedbackData.exercises?.length,
+        hasExercisesByType: !!feedbackData.exercisesByType,
+        swappedCount: feedbackData.exercisesByType?.swapped?.length,
+        performedCount: feedbackData.exercisesByType?.performed?.length,
+      } : null,
+      timestamp: new Date().toISOString(),
+    });
 
-  // Log the full data if available
-  if (feedbackData) {
-    console.log("PostWorkoutFeedbackPage - Full feedbackData:", feedbackData);
-  }
+    // Log the full data if available
+    if (feedbackData) {
+      console.log("PostWorkoutFeedbackPage - Full feedbackData:", feedbackData);
+    }
+  }, [isLoading, error, feedbackData]);
 
-  // Mutation for setting exercise rating
+  // We don't need a separate ratings query anymore since ratings come with the exercises
+
+  // Get the query key for optimistic updates
+  const queryKey = trpc.postWorkoutFeedback.getExercisesForFeedbackPublic.queryOptions({
+    sessionId,
+    userId,
+  }).queryKey;
+
+  // Mutation for setting exercise rating with optimistic updates
   const setRatingMutation = useMutation({
-    mutationFn: async ({ exerciseId, ratingType }: { exerciseId: string; ratingType: "favorite" | "avoid" }) => {
+    mutationFn: async ({ exerciseId, ratingType }: { exerciseId: string; ratingType: "favorite" | "avoid" | "not_sure" }) => {
+      // Map "not_sure" to "maybe_later" for the backend
+      const backendRatingType = ratingType === "not_sure" ? "maybe_later" : ratingType;
+      
       const response = await fetch('/api/trpc/exercise.setRating', {
         method: 'POST',
         headers: {
@@ -66,7 +83,7 @@ export default function PostWorkoutFeedbackPage() {
           json: {
             userId,
             exerciseId,
-            ratingType,
+            ratingType: backendRatingType,
           },
         }),
       });
@@ -78,44 +95,83 @@ export default function PostWorkoutFeedbackPage() {
       const result = await response.json();
       return result.result?.data?.json;
     },
-    onMutate: async ({ exerciseId }) => {
+    onMutate: async ({ exerciseId, ratingType }) => {
       // Add to loading state
       setLoadingExercises(prev => new Set(prev).add(exerciseId));
+      
+      // Cancel any outgoing refetches using the exact query key from tRPC
+      await queryClient.cancelQueries({ queryKey });
+      
+      // Snapshot the previous value
+      const previousData = queryClient.getQueryData(queryKey);
+      
+      // Optimistically update the cache
+      queryClient.setQueryData(queryKey, (old: any) => {
+        if (!old) return old;
+        
+        // Map the frontend rating type to backend
+        const backendRatingType = ratingType === "not_sure" ? "maybe_later" : ratingType;
+        
+        // Update the exercises array with the new rating
+        const updatedExercises = old.exercises.map((exercise: any) => {
+          if (exercise.exerciseId === exerciseId) {
+            return {
+              ...exercise,
+              existingRating: backendRatingType,
+            };
+          }
+          return exercise;
+        });
+        
+        return {
+          ...old,
+          exercises: updatedExercises,
+          exercisesByType: {
+            swapped: updatedExercises.filter((e: any) => e.feedbackType === "swapped_out"),
+            performed: updatedExercises.filter((e: any) => e.feedbackType === "performed"),
+          },
+        };
+      });
+      
+      // Return context for rollback
+      return { previousData, exerciseId };
     },
-    onSuccess: async (data, { exerciseId }) => {
-      // Hide the card
-      setHiddenExercises(prev => new Set(prev).add(exerciseId));
+    onSuccess: (data, { exerciseId }) => {
       // Remove from loading state
       setLoadingExercises(prev => {
         const next = new Set(prev);
         next.delete(exerciseId);
         return next;
       });
-      // Invalidate the query to refresh data
-      await queryClient.invalidateQueries({
-        queryKey: ['postWorkoutFeedback.getExercisesForFeedbackPublic', { sessionId, userId }],
-      });
     },
-    onError: (error, { exerciseId }) => {
+    onError: (error, { exerciseId }, context) => {
       // Remove from loading state
       setLoadingExercises(prev => {
         const next = new Set(prev);
         next.delete(exerciseId);
         return next;
       });
+      
+      // Rollback the optimistic update
+      if (context?.previousData) {
+        queryClient.setQueryData(queryKey, context.previousData);
+      }
+      
       console.error('Failed to save rating:', error);
+    },
+    onSettled: () => {
+      // Optional: Invalidate and refetch to ensure consistency
+      // But with optimistic updates, this is usually not needed
+      // queryClient.invalidateQueries({
+      //   queryKey: ['postWorkoutFeedback', 'getExercisesForFeedbackPublic', { sessionId, userId }],
+      // });
     },
   });
 
   // Handle button clicks
-  const handleRating = (exerciseId: string, ratingType: "favorite" | "avoid" | "maybe_later") => {
-    if (ratingType === "maybe_later") {
-      // Just hide the card, don't save to backend
-      setHiddenExercises(prev => new Set(prev).add(exerciseId));
-    } else {
-      // Save to backend
-      setRatingMutation.mutate({ exerciseId, ratingType });
-    }
+  const handleRating = (exerciseId: string, ratingType: "favorite" | "avoid" | "not_sure") => {
+    // Always save to backend
+    setRatingMutation.mutate({ exerciseId, ratingType });
   };
 
   // Get client info for display
@@ -166,8 +222,216 @@ export default function PostWorkoutFeedbackPage() {
     );
   }
 
-  const { swapped, performed } = feedbackData.exercisesByType;
-  const totalExercises = feedbackData.exercises.length;
+  // Create a map of exercise ratings from the exercises data
+  const exerciseRatings = new Map<string, string>();
+  feedbackData.exercises.forEach((exercise: any) => {
+    if (exercise.existingRating) {
+      // Map "maybe_later" from backend to "not_sure" for frontend
+      const displayRatingType = exercise.existingRating === "maybe_later" ? "not_sure" : exercise.existingRating;
+      exerciseRatings.set(exercise.exerciseId, displayRatingType);
+    }
+  });
+
+  // Separate exercises into rated and unrated
+  const unratedExercises = feedbackData.exercises.filter(
+    (exercise: any) => !exercise.existingRating
+  );
+  const ratedExercisesList = feedbackData.exercises.filter(
+    (exercise: any) => exercise.existingRating
+  );
+
+  // Component to render exercise card - Memoized to prevent re-renders
+  const ExerciseCard = React.memo(({ exercise, currentRating }: { exercise: any; currentRating?: string }) => {
+    const isLoading = loadingExercises.has(exercise.exerciseId);
+    const weight = exerciseWeights[exercise.exerciseId] || 0;
+    
+    const handleIncrement = () => {
+      console.log('[Weight Slider] Increment clicked, current weight:', weight);
+      const newWeight = Math.min(weight + 5, 300);
+      console.log('[Weight Slider] Setting new weight:', newWeight);
+      setExerciseWeights(prev => ({
+        ...prev,
+        [exercise.exerciseId]: newWeight
+      }));
+    };
+    
+    const handleDecrement = () => {
+      console.log('[Weight Slider] Decrement clicked, current weight:', weight);
+      const newWeight = Math.max(weight - 5, 0);
+      console.log('[Weight Slider] Setting new weight:', newWeight);
+      setExerciseWeights(prev => ({
+        ...prev,
+        [exercise.exerciseId]: newWeight
+      }));
+    };
+    
+    const handleSaveWeight = () => {
+      // TODO: Implement save functionality
+      console.log(`[Weight Slider] Saving weight for ${exercise.exerciseName}: ${weight} lbs`);
+    };
+    
+    return (
+      <div
+        key={exercise.exerciseId}
+        className={`p-4 bg-white border border-gray-200 rounded-lg shadow-sm transition-opacity ${
+          isLoading ? 'opacity-50' : 'opacity-100'
+        }`}
+      >
+        <div className="font-medium text-gray-900 mb-3">
+          {exercise.exerciseName}
+        </div>
+        <div className="flex gap-2 mb-3">
+          <button
+            onClick={() => handleRating(exercise.exerciseId, 'favorite')}
+            disabled={isLoading}
+            className={`flex-1 p-3 border rounded-lg transition-all ${
+              currentRating === 'favorite'
+                ? 'bg-green-100 border-green-500 text-green-700'
+                : 'bg-gray-50 border-gray-200 hover:bg-green-50 hover:border-green-300'
+            } ${isLoading ? 'cursor-not-allowed' : ''}`}
+            aria-label="Like exercise"
+          >
+            <svg 
+              className={`w-5 h-5 mx-auto ${
+                currentRating === 'favorite' ? 'text-green-600' : 'text-gray-600'
+              }`} 
+              fill={currentRating === 'favorite' ? 'currentColor' : 'none'} 
+              stroke="currentColor" 
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5" />
+            </svg>
+          </button>
+          <button
+            onClick={() => handleRating(exercise.exerciseId, 'avoid')}
+            disabled={isLoading}
+            className={`flex-1 p-3 border rounded-lg transition-all ${
+              currentRating === 'avoid'
+                ? 'bg-red-100 border-red-500 text-red-700'
+                : 'bg-gray-50 border-gray-200 hover:bg-red-50 hover:border-red-300'
+            } ${isLoading ? 'cursor-not-allowed' : ''}`}
+            aria-label="Dislike exercise"
+          >
+            <svg 
+              className={`w-5 h-5 mx-auto ${
+                currentRating === 'avoid' ? 'text-red-600' : 'text-gray-600'
+              }`} 
+              fill={currentRating === 'avoid' ? 'currentColor' : 'none'} 
+              stroke="currentColor" 
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14H5.236a2 2 0 01-1.789-2.894l3.5-7A2 2 0 018.736 3h4.018a2 2 0 01.485.06l3.76.94m-7 10v5a2 2 0 002 2h.096c.5 0 .905-.405.905-.904 0-.715.211-1.413.608-2.008L17 13V4m-7 10h2m5-10h2a2 2 0 012 2v6a2 2 0 01-2 2h-2.5" />
+            </svg>
+          </button>
+          <button
+            onClick={() => handleRating(exercise.exerciseId, 'not_sure')}
+            disabled={isLoading}
+            className={`flex-1 p-3 border rounded-lg transition-all ${
+              currentRating === 'not_sure'
+                ? 'bg-yellow-100 border-yellow-500 text-yellow-700'
+                : 'bg-gray-50 border-gray-200 hover:bg-yellow-50 hover:border-yellow-300'
+            } ${isLoading ? 'cursor-not-allowed' : ''}`}
+            aria-label="Not sure"
+          >
+            <span className={`text-sm font-medium ${
+              currentRating === 'not_sure' ? 'text-yellow-700' : 'text-gray-600'
+            }`}>Not Sure</span>
+          </button>
+        </div>
+        
+        {/* Weight Slider Section */}
+        <div className="mt-3 pt-3 border-t border-gray-100">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs text-gray-500 font-medium">Weight</span>
+            <span className="text-sm font-semibold text-gray-900">{weight} lbs</span>
+            {/* Debug button */}
+            <button
+              onClick={() => {
+                console.log('[Weight Slider] Debug - Current state:', {
+                  exerciseId: exercise.exerciseId,
+                  weight,
+                  allWeights: exerciseWeights
+                });
+                // Test direct state update
+                const testWeight = weight === 0 ? 50 : 0;
+                console.log('[Weight Slider] Debug - Setting test weight:', testWeight);
+                setExerciseWeights(prev => ({
+                  ...prev,
+                  [exercise.exerciseId]: testWeight
+                }));
+              }}
+              className="text-xs text-blue-600 underline"
+            >
+              Debug
+            </button>
+          </div>
+          
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleDecrement}
+              className="p-1.5 rounded-md border border-gray-300 hover:bg-gray-50 transition-colors"
+              aria-label="Decrease weight"
+            >
+              <svg className="w-4 h-4 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
+              </svg>
+            </button>
+            
+            <div className="flex-1">
+              <input
+                type="range"
+                min="0"
+                max="300"
+                step="5"
+                value={weight}
+                onInput={(e) => {
+                  const newValue = parseInt((e.target as HTMLInputElement).value);
+                  console.log('[Weight Slider] onInput - value changed to:', newValue);
+                  setExerciseWeights(prev => ({
+                    ...prev,
+                    [exercise.exerciseId]: newValue
+                  }));
+                }}
+                onPointerDown={(e) => {
+                  console.log('[Weight Slider] Pointer down - starting drag');
+                  (e.target as HTMLInputElement).setPointerCapture(e.pointerId);
+                }}
+                onPointerUp={(e) => {
+                  console.log('[Weight Slider] Pointer up - ending drag');
+                  (e.target as HTMLInputElement).releasePointerCapture(e.pointerId);
+                }}
+                className="w-full h-2 bg-gray-200 rounded-lg cursor-pointer accent-indigo-600 touch-none"
+                style={{
+                  WebkitAppearance: 'none',
+                  appearance: 'none',
+                }}
+              />
+            </div>
+            
+            <button
+              onClick={handleIncrement}
+              className="p-1.5 rounded-md border border-gray-300 hover:bg-gray-50 transition-colors"
+              aria-label="Increase weight"
+            >
+              <svg className="w-4 h-4 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v12m6-6H6" />
+              </svg>
+            </button>
+            
+            <button
+              onClick={handleSaveWeight}
+              className="px-3 py-1.5 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700 transition-colors"
+            >
+              Save
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  });
+
+  // Give the component a display name for debugging
+  ExerciseCard.displayName = 'ExerciseCard';
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -185,75 +449,65 @@ export default function PostWorkoutFeedbackPage() {
         </div>
 
 
-        {/* All Exercises */}
+        {/* Rate These Exercises Section */}
         <div className="space-y-6">
-          <div>
-            <h4 className="text-sm font-semibold text-gray-700 mb-3">
-              All Exercises ({totalExercises})
-            </h4>
-            <div className="space-y-2">
-              {feedbackData.exercises
-                .filter(exercise => !hiddenExercises.has(exercise.exerciseId))
-                .map((exercise) => {
-                  const isLoading = loadingExercises.has(exercise.exerciseId);
+          {unratedExercises.length > 0 ? (
+            <div>
+              <h4 className="text-sm font-semibold text-gray-700 mb-3">
+                Rate These Exercises ({unratedExercises.length})
+              </h4>
+              <div className="space-y-2">
+                {unratedExercises.map((exercise) => (
+                  <ExerciseCard 
+                    key={exercise.exerciseId}
+                    exercise={exercise} 
+                    currentRating={undefined}
+                  />
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <div className="bg-green-50 rounded-lg p-6 border border-green-200">
+                <svg className="w-12 h-12 mx-auto text-green-600 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">All exercises have been rated!</h3>
+                <p className="text-gray-600">You can update your ratings below if needed.</p>
+              </div>
+            </div>
+          )}
+
+          {/* Already Rated Section */}
+          {ratedExercisesList.length > 0 && (
+            <div>
+              <h4 className="text-sm font-semibold text-gray-700 mb-3">
+                Already Rated ({ratedExercisesList.length})
+              </h4>
+              <div className="space-y-2">
+                {ratedExercisesList.map((exercise) => {
+                  // Get the rating for this exercise - check the exercise object first (from optimistic update)
+                  let currentRating = undefined;
+                  
+                  if (exercise.existingRating) {
+                    // Map backend rating to frontend display
+                    currentRating = exercise.existingRating === "maybe_later" ? "not_sure" : exercise.existingRating;
+                  } else if (exerciseRatings.has(exercise.exerciseId)) {
+                    // Fallback to the ratings map
+                    currentRating = exerciseRatings.get(exercise.exerciseId);
+                  }
                   
                   return (
-                    <div
+                    <ExerciseCard 
                       key={exercise.exerciseId}
-                      className={`p-4 bg-white border border-gray-200 rounded-lg shadow-sm transition-opacity ${
-                        isLoading ? 'opacity-50' : 'opacity-100'
-                      }`}
-                    >
-                  <div className="font-medium text-gray-900 mb-3">
-                    {exercise.exerciseName}
-                  </div>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => handleRating(exercise.exerciseId, 'favorite')}
-                      disabled={isLoading}
-                      className={`flex-1 p-3 bg-gray-50 border border-gray-200 rounded-lg transition-colors ${
-                        isLoading 
-                          ? 'cursor-not-allowed opacity-50' 
-                          : 'hover:bg-green-50 hover:border-green-300'
-                      }`}
-                      aria-label="Like exercise"
-                    >
-                      <svg className="w-5 h-5 mx-auto text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5" />
-                      </svg>
-                    </button>
-                    <button
-                      onClick={() => handleRating(exercise.exerciseId, 'avoid')}
-                      disabled={isLoading}
-                      className={`flex-1 p-3 bg-gray-50 border border-gray-200 rounded-lg transition-colors ${
-                        isLoading 
-                          ? 'cursor-not-allowed opacity-50' 
-                          : 'hover:bg-red-50 hover:border-red-300'
-                      }`}
-                      aria-label="Dislike exercise"
-                    >
-                      <svg className="w-5 h-5 mx-auto text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14H5.236a2 2 0 01-1.789-2.894l3.5-7A2 2 0 018.736 3h4.018a2 2 0 01.485.06l3.76.94m-7 10v5a2 2 0 002 2h.096c.5 0 .905-.405.905-.904 0-.715.211-1.413.608-2.008L17 13V4m-7 10h2m5-10h2a2 2 0 012 2v6a2 2 0 01-2 2h-2.5" />
-                      </svg>
-                    </button>
-                    <button
-                      onClick={() => handleRating(exercise.exerciseId, 'maybe_later')}
-                      disabled={isLoading}
-                      className={`flex-1 p-3 bg-gray-50 border border-gray-200 rounded-lg transition-colors ${
-                        isLoading 
-                          ? 'cursor-not-allowed opacity-50' 
-                          : 'hover:bg-yellow-50 hover:border-yellow-300'
-                      }`}
-                      aria-label="Not sure"
-                    >
-                      <span className="text-sm font-medium text-gray-600">Not Sure</span>
-                    </button>
-                  </div>
-                </div>
+                      exercise={exercise} 
+                      currentRating={currentRating}
+                    />
                   );
                 })}
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
       </div>
