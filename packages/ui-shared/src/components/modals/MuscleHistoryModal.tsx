@@ -50,6 +50,7 @@ export const MuscleHistoryModal: React.FC<MuscleHistoryModalProps> = ({
 }) => {
   const [selectedRange, setSelectedRange] = useState<TimeRange>('7');
   const [isWeeklyMode, setIsWeeklyMode] = useState(true); // Default to This Week
+  const [showBarGraph, setShowBarGraph] = useState(false);
 
   // Calculate date range
   const calculateDateRange = () => {
@@ -164,6 +165,37 @@ export const MuscleHistoryModal: React.FC<MuscleHistoryModalProps> = ({
     );
   };
 
+  const MuscleBarGraph = ({ muscle, count, maxCount }: { muscle: string; count: number; maxCount: number }) => {
+    const percentage = maxCount > 0 ? (count / maxCount) * 100 : 0;
+    const hasActivity = count > 0;
+    // Round down for display in bar graph
+    const displayCount = Math.floor(count);
+    
+    return (
+      <div className="space-y-1">
+        <div className="flex items-center justify-between text-sm">
+          <span className="font-medium text-gray-700">{muscle}</span>
+          <span className="text-xs text-gray-500">
+            {displayCount} {displayCount === 1 ? 'exercise' : 'exercises'}
+          </span>
+        </div>
+        <div className="relative h-6 w-full overflow-hidden rounded-full bg-gray-200">
+          <div
+            className={`absolute left-0 top-0 h-full transition-all duration-500 ease-out ${
+              hasActivity ? 'bg-gradient-to-r from-indigo-500 to-indigo-600' : 'bg-gray-300'
+            }`}
+            style={{ width: `${Math.max(percentage, hasActivity ? 10 : 0)}%` }}
+          />
+          {!hasActivity && (
+            <div className="absolute inset-0 flex items-center justify-center">
+              <span className="text-xs font-medium text-gray-500">No activity</span>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   const MuscleCard = ({ muscle, count }: { muscle: string; count: number }) => (
     <div
       className={`flex items-center justify-between rounded-lg border px-3 py-2.5 ${
@@ -205,6 +237,7 @@ export const MuscleHistoryModal: React.FC<MuscleHistoryModalProps> = ({
               onClick={() => {
                 setIsWeeklyMode(!isWeeklyMode);
                 setSelectedRange('7');
+                setShowBarGraph(false);
               }}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors ${
                 isWeeklyMode 
@@ -221,6 +254,7 @@ export const MuscleHistoryModal: React.FC<MuscleHistoryModalProps> = ({
             onClick={() => {
               setSelectedRange('7');
               setIsWeeklyMode(false);
+              setShowBarGraph(false);
             }}
             className={`px-3 py-1.5 text-sm font-semibold rounded-lg border transition-colors ${
               selectedRange === '7' && !isWeeklyMode
@@ -234,6 +268,7 @@ export const MuscleHistoryModal: React.FC<MuscleHistoryModalProps> = ({
             onClick={() => {
               setSelectedRange('14');
               setIsWeeklyMode(false);
+              setShowBarGraph(false);
             }}
             className={`px-3 py-1.5 text-sm font-semibold rounded-lg border transition-colors ${
               selectedRange === '14' && !isWeeklyMode
@@ -247,6 +282,7 @@ export const MuscleHistoryModal: React.FC<MuscleHistoryModalProps> = ({
             onClick={() => {
               setSelectedRange('30');
               setIsWeeklyMode(false);
+              setShowBarGraph(true);
             }}
             className={`px-3 py-1.5 text-sm font-semibold rounded-lg border transition-colors ${
               selectedRange === '30' && !isWeeklyMode
@@ -260,55 +296,124 @@ export const MuscleHistoryModal: React.FC<MuscleHistoryModalProps> = ({
 
         {/* Coverage section */}
         <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
-          <h3 className="text-base font-semibold text-gray-900 mb-4">Coverage</h3>
+          <h3 className="text-base font-semibold text-gray-900 mb-4">
+            {showBarGraph ? '30-Day Progress' : 'Coverage'}
+          </h3>
 
-          {/* Upper Body */}
-          <div className="mb-4">
-            <h4 className="text-xs font-bold text-gray-600 uppercase tracking-wider mb-2">
-              Upper Body
-            </h4>
-            <div className="grid grid-cols-2 gap-2">
-              {MUSCLE_GROUPS.upper.map(muscle => (
-                <MuscleCard 
-                  key={muscle} 
-                  muscle={muscle} 
-                  count={muscleCounts[muscle] || 0} 
-                />
-              ))}
-            </div>
-          </div>
+          {showBarGraph ? (
+            // Bar graph view for 30 days
+            <>
+              {/* Calculate max count for scaling */}
+              {(() => {
+                const maxCount = Math.max(...Object.values(muscleCounts), 1);
+                return (
+                  <>
+                    {/* Upper Body */}
+                    <div className="mb-6">
+                      <h4 className="text-xs font-bold text-gray-600 uppercase tracking-wider mb-3">
+                        Upper Body
+                      </h4>
+                      <div className="space-y-3">
+                        {MUSCLE_GROUPS.upper.map(muscle => (
+                          <MuscleBarGraph 
+                            key={muscle} 
+                            muscle={muscle} 
+                            count={muscleCounts[muscle] || 0}
+                            maxCount={maxCount}
+                          />
+                        ))}
+                      </div>
+                    </div>
 
-          {/* Lower Body */}
-          <div className="mb-4">
-            <h4 className="text-xs font-bold text-gray-600 uppercase tracking-wider mb-2">
-              Lower Body
-            </h4>
-            <div className="grid grid-cols-2 gap-2">
-              {MUSCLE_GROUPS.lower.map(muscle => (
-                <MuscleCard 
-                  key={muscle} 
-                  muscle={muscle} 
-                  count={muscleCounts[muscle] || 0} 
-                />
-              ))}
-            </div>
-          </div>
+                    {/* Lower Body */}
+                    <div className="mb-6">
+                      <h4 className="text-xs font-bold text-gray-600 uppercase tracking-wider mb-3">
+                        Lower Body
+                      </h4>
+                      <div className="space-y-3">
+                        {MUSCLE_GROUPS.lower.map(muscle => (
+                          <MuscleBarGraph 
+                            key={muscle} 
+                            muscle={muscle} 
+                            count={muscleCounts[muscle] || 0}
+                            maxCount={maxCount}
+                          />
+                        ))}
+                      </div>
+                    </div>
 
-          {/* Core */}
-          <div>
-            <h4 className="text-xs font-bold text-gray-600 uppercase tracking-wider mb-2">
-              Core
-            </h4>
-            <div className="grid grid-cols-2 gap-2">
-              {MUSCLE_GROUPS.core.map(muscle => (
-                <MuscleCard 
-                  key={muscle} 
-                  muscle={muscle} 
-                  count={muscleCounts[muscle] || 0} 
-                />
-              ))}
-            </div>
-          </div>
+                    {/* Core */}
+                    <div>
+                      <h4 className="text-xs font-bold text-gray-600 uppercase tracking-wider mb-3">
+                        Core
+                      </h4>
+                      <div className="space-y-3">
+                        {MUSCLE_GROUPS.core.map(muscle => (
+                          <MuscleBarGraph 
+                            key={muscle} 
+                            muscle={muscle} 
+                            count={muscleCounts[muscle] || 0}
+                            maxCount={maxCount}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                );
+              })()}
+            </>
+          ) : (
+            // Card view for 7d, 14d, and This Week
+            <>
+              {/* Upper Body */}
+              <div className="mb-4">
+                <h4 className="text-xs font-bold text-gray-600 uppercase tracking-wider mb-2">
+                  Upper Body
+                </h4>
+                <div className="grid grid-cols-2 gap-2">
+                  {MUSCLE_GROUPS.upper.map(muscle => (
+                    <MuscleCard 
+                      key={muscle} 
+                      muscle={muscle} 
+                      count={muscleCounts[muscle] || 0} 
+                    />
+                  ))}
+                </div>
+              </div>
+
+              {/* Lower Body */}
+              <div className="mb-4">
+                <h4 className="text-xs font-bold text-gray-600 uppercase tracking-wider mb-2">
+                  Lower Body
+                </h4>
+                <div className="grid grid-cols-2 gap-2">
+                  {MUSCLE_GROUPS.lower.map(muscle => (
+                    <MuscleCard 
+                      key={muscle} 
+                      muscle={muscle} 
+                      count={muscleCounts[muscle] || 0} 
+                    />
+                  ))}
+                </div>
+              </div>
+
+              {/* Core */}
+              <div>
+                <h4 className="text-xs font-bold text-gray-600 uppercase tracking-wider mb-2">
+                  Core
+                </h4>
+                <div className="grid grid-cols-2 gap-2">
+                  {MUSCLE_GROUPS.core.map(muscle => (
+                    <MuscleCard 
+                      key={muscle} 
+                      muscle={muscle} 
+                      count={muscleCounts[muscle] || 0} 
+                    />
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
         </div>
         </>
         )}
