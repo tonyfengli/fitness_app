@@ -363,15 +363,9 @@ export function CircuitWorkoutOverviewScreen() {
   
   const handleStartCircuit = async () => {
     console.log('[CircuitWorkoutOverview] Starting circuit workout');
-    setError(null);
-    
-    try {
-      await startWorkout(sessionId);
-      // Navigation will be handled by the hook
-    } catch (error) {
-      console.error('[CircuitWorkoutOverview] Error starting workout:', error);
-      setShowErrorModal(true);
-    }
+    // For circuit workouts, we don't need the complex workout generation
+    // Just navigate to the live workout screen
+    navigation.navigate('CircuitWorkoutLive', { sessionId });
   };
   
   if (sessionLoading || selectionsLoading) {

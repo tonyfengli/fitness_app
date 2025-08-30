@@ -29,9 +29,10 @@ import { SessionMonitorScreen } from './screens/SessionMonitorScreen';
 import { TestTailwindScreen } from './screens/TestTailwindScreen';
 import { CircuitPreferencesScreen } from './screens/CircuitPreferencesScreen';
 import { CircuitWorkoutOverviewScreen } from './screens/CircuitWorkoutOverviewScreen';
+import { CircuitWorkoutLiveScreen } from './screens/CircuitWorkoutLiveScreen';
 
 
-type ScreenName = 'Main' | 'SessionLobby' | 'GlobalPreferences' | 'CircuitPreferences' | 'WorkoutOverview' | 'CircuitWorkoutOverview' | 'WorkoutLive' | 'WorkoutComplete' | 'SessionMonitor' | 'TestTailwind';
+type ScreenName = 'Main' | 'SessionLobby' | 'GlobalPreferences' | 'CircuitPreferences' | 'WorkoutOverview' | 'CircuitWorkoutOverview' | 'CircuitWorkoutLive' | 'WorkoutLive' | 'WorkoutComplete' | 'SessionMonitor' | 'TestTailwind';
 
 interface NavigationState {
   currentScreen: ScreenName;
@@ -141,6 +142,9 @@ function NavigationContainer({ children }: { children: React.ReactNode }) {
         )}
         {navigationState.currentScreen === 'CircuitWorkoutOverview' && (
           <CircuitWorkoutOverviewScreen />
+        )}
+        {navigationState.currentScreen === 'CircuitWorkoutLive' && (
+          <CircuitWorkoutLiveScreen />
         )}
         {navigationState.currentScreen === 'WorkoutLive' && (
           <>
