@@ -19,6 +19,8 @@ export default function PostWorkoutFeedbackPage() {
   const [loadingExercises, setLoadingExercises] = useState<Set<string>>(new Set());
   // Track exercise weights locally
   const [exerciseWeights, setExerciseWeights] = useState<Record<string, number>>({});
+  // Track expanded cards
+  const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
 
   // Log initial params
   // Only log on mount, not every render
@@ -58,6 +60,16 @@ export default function PostWorkoutFeedbackPage() {
       console.log("PostWorkoutFeedbackPage - Full feedbackData:", feedbackData);
     }
   }, [isLoading, error, feedbackData]);
+
+  // Initialize first exercise with weight when data loads
+  React.useEffect(() => {
+    if (feedbackData?.exercises?.[0] && !exerciseWeights[feedbackData.exercises[0].exerciseId]) {
+      setExerciseWeights(prev => ({
+        ...prev,
+        [feedbackData.exercises[0].exerciseId]: 135
+      }));
+    }
+  }, [feedbackData]);
 
   // We don't need a separate ratings query anymore since ratings come with the exercises
 
@@ -240,10 +252,9 @@ export default function PostWorkoutFeedbackPage() {
     (exercise: any) => exercise.existingRating
   );
 
-  // Component to render exercise card - Memoized to prevent re-renders
-  const ExerciseCard = React.memo(({ exercise, currentRating }: { exercise: any; currentRating?: string }) => {
-    const isLoading = loadingExercises.has(exercise.exerciseId);
-    const weight = exerciseWeights[exercise.exerciseId] || 0;
+  // Separate component for weight controls to prevent re-animation
+  const WeightControls = React.memo(({ exerciseId, exerciseName }: { exerciseId: string; exerciseName: string }) => {
+    const weight = exerciseWeights[exerciseId] || 0;
     
     const handleIncrement = () => {
       console.log('[Weight Slider] Increment clicked, current weight:', weight);
@@ -251,7 +262,7 @@ export default function PostWorkoutFeedbackPage() {
       console.log('[Weight Slider] Setting new weight:', newWeight);
       setExerciseWeights(prev => ({
         ...prev,
-        [exercise.exerciseId]: newWeight
+        [exerciseId]: newWeight
       }));
     };
     
@@ -261,19 +272,97 @@ export default function PostWorkoutFeedbackPage() {
       console.log('[Weight Slider] Setting new weight:', newWeight);
       setExerciseWeights(prev => ({
         ...prev,
-        [exercise.exerciseId]: newWeight
+        [exerciseId]: newWeight
       }));
     };
     
     const handleSaveWeight = () => {
       // TODO: Implement save functionality
-      console.log(`[Weight Slider] Saving weight for ${exercise.exerciseName}: ${weight} lbs`);
+      console.log(`[Weight Slider] Saving weight for ${exerciseName}: ${weight} lbs`);
+      // For demo purposes, just keep the weight in state
+      // In real implementation, this would save to backend
+    };
+    
+    return (
+      <div className="pt-3">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-xs text-gray-500 font-medium">Weight</span>
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-semibold text-gray-900">{weight} lbs</span>
+            {weight > 0 && (
+              <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Saved</span>
+            )}
+          </div>
+        </div>
+        
+        <div className="space-y-2">
+          {/* Visual progress bar */}
+          <div className="relative h-2 w-full overflow-hidden rounded-full bg-gray-200">
+            <div
+              className="absolute left-0 top-0 h-full bg-gradient-to-r from-indigo-500 to-indigo-600 transition-all duration-300"
+              style={{ width: `${Math.min((weight / 300) * 100, 100)}%` }}
+            />
+          </div>
+          
+          {/* Control buttons */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleDecrement}
+              className="flex-1 py-3 px-3 bg-gray-100 hover:bg-gray-200 active:bg-gray-300 active:scale-95 rounded-lg shadow-sm transition-all flex items-center justify-center gap-1 border border-gray-200"
+              aria-label="Decrease weight"
+            >
+              <svg className="w-5 h-5 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
+              </svg>
+              <span className="text-sm font-semibold text-gray-700">5 lbs</span>
+            </button>
+            
+            <button
+              onClick={handleIncrement}
+              className="flex-1 py-3 px-3 bg-gray-100 hover:bg-gray-200 active:bg-gray-300 active:scale-95 rounded-lg shadow-sm transition-all flex items-center justify-center gap-1 border border-gray-200"
+              aria-label="Increase weight"
+            >
+              <svg className="w-5 h-5 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v12m6-6H6" />
+              </svg>
+              <span className="text-sm font-semibold text-gray-700">5 lbs</span>
+            </button>
+            
+            <button
+              onClick={handleSaveWeight}
+              className="px-4 py-3 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 active:scale-95 text-white text-sm font-semibold rounded-lg shadow-sm transition-all"
+            >
+              Save
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  });
+  
+  WeightControls.displayName = 'WeightControls';
+
+  // Component to render exercise card - Memoized to prevent re-renders
+  const ExerciseCard = React.memo(({ exercise, currentRating }: { exercise: any; currentRating?: string }) => {
+    const isLoading = loadingExercises.has(exercise.exerciseId);
+    const isExpanded = expandedCards.has(exercise.exerciseId);
+    
+    const toggleExpanded = () => {
+      setExpandedCards(prev => {
+        const next = new Set(prev);
+        if (next.has(exercise.exerciseId)) {
+          next.delete(exercise.exerciseId);
+        } else {
+          next.add(exercise.exerciseId);
+        }
+        return next;
+      });
     };
     
     return (
       <div
         key={exercise.exerciseId}
-        className={`p-4 bg-white border border-gray-200 rounded-lg shadow-sm transition-opacity ${
+        className={`p-4 bg-white border border-gray-200 rounded-lg shadow-sm transition-all ${
           isLoading ? 'opacity-50' : 'opacity-100'
         }`}
       >
@@ -339,92 +428,43 @@ export default function PostWorkoutFeedbackPage() {
           </button>
         </div>
         
-        {/* Weight Slider Section */}
-        <div className="mt-3 pt-3 border-t border-gray-100">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs text-gray-500 font-medium">Weight</span>
-            <span className="text-sm font-semibold text-gray-900">{weight} lbs</span>
-            {/* Debug button */}
-            <button
-              onClick={() => {
-                console.log('[Weight Slider] Debug - Current state:', {
-                  exerciseId: exercise.exerciseId,
-                  weight,
-                  allWeights: exerciseWeights
-                });
-                // Test direct state update
-                const testWeight = weight === 0 ? 50 : 0;
-                console.log('[Weight Slider] Debug - Setting test weight:', testWeight);
-                setExerciseWeights(prev => ({
-                  ...prev,
-                  [exercise.exerciseId]: testWeight
-                }));
-              }}
-              className="text-xs text-blue-600 underline"
-            >
-              Debug
-            </button>
-          </div>
-          
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleDecrement}
-              className="p-1.5 rounded-md border border-gray-300 hover:bg-gray-50 transition-colors"
-              aria-label="Decrease weight"
-            >
-              <svg className="w-4 h-4 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
+        {/* Expand/Collapse button */}
+        <button
+          onClick={toggleExpanded}
+          className="w-full py-2 mt-3 text-sm text-gray-500 hover:text-gray-600 font-medium flex items-center justify-center gap-1 border-t border-gray-100 transition-colors"
+        >
+          {isExpanded ? (
+            <>
+              <span>Hide</span>
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
               </svg>
-            </button>
-            
-            <div className="flex-1">
-              <input
-                type="range"
-                min="0"
-                max="300"
-                step="5"
-                value={weight}
-                onInput={(e) => {
-                  const newValue = parseInt((e.target as HTMLInputElement).value);
-                  console.log('[Weight Slider] onInput - value changed to:', newValue);
-                  setExerciseWeights(prev => ({
-                    ...prev,
-                    [exercise.exerciseId]: newValue
-                  }));
-                }}
-                onPointerDown={(e) => {
-                  console.log('[Weight Slider] Pointer down - starting drag');
-                  (e.target as HTMLInputElement).setPointerCapture(e.pointerId);
-                }}
-                onPointerUp={(e) => {
-                  console.log('[Weight Slider] Pointer up - ending drag');
-                  (e.target as HTMLInputElement).releasePointerCapture(e.pointerId);
-                }}
-                className="w-full h-2 bg-gray-200 rounded-lg cursor-pointer accent-indigo-600 touch-none"
-                style={{
-                  WebkitAppearance: 'none',
-                  appearance: 'none',
-                }}
-              />
-            </div>
-            
-            <button
-              onClick={handleIncrement}
-              className="p-1.5 rounded-md border border-gray-300 hover:bg-gray-50 transition-colors"
-              aria-label="Increase weight"
-            >
-              <svg className="w-4 h-4 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v12m6-6H6" />
+            </>
+          ) : (
+            <>
+              {exerciseWeights[exercise.exerciseId] ? (
+                <span className="flex items-center gap-2">
+                  <span className="text-gray-900 font-semibold">{exerciseWeights[exercise.exerciseId]} lbs</span>
+                  <span className="text-gray-400">•</span>
+                  <span>Update</span>
+                </span>
+              ) : (
+                <span>New Record</span>
+              )}
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
               </svg>
-            </button>
-            
-            <button
-              onClick={handleSaveWeight}
-              className="px-3 py-1.5 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700 transition-colors"
-            >
-              Save
-            </button>
-          </div>
+            </>
+          )}
+        </button>
+        
+        {/* Weight Section - Only visible when expanded */}
+        <div
+          className={`overflow-hidden transition-all duration-300 ease-in-out ${
+            isExpanded ? 'max-h-40 opacity-100' : 'max-h-0 opacity-0'
+          }`}
+        >
+          <WeightControls exerciseId={exercise.exerciseId} exerciseName={exercise.exerciseName} />
         </div>
       </div>
     );
