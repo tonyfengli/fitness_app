@@ -14,6 +14,7 @@ import {
   getFilteredExercises,
   MUSCLE_GROUPS_ALPHABETICAL,
   MuscleModal,
+  MuscleHistoryModal,
   PlusIcon,
   PreferenceListItem,
   SearchIcon,
@@ -577,6 +578,7 @@ export default function ClientPreferencePage() {
   // Use shared modal state hook
   const muscleModal = useModalState();
   const notesModal = useModalState();
+  const muscleHistoryModal = useModalState();
 
   // Subscribe to realtime preference updates
   useRealtimePreferences({
@@ -628,6 +630,7 @@ export default function ClientPreferencePage() {
 
   return (
     <div className="relative min-h-screen overflow-y-auto bg-gray-50">
+
       {/* Full screen loading overlay */}
       {updateWorkoutTypeMutation.isPending && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
@@ -641,16 +644,30 @@ export default function ClientPreferencePage() {
       )}
 
       <div className="mx-auto max-w-md p-4 pb-20">
-        {/* Client info outside card */}
-        <div className="mb-6 mt-4 flex items-center justify-center">
-          <img
-            src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${displayData.avatar}`}
-            alt={displayData.name}
-            className="mr-3 h-10 w-10 rounded-full"
-          />
-          <h2 className="text-lg font-semibold text-gray-900">
-            {displayData.name}
-          </h2>
+        {/* Header with Client info and Muscle History button */}
+        <div className="mb-6 mt-4 flex items-center justify-between">
+          <div className="flex items-center">
+            <img
+              src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${displayData.avatar}`}
+              alt={displayData.name}
+              className="mr-3 h-10 w-10 rounded-full"
+            />
+            <h2 className="text-lg font-semibold text-gray-900">
+              {displayData.name}
+            </h2>
+          </div>
+          
+          {/* Muscle History Button */}
+          <button
+            onClick={() => muscleHistoryModal.open()}
+            className="flex items-center gap-2 rounded-full bg-indigo-600 px-3 py-2 text-white shadow-md active:scale-95 transition-all hover:bg-indigo-700"
+            aria-label="View Muscle History"
+          >
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+            </svg>
+            <span className="text-sm font-medium">Targets to Hit</span>
+          </button>
         </div>
 
         {/* Client Card - Single card view */}
@@ -1188,6 +1205,13 @@ export default function ClientPreferencePage() {
           notesModal.close();
         }}
         isLoading={isAddingNote}
+      />
+
+      {/* Muscle History Modal */}
+      <MuscleHistoryModal
+        isOpen={muscleHistoryModal.isOpen}
+        onClose={muscleHistoryModal.close}
+        clientName={clientData?.user?.name}
       />
     </div>
   );
