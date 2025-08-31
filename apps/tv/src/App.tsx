@@ -147,10 +147,7 @@ function NavigationContainer({ children }: { children: React.ReactNode }) {
           <CircuitWorkoutLiveScreen />
         )}
         {navigationState.currentScreen === 'WorkoutLive' && (
-          <>
-            {console.log('[App] Rendering WorkoutLiveScreen')}
-            <WorkoutLiveScreen />
-          </>
+          <WorkoutLiveScreen />
         )}
         {navigationState.currentScreen === 'WorkoutComplete' && (
           <WorkoutCompleteScreen />

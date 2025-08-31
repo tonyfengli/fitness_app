@@ -440,8 +440,24 @@ export default function RoundView({ sessionId, round, workouts, roundsData, orga
                           paddingVertical: 5,
                           paddingHorizontal: 8,
                         }}>
-                        <View style={{ width: 16, height: 16, borderRadius: 8, backgroundColor: TOKENS.color.accent, marginRight: 6 }} />
-                        <Text style={{ fontSize: 11.5, color: TOKENS.color.text, fontWeight: '700' }}>{a.clientName}</Text>
+                        <View style={{ 
+                          width: 16, 
+                          height: 16, 
+                          borderRadius: 8, 
+                          backgroundColor: a.tag?.includes('🏆') ? '#FFD700' : TOKENS.color.accent, 
+                          marginRight: 6 
+                        }} />
+                        <Text style={{ fontSize: 11.5, color: TOKENS.color.text, fontWeight: '700' }}>
+                          {a.clientName}
+                          {a.tag && (
+                            <Text style={{ 
+                              color: a.tag.includes('🏆') ? '#FFD700' : TOKENS.color.muted,
+                              fontWeight: '600' 
+                            }}>
+                              {' • '}{a.tag}
+                            </Text>
+                          )}
+                        </Text>
                       </View>
                     ))}
                   </View>

@@ -33,28 +33,29 @@ export function useStartWorkout() {
   });
   
   const startWorkout = async (sessionId: string) => {
+    console.log('[useStartWorkout] Starting workout for session:', sessionId);
     setIsGenerating(true);  // Show loading state on button
     setError(null);
     setLoadingMessage('Preparing workout...');
     
     try {
-      
       // First, check if workout organization already exists
       const sessionQuery = await queryClient.fetchQuery(
         api.trainingSession.getById.queryOptions({ id: sessionId })
       );
       
       if (sessionQuery?.workoutOrganization) {
+        console.log('[useStartWorkout] Workout already organized, loading data...');
         setLoadingMessage('Loading workout...');
         
         // Fetch the full workout data
         const workouts = await queryClient.fetchQuery(
           api.workoutSelections.getSelections.queryOptions({ sessionId })
         );
+        
         const clients = await queryClient.fetchQuery(
           api.trainingSession.getCheckedInClients.queryOptions({ sessionId })
         );
-        
         
         // Transform the data for WorkoutLive screen
         const transformedOrganization = transformWorkoutDataForLiveView(
@@ -64,7 +65,6 @@ export function useStartWorkout() {
         
         setIsGenerating(false); // Hide loading state
         
-        // Navigate directly to WorkoutLive
         navigation.navigate('WorkoutLive', { 
           sessionId, 
           round: 1,
@@ -81,6 +81,7 @@ export function useStartWorkout() {
       }
       
       // No existing organization - need to generate Phase 2
+      console.log('[useStartWorkout] Generating Phase 2 workout organization...');
       setLoadingMessage('Preparing workout data...');
       
       // Get preprocessing data for fixed assignments  
@@ -92,6 +93,7 @@ export function useStartWorkout() {
       const workouts = await queryClient.fetchQuery(
         api.workoutSelections.getSelections.queryOptions({ sessionId })
       );
+      
       const clients = await queryClient.fetchQuery(
         api.trainingSession.getCheckedInClients.queryOptions({ sessionId })
       );

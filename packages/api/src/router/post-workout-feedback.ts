@@ -2,7 +2,7 @@ import type { TRPCRouterRecord } from "@trpc/server";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
-import { and, eq, desc } from "@acme/db";
+import { and, eq, desc, inArray, or } from "@acme/db";
 import { 
   TrainingSession, 
   UserExerciseRatings, 
@@ -293,5 +293,116 @@ export const postWorkoutFeedbackRouter = {
         isNewRecord: isWeightPr,
         previousBest: previousBestWeight,
       };
+    }),
+
+  // Get performance metrics by workout exercise IDs (for TV app)
+  getPerformanceByWorkoutExerciseIds: publicProcedure
+    .input(
+      z.object({
+        workoutExerciseIds: z.array(z.string().uuid()),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      if (input.workoutExerciseIds.length === 0) {
+        return [];
+      }
+
+      // Get all performance logs for these workout exercises
+      const performanceLogs = await ctx.db.query.ExercisePerformanceLog.findMany({
+        where: inArray(
+          ExercisePerformanceLog.workoutExerciseId,
+          input.workoutExerciseIds
+        ),
+        orderBy: [desc(ExercisePerformanceLog.createdAt)],
+      });
+
+      // Group by workoutExerciseId and take the latest entry
+      const latestByExercise = new Map();
+      performanceLogs.forEach(log => {
+        const existing = latestByExercise.get(log.workoutExerciseId);
+        if (!existing || log.createdAt > existing.createdAt) {
+          latestByExercise.set(log.workoutExerciseId, {
+            workoutExerciseId: log.workoutExerciseId,
+            weight: Number(log.weightLbs),
+            isPersonalRecord: log.isWeightPr,
+            createdAt: log.createdAt,
+          });
+        }
+      });
+
+      return Array.from(latestByExercise.values());
+    }),
+
+  // Get latest performance by user-exercise pairs (for TV app - shows historical data)
+  getLatestPerformanceByUserExercises: publicProcedure
+    .input(
+      z.object({
+        userExercisePairs: z.array(z.object({
+          userId: z.string(),
+          exerciseId: z.string().uuid(),
+          workoutExerciseId: z.string().uuid(), // Keep for mapping back
+        })),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      if (input.userExercisePairs.length === 0) {
+        return [];
+      }
+
+      // Log input pairs for debugging
+      console.log('[getLatestPerformanceByUserExercises] Input pairs:', input.userExercisePairs);
+      
+      // Build OR conditions for each user-exercise pair
+      const conditions = input.userExercisePairs.map(pair => 
+        and(
+          eq(ExercisePerformanceLog.userId, pair.userId),
+          eq(ExercisePerformanceLog.exerciseId, pair.exerciseId)
+        )
+      );
+
+      // Get all performance logs for these user-exercise combinations
+      const performanceLogs = await ctx.db.query.ExercisePerformanceLog.findMany({
+        where: conditions.length === 1 ? conditions[0] : or(...conditions),
+        orderBy: [desc(ExercisePerformanceLog.createdAt)],
+      });
+
+      // Log fetched performance logs
+      console.log('[getLatestPerformanceByUserExercises] Found performance logs:', performanceLogs.length);
+      
+      // Group by userId+exerciseId and take the latest entry
+      const latestByUserExercise = new Map();
+      performanceLogs.forEach(log => {
+        const key = `${log.userId}-${log.exerciseId}`;
+        const existing = latestByUserExercise.get(key);
+        if (!existing || log.createdAt > existing.createdAt) {
+          // Find the corresponding workoutExerciseId from input
+          const pair = input.userExercisePairs.find(p => 
+            p.userId === log.userId && p.exerciseId === log.exerciseId
+          );
+          
+          console.log('[getLatestPerformanceByUserExercises] Mapping:', {
+            logUserId: log.userId,
+            logExerciseId: log.exerciseId,
+            foundPair: !!pair,
+            currentWorkoutExerciseId: pair?.workoutExerciseId,
+            weight: Number(log.weightLbs)
+          });
+          
+          if (pair?.workoutExerciseId) {
+            latestByUserExercise.set(key, {
+              workoutExerciseId: pair.workoutExerciseId, // Map to current workout exercise
+              userId: log.userId,
+              exerciseId: log.exerciseId,
+              weight: Number(log.weightLbs),
+              isPersonalRecord: log.isWeightPr,
+              createdAt: log.createdAt,
+            });
+          }
+        }
+      });
+
+      const result = Array.from(latestByUserExercise.values());
+      console.log('[getLatestPerformanceByUserExercises] Returning:', result);
+      return result;
     }),
 } satisfies TRPCRouterRecord;

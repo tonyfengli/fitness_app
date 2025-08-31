@@ -23,12 +23,26 @@ export function WorkoutLiveScreen() {
   const sessionId = navigation.getParam('sessionId');
   const round = navigation.getParam('round') || 1;
   
+  // Store initial params to prevent double mount issues
+  const initialParams = React.useRef({
+    organization: navigation.getParam('organization'),
+    workouts: navigation.getParam('workouts'),
+    clients: navigation.getParam('clients'),
+    isPhase2Loading: navigation.getParam('isPhase2Loading'),
+    phase2Error: navigation.getParam('phase2Error')
+  });
+  
+  console.log('[WorkoutLiveScreen] Initial mount:', {
+    sessionId,
+    hasData: !!initialParams.current.workouts
+  });
+  
   // Get any passed organization data for efficiency
-  const [passedOrganization, setPassedOrganization] = useState(navigation.getParam('organization'));
-  const [passedWorkouts, setPassedWorkouts] = useState(navigation.getParam('workouts'));
-  const [passedClients] = useState(navigation.getParam('clients'));
-  const [isPhase2Loading, setIsPhase2Loading] = useState(navigation.getParam('isPhase2Loading') || false);
-  const [phase2Error, setPhase2Error] = useState(navigation.getParam('phase2Error'));
+  const [passedOrganization, setPassedOrganization] = useState(initialParams.current.organization);
+  const [passedWorkouts, setPassedWorkouts] = useState(initialParams.current.workouts);
+  const [passedClients] = useState(initialParams.current.clients);
+  const [isPhase2Loading, setIsPhase2Loading] = useState(initialParams.current.isPhase2Loading || false);
+  const [phase2Error, setPhase2Error] = useState(initialParams.current.phase2Error);
   
   // Update state when params change
   useEffect(() => {
@@ -70,8 +84,74 @@ export function WorkoutLiveScreen() {
   const workouts = passedWorkouts || sessionWorkouts || [];
   const clients = passedClients || fetchedClients || [];
   
+  // Extract user-exercise pairs for performance query
+  const userExercisePairs = React.useMemo(() => {
+    console.log('[WorkoutLiveScreen] Building user-exercise pairs from workouts:', workouts.length);
+    if (workouts.length > 0) {
+      console.log('[WorkoutLiveScreen] Sample workout object:', workouts[0]);
+    }
+    
+    const pairs = workouts.map(w => ({
+      userId: w.clientId,
+      exerciseId: w.exerciseId,
+      workoutExerciseId: w.id
+    })).filter(p => p.userId && p.exerciseId && p.workoutExerciseId);
+    
+    if (pairs.length > 0) {
+      console.log('[WorkoutLiveScreen] Performance query enabled with', pairs.length, 'user-exercise pairs');
+      console.log('[WorkoutLiveScreen] First few pairs:', pairs.slice(0, 3));
+    }
+    return pairs;
+  }, [workouts]);
+
+  // Fetch performance metrics using TRPC pattern - now queries by user+exercise
+  const { 
+    data: performanceMetrics, 
+    isLoading: performanceLoading,
+    error: performanceError 
+  } = useQuery({
+    ...api.postWorkoutFeedback.getLatestPerformanceByUserExercises.queryOptions({ 
+      userExercisePairs 
+    }),
+    enabled: userExercisePairs.length > 0,
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+  });
+  
+  // Log only when performance data loads
+  React.useEffect(() => {
+    if (!performanceLoading && performanceMetrics) {
+      console.log('[WorkoutLiveScreen] Performance data loaded:', performanceMetrics.length, 'records');
+      console.log('[WorkoutLiveScreen] Performance data details:', performanceMetrics);
+    }
+  }, [performanceLoading, performanceMetrics]);
+
+  // Create performance lookup map
+  const performanceByWorkoutExerciseId = React.useMemo(() => {
+    const map = new Map();
+    performanceMetrics?.forEach(metric => {
+      map.set(metric.workoutExerciseId, metric);
+    });
+    console.log('[WorkoutLiveScreen] Performance lookup map created:', {
+      size: map.size,
+      entries: Array.from(map.entries()).map(([key, value]) => ({
+        workoutExerciseId: key,
+        weight: value.weight,
+        userId: value.userId,
+        exerciseId: value.exerciseId
+      }))
+    });
+    
+    // Also log current workout exercise IDs for comparison
+    console.log('[WorkoutLiveScreen] Current workout exercise IDs:', 
+      workouts.map(w => ({ id: w.id, clientId: w.clientId, exerciseId: w.exerciseId }))
+    );
+    
+    return map;
+  }, [performanceMetrics, workouts]);
+  
   const isLoading = workoutsLoading || clientsLoading;
   const error = workoutsError || clientsError;
+  
   
   // Poll for session data to detect Phase 2 completion
   const { data: sessionData, isLoading: sessionLoading, error: sessionError } = useQuery({
@@ -149,7 +229,6 @@ export function WorkoutLiveScreen() {
 
   // Transform workouts data into rounds format for RoundView
   const roundsData = React.useMemo(() => {
-    
     if (!passedOrganization || !workouts || workouts.length === 0) {
       return [];
     }
@@ -232,7 +311,39 @@ export function WorkoutLiveScreen() {
               roundData.exercises.push({
                 title: exerciseDetails.map(e => e.title).join(' + '),
                 meta: exerciseDetails.map(e => e.meta).filter(m => m).join(' | '),
-                assigned: [{ clientName: client.clientName, tag: '' }],
+                assigned: [{ 
+                  clientName: client.clientName, 
+                  tag: (() => {
+                    // Find the workout exercise for this client/exercise combo
+                    const workoutExercise = workouts.find(w => 
+                      w.clientId === client.clientId && 
+                      w.exerciseId === exerciseGroup.exerciseId
+                    );
+                    
+                    if (!workoutExercise) {
+                      console.log('[WorkoutLiveScreen] Tag - No workout exercise found for:', {
+                        clientName: client.clientName,
+                        exerciseName: exerciseGroup.exerciseName,
+                        clientId: client.clientId,
+                        exerciseId: exerciseGroup.exerciseId
+                      });
+                      return '';
+                    }
+                    
+                    const metric = performanceByWorkoutExerciseId.get(workoutExercise.id);
+                    console.log('[WorkoutLiveScreen] Tag assignment:', {
+                      clientName: client.clientName,
+                      exerciseName: exerciseGroup.exerciseName,
+                      workoutExerciseId: workoutExercise.id,
+                      hasMetric: !!metric,
+                      weight: metric?.weight
+                    });
+                    
+                    if (!metric?.weight) return '';
+                    
+                    return `${metric.weight} lbs`;
+                  })()
+                }],
                 exerciseDetails: exerciseDetails
               });
             }
@@ -250,7 +361,36 @@ export function WorkoutLiveScreen() {
             meta: exerciseDetails[0].meta,
             assigned: exerciseGroup.clients.map(client => ({ 
               clientName: client.clientName, 
-              tag: '' 
+              tag: (() => {
+                // Find the workout exercise for this client/exercise combo
+                const workoutExercise = workouts.find(w => 
+                  w.clientId === client.clientId && 
+                  w.exerciseId === exerciseGroup.exerciseId
+                );
+                
+                if (!workoutExercise) {
+                  console.log('[WorkoutLiveScreen] Shared tag - No workout exercise found for:', {
+                    clientName: client.clientName,
+                    exerciseName: exerciseGroup.exerciseName,
+                    clientId: client.clientId,
+                    exerciseId: exerciseGroup.exerciseId
+                  });
+                  return '';
+                }
+                
+                const metric = performanceByWorkoutExerciseId.get(workoutExercise.id);
+                console.log('[WorkoutLiveScreen] Shared tag assignment:', {
+                  clientName: client.clientName,
+                  exerciseName: exerciseGroup.exerciseName,
+                  workoutExerciseId: workoutExercise.id,
+                  hasMetric: !!metric,
+                  weight: metric?.weight
+                });
+                
+                if (!metric?.weight) return '';
+                
+                return `${metric.weight} lbs`;
+              })()
             })),
             exerciseDetails: exerciseDetails,
             isShared: true
@@ -265,7 +405,7 @@ export function WorkoutLiveScreen() {
     });
     
     return roundsList;
-  }, [passedOrganization, workouts]);
+  }, [passedOrganization, workouts, performanceByWorkoutExerciseId]);
   
   // Show loading state
   if (isLoading) {

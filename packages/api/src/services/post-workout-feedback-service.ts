@@ -211,11 +211,11 @@ export class PostWorkoutFeedbackService {
       ratings: Array.from(existingRatingsMap.entries()),
     });
 
-    // Step 6.5: Get latest performance logs for all exercises
+    // Step 6.5: Get latest performance logs for all exercises (across all workouts)
     let performanceLogsMap = new Map<string, { weight: number; isPr: boolean; previousBest: number | null }>();
     
-    if (allExerciseIds.length > 0 && workout) {
-      // Get all performance logs for this workout
+    if (allExerciseIds.length > 0) {
+      // Get all performance logs for this user and these exercises (not limited to current workout)
       const performanceLogs = await this.db
         .select({
           exerciseId: ExercisePerformanceLog.exerciseId,
@@ -228,7 +228,6 @@ export class PostWorkoutFeedbackService {
         .where(
           and(
             eq(ExercisePerformanceLog.userId, userId),
-            eq(ExercisePerformanceLog.workoutId, workout.id),
             inArray(ExercisePerformanceLog.exerciseId, allExerciseIds)
           )
         )
