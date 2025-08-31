@@ -94,7 +94,7 @@ export function MainScreen() {
   const navigation = useNavigation();
   const queryClient = useQueryClient();
   const { businessId } = useBusiness();
-  const { user, isLoading: isAuthLoading, isAuthenticated, error: authError, retry, switchAccount, currentEnvironment } = useAuth();
+  const { user, isLoading: isAuthLoading, isAuthenticated, error: authError, retry, switchAccount, currentEnvironment, signOut } = useAuth();
   const [openSessions, setOpenSessions] = useState<TrainingSession[]>([]);
   const [isLoadingSessions, setIsLoadingSessions] = useState(false);
   const [isSwitching, setIsSwitching] = useState(false);
@@ -351,24 +351,47 @@ export function MainScreen() {
 
   // Handle environment toggle
   const handleEnvironmentChange = async (newEnv: 'gym' | 'developer') => {
-    if (newEnv === currentEnvironment || isSwitching) return;
+    if (isSwitching) return;
     
-    console.log('[MainScreen] 🔄 Environment toggle:', currentEnvironment, '->', newEnv);
-    setIsSwitching(true);
-    
-    // Clear sessions immediately when switching accounts
-    console.log('[MainScreen] 🧹 Clearing sessions for account switch');
-    setOpenSessions([]);
-    setIsLoadingSessions(true); // Show loading state
-    
-    try {
-      await switchAccount(newEnv);
-      console.log('[MainScreen] ✅ Environment switch complete');
-      // Sessions will be refetched by the useEffect when businessId updates
-    } catch (error) {
-      console.error('[MainScreen] ❌ Environment switch failed:', error);
-    } finally {
-      setIsSwitching(false);
+    // If clicking the same environment button, force a re-login
+    if (newEnv === currentEnvironment) {
+      console.log('[MainScreen] 🔄 Re-logging into same environment:', newEnv);
+      setIsSwitching(true);
+      
+      // Clear sessions
+      console.log('[MainScreen] 🧹 Clearing sessions for re-login');
+      setOpenSessions([]);
+      setIsLoadingSessions(true);
+      
+      try {
+        // Sign out and sign back in to the same environment
+        await signOut();
+        // signOut already triggers auto-login in AuthProvider
+        console.log('[MainScreen] ✅ Re-login complete');
+      } catch (error) {
+        console.error('[MainScreen] ❌ Re-login failed:', error);
+      } finally {
+        setIsSwitching(false);
+      }
+    } else {
+      // Different environment - switch accounts
+      console.log('[MainScreen] 🔄 Environment toggle:', currentEnvironment, '->', newEnv);
+      setIsSwitching(true);
+      
+      // Clear sessions immediately when switching accounts
+      console.log('[MainScreen] 🧹 Clearing sessions for account switch');
+      setOpenSessions([]);
+      setIsLoadingSessions(true); // Show loading state
+      
+      try {
+        await switchAccount(newEnv);
+        console.log('[MainScreen] ✅ Environment switch complete');
+        // Sessions will be refetched by the useEffect when businessId updates
+      } catch (error) {
+        console.error('[MainScreen] ❌ Environment switch failed:', error);
+      } finally {
+        setIsSwitching(false);
+      }
     }
   };
 
@@ -623,28 +646,37 @@ export function MainScreen() {
           </View>
         )}
         
-        {/* Environment Toggle */}
-        <View style={[styles.segmented, isSwitching && styles.disabledSegmented]} focusable={false}>
-          <TouchableOpacity 
-            style={[styles.segmentOption, currentEnvironment === 'developer' && styles.segmentActive]}
-            onPress={() => handleEnvironmentChange('developer')}
-            onFocus={() => console.log('[MainScreen] 🔴 Developer toggle received focus!')}
-            onBlur={() => console.log('[MainScreen] 🔸 Developer toggle lost focus')}
-            disabled={isSwitching || showTemplates}
-            focusable={!showTemplates}
-          >
-            <Text style={[styles.segmentText, currentEnvironment === 'developer' && styles.segmentTextActive]}>Developer</Text>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={[styles.segmentOption, currentEnvironment === 'gym' && styles.segmentActive]}
+        {/* Account Buttons */}
+        <View style={{ flexDirection: 'row', gap: 12 }}>
+          {/* Refresh (Gym) Button - Top Right */}
+          <Pressable
             onPress={() => handleEnvironmentChange('gym')}
-            onFocus={() => console.log('[MainScreen] 🔴 Gym toggle received focus!')}
-            onBlur={() => console.log('[MainScreen] 🔸 Gym toggle lost focus')}
             disabled={isSwitching || showTemplates}
             focusable={!showTemplates}
           >
-            <Text style={[styles.segmentText, currentEnvironment === 'gym' && styles.segmentTextActive]}>Gym</Text>
-          </TouchableOpacity>
+            {({ focused }) => (
+              <MattePanel 
+                focused={focused}
+                style={{ 
+                  paddingHorizontal: 24,
+                  paddingVertical: 12,
+                  opacity: (isSwitching || showTemplates) ? 0.5 : 1,
+                  backgroundColor: focused ? 'rgba(255,255,255,0.16)' : TOKENS.color.card,
+                  borderColor: focused ? 'rgba(255,255,255,0.45)' : TOKENS.color.borderGlass,
+                  borderWidth: 1,
+                  transform: focused ? [{ translateY: -1 }] : [],
+                }}
+              >
+                <Text style={{ 
+                  color: TOKENS.color.text, 
+                  fontSize: 16, 
+                  letterSpacing: 0.2
+                }}>
+                  Refresh
+                </Text>
+              </MattePanel>
+            )}
+          </Pressable>
         </View>
       </View>
 
@@ -784,11 +816,46 @@ export function MainScreen() {
             <View style={styles.emptyState}>
               <Text style={styles.emptyStateText}>No active sessions</Text>
               <Text style={[styles.emptyStateText, styles.emptySubtext]}>
-                Start a new session from the web app
+                Logged in as: {currentEnvironment === 'gym' ? 'Gym' : 'Developer'}
+              </Text>
+              <Text style={[styles.emptyStateText, styles.emptySubtext, { marginTop: 8 }]}>
+                {user?.email}
               </Text>
             </View>
           </View>
         )}
+      </View>
+      
+      {/* Developer Button - Bottom Right */}
+      <View style={{ position: 'absolute', bottom: 32, right: 32 }}>
+        <Pressable
+          onPress={() => handleEnvironmentChange('developer')}
+          disabled={isSwitching || showTemplates}
+          focusable={!showTemplates}
+        >
+          {({ focused }) => (
+            <MattePanel 
+              focused={focused}
+              style={{ 
+                paddingHorizontal: 24,
+                paddingVertical: 12,
+                opacity: (isSwitching || showTemplates) ? 0.5 : 1,
+                backgroundColor: focused ? 'rgba(255,255,255,0.16)' : TOKENS.color.card,
+                borderColor: focused ? 'rgba(255,255,255,0.45)' : TOKENS.color.borderGlass,
+                borderWidth: 1,
+                transform: focused ? [{ translateY: -1 }] : [],
+              }}
+            >
+              <Text style={{ 
+                color: TOKENS.color.text, 
+                fontSize: 16, 
+                letterSpacing: 0.2
+              }}>
+                Developer
+              </Text>
+            </MattePanel>
+          )}
+        </Pressable>
       </View>
     </View>
   );
