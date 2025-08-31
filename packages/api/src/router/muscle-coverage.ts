@@ -12,10 +12,11 @@ export const muscleCoverageRouter = createTRPCRouter({
         clientId: z.string(),
         startDate: z.date(),
         endDate: z.date(),
+        includeExercises: z.boolean().optional().default(false),
       }),
     )
     .query(async ({ ctx, input }) => {
-      const { clientId, startDate, endDate } = input;
+      const { clientId, startDate, endDate, includeExercises } = input;
 
       // Set times to beginning and end of day
       const startOfDay = new Date(startDate);
@@ -28,9 +29,11 @@ export const muscleCoverageRouter = createTRPCRouter({
       const workoutExercises = await db
         .select({
           exerciseId: WorkoutExercise.exerciseId,
+          exerciseName: exercises.name,
           primaryMuscle: exercises.primaryMuscle,
           secondaryMuscles: exercises.secondaryMuscles,
           createdAt: WorkoutExercise.createdAt,
+          workoutId: WorkoutExercise.workoutId,
         })
         .from(WorkoutExercise)
         .innerJoin(Workout, eq(WorkoutExercise.workoutId, Workout.id))
@@ -41,7 +44,8 @@ export const muscleCoverageRouter = createTRPCRouter({
             gte(WorkoutExercise.createdAt, startOfDay),
             lte(WorkoutExercise.createdAt, endOfDay),
           ),
-        );
+        )
+        .orderBy(WorkoutExercise.createdAt);
 
       // Calculate muscle counts
       const muscleCounts: Record<string, { primary: number; secondary: number }> = {};
@@ -73,7 +77,7 @@ export const muscleCoverageRouter = createTRPCRouter({
         muscleScores[muscle] = counts.primary + counts.secondary * 0.5;
       });
 
-      return {
+      const result: any = {
         workoutCount: workoutExercises.length,
         muscleCounts,
         muscleScores,
@@ -82,5 +86,19 @@ export const muscleCoverageRouter = createTRPCRouter({
           end: endOfDay,
         },
       };
+
+      // Include exercise details if requested
+      if (includeExercises) {
+        result.exercises = workoutExercises.map(we => ({
+          id: we.exerciseId,
+          name: we.exerciseName,
+          primaryMuscle: we.primaryMuscle,
+          secondaryMuscles: we.secondaryMuscles,
+          createdAt: we.createdAt,
+          workoutId: we.workoutId,
+        }));
+      }
+
+      return result;
     }),
 });

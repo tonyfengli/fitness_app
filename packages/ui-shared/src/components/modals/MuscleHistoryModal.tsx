@@ -36,7 +36,19 @@ const MUSCLE_GROUPS = {
 const MUSCLE_UNIFICATION: Record<string, string> = {
   'Hips': 'Glutes',
   'Obliques': 'Core',
-  'Traps': 'Shoulders'
+  'Traps': 'Shoulders',
+  'Lats': 'Back',
+  'Lower_back': 'Back',
+  'Upper_back': 'Back',
+  'Delts': 'Shoulders',
+  'Adductors': 'Glutes',
+  'Abductors': 'Glutes',
+  'Lower_abs': 'Core',
+  'Upper_abs': 'Core',
+  'Upper_chest': 'Chest',
+  'Lower_chest': 'Chest',
+  'Shins': 'Calves',
+  'Tibialis_anterior': 'Calves'
 };
 
 type TimeRange = '7' | '14' | '30' | 'custom';
@@ -51,6 +63,7 @@ export const MuscleHistoryModal: React.FC<MuscleHistoryModalProps> = ({
   const [selectedRange, setSelectedRange] = useState<TimeRange>('7');
   const [isWeeklyMode, setIsWeeklyMode] = useState(true); // Default to This Week
   const [showBarGraph, setShowBarGraph] = useState(false);
+  const [showPastWorkouts, setShowPastWorkouts] = useState(false);
 
   // Calculate date range
   const calculateDateRange = () => {
@@ -81,39 +94,82 @@ export const MuscleHistoryModal: React.FC<MuscleHistoryModalProps> = ({
   const { startDate, endDate } = calculateDateRange();
 
   // Fetch muscle coverage data using React Query
-  const { data: muscleData, isLoading } = useQuery({
+  const { data: rawData, isLoading } = useQuery({
     ...api.muscleCoverage.getClientMuscleCoverage.queryOptions({
       clientId,
       startDate,
       endDate,
+      includeExercises: true, // Request exercise details
     }),
     enabled: isOpen && !!clientId,
-    select: (data) => {
-      // Process the muscle scores with unification
-      const processedCounts: Record<string, number> = {};
-      
-      // Initialize all muscles to 0
-      MUSCLES.forEach(muscle => {
-        processedCounts[muscle] = 0;
-      });
-
-      // Add scores from API, applying unification
-      if (data?.muscleScores) {
-        Object.entries(data.muscleScores).forEach(([muscle, score]) => {
-          const muscleKey = muscle.charAt(0).toUpperCase() + muscle.slice(1);
-          const unifiedMuscle = MUSCLE_UNIFICATION[muscleKey] || muscleKey;
-          
-          if (processedCounts[unifiedMuscle] !== undefined) {
-            processedCounts[unifiedMuscle] += score as number;
-          }
-        });
-      }
-
-      return processedCounts;
-    }
   });
 
-  const muscleCounts = muscleData || {};
+  // Process muscle data
+  const muscleData = React.useMemo(() => {
+    if (!rawData?.muscleScores) return {};
+    
+    const processedCounts: Record<string, number> = {};
+    
+    // Initialize all muscles to 0
+    MUSCLES.forEach(muscle => {
+      processedCounts[muscle] = 0;
+    });
+
+    // Add scores from API, applying unification
+    Object.entries(rawData.muscleScores).forEach(([muscle, score]) => {
+      const muscleKey = muscle.charAt(0).toUpperCase() + muscle.slice(1);
+      const unifiedMuscle = MUSCLE_UNIFICATION[muscleKey] || muscleKey;
+      
+      if (processedCounts[unifiedMuscle] !== undefined) {
+        processedCounts[unifiedMuscle] += score as number;
+      }
+    });
+
+    return processedCounts;
+  }, [rawData]);
+
+  // Extract workout data from the same API response
+  const workoutData = React.useMemo(() => {
+    if (!rawData?.exercises) return [];
+    
+    // Group exercises by date and workout
+    const workoutsByDate = new Map<string, Array<any>>();
+    
+    rawData.exercises.forEach((exercise: any) => {
+      const date = new Date(exercise.createdAt).toLocaleDateString('en-US', {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric'
+      });
+      if (!workoutsByDate.has(date)) {
+        workoutsByDate.set(date, []);
+      }
+      
+      // Format muscle names for display
+      const formattedPrimary = exercise.primaryMuscle ? 
+        exercise.primaryMuscle.charAt(0).toUpperCase() + exercise.primaryMuscle.slice(1) : 
+        'Unknown';
+      const unifiedPrimary = MUSCLE_UNIFICATION[formattedPrimary] || formattedPrimary;
+      
+      // Process secondary muscles
+      const formattedSecondary = (exercise.secondaryMuscles || []).map((muscle: string) => {
+        const formatted = muscle.charAt(0).toUpperCase() + muscle.slice(1);
+        return MUSCLE_UNIFICATION[formatted] || formatted;
+      });
+      
+      workoutsByDate.get(date)?.push({
+        ...exercise,
+        displayMuscle: unifiedPrimary,
+        displaySecondaryMuscles: formattedSecondary,
+      });
+    });
+    
+    // Convert to array and sort by date (newest first)
+    return Array.from(workoutsByDate.entries())
+      .map(([date, exercises]) => ({ date, exercises }))
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [rawData]);
+  const muscleCounts = muscleData;
 
   const formatDateRange = (start: Date, end: Date) => {
     const formatDate = (date: Date) => 
@@ -415,8 +471,84 @@ export const MuscleHistoryModal: React.FC<MuscleHistoryModalProps> = ({
             </>
           )}
         </div>
+        
+        {/* Past Workouts Section */}
+        {showPastWorkouts && (
+          <div className="mt-6">
+            <div className="border-t border-gray-200 pt-4">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-base font-semibold text-gray-900">Past Workouts</h3>
+                <span className="text-xs text-gray-500">
+                  {workoutData.reduce((acc, { exercises }) => acc + exercises.length, 0)} exercises
+                </span>
+              </div>
+              
+              {workoutData.length === 0 ? (
+                <p className="text-sm text-gray-500 text-center py-4">No workouts found in this time period</p>
+              ) : (
+                <div className="space-y-3">
+                  {workoutData.map(({ date, exercises }) => (
+                    <div key={date} className="bg-gray-50 rounded-lg p-3">
+                      <h4 className="text-sm font-semibold text-gray-900 mb-2">{date}</h4>
+                      <div className="space-y-1.5">
+                        {exercises.map((exercise: any, idx: number) => {
+                          const muscleCount = muscleCounts[exercise.displayMuscle] || 0;
+                          const isUncovered = muscleCount === 0;
+                          
+                          return (
+                            <div key={idx} className="flex items-center justify-between text-sm py-1">
+                              <span className="text-gray-700 flex-1 mr-2">{exercise.name}</span>
+                              <div className="flex items-center gap-1">
+                                {/* Show warning if muscle not covered */}
+                                {isUncovered && (
+                                  <span className="text-red-500 text-xs mr-1">!</span>
+                                )}
+                                {/* Primary muscle */}
+                                <span className={`text-xs px-2 py-1 rounded-full font-medium ${
+                                  MUSCLE_GROUPS.upper.includes(exercise.displayMuscle) ? 'bg-blue-100 text-blue-700' :
+                                  MUSCLE_GROUPS.lower.includes(exercise.displayMuscle) ? 'bg-green-100 text-green-700' :
+                                  MUSCLE_GROUPS.core.includes(exercise.displayMuscle) ? 'bg-purple-100 text-purple-700' :
+                                  'bg-gray-100 text-gray-600'
+                                }`}>
+                                  {exercise.displayMuscle}
+                                </span>
+                                {/* Secondary muscle count bubble */}
+                                {exercise.displaySecondaryMuscles?.length > 0 && (
+                                  <span className="text-xs px-1.5 py-1 rounded-full bg-gray-100 text-gray-600">
+                                    +{exercise.displaySecondaryMuscles.length}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                  
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+        
         </>
         )}
+      </div>
+      
+      {/* Separator and button section */}
+      <div className="border-t border-gray-200 mt-6">
+        <div className="px-6 py-4">
+          <div className="flex justify-center">
+            <button
+              onClick={() => setShowPastWorkouts(!showPastWorkouts)}
+              className="w-[90%] rounded-lg bg-gray-100 px-4 py-3 text-sm font-semibold text-gray-700 hover:bg-gray-200 transition-colors flex items-center justify-center gap-2"
+            >
+              <span>{showPastWorkouts ? 'Hide' : 'Show'} Past Workouts</span>
+              <span className="text-xs">{showPastWorkouts ? '▲' : '▼'}</span>
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
