@@ -242,7 +242,6 @@ function ClientWorkoutOverviewContent() {
   const updateStatusMutation = useMutation({
     ...trpc.trainingSession.updateClientReadyStatusPublic.mutationOptions({
       onSuccess: (data) => {
-        console.log('[ClientWorkoutOverview] Status updated to:', data.newStatus);
         // Set local ready state
         setIsReady(true);
       },
@@ -259,10 +258,6 @@ function ClientWorkoutOverviewContent() {
     userId: userId || "",
     supabase,
     onExercisesUpdate: (exercises) => {
-      console.log(
-        "[ClientWorkoutOverview] Received real-time exercises:",
-        exercises,
-      );
       setRealtimeExercises(exercises);
       // Force refetch of visualization data when exercises arrive
       queryClient.invalidateQueries({
@@ -282,7 +277,6 @@ function ClientWorkoutOverviewContent() {
     sessionId: sessionId || "",
     supabase,
     onSwapUpdate: (swap) => {
-      console.log("[ClientWorkoutOverview] Exercise swap detected:", swap);
 
       // Force refetch of exercise selections and visualization data
       queryClient.invalidateQueries({
@@ -302,11 +296,8 @@ function ClientWorkoutOverviewContent() {
     sessionId: sessionId || "",
     supabase,
     onStatusUpdate: (update) => {
-      console.log("[ClientWorkoutOverview] Status update received:", update);
-      
       // Update ready state if this is the current user
       if (update.userId === userId && update.status === 'workout_ready') {
-        console.log("[ClientWorkoutOverview] Current user is now workout_ready");
         setIsReady(true);
       }
     },
@@ -331,34 +322,8 @@ function ClientWorkoutOverviewContent() {
     refetchInterval: !hasExercises ? 5000 : false,
   });
 
-  // Debug visualization data
-  console.log("Visualization query result:", {
-    data: visualizationData,
-    isLoading,
-    error: visualizationError,
-    sessionId,
-    userId,
-  });
   
-  // If visualization data is null, try to understand why
-  if (!visualizationData && !isLoading && !visualizationError) {
-    console.warn("⚠️ Visualization data is null. Possible reasons:", {
-      "1": "No visualization data saved in session templateConfig",
-      "2": "Workout has not been generated yet",
-      "3": "Session might need workout regeneration",
-      sessionId,
-      userId
-    });
-  }
   
-  // Log blueprint data specifically
-  if (visualizationData?.blueprint?.clientExercisePools?.[userId]) {
-    console.log("Blueprint exercise pools for user:", {
-      userId,
-      pool: visualizationData.blueprint.clientExercisePools[userId],
-      candidatesCount: visualizationData.blueprint.clientExercisePools[userId]?.availableCandidates?.length
-    });
-  }
 
   // Fetch user info directly from client preference data
   const { data: clientInfoResponse } = useQuery({
@@ -380,20 +345,8 @@ function ClientWorkoutOverviewContent() {
     refetchInterval: !hasExercises ? 5000 : false,
   });
 
-  console.log("Saved selections:", savedSelections);
   
-  // Check if we have saved selections but no visualization data
-  if (!visualizationData && !isLoading && !visualizationError && savedSelections && savedSelections.length > 0) {
-    console.log("📊 We have saved selections but no visualization data. This might mean:");
-    console.log("- Workout was generated but visualization data wasn't saved");
-    console.log("- Or visualization data is being saved differently");
-    console.log("Saved selections count:", savedSelections.length);
-  }
   
-  // Log the full structure of saved selections
-  if (savedSelections && savedSelections.length > 0) {
-    console.log("First saved selection structure:", savedSelections[0]);
-  }
 
   // Pre-fetch available exercises as soon as we have a session
   const { data: exercisesData, isLoading: isLoadingExercises } = useQuery({
@@ -407,11 +360,6 @@ function ClientWorkoutOverviewContent() {
 
   const availableExercises = exercisesData?.exercises || [];
   
-  // Log available exercises to see what we're working with
-  console.log("Available exercises from API:", {
-    count: availableExercises.length,
-    first5: availableExercises.slice(0, 5).map(e => ({ id: e.id, name: e.name }))
-  });
 
   // Keep ref updated with available exercises
   useEffect(() => {
@@ -422,7 +370,6 @@ function ClientWorkoutOverviewContent() {
   const clientExercises = useMemo(() => {
     // First check if we have real-time exercises
     if (realtimeExercises.length > 0) {
-      console.log("Using real-time exercises");
       return realtimeExercises.map((exercise, index) => ({
         id: exercise.exerciseId,
         name: exercise.exerciseName || exercise.name,
@@ -437,7 +384,6 @@ function ClientWorkoutOverviewContent() {
 
     // Then try to use saved selections (source of truth after swaps)
     if (savedSelections && savedSelections.length > 0) {
-      console.log("Using saved selections as primary source");
       return savedSelections.map((selection: any, index: number) => ({
         id: selection.exerciseId,
         name: selection.exerciseName,
@@ -460,27 +406,15 @@ function ClientWorkoutOverviewContent() {
     const groupContext = visualizationData.groupContext;
 
     if (!llmResult || !groupContext) {
-      console.log("Missing llmResult or groupContext:", {
-        llmResult,
-        groupContext,
-      });
       return [];
     }
 
-    // Debug logging
-    console.log("Full Visualization data:", visualizationData);
-    console.log("LLM Result:", llmResult);
-    console.log("Looking for userId:", userId);
 
     // Find the client's information
     const clientIndex = groupContext.clients.findIndex(
       (c: any) => c.user_id === userId,
     );
     if (clientIndex === -1) {
-      console.log(
-        "Client not found in groupContext. Available clients:",
-        groupContext.clients,
-      );
       return [];
     }
 
@@ -489,13 +423,10 @@ function ClientWorkoutOverviewContent() {
 
     // Get pre-assigned exercises from the blueprint
     const blueprint = visualizationData.blueprint;
-    console.log("Blueprint:", blueprint);
-    console.log("Client exercise pools:", blueprint?.clientExercisePools);
 
     if (blueprint?.clientExercisePools?.[userId]) {
       const preAssigned =
         blueprint.clientExercisePools[userId].preAssigned || [];
-      console.log("Pre-assigned exercises:", preAssigned);
       preAssigned.forEach((pa: any, index: number) => {
         exercises.push({
           id: pa.exercise.id,
@@ -507,24 +438,9 @@ function ClientWorkoutOverviewContent() {
         });
       });
     } else {
-      console.log("No client exercise pool found for userId:", userId);
     }
 
     // Get LLM selected exercises
-    console.log("Checking for LLM selections at:", {
-      path1: llmResult.exerciseSelection?.clientSelections?.[userId],
-      path2: llmResult.llmAssignments,
-      hasExerciseSelection: !!llmResult.exerciseSelection,
-      hasClientSelections: !!llmResult.exerciseSelection?.clientSelections,
-      clientIds: llmResult.exerciseSelection?.clientSelections
-        ? Object.keys(llmResult.exerciseSelection.clientSelections)
-        : [],
-      actualUserId: userId,
-      clientsInContext: groupContext.clients.map((c: any) => ({
-        user_id: c.user_id,
-        name: c.name,
-      })),
-    });
 
     // Check multiple possible paths for the LLM selections
     let llmSelections = null;
@@ -534,9 +450,7 @@ function ClientWorkoutOverviewContent() {
     if (typeof exerciseSelection === "string") {
       try {
         exerciseSelection = JSON.parse(exerciseSelection);
-        console.log("Parsed exerciseSelection from string");
       } catch (e) {
-        console.log("Failed to parse exerciseSelection string");
       }
     }
 
@@ -546,21 +460,18 @@ function ClientWorkoutOverviewContent() {
       llmSelections =
         exerciseSelection.clientSelections[userId].selected ||
         exerciseSelection.clientSelections[userId].selectedExercises;
-      console.log("Found in exerciseSelection.clientSelections");
     }
     // Path 2: Direct clientSelections
     else if (llmResult.clientSelections?.[userId]) {
       llmSelections =
         llmResult.clientSelections[userId].selected ||
         llmResult.clientSelections[userId].selectedExercises;
-      console.log("Found in llmResult.clientSelections");
     }
     // Path 3: Check if we need to use client index instead of userId
     else if (exerciseSelection?.clientSelections) {
       // Try using the client index from groupContext
       const clientKey = `client_${clientIndex}`;
       if (exerciseSelection.clientSelections[clientKey]) {
-        console.log("Found selections using client key:", clientKey);
         llmSelections =
           exerciseSelection.clientSelections[clientKey].selectedExercises;
       }
@@ -568,11 +479,9 @@ function ClientWorkoutOverviewContent() {
     // Path 4: llmAssignments for BMF templates
     else if (llmResult.llmAssignments) {
       // Look for user in llmAssignments structure
-      console.log("Checking llmAssignments structure");
     }
 
     if (llmSelections) {
-      console.log("Found LLM selections:", llmSelections);
       llmSelections.forEach((ex: any, index: number) => {
         // Handle different possible structures
         const exercise = {
@@ -589,13 +498,7 @@ function ClientWorkoutOverviewContent() {
           exercises.push(exercise);
         }
       });
-      console.log(
-        "Added exercises from LLM:",
-        exercises.length -
-          (blueprint?.clientExercisePools?.[userId]?.preAssigned?.length || 0),
-      );
     } else {
-      console.log("No LLM selections found for user");
     }
 
     return exercises;
@@ -667,9 +570,6 @@ function ClientWorkoutOverviewContent() {
   // Refetch visualization when we get real-time exercises
   useEffect(() => {
     if (realtimeExercises.length > 0 && !visualizationData) {
-      console.log(
-        "[ClientWorkoutOverview] Real-time exercises detected, refetching visualization data",
-      );
       refetchVisualization();
     }
   }, [realtimeExercises.length, visualizationData, refetchVisualization]);
@@ -678,7 +578,6 @@ function ClientWorkoutOverviewContent() {
   useEffect(() => {
     const exercisesLoaded = enrichedClientExercises.length > 0;
     if (exercisesLoaded !== hasExercises) {
-      console.log("[ClientWorkoutOverview] Exercises loaded state changed:", exercisesLoaded);
       setHasExercises(exercisesLoaded);
     }
   }, [enrichedClientExercises.length, hasExercises]);
@@ -686,7 +585,6 @@ function ClientWorkoutOverviewContent() {
   // Initialize ready state from client info
   useEffect(() => {
     if (clientInfoResponse?.status === 'workout_ready' && !isReady) {
-      console.log("[ClientWorkoutOverview] Initializing ready state from client info");
       setIsReady(true);
     }
   }, [clientInfoResponse?.status, isReady]);
@@ -748,9 +646,9 @@ function ClientWorkoutOverviewContent() {
         .map(ex => ex.id)
     );
     
-    // Get blueprint candidates if available, otherwise use all available exercises
+    // Get blueprint candidates from visualization data (no fallback)
     const blueprintCandidates = visualizationData?.blueprint?.clientExercisePools?.[userId]?.availableCandidates || [];
-    const candidatesPool = blueprintCandidates.length > 0 ? blueprintCandidates : availableExercises;
+    const candidatesPool = blueprintCandidates;
     
     // Filter candidates:
     // 1. Match the target muscle group (primary muscle only)
@@ -776,9 +674,14 @@ function ClientWorkoutOverviewContent() {
     
     const targetMuscle = selectedExercise?.primaryMuscle;
     const unifiedMuscle = getUnifiedMuscleGroup(targetMuscle);
-    const workoutType = visualizationData?.groupContext?.workoutType;
-    const isFullBodyWorkout = workoutType?.includes('FULL_BODY');
+    // workoutType is now stored per-client in the groupContext.clients array
+    const currentClient = visualizationData?.groupContext?.clients?.find((c: any) => c.user_id === userId);
+    const workoutType = currentClient?.workoutType;
+    // Check if it's any of the 3 full body variants
+    const isFullBodyWorkout = workoutType?.toLowerCase().includes('full_body') || false;
     const showAllHighScoring = unifiedMuscle === "Other";
+    
+    console.log("[Other Options Debug] Workout type:", workoutType, "isFullBody:", isFullBodyWorkout);
     
     // Get already selected exercise IDs to filter out (excluding the one being replaced)
     const selectedExerciseIds = new Set(
@@ -787,9 +690,9 @@ function ClientWorkoutOverviewContent() {
         .map(ex => ex.id)
     );
     
-    // Use blueprint candidates if available, otherwise use all available exercises
+    // Get blueprint candidates from visualization data (no fallback)
     const blueprintCandidates = visualizationData?.blueprint?.clientExercisePools?.[userId]?.availableCandidates || [];
-    const candidatesPool = blueprintCandidates.length > 0 ? blueprintCandidates : availableExercises;
+    const candidatesPool = blueprintCandidates;
     
     if (isFullBodyWorkout) {
       // For full body workouts: Get the highest scored exercise for each muscle not in workout
@@ -803,6 +706,7 @@ function ClientWorkoutOverviewContent() {
         }
       });
       
+      
       // Group candidates by muscle
       const exercisesByMuscle = new Map<string, any[]>();
       candidatesPool.forEach((ex: any) => {
@@ -815,6 +719,7 @@ function ClientWorkoutOverviewContent() {
         }
         exercisesByMuscle.get(muscle)!.push(ex);
       });
+      
       
       // Sort exercises within each muscle by score
       exercisesByMuscle.forEach((exercises, muscle) => {
@@ -832,11 +737,13 @@ function ClientWorkoutOverviewContent() {
         }
       });
       
+      
       // Sort by exercise score to get the highest scoring exercises across all muscles
       topExercisesByMuscle.sort((a, b) => (b.exercise.score || 0) - (a.exercise.score || 0));
       
       // Store the primary candidates from uncovered muscles
       const primaryCandidates = topExercisesByMuscle.map(item => item.exercise);
+      
       
       // Get all other exercises as fallback
       const fallbackCandidates = candidatesPool
@@ -847,11 +754,34 @@ function ClientWorkoutOverviewContent() {
         )
         .sort((a: any, b: any) => (b.score || 0) - (a.score || 0));
       
-      // Combine primary and fallback candidates
-      const allCandidates = [...primaryCandidates, ...fallbackCandidates];
+      
+      // For Other Options, we want to show only 1 exercise per muscle
+      // Start with primary candidates (from muscles not in workout)
+      const finalCandidates: any[] = [];
+      const usedMuscles = new Set<string>();
+      
+      // Add primary candidates first (these are already 1 per muscle)
+      primaryCandidates.forEach(exercise => {
+        const muscle = getUnifiedMuscleGroup(exercise.primaryMuscle);
+        finalCandidates.push(exercise);
+        usedMuscles.add(muscle);
+      });
+      
+      // If we need more to reach 3, add from fallback but only 1 per muscle
+      if (finalCandidates.length < 3) {
+        for (const exercise of fallbackCandidates) {
+          const muscle = getUnifiedMuscleGroup(exercise.primaryMuscle);
+          if (!usedMuscles.has(muscle)) {
+            finalCandidates.push(exercise);
+            usedMuscles.add(muscle);
+            if (finalCandidates.length >= 3) break;
+          }
+        }
+      }
+      
       
       // Use tie-breaking to get consistent order
-      return selectTopWithTieBreaking(allCandidates, allCandidates.length);
+      return selectTopWithTieBreaking(finalCandidates, finalCandidates.length);
     } else {
       // Default logic for non-full body workouts
       const filtered = candidatesPool
@@ -1178,7 +1108,7 @@ function ClientWorkoutOverviewContent() {
                 /* Stage 1: Recommended Alternatives */
                 <div className="p-6">
                   {/* Loading state */}
-                  {isLoadingExercises && (
+                  {(isLoadingExercises || isLoading) && (
                     <div className="py-12 text-center">
                       <div className="inline-flex items-center justify-center w-16 h-16 bg-indigo-50 rounded-full mb-4">
                         <SpinnerIcon className="h-8 w-8 animate-spin text-indigo-600" />
@@ -1189,7 +1119,7 @@ function ClientWorkoutOverviewContent() {
 
 
                   {/* Recommended exercises list */}
-                  {!isLoadingExercises && (
+                  {!isLoadingExercises && !isLoading && (
                     <>
                       {/* Primary Recommendations - Same muscle group */}
                       {(() => {
@@ -1212,6 +1142,15 @@ function ClientWorkoutOverviewContent() {
                         // Get exercises based on current count
                         const recommendedExercises = muscleCandidates.slice(0, muscleSectionCount);
                         
+                        // If no blueprint candidates available, show a message
+                        if (!visualizationData?.blueprint?.clientExercisePools?.[userId]?.availableCandidates) {
+                          return (
+                            <div className="py-8 text-center">
+                              <p className="text-gray-500">Loading exercise recommendations...</p>
+                            </div>
+                          );
+                        }
+                        
                         return (
                           <div className="mb-8">
                             <div className="mb-4">
@@ -1221,10 +1160,10 @@ function ClientWorkoutOverviewContent() {
                             </div>
                             <div className="space-y-2">
                               {recommendedExercises.map((exercise: any, index: number) => {
-                                // For blueprint candidates, the exercise is already the full object
-                                const actualExercise = exercise.id ? exercise : availableExercises.find(ex => ex.name === exercise.name);
+                                // Blueprint candidates are already full exercise objects
+                                const actualExercise = exercise;
                                 
-                                if (!actualExercise) return null;
+                                if (!actualExercise || !actualExercise.id) return null;
 
                                 return (
                                   <button
@@ -1290,6 +1229,7 @@ function ClientWorkoutOverviewContent() {
                         // Get exercises based on current count
                         const otherMuscleExercises = otherCandidates.slice(0, otherSectionCount);
                         
+                        
                         if (otherMuscleExercises.length === 0) return null;
                         
                         return (
@@ -1301,10 +1241,10 @@ function ClientWorkoutOverviewContent() {
                             </div>
                             <div className="space-y-2">
                               {otherMuscleExercises.map((exercise: any, index: number) => {
-                                // For blueprint candidates, the exercise is already the full object
-                                const actualExercise = exercise.id ? exercise : availableExercises.find(ex => ex.name === exercise.name);
+                                // Blueprint candidates are already full exercise objects
+                                const actualExercise = exercise;
                                 
-                                if (!actualExercise) return null;
+                                if (!actualExercise || !actualExercise.id) return null;
                                 
                                 const muscleGroup = getUnifiedMuscleGroup(actualExercise.primaryMuscle);
 

@@ -923,12 +923,12 @@ function GroupVisualizationPageContent() {
                             {client.name}
                           </h4>
                           <div className="space-y-0">
-                            {groupContext.workoutType && (
+                            {client.workoutType && (
                               <p className="leading-tight text-gray-600">
                                 <span className="font-medium">
                                   Workout Type:
                                 </span>{" "}
-                                {groupContext.workoutType
+                                {client.workoutType
                                   .replace(/_/g, " ")
                                   .replace(/\b\w/g, (l) => l.toUpperCase())}
                               </p>
