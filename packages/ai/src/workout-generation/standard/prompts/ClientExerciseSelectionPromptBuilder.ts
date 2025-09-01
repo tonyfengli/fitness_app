@@ -139,7 +139,7 @@ Select exactly ${exercisesToSelect} new exercises (not pre-assigned).
 
 Names must match exactly (case-sensitive).
 
-Full body workouts MUST include at least one upper-body exercise (push or pull) among selections.
+Full body workouts MUST include at least one push AND one lower-body compound across the entire session (pre-assigned + new selections).
 
 ${this.buildClientConstraints()}
 
@@ -149,12 +149,14 @@ Max 3 exercises per primary muscle across the whole session (including pre-assig
 
 Lower-body compound limit: Do not exceed 1 compound lower-body movement (squat/deadlift/lunge family) unless the client explicitly targets lower body.
 
-For non-target muscles, prefer compound over isolation; limit to one isolation unless required.
+For non-target muscles, prefer compound over isolation; across the entire session, limit to one isolation per muscle target unless required.
 
 Selection Priorities (apply in order)
 For full body: Ensure upper/lower balance first, then satisfy muscle targets within that balance.
 
-Fill movement pattern gaps: prioritize missing patterns (push/pull/vertical).
+Fill movement pattern gaps across the entire session (pre-assigned + new selections): prioritize missing push, lower-body, or vertical patterns.
+
+When push vs pull or hinge vs squat are imbalanced across the entire session, prefer the underrepresented side before score.
 
 Prefer higher scores when choices are equally valid.
 
@@ -262,15 +264,13 @@ Stop after selecting the first valid high-scoring exercise combination that sati
     const isFullBody = this.config.workoutType.toLowerCase().includes("full_body");
 
     if (isFullBody) {
-      // Count how many pre-assigned exercises already hit the target muscles
+      // Count how many pre-assigned exercises already hit the target muscles as PRIMARY
       const targetsCoveredByPreAssigned = new Set<string>();
       this.config.preAssigned.forEach(pa => {
         const primaryMuscle = pa.exercise.primaryMuscle?.toLowerCase();
-        const secondaryMuscles = pa.exercise.secondaryMuscles?.map(m => m.toLowerCase()) || [];
         
         targets.forEach(target => {
-          if (primaryMuscle === target.toLowerCase() || 
-              secondaryMuscles.includes(target.toLowerCase())) {
+          if (primaryMuscle === target.toLowerCase()) {
             targetsCoveredByPreAssigned.add(target.toLowerCase());
           }
         });
@@ -279,7 +279,7 @@ Stop after selecting the first valid high-scoring exercise combination that sati
       if (targetsCoveredByPreAssigned.size === targets.length) {
         return `Muscle targets in full body: ${targets.join(", ")} already well-covered by pre-assigned. Prioritize other body regions.`;
       } else {
-        return `Muscle targets in full body: ${targets.join(", ")} → ensure coverage but maintain full-body balance.`;
+        return `Muscle targets in full body: ${targets.join(", ")} → ensure at least one primary exercise for each, maintain full-body balance.`;
       }
     }
 
