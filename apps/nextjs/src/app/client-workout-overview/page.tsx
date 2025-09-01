@@ -359,7 +359,18 @@ function ClientWorkoutOverviewContent() {
   });
 
   const availableExercises = exercisesData?.exercises || [];
-  
+
+  // Fetch user's favorite exercises
+  const { data: favoritesData, isLoading: isLoadingFavorites } = useQuery({
+    ...trpc.exercise.getUserFavoritesPublic.queryOptions({
+      sessionId: sessionId || "",
+      userId: userId || "",
+    }),
+    enabled: !!sessionId && !!userId,
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+  });
+
+  const favoriteExercises = favoritesData?.favorites || [];
 
   // Keep ref updated with available exercises
   useEffect(() => {
@@ -629,8 +640,33 @@ function ClientWorkoutOverviewContent() {
 
   // Group filtered exercises by muscle
   const groupedExercises = useMemo(() => {
-    return groupByMuscle(filteredExercises);
-  }, [filteredExercises]);
+    const groups: Array<[string, any[]]> = [];
+    
+    // Add favorites as the first group if any exist
+    if (favoriteExercises.length > 0 && !searchQuery.trim()) {
+      // Get already selected exercise IDs (excluding the one being replaced)
+      const selectedIds = new Set(
+        enrichedClientExercises
+          .filter((ex, idx) => idx !== selectedExerciseIndex)
+          .map((ex) => ex.id)
+      );
+      
+      // Filter favorites to exclude already selected ones and the one being replaced
+      const filteredFavorites = favoriteExercises.filter((fav: any) => 
+        !selectedIds.has(fav.id) && fav.id !== selectedExercise?.id
+      );
+      
+      if (filteredFavorites.length > 0) {
+        groups.push(['Favorites', filteredFavorites]);
+      }
+    }
+    
+    // Add regular muscle groups
+    const muscleGroups = groupByMuscle(filteredExercises);
+    groups.push(...muscleGroups);
+    
+    return groups;
+  }, [filteredExercises, favoriteExercises, searchQuery, enrichedClientExercises, selectedExerciseIndex, selectedExercise]);
 
   // Memoize muscle candidates for recommendations
   const muscleCandidates = useMemo(() => {
@@ -783,7 +819,127 @@ function ClientWorkoutOverviewContent() {
       // Use tie-breaking to get consistent order
       return selectTopWithTieBreaking(finalCandidates, finalCandidates.length);
     } else {
-      // Default logic for non-full body workouts
+      // Targeted workout logic - show exercises from OTHER target muscles
+      const clientTargetMuscles = visualizationData?.groupContext?.clients?.find((c: any) => c.user_id === userId)?.muscle_target || [];
+      
+      // If client has muscle targets, show exercises from other target muscles
+      if (clientTargetMuscles.length > 0) {
+        // Get other target muscles (excluding the muscle being replaced)
+        const otherTargetMuscles = clientTargetMuscles.filter((muscle: string) => {
+          const unifiedTargetMuscle = getUnifiedMuscleGroup(muscle);
+          return unifiedTargetMuscle !== unifiedMuscle;
+        });
+        
+        console.log("[Other Options Debug] Other target muscles:", otherTargetMuscles);
+        
+        if (otherTargetMuscles.length === 0) {
+          // No other target muscles - fall back to showing any high-scoring exercises
+          const filtered = candidatesPool
+            .filter((ex: any) => 
+              !selectedExerciseIds.has(ex.id) && 
+              ex.id !== selectedExercise?.id
+            )
+            .sort((a: any, b: any) => (b.score || 0) - (a.score || 0));
+          
+          return selectTopWithTieBreaking(filtered.slice(0, 3), 3);
+        }
+        
+        // Get best exercises from each other target muscle
+        const exercisesByTargetMuscle = new Map<string, any[]>();
+        
+        candidatesPool.forEach((ex: any) => {
+          // Skip if already selected or is the current exercise
+          if (selectedExerciseIds.has(ex.id) || ex.id === selectedExercise?.id) return;
+          
+          // Check if this exercise's PRIMARY muscle matches any of the other target muscles
+          const exUnifiedMuscle = getUnifiedMuscleGroup(ex.primaryMuscle);
+          const matchingTarget = otherTargetMuscles.find((target: string) => 
+            getUnifiedMuscleGroup(target) === exUnifiedMuscle
+          );
+          
+          if (matchingTarget) {
+            const targetKey = getUnifiedMuscleGroup(matchingTarget);
+            if (!exercisesByTargetMuscle.has(targetKey)) {
+              exercisesByTargetMuscle.set(targetKey, []);
+            }
+            exercisesByTargetMuscle.get(targetKey)!.push(ex);
+          }
+        });
+        
+        // Sort exercises within each muscle by score
+        exercisesByTargetMuscle.forEach((exercises, muscle) => {
+          exercises.sort((a, b) => (b.score || 0) - (a.score || 0));
+          console.log(`[Other Options Debug] ${muscle} exercises found:`, exercises.length, 
+            exercises.slice(0, 3).map(ex => ({ name: ex.name, score: ex.score })));
+        });
+        
+        // Build final list based on number of other target muscles
+        const finalCandidates: any[] = [];
+        
+        if (exercisesByTargetMuscle.size === 1) {
+          // Only 1 other target muscle - show top 3 from that muscle
+          const exercises = Array.from(exercisesByTargetMuscle.values())[0];
+          finalCandidates.push(...exercises.slice(0, 3));
+        } else if (exercisesByTargetMuscle.size === 2) {
+          // 2 other target muscles - ensure at least 1 from each muscle
+          const muscleArrays = Array.from(exercisesByTargetMuscle.entries());
+          
+          // First, get the top exercise from each muscle
+          const topFromEach: Array<{muscle: string, exercise: any}> = [];
+          muscleArrays.forEach(([muscle, exercises]) => {
+            if (exercises.length > 0) {
+              topFromEach.push({ muscle, exercise: exercises[0] });
+            }
+          });
+          
+          // Add these guaranteed picks
+          finalCandidates.push(...topFromEach.map(item => item.exercise));
+          
+          // For the remaining slot(s), get the next best exercise from either muscle
+          if (finalCandidates.length < 3) {
+            const remainingCandidates: Array<{muscle: string, exercise: any}> = [];
+            
+            muscleArrays.forEach(([muscle, exercises]) => {
+              // Skip the first exercise since we already added it
+              exercises.slice(1).forEach(ex => {
+                remainingCandidates.push({ muscle, exercise: ex });
+              });
+            });
+            
+            // Sort remaining by score
+            remainingCandidates.sort((a, b) => (b.exercise.score || 0) - (a.exercise.score || 0));
+            
+            // Add the best remaining exercise(s) to reach 3 total
+            const slotsNeeded = 3 - finalCandidates.length;
+            finalCandidates.push(...remainingCandidates.slice(0, slotsNeeded).map(c => c.exercise));
+          }
+          
+          console.log("[Other Options Debug] Final distribution:", 
+            finalCandidates.map(ex => ({ 
+              name: ex.name, 
+              muscle: ex.primaryMuscle,
+              unifiedMuscle: getUnifiedMuscleGroup(ex.primaryMuscle),
+              score: ex.score 
+            })));
+        } else {
+          // 3+ other target muscles - show 1 from each (top 3)
+          const topFromEachMuscle: any[] = [];
+          
+          exercisesByTargetMuscle.forEach((exercises) => {
+            if (exercises.length > 0) {
+              topFromEachMuscle.push(exercises[0]); // Top exercise from this muscle
+            }
+          });
+          
+          // Sort by score and take top 3
+          topFromEachMuscle.sort((a, b) => (b.score || 0) - (a.score || 0));
+          finalCandidates.push(...topFromEachMuscle.slice(0, 3));
+        }
+        
+        return selectTopWithTieBreaking(finalCandidates, finalCandidates.length);
+      }
+      
+      // No muscle targets - use original logic
       const filtered = candidatesPool
         .filter((ex: any) => {
           // Exclude already selected exercises and the current exercise being replaced
@@ -1362,43 +1518,77 @@ function ClientWorkoutOverviewContent() {
                         {searchQuery.trim() ? (
                           // Flat list when searching
                           <div className="space-y-2">
-                            {filteredExercises.map((exercise: any) => {
-                              const muscleGroup = getUnifiedMuscleGroup(exercise.primaryMuscle);
+                            {(() => {
+                              // When searching, create a deduped list with favorites shown first
+                              const seenIds = new Set<string>();
+                              const deduplicatedExercises: any[] = [];
                               
-                              return (
-                                <button
-                                  key={exercise.id}
-                                  onClick={() => setSelectedReplacement(exercise.name)}
-                                  className={`group flex w-full items-center justify-between rounded-xl px-4 py-3.5 text-left transition-all ${
-                                    selectedReplacement === exercise.name
-                                      ? 'bg-gradient-to-r from-indigo-500 to-indigo-600 text-white shadow-lg shadow-indigo-500/25 scale-[1.02]'
-                                      : 'bg-white hover:bg-gray-50 shadow-sm hover:shadow-md border border-gray-100'
-                                  }`}
-                                >
-                                  <span className={`font-medium ${
-                                    selectedReplacement === exercise.name
-                                      ? 'text-white'
-                                      : 'text-gray-900'
-                                  }`}>
-                                    {exercise.name}
-                                  </span>
-                                  {exercise.primaryMuscle && (
-                                    <span className={`text-xs px-2.5 py-1 rounded-full font-medium capitalize ${
+                              // Add matching favorites first
+                              const matchingFavorites = filterExercisesBySearch(favoriteExercises, searchQuery);
+                              matchingFavorites.forEach(fav => {
+                                if (!seenIds.has(fav.id)) {
+                                  seenIds.add(fav.id);
+                                  deduplicatedExercises.push({...fav, isFavorite: true});
+                                }
+                              });
+                              
+                              // Then add regular filtered exercises (skipping duplicates)
+                              filteredExercises.forEach(exercise => {
+                                if (!seenIds.has(exercise.id)) {
+                                  seenIds.add(exercise.id);
+                                  deduplicatedExercises.push(exercise);
+                                }
+                              });
+                              
+                              return deduplicatedExercises.map((exercise: any) => {
+                                const muscleGroup = getUnifiedMuscleGroup(exercise.primaryMuscle);
+                                
+                                return (
+                                  <button
+                                    key={exercise.id}
+                                    onClick={() => setSelectedReplacement(exercise.name)}
+                                    className={`group flex w-full items-center justify-between rounded-xl px-4 py-3.5 text-left transition-all ${
                                       selectedReplacement === exercise.name
-                                        ? 'bg-white/20 text-white'
-                                        : muscleGroup === 'Chest' ? 'bg-yellow-100 text-yellow-800'
-                                        : muscleGroup === 'Back' ? 'bg-green-100 text-green-800'
-                                        : muscleGroup === 'Shoulders' ? 'bg-purple-100 text-purple-800'
-                                        : muscleGroup === 'Core' ? 'bg-orange-100 text-orange-800'
-                                        : muscleGroup === 'Glutes' || muscleGroup === 'Quads' || muscleGroup === 'Hamstrings' ? 'bg-red-100 text-red-800'
-                                        : 'bg-gray-100 text-gray-600'
-                                    }`}>
-                                      {exercise.primaryMuscle.toLowerCase().replace(/_/g, ' ')}
-                                    </span>
-                                  )}
-                                </button>
-                              );
-                            })}
+                                        ? 'bg-gradient-to-r from-indigo-500 to-indigo-600 text-white shadow-lg shadow-indigo-500/25 scale-[1.02]'
+                                        : 'bg-white hover:bg-gray-50 shadow-sm hover:shadow-md border border-gray-100'
+                                    }`}
+                                  >
+                                    <div className="flex items-center gap-2">
+                                      <span className={`font-medium ${
+                                        selectedReplacement === exercise.name
+                                          ? 'text-white'
+                                          : 'text-gray-900'
+                                      }`}>
+                                        {exercise.name}
+                                      </span>
+                                      {exercise.isFavorite && (
+                                        <span className={`text-xs ${
+                                          selectedReplacement === exercise.name
+                                            ? 'text-white/80'
+                                            : 'text-yellow-600'
+                                        }`}>
+                                          ⭐
+                                        </span>
+                                      )}
+                                    </div>
+                                    {exercise.primaryMuscle && (
+                                      <span className={`text-xs px-2.5 py-1 rounded-full font-medium capitalize ${
+                                        selectedReplacement === exercise.name
+                                          ? 'bg-white/20 text-white'
+                                          : muscleGroup === 'Chest' ? 'bg-yellow-100 text-yellow-800'
+                                          : muscleGroup === 'Back' ? 'bg-green-100 text-green-800'
+                                          : muscleGroup === 'Shoulders' ? 'bg-purple-100 text-purple-800'
+                                          : muscleGroup === 'Core' ? 'bg-orange-100 text-orange-800'
+                                          : muscleGroup === 'Glutes' || muscleGroup === 'Quads' || muscleGroup === 'Hamstrings' ? 'bg-red-100 text-red-800'
+                                          : 'bg-gray-100 text-gray-600'
+                                      }`}>
+                                        {exercise.primaryMuscle.toLowerCase().replace(/_/g, ' ')}
+                                      </span>
+                                    )}
+                                  </button>
+                                );
+                              });
+                            })()}
                           </div>
                         ) : (
                           // Grouped by muscle when browsing
@@ -1409,8 +1599,13 @@ function ClientWorkoutOverviewContent() {
                               onClick={() => toggleMuscleGroup(muscle)}
                               className="flex w-full items-center justify-between px-5 py-4 text-left transition-all hover:bg-gray-50"
                             >
-                              <span className="font-semibold text-gray-900 capitalize">
-                                {muscle.toLowerCase().replace(/_/g, ' ')}
+                              <span className="flex items-center gap-2 font-semibold text-gray-900">
+                                <span className="capitalize">
+                                  {muscle.toLowerCase().replace(/_/g, ' ')}
+                                </span>
+                                {muscle === 'Favorites' && (
+                                  <span className="text-yellow-500">⭐</span>
+                                )}
                               </span>
                               <div className="flex items-center gap-3">
                                 <span className="text-sm font-medium text-gray-500 bg-gray-100 px-2.5 py-1 rounded-full">

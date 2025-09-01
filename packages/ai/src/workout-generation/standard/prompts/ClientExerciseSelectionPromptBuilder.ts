@@ -436,9 +436,11 @@ Workout type: ${this.formatWorkoutType(this.config.workoutType)}
 Total exercises for this workout: ${totalExercises} (${this.config.preAssigned.length} pre-assigned + ${exercisesToSelect} to select)
 
 Rules
+All rules are evaluated across the entire session (pre-assigned + new selections), not just the new selections.
+
 Select exactly ${exercisesToSelect} new exercises (not pre-assigned).
 
-Must satisfy the "Must Include" muscle constraints.
+Must satisfy all "Must Include" muscles with at least one exercise where that muscle is the primaryMuscle. Prefer compound movementPatterns (hinge, squat, press, row, lunge) when available.
 
 Prioritize movement pattern variety across the full session (avoid patterns listed above).
 
@@ -456,13 +458,15 @@ Avoid selecting more than one new exercise for the same must-include muscle unle
 
 When the total number of target muscles is fewer than 3, do not allocate all remaining slots to a single target once it is already covered; use at least one slot for complementary balance outside those targets.
 
-If multiple exercises target the same muscle, prefer different angles or patterns (e.g., vertical vs horizontal, isolation vs compound).
+If a target primaryMuscle is already covered, avoid selecting another exercise with the same movementPattern. Prefer variation (different angle/pattern) or shift coverage to another target muscle.
 
 Prefer compound > isolation when variety is needed.
 
 Prefer higher score if equally valid.
 
 Selections should feel like a cohesive, trainer-designed workout, not random or redundant.
+
+When trade-offs arise, prefer the combination of exerciseNames that produces a balanced set of movementPatterns and looks most trainer-like.
 
 ${this.buildClientConstraints()}
 

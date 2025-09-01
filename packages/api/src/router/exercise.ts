@@ -466,6 +466,54 @@ export const exerciseRouter = {
       return { exercises: businessExercises };
     }),
 
+  // Public endpoint for getting user's favorite exercises
+  getUserFavoritesPublic: publicProcedure
+    .input(
+      z.object({
+        sessionId: z.string().uuid(),
+        userId: z.string(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      // Get the session to find the business
+      const session = await ctx.db.query.TrainingSession.findFirst({
+        where: eq(TrainingSession.id, input.sessionId),
+      });
+
+      if (!session) {
+        return { favorites: [] };
+      }
+
+      // Get all favorite exercises for the user in this business
+      const favorites = await ctx.db
+        .select({
+          id: exercises.id,
+          name: exercises.name,
+          primaryMuscle: exercises.primaryMuscle,
+          secondaryMuscles: exercises.secondaryMuscles,
+          equipment: exercises.equipment,
+          movementPattern: exercises.movementPattern,
+          modality: exercises.modality,
+        })
+        .from(UserExerciseRatings)
+        .innerJoin(exercises, eq(UserExerciseRatings.exerciseId, exercises.id))
+        .innerJoin(
+          BusinessExercise,
+          eq(exercises.id, BusinessExercise.exerciseId),
+        )
+        .where(
+          and(
+            eq(UserExerciseRatings.userId, input.userId),
+            eq(UserExerciseRatings.businessId, session.businessId),
+            eq(UserExerciseRatings.ratingType, "favorite"),
+            eq(BusinessExercise.businessId, session.businessId)
+          )
+        )
+        .orderBy(exercises.name);
+
+      return { favorites };
+    }),
+
   // Get user's favorite exercises
   getUserFavorites: protectedProcedure
     .input(
