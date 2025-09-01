@@ -16,6 +16,7 @@ import {
   XIcon,
   MuscleHistoryModal,
   useModalState,
+  MUSCLE_UNIFICATION,
 } from "@acme/ui-shared";
 
 import { supabase } from "~/lib/supabase";
@@ -30,12 +31,87 @@ interface SelectedExercise {
   isShared: boolean;
 }
 
-// Group exercises by muscle
+// Helper function to get unified muscle group
+const getUnifiedMuscleGroup = (muscle: string | undefined): string => {
+  if (!muscle) return "Other";
+  
+  // First check if it's already a unified muscle
+  const capitalizedMuscle = muscle.charAt(0).toUpperCase() + muscle.slice(1).toLowerCase();
+  if (MUSCLE_UNIFICATION[capitalizedMuscle]) {
+    return MUSCLE_UNIFICATION[capitalizedMuscle];
+  }
+  
+  // Check various case formats
+  const upperMuscle = muscle.toUpperCase();
+  const lowerMuscle = muscle.toLowerCase();
+  const underscoreMuscle = muscle.replace(/ /g, '_');
+  
+  // Try different formats
+  if (MUSCLE_UNIFICATION[muscle]) return MUSCLE_UNIFICATION[muscle];
+  if (MUSCLE_UNIFICATION[capitalizedMuscle]) return MUSCLE_UNIFICATION[capitalizedMuscle];
+  if (MUSCLE_UNIFICATION[underscoreMuscle]) return MUSCLE_UNIFICATION[underscoreMuscle];
+  
+  // If not in unification map, it might already be a primary muscle
+  // Capitalize it properly
+  return muscle.charAt(0).toUpperCase() + muscle.slice(1).toLowerCase().replace(/_/g, ' ');
+};
+
+// Helper function to select top N exercises with tie-breaking
+const selectTopWithTieBreaking = (exercises: any[], count: number): any[] => {
+  if (exercises.length === 0 || count <= 0) return [];
+  if (exercises.length <= count) return exercises;
+
+  const selected: any[] = [];
+  const used = new Set<string>();
+
+  while (selected.length < count && exercises.length > used.size) {
+    // Find the highest score among unused exercises
+    let highestScore = -Infinity;
+    for (const ex of exercises) {
+      if (!used.has(ex.id) && ex.score > highestScore) {
+        highestScore = ex.score;
+      }
+    }
+
+    // Get all exercises with the highest score
+    const tied = exercises.filter(
+      (ex) => !used.has(ex.id) && ex.score === highestScore
+    );
+
+    if (tied.length === 0) break;
+
+    // If we need more exercises than tied, take all tied
+    const remaining = count - selected.length;
+    if (tied.length <= remaining) {
+      tied.forEach((ex) => {
+        selected.push(ex);
+        used.add(ex.id);
+      });
+    } else {
+      // Randomly select from tied exercises
+      for (let i = 0; i < remaining; i++) {
+        const availableTied = tied.filter((ex) => !used.has(ex.id));
+        if (availableTied.length > 0) {
+          const randomIndex = Math.floor(Math.random() * availableTied.length);
+          const randomEx = availableTied[randomIndex];
+          if (randomEx) {
+            selected.push(randomEx);
+            used.add(randomEx.id);
+          }
+        }
+      }
+    }
+  }
+
+  return selected;
+};
+
+// Group exercises by unified muscle categories
 const groupByMuscle = (exercises: any[]) => {
   const grouped = exercises.reduce((acc, exercise) => {
-    const muscle = exercise.primaryMuscle || "Other";
-    if (!acc[muscle]) acc[muscle] = [];
-    acc[muscle].push(exercise);
+    const unifiedMuscle = getUnifiedMuscleGroup(exercise.primaryMuscle);
+    if (!acc[unifiedMuscle]) acc[unifiedMuscle] = [];
+    acc[unifiedMuscle].push(exercise);
     return acc;
   }, {} as Record<string, any[]>);
   
@@ -156,7 +232,11 @@ function ClientWorkoutOverviewContent() {
   const availableExercisesRef = useRef<any[]>([]);
   const [hasExercises, setHasExercises] = useState(false);
   const [isReady, setIsReady] = useState(false);
+  const [showFullExerciseList, setShowFullExerciseList] = useState(false);
+  const [muscleSectionCount, setMuscleSectionCount] = useState(3);
+  const [otherSectionCount, setOtherSectionCount] = useState(3);
   const muscleHistoryModal = useModalState();
+  const modalContentRef = useRef<HTMLDivElement>(null);
 
   // Mutation to update client status to workout_ready
   const updateStatusMutation = useMutation({
@@ -259,6 +339,26 @@ function ClientWorkoutOverviewContent() {
     sessionId,
     userId,
   });
+  
+  // If visualization data is null, try to understand why
+  if (!visualizationData && !isLoading && !visualizationError) {
+    console.warn("⚠️ Visualization data is null. Possible reasons:", {
+      "1": "No visualization data saved in session templateConfig",
+      "2": "Workout has not been generated yet",
+      "3": "Session might need workout regeneration",
+      sessionId,
+      userId
+    });
+  }
+  
+  // Log blueprint data specifically
+  if (visualizationData?.blueprint?.clientExercisePools?.[userId]) {
+    console.log("Blueprint exercise pools for user:", {
+      userId,
+      pool: visualizationData.blueprint.clientExercisePools[userId],
+      candidatesCount: visualizationData.blueprint.clientExercisePools[userId]?.availableCandidates?.length
+    });
+  }
 
   // Fetch user info directly from client preference data
   const { data: clientInfoResponse } = useQuery({
@@ -281,17 +381,37 @@ function ClientWorkoutOverviewContent() {
   });
 
   console.log("Saved selections:", savedSelections);
+  
+  // Check if we have saved selections but no visualization data
+  if (!visualizationData && !isLoading && !visualizationError && savedSelections && savedSelections.length > 0) {
+    console.log("📊 We have saved selections but no visualization data. This might mean:");
+    console.log("- Workout was generated but visualization data wasn't saved");
+    console.log("- Or visualization data is being saved differently");
+    console.log("Saved selections count:", savedSelections.length);
+  }
+  
+  // Log the full structure of saved selections
+  if (savedSelections && savedSelections.length > 0) {
+    console.log("First saved selection structure:", savedSelections[0]);
+  }
 
-  // Fetch available exercises
+  // Pre-fetch available exercises as soon as we have a session
   const { data: exercisesData, isLoading: isLoadingExercises } = useQuery({
     ...trpc.exercise.getAvailablePublic.queryOptions({
       sessionId: sessionId || "",
       userId: userId || "",
     }),
-    enabled: !!sessionId && !!userId && showExerciseSelection,
+    enabled: !!sessionId && !!userId,
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
   });
 
   const availableExercises = exercisesData?.exercises || [];
+  
+  // Log available exercises to see what we're working with
+  console.log("Available exercises from API:", {
+    count: availableExercises.length,
+    first5: availableExercises.slice(0, 5).map(e => ({ id: e.id, name: e.name }))
+  });
 
   // Keep ref updated with available exercises
   useEffect(() => {
@@ -306,6 +426,7 @@ function ClientWorkoutOverviewContent() {
       return realtimeExercises.map((exercise, index) => ({
         id: exercise.exerciseId,
         name: exercise.exerciseName || exercise.name,
+        primaryMuscle: exercise.primaryMuscle, // Will be undefined initially
         source: "llm_phase1",
         reasoning: "Selected by AI",
         isShared: exercise.isShared || false,
@@ -320,6 +441,7 @@ function ClientWorkoutOverviewContent() {
       return savedSelections.map((selection: any, index: number) => ({
         id: selection.exerciseId,
         name: selection.exerciseName,
+        primaryMuscle: undefined, // Will be populated later
         source: selection.selectionSource,
         reasoning:
           selection.selectionSource === "manual_swap"
@@ -479,6 +601,29 @@ function ClientWorkoutOverviewContent() {
     return exercises;
   }, [visualizationData, userId, savedSelections, realtimeExercises]);
 
+  // Progressively enrich exercises with muscle data as it becomes available
+  const enrichedClientExercises = useMemo(() => {
+    return clientExercises.map(exercise => {
+      // Skip if already has muscle data
+      if (exercise.primaryMuscle) return exercise;
+      
+      // Try to find muscle data from available exercises
+      const fullExercise = availableExercises.find(ex => ex.id === exercise.id);
+      if (fullExercise?.primaryMuscle) {
+        return { ...exercise, primaryMuscle: fullExercise.primaryMuscle };
+      }
+      
+      // Try blueprint candidates
+      const blueprintCandidates = visualizationData?.blueprint?.clientExercisePools?.[userId]?.availableCandidates || [];
+      const blueprintExercise = blueprintCandidates.find((ex: any) => ex.id === exercise.id);
+      if (blueprintExercise?.primaryMuscle) {
+        return { ...exercise, primaryMuscle: blueprintExercise.primaryMuscle };
+      }
+      
+      return exercise;
+    });
+  }, [clientExercises, availableExercises, visualizationData, userId]);
+
   // Get user name and avatar
   const userName = useMemo(() => {
     // First try direct client info response
@@ -513,6 +658,9 @@ function ClientWorkoutOverviewContent() {
       setSelectedExerciseIndex(null);
       setSelectedReplacement(null);
       setSearchQuery("");
+      setShowFullExerciseList(false);
+      setMuscleSectionCount(3);
+      setOtherSectionCount(3);
     }
   }, [modalOpen, showExerciseSelection]);
 
@@ -528,12 +676,12 @@ function ClientWorkoutOverviewContent() {
 
   // Update hasExercises state when exercises are loaded
   useEffect(() => {
-    const exercisesLoaded = clientExercises.length > 0;
+    const exercisesLoaded = enrichedClientExercises.length > 0;
     if (exercisesLoaded !== hasExercises) {
       console.log("[ClientWorkoutOverview] Exercises loaded state changed:", exercisesLoaded);
       setHasExercises(exercisesLoaded);
     }
-  }, [clientExercises.length, hasExercises]);
+  }, [enrichedClientExercises.length, hasExercises]);
 
   // Initialize ready state from client info
   useEffect(() => {
@@ -549,8 +697,12 @@ function ClientWorkoutOverviewContent() {
       return [];
     }
 
-    // Get already selected exercise IDs
-    const selectedIds = new Set(clientExercises.map((ex) => ex.id));
+    // Get already selected exercise IDs (including the one being replaced)
+    const selectedIds = new Set(
+      enrichedClientExercises
+        .filter((ex, idx) => idx !== selectedExerciseIndex) // Exclude the exercise being replaced
+        .map((ex) => ex.id)
+    );
 
     // First filter by template type - only show exercises suitable for standard template
     const templateFiltered = availableExercises.filter((exercise) => {
@@ -574,13 +726,149 @@ function ClientWorkoutOverviewContent() {
     searchQuery,
     showExerciseSelection,
     selectedExercise,
-    clientExercises,
+    enrichedClientExercises,
   ]);
 
   // Group filtered exercises by muscle
   const groupedExercises = useMemo(() => {
     return groupByMuscle(filteredExercises);
   }, [filteredExercises]);
+
+  // Memoize muscle candidates for recommendations
+  const muscleCandidates = useMemo(() => {
+    if (!selectedExercise) return [];
+    
+    const targetMuscle = selectedExercise?.primaryMuscle;
+    const unifiedMuscle = getUnifiedMuscleGroup(targetMuscle);
+    
+    // Get already selected exercise IDs to filter out (excluding the one being replaced)
+    const selectedExerciseIds = new Set(
+      enrichedClientExercises
+        .filter((ex, idx) => idx !== selectedExerciseIndex)
+        .map(ex => ex.id)
+    );
+    
+    // Get blueprint candidates if available, otherwise use all available exercises
+    const blueprintCandidates = visualizationData?.blueprint?.clientExercisePools?.[userId]?.availableCandidates || [];
+    const candidatesPool = blueprintCandidates.length > 0 ? blueprintCandidates : availableExercises;
+    
+    // Filter candidates:
+    // 1. Match the target muscle group (primary muscle only)
+    // 2. Not already in workout selection
+    // 3. Not the current exercise being replaced
+    const eligible = candidatesPool
+      .filter((candidate: any) => {
+        const candidateMuscle = getUnifiedMuscleGroup(candidate.primaryMuscle);
+        const isCorrectMuscle = candidateMuscle === unifiedMuscle;
+        const notAlreadySelected = !selectedExerciseIds.has(candidate.id);
+        const notCurrentExercise = candidate.id !== selectedExercise?.id;
+        return isCorrectMuscle && notAlreadySelected && notCurrentExercise;
+      })
+      .sort((a: any, b: any) => (b.score || 0) - (a.score || 0));
+    
+    // Use tie-breaking to get a consistent order
+    return selectTopWithTieBreaking(eligible, eligible.length);
+  }, [enrichedClientExercises, selectedExerciseIndex, selectedExercise, visualizationData, userId, availableExercises]);
+
+  // Memoize other options candidates
+  const otherCandidates = useMemo(() => {
+    if (!selectedExercise) return [];
+    
+    const targetMuscle = selectedExercise?.primaryMuscle;
+    const unifiedMuscle = getUnifiedMuscleGroup(targetMuscle);
+    const workoutType = visualizationData?.groupContext?.workoutType;
+    const isFullBodyWorkout = workoutType?.includes('FULL_BODY');
+    const showAllHighScoring = unifiedMuscle === "Other";
+    
+    // Get already selected exercise IDs to filter out (excluding the one being replaced)
+    const selectedExerciseIds = new Set(
+      enrichedClientExercises
+        .filter((ex, idx) => idx !== selectedExerciseIndex)
+        .map(ex => ex.id)
+    );
+    
+    // Use blueprint candidates if available, otherwise use all available exercises
+    const blueprintCandidates = visualizationData?.blueprint?.clientExercisePools?.[userId]?.availableCandidates || [];
+    const candidatesPool = blueprintCandidates.length > 0 ? blueprintCandidates : availableExercises;
+    
+    if (isFullBodyWorkout) {
+      // For full body workouts: Get the highest scored exercise for each muscle not in workout
+      
+      // First, get all muscle groups currently in the workout
+      const musclesInWorkout = new Set<string>();
+      enrichedClientExercises.forEach((ex, idx) => {
+        if (idx !== selectedExerciseIndex && ex.primaryMuscle) {
+          const muscle = getUnifiedMuscleGroup(ex.primaryMuscle);
+          musclesInWorkout.add(muscle);
+        }
+      });
+      
+      // Group candidates by muscle
+      const exercisesByMuscle = new Map<string, any[]>();
+      candidatesPool.forEach((ex: any) => {
+        // Exclude already selected exercises and the current exercise
+        if (selectedExerciseIds.has(ex.id) || ex.id === selectedExercise?.id) return;
+        
+        const muscle = getUnifiedMuscleGroup(ex.primaryMuscle);
+        if (!exercisesByMuscle.has(muscle)) {
+          exercisesByMuscle.set(muscle, []);
+        }
+        exercisesByMuscle.get(muscle)!.push(ex);
+      });
+      
+      // Sort exercises within each muscle by score
+      exercisesByMuscle.forEach((exercises, muscle) => {
+        exercises.sort((a, b) => (b.score || 0) - (a.score || 0));
+      });
+      
+      // Get the top exercise from each muscle not in workout
+      const topExercisesByMuscle: Array<{muscle: string, exercise: any}> = [];
+      exercisesByMuscle.forEach((exercises, muscle) => {
+        if (!musclesInWorkout.has(muscle) && exercises.length > 0) {
+          topExercisesByMuscle.push({
+            muscle,
+            exercise: exercises[0] // Top scored exercise for this muscle
+          });
+        }
+      });
+      
+      // Sort by exercise score to get the highest scoring exercises across all muscles
+      topExercisesByMuscle.sort((a, b) => (b.exercise.score || 0) - (a.exercise.score || 0));
+      
+      // Store the primary candidates from uncovered muscles
+      const primaryCandidates = topExercisesByMuscle.map(item => item.exercise);
+      
+      // Get all other exercises as fallback
+      const fallbackCandidates = candidatesPool
+        .filter((ex: any) => 
+          !selectedExerciseIds.has(ex.id) && 
+          ex.id !== selectedExercise?.id &&
+          !primaryCandidates.some(pc => pc.id === ex.id)
+        )
+        .sort((a: any, b: any) => (b.score || 0) - (a.score || 0));
+      
+      // Combine primary and fallback candidates
+      const allCandidates = [...primaryCandidates, ...fallbackCandidates];
+      
+      // Use tie-breaking to get consistent order
+      return selectTopWithTieBreaking(allCandidates, allCandidates.length);
+    } else {
+      // Default logic for non-full body workouts
+      const filtered = candidatesPool
+        .filter((ex: any) => {
+          // Exclude already selected exercises and the current exercise being replaced
+          if (selectedExerciseIds.has(ex.id) || ex.id === selectedExercise?.id) return false;
+          
+          if (showAllHighScoring) return true; // Show all if muscle unknown
+          const exMuscle = getUnifiedMuscleGroup(ex.primaryMuscle);
+          return exMuscle !== unifiedMuscle;
+        })
+        .sort((a: any, b: any) => (b.score || 0) - (a.score || 0));
+      
+      // Use tie-breaking to get consistent order
+      return selectTopWithTieBreaking(filtered, filtered.length);
+    }
+  }, [enrichedClientExercises, selectedExerciseIndex, selectedExercise, visualizationData, userId, availableExercises]);
 
   // Toggle muscle group expansion
   const toggleMuscleGroup = (muscle: string) => {
@@ -623,7 +911,7 @@ function ClientWorkoutOverviewContent() {
   }
 
   // Empty state when no exercises found
-  if (clientExercises.length === 0 && realtimeExercises.length === 0) {
+  if (enrichedClientExercises.length === 0 && realtimeExercises.length === 0) {
     // Show "All Set!" state if we're waiting for workout generation
     if (!visualizationData || visualizationData === null) {
       return (
@@ -745,31 +1033,77 @@ function ClientWorkoutOverviewContent() {
         <div className="rounded-lg border border-gray-200 bg-white shadow-sm">
           {/* Exercise list */}
           <div className="p-4">
-            <div className="space-y-6">
-              {clientExercises.map((exercise, index) => (
-                <div key={exercise.id} className="group flex items-center">
-                  <div className="flex-1">
-                    <span className="text-base font-medium text-gray-800">
-                      {exercise.name}
-                    </span>
+            <div className="space-y-4">
+              {enrichedClientExercises.map((exercise, index) => {
+                const muscleGroup = getUnifiedMuscleGroup(exercise.primaryMuscle);
+                
+                return (
+                  <div key={exercise.id} className="group flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-base font-medium text-gray-800">
+                          {exercise.name}
+                        </span>
+                        {exercise.primaryMuscle ? (
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ${
+                            muscleGroup === 'Chest' ? 'bg-yellow-50 text-yellow-700'
+                            : muscleGroup === 'Back' ? 'bg-green-50 text-green-700'
+                            : muscleGroup === 'Shoulders' ? 'bg-purple-50 text-purple-700'
+                            : muscleGroup === 'Core' ? 'bg-orange-50 text-orange-700'
+                            : muscleGroup === 'Glutes' ? 'bg-red-50 text-red-700'
+                            : muscleGroup === 'Quads' || muscleGroup === 'Hamstrings' ? 'bg-pink-50 text-pink-700'
+                            : muscleGroup === 'Biceps' || muscleGroup === 'Triceps' ? 'bg-blue-50 text-blue-700'
+                            : muscleGroup === 'Calves' ? 'bg-indigo-50 text-indigo-700'
+                            : 'bg-gray-50 text-gray-600'
+                          }`}>
+                            {muscleGroup}
+                          </span>
+                        ) : isLoadingExercises ? (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-gray-100">
+                            <div className="h-2 w-2 animate-pulse rounded-full bg-gray-400"></div>
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => {
+                        // Use the enriched exercise which already has muscle data if available
+                        setSelectedExercise(exercise);
+                        setSelectedExerciseIndex(index);
+                        // Skip the modal and go directly to exercise selection
+                        setShowExerciseSelection(true);
+                      }}
+                      className="flex-shrink-0 rounded-md bg-gray-100 px-3 py-1 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-200"
+                      aria-label="Replace exercise"
+                    >
+                      Replace
+                    </button>
                   </div>
-                  <button
-                    onClick={() => {
-                      setSelectedExercise(exercise);
-                      setSelectedExerciseIndex(index);
-                      // Skip the modal and go directly to exercise selection
-                      setShowExerciseSelection(true);
-                    }}
-                    className="ml-2 rounded-md bg-gray-100 px-3 py-1 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-200"
-                    aria-label="Replace exercise"
-                  >
-                    Replace
-                  </button>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </div>
+
+        {/* TEMPORARY: Display all available exercises */}
+        {showExerciseSelection && availableExercises.length > 0 && (
+          <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded text-xs">
+            <p className="font-bold mb-2">All Available Exercises in Database (TEMP):</p>
+            <div className="max-h-40 overflow-y-auto">
+              {availableExercises
+                .slice(0, 30) // Show first 30
+                .map((exercise: any, index: number) => (
+                  <div key={exercise.id} className="py-0.5">
+                    <span className="font-medium">{exercise.name}</span>
+                    <span className="ml-2 text-gray-600">
+                      {exercise.primaryMuscle} | {exercise.movementPattern}
+                    </span>
+                  </div>
+                ))}
+            </div>
+            <p className="mt-2 text-gray-500">Showing first 30 of {availableExercises.length} exercises</p>
+          </div>
+        )}
 
         {/* Ready Button */}
         <div className="mt-6">
@@ -813,16 +1147,16 @@ function ClientWorkoutOverviewContent() {
           />
 
           {/* Modal */}
-          <div className="fixed inset-x-4 top-1/2 z-50 mx-auto flex h-[80vh] max-w-lg -translate-y-1/2 flex-col rounded-2xl bg-white shadow-2xl">
+          <div className="fixed inset-x-4 top-1/2 z-50 mx-auto flex h-[85vh] max-w-lg -translate-y-1/2 flex-col rounded-3xl bg-white shadow-2xl ring-1 ring-black/5">
             {/* Header */}
-            <div className="flex-shrink-0 border-b border-gray-200 px-6 py-4">
+            <div className="flex-shrink-0 border-b border-gray-100 bg-gradient-to-b from-gray-50 to-white px-6 py-5">
               <div className="flex items-center justify-between">
                 <div>
-                  <h2 className="text-lg font-bold text-gray-900">
+                  <h2 className="text-xl font-semibold text-gray-900">
                     Change Exercise
                   </h2>
-                  <p className="mt-1 text-sm text-gray-500">
-                    Replacing: {selectedExercise?.name}
+                  <p className="mt-1 text-sm text-gray-600">
+                    Replacing: <span className="font-medium text-gray-900">{selectedExercise?.name}</span>
                   </p>
                 </div>
                 <button
@@ -830,7 +1164,7 @@ function ClientWorkoutOverviewContent() {
                     setShowExerciseSelection(false);
                     setSelectedReplacement(null);
                   }}
-                  className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
+                  className="rounded-full p-2 text-gray-400 transition-all hover:bg-gray-100 hover:text-gray-600 hover:rotate-90"
                 >
                   <XIcon />
                 </button>
@@ -838,130 +1172,398 @@ function ClientWorkoutOverviewContent() {
             </div>
 
             {/* Content */}
-            <div className="flex-1 overflow-y-auto">
-              {/* Search Bar */}
-              <div className="sticky top-0 z-10 border-b bg-gray-50 px-6 py-4">
-                <div className="relative">
-                  <SearchIcon className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
-                  <input
-                    type="text"
-                    placeholder="Search exercises..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    disabled={isLoadingExercises}
-                    className="w-full rounded-lg border border-gray-300 bg-white py-2 pl-10 pr-4 text-gray-900 placeholder-gray-400 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-100 disabled:text-gray-500"
-                  />
-                </div>
-              </div>
-
-              <div className="p-6">
-                {/* Loading state */}
-                {isLoadingExercises && (
-                  <div className="py-8 text-center">
-                    <SpinnerIcon className="mx-auto mb-4 h-8 w-8 animate-spin text-indigo-600" />
-                    <p className="text-gray-500">Loading exercises...</p>
-                  </div>
-                )}
-
-                {/* No results message */}
-                {!isLoadingExercises &&
-                  searchQuery.trim() &&
-                  filteredExercises.length === 0 && (
-                    <div className="py-8 text-center">
-                      <p className="text-gray-500">
-                        No exercises found matching "{searchQuery}"
-                      </p>
+            <div className="flex-1 overflow-y-auto" ref={modalContentRef}>
+              {/* Two-stage view */}
+              {!showFullExerciseList ? (
+                /* Stage 1: Recommended Alternatives */
+                <div className="p-6">
+                  {/* Loading state */}
+                  {isLoadingExercises && (
+                    <div className="py-12 text-center">
+                      <div className="inline-flex items-center justify-center w-16 h-16 bg-indigo-50 rounded-full mb-4">
+                        <SpinnerIcon className="h-8 w-8 animate-spin text-indigo-600" />
+                      </div>
+                      <p className="text-gray-500 font-medium">Loading recommendations...</p>
                     </div>
                   )}
 
-                {/* All exercises grouped by muscle */}
-                {!isLoadingExercises && filteredExercises.length > 0 && (
-                  <div className="space-y-3">
-                    {groupedExercises.map(([muscle, exercises]) => (
-                      <div key={muscle} className="rounded-lg border border-gray-200 bg-white">
-                        {/* Muscle group header */}
-                        <button
-                          onClick={() => toggleMuscleGroup(muscle)}
-                          className="flex w-full items-center justify-between px-4 py-3 text-left transition-colors hover:bg-gray-50"
-                        >
-                          <span className="font-medium text-gray-900 capitalize">
-                            {muscle.toLowerCase().replace(/_/g, ' ')}
-                          </span>
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm text-gray-500">
-                              {exercises.length} exercise{exercises.length !== 1 ? 's' : ''}
-                            </span>
-                            <svg
-                              className={`h-5 w-5 text-gray-400 transition-transform ${
-                                expandedMuscles.has(muscle) ? 'rotate-180' : ''
-                              }`}
-                              fill="none"
-                              viewBox="0 0 24 24"
-                              stroke="currentColor"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M19 9l-7 7-7-7"
-                              />
-                            </svg>
-                          </div>
-                        </button>
+
+                  {/* Recommended exercises list */}
+                  {!isLoadingExercises && (
+                    <>
+                      {/* Primary Recommendations - Same muscle group */}
+                      {(() => {
+                        // Get the muscle group of the exercise being replaced
+                        const targetMuscle = selectedExercise?.primaryMuscle;
+                        const unifiedMuscle = getUnifiedMuscleGroup(targetMuscle);
                         
-                        {/* Exercise list */}
-                        {expandedMuscles.has(muscle) && (
-                          <div className="border-t border-gray-100 px-4 py-2">
+                        // If muscle is "Other", it means we don't have muscle data yet
+                        if (unifiedMuscle === "Other" && isLoadingExercises) {
+                          return (
+                            <div className="flex items-center justify-center py-8">
+                              <div className="text-center">
+                                <div className="mx-auto h-6 w-6 animate-spin rounded-full border-b-2 border-indigo-600"></div>
+                                <p className="mt-2 text-sm text-gray-600">Loading recommendations...</p>
+                              </div>
+                            </div>
+                          );
+                        }
+                        
+                        // Get exercises based on current count
+                        const recommendedExercises = muscleCandidates.slice(0, muscleSectionCount);
+                        
+                        return (
+                          <div className="mb-8">
+                            <div className="mb-4">
+                              <h3 className="text-sm font-semibold text-gray-900 uppercase tracking-wider">
+                                {unifiedMuscle} Exercises
+                              </h3>
+                            </div>
                             <div className="space-y-2">
-                              {exercises.map((exercise: any) => (
+                              {recommendedExercises.map((exercise: any, index: number) => {
+                                // For blueprint candidates, the exercise is already the full object
+                                const actualExercise = exercise.id ? exercise : availableExercises.find(ex => ex.name === exercise.name);
+                                
+                                if (!actualExercise) return null;
+
+                                return (
+                                  <button
+                                    key={actualExercise.id}
+                                    onClick={() => setSelectedReplacement(actualExercise.name)}
+                                    className={`group flex w-full items-center justify-between rounded-xl px-4 py-3.5 text-left transition-all ${
+                                      selectedReplacement === actualExercise.name
+                                        ? 'bg-gradient-to-r from-indigo-500 to-indigo-600 text-white shadow-lg shadow-indigo-500/25 scale-[1.02]'
+                                        : 'bg-white hover:bg-gray-50 shadow-sm hover:shadow-md border border-gray-100'
+                                    }`}
+                                  >
+                                    <div className="flex-1">
+                                      <p className={`font-medium ${
+                                        selectedReplacement === actualExercise.name
+                                          ? 'text-white'
+                                          : 'text-gray-900'
+                                      }`}>
+                                        {actualExercise.name}
+                                      </p>
+                                    </div>
+                                    {actualExercise.primaryMuscle && (
+                                      <span className={`text-xs px-2.5 py-1 rounded-full font-medium capitalize ${
+                                        selectedReplacement === actualExercise.name
+                                          ? 'bg-white/20 text-white'
+                                          : 'bg-blue-100 text-blue-800'
+                                      }`}>
+                                        {actualExercise.primaryMuscle.toLowerCase().replace(/_/g, ' ')}
+                                      </span>
+                                    )}
+                                  </button>
+                                );
+                              }).filter(Boolean)}
+                              
+                              {recommendedExercises.length === 0 && (
+                                <p className="text-sm text-gray-500 italic">
+                                  No {unifiedMuscle.toLowerCase()} exercises available
+                                </p>
+                              )}
+                            </div>
+                            
+                            {/* See more button */}
+                            {muscleCandidates.length > muscleSectionCount && (
+                              <div className="mt-3 flex justify-center">
+                                <button
+                                  onClick={() => {
+                                    setMuscleSectionCount(prev => prev + 4);
+                                  }}
+                                  className="text-sm text-gray-500 hover:text-gray-700 transition-colors flex items-center gap-1"
+                                >
+                                  <span>See more</span>
+                                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                  </svg>
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
+
+                      {/* Other Recommendations */}
+                      {(() => {
+                        // Get exercises based on current count
+                        const otherMuscleExercises = otherCandidates.slice(0, otherSectionCount);
+                        
+                        if (otherMuscleExercises.length === 0) return null;
+                        
+                        return (
+                          <div className="mb-6">
+                            <div className="mb-4">
+                              <h3 className="text-sm font-semibold text-gray-900 uppercase tracking-wider">
+                                Other Options
+                              </h3>
+                            </div>
+                            <div className="space-y-2">
+                              {otherMuscleExercises.map((exercise: any, index: number) => {
+                                // For blueprint candidates, the exercise is already the full object
+                                const actualExercise = exercise.id ? exercise : availableExercises.find(ex => ex.name === exercise.name);
+                                
+                                if (!actualExercise) return null;
+                                
+                                const muscleGroup = getUnifiedMuscleGroup(actualExercise.primaryMuscle);
+
+                                return (
+                                  <button
+                                    key={actualExercise.id}
+                                    onClick={() => setSelectedReplacement(actualExercise.name)}
+                                    className={`group flex w-full items-center justify-between rounded-xl px-4 py-3.5 text-left transition-all ${
+                                      selectedReplacement === actualExercise.name
+                                        ? 'bg-gradient-to-r from-indigo-500 to-indigo-600 text-white shadow-lg shadow-indigo-500/25 scale-[1.02]'
+                                        : 'bg-white hover:bg-gray-50 shadow-sm hover:shadow-md border border-gray-100'
+                                    }`}
+                                  >
+                                    <div className="flex-1">
+                                      <p className={`font-medium ${
+                                        selectedReplacement === actualExercise.name
+                                          ? 'text-white'
+                                          : 'text-gray-900'
+                                      }`}>
+                                        {actualExercise.name}
+                                      </p>
+                                    </div>
+                                    {actualExercise.primaryMuscle && (
+                                      <span className={`text-xs px-2.5 py-1 rounded-full font-medium capitalize ${
+                                        selectedReplacement === actualExercise.name
+                                          ? 'bg-white/20 text-white'
+                                          : muscleGroup === 'Chest' ? 'bg-yellow-100 text-yellow-800'
+                                          : muscleGroup === 'Back' ? 'bg-green-100 text-green-800'
+                                          : muscleGroup === 'Shoulders' ? 'bg-purple-100 text-purple-800'
+                                          : muscleGroup === 'Core' ? 'bg-orange-100 text-orange-800'
+                                          : muscleGroup === 'Glutes' || muscleGroup === 'Quads' || muscleGroup === 'Hamstrings' ? 'bg-red-100 text-red-800'
+                                          : 'bg-gray-100 text-gray-600'
+                                      }`}>
+                                        {actualExercise.primaryMuscle.toLowerCase().replace(/_/g, ' ')}
+                                      </span>
+                                    )}
+                                  </button>
+                                );
+                              }).filter(Boolean)}
+                            </div>
+                          </div>
+                        );
+                      })()}
+
+                      {/* Show all exercises button */}
+                      <div className="border-t border-gray-100 pt-6 mt-8">
+                        <button
+                          onClick={() => {
+                            setShowFullExerciseList(true);
+                            // Scroll to top of modal content
+                            if (modalContentRef.current) {
+                              modalContentRef.current.scrollTop = 0;
+                            }
+                          }}
+                          className="w-full rounded-xl bg-gradient-to-r from-gray-50 to-gray-100 px-5 py-3.5 text-center font-medium text-gray-700 transition-all hover:from-gray-100 hover:to-gray-200 hover:shadow-md group"
+                        >
+                          <span className="flex items-center justify-center gap-2">
+                            Browse All Exercises
+                            <svg className="h-4 w-4 transition-transform group-hover:translate-x-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                            </svg>
+                          </span>
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              ) : (
+                /* Stage 2: Full Exercise List */
+                <>
+                  {/* Search Bar */}
+                  <div className="sticky top-0 z-10 border-b border-gray-100 bg-gradient-to-b from-white to-gray-50 px-6 py-5">
+                    <div className="mb-4 flex items-center justify-between">
+                      <button
+                        onClick={() => {
+                          setShowFullExerciseList(false);
+                          setSearchQuery("");
+                        }}
+                        className="flex items-center gap-2 text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors group"
+                      >
+                        <svg className="h-4 w-4 transition-transform group-hover:-translate-x-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                        </svg>
+                        Back to recommendations
+                      </button>
+                    </div>
+                    <div className="relative">
+                      <SearchIcon className="absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
+                      <input
+                        type="text"
+                        placeholder="Search exercises..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        disabled={isLoadingExercises}
+                        className="w-full rounded-xl border border-gray-200 bg-white py-3 pl-11 pr-4 text-gray-900 placeholder-gray-400 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 disabled:bg-gray-100 disabled:text-gray-500 transition-all"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="p-6">
+                    {/* No results message */}
+                    {!isLoadingExercises &&
+                      searchQuery.trim() &&
+                      filteredExercises.length === 0 && (
+                        <div className="py-8 text-center">
+                          <p className="text-gray-500">
+                            No exercises found matching "{searchQuery}"
+                          </p>
+                        </div>
+                      )}
+
+                    {/* All exercises - flat list when searching, grouped when browsing */}
+                    {!isLoadingExercises && filteredExercises.length > 0 && (
+                      <div className="space-y-3">
+                        {searchQuery.trim() ? (
+                          // Flat list when searching
+                          <div className="space-y-2">
+                            {filteredExercises.map((exercise: any) => {
+                              const muscleGroup = getUnifiedMuscleGroup(exercise.primaryMuscle);
+                              
+                              return (
                                 <button
                                   key={exercise.id}
                                   onClick={() => setSelectedReplacement(exercise.name)}
-                                  className={`flex w-full items-center justify-between rounded-md px-3 py-2.5 text-left transition-colors ${
+                                  className={`group flex w-full items-center justify-between rounded-xl px-4 py-3.5 text-left transition-all ${
                                     selectedReplacement === exercise.name
-                                      ? 'bg-indigo-50 text-indigo-700'
-                                      : 'hover:bg-gray-50'
+                                      ? 'bg-gradient-to-r from-indigo-500 to-indigo-600 text-white shadow-lg shadow-indigo-500/25 scale-[1.02]'
+                                      : 'bg-white hover:bg-gray-50 shadow-sm hover:shadow-md border border-gray-100'
                                   }`}
                                 >
-                                  <span className="font-medium text-black">
+                                  <span className={`font-medium ${
+                                    selectedReplacement === exercise.name
+                                      ? 'text-white'
+                                      : 'text-gray-900'
+                                  }`}>
                                     {exercise.name}
                                   </span>
-                                  {exercise.movementPattern && (
-                                    <span className={`text-xs px-2 py-1 rounded-full ${
-                                      MOVEMENT_PATTERN_COLORS[exercise.movementPattern] || 'bg-gray-100 text-gray-800'
+                                  {exercise.primaryMuscle && (
+                                    <span className={`text-xs px-2.5 py-1 rounded-full font-medium capitalize ${
+                                      selectedReplacement === exercise.name
+                                        ? 'bg-white/20 text-white'
+                                        : muscleGroup === 'Chest' ? 'bg-yellow-100 text-yellow-800'
+                                        : muscleGroup === 'Back' ? 'bg-green-100 text-green-800'
+                                        : muscleGroup === 'Shoulders' ? 'bg-purple-100 text-purple-800'
+                                        : muscleGroup === 'Core' ? 'bg-orange-100 text-orange-800'
+                                        : muscleGroup === 'Glutes' || muscleGroup === 'Quads' || muscleGroup === 'Hamstrings' ? 'bg-red-100 text-red-800'
+                                        : 'bg-gray-100 text-gray-600'
                                     }`}>
-                                      {exercise.movementPattern.replace(/_/g, ' ')}
+                                      {exercise.primaryMuscle.toLowerCase().replace(/_/g, ' ')}
                                     </span>
                                   )}
                                 </button>
-                              ))}
-                            </div>
+                              );
+                            })}
                           </div>
+                        ) : (
+                          // Grouped by muscle when browsing
+                          groupedExercises.map(([muscle, exercises]) => (
+                          <div key={muscle} className="rounded-xl border border-gray-100 bg-white shadow-sm overflow-hidden">
+                            {/* Muscle group header */}
+                            <button
+                              onClick={() => toggleMuscleGroup(muscle)}
+                              className="flex w-full items-center justify-between px-5 py-4 text-left transition-all hover:bg-gray-50"
+                            >
+                              <span className="font-semibold text-gray-900 capitalize">
+                                {muscle.toLowerCase().replace(/_/g, ' ')}
+                              </span>
+                              <div className="flex items-center gap-3">
+                                <span className="text-sm font-medium text-gray-500 bg-gray-100 px-2.5 py-1 rounded-full">
+                                  {exercises.length}
+                                </span>
+                                <svg
+                                  className={`h-5 w-5 text-gray-400 transition-transform duration-200 ${
+                                    expandedMuscles.has(muscle) ? 'rotate-180' : ''
+                                  }`}
+                                  fill="none"
+                                  viewBox="0 0 24 24"
+                                  stroke="currentColor"
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M19 9l-7 7-7-7"
+                                  />
+                                </svg>
+                              </div>
+                            </button>
+                            
+                            {/* Exercise list */}
+                            {expandedMuscles.has(muscle) && (
+                              <div className="border-t border-gray-100 bg-gray-50/50 px-4 py-3">
+                                <div className="space-y-1.5">
+                                  {exercises.map((exercise: any) => (
+                                    <button
+                                      key={exercise.id}
+                                      onClick={() => setSelectedReplacement(exercise.name)}
+                                      className={`flex w-full items-center justify-between rounded-lg px-3.5 py-3 text-left transition-all ${
+                                        selectedReplacement === exercise.name
+                                          ? 'bg-gradient-to-r from-indigo-500 to-indigo-600 text-white shadow-md scale-[1.02]'
+                                          : 'bg-white hover:bg-gray-50 hover:shadow-sm'
+                                      }`}
+                                    >
+                                      <span className={`font-medium ${
+                                        selectedReplacement === exercise.name
+                                          ? 'text-white'
+                                          : 'text-gray-900'
+                                      }`}>
+                                        {exercise.name}
+                                      </span>
+                                      {exercise.primaryMuscle && (
+                                        <span className={`text-xs px-2.5 py-1 rounded-full font-medium capitalize ${
+                                          selectedReplacement === exercise.name
+                                            ? 'bg-white/20 text-white'
+                                            : (() => {
+                                                const muscleGroup = getUnifiedMuscleGroup(exercise.primaryMuscle);
+                                                return muscleGroup === 'Chest' ? 'bg-yellow-100 text-yellow-800'
+                                                  : muscleGroup === 'Back' ? 'bg-green-100 text-green-800'
+                                                  : muscleGroup === 'Shoulders' ? 'bg-purple-100 text-purple-800'
+                                                  : muscleGroup === 'Core' ? 'bg-orange-100 text-orange-800'
+                                                  : muscleGroup === 'Glutes' || muscleGroup === 'Quads' || muscleGroup === 'Hamstrings' ? 'bg-red-100 text-red-800'
+                                                  : 'bg-gray-100 text-gray-600';
+                                              })()
+                                        }`}>
+                                          {exercise.primaryMuscle.toLowerCase().replace(/_/g, ' ')}
+                                        </span>
+                                      )}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        ))
                         )}
                       </div>
-                    ))}
-                  </div>
-                )}
+                    )}
 
-                {/* Empty state when no exercises available */}
-                {!isLoadingExercises &&
-                  !searchQuery.trim() &&
-                  filteredExercises.length === 0 && (
-                    <div className="py-8 text-center">
-                      <p className="text-gray-500">No exercises available</p>
-                    </div>
-                  )}
-              </div>
+                    {/* Empty state when no exercises available */}
+                    {!isLoadingExercises &&
+                      !searchQuery.trim() &&
+                      filteredExercises.length === 0 && (
+                        <div className="py-8 text-center">
+                          <p className="text-gray-500">No exercises available</p>
+                        </div>
+                      )}
+                  </div>
+                </>
+              )}
             </div>
 
             {/* Footer */}
-            <div className="flex flex-shrink-0 justify-end gap-3 border-t bg-gray-50 px-6 py-4">
+            <div className="flex flex-shrink-0 justify-end gap-3 border-t border-gray-100 bg-gradient-to-b from-gray-50 to-white px-6 py-5">
               <button
                 onClick={() => {
                   setShowExerciseSelection(false);
                   setSelectedReplacement(null);
                 }}
-                className="px-4 py-2 text-gray-700 transition-colors hover:text-gray-900"
+                className="px-5 py-2.5 text-gray-700 font-medium transition-all hover:text-gray-900 hover:bg-gray-100 rounded-xl"
               >
                 Cancel
               </button>
@@ -988,16 +1590,16 @@ function ClientWorkoutOverviewContent() {
                 disabled={
                   !selectedReplacement || swapExerciseMutation.isPending
                 }
-                className={`flex items-center gap-2 rounded-lg px-4 py-2 transition-colors ${
+                className={`flex items-center gap-2 rounded-xl px-6 py-2.5 font-medium transition-all ${
                   selectedReplacement && !swapExerciseMutation.isPending
-                    ? "bg-indigo-600 text-white hover:bg-indigo-700"
-                    : "cursor-not-allowed bg-gray-300 text-gray-500"
+                    ? "bg-gradient-to-r from-indigo-500 to-indigo-600 text-white hover:from-indigo-600 hover:to-indigo-700 shadow-lg shadow-indigo-500/25"
+                    : "cursor-not-allowed bg-gray-200 text-gray-400"
                 }`}
               >
                 {swapExerciseMutation.isPending ? (
                   <>
-                    <SpinnerIcon className="h-4 w-4 animate-spin text-white" />
-                    Saving...
+                    <SpinnerIcon className="h-4 w-4 animate-spin" />
+                    <span>Saving...</span>
                   </>
                 ) : (
                   "Confirm Change"

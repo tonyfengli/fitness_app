@@ -3222,17 +3222,8 @@ Set your goals and preferences for today's session.`;
         return null;
       }
 
-      // Check if data is stale (older than 30 minutes)
-      // For completed sessions, always return saved data regardless of age
-      if (session.status !== "completed") {
-        const savedAt = new Date(visualizationData.savedAt);
-        const now = new Date();
-        const diffMinutes = (now.getTime() - savedAt.getTime()) / (1000 * 60);
-
-        if (diffMinutes > 30) {
-          return null; // Force regeneration if data is too old
-        }
-      }
+      // Visualization data is never stale - once generated, it represents 
+      // the workout blueprint for this session and should always be accessible
 
       // Add detailed logging for debug data
       console.log("🔍 [getSavedVisualizationData] LLM DEBUG DATA CHECK:", {
@@ -3305,17 +3296,8 @@ Set your goals and preferences for today's session.`;
         return null;
       }
 
-      // Check if data is stale (older than 30 minutes)
-      // For completed sessions, always return saved data regardless of age
-      if (session.status !== "completed") {
-        const savedAt = new Date(visualizationData.savedAt);
-        const now = new Date();
-        const diffMinutes = (now.getTime() - savedAt.getTime()) / (1000 * 60);
-
-        if (diffMinutes > 30) {
-          return null; // Force regeneration if data is too old
-        }
-      }
+      // Visualization data is never stale - once generated, it represents 
+      // the workout blueprint for this session and should always be accessible
 
       // Add detailed logging for debug data
       console.log("🔍 [getSavedVisualizationData] LLM DEBUG DATA CHECK:", {

@@ -33,7 +33,7 @@ const MUSCLE_GROUPS = {
 };
 
 // Mapping from system muscles to simplified UI muscles
-const MUSCLE_UNIFICATION: Record<string, string> = {
+export const MUSCLE_UNIFICATION: Record<string, string> = {
   'Hips': 'Glutes',
   'Obliques': 'Core',
   'Traps': 'Shoulders',
