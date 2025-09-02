@@ -71,6 +71,13 @@ function CircuitWorkoutOverviewContent() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedReplacement, setSelectedReplacement] = useState<string | null>(null);
   const [expandedMuscles, setExpandedMuscles] = useState<Set<string>>(new Set());
+  const [showMirrorReplaceDialog, setShowMirrorReplaceDialog] = useState(false);
+  const [pendingReplacement, setPendingReplacement] = useState<{
+    exerciseId: string;
+    exerciseName: string;
+    mirrorRound: string;
+    mirrorIndex: number;
+  } | null>(null);
   const availableExercisesRef = useRef<any[]>([]);
 
   // Set up the reorder mutation for circuits
@@ -270,6 +277,32 @@ function CircuitWorkoutOverviewContent() {
       newExpanded.add(muscle);
     }
     setExpandedMuscles(newExpanded);
+  };
+
+  // Function to find mirror exercise in repeated rounds
+  const findMirrorExercise = (roundName: string, exerciseIndex: number, exerciseName: string) => {
+    if (!circuitConfig?.config?.repeatRounds || !savedSelections) return null;
+    
+    // Parse the round number
+    const roundNum = parseInt(roundName.match(/\d+/)?.[0] || '0');
+    const totalRounds = circuitConfig.config.rounds;
+    
+    // Calculate the mirror round
+    const mirrorRoundNum = roundNum + totalRounds;
+    const mirrorRoundName = `Round ${mirrorRoundNum}`;
+    
+    // Find the mirror exercise in saved selections
+    const mirrorExercise = savedSelections.find((selection: any) => 
+      selection.groupName === mirrorRoundName && 
+      selection.orderIndex === exerciseIndex &&
+      selection.exerciseName === exerciseName
+    );
+    
+    return mirrorExercise ? { 
+      round: mirrorRoundName, 
+      index: exerciseIndex,
+      exerciseId: mirrorExercise.exerciseId
+    } : null;
   };
 
   // Reset states when modal closes
@@ -613,16 +646,39 @@ function CircuitWorkoutOverviewContent() {
                 onClick={async () => {
                   if (!selectedReplacement || !selectedExercise) return;
 
-                  // Call the circuit swap mutation
-                  swapExerciseMutation.mutate({
-                    sessionId: sessionId!,
-                    roundName: selectedRound,
-                    exerciseIndex: selectedExerciseIndex,
-                    originalExerciseId: selectedExercise.exerciseId,
-                    newExerciseId: selectedReplacement,
-                    reason: "Circuit exercise swap",
-                    swappedBy: dummyUserId || "unknown",
-                  });
+                  // Check for mirror exercise
+                  const mirror = findMirrorExercise(
+                    selectedRound, 
+                    selectedExerciseIndex, 
+                    selectedExercise.exerciseName
+                  );
+                  
+                  if (mirror) {
+                    // Get the replacement exercise name
+                    const replacementExercise = availableExercises.find(ex => ex.id === selectedReplacement);
+                    
+                    // Store pending replacement info
+                    setPendingReplacement({
+                      exerciseId: selectedReplacement,
+                      exerciseName: replacementExercise?.name || 'Selected Exercise',
+                      mirrorRound: mirror.round,
+                      mirrorIndex: mirror.index
+                    });
+                    
+                    // Show dialog
+                    setShowMirrorReplaceDialog(true);
+                  } else {
+                    // No mirror, proceed with single replacement
+                    swapExerciseMutation.mutate({
+                      sessionId: sessionId!,
+                      roundName: selectedRound,
+                      exerciseIndex: selectedExerciseIndex,
+                      originalExerciseId: selectedExercise.exerciseId,
+                      newExerciseId: selectedReplacement,
+                      reason: "Circuit exercise swap",
+                      swappedBy: dummyUserId || "unknown",
+                    });
+                  }
                 }}
                 disabled={
                   !selectedReplacement || swapExerciseMutation.isPending
@@ -642,6 +698,168 @@ function CircuitWorkoutOverviewContent() {
                   "Confirm Change"
                 )}
               </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Mirror Replace Dialog */}
+      {showMirrorReplaceDialog && pendingReplacement && (
+        <>
+          {/* Background overlay with blur */}
+          <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm transition-opacity duration-200" />
+          
+          {/* Dialog */}
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="w-full max-w-md transform transition-all duration-300">
+              <Card className="p-0 shadow-2xl border-0 overflow-hidden">
+                {/* Header with gradient background */}
+                <div className="bg-gradient-to-br from-amber-500 to-orange-500 p-6 text-white">
+                  <div className="flex items-start gap-4">
+                    <div className="flex-shrink-0 w-12 h-12 bg-white/20 backdrop-blur rounded-full flex items-center justify-center">
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" className="text-white">
+                        <path d="M4 12C4 15.3137 6.68629 18 10 18C11.6569 18 13.1569 17.3137 14.2426 16.2426M14 12C14 8.68629 11.3137 6 8 6C6.34315 6 4.84315 6.68629 3.75736 7.75736" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                        <path d="M4 6V12H10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                        <path d="M14 18H20V12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-bold mb-1">Repeated Exercise Detected</h3>
+                      <p className="text-white/90 text-sm">
+                        This circuit has repeated rounds enabled
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Content */}
+                <div className="p-6 space-y-4">
+                  <div className="space-y-3">
+                    <p className="text-gray-700 leading-relaxed">
+                      You're replacing <span className="font-semibold text-gray-900">{selectedExercise?.exerciseName}</span> with{' '}
+                      <span className="font-semibold text-gray-900">{pendingReplacement.exerciseName}</span> in{' '}
+                      <span className="font-semibold text-primary">{selectedRound}</span>.
+                    </p>
+                    
+                    <div className="flex items-center gap-2 p-3 bg-amber-50 rounded-lg border border-amber-200">
+                      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" className="text-amber-600 flex-shrink-0">
+                        <path d="M10 6V10M10 14H10.01M18 10C18 14.4183 14.4183 18 10 18C5.58172 18 2 14.4183 2 10C2 5.58172 5.58172 2 10 2C14.4183 2 18 5.58172 18 10Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                      <p className="text-sm text-amber-800">
+                        The same exercise also appears in <span className="font-semibold">{pendingReplacement.mirrorRound}</span>
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <div className="pt-2">
+                    <p className="text-gray-600 text-sm font-medium mb-3">
+                      Would you like to replace it in both rounds?
+                    </p>
+                    
+                    {/* Visual representation */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="p-3 rounded-lg bg-gray-50 border-2 border-primary">
+                        <p className="text-xs font-medium text-gray-500 mb-1">{selectedRound}</p>
+                        <p className="text-sm font-semibold text-gray-900">{pendingReplacement.exerciseName}</p>
+                        <p className="text-xs text-green-600 mt-1">✓ Will be replaced</p>
+                      </div>
+                      <div className="p-3 rounded-lg bg-gray-50 border-2 border-dashed border-gray-300">
+                        <p className="text-xs font-medium text-gray-500 mb-1">{pendingReplacement.mirrorRound}</p>
+                        <p className="text-sm font-semibold text-gray-900">{selectedExercise?.exerciseName}</p>
+                        <p className="text-xs text-gray-500 mt-1">? Optional</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Actions */}
+                <div className="flex flex-col gap-2 p-6 pt-0">
+                  <Button
+                    onClick={async () => {
+                      // Replace both exercises
+                      const mirrorExercise = findMirrorExercise(
+                        selectedRound,
+                        selectedExerciseIndex,
+                        selectedExercise.exerciseName
+                      );
+                      
+                      // Replace the original
+                      await swapExerciseMutation.mutateAsync({
+                        sessionId: sessionId!,
+                        roundName: selectedRound,
+                        exerciseIndex: selectedExerciseIndex,
+                        originalExerciseId: selectedExercise.exerciseId,
+                        newExerciseId: pendingReplacement.exerciseId,
+                        reason: "Circuit exercise swap (with mirror)",
+                        swappedBy: dummyUserId || "unknown",
+                      });
+                      
+                      // Replace the mirror
+                      if (mirrorExercise) {
+                        await swapExerciseMutation.mutateAsync({
+                          sessionId: sessionId!,
+                          roundName: pendingReplacement.mirrorRound,
+                          exerciseIndex: pendingReplacement.mirrorIndex,
+                          originalExerciseId: mirrorExercise.exerciseId,
+                          newExerciseId: pendingReplacement.exerciseId,
+                          reason: "Circuit exercise swap (mirror round)",
+                          swappedBy: dummyUserId || "unknown",
+                        });
+                      }
+                      
+                      setShowMirrorReplaceDialog(false);
+                      setShowExerciseSelection(false);
+                      setPendingReplacement(null);
+                    }}
+                    className="w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-medium py-3"
+                    disabled={swapExerciseMutation.isPending}
+                  >
+                    {swapExerciseMutation.isPending ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <SpinnerIcon className="h-4 w-4 animate-spin" />
+                        Replacing both...
+                      </span>
+                    ) : (
+                      'Replace in Both Rounds'
+                    )}
+                  </Button>
+                  
+                  <Button
+                    variant="outline"
+                    onClick={async () => {
+                      // Replace only the selected one
+                      await swapExerciseMutation.mutateAsync({
+                        sessionId: sessionId!,
+                        roundName: selectedRound,
+                        exerciseIndex: selectedExerciseIndex,
+                        originalExerciseId: selectedExercise.exerciseId,
+                        newExerciseId: pendingReplacement.exerciseId,
+                        reason: "Circuit exercise swap (single)",
+                        swappedBy: dummyUserId || "unknown",
+                      });
+                      
+                      setShowMirrorReplaceDialog(false);
+                      setShowExerciseSelection(false);
+                      setPendingReplacement(null);
+                    }}
+                    className="w-full"
+                    disabled={swapExerciseMutation.isPending}
+                  >
+                    Replace Only {selectedRound}
+                  </Button>
+                  
+                  <button
+                    onClick={() => {
+                      setShowMirrorReplaceDialog(false);
+                      setPendingReplacement(null);
+                    }}
+                    className="w-full py-2 text-gray-500 hover:text-gray-700 transition-colors text-sm"
+                    disabled={swapExerciseMutation.isPending}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </Card>
             </div>
           </div>
         </>

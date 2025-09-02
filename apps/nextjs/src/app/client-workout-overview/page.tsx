@@ -328,26 +328,9 @@ function ClientWorkoutOverviewContent() {
     // Poll until we have blueprint candidates, not just exercises
     refetchInterval: (data) => {
       const shouldPoll = !data?.blueprint?.clientExercisePools?.[userId]?.availableCandidates;
-      console.log('[ClientWorkoutOverview] Polling decision:', {
-        shouldPoll,
-        hasExercises,
-        hasVisualizationData: !!data,
-        hasCandidates: !!data?.blueprint?.clientExercisePools?.[userId]?.availableCandidates,
-        timestamp: new Date().toISOString()
-      });
       // Use faster polling (2s) initially when no exercises, then 5s once exercises are loaded
       const pollInterval = !hasExercises ? 2000 : 5000;
       return shouldPoll ? pollInterval : false;
-    },
-    onSuccess: (data) => {
-      console.log('[ClientWorkoutOverview] Visualization data fetched:', {
-        hasData: !!data,
-        hasBlueprint: !!data?.blueprint,
-        hasClientPool: !!data?.blueprint?.clientExercisePools?.[userId],
-        hasCandidates: !!data?.blueprint?.clientExercisePools?.[userId]?.availableCandidates,
-        candidatesCount: data?.blueprint?.clientExercisePools?.[userId]?.availableCandidates?.length || 0,
-        timestamp: new Date().toISOString()
-      });
     },
     onError: (error) => {
       console.error('[ClientWorkoutOverview] Visualization data error:', error);
@@ -597,30 +580,6 @@ function ClientWorkoutOverviewContent() {
 
   const avatarUrl = `${AVATAR_API_URL}?seed=${encodeURIComponent(userName)}`;
 
-  // Debug polling status - placed after all data declarations
-  useEffect(() => {
-    const interval = setInterval(() => {
-      console.log('[ClientWorkoutOverview] Polling status check:', {
-        hasExercises,
-        isPollingVisualization: !visualizationData?.blueprint?.clientExercisePools?.[userId]?.availableCandidates,
-        visualizationPollingInterval: !visualizationData?.blueprint?.clientExercisePools?.[userId]?.availableCandidates ? (!hasExercises ? '2000ms' : '5000ms') : 'stopped',
-        selectionsPollingInterval: !hasExercises ? '2000ms' : 'stopped',
-        visualizationDataStatus: {
-          hasData: !!visualizationData,
-          hasBlueprint: !!visualizationData?.blueprint,
-          hasCandidates: !!visualizationData?.blueprint?.clientExercisePools?.[userId]?.availableCandidates
-        },
-        exerciseCounts: {
-          realtime: realtimeExercises.length,
-          enriched: enrichedClientExercises.length,
-          savedSelections: savedSelections?.length || 0
-        },
-        timestamp: new Date().toISOString()
-      });
-    }, 10000); // Log every 10 seconds
-
-    return () => clearInterval(interval);
-  }, [hasExercises, visualizationData, realtimeExercises.length, enrichedClientExercises.length, savedSelections, userId]);
 
   // Reset states when modals close
   useEffect(() => {
@@ -637,13 +596,7 @@ function ClientWorkoutOverviewContent() {
 
   // Refetch visualization when we get real-time exercises
   useEffect(() => {
-    console.log('[ClientWorkoutOverview] Checking if should refetch visualization:', {
-      realtimeExercisesCount: realtimeExercises.length,
-      hasVisualizationData: !!visualizationData,
-      willRefetch: realtimeExercises.length > 0 && !visualizationData
-    });
     if (realtimeExercises.length > 0 && !visualizationData) {
-      console.log('[ClientWorkoutOverview] Triggering visualization data refetch');
       refetchVisualization();
     }
   }, [realtimeExercises.length, visualizationData, refetchVisualization]);
@@ -652,13 +605,6 @@ function ClientWorkoutOverviewContent() {
   useEffect(() => {
     const exercisesLoaded = enrichedClientExercises.length > 0;
     if (exercisesLoaded !== hasExercises) {
-      console.log('[ClientWorkoutOverview] hasExercises state changing:', {
-        from: hasExercises,
-        to: exercisesLoaded,
-        exerciseCount: enrichedClientExercises.length,
-        willStopPolling: exercisesLoaded,
-        timestamp: new Date().toISOString()
-      });
       setHasExercises(exercisesLoaded);
     }
   }, [enrichedClientExercises.length, hasExercises]);

@@ -26,13 +26,14 @@ export function RoundsStep({
   return (
     <div className="space-y-6">
       <div>
-        <label className="text-base font-medium">Select number of rounds</label>
-        <div className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-5">
+        <h3 className="text-lg font-semibold mb-1">How many rounds?</h3>
+        <p className="text-sm text-muted-foreground mb-4">Each round contains all exercises</p>
+        <div className="grid grid-cols-5 gap-2">
           {roundOptions.map((option) => (
             <Button
               key={option}
               variant={rounds === option ? "primary" : "outline"}
-              className="relative h-12 min-w-0 touch-manipulation"
+              className="relative h-14 min-w-0 touch-manipulation text-base"
               onClick={() => onRoundsChange(option)}
               disabled={isSaving}
             >
@@ -45,13 +46,13 @@ export function RoundsStep({
         </div>
       </div>
 
-      <div className="flex items-center justify-between rounded-lg border p-4">
+      <div className="flex items-center justify-between rounded-xl bg-muted/50 p-4">
         <div className="space-y-0.5">
-          <label htmlFor="repeat-rounds" className="text-base">
+          <label htmlFor="repeat-rounds" className="text-base font-medium">
             Repeat rounds
           </label>
           <p className="text-sm text-muted-foreground">
-            Double the workout by repeating all rounds
+            Double the workout intensity
           </p>
         </div>
         <button
@@ -77,9 +78,12 @@ export function RoundsStep({
         </button>
       </div>
 
-      <div className="rounded-lg bg-muted p-4 text-center">
-        <p className="text-sm text-muted-foreground">Total rounds</p>
-        <p className="text-2xl font-bold">{totalRounds}</p>
+      <div className="rounded-xl bg-primary/10 p-6 text-center">
+        <p className="text-sm text-muted-foreground mb-1">Total rounds</p>
+        <p className="text-3xl font-bold text-primary">{totalRounds}</p>
+        {repeatRounds && (
+          <p className="text-xs text-muted-foreground mt-1">({rounds} × 2)</p>
+        )}
       </div>
     </div>
   );
@@ -101,18 +105,18 @@ export function ExercisesStep({
   return (
     <div className="space-y-6">
       <div>
-        <label className="text-base font-medium">
-          Select exercises per round
-        </label>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Common options for quick selection
+        <h3 className="text-lg font-semibold mb-1">
+          Exercises per round
+        </h3>
+        <p className="text-sm text-muted-foreground mb-4">
+          How many exercises in each round?
         </p>
-        <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
+        <div className="grid grid-cols-3 gap-2">
           {presetOptions.map((option) => (
             <Button
               key={option}
               variant={exercises === option ? "primary" : "outline"}
-              className="relative h-12 min-w-0 touch-manipulation"
+              className="relative h-14 min-w-0 touch-manipulation text-base"
               onClick={() => onExercisesChange(option)}
               disabled={isSaving}
             >
@@ -149,33 +153,38 @@ export function TimingStep({
   isSaving,
 }: TimingStepProps) {
   return (
-    <div className="space-y-6">
-      <TimingOption
-        label="Exercise Duration"
-        description="Time for each exercise"
-        value={workDuration}
-        options={[10, 20, 30, 40, 45, 60, 90]}
-        onChange={onWorkChange}
-        isSaving={isSaving}
-      />
+    <div className="space-y-8">
+      <div className="space-y-6">
+        <TimingOption
+          label="Work"
+          description="Time for each exercise"
+          value={workDuration}
+          options={[20, 30, 40, 45, 60]}
+          onChange={onWorkChange}
+          isSaving={isSaving}
+          color="primary"
+        />
 
-      <TimingOption
-        label="Rest Duration"
-        description="Rest between exercises"
-        value={restDuration}
-        options={[5, 10, 15, 20, 30, 45]}
-        onChange={onRestChange}
-        isSaving={isSaving}
-      />
+        <TimingOption
+          label="Rest"
+          description="Between exercises"
+          value={restDuration}
+          options={[10, 15, 20, 30]}
+          onChange={onRestChange}
+          isSaving={isSaving}
+          color="secondary"
+        />
 
-      <TimingOption
-        label="Rest Between Rounds"
-        description="Rest after completing a round"
-        value={restBetweenRounds}
-        options={[30, 45, 60, 90, 120, 180]}
-        onChange={onRoundRestChange}
-        isSaving={isSaving}
-      />
+        <TimingOption
+          label="Round Break"
+          description="Between rounds"
+          value={restBetweenRounds}
+          options={[60, 90, 120]}
+          onChange={onRoundRestChange}
+          isSaving={isSaving}
+          color="accent"
+        />
+      </div>
     </div>
   );
 }
@@ -187,6 +196,7 @@ interface TimingOptionProps {
   options: number[];
   onChange: (value: number) => void;
   isSaving: boolean;
+  color?: "primary" | "secondary" | "accent";
 }
 
 function TimingOption({
@@ -196,24 +206,43 @@ function TimingOption({
   options,
   onChange,
   isSaving,
+  color = "primary",
 }: TimingOptionProps) {
   return (
-    <div>
-      <label className="text-base font-medium">{label}</label>
-      <p className="text-sm text-muted-foreground">{description}</p>
-      <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-4">
+    <div className="space-y-3">
+      <div className="flex items-baseline justify-between">
+        <div>
+          <h4 className="text-base font-semibold">{label}</h4>
+          <p className="text-sm text-muted-foreground">{description}</p>
+        </div>
+        <div className={cn(
+          "text-2xl font-bold",
+          color === "primary" && "text-primary",
+          color === "secondary" && "text-blue-600",
+          color === "accent" && "text-green-600"
+        )}>
+          {value}s
+        </div>
+      </div>
+      <div className="grid grid-cols-5 gap-1.5">
         {options.map((option) => (
           <Button
             key={option}
             variant={value === option ? "primary" : "outline"}
-            className="relative h-12 min-w-0 touch-manipulation"
+            className={cn(
+              "relative h-12 min-w-0 touch-manipulation text-sm font-medium transition-all",
+              value === option && color === "primary" && "bg-primary text-primary-foreground",
+              value === option && color === "secondary" && "bg-blue-600 text-white hover:bg-blue-700",
+              value === option && color === "accent" && "bg-green-600 text-white hover:bg-green-700"
+            )}
             onClick={() => onChange(option)}
             disabled={isSaving}
           >
-            {isSaving && value === option && (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            {isSaving && value === option ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              `${option}s`
             )}
-            {option}s
           </Button>
         ))}
       </div>
@@ -243,39 +272,50 @@ export function ReviewStep({ config, repeatRounds }: ReviewStepProps) {
 
   return (
     <div className="space-y-6">
-      <div className="space-y-4">
-        <div className="flex justify-between border-b pb-2">
-          <span className="text-muted-foreground">Rounds</span>
-          <span className="font-medium">
-            {config.config.rounds}
-            {repeatRounds && ` × 2 = ${totalRounds}`}
-          </span>
+      {/* Summary Cards */}
+      <div className="grid grid-cols-2 gap-3">
+        <div className="rounded-xl bg-primary/10 p-4 text-center">
+          <p className="text-sm text-muted-foreground">Total Time</p>
+          <p className="text-2xl font-bold text-primary">{formatTime(totalTime)}</p>
         </div>
+        <div className="rounded-xl bg-green-500/10 p-4 text-center">
+          <p className="text-sm text-muted-foreground">Total Exercises</p>
+          <p className="text-2xl font-bold text-green-600">{totalExercises}</p>
+        </div>
+      </div>
 
-        <div className="flex justify-between border-b pb-2">
-          <span className="text-muted-foreground">Exercises per round</span>
-          <span className="font-medium">{config.config.exercisesPerRound}</span>
-        </div>
+      {/* Configuration Details */}
+      <div className="space-y-1">
+        <h4 className="text-sm font-semibold text-muted-foreground mb-3">Configuration Summary</h4>
+        
+        <div className="space-y-3">
+          <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+            <span className="text-sm">Rounds</span>
+            <span className="font-semibold">
+              {config.config.rounds}
+              {repeatRounds && ` × 2 = ${totalRounds}`}
+            </span>
+          </div>
 
-        <div className="flex justify-between border-b pb-2">
-          <span className="text-muted-foreground">Exercise duration</span>
-          <span className="font-medium">{config.config.workDuration} seconds</span>
-        </div>
+          <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+            <span className="text-sm">Exercises per round</span>
+            <span className="font-semibold">{config.config.exercisesPerRound}</span>
+          </div>
 
-        <div className="flex justify-between border-b pb-2">
-          <span className="text-muted-foreground">Rest duration</span>
-          <span className="font-medium">{config.config.restDuration} seconds</span>
+          <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+            <span className="text-sm">Work / Rest / Round Break</span>
+            <span className="font-semibold">
+              {config.config.workDuration}s / {config.config.restDuration}s / {config.config.restBetweenRounds}s
+            </span>
+          </div>
         </div>
+      </div>
 
-        <div className="flex justify-between border-b pb-2">
-          <span className="text-muted-foreground">Rest between rounds</span>
-          <span className="font-medium">{config.config.restBetweenRounds} seconds</span>
-        </div>
-
-        <div className="flex justify-between border-b pb-2">
-          <span className="text-muted-foreground">Total workout time</span>
-          <span className="font-medium text-lg">{formatTime(totalTime)}</span>
-        </div>
+      {/* Ready Message */}
+      <div className="rounded-xl bg-green-500/10 border border-green-500/20 p-4 text-center">
+        <p className="text-sm text-green-700 font-medium">
+          ✓ Configuration complete! Tap confirm to continue.
+        </p>
       </div>
     </div>
   );

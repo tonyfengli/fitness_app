@@ -39,7 +39,8 @@ export default function CircuitConfigPage() {
   const updateConfigMutation = useMutation(
     trpc.circuitConfig.updatePublic.mutationOptions({
       onSuccess: () => {
-        toast.success("Configuration updated");
+        // Remove success toast to avoid UI obstruction
+        // Users get immediate visual feedback from the UI updates
       },
       onError: (error: any) => {
         toast.error("Failed to update configuration");
@@ -124,47 +125,79 @@ export default function CircuitConfigPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background p-4">
-      <div className="mx-auto max-w-md">
-        {/* Header with back button */}
-        <div className="mb-6 flex items-center justify-between">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => router.back()}
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <h1 className="text-xl font-semibold">Circuit Configuration</h1>
-          <div className="w-10" /> {/* Spacer for centering */}
-        </div>
+    <div className="min-h-screen bg-background">
+      {/* Fixed Header with Navigation */}
+      <div className="fixed top-0 left-0 right-0 z-40 bg-background/95 backdrop-blur-sm border-b">
+        <div className="mx-auto max-w-md">
+          {/* Top Navigation Row */}
+          <div className="flex items-center justify-between p-4 pb-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleBack}
+              disabled={currentStep === 1}
+              className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <ChevronLeft className="h-4 w-4" />
+              <span className="text-sm">Back</span>
+            </Button>
+            
+            <div className="text-center">
+              <p className="text-xs text-muted-foreground">Step {currentStep} of {TOTAL_STEPS}</p>
+              <h1 className="text-sm font-medium">
+                {currentStep === 1 && "Rounds"}
+                {currentStep === 2 && "Exercises"}
+                {currentStep === 3 && "Timing"}
+                {currentStep === 4 && "Review"}
+              </h1>
+            </div>
+            
+            {currentStep < TOTAL_STEPS ? (
+              <Button
+                size="sm"
+                onClick={handleNext}
+                className="flex items-center gap-1"
+              >
+                <span className="text-sm">Next</span>
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            ) : (
+              <Button
+                size="sm"
+                onClick={handleComplete}
+                className="bg-green-600 hover:bg-green-700"
+              >
+                Confirm
+              </Button>
+            )}
+          </div>
 
-        {/* Progress indicator */}
-        <div className="mb-8 flex justify-center">
-          <div className="flex space-x-2">
-            {[1, 2, 3, 4].map((step) => (
-              <div
-                key={step}
-                className={cn(
-                  "h-2 w-16 rounded-full transition-colors",
-                  step <= currentStep ? "bg-primary" : "bg-muted"
-                )}
-              />
-            ))}
+          {/* Progress indicator */}
+          <div className="px-4 pb-3">
+            <div className="flex gap-1">
+              {[1, 2, 3, 4].map((step) => (
+                <div
+                  key={step}
+                  className={cn(
+                    "h-1 flex-1 rounded-full transition-all duration-300",
+                    step <= currentStep 
+                      ? "bg-primary" 
+                      : "bg-muted"
+                  )}
+                />
+              ))}
+            </div>
           </div>
         </div>
+      </div>
+
+      {/* Content with top padding for fixed header */}
+      <div className="pt-24 p-4 pb-8">
+        <div className="mx-auto max-w-md">
 
         {/* Step content */}
-        <Card className="p-0">
-          <div className="p-6 pb-2">
-            <h2 className="text-lg font-semibold">
-              {currentStep === 1 && "Rounds"}
-              {currentStep === 2 && "Exercises per Round"}
-              {currentStep === 3 && "Exercise Timing"}
-              {currentStep === 4 && "Review Configuration"}
-            </h2>
-          </div>
-          <div className="px-6 pb-6 space-y-6">
+        <Card className="p-0 shadow-sm">
+          <div className="p-6 space-y-6">
             {/* Step 1: Rounds */}
             {currentStep === 1 && (
               <RoundsStep
@@ -208,29 +241,9 @@ export default function CircuitConfigPage() {
                 repeatRounds={repeatRounds}
               />
             )}
-
-            {/* Navigation buttons */}
-            <div className="flex justify-between pt-4">
-              <Button
-                variant="outline"
-                onClick={handleBack}
-                disabled={currentStep === 1}
-              >
-                Back
-              </Button>
-              
-              {currentStep < TOTAL_STEPS ? (
-                <Button onClick={handleNext}>
-                  Next
-                </Button>
-              ) : (
-                <Button onClick={handleComplete}>
-                  Confirm
-                </Button>
-              )}
-            </div>
           </div>
         </Card>
+        </div>
       </div>
     </div>
   );
