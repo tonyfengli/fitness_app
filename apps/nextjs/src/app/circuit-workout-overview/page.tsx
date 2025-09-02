@@ -73,6 +73,11 @@ function CircuitWorkoutOverviewContent() {
   const [selectedReplacement, setSelectedReplacement] = useState<string | null>(null);
   const [expandedMuscles, setExpandedMuscles] = useState<Set<string>>(new Set());
   const availableExercisesRef = useRef<any[]>([]);
+  
+  // Mirror update confirmation state
+  const [showMirrorConfirm, setShowMirrorConfirm] = useState(false);
+  const [mirrorRoundName, setMirrorRoundName] = useState("");
+  const [pendingMirrorSwap, setPendingMirrorSwap] = useState<any>(null);
 
   // Set up the reorder mutation for circuits
   const reorderExerciseMutation = useMutation({
@@ -336,14 +341,14 @@ function CircuitWorkoutOverviewContent() {
                 key={round.roundName} 
                 className={`p-8 border-2 shadow-lg hover:shadow-xl transition-all ${
                   round.isRepeat 
-                    ? 'bg-gradient-to-br from-purple-950/20 to-indigo-950/20 border-purple-500/30 hover:border-purple-400/50' 
-                    : 'hover:shadow-xl'
+                    ? 'bg-gradient-to-br from-purple-50 to-indigo-50 dark:from-purple-950/10 dark:to-indigo-950/10 border-purple-400 dark:border-purple-500/40' 
+                    : ''
                 }`}
               >
                 <h2 className="mb-6 text-2xl font-bold flex items-center gap-3">
                   <span className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${
                     round.isRepeat 
-                      ? 'bg-gradient-to-br from-purple-500/20 to-indigo-500/20 text-purple-300 ring-2 ring-purple-500/30' 
+                      ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 ring-2 ring-purple-400 dark:ring-purple-500/50' 
                       : 'bg-primary/10 text-primary'
                   }`}>
                     {round.roundName.match(/\d+/)?.[0] || ''}
@@ -351,7 +356,7 @@ function CircuitWorkoutOverviewContent() {
                   <span className="flex items-center gap-3">
                     {round.roundName}
                     {round.isRepeat && (
-                      <span className="px-3 py-1 text-sm font-medium bg-gradient-to-r from-purple-500/20 to-indigo-500/20 text-purple-300 rounded-full border border-purple-500/30">
+                      <span className="px-3 py-1 text-sm font-semibold bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-full">
                         Repeat
                       </span>
                     )}
@@ -625,6 +630,41 @@ function CircuitWorkoutOverviewContent() {
                 onClick={async () => {
                   if (!selectedReplacement || !selectedExercise) return;
 
+                  // Check if this is a base round with a mirror
+                  if (circuitConfig?.config?.repeatRounds) {
+                    const baseRoundCount = Math.floor(roundsData.length / 2);
+                    const currentRoundIndex = roundsData.findIndex(r => r.roundName === selectedRound);
+                    
+                    if (currentRoundIndex < baseRoundCount) {
+                      // This is a base round, find its mirror
+                      const mirrorRoundIndex = currentRoundIndex + baseRoundCount;
+                      const mirrorRound = roundsData[mirrorRoundIndex];
+                      
+                      if (mirrorRound) {
+                        // Find the exercise at the same position in the mirror round
+                        const currentRound = roundsData[currentRoundIndex];
+                        const exercisePositionInRound = currentRound.exercises.findIndex(ex => ex.id === selectedExercise.id);
+                        const mirrorExercise = mirrorRound.exercises[exercisePositionInRound];
+                        
+                        if (mirrorExercise && mirrorExercise.exerciseName === selectedExercise.exerciseName) {
+                          // Store the swap details and show confirmation modal
+                          setMirrorRoundName(mirrorRound.roundName);
+                          setPendingMirrorSwap({
+                            originalRound: selectedRound,
+                            mirrorRound: mirrorRound.roundName,
+                            mirrorExercise,
+                            selectedExercise,
+                            selectedReplacement,
+                            selectedExerciseIndex
+                          });
+                          setShowMirrorConfirm(true);
+                          setShowExerciseSelection(false);
+                          return;
+                        }
+                      }
+                    }
+                  }
+
                   // Single exercise replacement
                   swapExerciseMutation.mutate({
                     sessionId: sessionId!,
@@ -655,6 +695,104 @@ function CircuitWorkoutOverviewContent() {
                 )}
               </button>
             </div>
+          </div>
+        </>
+      )}
+
+      {/* Mirror Update Confirmation Modal */}
+      {showMirrorConfirm && pendingMirrorSwap && (
+        <>
+          {/* Background overlay */}
+          <div
+            className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm"
+            onClick={() => setShowMirrorConfirm(false)}
+          />
+
+          {/* Modal */}
+          <div className="fixed inset-x-4 top-1/2 z-50 mx-auto max-w-md -translate-y-1/2">
+            <Card className="p-6 shadow-2xl border-2">
+              <div className="space-y-4">
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/30 rounded-full flex items-center justify-center flex-shrink-0">
+                    <svg className="w-5 h-5 text-purple-600 dark:text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                    </svg>
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                      Update Mirror Round?
+                    </h3>
+                    <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">
+                      This exercise also appears in <span className="font-semibold text-purple-600 dark:text-purple-400">{mirrorRoundName}</span> (repeat round).
+                    </p>
+                    <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">
+                      Would you like to update both rounds?
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex gap-3 justify-end mt-6">
+                  <Button
+                    variant="outline"
+                    onClick={async () => {
+                      // Update only the original
+                      try {
+                        await swapExerciseMutation.mutateAsync({
+                          sessionId: sessionId!,
+                          roundName: pendingMirrorSwap.originalRound,
+                          exerciseIndex: pendingMirrorSwap.selectedExerciseIndex,
+                          originalExerciseId: pendingMirrorSwap.selectedExercise.exerciseId,
+                          newExerciseId: pendingMirrorSwap.selectedReplacement,
+                          reason: "Circuit exercise swap",
+                          swappedBy: dummyUserId || "unknown",
+                        });
+                      } catch (error) {
+                        console.error("Failed to swap exercise:", error);
+                      }
+                      setShowMirrorConfirm(false);
+                      setPendingMirrorSwap(null);
+                    }}
+                  >
+                    Update {pendingMirrorSwap.originalRound} Only
+                  </Button>
+                  <Button
+                    className="bg-purple-600 hover:bg-purple-700 text-white"
+                    onClick={async () => {
+                      // Update both rounds
+                      try {
+                        // Update original
+                        await swapExerciseMutation.mutateAsync({
+                          sessionId: sessionId!,
+                          roundName: pendingMirrorSwap.originalRound,
+                          exerciseIndex: pendingMirrorSwap.selectedExerciseIndex,
+                          originalExerciseId: pendingMirrorSwap.selectedExercise.exerciseId,
+                          newExerciseId: pendingMirrorSwap.selectedReplacement,
+                          reason: "Circuit exercise swap (with mirror)",
+                          swappedBy: dummyUserId || "unknown",
+                        });
+                        
+                        // Update mirror
+                        await swapExerciseMutation.mutateAsync({
+                          sessionId: sessionId!,
+                          roundName: pendingMirrorSwap.mirrorRound,
+                          exerciseIndex: pendingMirrorSwap.mirrorExercise.orderIndex,
+                          originalExerciseId: pendingMirrorSwap.mirrorExercise.exerciseId,
+                          newExerciseId: pendingMirrorSwap.selectedReplacement,
+                          reason: "Circuit exercise swap (mirror round)",
+                          swappedBy: dummyUserId || "unknown",
+                        });
+                      } catch (error) {
+                        console.error("Failed to swap exercises:", error);
+                      }
+                      setShowMirrorConfirm(false);
+                      setPendingMirrorSwap(null);
+                    }}
+                  >
+                    Update Both Rounds
+                  </Button>
+                </div>
+              </div>
+            </Card>
           </div>
         </>
       )}
