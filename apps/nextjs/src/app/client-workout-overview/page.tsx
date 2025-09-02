@@ -1159,10 +1159,22 @@ function ClientWorkoutOverviewContent() {
                         // Skip the modal and go directly to exercise selection
                         setShowExerciseSelection(true);
                       }}
-                      className="flex-shrink-0 rounded-md bg-gray-100 px-3 py-1 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-200"
+                      disabled={!visualizationData?.blueprint?.clientExercisePools?.[userId]?.availableCandidates}
+                      className={`flex-shrink-0 rounded-md px-3 py-1 text-sm font-medium transition-colors ${
+                        !visualizationData?.blueprint?.clientExercisePools?.[userId]?.availableCandidates
+                          ? "bg-gray-50 text-gray-400 cursor-not-allowed"
+                          : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                      }`}
                       aria-label="Replace exercise"
                     >
-                      Replace
+                      {!visualizationData?.blueprint?.clientExercisePools?.[userId]?.availableCandidates ? (
+                        <span className="flex items-center gap-1.5">
+                          <SpinnerIcon className="h-3 w-3 animate-spin" />
+                          Loading
+                        </span>
+                      ) : (
+                        "Replace"
+                      )}
                     </button>
                   </div>
                 );
