@@ -101,7 +101,7 @@ export const circuitConfigRouter = createTRPCRouter({
         typeof session.templateConfig === "object" &&
         "type" in session.templateConfig &&
         session.templateConfig.type === "circuit"
-          ? session.templateConfig
+          ? (session.templateConfig as typeof DEFAULT_CIRCUIT_CONFIG)
           : DEFAULT_CIRCUIT_CONFIG;
 
       // Merge with updates - use ISO string for date
@@ -185,7 +185,7 @@ export const circuitConfigRouter = createTRPCRouter({
         .where(eq(TrainingSession.id, input.sessionId))
         .returning();
 
-      return updated.templateConfig;
+      return updated?.templateConfig || resetConfig;
     }),
 
   /**

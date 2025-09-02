@@ -300,6 +300,7 @@ export class ExerciseFilterService {
           includeExercises: input.includeExercises,
           avoidExercises: input.avoidExercises,
           sessionGoal: input.primaryGoal,
+          isFullBody: input.template === "full_body",
         },
         results: {
           totalExercises: filteredExercises.length,

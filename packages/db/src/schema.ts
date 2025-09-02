@@ -139,7 +139,7 @@ export const CreateTrainingSessionSchema = createInsertSchema(TrainingSession, {
     .enum(["open", "in_progress", "completed", "cancelled"])
     .optional()
     .default("open"),
-  templateType: z.string().max(50).optional().default("full_body_bmf"),
+  templateType: z.enum(["full_body_bmf", "standard", "circuit"]).optional().default("full_body_bmf"),
 }).omit({
   id: true,
   createdAt: true,

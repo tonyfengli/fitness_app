@@ -1020,12 +1020,8 @@ export const trainingSessionRouter = {
               content: messageBody,
               phoneNumber: client.userPhone,
               metadata: {
-                sessionId: input.sessionId,
-                feedbackUrl,
-                sentAt: new Date().toISOString(),
                 sentBy: user.id,
-                messageType: "post_workout_feedback",
-              },
+              } as any,
               status: "sent",
             });
 

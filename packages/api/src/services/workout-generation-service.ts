@@ -546,10 +546,10 @@ export class WorkoutGenerationService {
       parsedResponse = JSON.parse(jsonMatch[1]);
     } catch (parseError) {
       logger.error("Failed to parse JSON from LLM response", {
-        error: parseError.message,
+        error: (parseError as Error).message,
         extractedJson: jsonMatch[1].substring(0, 500),
       });
-      throw new Error(`Failed to parse LLM JSON response: ${parseError.message}`);
+      throw new Error(`Failed to parse LLM JSON response: ${(parseError as Error).message}`);
     }
     
     // Transform minimal format to expected structure
@@ -1244,7 +1244,7 @@ export class WorkoutGenerationService {
     groupContext: GroupContext,
     exercisePool: Exercise[],
   ) {
-    const allExercises = [];
+    const allExercises: any[] = [];
     
     // Log what we're working with
     logger.info("createExerciseRecords called", {
@@ -1531,7 +1531,7 @@ export class WorkoutGenerationService {
     groupContext: GroupContext,
     exercisePool: Exercise[],
   ) {
-    const allExercises = [];
+    const allExercises: any[] = [];
     const { exerciseSelection, roundOrganization } = generationResult;
 
     // If no round organization (Phase 2 removed), create exercises from selection only
@@ -1758,7 +1758,7 @@ export class WorkoutGenerationService {
     groupContext: GroupContext,
     exercisePool: Exercise[],
   ) {
-    const allExercises = [];
+    const allExercises: any[] = [];
     const { llmAssignments, metadata } = generationResult;
     
     // Check if repeat is enabled

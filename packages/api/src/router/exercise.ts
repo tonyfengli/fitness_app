@@ -404,7 +404,7 @@ export const exerciseRouter = {
         clientId: z.string(),
         sessionGoal: z.enum(["strength", "stability"]),
         intensity: z.enum(["low", "moderate", "high"]),
-        template: z.enum(["standard", "circuit", "full_body"]),
+        template: z.enum(["standard", "circuit", "full_body_bmf"]),
         includeExercises: z.array(z.string()),
         avoidExercises: z.array(z.string()),
         muscleTarget: z.array(z.string()),

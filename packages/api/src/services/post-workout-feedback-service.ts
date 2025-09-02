@@ -245,7 +245,7 @@ export class PostWorkoutFeedbackService {
       latestPerformanceByExercise.forEach((log, exerciseId) => {
         performanceLogsMap.set(exerciseId, {
           weight: Number(log.weightLbs),
-          isPr: log.isWeightPr,
+          isPr: log.isWeightPr || false,
           previousBest: log.previousBestWeightLbs ? Number(log.previousBestWeightLbs) : null,
         });
       });
