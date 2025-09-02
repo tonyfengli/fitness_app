@@ -23,9 +23,14 @@ function isIncludedExercise(
  */
 export function performSecondPassScoring(
   firstPassResults: ScoredExercise[],
-  criteria: ScoringCriteria,
+  criteria: ScoringCriteria & { templateType?: string },
   maxScore: number,
 ): ScoredExercise[] {
+  // Circuit MVP: Skip second pass entirely for circuit templates
+  if (criteria.templateType === 'circuit') {
+    return firstPassResults;
+  }
+
   console.log("🎯 Second pass: Boosting included exercises");
 
   const finalScoredExercises = firstPassResults.map((exercise) => {

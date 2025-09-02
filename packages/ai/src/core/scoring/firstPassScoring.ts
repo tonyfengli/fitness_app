@@ -156,17 +156,51 @@ export function scoreExercise(
 }
 
 /**
+ * Calculate the base score for an exercise based on template type
+ * For circuit templates, always returns 5.0 regardless of other criteria
+ */
+function calculateFirstPassScore(
+  exercise: Exercise,
+  criteria: ScoringCriteria & { templateType?: string },
+): ScoredExercise {
+  // Circuit MVP: All exercises get flat 5.0 score
+  if (criteria.templateType === 'circuit') {
+    const base = SCORING_CONFIG.BASE_SCORE; // 5.0
+    
+    return {
+      ...exercise,
+      score: base,
+      scoreBreakdown: {
+        base,
+        includeExerciseBoost: 0,
+        favoriteExerciseBoost: 0,
+        muscleTargetBonus: 0,
+        muscleLessenPenalty: 0,
+        intensityAdjustment: 0,
+        total: base,
+      },
+    };
+  }
+  
+  // Non-circuit templates use normal scoring
+  return scoreExercise(exercise, criteria, 0);
+}
+
+/**
  * Perform the first pass of scoring - calculate base scores without include boost
  */
 export function performFirstPassScoring(
   exercises: Exercise[],
-  criteria: ScoringCriteria,
+  criteria: ScoringCriteria & { templateType?: string },
 ): { scoredExercises: ScoredExercise[]; maxScore: number } {
-  console.log("🎯 First pass: Scoring exercises without include boost");
-  console.log("🎯 Favorite exercise IDs:", criteria.favoriteExerciseIds);
+  // Skip logging for circuit templates to reduce noise
+  if (criteria.templateType !== 'circuit') {
+    console.log("🎯 First pass: Scoring exercises without include boost");
+    console.log("🎯 Favorite exercise IDs:", criteria.favoriteExerciseIds);
+  }
 
   const scoredExercises = exercises.map((exercise) =>
-    scoreExercise(exercise, criteria, 0),
+    calculateFirstPassScore(exercise, criteria),
   );
 
   const maxScore =
@@ -174,7 +208,9 @@ export function performFirstPassScoring(
       ? Math.max(...scoredExercises.map((ex) => ex.score))
       : 0;
 
-  console.log(`📊 First pass complete: max score = ${maxScore}`);
+  if (criteria.templateType !== 'circuit') {
+    console.log(`📊 First pass complete: max score = ${maxScore}`);
+  }
 
   return { scoredExercises, maxScore };
 }

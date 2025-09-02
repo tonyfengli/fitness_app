@@ -14,6 +14,132 @@ interface CircuitPromptConfig extends GroupWorkoutConfig {
   circuitConfig?: CircuitConfig;
 }
 
+/**
+ * Deterministic bucketing for circuit exercises
+ * Ensures balanced selection across movement patterns
+ */
+function selectCircuitExercises(
+  allExercises: CircuitExercise[], 
+  rawExercises: any[]
+): CircuitExercise[] {
+  // Group exercises by movement pattern
+  const exercisesByPattern: Record<string, CircuitExercise[]> = {};
+  const capacityExercises: CircuitExercise[] = [];
+  
+  // First, categorize all exercises
+  allExercises.forEach(ex => {
+    const pattern = ex.movementPattern?.toLowerCase() || 'unknown';
+    
+    // Check if this is a capacity exercise by looking at the raw exercise data
+    const rawExercise = rawExercises.find(raw => raw.name === ex.name);
+    const isCapacity = rawExercise?.functionTags?.includes('capacity') || false;
+    
+    if (isCapacity) {
+      capacityExercises.push(ex);
+    } else {
+      if (!exercisesByPattern[pattern]) {
+        exercisesByPattern[pattern] = [];
+      }
+      exercisesByPattern[pattern].push(ex);
+    }
+  });
+  
+  // Shuffle function for randomness within categories
+  const shuffle = <T>(array: T[]): T[] => {
+    const shuffled = [...array];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled;
+  };
+  
+  const selected: CircuitExercise[] = [];
+  const usedExerciseNames = new Set<string>();
+  
+  // Helper to add exercises without duplicates
+  const addExercises = (exercises: CircuitExercise[], count: number) => {
+    const shuffled = shuffle(exercises.filter(ex => !usedExerciseNames.has(ex.name)));
+    const toAdd = shuffled.slice(0, count);
+    toAdd.forEach(ex => {
+      selected.push(ex);
+      usedExerciseNames.add(ex.name);
+    });
+    return toAdd.length;
+  };
+  
+  // 1. Squat (knee-dominant): 5 exercises
+  const squatExercises = exercisesByPattern['squat'] || [];
+  const squatsAdded = addExercises(squatExercises, 5);
+  
+  // 2. Hinge (hip-dominant): 4 exercises
+  const hingeExercises = exercisesByPattern['hinge'] || [];
+  const hingesAdded = addExercises(hingeExercises, 4);
+  
+  // 3. Push (horizontal/vertical): 6 total, balanced
+  const horizontalPush = exercisesByPattern['horizontal_push'] || [];
+  const verticalPush = exercisesByPattern['vertical_push'] || [];
+  const horizontalPushAdded = addExercises(horizontalPush, 3);
+  const verticalPushAdded = addExercises(verticalPush, 3);
+  
+  // 4. Pull (horizontal/vertical): 5 total
+  const horizontalPull = exercisesByPattern['horizontal_pull'] || [];
+  const verticalPull = exercisesByPattern['vertical_pull'] || [];
+  // Get 4 horizontal and 1 vertical
+  const horizontalPullAdded = addExercises(horizontalPull, 4);
+  const verticalPullAdded = addExercises(verticalPull, 1);
+  
+  // 5. Core: 7 exercises
+  const coreExercises = exercisesByPattern['core'] || [];
+  const coreAdded = addExercises(coreExercises, 7);
+  
+  // 6. Locomotion/conditioning (capacity): 2 exercises
+  const capacityAdded = addExercises(capacityExercises, 2);
+  
+  // Log what we've selected so far
+  console.log('[Circuit Bucketing] Initial selection:', {
+    squat: squatsAdded,
+    hinge: hingesAdded,
+    horizontalPush: horizontalPushAdded,
+    verticalPush: verticalPushAdded,
+    horizontalPull: horizontalPullAdded,
+    verticalPull: verticalPullAdded,
+    core: coreAdded,
+    capacity: capacityAdded,
+    totalSelected: selected.length
+  });
+  
+  // Fill remaining slots if any category was short
+  const targetCount = 32;
+  if (selected.length < targetCount) {
+    // Priority order for filling: core, squat, hinge, push, pull
+    const fillOrder = [
+      coreExercises,
+      squatExercises,
+      hingeExercises,
+      [...horizontalPush, ...verticalPush],
+      [...horizontalPull, ...verticalPull],
+      capacityExercises
+    ];
+    
+    for (const pool of fillOrder) {
+      if (selected.length >= targetCount) break;
+      const remaining = targetCount - selected.length;
+      addExercises(pool, remaining);
+    }
+  }
+  
+  console.log('[Circuit Bucketing] Final selection:', {
+    total: selected.length,
+    patterns: selected.reduce((acc, ex) => {
+      acc[ex.movementPattern] = (acc[ex.movementPattern] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>)
+  });
+  
+  return selected;
+}
+
 // Helper to extract equipment from exercise
 function getEquipmentFromExercise(exercise: any): string[] {
   // Use the exercise's equipment field if available
@@ -70,34 +196,27 @@ export function generateCircuitGroupPrompt(config: CircuitPromptConfig): string 
     throw new Error("Circuit template requires circuit_exercises block");
   }
   
-  // For circuits, we want all clients to do the same exercises
-  // So we'll use the shared candidates primarily
-  const sharedExercises = exerciseBlock.sharedCandidates?.exercises || [];
-  
-  // If we need more exercises, we can pull from individual pools
-  // But prefer exercises that multiple clients can do
+  // Circuit MVP: Use individual exercise pools only (shared candidates are skipped)
+  // In MVP, we expect only one client, so we use their exercise pool
   const allIndividualExercises: CircuitExercise[] = [];
-  Object.values(exerciseBlock.individualCandidates).forEach((clientData: any) => {
+  const clientExerciseCounts: Record<string, number> = {};
+  
+  Object.entries(exerciseBlock.individualCandidates).forEach(([clientId, clientData]: [string, any]) => {
     if (clientData?.exercises) {
+      clientExerciseCounts[clientId] = clientData.exercises.length;
       allIndividualExercises.push(...clientData.exercises);
     }
   });
   
-  // Combine and deduplicate exercises
-  const exerciseMap = new Map<string, CircuitExercise>();
-  
-  // Add shared exercises first (higher priority)
-  sharedExercises.forEach((ex: any) => {
-    exerciseMap.set(ex.name, {
-      name: ex.name,
-      equipment: getEquipmentFromExercise(ex),
-      movementPattern: ex.movementPattern || 'unknown',
-      primaryMuscle: ex.primaryMuscle || 'unknown',
-      score: ex.groupScore || ex.score || 5.0
-    });
+  console.log('[Circuit Template] Individual exercises by client:', {
+    clientCounts: clientExerciseCounts,
+    totalIndividualExercises: allIndividualExercises.length
   });
   
-  // Add individual exercises if we need more
+  // Convert exercises to circuit format and deduplicate
+  const exerciseMap = new Map<string, CircuitExercise>();
+  
+  // Add all individual exercises (all have score 5.0 in circuit MVP)
   allIndividualExercises.forEach((ex: any) => {
     if (!exerciseMap.has(ex.name)) {
       exerciseMap.set(ex.name, {
@@ -105,15 +224,56 @@ export function generateCircuitGroupPrompt(config: CircuitPromptConfig): string 
         equipment: getEquipmentFromExercise(ex),
         movementPattern: ex.movementPattern || 'unknown',
         primaryMuscle: ex.primaryMuscle || 'unknown',
-        score: ex.score || 5.0
+        score: ex.score || 5.0  // Should be 5.0 from scoring override
       });
     }
   });
   
-  // Convert to array and sort by score - use only Smart Bucketing Selection (top 20-30)
-  const availableExercises = Array.from(exerciseMap.values())
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 30); // Smart Bucketing Selection
+  // Convert to array - Circuit MVP: All exercises have score 5.0, so order is preserved from filtering
+  const allExercises = Array.from(exerciseMap.values());
+  
+  // Log all exercises before bucketing
+  console.log('[Circuit Template] All exercises before bucketing:', {
+    totalCount: allExercises.length,
+    exercisesByMovementPattern: allExercises.reduce((acc, ex) => {
+      const pattern = ex.movementPattern || 'unknown';
+      acc[pattern] = (acc[pattern] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>)
+  });
+  
+  // Circuit MVP: Deterministic bucketing for balanced exercise selection
+  const availableExercises = selectCircuitExercises(allExercises, allIndividualExercises);
+  
+  console.log('[Circuit Template] Bucketed exercises for circuit:', {
+    count: availableExercises.length,
+    exercises: availableExercises.map((ex, idx) => ({
+      rank: idx + 1,
+      name: ex.name,
+      pattern: ex.movementPattern,
+      muscle: ex.primaryMuscle
+    }))
+  });
+  
+  // IMPORTANT: Store the bucketed exercises back in the blueprint for frontend access
+  // This ensures the frontend sees the properly bucketed selection, not all exercises
+  for (const [clientId, clientData] of Object.entries(exerciseBlock.individualCandidates)) {
+    if (clientData && typeof clientData === 'object') {
+      // Store the full list of exercises before bucketing for visualization
+      (clientData as any).allFilteredExercises = [...((clientData as any).exercises || [])];
+      
+      // Store the bucketed selection separately
+      // Convert CircuitExercise back to ScoredExercise format
+      (clientData as any).bucketedExercises = availableExercises.map(ex => {
+        // Find the original exercise to preserve all properties
+        const original = allIndividualExercises.find(orig => orig.name === ex.name);
+        return original || ex;
+      });
+      
+      // Replace exercises array with bucketed selection for LLM
+      (clientData as any).exercises = (clientData as any).bucketedExercises;
+    }
+  }
   
   const sections: string[] = [];
   

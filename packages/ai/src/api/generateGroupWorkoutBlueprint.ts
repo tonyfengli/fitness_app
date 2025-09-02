@@ -62,6 +62,7 @@ export async function generateGroupWorkoutBlueprint(
               muscleTarget: client.muscle_target || [],
               muscleLessen: client.muscle_lessen || [],
               includeExercises: client.exercise_requests?.include,
+              templateType: client.templateType,
             }); // scoreBreakdown now always included
             // Client scoring complete
 

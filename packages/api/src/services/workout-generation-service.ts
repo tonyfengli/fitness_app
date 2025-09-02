@@ -1813,10 +1813,13 @@ export class WorkoutGenerationService {
                 orderIndex: globalIndex++,
                 setsCompleted: 0,
                 groupName: `Round ${displayRoundNumber}`,
-                isShared: true, // All circuit exercises are shared
-                sharedWithClients: groupContext.clients
-                  .filter(c => c.user_id !== client.user_id)
-                  .map(c => c.user_id),
+                // Circuit MVP: Only mark as shared if multiple clients
+                isShared: groupContext.clients.length > 1,
+                sharedWithClients: groupContext.clients.length > 1 
+                  ? groupContext.clients
+                      .filter(c => c.user_id !== client.user_id)
+                      .map(c => c.user_id)
+                  : [],
                 // Store additional circuit metadata
                 metadata: {
                   round: displayRoundNumber,

@@ -20,7 +20,7 @@ import { performSecondPassScoring } from "./secondPassScoring";
  */
 export async function scoreAndSortExercises(
   exercises: Exercise[],
-  criteria: ScoringCriteria,
+  criteria: ScoringCriteria & { templateType?: string },
 ): Promise<ScoredExercise[]> {
   const startTime = performance.now();
   // console.log('🎯 Scoring exercises with criteria:', {
@@ -45,8 +45,10 @@ export async function scoreAndSortExercises(
   // Sort by score (highest first)
   finalScoredExercises.sort((a, b) => b.score - a.score);
 
-  // Analyze and log score distribution
-  analyzeScoreDistribution(finalScoredExercises, criteria, maxScore);
+  // Analyze and log score distribution (skip for circuit templates)
+  if (criteria.templateType !== 'circuit') {
+    analyzeScoreDistribution(finalScoredExercises, criteria, maxScore);
+  }
 
   // Log performance metrics
   logScoringPerformance(startTime, exercises.length);

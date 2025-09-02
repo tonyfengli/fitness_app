@@ -45,7 +45,29 @@ export default function CircuitTemplateView({
   // Get the circuit exercises block
   const circuitBlock = blueprint.blocks?.find(b => b.blockId === 'circuit_exercises');
   
-  // Get all individual exercises (deduplicated)
+  // Get bucketed exercises from backend (circuit template already selected these)
+  const bucketedExercisesFromBackend = useMemo(() => {
+    if (!circuitBlock) return [];
+    
+    // For circuit templates, the backend stores the bucketed exercises
+    // Check each client's data for bucketedExercises
+    for (const [clientId, data] of Object.entries(circuitBlock.individualCandidates || {})) {
+      if ((data as any).bucketedExercises) {
+        return (data as any).bucketedExercises;
+      }
+    }
+    
+    // Fallback to exercises if bucketedExercises not found
+    for (const [clientId, data] of Object.entries(circuitBlock.individualCandidates || {})) {
+      if ((data as any).exercises) {
+        return (data as any).exercises;
+      }
+    }
+    
+    return [];
+  }, [circuitBlock]);
+
+  // Get all available exercises (for the full pool display)
   const allExercises = useMemo(() => {
     if (!circuitBlock) return [];
     
@@ -63,9 +85,11 @@ export default function CircuitTemplateView({
       }
     });
     
-    // Add individual exercises
+    // Add ALL exercises from individual candidates to show the full pool
     Object.entries(circuitBlock.individualCandidates || {}).forEach(([clientId, data]: [string, any]) => {
-      data.exercises?.forEach((ex: any) => {
+      // Use allFilteredExercises if available (the full list before bucketing)
+      const exercises = (data as any).allFilteredExercises || (data as any).exercises || [];
+      exercises.forEach((ex: any) => {
         if (!exerciseMap.has(ex.id)) {
           exerciseMap.set(ex.id, {
             ...ex,
@@ -85,9 +109,43 @@ export default function CircuitTemplateView({
     });
   }, [circuitBlock]);
   
-  // Get the filtered exercises (top 20-30) - these would be marked as "Smart Bucketing Selection"
-  const filteredExercises = allExercises.slice(0, 30);
+  // Use the bucketed exercises from backend - these are the actual selected exercises
+  const filteredExercises = bucketedExercisesFromBackend;
   const filteredExerciseIds = new Set(filteredExercises.map(ex => ex.id));
+  
+  // Categorize filtered exercises by movement pattern for circuit bucketing
+  const bucketedExercises = useMemo(() => {
+    const buckets = {
+      squat: { exercises: [] as any[], target: 5, label: 'Squat (Knee-dominant)' },
+      hinge: { exercises: [] as any[], target: 4, label: 'Hinge (Hip-dominant)' },
+      horizontal_push: { exercises: [] as any[], target: 3, label: 'Push (Horizontal)' },
+      vertical_push: { exercises: [] as any[], target: 3, label: 'Push (Vertical)' },
+      horizontal_pull: { exercises: [] as any[], target: 4, label: 'Pull (Horizontal)' },
+      vertical_pull: { exercises: [] as any[], target: 1, label: 'Pull (Vertical)' },
+      core: { exercises: [] as any[], target: 7, label: 'Core' },
+      capacity: { exercises: [] as any[], target: 2, label: 'Locomotion/Conditioning' },
+    };
+    
+    // First, categorize all filtered exercises
+    filteredExercises.forEach(ex => {
+      const pattern = ex.movementPattern?.toLowerCase() || 'unknown';
+      
+      // Check if this is a capacity exercise
+      // Look in allFilteredExercises first (full list), then bucketedExercises
+      const rawExercise = Object.values(circuitBlock?.individualCandidates || {})
+        .flatMap((data: any) => data.allFilteredExercises || data.bucketedExercises || data.exercises || [])
+        .find((raw: any) => raw.id === ex.id);
+      const isCapacity = rawExercise?.functionTags?.includes('capacity') || ex.functionTags?.includes('capacity') || false;
+      
+      if (isCapacity && buckets.capacity.exercises.length < buckets.capacity.target) {
+        buckets.capacity.exercises.push(ex);
+      } else if (buckets[pattern] && buckets[pattern].exercises.length < buckets[pattern].target) {
+        buckets[pattern].exercises.push(ex);
+      }
+    });
+    
+    return buckets;
+  }, [filteredExercises, circuitBlock]);
 
   return (
     <div className="min-h-screen bg-gray-50 p-8">
@@ -181,14 +239,61 @@ export default function CircuitTemplateView({
           </div>
         )}
 
+        {/* Circuit Bucketing Visualization */}
+        <div className="mb-8 rounded-lg bg-white shadow">
+          <div className="px-6 py-4 border-b border-gray-200">
+            <h2 className="text-xl font-semibold text-gray-900">
+              Circuit Exercise Bucketing
+            </h2>
+            <p className="mt-1 text-sm text-gray-500">
+              Exercises are deterministically selected to ensure balanced movement patterns
+            </p>
+          </div>
+          
+          <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {Object.entries(bucketedExercises).map(([pattern, bucket]) => (
+              <div key={pattern} className="border rounded-lg p-4 bg-gray-50">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="font-medium text-gray-900">{bucket.label}</h3>
+                  <span className={`text-sm ${bucket.exercises.length >= bucket.target ? 'text-green-600' : 'text-orange-600'}`}>
+                    {bucket.exercises.length}/{bucket.target}
+                  </span>
+                </div>
+                <div className="space-y-1">
+                  {bucket.exercises.length > 0 ? (
+                    bucket.exercises.map((ex, idx) => (
+                      <div key={ex.id} className="text-sm text-gray-600 truncate" title={ex.name}>
+                        {idx + 1}. {ex.name}
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-sm text-gray-400 italic">No exercises selected</div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+          
+          <div className="px-6 py-3 bg-gray-50 border-t border-gray-200">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-gray-600">
+                Total exercises selected: {Object.values(bucketedExercises).reduce((sum, bucket) => sum + bucket.exercises.length, 0)} / 32
+              </span>
+              <span className="text-xs text-gray-500">
+                Exercises are randomly shuffled within each category for variety
+              </span>
+            </div>
+          </div>
+        </div>
+
         {/* Exercise Pool Table */}
         <div className="rounded-lg bg-white shadow">
           <div className="px-6 py-4 border-b border-gray-200">
             <h2 className="text-xl font-semibold text-gray-900">
-              Circuit Exercise Pool
+              Full Exercise Pool
             </h2>
             <p className="mt-1 text-sm text-gray-500">
-              All available exercises for circuit training. Exercises marked with "Smart Bucketing Selection" are in the filtered pool.
+              All available exercises for circuit training. Blue rows indicate exercises in the filtered pool.
             </p>
           </div>
           
@@ -217,12 +322,24 @@ export default function CircuitTemplateView({
                   <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
                     Status
                   </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                    Bucket Category
+                  </th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {allExercises.map((exercise, idx) => {
                   const isInFilteredPool = filteredExerciseIds.has(exercise.id);
                   const score = exercise.groupScore || exercise.score || 0;
+                  
+                  // Find which bucket this exercise belongs to
+                  let bucketCategory = '-';
+                  for (const [pattern, bucket] of Object.entries(bucketedExercises)) {
+                    if (bucket.exercises.some(ex => ex.id === exercise.id)) {
+                      bucketCategory = bucket.label;
+                      break;
+                    }
+                  }
                   
                   return (
                     <tr key={exercise.id} className={isInFilteredPool ? 'bg-blue-50' : ''}>
@@ -253,6 +370,15 @@ export default function CircuitTemplateView({
                           </span>
                         ) : (
                           <span className="text-sm text-gray-500">Available</span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm">
+                        {bucketCategory !== '-' ? (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                            {bucketCategory}
+                          </span>
+                        ) : (
+                          <span className="text-gray-400">{bucketCategory}</span>
                         )}
                       </td>
                     </tr>

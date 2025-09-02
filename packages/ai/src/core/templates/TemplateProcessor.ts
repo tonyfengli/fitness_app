@@ -142,7 +142,10 @@ export class TemplateProcessor {
     }
 
     // Step 2: Find shared exercises (appear for 2+ clients)
-    const sharedCandidates = this.findSharedExercises(blockFilteredExercises);
+    // Circuit MVP: Skip shared candidate detection for circuit templates
+    const sharedCandidates = this.template.id === 'circuit' 
+      ? [] 
+      : this.findSharedExercises(blockFilteredExercises);
 
     // Step 3: Prepare individual candidates
     const individualCandidates = this.prepareIndividualCandidates(
