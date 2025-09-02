@@ -24,6 +24,7 @@ interface RoundData {
     exerciseName: string;
     orderIndex: number;
   }>;
+  isRepeat?: boolean;
 }
 
 // Group exercises by muscle
@@ -215,13 +216,18 @@ function CircuitWorkoutOverviewContent() {
           return aNum - bNum;
         });
       
-      // If repeat is enabled, only show the base rounds (first half)
-      if (circuitConfig?.config?.repeatRounds) {
-        const baseRoundCount = Math.floor(rounds.length / 2);
-        rounds = rounds.slice(0, baseRoundCount);
-      }
+      // Calculate base round count for styling purposes
+      const baseRoundCount = circuitConfig?.config?.repeatRounds 
+        ? Math.floor(rounds.length / 2) 
+        : rounds.length;
       
-      setRoundsData(rounds);
+      // Mark which rounds are repeats
+      const roundsWithMetadata = rounds.map((round, index) => ({
+        ...round,
+        isRepeat: circuitConfig?.config?.repeatRounds && index >= baseRoundCount
+      }));
+      
+      setRoundsData(roundsWithMetadata);
       setHasExercises(true);
     }
   }, [savedSelections, circuitConfig]);
@@ -272,52 +278,6 @@ function CircuitWorkoutOverviewContent() {
     setExpandedMuscles(newExpanded);
   };
 
-  // Function to find mirror exercise in repeated rounds
-  const findMirrorExercise = (roundName: string, exerciseIndex: number, exerciseName: string) => {
-    if (!circuitConfig?.config?.repeatRounds || !savedSelections) {
-      console.log("[Mirror Exercise] No repeat rounds or saved selections", {
-        repeatRounds: circuitConfig?.config?.repeatRounds,
-        hasSelections: !!savedSelections
-      });
-      return null;
-    }
-    
-    // Parse the round number
-    const roundNum = parseInt(roundName.match(/\d+/)?.[0] || '0');
-    const totalRounds = circuitConfig.config.rounds;
-    
-    // Calculate the mirror round
-    const mirrorRoundNum = roundNum + totalRounds;
-    const mirrorRoundName = `Round ${mirrorRoundNum}`;
-    
-    console.log("[Mirror Exercise] Looking for mirror", {
-      originalRound: roundName,
-      roundNum,
-      totalRounds,
-      mirrorRoundNum,
-      mirrorRoundName,
-      exerciseName,
-      exerciseIndex
-    });
-    
-    // Find the mirror exercise in saved selections
-    const mirrorExercise = savedSelections.find((selection: any) => 
-      selection.groupName === mirrorRoundName && 
-      selection.orderIndex === exerciseIndex &&
-      selection.exerciseName === exerciseName
-    );
-    
-    console.log("[Mirror Exercise] Result", {
-      found: !!mirrorExercise,
-      mirrorExercise
-    });
-    
-    return mirrorExercise ? { 
-      round: mirrorRoundName, 
-      index: exerciseIndex,
-      exerciseId: mirrorExercise.exerciseId
-    } : null;
-  };
 
   // Reset states when modal closes
   useEffect(() => {
@@ -350,11 +310,11 @@ function CircuitWorkoutOverviewContent() {
             </h1>
             <div className="mt-2 flex items-center gap-4">
               <span className="text-lg text-muted-foreground font-medium">
-                {circuitConfig?.config?.rounds || 0} rounds × {circuitConfig?.config?.exercisesPerRound || 0} exercises
+                {roundsData.length} rounds × {circuitConfig?.config?.exercisesPerRound || 0} exercises
               </span>
               {circuitConfig?.config?.repeatRounds && (
-                <span className="px-3 py-1 text-sm font-semibold bg-primary/10 text-primary rounded-full">
-                  Repeats 2×
+                <span className="px-3 py-1 text-sm font-semibold bg-gradient-to-r from-purple-500/20 to-indigo-500/20 text-purple-300 rounded-full border border-purple-500/30">
+                  {circuitConfig.config.rounds} base + {circuitConfig.config.rounds} repeat
                 </span>
               )}
             </div>
@@ -372,12 +332,30 @@ function CircuitWorkoutOverviewContent() {
         {roundsData.length > 0 ? (
           <div className="grid gap-6">
             {roundsData.map((round) => (
-              <Card key={round.roundName} className="p-8 border-2 shadow-lg hover:shadow-xl transition-shadow">
+              <Card 
+                key={round.roundName} 
+                className={`p-8 border-2 shadow-lg hover:shadow-xl transition-all ${
+                  round.isRepeat 
+                    ? 'bg-gradient-to-br from-purple-950/20 to-indigo-950/20 border-purple-500/30 hover:border-purple-400/50' 
+                    : 'hover:shadow-xl'
+                }`}
+              >
                 <h2 className="mb-6 text-2xl font-bold flex items-center gap-3">
-                  <span className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center text-primary font-bold">
+                  <span className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${
+                    round.isRepeat 
+                      ? 'bg-gradient-to-br from-purple-500/20 to-indigo-500/20 text-purple-300 ring-2 ring-purple-500/30' 
+                      : 'bg-primary/10 text-primary'
+                  }`}>
                     {round.roundName.match(/\d+/)?.[0] || ''}
                   </span>
-                  {round.roundName}
+                  <span className="flex items-center gap-3">
+                    {round.roundName}
+                    {round.isRepeat && (
+                      <span className="px-3 py-1 text-sm font-medium bg-gradient-to-r from-purple-500/20 to-indigo-500/20 text-purple-300 rounded-full border border-purple-500/30">
+                        Repeat
+                      </span>
+                    )}
+                  </span>
                 </h2>
                 <div className="space-y-3">
                   {round.exercises.map((exercise, idx) => (
@@ -450,19 +428,6 @@ function CircuitWorkoutOverviewContent() {
               </Card>
             ))}
             
-            {/* Repeat indicator */}
-            {circuitConfig?.config?.repeatRounds && (
-              <div className="text-center py-8">
-                <div className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-primary/10 to-primary/5 rounded-full border border-primary/20">
-                  <svg width="20" height="20" viewBox="0 0 20 20" fill="none" className="text-primary">
-                    <path d="M4 10C4 13.3137 6.68629 16 10 16C11.6569 16 13.1569 15.3137 14.2426 14.2426M16 10C16 6.68629 13.3137 4 10 4C8.34315 4 6.84315 4.68629 5.75736 5.75736" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-                    <path d="M4 4V10H10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                    <path d="M10 16H16V10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                  <span className="text-lg font-semibold text-primary">Circuit Repeats 2×</span>
-                </div>
-              </div>
-            )}
           </div>
         ) : (
           <Card className="p-16 text-center border-2 border-dashed">
@@ -514,7 +479,6 @@ function CircuitWorkoutOverviewContent() {
                   </p>
                   <p className="text-xs text-amber-600 font-medium mt-1">
                     This will update the exercise for all participants
-                    {circuitConfig?.config?.repeatRounds && " (including repeated rounds)"}
                   </p>
                 </div>
                 <button
@@ -661,53 +625,16 @@ function CircuitWorkoutOverviewContent() {
                 onClick={async () => {
                   if (!selectedReplacement || !selectedExercise) return;
 
-                  // For repeat rounds, always update both original and mirror
-                  if (circuitConfig?.config?.repeatRounds) {
-                    const mirror = findMirrorExercise(
-                      selectedRound, 
-                      selectedExerciseIndex, 
-                      selectedExercise.exerciseName
-                    );
-                    
-                    try {
-                      // Replace the original
-                      await swapExerciseMutation.mutateAsync({
-                        sessionId: sessionId!,
-                        roundName: selectedRound,
-                        exerciseIndex: selectedExerciseIndex,
-                        originalExerciseId: selectedExercise.exerciseId,
-                        newExerciseId: selectedReplacement,
-                        reason: "Circuit exercise swap (with auto-mirror)",
-                        swappedBy: dummyUserId || "unknown",
-                      });
-                      
-                      // Always replace the mirror if it exists
-                      if (mirror) {
-                        await swapExerciseMutation.mutateAsync({
-                          sessionId: sessionId!,
-                          roundName: mirror.round,
-                          exerciseIndex: mirror.index,
-                          originalExerciseId: mirror.exerciseId,
-                          newExerciseId: selectedReplacement,
-                          reason: "Circuit exercise swap (auto-mirror round)",
-                          swappedBy: dummyUserId || "unknown",
-                        });
-                      }
-                    } catch (error) {
-                      console.error("Failed to swap exercises:", error);
-                    }
-                  } else {
-                    // No repeat rounds, just single replacement
-                    swapExerciseMutation.mutate({
-                      sessionId: sessionId!,
-                      roundName: selectedRound,
-                      exerciseIndex: selectedExerciseIndex,
-                      originalExerciseId: selectedExercise.exerciseId,
-                      newExerciseId: selectedReplacement,
-                      reason: "Circuit exercise swap",
-                      swappedBy: dummyUserId || "unknown",
-                    });
-                  }
+                  // Single exercise replacement
+                  swapExerciseMutation.mutate({
+                    sessionId: sessionId!,
+                    roundName: selectedRound,
+                    exerciseIndex: selectedExerciseIndex,
+                    originalExerciseId: selectedExercise.exerciseId,
+                    newExerciseId: selectedReplacement,
+                    reason: "Circuit exercise swap",
+                    swappedBy: dummyUserId || "unknown",
+                  });
                 }}
                 disabled={
                   !selectedReplacement || swapExerciseMutation.isPending
