@@ -229,4 +229,68 @@ export const circuitConfigRouter = createTRPCRouter({
 
       return DEFAULT_CIRCUIT_CONFIG;
     }),
+
+  /**
+   * Public endpoint for updating circuit config (no auth required)
+   * Used by client preferences pages on mobile
+   */
+  updatePublic: publicProcedure
+    .input(CircuitConfigInputSchema)
+    .mutation(async ({ ctx, input }) => {
+      // Get the session to verify it exists and is a circuit session
+      const session = await ctx.db
+        .select()
+        .from(TrainingSession)
+        .where(eq(TrainingSession.id, input.sessionId))
+        .limit(1)
+        .then((res) => res[0]);
+
+      if (!session) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Session not found",
+        });
+      }
+
+      if (session.templateType !== "circuit") {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Session is not a circuit type",
+        });
+      }
+
+      // Get existing config or use default
+      const existingConfig =
+        session.templateConfig &&
+        typeof session.templateConfig === "object" &&
+        "type" in session.templateConfig &&
+        session.templateConfig.type === "circuit"
+          ? (session.templateConfig as typeof DEFAULT_CIRCUIT_CONFIG)
+          : DEFAULT_CIRCUIT_CONFIG;
+
+      // Merge with updates - use ISO string for date
+      const updatedConfig = {
+        type: "circuit" as const,
+        config: {
+          ...existingConfig.config,
+          ...input.config,
+        },
+        lastUpdated: new Date().toISOString(),
+        updatedBy: "anonymous", // Since it's public
+      };
+
+      // Validate the complete config
+      const validatedConfig = CircuitConfigSchema.parse(updatedConfig);
+
+      // Update the session
+      await ctx.db
+        .update(TrainingSession)
+        .set({
+          templateConfig: validatedConfig,
+          updatedAt: new Date(),
+        })
+        .where(eq(TrainingSession.id, input.sessionId));
+
+      return validatedConfig;
+    }),
 });
