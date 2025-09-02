@@ -1,4 +1,4 @@
-import type { WorkoutTemplate } from "../../../types";
+import type { WorkoutTemplate } from "../../types/dynamicBlockTypes";
 
 export const circuitTemplate: WorkoutTemplate = {
   id: 'circuit',

@@ -1,6 +1,6 @@
 import type { GroupWorkoutConfig } from "../../types";
 import type { ClientContext } from "../../../../types/clientContext";
-import type { CircuitConfig } from "@codebase/validators";
+import type { CircuitConfig } from "@acme/validators";
 
 interface CircuitExercise {
   name: string;
@@ -49,7 +49,9 @@ function selectCircuitExercises(
     const shuffled = [...array];
     for (let i = shuffled.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
-      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      const temp = shuffled[i];
+      shuffled[i] = shuffled[j]!;
+      shuffled[j] = temp!;
     }
     return shuffled;
   };
@@ -180,11 +182,11 @@ export function generateCircuitGroupPrompt(config: CircuitPromptConfig): string 
   const { clients, equipment: availableEquipment, blueprint, circuitConfig } = config;
   
   // Get circuit configuration from session settings (no flexibility)
-  const rounds = circuitConfig?.config?.rounds || circuitConfig?.rounds || 3;
-  const exercisesPerRound = circuitConfig?.config?.exercisesPerRound || circuitConfig?.exercisesPerRound || 6;
-  const workDuration = circuitConfig?.config?.workDuration || circuitConfig?.workDuration || 45;
-  const restDuration = circuitConfig?.config?.restDuration || circuitConfig?.restDuration || 15;
-  const restBetweenRounds = circuitConfig?.config?.restBetweenRounds || circuitConfig?.restBetweenRounds || 60;
+  const rounds = circuitConfig?.config?.rounds || 3;
+  const exercisesPerRound = circuitConfig?.config?.exercisesPerRound || 6;
+  const workDuration = circuitConfig?.config?.workDuration || 45;
+  const restDuration = circuitConfig?.config?.restDuration || 15;
+  const restBetweenRounds = circuitConfig?.config?.restBetweenRounds || 60;
   const repeatRounds = circuitConfig?.config?.repeatRounds || false;
   
   // Calculate total rounds including repeats

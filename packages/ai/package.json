@@ -38,6 +38,7 @@
   },
   "dependencies": {
     "@acme/db": "workspace:*",
+    "@acme/validators": "workspace:*",
     "@langchain/core": "^0.3.26",
     "@langchain/langgraph": "^0.3.6",
     "@langchain/openai": "^0.5.16",

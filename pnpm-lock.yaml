@@ -12,19 +12,34 @@ catalogs:
     '@trpc/client':
       specifier: ^11.4.0
       version: 11.4.4
+    '@trpc/server':
+      specifier: ^11.4.0
+      version: 11.4.4
     '@trpc/tanstack-react-query':
       specifier: ^11.4.0
       version: 11.4.4
     eslint:
       specifier: ^9.28.0
       version: 9.33.0
+    prettier:
+      specifier: ^3.5.3
+      version: 3.6.2
+    tailwindcss:
+      specifier: ^3.4.15
+      version: 3.4.17
     typescript:
       specifier: ^5.8.3
       version: 5.9.2
+    zod:
+      specifier: ^3.25.49
+      version: 3.25.76
   react19:
     '@types/react':
       specifier: ^19.1.6
       version: 19.1.10
+    '@types/react-dom':
+      specifier: ^19.1.5
+      version: 19.1.7
     react:
       specifier: 19.0.0
       version: 19.0.0
@@ -386,7 +401,7 @@ importers:
         version: 0.79.2(eslint@9.33.0(jiti@2.5.1))(prettier@3.6.2)(typescript@5.9.2)
       '@react-native/metro-config':
         specifier: 0.79.2
-        version: 0.79.2(@babel/core@7.28.3)
+        version: 0.79.2(@babel/core@7.28.3)(bufferutil@4.0.9)
       '@react-native/typescript-config':
         specifier: 0.79.2
         version: 0.79.2
@@ -429,6 +444,9 @@ importers:
       '@acme/db':
         specifier: workspace:*
         version: link:../db
+      '@acme/validators':
+        specifier: workspace:*
+        version: link:../validators
       '@langchain/core':
         specifier: ^0.3.26
         version: 0.3.70(openai@5.12.2(ws@8.18.3(bufferutil@4.0.9))(zod@3.25.76))
@@ -12034,7 +12052,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@react-native/metro-config@0.79.2(@babel/core@7.28.3)':
+  '@react-native/metro-config@0.79.2(@babel/core@7.28.3)(bufferutil@4.0.9)':
     dependencies:
       '@react-native/js-polyfills': 0.79.2
       '@react-native/metro-babel-transformer': 0.79.2(@babel/core@7.28.3)
@@ -12042,7 +12060,9 @@ snapshots:
       metro-runtime: 0.82.5
     transitivePeerDependencies:
       - '@babel/core'
+      - bufferutil
       - supports-color
+      - utf-8-validate
 
   '@react-native/normalize-colors@0.74.89': {}
 
