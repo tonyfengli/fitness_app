@@ -500,7 +500,7 @@ export const workoutRouter = {
           setsCompleted: WorkoutExercise.setsCompleted,
           groupName: WorkoutExercise.groupName,
           phase: WorkoutExercise.phase,
-          scheme: WorkoutExercise.scheme,
+          template: WorkoutExercise.template,
           isShared: WorkoutExercise.isShared,
           sharedWithClients: WorkoutExercise.sharedWithClients,
           exercise: {
@@ -528,7 +528,7 @@ export const workoutRouter = {
             setsCompleted: exercise.setsCompleted,
             groupName: exercise.groupName,
             phase: exercise.phase,
-            scheme: exercise.scheme,
+            template: exercise.template,
             isShared: exercise.isShared,
             sharedWithClients: exercise.sharedWithClients,
             exercise: exercise.exercise,
