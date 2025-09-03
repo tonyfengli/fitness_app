@@ -616,10 +616,26 @@ export class PreAssignmentService {
     for (const [clientId, data] of clientsData) {
       const { context, exercises, favoriteIds } = data;
 
+      // Get client's workout type and muscle targets
+      const clientWorkoutType = (context.workoutType || workoutType) as WorkoutType;
+      const isTargeted = clientWorkoutType.includes("targeted");
+      const muscleTargets = isTargeted && context.muscle_target
+        ? context.muscle_target.map(m => mapMuscleToConsolidated(m))
+        : undefined;
+
       // Get favorites sorted by score
-      const favorites = exercises
+      let favorites = exercises
         .filter((ex) => favoriteIds.includes(ex.id))
         .sort((a, b) => b.score - a.score);
+
+      // For targeted workouts, filter favorites to only include those with primary muscle in targets
+      if (isTargeted && muscleTargets && muscleTargets.length > 0) {
+        favorites = favorites.filter((ex) => {
+          if (!ex.primaryMuscle) return false;
+          const exerciseMuscle = mapMuscleToConsolidated(ex.primaryMuscle);
+          return muscleTargets.includes(exerciseMuscle);
+        });
+      }
 
       if (favorites.length > 0) {
         // Select highest with tie-breaking
@@ -631,13 +647,6 @@ export class PreAssignmentService {
           const muscleGroup = selected.primaryMuscle 
             ? mapMuscleToConsolidated(selected.primaryMuscle)
             : null;
-          
-          // Get client's muscle targets if targeted workout
-          const clientWorkoutType = (context.workoutType || workoutType) as WorkoutType;
-          const isTargeted = clientWorkoutType.includes("targeted");
-          const muscleTargets = isTargeted && context.muscle_target
-            ? context.muscle_target.map(m => mapMuscleToConsolidated(m))
-            : undefined;
 
           exercise1Selections.set(clientId, {
             exercise: selected,
@@ -655,7 +664,16 @@ export class PreAssignmentService {
           ]);
         }
       } else {
-        // No favorites available
+        // No favorites available (or none match muscle targets for targeted workouts)
+        // Store the client info even without Exercise #1 for constraint calculation
+        if (isTargeted && muscleTargets) {
+          exercise1Selections.set(clientId, {
+            exercise: null as any, // No exercise selected
+            muscleGroup: null,
+            workoutType: clientWorkoutType,
+            muscleTargets
+          });
+        }
         result.set(clientId, []);
       }
     }

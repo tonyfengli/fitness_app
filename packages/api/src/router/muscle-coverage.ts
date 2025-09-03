@@ -34,6 +34,8 @@ export const muscleCoverageRouter = createTRPCRouter({
           secondaryMuscles: exercises.secondaryMuscles,
           createdAt: WorkoutExercise.createdAt,
           workoutId: WorkoutExercise.workoutId,
+          template: WorkoutExercise.template, // Add template field
+          orderIndex: WorkoutExercise.orderIndex, // Add orderIndex to identify draft exercises
         })
         .from(WorkoutExercise)
         .innerJoin(Workout, eq(WorkoutExercise.workoutId, Workout.id))
@@ -71,16 +73,61 @@ export const muscleCoverageRouter = createTRPCRouter({
         }
       });
 
-      // Convert to total bubble count (primary = 1, secondary = 0.5)
+      // Convert to total bubble count with circuit adjustments
+      // Standard: primary = 1, secondary = 0.5
+      // Circuit: primary = 0.25, secondary = 0.125
       const muscleScores: Record<string, number> = {};
-      Object.entries(muscleCounts).forEach(([muscle, counts]) => {
-        muscleScores[muscle] = counts.primary + counts.secondary * 0.5;
+      const muscleDraftScores: Record<string, number> = {}; // Track draft points separately
+      
+      // We need to track points per muscle with template consideration
+      workoutExercises.forEach((we) => {
+        // Check if this is a draft exercise (orderIndex = 999)
+        const isDraft = we.orderIndex === 999;
+        
+        // Check if this is a circuit exercise
+        const isCircuit = we.template === "circuit";
+        const primaryMultiplier = isCircuit ? 0.25 : 1;
+        const secondaryMultiplier = isCircuit ? 0.125 : 0.5;
+        
+        // Add primary muscle points
+        if (we.primaryMuscle) {
+          const muscle = we.primaryMuscle;
+          if (isDraft) {
+            if (!muscleDraftScores[muscle]) {
+              muscleDraftScores[muscle] = 0;
+            }
+            muscleDraftScores[muscle] += primaryMultiplier;
+          } else {
+            if (!muscleScores[muscle]) {
+              muscleScores[muscle] = 0;
+            }
+            muscleScores[muscle] += primaryMultiplier;
+          }
+        }
+        
+        // Add secondary muscle points
+        if (we.secondaryMuscles && Array.isArray(we.secondaryMuscles)) {
+          we.secondaryMuscles.forEach((muscle) => {
+            if (isDraft) {
+              if (!muscleDraftScores[muscle]) {
+                muscleDraftScores[muscle] = 0;
+              }
+              muscleDraftScores[muscle] += secondaryMultiplier;
+            } else {
+              if (!muscleScores[muscle]) {
+                muscleScores[muscle] = 0;
+              }
+              muscleScores[muscle] += secondaryMultiplier;
+            }
+          });
+        }
       });
 
       const result: any = {
         workoutCount: workoutExercises.length,
         muscleCounts,
         muscleScores,
+        muscleDraftScores, // Include draft scores separately
         dateRange: {
           start: startOfDay,
           end: endOfDay,

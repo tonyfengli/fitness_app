@@ -104,18 +104,20 @@ export const MuscleHistoryModal: React.FC<MuscleHistoryModalProps> = ({
     enabled: isOpen && !!clientId,
   });
 
-  // Process muscle data
+  // Process muscle data including draft scores
   const muscleData = React.useMemo(() => {
-    if (!rawData?.muscleScores) return {};
+    if (!rawData?.muscleScores) return { completed: {}, draft: {} };
     
     const processedCounts: Record<string, number> = {};
+    const processedDraftCounts: Record<string, number> = {};
     
     // Initialize all muscles to 0
     MUSCLES.forEach(muscle => {
       processedCounts[muscle] = 0;
+      processedDraftCounts[muscle] = 0;
     });
 
-    // Add scores from API, applying unification
+    // Add completed scores from API, applying unification
     Object.entries(rawData.muscleScores).forEach(([muscle, score]) => {
       const muscleKey = muscle.charAt(0).toUpperCase() + muscle.slice(1);
       const unifiedMuscle = MUSCLE_UNIFICATION[muscleKey] || muscleKey;
@@ -125,7 +127,19 @@ export const MuscleHistoryModal: React.FC<MuscleHistoryModalProps> = ({
       }
     });
 
-    return processedCounts;
+    // Add draft scores from API, applying unification
+    if (rawData.muscleDraftScores) {
+      Object.entries(rawData.muscleDraftScores).forEach(([muscle, score]) => {
+        const muscleKey = muscle.charAt(0).toUpperCase() + muscle.slice(1);
+        const unifiedMuscle = MUSCLE_UNIFICATION[muscleKey] || muscleKey;
+        
+        if (processedDraftCounts[unifiedMuscle] !== undefined) {
+          processedDraftCounts[unifiedMuscle] += score as number;
+        }
+      });
+    }
+
+    return { completed: processedCounts, draft: processedDraftCounts };
   }, [rawData]);
 
   // Extract workout data from the same API response
@@ -169,7 +183,8 @@ export const MuscleHistoryModal: React.FC<MuscleHistoryModalProps> = ({
       .map(([date, exercises]) => ({ date, exercises }))
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [rawData]);
-  const muscleCounts = muscleData;
+  const muscleCounts = muscleData.completed || {};
+  const muscleDraftCounts = muscleData.draft || {};
 
   const formatDateRange = (start: Date, end: Date) => {
     const formatDate = (date: Date) => 
@@ -252,18 +267,30 @@ export const MuscleHistoryModal: React.FC<MuscleHistoryModalProps> = ({
     );
   };
 
-  const MuscleCard = ({ muscle, count }: { muscle: string; count: number }) => (
-    <div
-      className={`flex items-center justify-between rounded-lg border px-3 py-2.5 ${
-        count === 0 
-          ? 'border-red-500 bg-red-50' 
-          : 'border-gray-200 bg-white'
-      }`}
-    >
-      <span className="text-sm font-semibold text-gray-900">{muscle}</span>
-      <MuscleProgressDots count={count} />
-    </div>
-  );
+  const MuscleCard = ({ muscle, count, draftCount = 0 }: { muscle: string; count: number; draftCount?: number }) => {
+    const totalCount = count + draftCount;
+    const hasDraft = draftCount > 0;
+    
+    return (
+      <div
+        className={`flex items-center justify-between rounded-lg border px-3 py-2.5 ${
+          totalCount === 0
+            ? 'border-red-500 bg-red-50' 
+            : 'border-gray-200 bg-white'
+        }`}
+      >
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-semibold text-gray-900">{muscle}</span>
+          {hasDraft && (
+            <span className="text-xs text-gray-500">
+              +{draftCount % 1 === 0 ? draftCount : draftCount.toFixed(1)}
+            </span>
+          )}
+        </div>
+        <MuscleProgressDots count={totalCount} />
+      </div>
+    );
+  };
 
   const content = (
     <div className="flex-1 overflow-y-auto">
@@ -431,7 +458,8 @@ export const MuscleHistoryModal: React.FC<MuscleHistoryModalProps> = ({
                     <MuscleCard 
                       key={muscle} 
                       muscle={muscle} 
-                      count={muscleCounts[muscle] || 0} 
+                      count={muscleCounts[muscle] || 0}
+                      draftCount={muscleDraftCounts[muscle] || 0}
                     />
                   ))}
                 </div>
@@ -447,7 +475,8 @@ export const MuscleHistoryModal: React.FC<MuscleHistoryModalProps> = ({
                     <MuscleCard 
                       key={muscle} 
                       muscle={muscle} 
-                      count={muscleCounts[muscle] || 0} 
+                      count={muscleCounts[muscle] || 0}
+                      draftCount={muscleDraftCounts[muscle] || 0}
                     />
                   ))}
                 </div>
@@ -463,7 +492,8 @@ export const MuscleHistoryModal: React.FC<MuscleHistoryModalProps> = ({
                     <MuscleCard 
                       key={muscle} 
                       muscle={muscle} 
-                      count={muscleCounts[muscle] || 0} 
+                      count={muscleCounts[muscle] || 0}
+                      draftCount={muscleDraftCounts[muscle] || 0}
                     />
                   ))}
                 </div>

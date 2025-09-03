@@ -201,6 +201,10 @@ function ClientWorkoutOverviewContent() {
       queryClient.invalidateQueries({
         queryKey: [["trainingSession", "getSavedVisualizationDataPublic"]],
       });
+      // Invalidate muscle coverage to update the Targets to Hit modal
+      queryClient.invalidateQueries({
+        queryKey: [["muscleCoverage", "getClientMuscleCoverage"]],
+      });
     },
     onError: (error, variables, context) => {
       console.error("Failed to swap exercise:", error);
@@ -291,6 +295,10 @@ function ClientWorkoutOverviewContent() {
       });
       queryClient.invalidateQueries({
         queryKey: [["trainingSession", "getSavedVisualizationDataPublic"]],
+      });
+      // Invalidate muscle coverage to update the Targets to Hit modal
+      queryClient.invalidateQueries({
+        queryKey: [["muscleCoverage", "getClientMuscleCoverage"]],
       });
     },
     onError: (error) => {
