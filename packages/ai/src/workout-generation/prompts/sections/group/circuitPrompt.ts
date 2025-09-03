@@ -175,7 +175,8 @@ function getEquipmentFromExercise(exercise: any): string[] {
 // Format exercise for display in prompt
 function formatExerciseOption(exercise: CircuitExercise, index: number): string {
   const equipment = getEquipmentFromExercise(exercise);
-  return `${index}. ${exercise.name} (${exercise.movementPattern}, ${exercise.primaryMuscle}, ${equipment.join("+")})`;
+  const exerciseId = `ex_${index}`;
+  return `${exerciseId}: ${exercise.name} (${exercise.movementPattern}, ${exercise.primaryMuscle}, ${equipment.join("+")})`;
 }
 
 export function generateCircuitGroupPrompt(config: CircuitPromptConfig): string {
@@ -257,6 +258,13 @@ export function generateCircuitGroupPrompt(config: CircuitPromptConfig): string 
     }))
   });
   
+  // Create exercise ID mapping
+  const exerciseIdMap = new Map<string, CircuitExercise>();
+  availableExercises.forEach((exercise, idx) => {
+    const exerciseId = `ex_${idx + 1}`;
+    exerciseIdMap.set(exerciseId, exercise);
+  });
+  
   // IMPORTANT: Store the bucketed exercises back in the blueprint for frontend access
   // This ensures the frontend sees the properly bucketed selection, not all exercises
   for (const [clientId, clientData] of Object.entries(exerciseBlock.individualCandidates)) {
@@ -274,6 +282,9 @@ export function generateCircuitGroupPrompt(config: CircuitPromptConfig): string 
       
       // Replace exercises array with bucketed selection for LLM
       (clientData as any).exercises = (clientData as any).bucketedExercises;
+      
+      // Store the exercise ID mapping for later use
+      (clientData as any).exerciseIdMap = Object.fromEntries(exerciseIdMap);
     }
   }
   
@@ -371,18 +382,16 @@ export function generateCircuitGroupPrompt(config: CircuitPromptConfig): string 
   
   // Output Format
   sections.push("## Output Format:");
-  sections.push("Return ONLY exercise names from the provided list. Do not include movement patterns, muscles, equipment, or notes.");
+  sections.push("Return ONLY exercise IDs (ex_1, ex_2, etc.) from the provided list. Do NOT use exercise names.");
   sections.push("Use abbreviated keys to minimize tokens. Total JSON must be < 1,500 characters.");
   sections.push("");
   sections.push("```json");
   sections.push("{");
   sections.push('  "rounds": [');
-  sections.push('    {"r":1,"ex":["Goblet Squat","Push-Ups","Single-Leg Glute Bridge","Upright Row","Dead Bug","Banded Suitcase Marches"]},');
-  sections.push('    {"r":2,"ex":["exercise1","exercise2","exercise3","exercise4","exercise5","exercise6"]},');
-  sections.push('    {"r":3,"ex":["exercise1","exercise2","exercise3","exercise4","exercise5","exercise6"]},');
-  sections.push('    {"r":4,"ex":["exercise1","exercise2","exercise3","exercise4","exercise5","exercise6"]},');
-  sections.push('    {"r":5,"ex":["exercise1","exercise2","exercise3","exercise4","exercise5","exercise6"]},');
-  sections.push('    {"r":6,"ex":["exercise1","exercise2","exercise3","exercise4","exercise5","exercise6"]}');
+  sections.push('    {"r":1,"ex":["ex_1","ex_2","ex_3"]},');
+  sections.push('    {"r":2,"ex":["ex_4","ex_5","ex_6"]},');
+  sections.push('    {"r":3,"ex":["ex_7","ex_8","ex_9"]},');
+  sections.push('    {"r":4,"ex":["ex_10","ex_11","ex_12"]}');
   sections.push('  ]');
   sections.push("}");
   sections.push("```");

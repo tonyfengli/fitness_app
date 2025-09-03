@@ -530,6 +530,11 @@ export class WorkoutGenerationService {
     ]);
 
     const llmOutput = response.content.toString();
+    
+    logger.info("Circuit LLM raw response", {
+      llmOutputLength: llmOutput.length,
+      first1000Chars: llmOutput.substring(0, 1000),
+    });
 
     // Parse response - simple regex extraction
     const jsonMatch = llmOutput.match(/```json\s*([\s\S]*?)\s*```/);
@@ -552,15 +557,62 @@ export class WorkoutGenerationService {
       throw new Error(`Failed to parse LLM JSON response: ${(parseError as Error).message}`);
     }
     
+    // Get exercise ID mapping from the blueprint
+    let exerciseIdMap: Record<string, any> = {};
+    const exerciseBlock = blueprint.blocks.find(block => block.blockId === "circuit_exercises");
+    if (exerciseBlock && "individualCandidates" in exerciseBlock) {
+      // Get the ID map from any client (they all have the same exercises)
+      const firstClientData = Object.values(exerciseBlock.individualCandidates)[0];
+      if (firstClientData && typeof firstClientData === 'object' && 'exerciseIdMap' in firstClientData) {
+        exerciseIdMap = (firstClientData as any).exerciseIdMap;
+      }
+    }
+    
     // Transform minimal format to expected structure
     const normalizedResponse = {
       circuit: {
         rounds: parsedResponse.rounds.map((round: any) => ({
           round: round.r,
-          exercises: round.ex.map((name: string, idx: number) => ({
-            position: idx + 1,
-            name: name
-          }))
+          exercises: round.ex.map((exerciseId: string, idx: number) => {
+            // Map exercise ID back to exercise name
+            const exercise = exerciseIdMap[exerciseId];
+            if (!exercise) {
+              logger.warn(`Exercise ID ${exerciseId} not found in mapping`, {
+                exerciseId,
+                availableIds: Object.keys(exerciseIdMap).slice(0, 10),
+                round: round.r
+              });
+              
+              // Try to find if it's an exercise name instead of ID (fallback for old format)
+              const exerciseByName = Object.values(exerciseIdMap).find(
+                (ex: any) => ex.name === exerciseId
+              );
+              
+              if (exerciseByName) {
+                logger.info("Found exercise by name instead of ID", {
+                  input: exerciseId,
+                  found: (exerciseByName as any).name
+                });
+                return {
+                  position: idx + 1,
+                  name: (exerciseByName as any).name,
+                  movementPattern: (exerciseByName as any).movementPattern,
+                  primaryMuscle: (exerciseByName as any).primaryMuscle
+                };
+              }
+              
+              return {
+                position: idx + 1,
+                name: exerciseId // Fallback to ID as name
+              };
+            }
+            return {
+              position: idx + 1,
+              name: exercise.name,
+              movementPattern: exercise.movementPattern,
+              primaryMuscle: exercise.primaryMuscle
+            };
+          })
         })),
         notes: parsedResponse.notes
       }
@@ -569,6 +621,17 @@ export class WorkoutGenerationService {
     logger.info("Circuit LLM response parsed", {
       roundsCount: normalizedResponse.circuit.rounds.length,
       firstRoundExercises: normalizedResponse.circuit.rounds[0]?.exercises.length || 0,
+      hasExerciseIdMap: Object.keys(exerciseIdMap).length > 0,
+      idMapSize: Object.keys(exerciseIdMap).length,
+      sampleMapping: Object.entries(exerciseIdMap).slice(0, 3).map(([id, ex]) => ({
+        id,
+        name: (ex as any).name
+      })),
+      firstRoundMappedExercises: normalizedResponse.circuit.rounds[0]?.exercises.map((ex: any) => ({
+        position: ex.position,
+        name: ex.name,
+        pattern: ex.movementPattern
+      }))
     });
 
     return {
@@ -1830,6 +1893,55 @@ export class WorkoutGenerationService {
                   originalRound: roundNumber,
                 }
               });
+            } else {
+              // Try normalized name matching as fallback
+              const normalizedInputName = circuitEx.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+              const fallbackExercise = exercisePool.find(
+                (ex: Exercise) => {
+                  const normalizedPoolName = ex.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+                  // Also check if the input is a substring of the pool name (e.g., "Romanian Deadlift" matches "Romanian Deadlift (RDL)")
+                  return normalizedPoolName === normalizedInputName || 
+                         normalizedPoolName.includes(normalizedInputName) ||
+                         normalizedInputName.includes(normalizedPoolName);
+                }
+              );
+              
+              if (fallbackExercise) {
+                logger.info("Found exercise using normalized name matching", {
+                  original: circuitEx.name,
+                  normalized: normalizedInputName,
+                  found: fallbackExercise.name
+                });
+                
+                allExercises.push({
+                  workoutId: workoutId,
+                  exerciseId: fallbackExercise.id,
+                  orderIndex: globalIndex++,
+                  setsCompleted: 0,
+                  groupName: `Round ${displayRoundNumber}`,
+                  isShared: groupContext.clients.length > 1,
+                  sharedWithClients: groupContext.clients.length > 1 
+                    ? groupContext.clients
+                        .filter(c => c.user_id !== client.user_id)
+                        .map(c => c.user_id)
+                    : [],
+                  metadata: {
+                    round: displayRoundNumber,
+                    position: circuitEx.position,
+                    movementPattern: circuitEx.movementPattern || fallbackExercise.movementPattern,
+                    transitionNote: circuitEx.transitionNote,
+                    isRepeat: iteration > 0,
+                    originalRound: roundNumber,
+                  }
+                });
+              } else {
+                logger.warn("Exercise not found even with normalized matching", {
+                  name: circuitEx.name,
+                  normalized: normalizedInputName,
+                  round: displayRoundNumber,
+                  availableExercises: exercisePool.slice(0, 5).map(ex => ex.name)
+                });
+              }
             }
           });
         });

@@ -96,7 +96,7 @@ export const workoutSelectionsRouter = {
     }),
 
   // Get current selections for a session
-  getSelections: protectedProcedure
+  getSelections: publicProcedure
     .input(
       z.object({
         sessionId: z.string(),
