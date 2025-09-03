@@ -1007,11 +1007,11 @@ export class WorkoutGenerationService {
         console.log('[WorkoutGenerationService.savePhase1Selections] 🎯 PHASE 1: INSERTING WORKOUT EXERCISES', {
           totalCount: exerciseRecords.length,
           templateType: groupContext.templateType || "standard",
-          templateTypes: exerciseRecords.reduce((acc, ex) => {
+          templateTypes: exerciseRecords.reduce((acc: Record<string, number>, ex) => {
             const template = ex.template || 'NOT_SET';
             acc[template] = (acc[template] || 0) + 1;
             return acc;
-          }, {}),
+          }, {} as Record<string, number>),
           sampleExercise: exerciseRecords[0] ? {
             workoutId: exerciseRecords[0].workoutId,
             exerciseId: exerciseRecords[0].exerciseId,
@@ -1110,11 +1110,11 @@ export class WorkoutGenerationService {
       if (allExercises.length > 0) {
         logger.info("🔴 INSERTING WORKOUT EXERCISES", {
           totalCount: allExercises.length,
-          templateTypes: allExercises.reduce((acc, ex) => {
+          templateTypes: allExercises.reduce((acc: Record<string, number>, ex) => {
             const template = ex.template || 'NOT_SET';
             acc[template] = (acc[template] || 0) + 1;
             return acc;
-          }, {}),
+          }, {} as Record<string, number>),
           sampleExercise: allExercises[0] ? {
             hasTemplate: 'template' in allExercises[0],
             templateValue: allExercises[0].template,
