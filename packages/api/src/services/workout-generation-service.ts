@@ -935,6 +935,7 @@ export class WorkoutGenerationService {
               isShared: false,
               sharedWithClients: null as string[] | null,
               selectionSource: "pre_assigned",
+              template: groupContext.templateType || "standard", // Add template field
             });
           }
         }
@@ -957,6 +958,7 @@ export class WorkoutGenerationService {
               isShared: exercise.isShared || false,
               sharedWithClients: exercise.sharedWith || null,
               selectionSource: "llm_phase1",
+              template: groupContext.templateType || "standard", // Add template field
             });
           }
         }
@@ -993,6 +995,7 @@ export class WorkoutGenerationService {
                 isShared: true,
                 sharedWithClients: sharedExercise.clientIds,
                 selectionSource: "llm_phase1",
+                template: groupContext.templateType || "standard", // Add template field
               });
             }
           }
@@ -1001,6 +1004,22 @@ export class WorkoutGenerationService {
 
       // Batch insert exercise records
       if (exerciseRecords.length > 0) {
+        console.log('[WorkoutGenerationService.savePhase1Selections] 🎯 PHASE 1: INSERTING WORKOUT EXERCISES', {
+          totalCount: exerciseRecords.length,
+          templateType: groupContext.templateType || "standard",
+          templateTypes: exerciseRecords.reduce((acc, ex) => {
+            const template = ex.template || 'NOT_SET';
+            acc[template] = (acc[template] || 0) + 1;
+            return acc;
+          }, {}),
+          sampleExercise: exerciseRecords[0] ? {
+            workoutId: exerciseRecords[0].workoutId,
+            exerciseId: exerciseRecords[0].exerciseId,
+            template: exerciseRecords[0].template,
+            selectionSource: exerciseRecords[0].selectionSource
+          } : null
+        });
+        
         await tx.insert(WorkoutExercise).values(exerciseRecords);
         logger.info(
           `Created ${exerciseRecords.length} workout exercises for ${createdWorkouts.length} draft workouts`,
@@ -1089,6 +1108,19 @@ export class WorkoutGenerationService {
 
       // Only insert if we have exercises
       if (allExercises.length > 0) {
+        logger.info("🔴 INSERTING WORKOUT EXERCISES", {
+          totalCount: allExercises.length,
+          templateTypes: allExercises.reduce((acc, ex) => {
+            const template = ex.template || 'NOT_SET';
+            acc[template] = (acc[template] || 0) + 1;
+            return acc;
+          }, {}),
+          sampleExercise: allExercises[0] ? {
+            hasTemplate: 'template' in allExercises[0],
+            templateValue: allExercises[0].template,
+            fields: Object.keys(allExercises[0])
+          } : null
+        });
         await tx.insert(WorkoutExercise).values(allExercises);
       } else {
         logger.error("No exercises to insert!");
@@ -1324,7 +1356,19 @@ export class WorkoutGenerationService {
       generationResult.exerciseSelection &&
       generationResult.roundOrganization
     ) {
-      logger.info("Using standard exercise record creation");
+      logger.info("🚀 ROUTING TO: createStandardExerciseRecords (has both selection and organization)");
+      return this.createStandardExerciseRecords(
+        tx,
+        clientWorkouts,
+        generationResult,
+        groupContext,
+        exercisePool,
+      );
+    }
+    
+    // Check if this is standard template with only Phase 1
+    if (generationResult.exerciseSelection && !generationResult.roundOrganization) {
+      logger.info("🚀 ROUTING TO: createStandardExerciseRecords (Phase 1 only)");
       return this.createStandardExerciseRecords(
         tx,
         clientWorkouts,
@@ -1336,7 +1380,7 @@ export class WorkoutGenerationService {
 
     // Check if this is circuit template result
     if (generationResult.metadata?.templateType === "circuit" || groupContext.templateType === "circuit") {
-      logger.info("Using circuit exercise record creation");
+      logger.info("🚀 ROUTING TO: createCircuitExerciseRecords");
       return this.createCircuitExerciseRecords(
         tx,
         clientWorkouts,
@@ -1347,6 +1391,12 @@ export class WorkoutGenerationService {
     }
 
     // BMF template processing
+    logger.info("🚀 ROUTING TO: BMF template processing (default path)", {
+      hasDeterministicAssignments: !!generationResult.deterministicAssignments,
+      hasLlmAssignments: !!generationResult.llmAssignments,
+      templateType: groupContext.templateType,
+    });
+    
     const { deterministicAssignments, llmAssignments } = generationResult;
     
     // If no deterministic assignments (shouldn't happen for BMF but let's be safe)
@@ -1376,6 +1426,7 @@ export class WorkoutGenerationService {
             orderIndex: 1,
             setsCompleted: 99,
             groupName: "Round 1",
+            template: "full_body_bmf",
           });
         }
       }
@@ -1395,6 +1446,7 @@ export class WorkoutGenerationService {
             orderIndex: 2,
             setsCompleted: 99,
             groupName: "Round 2",
+            template: "full_body_bmf",
           });
         }
       }
@@ -1419,6 +1471,7 @@ export class WorkoutGenerationService {
               setsCompleted: 99,
               groupName: "Round 3",
               notes: `Pre-assigned: ${assignment.reason}`,
+              template: "full_body_bmf",
             });
             clientR3Exercises.add(exercise.name.toLowerCase());
           }
@@ -1448,6 +1501,7 @@ export class WorkoutGenerationService {
                   orderIndex: 3,
                   setsCompleted: 99,
                   groupName: "Round 3",
+                  template: "full_body_bmf",
                 });
               }
             }
@@ -1468,6 +1522,7 @@ export class WorkoutGenerationService {
                   orderIndex: 3,
                   setsCompleted: 99,
                   groupName: "Round 3",
+                  template: "full_body_bmf",
                 });
               }
             }
@@ -1495,6 +1550,7 @@ export class WorkoutGenerationService {
               setsCompleted: 99,
               groupName: "Round 4",
               notes: `Pre-assigned: ${assignment.reason}`,
+              template: "full_body_bmf",
             });
             clientR4Exercises.add(exercise.name.toLowerCase());
           }
@@ -1524,6 +1580,7 @@ export class WorkoutGenerationService {
                   orderIndex: 4,
                   setsCompleted: 99,
                   groupName: "Round 4",
+                  template: "full_body_bmf",
                 });
               }
             }
@@ -1544,6 +1601,7 @@ export class WorkoutGenerationService {
                   orderIndex: 4,
                   setsCompleted: 99,
                   groupName: "Round 4",
+                  template: "full_body_bmf",
                 });
               }
             }
@@ -1596,6 +1654,13 @@ export class WorkoutGenerationService {
   ) {
     const allExercises: any[] = [];
     const { exerciseSelection, roundOrganization } = generationResult;
+    
+    logger.info("🎯 createStandardExerciseRecords called", {
+      hasExerciseSelection: !!exerciseSelection,
+      hasRoundOrganization: !!roundOrganization,
+      clientCount: groupContext.clients.length,
+      templateType: groupContext.templateType,
+    });
 
     // If no round organization (Phase 2 removed), create exercises from selection only
     if (!roundOrganization) {
@@ -1610,6 +1675,10 @@ export class WorkoutGenerationService {
         let orderIndex = 0;
 
         // Add pre-assigned exercises first
+        logger.info(`🔵 Processing pre-assigned exercises for client ${clientId}`, {
+          preAssignedCount: (clientData.preAssigned || []).length,
+        });
+        
         for (const exercise of clientData.preAssigned || []) {
           const dbExercise = exercisePool.find(
             (ex: Exercise) =>
@@ -1618,18 +1687,28 @@ export class WorkoutGenerationService {
           );
 
           if (dbExercise) {
-            allExercises.push({
+            const exerciseRecord = {
               workoutId: workoutId,
               exerciseId: dbExercise.id,
               orderIndex: orderIndex++,
               setsCompleted: 3,
               groupName: "Unorganized",
               selectionSource: exercise.source || "pre_assigned",
+              template: "standard",
+            };
+            logger.info(`  ➡️ Adding pre-assigned exercise`, {
+              exerciseName: dbExercise.name,
+              template: exerciseRecord.template,
             });
+            allExercises.push(exerciseRecord);
           }
         }
 
         // Add selected exercises
+        logger.info(`🟢 Processing selected exercises for client ${clientId}`, {
+          selectedCount: (clientData.selected || []).length,
+        });
+        
         for (const exercise of clientData.selected || []) {
           const dbExercise = exercisePool.find(
             (ex: Exercise) =>
@@ -1638,7 +1717,7 @@ export class WorkoutGenerationService {
           );
 
           if (dbExercise) {
-            allExercises.push({
+            const exerciseRecord = {
               workoutId: workoutId,
               exerciseId: dbExercise.id,
               orderIndex: orderIndex++,
@@ -1647,7 +1726,14 @@ export class WorkoutGenerationService {
               isShared: exercise.isShared || false,
               sharedWithClients: exercise.sharedWith || null,
               selectionSource: "llm_phase1",
+              template: "standard",
+            };
+            logger.info(`  ➡️ Adding selected exercise`, {
+              exerciseName: dbExercise.name,
+              template: exerciseRecord.template,
+              isShared: exerciseRecord.isShared,
             });
+            allExercises.push(exerciseRecord);
           }
         }
       }
@@ -1656,14 +1742,26 @@ export class WorkoutGenerationService {
     }
 
     // Original logic for when round organization exists
+    logger.info("🟡 Processing round organization - Phase 2 present", {
+      roundCount: roundOrganization.rounds?.length || 0,
+    });
+    
     // Process each round
     for (const round of roundOrganization.rounds) {
+      logger.info(`📍 Processing round: ${round.name}`, {
+        roundId: round.id,
+        clientCount: Object.keys(round.exercises || {}).length,
+      });
+      
       // Process each client's exercises in this round
       for (const client of groupContext.clients) {
         const workoutId = clientWorkouts.get(client.user_id);
         if (!workoutId) continue;
 
         const clientExercisesInRound = round.exercises[client.user_id] || [];
+        logger.info(`  👤 Client ${client.user_id} exercises in ${round.name}`, {
+          exerciseCount: clientExercisesInRound.length,
+        });
 
         // Add each exercise in the round
         for (let i = 0; i < clientExercisesInRound.length; i++) {
@@ -1677,13 +1775,20 @@ export class WorkoutGenerationService {
           );
 
           if (dbExercise) {
-            allExercises.push({
+            const exerciseRecord = {
               workoutId: workoutId,
               exerciseId: dbExercise.id,
               orderIndex: this.getRoundOrderIndex(round.id) + i,
               setsCompleted: exercise.sets || 3,
               groupName: round.name,
+              template: "standard",
+            };
+            logger.info(`    ➡️ Adding round exercise`, {
+              exerciseName: dbExercise.name,
+              template: exerciseRecord.template,
+              round: round.name,
             });
+            allExercises.push(exerciseRecord);
           } else {
             logger.warn(`Exercise not found in pool: ${exercise.exerciseName}`);
           }
@@ -1691,6 +1796,14 @@ export class WorkoutGenerationService {
       }
     }
 
+    logger.info("✅ createStandardExerciseRecords completed", {
+      totalExercises: allExercises.length,
+      exercisesByTemplate: allExercises.reduce((acc, ex) => {
+        acc[ex.template || 'undefined'] = (acc[ex.template || 'undefined'] || 0) + 1;
+        return acc;
+      }, {}),
+    });
+    
     return allExercises;
   }
 
@@ -1883,6 +1996,7 @@ export class WorkoutGenerationService {
                       .filter(c => c.user_id !== client.user_id)
                       .map(c => c.user_id)
                   : [],
+                template: "circuit",
                 // Store additional circuit metadata
                 metadata: {
                   round: displayRoundNumber,
@@ -1925,6 +2039,7 @@ export class WorkoutGenerationService {
                         .filter(c => c.user_id !== client.user_id)
                         .map(c => c.user_id)
                     : [],
+                  template: "circuit",
                   metadata: {
                     round: displayRoundNumber,
                     position: circuitEx.position,
