@@ -15,6 +15,7 @@ export default function SignupPage() {
   const queryClient = useQueryClient();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   // Check if current user is a trainer
   const { data: currentSession } = useQuery({
@@ -37,11 +38,26 @@ export default function SignupPage() {
     skillLevel: "moderate",
   });
   const [isRedirecting, setIsRedirecting] = useState(false);
+  const [selectedClientId, setSelectedClientId] = useState(""); // For future use
 
   // Fetch businesses
   const { data: businesses, isLoading: businessesLoading } = useQuery(
     trpc.business.all.queryOptions(),
   );
+
+  // Fetch all users in the business (for trainers only)
+  const { data: businessUsers, isLoading: usersLoading } = useQuery({
+    ...trpc.auth.getAllUsersByBusiness.queryOptions(),
+    enabled: isTrainerCreatingClient,
+  });
+
+  // Fetch exercise ratings count for selected client
+  const { data: ratingsCount } = useQuery({
+    ...trpc.auth.getClientExerciseRatingsCount.queryOptions({ 
+      clientId: selectedClientId 
+    }),
+    enabled: !!selectedClientId && isTrainerCreatingClient,
+  });
 
   // Mutation for creating user profile
   const createProfile = useMutation(
@@ -55,11 +71,25 @@ export default function SignupPage() {
   // Mutation for trainer creating user
   const createUserAsTrainer = useMutation(
     trpc.auth.createUserAsTrainer.mutationOptions({
-      onSuccess: async () => {
+      onSuccess: async (data) => {
+        // Show success message with copied ratings count
+        if (data.copiedRatingsCount && data.copiedRatingsCount > 0) {
+          setSuccessMessage(`Successfully created user and copied ${data.copiedRatingsCount} exercise preferences!`);
+        } else {
+          setSuccessMessage("User created successfully!");
+        }
+        setError(null);
+        
         // Invalidate clients query to refresh the trainer dashboard
         await queryClient.invalidateQueries({
           queryKey: ["auth", "getClientsByBusiness"],
         });
+
+        // Redirect after showing message
+        setTimeout(() => {
+          router.push("/trainer-dashboard");
+          router.refresh();
+        }, 2000);
       },
       onError: (err) => {
         setError(err.message || "Failed to create user");
@@ -108,15 +138,10 @@ export default function SignupPage() {
                     | "moderate"
                     | "high")
                 : undefined,
+            sourceClientId: selectedClientId || undefined,
           });
 
-          // Set redirecting state only after success
-          setIsRedirecting(true);
-
-          // Important: Do NOT sign in as the new user - trainer should remain logged in
-          // Just navigate back to trainer dashboard
-          router.push("/trainer-dashboard");
-          router.refresh();
+          setIsLoading(false);
         } catch (error) {
           // Error is already handled by the mutation's onError
           setIsLoading(false);
@@ -266,6 +291,11 @@ export default function SignupPage() {
           {error && (
             <div className="rounded-md bg-red-50 p-4">
               <p className="text-sm text-red-800">{error}</p>
+            </div>
+          )}
+          {successMessage && (
+            <div className="rounded-md bg-green-50 p-4">
+              <p className="text-sm text-green-800">{successMessage}</p>
             </div>
           )}
 
@@ -460,6 +490,44 @@ export default function SignupPage() {
                     <option value="high">High</option>
                   </select>
                 </div>
+
+                {/* Existing Clients Dropdown - Only for trainers */}
+                {isTrainerCreatingClient && (
+                  <div>
+                    <label
+                      htmlFor="existingClient"
+                      className="block text-sm font-medium text-gray-700"
+                    >
+                      Copy From Existing Client (Optional)
+                    </label>
+                    <select
+                      id="existingClient"
+                      name="existingClient"
+                      disabled={usersLoading}
+                      className="mt-1 block w-full rounded-md border-0 px-3 py-2 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-blue-600 sm:text-sm sm:leading-6"
+                      value={selectedClientId}
+                      onChange={(e) => setSelectedClientId(e.target.value)}
+                    >
+                      <option value="">-- Select a client to copy from --</option>
+                      {businessUsers?.filter(u => u.role === 'client').map((user) => (
+                        <option key={user.id} value={user.id}>
+                          {user.name || user.email}
+                          {user.profile && ` - ${user.profile.strengthLevel}/${user.profile.skillLevel}`}
+                        </option>
+                      ))}
+                    </select>
+                    {selectedClientId && ratingsCount && (
+                      <p className="mt-1 text-sm text-blue-600">
+                        Will copy {ratingsCount.count} exercise preferences from selected client
+                      </p>
+                    )}
+                    {selectedClientId && !ratingsCount && (
+                      <p className="mt-1 text-sm text-gray-500">
+                        Loading exercise preferences...
+                      </p>
+                    )}
+                  </div>
+                )}
               </>
             )}
           </div>

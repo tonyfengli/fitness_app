@@ -117,6 +117,17 @@ export function Navigation() {
                 >
                   Sessions
                 </Link>
+                <Link
+                  href="/signup"
+                  className={cn(
+                    "text-sm font-medium transition-colors",
+                    pathname === "/signup"
+                      ? "text-primary"
+                      : "text-muted-foreground hover:text-primary",
+                  )}
+                >
+                  New Client
+                </Link>
               </>
             )}
           </div>

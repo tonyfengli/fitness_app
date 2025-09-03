@@ -1,6 +1,6 @@
 import React from "react";
 import type { ClientSidebarProps } from "./ClientSidebar.types";
-import { cn, Avatar, Button, Icon } from "@acme/ui-shared";
+import { cn, Avatar } from "@acme/ui-shared";
 
 export function ClientSidebar({
   clients,
@@ -47,19 +47,6 @@ export function ClientSidebar({
           </li>
         ))}
       </ul>
-
-      {/* Add New Client Button */}
-      <div className="mt-auto">
-        <Button
-          onClick={onAddNewClient}
-          className="w-full flex items-center justify-center"
-          variant="primary"
-          aria-label="Add new client"
-        >
-          <Icon name="add" size={18} className="mr-2" />
-          <span>Add New Client</span>
-        </Button>
-      </div>
     </nav>
   );
 }

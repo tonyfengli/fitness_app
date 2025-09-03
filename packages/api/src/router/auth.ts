@@ -2,8 +2,8 @@ import type { TRPCRouterRecord } from "@trpc/server";
 import { hashPassword } from "better-auth/crypto";
 import { z } from "zod";
 
-import { and, eq } from "@acme/db";
-import { account, user, UserProfile } from "@acme/db/schema";
+import { and, eq, sql } from "@acme/db";
+import { account, user, UserProfile, UserExerciseRatings } from "@acme/db/schema";
 
 import type { SessionUser } from "../types/auth";
 import { normalizePhoneNumber } from "../services/twilio";
@@ -83,6 +83,65 @@ export const authRouter = {
     return clients.map((client) => ({
       ...client,
       profile: client.userProfiles?.[0] || null,
+      userProfiles: undefined, // Remove the array
+    }));
+  }),
+  getClientExerciseRatingsCount: protectedProcedure
+    .input(z.object({ clientId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const currentUser = ctx.session?.user as SessionUser;
+      if (currentUser?.role !== "trainer") {
+        throw new Error("Only trainers can view client ratings");
+      }
+
+      const count = await ctx.db
+        .select({ count: sql<number>`count(*)` })
+        .from(UserExerciseRatings)
+        .where(eq(UserExerciseRatings.userId, input.clientId))
+        .then((result) => result[0]?.count ?? 0);
+
+      return { count };
+    }),
+  getAllUsersByBusiness: protectedProcedure.query(async ({ ctx }) => {
+    // Only trainers should be able to see all users
+    const currentUser = ctx.session?.user as SessionUser;
+    if (currentUser?.role !== "trainer") {
+      throw new Error("Only trainers can view all users");
+    }
+
+    const businessId = currentUser.businessId;
+    if (!businessId) {
+      throw new Error("Trainer must be associated with a business");
+    }
+
+    // Fetch all users in the same business
+    const users = await ctx.db.query.user.findMany({
+      where: eq(user.businessId, businessId),
+      columns: {
+        id: true,
+        email: true,
+        phone: true,
+        name: true,
+        role: true,
+        createdAt: true,
+      },
+      with: {
+        userProfiles: {
+          columns: {
+            strengthLevel: true,
+            skillLevel: true,
+            notes: true,
+          },
+          limit: 1,
+        },
+      },
+      orderBy: (user, { asc }) => [asc(user.name)],
+    });
+
+    // Transform the data to have a single profile object
+    return users.map((u) => ({
+      ...u,
+      profile: u.userProfiles?.[0] || null,
       userProfiles: undefined, // Remove the array
     }));
   }),
@@ -202,6 +261,7 @@ export const authRouter = {
           .enum(["very_low", "low", "moderate", "high"])
           .optional(),
         skillLevel: z.enum(["very_low", "low", "moderate", "high"]).optional(),
+        sourceClientId: z.string().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -272,9 +332,40 @@ export const authRouter = {
         });
       }
 
+      // Copy exercise ratings if sourceClientId is provided
+      let copiedRatingsCount = 0;
+      if (input.sourceClientId && input.role === "client") {
+        try {
+          // Fetch all exercise ratings from source client
+          const sourceRatings = await ctx.db.query.UserExerciseRatings.findMany({
+            where: eq(UserExerciseRatings.userId, input.sourceClientId),
+          });
+
+          if (sourceRatings.length > 0) {
+            // Prepare the ratings for the new user
+            const newRatings = sourceRatings.map((rating) => ({
+              userId: userId,
+              exerciseId: rating.exerciseId,
+              businessId: rating.businessId,
+              ratingType: rating.ratingType,
+              createdAt: now,
+              updatedAt: now,
+            }));
+
+            // Insert all ratings in batch
+            await ctx.db.insert(UserExerciseRatings).values(newRatings);
+            copiedRatingsCount = newRatings.length;
+          }
+        } catch (error) {
+          console.error("Failed to copy exercise ratings:", error);
+          // Don't fail the user creation if ratings copy fails
+        }
+      }
+
       return {
         success: true,
         userId: userId,
+        copiedRatingsCount: copiedRatingsCount,
       };
     }),
 } satisfies TRPCRouterRecord;

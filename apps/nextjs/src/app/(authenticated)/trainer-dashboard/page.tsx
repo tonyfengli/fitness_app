@@ -422,9 +422,9 @@ export default function TrainerDashboardPage() {
               <p className="mb-4 text-gray-500">
                 No clients found in your business
               </p>
-              <Button onClick={() => router.push("/signup")}>
-                Add Your First Client
-              </Button>
+              <p className="text-sm text-gray-400">
+                Click "New Client" in the navigation bar to add your first client
+              </p>
             </div>
           </div>
         ) : selectedClient ? (
