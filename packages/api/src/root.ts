@@ -2,6 +2,7 @@ import { authRouter } from "./router/auth";
 import { businessRouter } from "./router/business";
 import { circuitConfigRouter } from "./router/circuit-config";
 import { exerciseRouter } from "./router/exercise";
+import { lightingRouter } from "./router/lighting";
 import { muscleCoverageRouter } from "./router/muscle-coverage";
 import { postWorkoutFeedbackRouter } from "./router/post-workout-feedback";
 import { trainingSessionRouter } from "./router/training-session";
@@ -16,6 +17,7 @@ export const appRouter = createTRPCRouter({
   business: businessRouter,
   circuitConfig: circuitConfigRouter,
   exercise: exerciseRouter,
+  lighting: lightingRouter,
   muscleCoverage: muscleCoverageRouter,
   postWorkoutFeedback: postWorkoutFeedbackRouter,
   trainingSession: trainingSessionRouter,

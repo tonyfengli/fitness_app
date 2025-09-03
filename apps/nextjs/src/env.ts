@@ -17,6 +17,11 @@ export const env = createEnv({
    */
   server: {
     POSTGRES_URL: z.string().url(),
+    // Philips Hue Configuration
+    HUE_BRIDGE_IP: z.string().optional(),
+    HUE_APP_KEY: z.string().optional(),
+    HUE_GROUP_ID: z.string().default("1"),
+    HUE_ENABLED: z.string().transform((val) => val === "true").default("false"),
   },
 
   /**

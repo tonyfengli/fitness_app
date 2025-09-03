@@ -520,6 +520,9 @@ importers:
       '@trpc/server':
         specifier: 'catalog:'
         version: 11.4.4(typescript@5.9.2)
+      '@types/uuid':
+        specifier: ^10.0.0
+        version: 10.0.0
       ioredis:
         specifier: ^5.6.1
         version: 5.7.0
@@ -532,6 +535,9 @@ importers:
       twilio:
         specifier: ^5.7.3
         version: 5.8.0
+      uuid:
+        specifier: ^11.1.0
+        version: 11.1.0
       zod:
         specifier: 'catalog:'
         version: 3.25.76
