@@ -136,7 +136,7 @@ export class HueClient {
           'Content-Type': 'application/json',
         },
         body: body ? JSON.stringify(body) : undefined,
-        signal: controller.signal,
+        signal: controller.signal as any,
       });
 
       clearTimeout(timeoutId);

@@ -43,7 +43,7 @@ export class LightingService {
   private status: ConnectionStatus = 'disconnected';
   private lastError?: string;
   private degradedUntil?: Date;
-  private healthCheckInterval?: NodeJS.Timeout;
+  private healthCheckInterval?: ReturnType<typeof setInterval>;
   
   // State tracking
   private lastIntendedState?: HueLightState;

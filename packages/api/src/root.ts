@@ -25,7 +25,7 @@ export const appRouter = createTRPCRouter({
   workoutPreferences: workoutPreferencesRouter,
   workoutSelections: workoutSelectionsRouter,
   messages: messagesRouter,
-});
+} as any) as ReturnType<typeof createTRPCRouter>;
 
 // export type definition of API
 export type AppRouter = typeof appRouter;
