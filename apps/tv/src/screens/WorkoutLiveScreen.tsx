@@ -5,6 +5,8 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '../providers/TRPCProvider';
 import RoundView from './RoundView';
 import { transformWorkoutDataForLiveView } from '../utils/workoutDataTransformer';
+import { setHueLights, getPresetForEvent, startHealthCheck, stopHealthCheck } from '../lib/lighting';
+import { LightingStatusDot } from '../components/LightingStatusDot';
 
 // Design tokens - matching other screens
 const TOKENS = {
@@ -43,6 +45,12 @@ export function WorkoutLiveScreen() {
   const [passedClients] = useState(initialParams.current.clients);
   const [isPhase2Loading, setIsPhase2Loading] = useState(initialParams.current.isPhase2Loading || false);
   const [phase2Error, setPhase2Error] = useState(initialParams.current.phase2Error);
+  
+  // Lighting state
+  const [lastLightingEvent, setLastLightingEvent] = useState<string>('');
+  const [currentPhase, setCurrentPhase] = useState<'warmup' | 'work' | 'rest' | 'done'>('warmup');
+  const [isStarted, setIsStarted] = useState(false);
+  const [elapsedTime, setElapsedTime] = useState(0);
   
   // Update state when params change
   useEffect(() => {
@@ -177,7 +185,35 @@ export function WorkoutLiveScreen() {
     }
   }, [sessionData, isPhase2Loading, sessionLoading, passedWorkouts]);
   
-  
+  // Start health check on mount
+  useEffect(() => {
+    startHealthCheck();
+    return () => stopHealthCheck();
+  }, []);
+
+  // Handle phase changes for lighting
+  useEffect(() => {
+    let lightingEvent = '';
+    
+    if (!isStarted && elapsedTime === 0) {
+      lightingEvent = 'warmup';
+    } else if (currentPhase === 'work') {
+      lightingEvent = 'work';
+    } else if (currentPhase === 'rest') {
+      lightingEvent = 'rest';
+    } else if (currentPhase === 'done') {
+      lightingEvent = 'complete';
+    }
+    
+    if (lightingEvent && lightingEvent !== lastLightingEvent) {
+      const preset = getPresetForEvent('strength', lightingEvent);
+      if (preset) {
+        setHueLights(preset);
+        setLastLightingEvent(lightingEvent);
+        console.log(`Strength lighting: ${lightingEvent}`, preset);
+      }
+    }
+  }, [currentPhase, isStarted, elapsedTime, lastLightingEvent]);
   
   // Helper function to format exercise metadata
   const formatExerciseMeta = (exercise: any): string => {
@@ -429,14 +465,21 @@ export function WorkoutLiveScreen() {
   }
   
   
-  return <RoundView 
-    sessionId={sessionId} 
-    round={round} 
-    workouts={workouts} 
-    roundsData={roundsData} 
-    organization={passedOrganization}
-    clients={clients}
-    isPhase2Loading={isPhase2Loading}
-    phase2Error={phase2Error}
-  />;
+  return (
+    <View style={{ flex: 1, backgroundColor: TOKENS.color.bg }}>
+      <RoundView 
+        sessionId={sessionId} 
+        round={round} 
+        workouts={workouts} 
+        roundsData={roundsData} 
+        organization={passedOrganization}
+        clients={clients}
+        isPhase2Loading={isPhase2Loading}
+        phase2Error={phase2Error}
+      />
+      
+      {/* Lighting Status Indicator */}
+      <LightingStatusDot />
+    </View>
+  );
 }

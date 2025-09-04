@@ -4,6 +4,8 @@ import { useNavigation } from '../App';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../providers/TRPCProvider';
 import Icon from 'react-native-vector-icons/MaterialIcons';
+import { setHueLights, getPresetForEvent, startHealthCheck, stopHealthCheck } from '../lib/lighting';
+import { LightingStatusDot } from '../components/LightingStatusDot';
 
 // Design tokens
 const TOKENS = {
@@ -99,6 +101,10 @@ export function CircuitWorkoutLiveScreen() {
   const [timeRemaining, setTimeRemaining] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Lighting state
+  const [lastLightingEvent, setLastLightingEvent] = useState<string>('');
+  const [isStarted, setIsStarted] = useState(false);
 
   // Get circuit config for timing
   const { data: circuitConfig } = useQuery(
@@ -168,6 +174,82 @@ export function CircuitWorkoutLiveScreen() {
     }
   }, [selections]);
 
+  // Start health check on mount
+  useEffect(() => {
+    console.log('[CIRCUIT-LIGHTING] Component mounted, starting health check');
+    startHealthCheck();
+    return () => {
+      console.log('[CIRCUIT-LIGHTING] Component unmounting, stopping health check');
+      stopHealthCheck();
+    };
+  }, []);
+
+  // Handle phase changes for lighting
+  useEffect(() => {
+    console.log('[CIRCUIT-LIGHTING] Phase detection:', {
+      currentScreen,
+      timeRemaining,
+      isStarted,
+      currentRoundIndex,
+      totalRounds: roundsData.length,
+      lastLightingEvent
+    });
+    
+    // Map current state to lighting event
+    let lightingEvent = '';
+    let currentPhase = '';
+    
+    // Check warmup first (before workout starts)
+    if (currentScreen === 'round-preview' && currentRoundIndex === 0 && !isStarted) {
+      lightingEvent = 'warmup';
+      currentPhase = 'warmup';
+    } else if (currentScreen === 'exercise') {
+      lightingEvent = 'work';
+      currentPhase = 'work';
+    } else if (currentScreen === 'rest') {
+      lightingEvent = 'rest';
+      currentPhase = 'rest';
+    } else if (timeRemaining === 0 && isStarted && currentRoundIndex === roundsData.length - 1 && currentScreen === 'exercise') {
+      // Only mark as complete when the last exercise finishes
+      lightingEvent = 'cooldown';
+      currentPhase = 'cooldown';
+    }
+    
+    console.log('[CIRCUIT-LIGHTING] Detected event:', {
+      lightingEvent,
+      currentPhase,
+      willTrigger: lightingEvent && lightingEvent !== lastLightingEvent
+    });
+    
+    // Only trigger if event changed
+    if (lightingEvent && lightingEvent !== lastLightingEvent) {
+      const preset = getPresetForEvent('circuit', lightingEvent);
+      console.log('[CIRCUIT-LIGHTING] 🎨 Applying preset:', {
+        event: lightingEvent,
+        preset,
+        timestamp: new Date().toISOString()
+      });
+      
+      if (preset) {
+        setHueLights(preset);
+        setLastLightingEvent(lightingEvent);
+      } else {
+        console.warn('[CIRCUIT-LIGHTING] No preset found for event:', lightingEvent);
+      }
+    }
+  }, [currentScreen, timeRemaining, isStarted, lastLightingEvent, currentRoundIndex, roundsData.length]);
+
+  // Handle round changes
+  useEffect(() => {
+    if (currentRoundIndex > 0 && currentExerciseIndex === 0 && currentScreen === 'round-preview') {
+      const preset = getPresetForEvent('circuit', 'round_start');
+      if (preset) {
+        setHueLights(preset);
+        console.log(`Circuit round ${currentRoundIndex + 1} start`);
+      }
+    }
+  }, [currentRoundIndex, currentExerciseIndex, currentScreen]);
+
   // Timer management
   useEffect(() => {
     if (timeRemaining > 0 && !isPaused) {
@@ -201,6 +283,7 @@ export function CircuitWorkoutLiveScreen() {
 
   const startTimer = (duration: number) => {
     setTimeRemaining(duration);
+    setIsStarted(true);
   };
 
   const getCurrentRound = () => roundsData[currentRoundIndex];
@@ -663,6 +746,9 @@ export function CircuitWorkoutLiveScreen() {
           </View>
         )}
       </View>
+      
+      {/* Lighting Status Indicator */}
+      <LightingStatusDot />
     </View>
   );
 }

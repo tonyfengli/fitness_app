@@ -5,6 +5,7 @@ import { RealtimeProvider } from './providers/RealtimeProvider';
 import { BusinessProvider } from './providers/BusinessProvider';
 import { AuthProvider } from './providers/AuthProvider';
 import { useAuthCleanup } from './hooks/useAuthCleanup';
+import { setHueLights, LIGHTING_PRESETS, startHealthCheck } from './lib/lighting';
 
 // TVEventHandler might be in a different location for react-native-tvos
 let TVEventHandler: any;
@@ -114,6 +115,15 @@ function NavigationContainer({ children }: { children: React.ReactNode }) {
         console.log('TV event handler not available');
       }
     }
+  }, []);
+
+  // Initialize lighting on app start
+  useEffect(() => {
+    // Start health check
+    startHealthCheck();
+    
+    // Set default lighting
+    setHueLights(LIGHTING_PRESETS.circuit.DEFAULT);
   }, []);
 
   const navigationValue = {
