@@ -649,6 +649,68 @@ export const exerciseRouter = {
       }
     }),
 
+  // Public endpoint for setting ratings from feedback page
+  setRatingPublic: publicProcedure
+    .input(
+      z.object({
+        sessionId: z.string().uuid(),
+        userId: z.string(),
+        exerciseId: z.string().uuid(),
+        ratingType: z.enum(["favorite", "avoid", "maybe_later"]),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      // Get the business ID from the training session
+      const session = await ctx.db.query.TrainingSession.findFirst({
+        where: eq(TrainingSession.id, input.sessionId),
+      });
+
+      if (!session) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Training session not found",
+        });
+      }
+
+      const businessId = session.businessId;
+
+      // Check if rating already exists
+      const existingRating = await ctx.db.query.UserExerciseRatings.findFirst({
+        where: and(
+          eq(UserExerciseRatings.userId, input.userId),
+          eq(UserExerciseRatings.exerciseId, input.exerciseId),
+          eq(UserExerciseRatings.businessId, businessId)
+        ),
+      });
+
+      if (existingRating) {
+        // Update existing rating
+        const [updated] = await ctx.db
+          .update(UserExerciseRatings)
+          .set({
+            ratingType: input.ratingType,
+            updatedAt: new Date(),
+          })
+          .where(eq(UserExerciseRatings.id, existingRating.id))
+          .returning();
+        
+        return { rating: updated, action: "updated" };
+      } else {
+        // Create new rating
+        const [created] = await ctx.db
+          .insert(UserExerciseRatings)
+          .values({
+            userId: input.userId,
+            exerciseId: input.exerciseId,
+            businessId,
+            ratingType: input.ratingType,
+          })
+          .returning();
+        
+        return { rating: created, action: "created" };
+      }
+    }),
+
   // Remove exercise rating
   removeRating: protectedProcedure
     .input(

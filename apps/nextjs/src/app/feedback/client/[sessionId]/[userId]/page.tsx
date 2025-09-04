@@ -91,7 +91,7 @@ export default function PostWorkoutFeedbackPage() {
       // Map "not_sure" to "maybe_later" for the backend
       const backendRatingType = ratingType === "not_sure" ? "maybe_later" : ratingType;
       
-      const response = await fetch('/api/trpc/exercise.setRating', {
+      const response = await fetch('/api/trpc/exercise.setRatingPublic', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -99,6 +99,7 @@ export default function PostWorkoutFeedbackPage() {
         credentials: 'include',
         body: JSON.stringify({
           json: {
+            sessionId,
             userId,
             exerciseId,
             ratingType: backendRatingType,
