@@ -3,10 +3,10 @@ import { and, eq, gte, lte, sql } from "@acme/db";
 import { db } from "@acme/db/client";
 import { exercises, Workout, WorkoutExercise } from "@acme/db/schema";
 
-import { createTRPCRouter, protectedProcedure } from "../trpc";
+import { createTRPCRouter, publicProcedure } from "../trpc";
 
 export const muscleCoverageRouter = createTRPCRouter({
-  getClientMuscleCoverage: protectedProcedure
+  getClientMuscleCoverage: publicProcedure
     .input(
       z.object({
         clientId: z.string(),
