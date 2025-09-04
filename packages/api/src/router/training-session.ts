@@ -977,10 +977,33 @@ export const trainingSessionRouter = {
       }
 
       // Send feedback form links to all checked-in clients
-      console.log("[completeSessionWithName] Sending feedback form links to clients");
+      console.log("[completeSessionWithName] ===== STARTING SMS SENDING PROCESS =====");
+      console.log("[completeSessionWithName] Session ID:", input.sessionId);
+      console.log("[completeSessionWithName] Business ID:", user.businessId);
       
       try {
+        // First, let's see ALL clients in this session regardless of status
+        console.log("[completeSessionWithName] Checking ALL clients in session for debugging...");
+        const allSessionClients = await db
+          .select({
+            userId: UserTrainingSession.userId,
+            status: UserTrainingSession.status,
+            userName: userTable.name,
+            userPhone: userTable.phone,
+          })
+          .from(UserTrainingSession)
+          .innerJoin(userTable, eq(UserTrainingSession.userId, userTable.id))
+          .where(eq(UserTrainingSession.trainingSessionId, input.sessionId));
+        
+        console.log("[completeSessionWithName] ALL clients in session:", allSessionClients.length);
+        console.log("[completeSessionWithName] Client statuses:", allSessionClients.map(c => ({
+          userName: c.userName,
+          status: c.status,
+          hasPhone: !!c.userPhone
+        })));
+
         // Get all checked-in clients with their phone numbers
+        console.log("[completeSessionWithName] Now querying for checked-in clients only...");
         const checkedInClients = await db
           .select({
             userId: UserTrainingSession.userId,
@@ -997,22 +1020,58 @@ export const trainingSessionRouter = {
           );
 
         console.log("[completeSessionWithName] Found checked-in clients:", checkedInClients.length);
+        console.log("[completeSessionWithName] Client details:", checkedInClients.map(c => ({
+          userId: c.userId,
+          userName: c.userName,
+          hasPhone: !!c.userPhone,
+          phoneLength: c.userPhone?.length
+        })));
+        
+        // If no checked-in clients found, let's try using all session participants
+        const clientsToMessage = checkedInClients.length > 0 ? checkedInClients : 
+          (allSessionClients.length > 0 ? allSessionClients.map(c => ({
+            userId: c.userId,
+            userName: c.userName,
+            userPhone: c.userPhone
+          })) : []);
+          
+        if (checkedInClients.length === 0 && allSessionClients.length > 0) {
+          console.log("[completeSessionWithName] WARNING: No checked-in clients found, using all session participants instead");
+        }
 
         // Import required services
+        console.log("[completeSessionWithName] Importing Twilio and messages...");
         const { twilioClient } = await import("../services/twilio");
         const { messages } = await import("@acme/db/schema");
+        
+        console.log("[completeSessionWithName] Twilio client exists:", !!twilioClient);
+        console.log("[completeSessionWithName] Environment variables:");
+        console.log("  - SMS_BASE_URL:", process.env.SMS_BASE_URL || "NOT SET");
+        console.log("  - NEXTAUTH_URL:", process.env.NEXTAUTH_URL || "NOT SET");
+        console.log("  - TWILIO_PHONE_NUMBER:", process.env.TWILIO_PHONE_NUMBER || "NOT SET");
+        console.log("  - TWILIO_ACCOUNT_SID exists:", !!process.env.TWILIO_ACCOUNT_SID);
+        console.log("  - TWILIO_AUTH_TOKEN exists:", !!process.env.TWILIO_AUTH_TOKEN);
 
-        // Send messages to all checked-in clients
-        const sendPromises = checkedInClients.map(async (client) => {
+        // Send messages to all clients to message
+        const sendPromises = clientsToMessage.map(async (client, index) => {
+          console.log(`[completeSessionWithName] Processing client ${index + 1}/${clientsToMessage.length}:`, {
+            userName: client.userName,
+            userId: client.userId,
+            phone: client.userPhone
+          });
+          
           try {
             // Generate feedback link - use SMS_BASE_URL for mobile access
             const baseUrl = process.env.SMS_BASE_URL || process.env.NEXTAUTH_URL || "http://localhost:3000";
             const feedbackUrl = `${baseUrl}/feedback/client/${input.sessionId}/${client.userId}`;
+            console.log(`[completeSessionWithName] Generated feedback URL for ${client.userName}:`, feedbackUrl);
             
             const messageBody = `Thanks for completing today's workout! Please rate the exercises to help us improve your future workouts: ${feedbackUrl}`;
+            console.log(`[completeSessionWithName] Message length for ${client.userName}:`, messageBody.length);
             
             // Store message in database
-            await db.insert(messages).values({
+            console.log(`[completeSessionWithName] Inserting message to database for ${client.userName}...`);
+            const insertedMessage = await db.insert(messages).values({
               userId: client.userId,
               businessId: user.businessId,
               direction: "outbound",
@@ -1024,17 +1083,38 @@ export const trainingSessionRouter = {
               } as any,
               status: "sent",
             });
+            console.log(`[completeSessionWithName] Database insert successful for ${client.userName}`);
 
             // Send via Twilio if phone number exists
             if (client.userPhone && twilioClient) {
-              await twilioClient.messages.create({
-                body: messageBody,
-                to: client.userPhone,
-                from: process.env.TWILIO_PHONE_NUMBER,
-              });
-              console.log(`[completeSessionWithName] Sent feedback SMS to ${client.userName} (${client.userPhone})`);
+              console.log(`[completeSessionWithName] Attempting Twilio SMS send for ${client.userName}...`);
+              console.log(`[completeSessionWithName] To: ${client.userPhone}, From: ${process.env.TWILIO_PHONE_NUMBER}`);
+              
+              try {
+                const twilioResponse = await twilioClient.messages.create({
+                  body: messageBody,
+                  to: client.userPhone,
+                  from: process.env.TWILIO_PHONE_NUMBER,
+                });
+                console.log(`[completeSessionWithName] ✅ Twilio SMS sent successfully to ${client.userName}:`, {
+                  sid: twilioResponse.sid,
+                  status: twilioResponse.status,
+                  to: twilioResponse.to,
+                  from: twilioResponse.from
+                });
+              } catch (twilioError) {
+                console.error(`[completeSessionWithName] ❌ Twilio SMS failed for ${client.userName}:`, {
+                  error: twilioError instanceof Error ? twilioError.message : twilioError,
+                  errorCode: (twilioError as any)?.code,
+                  moreInfo: (twilioError as any)?.moreInfo
+                });
+                throw twilioError;
+              }
             } else {
-              console.log(`[completeSessionWithName] Created in-app message for ${client.userName} (no phone)`);
+              console.log(`[completeSessionWithName] Skipping SMS for ${client.userName}:`, {
+                hasPhone: !!client.userPhone,
+                hasTwilioClient: !!twilioClient
+              });
             }
 
             return {
@@ -1044,24 +1124,52 @@ export const trainingSessionRouter = {
               phone: client.userPhone,
             };
           } catch (error) {
-            console.error(`[completeSessionWithName] Failed to send to ${client.userName}:`, error);
+            console.error(`[completeSessionWithName] ❌ Failed to process client ${client.userName}:`, {
+              error: error instanceof Error ? error.message : error,
+              stack: error instanceof Error ? error.stack : undefined
+            });
             return {
               success: false,
               userId: client.userId,
+              userName: client.userName,
               error: error instanceof Error ? error.message : "Unknown error",
             };
           }
         });
 
+        console.log("[completeSessionWithName] Waiting for all SMS operations to complete...");
         const results = await Promise.allSettled(sendPromises);
-        const successCount = results.filter(
-          (r) => r.status === "fulfilled" && r.value.success
-        ).length;
-
-        console.log(`[completeSessionWithName] Sent feedback links to ${successCount} out of ${checkedInClients.length} clients`);
+        
+        const successResults = results.filter(r => r.status === "fulfilled" && r.value.success);
+        const failureResults = results.filter(r => r.status === "rejected" || (r.status === "fulfilled" && !r.value.success));
+        
+        console.log("[completeSessionWithName] ===== SMS SENDING SUMMARY =====");
+        console.log(`[completeSessionWithName] Total clients: ${clientsToMessage.length}`);
+        console.log(`[completeSessionWithName] Successful: ${successResults.length}`);
+        console.log(`[completeSessionWithName] Failed: ${failureResults.length}`);
+        
+        if (successResults.length > 0) {
+          console.log("[completeSessionWithName] Successful sends:", successResults.map(r => 
+            r.status === "fulfilled" ? r.value.userName : "unknown"
+          ));
+        }
+        
+        if (failureResults.length > 0) {
+          console.log("[completeSessionWithName] Failed sends:", failureResults.map(r => {
+            if (r.status === "rejected") {
+              return { reason: r.reason };
+            } else if (r.status === "fulfilled") {
+              return { userName: r.value.userName, error: r.value.error };
+            }
+          }));
+        }
+        
       } catch (error) {
         // Log error but don't fail the completion
-        console.error("[completeSessionWithName] Error sending feedback links:", error);
+        console.error("[completeSessionWithName] ❌ CRITICAL ERROR in SMS sending process:", {
+          error: error instanceof Error ? error.message : error,
+          stack: error instanceof Error ? error.stack : undefined
+        });
       }
 
       const returnValue = { success: true, sessionId: input.sessionId };

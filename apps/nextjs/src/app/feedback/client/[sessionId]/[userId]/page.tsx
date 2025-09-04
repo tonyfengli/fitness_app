@@ -346,7 +346,7 @@ export default function PostWorkoutFeedbackPage() {
           </p>
           <button
             onClick={() => router.back()}
-            className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+            className="px-6 py-2 bg-indigo-600 text-white rounded-lg transition-colors"
           >
             Go Back
           </button>
@@ -463,7 +463,7 @@ export default function PostWorkoutFeedbackPage() {
           <div className="flex items-center gap-2">
             <button
               onClick={handleDecrement}
-              className="flex-1 py-3 px-3 bg-gray-100 hover:bg-gray-200 active:bg-gray-300 active:scale-95 rounded-lg shadow-sm transition-all flex items-center justify-center gap-1 border border-gray-200"
+              className="flex-1 py-3 px-3 bg-gray-100 active:bg-gray-300 active:scale-95 rounded-lg shadow-sm transition-all flex items-center justify-center gap-1 border border-gray-200"
               aria-label="Decrease weight"
             >
               <svg className="w-5 h-5 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -474,7 +474,7 @@ export default function PostWorkoutFeedbackPage() {
             
             <button
               onClick={handleIncrement}
-              className="flex-1 py-3 px-3 bg-gray-100 hover:bg-gray-200 active:bg-gray-300 active:scale-95 rounded-lg shadow-sm transition-all flex items-center justify-center gap-1 border border-gray-200"
+              className="flex-1 py-3 px-3 bg-gray-100 active:bg-gray-300 active:scale-95 rounded-lg shadow-sm transition-all flex items-center justify-center gap-1 border border-gray-200"
               aria-label="Increase weight"
             >
               <svg className="w-5 h-5 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -489,7 +489,7 @@ export default function PostWorkoutFeedbackPage() {
               className={`px-4 py-3 text-white text-sm font-semibold rounded-lg shadow-sm transition-all ${
                 savePerformanceMutation.isPending && savePerformanceMutation.variables?.exerciseId === exerciseId
                   ? 'bg-gray-400 cursor-not-allowed'
-                  : 'bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 active:scale-95'
+                  : 'bg-indigo-600 active:bg-indigo-800 active:scale-95'
               }`}
             >
               {savePerformanceMutation.isPending && savePerformanceMutation.variables?.exerciseId === exerciseId 
@@ -538,7 +538,7 @@ export default function PostWorkoutFeedbackPage() {
             className={`flex-1 p-3 border rounded-lg transition-all ${
               currentRating === 'favorite'
                 ? 'bg-green-100 border-green-500 text-green-700'
-                : 'bg-gray-50 border-gray-200 hover:bg-green-50 hover:border-green-300'
+                : 'bg-gray-50 border-gray-200'
             } ${isLoading ? 'cursor-not-allowed' : ''}`}
             aria-label="Like exercise"
           >
@@ -559,7 +559,7 @@ export default function PostWorkoutFeedbackPage() {
             className={`flex-1 p-3 border rounded-lg transition-all ${
               currentRating === 'avoid'
                 ? 'bg-red-100 border-red-500 text-red-700'
-                : 'bg-gray-50 border-gray-200 hover:bg-red-50 hover:border-red-300'
+                : 'bg-gray-50 border-gray-200'
             } ${isLoading ? 'cursor-not-allowed' : ''}`}
             aria-label="Dislike exercise"
           >
@@ -580,7 +580,7 @@ export default function PostWorkoutFeedbackPage() {
             className={`flex-1 p-3 border rounded-lg transition-all ${
               currentRating === 'not_sure'
                 ? 'bg-yellow-100 border-yellow-500 text-yellow-700'
-                : 'bg-gray-50 border-gray-200 hover:bg-yellow-50 hover:border-yellow-300'
+                : 'bg-gray-50 border-gray-200'
             } ${isLoading ? 'cursor-not-allowed' : ''}`}
             aria-label="Not sure"
           >
@@ -593,7 +593,7 @@ export default function PostWorkoutFeedbackPage() {
         {/* Expand/Collapse button */}
         <button
           onClick={toggleExpanded}
-          className="w-full py-2 mt-3 text-sm text-gray-500 hover:text-gray-600 font-medium flex items-center justify-center gap-1 border-t border-gray-100 transition-colors"
+          className="w-full py-2 mt-3 text-sm text-gray-500 font-medium flex items-center justify-center gap-1 border-t border-gray-100 transition-colors"
         >
           {isExpanded ? (
             <>
