@@ -392,6 +392,177 @@ export class LightingService {
   private sleep(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
+
+  // Animation state  
+  private currentAnimation?: ReturnType<typeof setInterval>;
+  private animationType?: string;
+
+  /**
+   * Start an animation effect
+   */
+  async startAnimation(type: 'drift' | 'breathe' | 'countdown'): Promise<void> {
+    if (!this.enabled) return;
+
+    // Stop any existing animation
+    this.stopAnimation();
+
+    logger.info('Starting animation', { type });
+    this.animationType = type;
+
+    switch (type) {
+      case 'drift':
+        await this.startDriftAnimation();
+        break;
+      case 'breathe':
+        await this.startBreatheAnimation();
+        break;
+      case 'countdown':
+        await this.startCountdownAnimation();
+        break;
+    }
+  }
+
+  /**
+   * Stop any running animation
+   */
+  stopAnimation(): void {
+    if (this.currentAnimation) {
+      clearInterval(this.currentAnimation);
+      this.currentAnimation = undefined;
+      this.animationType = undefined;
+      logger.info('Animation stopped');
+    }
+  }
+
+  /**
+   * Drift animation - gentle hue movement for work phase
+   */
+  private async startDriftAnimation(): Promise<void> {
+    let currentHue = 47000;
+    let direction = 1;
+    const HUE_DRIFT = 1500;
+    let stepCount = 0;
+
+    logger.info('Starting drift animation interval');
+
+    // Apply initial state
+    await this.applyState({
+      on: true,
+      bri: 254,
+      hue: currentHue,
+      sat: 200,
+      transitiontime: 20,
+    });
+
+    const intervalId = setInterval(async () => {
+      stepCount++;
+      logger.info(`Drift animation interval fired - step ${stepCount}`);
+      if (!this.enabled || this.status !== 'connected') {
+        this.stopAnimation();
+        return;
+      }
+
+      currentHue += (HUE_DRIFT * direction);
+      
+      if (currentHue >= 47000 + HUE_DRIFT || currentHue <= 47000 - HUE_DRIFT) {
+        direction *= -1;
+      }
+
+      // Wrap hue value
+      if (currentHue < 0) currentHue += 65536;
+      if (currentHue > 65535) currentHue -= 65536;
+
+      logger.info('Drift animation step', { 
+        currentHue: Math.round(currentHue), 
+        direction,
+        animationType: this.animationType 
+      });
+
+      await this.applyState({
+        hue: Math.round(currentHue),
+        transitiontime: 30,
+      });
+    }, 3000); // Every 3 seconds
+    
+    this.currentAnimation = intervalId;
+    logger.info('Drift animation interval stored', { intervalId: !!intervalId });
+  }
+
+  /**
+   * Breathe animation - brightness oscillation for rest phase
+   */
+  private async startBreatheAnimation(): Promise<void> {
+    let currentBri = 100;
+    let direction = 1;
+    const BRI_RANGE = 20;
+
+    // Apply initial state
+    await this.applyState({
+      on: true,
+      bri: currentBri,
+      hue: 25000,
+      sat: 100,
+      transitiontime: 10,
+    });
+
+    this.currentAnimation = setInterval(async () => {
+      if (!this.enabled || this.status !== 'connected') {
+        this.stopAnimation();
+        return;
+      }
+
+      currentBri += (BRI_RANGE * direction);
+      
+      if (currentBri >= 120 || currentBri <= 80) {
+        direction *= -1;
+      }
+
+      logger.info('Breathe animation step', { 
+        currentBri, 
+        direction,
+        animationType: this.animationType 
+      });
+
+      await this.applyState({
+        bri: currentBri,
+        transitiontime: 20,
+      });
+    }, 2000); // Every 2 seconds
+  }
+
+  /**
+   * Countdown animation - quick pulses
+   */
+  private async startCountdownAnimation(): Promise<void> {
+    let count = 5;
+    const baseBri = 180;
+
+    this.currentAnimation = setInterval(async () => {
+      if (!this.enabled || this.status !== 'connected' || count <= 0) {
+        this.stopAnimation();
+        return;
+      }
+
+      // Pulse up
+      await this.applyState({
+        on: true,
+        bri: baseBri + 60,
+        hue: 47000,
+        sat: 200,
+        transitiontime: 2,
+      });
+
+      // Return to base after 400ms
+      setTimeout(async () => {
+        await this.applyState({
+          bri: baseBri,
+          transitiontime: 3,
+        });
+      }, 400);
+
+      count--;
+    }, 1000); // Every second
+  }
 }
 
 // Singleton instance

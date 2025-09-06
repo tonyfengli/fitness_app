@@ -2,26 +2,61 @@
 
 ## Project Overview
 
-This is a **full-stack fitness application** built on the **create-t3-turbo** stack, featuring a monorepo architecture with web and mobile applications. The project uses TypeScript throughout for end-to-end type safety.
+This is a **full-stack fitness application** built on the **create-t3-turbo** stack, featuring a monorepo architecture with web, mobile, and TV applications. The project uses TypeScript throughout for end-to-end type safety.
 
-**Current State**: The app is currently a basic blog/post system with authentication. It provides a solid foundation for building fitness-specific features.
+**Current State**: The app is a production-ready fitness platform featuring:
+- AI-powered personalized workout generation for group training sessions
+- SMS-based client check-in and communication
+- Real-time TV display for gym workouts
+- Comprehensive exercise library and workout tracking
+- Multi-tenant business support with role-based access
 
 ## Technology Stack
 
 | Technology | Version | Purpose |
 |------------|---------|---------|
-| **Next.js** | 15.1.3 | Web application framework |
-| **React** | 19.0.0 | UI library |
-| **Expo** | SDK 53 | Mobile development platform |
-| **React Native** | 0.76.6 | Mobile UI framework |
-| **tRPC** | 11.0.12 | Type-safe API layer |
-| **Better Auth** | 1.2.2 | Authentication solution |
-| **Drizzle ORM** | 0.44.1 | Database ORM |
+| **Core Frameworks** | | |
+| **Next.js** | 15.3.3 | Web application framework |
+| **React** | 19.0.0 | UI library for web and mobile |
+| **React Native** | 0.79.2 | Mobile framework (standard) |
+| **React Native TV** | 0.79.2-0 | TV application framework (tvOS fork) |
+| **Expo** | 53.0.9 | Mobile development platform |
+| **TypeScript** | 5.8.3 | Type safety across all packages |
+| **Build & Package Management** | | |
+| **Turborepo** | 2.5.4 | Monorepo build orchestration |
+| **pnpm** | 10.11.1 | Package manager with workspace support |
+| **Node.js** | ≥22.14.0 | Runtime environment |
+| **API & Backend** | | |
+| **tRPC** | 11.4.0 | Type-safe API layer |
+| **Better Auth** | 1.2.9 | Authentication solution |
+| **Drizzle ORM** | 0.44.1 | Database ORM with type safety |
 | **PostgreSQL** | - | Database (via Supabase) |
-| **Tailwind CSS** | 3.4.17 | Styling framework |
-| **TypeScript** | 5.7.2 | Type safety |
-| **Turborepo** | 2.3.3 | Monorepo build system |
-| **pnpm** | 10.11.1 | Package manager |
+| **Supabase** | 2.53.0 | Database hosting & realtime |
+| **Redis (ioredis)** | 5.6.1 | Caching and session management |
+| **AI & ML Services** | | |
+| **OpenAI** | 5.10.1 | AI workout generation |
+| **LangChain** | 0.3.26 | AI orchestration framework |
+| **LangGraph** | 0.3.6 | AI workflow management |
+| **Tiktoken** | 1.0.21 | Token counting for AI models |
+| **Communication** | | |
+| **Twilio** | 5.7.3 | SMS notifications and check-ins |
+| **UI & Styling** | | |
+| **Tailwind CSS** | 3.4.15 | Utility-first CSS framework |
+| **NativeWind** | 4.1.23 (mobile) / 2.0.11 (TV) | Tailwind for React Native |
+| **Radix UI** | 1.4.2 | Headless UI components |
+| **React Hook Form** | 7.57.0 | Form management |
+| **Sonner** | 2.0.5 | Toast notifications |
+| **State Management** | | |
+| **TanStack Query** | 5.80.7 | Server state management |
+| **Zod** | 3.25.49 | Schema validation |
+| **Testing** | | |
+| **Vitest** | 3.2.4 | Unit and integration testing |
+| **Playwright** | 1.54.1 | E2E testing for web |
+| **React Testing Library** | 16.1.0 | Component testing |
+| **Development Tools** | | |
+| **ESLint** | 9.28.0 | Code linting |
+| **Prettier** | 3.5.3 | Code formatting |
+| **dotenv** | 16.4.7 | Environment management |
 
 ## Project Structure
 
@@ -35,20 +70,37 @@ fitness_app/
 │   │   │   └── utils/          # Mobile utilities (auth, api)
 │   │   ├── app.json           # Expo configuration
 │   │   └── package.json
-│   └── nextjs/                 # Next.js web application
+│   ├── nextjs/                 # Next.js web application
+│   │   ├── src/
+│   │   │   ├── app/           # App Router pages
+│   │   │   ├── auth/          # Authentication setup
+│   │   │   ├── components/    # Web components
+│   │   │   └── trpc/          # tRPC client setup
+│   │   ├── next.config.js
+│   │   └── package.json
+│   └── tv/                     # React Native TV application
 │       ├── src/
-│       │   ├── app/           # App Router pages
-│       │   ├── auth/          # Authentication setup
-│       │   ├── components/    # Web components
-│       │   └── trpc/          # tRPC client setup
-│       ├── next.config.js
+│       │   ├── screens/       # TV app screens
+│       │   ├── components/    # TV-optimized components
+│       │   ├── lib/           # Utilities (lighting, auth)
+│       │   └── navigation/    # TV navigation setup
+│       ├── android/           # Android TV build config
 │       └── package.json
 ├── packages/
 │   ├── api/                   # tRPC API definitions
 │   │   ├── src/
 │   │   │   ├── router/       # API route handlers
+│   │   │   ├── services/     # Business logic services
+│   │   │   ├── utils/        # API utilities and helpers
 │   │   │   ├── root.ts       # Main tRPC router
 │   │   │   └── trpc.ts       # tRPC configuration
+│   │   └── package.json
+│   ├── ai/                    # AI workout generation
+│   │   ├── src/
+│   │   │   ├── workout-generation/  # LangGraph AI workflows
+│   │   │   ├── agents/       # AI agent implementations
+│   │   │   ├── prompts/      # LLM prompt templates
+│   │   │   └── client.ts     # OpenAI client setup
 │   │   └── package.json
 │   ├── auth/                  # Authentication logic
 │   │   ├── src/
@@ -290,6 +342,52 @@ webpack: (config) => {
 - **Color Contrast**: WCAG AA compliance
 - **Focus Management**: Visible focus indicators
 
+### Cross-Platform Shared Logic
+
+#### Overview
+The `ui-shared` package contains business logic and utilities that work across web, mobile, and TV applications. This enables consistent behavior and reduces code duplication.
+
+#### Shared Hooks (`packages/ui-shared/src/hooks/`)
+- **useClientPreferences**: Manages workout preference operations with optimistic updates
+- **useWorkoutActions**: High-level workout mutations with integrated error handling
+- **useOptimisticWorkout**: Instant UI updates with rollback on errors
+- **useWorkoutBlocks**: Organizes exercises into logical groups
+- **useExerciseSelection**: Search, filter, and select exercises
+- **useRealtimePreferences**: Supabase realtime subscription for preferences
+- **useRealtimeWorkoutExercises**: Live workout exercise updates
+- **useRealtimeExerciseSwaps**: Real-time exercise swap notifications
+
+#### Shared Utilities (`packages/ui-shared/src/utils/`)
+- **exercise-filters.ts**: Consistent exercise filtering and categorization
+  - `filterExercisesBySearch`: Case-insensitive search
+  - `categorizeExercisesByRecommendation`: Group by blueprint scores
+  - `filterOutActiveExercises`: Remove already selected exercises
+
+#### Usage Pattern
+```typescript
+// Web (Next.js)
+import { useClientPreferences } from '@acme/ui-shared';
+import { api } from '~/trpc/react';
+import { supabase } from '~/lib/supabase';
+
+const { selections, handleToggleExercise } = useClientPreferences({
+  sessionId, userId, trpc: api, supabase
+});
+
+// TV App (React Native)
+import { useClientPreferences } from '@acme/ui-shared';
+import { api } from '../utils/api';
+import { supabase } from '../lib/supabase';
+
+// Same hook, different platform-specific imports
+```
+
+#### Key Principles
+1. **Dependency Injection**: Platform-specific services (tRPC, Supabase) are injected
+2. **No UI Components**: Only business logic and data management
+3. **"use client" Directive**: Required for hooks using React features
+4. **Type Safety**: Shared TypeScript interfaces ensure consistency
+
 
 ## Authentication System (Implemented)
 
@@ -396,6 +494,13 @@ Frontend Request → tRPC Router → Procedure → Database → Response
 - `business`: Business operations (`all`, `byId`, `create`)
 - `trainingSession`: Session scheduling (`create`, `list`, `getById`, `addParticipant`, `removeParticipant`, `myPast`)
 - `workout`: Workout management (see Workout Tracking System section for full list)
+- `lighting`: Smart lighting control for TV app integration
+- `muscleCoverage`: Muscle group analysis for workouts
+- `circuitConfig`: Circuit workout configuration management
+- `workoutPreferences`: User workout preferences and settings
+- `workoutSelections`: Exercise selection tracking for workouts
+- `postWorkoutFeedback`: Post-workout feedback collection
+- `messages`: SMS messaging via Twilio integration
 
 **Procedure Types:**
 - `publicProcedure`: Open to all users
@@ -511,6 +616,9 @@ Tracks procedure execution time:
 ### Prerequisites
 - Node.js 22.14.0+
 - pnpm 10.11.1+
+- PostgreSQL (via Supabase)
+- Android Studio (for TV app development)
+- Redis (optional, for caching)
 
 ### Installation
 ```bash
@@ -561,6 +669,18 @@ AUTH_SECRET="your-secret-key"
 
 # AI/LLM Integration
 OPENAI_API_KEY="your-openai-api-key"
+
+# SMS Communication (Twilio)
+TWILIO_ACCOUNT_SID="your-twilio-account-sid"
+TWILIO_AUTH_TOKEN="your-twilio-auth-token"
+TWILIO_PHONE_NUMBER="+1234567890"
+
+# Supabase Realtime
+SUPABASE_URL="https://[project-ref].supabase.co"
+SUPABASE_ANON_KEY="your-supabase-anon-key"
+
+# Smart Lighting (Optional)
+LIFX_ACCESS_TOKEN="your-lifx-token"
 
 # Optional: For OAuth proxy
 AUTH_REDIRECT_PROXY_URL="http://localhost:3000"
@@ -665,10 +785,39 @@ A comprehensive workout tracking system that allows clients to view their traini
 
 ---
 
-## AI Workout Generation & Storage (Implemented)
+## AI Workout Generation System (Implemented)
 
 ### Overview
-An intelligent workout generation system that creates personalized workouts using AI, with seamless database storage and client association. The system combines exercise selection, AI-powered workout creation, and persistent storage in a single workflow.
+A sophisticated AI-powered workout generation system using LangChain and LangGraph that creates personalized workouts based on client profiles, available equipment, and training goals. The system employs a multi-agent architecture for intelligent exercise selection and workout structuring.
+
+### Architecture
+The AI system uses a graph-based workflow with specialized agents:
+
+#### Agent Hierarchy
+1. **Orchestrator Agent**: Manages the overall workflow and coordinates between agents
+2. **Muscle Coverage Agent**: Ensures balanced muscle group distribution
+3. **Exercise Selection Agent**: Picks appropriate exercises based on constraints
+4. **Workout Structure Agent**: Organizes exercises into logical blocks/circuits
+5. **Set/Rep Agent**: Determines appropriate volume for each exercise
+
+#### LangGraph Workflow
+```typescript
+// Simplified workflow representation
+const workoutGraph = new StateGraph()
+  .addNode("analyze_requirements", analyzeRequirements)
+  .addNode("select_exercises", selectExercises)
+  .addNode("structure_workout", structureWorkout)
+  .addNode("assign_sets_reps", assignSetsReps)
+  .addNode("validate_output", validateOutput)
+  .addConditionalEdges(/* routing logic */);
+```
+
+### Features
+- **Multi-template Support**: Standard, Circuit, Full Body, and EMOM workouts
+- **Equipment-aware**: Filters exercises based on available gym equipment
+- **Skill/Strength Matching**: Adapts difficulty to client capabilities
+- **Progressive Overload**: Considers workout history for progression
+- **Constraint Satisfaction**: Respects time limits, equipment, and space constraints
 
 ### Core Features
 
@@ -974,6 +1123,159 @@ const WorkoutEditor = ({ workout }) => {
 - Workout versioning and history
 - Template creation from existing workouts
 - Collaborative editing with conflict resolution
+
+---
+
+## Realtime Features (Implemented)
+
+### Overview
+Extensive use of Supabase Realtime for live updates across web and TV applications, enabling synchronized multi-device experiences during training sessions.
+
+### Key Realtime Features
+
+#### Live Workout Updates
+- **Exercise Swaps**: Trainers can swap exercises in real-time, updates reflect instantly on TV
+- **Progress Tracking**: As clients complete sets, progress updates across all devices
+- **Circuit Timing**: Synchronized timers for circuit training across all screens
+
+#### Session Management
+- **Check-in Status**: Real-time client attendance updates
+- **Participant List**: Live updates as clients join/leave sessions
+- **Session State**: Start/pause/stop controls sync across devices
+
+#### Preference Syncing
+- **Client Preferences**: Equipment availability, exercise restrictions update live
+- **Global Settings**: Session-wide preferences (music, lighting) sync instantly
+- **Workout Modifications**: Real-time adjustments based on client feedback
+
+### Technical Implementation
+```typescript
+// Example: Realtime workout updates
+const channel = supabase
+  .channel(`workout-${workoutId}`)
+  .on('postgres_changes', {
+    event: '*',
+    schema: 'public',
+    table: 'workout_exercise',
+    filter: `workout_id=eq.${workoutId}`
+  }, handleExerciseUpdate)
+  .subscribe();
+```
+
+### Realtime Hooks
+- `useRealtimeWorkoutExercises`: Live exercise updates
+- `useRealtimeCheckIns`: Client attendance tracking
+- `useRealtimeCircuitConfig`: Circuit timing synchronization
+- `useRealtimePreferences`: Preference updates
+- `useRealtimeExerciseSwaps`: Exercise substitution tracking
+
+---
+
+## SMS Communication System (Implemented)
+
+### Overview
+Integrated SMS messaging system using Twilio for client check-ins, workout notifications, and two-way communication between trainers and clients.
+
+### Key Features
+- **Client Check-ins**: Automated SMS sent to clients before training sessions
+- **Response Tracking**: System processes client responses (Yes/No/Maybe)
+- **Trainer Notifications**: Real-time updates when clients respond
+- **Workout Updates**: SMS notifications for workout assignments and changes
+- **Two-way Messaging**: Clients can text questions, trainers receive and respond
+
+### Technical Implementation
+- **Twilio Integration**: Full SMS API integration with webhook support
+- **Message Queue**: Redis-based queue for reliable message delivery
+- **Webhook Handler**: `/api/twilio/webhook` endpoint for incoming messages
+- **Rate Limiting**: Prevents SMS spam and manages costs
+- **Message History**: Full audit trail of all SMS communications
+
+### Message Flow
+```mermaid
+sequenceDiagram
+    participant System
+    participant Twilio
+    participant Client
+    participant Database
+    participant Trainer
+
+    System->>Twilio: Send check-in SMS
+    Twilio->>Client: "Are you coming to today's 6pm session?"
+    Client->>Twilio: "Yes"
+    Twilio->>System: Webhook with response
+    System->>Database: Update attendance status
+    System->>Trainer: Real-time notification
+```
+
+### API Endpoints
+- `messages.sendCheckIn`: Send check-in SMS to session participants
+- `messages.processResponse`: Handle incoming SMS responses
+- `messages.sendCustom`: Send custom messages to clients
+- `messages.getHistory`: Retrieve message history for a client
+
+---
+
+## TV Application (Implemented)
+
+### Overview
+A dedicated React Native TV application designed for gym environments, providing real-time workout display and automated lighting control during training sessions.
+
+### Key Features
+- **Real-time Workout Display**: Shows active workouts with exercise details, sets, and reps
+- **Circuit Training Support**: Specialized views for time-based circuit workouts
+- **Smart Lighting Integration**: Automated lighting scenes synchronized with workout phases
+- **Multi-client Support**: Displays workouts for multiple participants in group sessions
+- **Focus Mode Navigation**: TV remote-friendly interface with clear focus states
+
+### Technology Stack
+- **React Native TV**: Fork of React Native optimized for tvOS and Android TV
+- **NativeWind 2.0.11**: Tailwind CSS styling for TV interface
+- **React Navigation**: TV-optimized navigation with remote control support
+- **Supabase Realtime**: WebSocket connection for live workout updates
+
+### Architecture
+```
+tv/
+├── src/
+│   ├── screens/
+│   │   ├── MainScreen.tsx          # Landing screen with session selection
+│   │   ├── CircuitWorkoutLiveScreen.tsx  # Live circuit workout display
+│   │   └── LightingTestScreen.tsx  # Lighting integration testing
+│   ├── components/
+│   │   ├── ExerciseCard.tsx       # Individual exercise display
+│   │   ├── WorkoutTimer.tsx       # Circuit timing display
+│   │   └── FocusableButton.tsx    # TV remote-friendly buttons
+│   └── lib/
+│       ├── lighting/              # LIFX smart lighting control
+│       ├── auth/                  # Authentication setup
+│       └── api/                   # tRPC client configuration
+└── android/
+    └── app/
+        └── build.gradle           # TV-specific build configuration
+```
+
+### Lighting System
+- **LIFX Integration**: Direct API integration for smart bulb control
+- **Preset Scenes**: Pre-configured lighting for different workout phases
+- **Smooth Transitions**: Gradual color/brightness changes between exercises
+- **Animation Support**: Pulse and breathe effects for timing cues
+
+### Build & Deployment
+```bash
+# Development
+pnpm run dev:tv          # Start Metro bundler for TV
+pnpm run android:tv      # Run on Android TV emulator/device
+
+# Production Build
+pnpm run build:tv        # Create production APK
+pnpm run deploy:tv       # Install on connected TV device
+```
+
+### Remote Control Navigation
+- **D-pad Navigation**: Full support for directional navigation
+- **Focus Management**: Clear visual indicators for focused elements
+- **Spatial Navigation**: Predictable focus movement between elements
+- **Back Button**: Proper handling of TV remote back button
 
 ---
 

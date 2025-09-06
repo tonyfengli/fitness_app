@@ -1,8 +1,8 @@
 export const LIGHTING_PRESETS = {
   circuit: {
-    WARMUP: { bri: 150, hue: 8000, sat: 100, transitiontime: 20 },
-    WORK: { bri: 254, hue: 47000, sat: 200, transitiontime: 2 },
-    REST: { bri: 100, hue: 25000, sat: 100, transitiontime: 2 },
+    WARMUP: { bri: 150, hue: 8000, sat: 100, transitiontime: 20 },   // Keep original orange
+    WORK: { bri: 150, hue: 8000, sat: 100, transitiontime: 2 },      // Use warmup color for work
+    REST: { bri: 100, hue: 25000, sat: 100, transitiontime: 2 },     // Keep original green
     ROUND: { bri: 200, hue: 10000, sat: 140, transitiontime: 5 },
     COOLDOWN: { bri: 120, hue: 35000, sat: 80, transitiontime: 20 },
     DEFAULT: { bri: 180, hue: 8000, sat: 140, transitiontime: 10 }

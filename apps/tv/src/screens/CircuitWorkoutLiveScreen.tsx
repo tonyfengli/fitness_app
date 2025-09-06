@@ -4,7 +4,18 @@ import { useNavigation } from '../App';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../providers/TRPCProvider';
 import Icon from 'react-native-vector-icons/MaterialIcons';
-import { setHueLights, getPresetForEvent, startHealthCheck, stopHealthCheck } from '../lib/lighting';
+import { 
+  setHueLights, 
+  getPresetForEvent, 
+  startHealthCheck, 
+  stopHealthCheck,
+  startDriftAnimation,
+  startBreatheAnimation,
+  roundFlash,
+  startCountdownPulse,
+  setPauseState,
+  stopAnimation
+} from '../lib/lighting';
 import { LightingStatusDot } from '../components/LightingStatusDot';
 
 // Design tokens
@@ -174,13 +185,14 @@ export function CircuitWorkoutLiveScreen() {
     }
   }, [selections]);
 
-  // Start health check on mount
+  // Start health check on mount and cleanup on unmount
   useEffect(() => {
     console.log('[CIRCUIT-LIGHTING] Component mounted, starting health check');
     startHealthCheck();
     return () => {
-      console.log('[CIRCUIT-LIGHTING] Component unmounting, stopping health check');
+      console.log('[CIRCUIT-LIGHTING] Component unmounting, cleanup');
       stopHealthCheck();
+      stopAnimation(); // Stop any running animations
     };
   }, []);
 
@@ -223,32 +235,36 @@ export function CircuitWorkoutLiveScreen() {
     
     // Only trigger if event changed
     if (lightingEvent && lightingEvent !== lastLightingEvent) {
-      const preset = getPresetForEvent('circuit', lightingEvent);
-      console.log('[CIRCUIT-LIGHTING] 🎨 Applying preset:', {
+      console.log('[CIRCUIT-LIGHTING] 🎨 Applying lighting effect:', {
         event: lightingEvent,
-        preset,
         timestamp: new Date().toISOString()
       });
       
+      // Apply static preset (no animations)
+      stopAnimation(); // Always stop any running animation
+      const preset = getPresetForEvent('circuit', lightingEvent);
       if (preset) {
         setHueLights(preset);
-        setLastLightingEvent(lightingEvent);
-      } else {
-        console.warn('[CIRCUIT-LIGHTING] No preset found for event:', lightingEvent);
       }
+      
+      setLastLightingEvent(lightingEvent);
     }
   }, [currentScreen, timeRemaining, isStarted, lastLightingEvent, currentRoundIndex, roundsData.length]);
 
-  // Handle round changes
+  // Handle round changes with flash
   useEffect(() => {
     if (currentRoundIndex > 0 && currentExerciseIndex === 0 && currentScreen === 'round-preview') {
-      const preset = getPresetForEvent('circuit', 'round_start');
-      if (preset) {
-        setHueLights(preset);
-        console.log(`Circuit round ${currentRoundIndex + 1} start`);
-      }
+      console.log(`[CIRCUIT-LIGHTING] Round ${currentRoundIndex + 1} transition flash`);
+      roundFlash();
     }
   }, [currentRoundIndex, currentExerciseIndex, currentScreen]);
+
+  // Handle pause state lighting (static)
+  useEffect(() => {
+    if (isPaused) {
+      setPauseState();
+    }
+  }, [isPaused]);
 
   // Timer management
   useEffect(() => {

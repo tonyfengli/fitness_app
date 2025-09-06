@@ -31,9 +31,10 @@ import { TestTailwindScreen } from './screens/TestTailwindScreen';
 import { CircuitPreferencesScreen } from './screens/CircuitPreferencesScreen';
 import { CircuitWorkoutOverviewScreen } from './screens/CircuitWorkoutOverviewScreen';
 import { CircuitWorkoutLiveScreen } from './screens/CircuitWorkoutLiveScreen';
+import { LightingTestScreen } from './screens/LightingTestScreen';
 
 
-type ScreenName = 'Main' | 'SessionLobby' | 'GlobalPreferences' | 'CircuitPreferences' | 'WorkoutOverview' | 'CircuitWorkoutOverview' | 'CircuitWorkoutLive' | 'WorkoutLive' | 'WorkoutComplete' | 'SessionMonitor' | 'TestTailwind';
+type ScreenName = 'Main' | 'SessionLobby' | 'GlobalPreferences' | 'CircuitPreferences' | 'WorkoutOverview' | 'CircuitWorkoutOverview' | 'CircuitWorkoutLive' | 'WorkoutLive' | 'WorkoutComplete' | 'SessionMonitor' | 'TestTailwind' | 'LightingTest';
 
 interface NavigationState {
   currentScreen: ScreenName;
@@ -167,6 +168,9 @@ function NavigationContainer({ children }: { children: React.ReactNode }) {
         )}
         {navigationState.currentScreen === 'TestTailwind' && (
           <TestTailwindScreen />
+        )}
+        {navigationState.currentScreen === 'LightingTest' && (
+          <LightingTestScreen />
         )}
       </View>
     </NavigationContext.Provider>

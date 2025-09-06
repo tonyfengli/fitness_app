@@ -3,7 +3,7 @@
  */
 
 import { z } from "zod/v4";
-import { createTRPCRouter, protectedProcedure } from "../trpc";
+import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
 import { getLightingService } from "../services/lighting/lighting-service";
 import type { WorkoutTemplate } from "../services/lighting/types";
 import { CIRCUIT_EVENTS, STRENGTH_EVENTS } from "../services/lighting/types";
@@ -113,5 +113,46 @@ export const lightingRouter = createTRPCRouter({
     await lightingService.initialize();
     
     return { success: true };
+  }),
+
+  /**
+   * Start an animation effect
+   */
+  startAnimation: protectedProcedure
+    .input(
+      z.object({
+        animation: z.enum(['drift', 'breathe', 'countdown', 'none']),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const lightingService = getLightingService();
+      
+      // Stop any existing animation first
+      await lightingService.stopAnimation();
+      
+      // Start the requested animation
+      if (input.animation !== 'none') {
+        await lightingService.startAnimation(input.animation);
+      }
+      
+      return { success: true };
+    }),
+
+  /**
+   * Stop any running animation
+   */
+  stopAnimation: protectedProcedure.mutation(async ({ ctx }) => {
+    const lightingService = getLightingService();
+    await lightingService.stopAnimation();
+    
+    return { success: true };
+  }),
+
+  /**
+   * Get current animation status
+   */
+  getAnimationStatus: protectedProcedure.query(async ({ ctx }) => {
+    const lightingService = getLightingService();
+    return lightingService.getAnimationStatus();
   }),
 });
