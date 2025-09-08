@@ -219,9 +219,10 @@ interface RoundViewProps {
   clients?: any[];
   isPhase2Loading?: boolean;
   phase2Error?: string;
+  onTimerUpdate?: (timeRemaining: number, roundIndex: number) => void;
 }
 
-export default function RoundView({ sessionId, round, workouts, roundsData, organization, clients, isPhase2Loading, phase2Error }: RoundViewProps = {}) {
+export default function RoundView({ sessionId, round, workouts, roundsData, organization, clients, isPhase2Loading, phase2Error, onTimerUpdate }: RoundViewProps = {}) {
   const navigation = useNavigation();
   
   // Use real data if provided, otherwise fall back to mock data
@@ -232,6 +233,15 @@ export default function RoundView({ sessionId, round, workouts, roundsData, orga
   const [timeRemaining, setTimeRemaining] = useState(600); // 10 minutes
   const [isPaused, setIsPaused] = useState(isPhase2Loading || false); // Start paused if Phase 2 is loading
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Call timer update on mount and when round changes
+  useEffect(() => {
+    if (onTimerUpdate) {
+      // Reset to initial time when round changes
+      const initialTime = 600; // 10 minutes
+      onTimerUpdate(initialTime, currentRoundIndex);
+    }
+  }, [currentRoundIndex]);
   
   // Unpause when Phase 2 completes
   useEffect(() => {
@@ -257,16 +267,24 @@ export default function RoundView({ sessionId, round, workouts, roundsData, orga
       });
     } else {
       // Go to next round
-      setCurrentRoundIndex((prev) => prev + 1);
+      const nextIndex = currentRoundIndex + 1;
+      setCurrentRoundIndex(nextIndex);
       setPhase("work");
       setTimeRemaining(600); // 10 minutes
+      if (onTimerUpdate) {
+        onTimerUpdate(600, nextIndex);
+      }
     }
   };
   
   const goToPreviousRound = () => {
-    setCurrentRoundIndex((prev) => (prev - 1 + rounds.length) % rounds.length);
+    const prevIndex = (currentRoundIndex - 1 + rounds.length) % rounds.length;
+    setCurrentRoundIndex(prevIndex);
     setPhase("work");
     setTimeRemaining(600); // 10 minutes
+    if (onTimerUpdate) {
+      onTimerUpdate(600, prevIndex);
+    }
   };
 
   // Format time as MM:SS
@@ -295,7 +313,13 @@ export default function RoundView({ sessionId, round, workouts, roundsData, orga
   useEffect(() => {
     if (!isPaused) {
       intervalRef.current = setInterval(() => {
-        setTimeRemaining((prev) => Math.max(0, prev - 1));
+        setTimeRemaining((prev) => {
+          const newTime = Math.max(0, prev - 1);
+          if (onTimerUpdate) {
+            onTimerUpdate(newTime, currentRoundIndex);
+          }
+          return newTime;
+        });
       }, 1000);
     }
 

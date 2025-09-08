@@ -6,7 +6,7 @@ import {
   subscribeLightingStatus
 } from '../lib/lighting';
 import {
-  DEFAULT_CIRCUIT_COLORS,
+  DEFAULT_PRESET_COLORS,
   getHuePresetForColor,
   loadColorMappings,
   saveColorMappings,
@@ -103,7 +103,7 @@ export function LightingTestScreen() {
 
   const handleBackPress = async () => {
     // Apply App Start color when going back
-    const appStartColor = selectedColors['circuit_app_start'] || DEFAULT_CIRCUIT_COLORS['circuit_app_start'];
+    const appStartColor = selectedColors['app_start'] || DEFAULT_PRESET_COLORS['app_start'];
     const huePreset = getHuePresetForColor(appStartColor);
     await setHueLights(huePreset);
     navigation.goBack();
@@ -113,16 +113,16 @@ export function LightingTestScreen() {
     { 
       label: 'App Start', 
       onPress: async () => {
-        const color = selectedColors['circuit_app_start'] || DEFAULT_CIRCUIT_COLORS['circuit_app_start'];
+        const color = selectedColors['app_start'] || DEFAULT_PRESET_COLORS['app_start'];
         await setHueLights(getHuePresetForColor(color));
       },
       color: '#fb923c',
-      presetKey: 'circuit_app_start'
+      presetKey: 'app_start'
     },
     { 
       label: 'Round Preview', 
       onPress: async () => {
-        const color = selectedColors['circuit_round_preview'] || DEFAULT_CIRCUIT_COLORS['circuit_round_preview'];
+        const color = selectedColors['circuit_round_preview'] || DEFAULT_PRESET_COLORS['circuit_round_preview'];
         await setHueLights(getHuePresetForColor(color));
       },
       color: '#a855f7',
@@ -131,7 +131,7 @@ export function LightingTestScreen() {
     { 
       label: 'Exercise Round', 
       onPress: async () => {
-        const color = selectedColors['circuit_exercise_round'] || DEFAULT_CIRCUIT_COLORS['circuit_exercise_round'];
+        const color = selectedColors['circuit_exercise_round'] || DEFAULT_PRESET_COLORS['circuit_exercise_round'];
         await setHueLights(getHuePresetForColor(color));
       },
       color: '#3b82f6',
@@ -140,7 +140,7 @@ export function LightingTestScreen() {
     { 
       label: 'Rest', 
       onPress: async () => {
-        const color = selectedColors['circuit_rest'] || DEFAULT_CIRCUIT_COLORS['circuit_rest'];
+        const color = selectedColors['circuit_rest'] || DEFAULT_PRESET_COLORS['circuit_rest'];
         await setHueLights(getHuePresetForColor(color));
       },
       color: '#22c55e',
@@ -149,7 +149,7 @@ export function LightingTestScreen() {
     { 
       label: 'Cooldown', 
       onPress: async () => {
-        const color = selectedColors['circuit_cooldown'] || DEFAULT_CIRCUIT_COLORS['circuit_cooldown'];
+        const color = selectedColors['circuit_cooldown'] || DEFAULT_PRESET_COLORS['circuit_cooldown'];
         await setHueLights(getHuePresetForColor(color));
       },
       color: '#06b6d4',
@@ -160,34 +160,49 @@ export function LightingTestScreen() {
 
   const strengthPresets: PresetButton[] = [
     { 
-      label: 'Warmup', 
-      onPress: () => setHueLights({ on: true, bri: 150, hue: 8000, sat: 100, transitiontime: 20 }), 
+      label: 'App Start', 
+      onPress: async () => {
+        const color = selectedColors['app_start'] || DEFAULT_PRESET_COLORS['app_start'];
+        await setHueLights(getHuePresetForColor(color));
+      },
       color: '#fb923c',
-      presetKey: 'strength_warmup'
+      presetKey: 'app_start'
     },
     { 
-      label: 'Round Start', 
-      onPress: () => setHueLights({ on: true, bri: 254, hue: 47000, sat: 200, transitiontime: 20 }), 
+      label: '0-5 Minutes', 
+      onPress: async () => {
+        const color = selectedColors['strength_0_5_min'] || DEFAULT_PRESET_COLORS['strength_0_5_min'];
+        await setHueLights(getHuePresetForColor(color));
+      },
+      color: '#3b82f6',
+      presetKey: 'strength_0_5_min'
+    },
+    { 
+      label: '5-9 Minutes', 
+      onPress: async () => {
+        const color = selectedColors['strength_5_9_min'] || DEFAULT_PRESET_COLORS['strength_5_9_min'];
+        await setHueLights(getHuePresetForColor(color));
+      },
       color: '#a855f7',
-      presetKey: 'strength_round_start'
+      presetKey: 'strength_5_9_min'
     },
     { 
-      label: 'Round Rest', 
-      onPress: () => setHueLights({ on: true, bri: 120, hue: 8000, sat: 140, transitiontime: 20 }), 
-      color: '#f97316',
-      presetKey: 'strength_round_rest'
+      label: '9-10 Minutes', 
+      onPress: async () => {
+        const color = selectedColors['strength_9_10_min'] || DEFAULT_PRESET_COLORS['strength_9_10_min'];
+        await setHueLights(getHuePresetForColor(color));
+      },
+      color: '#ef4444',
+      presetKey: 'strength_9_10_min'
     },
     { 
       label: 'Cooldown', 
-      onPress: () => setHueLights({ on: true, bri: 120, hue: 35000, sat: 80, transitiontime: 20 }), 
-      color: '#3b82f6',
+      onPress: async () => {
+        const color = selectedColors['strength_cooldown'] || DEFAULT_PRESET_COLORS['strength_cooldown'];
+        await setHueLights(getHuePresetForColor(color));
+      },
+      color: '#06b6d4',
       presetKey: 'strength_cooldown'
-    },
-    { 
-      label: 'Default', 
-      onPress: () => setHueLights({ on: true, bri: 180, hue: 8000, sat: 140, transitiontime: 10 }), 
-      color: '#6b7280',
-      presetKey: 'strength_default'
     },
   ];
 
@@ -301,7 +316,7 @@ function PresetSection({
         {presets.map((preset, index) => {
           const isSelected = selectedPreset === preset.label;
           const selectedColor = selectedColors[preset.presetKey] || 
-                              (DEFAULT_CIRCUIT_COLORS[preset.presetKey] || preset.color);
+                              (DEFAULT_PRESET_COLORS[preset.presetKey] || preset.color);
           
           return (
             <View key={index}>

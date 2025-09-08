@@ -3,13 +3,22 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 // Storage key for persisting color selections
 export const LIGHTING_PRESETS_STORAGE_KEY = '@lighting_presets_circuit';
 
-// Default color mappings for circuit presets
-export const DEFAULT_CIRCUIT_COLORS: Record<string, string> = {
-  'circuit_app_start': '#fb923c',      // Orange
+// Default color mappings for presets
+export const DEFAULT_PRESET_COLORS: Record<string, string> = {
+  // Shared
+  'app_start': '#fb923c',              // Orange
+  
+  // Circuit presets
   'circuit_round_preview': '#a855f7',  // Purple
   'circuit_exercise_round': '#3b82f6', // Blue
   'circuit_rest': '#22c55e',          // Green
   'circuit_cooldown': '#06b6d4',      // Cyan
+  
+  // Strength presets
+  'strength_0_5_min': '#3b82f6',      // Blue (calm start)
+  'strength_5_9_min': '#a855f7',      // Purple (increasing intensity)
+  'strength_9_10_min': '#ef4444',     // Red (final push)
+  'strength_cooldown': '#06b6d4',     // Cyan (recovery)
 };
 
 // Map colors to Hue values
@@ -42,7 +51,7 @@ export async function loadColorMappings(): Promise<Record<string, string>> {
   } catch (error) {
     console.error('Error loading color mappings:', error);
   }
-  return DEFAULT_CIRCUIT_COLORS;
+  return DEFAULT_PRESET_COLORS;
 }
 
 // Save color mappings to AsyncStorage
@@ -57,5 +66,5 @@ export async function saveColorMappings(mappings: Record<string, string>) {
 // Get color for a specific preset
 export async function getColorForPreset(presetKey: string): Promise<string> {
   const mappings = await loadColorMappings();
-  return mappings[presetKey] || DEFAULT_CIRCUIT_COLORS[presetKey] || '#fb923c';
+  return mappings[presetKey] || DEFAULT_PRESET_COLORS[presetKey] || '#fb923c';
 }

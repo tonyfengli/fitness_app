@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, Pressable, Alert, ActivityIndicator } from 'react-native';
 import { useNavigation } from '../App';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { api } from '../providers/TRPCProvider';
+import { setHueLights } from '../lib/lighting';
+import { getColorForPreset, getHuePresetForColor } from '../lib/lighting/colorMappings';
 
 // Design tokens - matching other screens
 const TOKENS = {
@@ -79,6 +81,22 @@ export function WorkoutCompleteScreen() {
   const workouts = navigation.getParam('workouts');
   const clients = navigation.getParam('clients');
   
+  // Apply cooldown lighting on mount
+  useEffect(() => {
+    getColorForPreset('strength_cooldown').then(color => {
+      const preset = getHuePresetForColor(color);
+      setHueLights(preset);
+    });
+    
+    // Apply App Start color when leaving
+    return () => {
+      getColorForPreset('app_start').then(color => {
+        const preset = getHuePresetForColor(color);
+        setHueLights(preset);
+      });
+    };
+  }, []);
+  
   // Fetch session data for any additional info we might want to display
   const { data: sessionData } = useQuery(
     sessionId ? api.trainingSession.getById.queryOptions({ id: sessionId }) : {
@@ -91,8 +109,12 @@ export function WorkoutCompleteScreen() {
   // Complete session mutation with name update
   const completeSessionMutation = useMutation({
     ...api.trainingSession.completeSessionWithName.mutationOptions(),
-    onSuccess: () => {
+    onSuccess: async () => {
       console.log('[WorkoutCompleteScreen] Session completed successfully');
+      // Apply App Start color before navigating
+      const color = await getColorForPreset('app_start');
+      const preset = getHuePresetForColor(color);
+      await setHueLights(preset);
       // Navigate to main screen
       navigation.navigate('Main');
     },

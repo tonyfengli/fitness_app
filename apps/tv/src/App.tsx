@@ -91,7 +91,7 @@ function NavigationContainer({ children }: { children: React.ReactNode }) {
       
       // Apply App Start color when returning to Main screen
       if (previousScreen === 'Main') {
-        getColorForPreset('circuit_app_start').then(color => {
+        getColorForPreset('app_start').then(color => {
           const preset = getHuePresetForColor(color);
           setHueLights(preset);
         });
@@ -133,7 +133,7 @@ function NavigationContainer({ children }: { children: React.ReactNode }) {
     startHealthCheck();
     
     // Apply App Start color
-    getColorForPreset('circuit_app_start').then(color => {
+    getColorForPreset('app_start').then(color => {
       const preset = getHuePresetForColor(color);
       setHueLights(preset);
     });

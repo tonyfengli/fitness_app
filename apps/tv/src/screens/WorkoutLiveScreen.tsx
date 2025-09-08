@@ -1,11 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { View, Text, ActivityIndicator } from 'react-native';
 import { useNavigation } from '../App';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../providers/TRPCProvider';
 import RoundView from './RoundView';
 import { transformWorkoutDataForLiveView } from '../utils/workoutDataTransformer';
-import { setHueLights, getPresetForEvent, startHealthCheck, stopHealthCheck } from '../lib/lighting';
+import { setHueLights, startHealthCheck, stopHealthCheck } from '../lib/lighting';
+import { getColorForPreset, getHuePresetForColor } from '../lib/lighting/colorMappings';
 import { LightingStatusDot } from '../components/LightingStatusDot';
 
 // Design tokens - matching other screens
@@ -48,9 +49,7 @@ export function WorkoutLiveScreen() {
   
   // Lighting state
   const [lastLightingEvent, setLastLightingEvent] = useState<string>('');
-  const [currentPhase, setCurrentPhase] = useState<'warmup' | 'work' | 'rest' | 'done'>('warmup');
-  const [isStarted, setIsStarted] = useState(false);
-  const [elapsedTime, setElapsedTime] = useState(0);
+  const currentLightingZoneRef = useRef<string>('');
   
   // Update state when params change
   useEffect(() => {
@@ -185,35 +184,60 @@ export function WorkoutLiveScreen() {
     }
   }, [sessionData, isPhase2Loading, sessionLoading, passedWorkouts]);
   
-  // Start health check on mount
+  // Start health check on mount and apply App Start color
   useEffect(() => {
     startHealthCheck();
-    return () => stopHealthCheck();
+    // Apply App Start color on mount
+    getColorForPreset('app_start').then(color => {
+      const preset = getHuePresetForColor(color);
+      setHueLights(preset);
+    });
+    return () => {
+      stopHealthCheck();
+      // Apply App Start color when leaving
+      getColorForPreset('app_start').then(color => {
+        const preset = getHuePresetForColor(color);
+        setHueLights(preset);
+      });
+    };
   }, []);
 
-  // Handle phase changes for lighting
-  useEffect(() => {
-    let lightingEvent = '';
-    
-    if (!isStarted && elapsedTime === 0) {
-      lightingEvent = 'warmup';
-    } else if (currentPhase === 'work') {
-      lightingEvent = 'work';
-    } else if (currentPhase === 'rest') {
-      lightingEvent = 'rest';
-    } else if (currentPhase === 'done') {
-      lightingEvent = 'complete';
+  // Track current round to detect round changes
+  const currentRoundRef = useRef<number>(-1);
+  
+  // Handle timer updates from RoundView
+  const handleTimerUpdate = useCallback(async (timeRemaining: number, roundIndex: number) => {
+    // Check if round changed and reset zone
+    if (roundIndex !== currentRoundRef.current) {
+      currentRoundRef.current = roundIndex;
+      currentLightingZoneRef.current = ''; // Reset zone to force update
+      console.log(`Round changed to ${roundIndex + 1}, resetting lighting zone`);
     }
     
-    if (lightingEvent && lightingEvent !== lastLightingEvent) {
-      const preset = getPresetForEvent('strength', lightingEvent);
-      if (preset) {
-        setHueLights(preset);
-        setLastLightingEvent(lightingEvent);
-        console.log(`Strength lighting: ${lightingEvent}`, preset);
-      }
+    // Timer counts DOWN from 600 (10:00) to 0 (0:00)
+    let zone = '';
+    
+    if (timeRemaining >= 300) { // 10:00 to 5:00 (first 5 minutes)
+      zone = 'strength_0_5_min';
+    } else if (timeRemaining >= 60) { // 4:59 to 1:00 (next ~4 minutes)
+      zone = 'strength_5_9_min';
+    } else if (timeRemaining > 0) { // 0:59 to 0:01 (last minute)
+      zone = 'strength_9_10_min';
+    } else { // 0:00 - timer expired
+      zone = 'strength_9_10_min'; // Keep red at 0
     }
-  }, [currentPhase, isStarted, elapsedTime, lastLightingEvent]);
+    
+    // Use ref to track current zone without causing callback recreation
+    if (zone !== currentLightingZoneRef.current) {
+      currentLightingZoneRef.current = zone;
+      const color = await getColorForPreset(zone);
+      const preset = getHuePresetForColor(color);
+      await setHueLights(preset);
+      const mins = Math.floor(timeRemaining / 60);
+      const secs = timeRemaining % 60;
+      console.log(`Strength lighting: ${zone} at ${mins}:${secs.toString().padStart(2, '0')} remaining`);
+    }
+  }, []); // No dependencies needed since we use refs
   
   // Helper function to format exercise metadata
   const formatExerciseMeta = (exercise: any): string => {
@@ -476,6 +500,7 @@ export function WorkoutLiveScreen() {
         clients={clients}
         isPhase2Loading={isPhase2Loading}
         phase2Error={phase2Error}
+        onTimerUpdate={handleTimerUpdate}
       />
       
       {/* Lighting Status Indicator */}

@@ -15,6 +15,7 @@ import {
   setPauseState,
   stopAnimation
 } from '../lib/lighting';
+import { getColorForPreset, getHuePresetForColor } from '../lib/lighting/colorMappings';
 import { LightingStatusDot } from '../components/LightingStatusDot';
 
 // Design tokens
@@ -192,6 +193,11 @@ export function CircuitWorkoutLiveScreen() {
       console.log('[CIRCUIT-LIGHTING] Component unmounting, cleanup');
       stopHealthCheck();
       stopAnimation(); // Stop any running animations
+      // Apply App Start color when leaving the workout screen
+      getColorForPreset('app_start').then(color => {
+        const preset = getHuePresetForColor(color);
+        setHueLights(preset);
+      });
     };
   }, []);
 
@@ -324,8 +330,12 @@ export function CircuitWorkoutLiveScreen() {
           setCurrentScreen('round-preview');
           startTimer(circuitConfig?.config?.restBetweenRounds || 60);
         } else {
-          // Workout complete
-          navigation.goBack();
+          // Workout complete - apply App Start color
+          getColorForPreset('app_start').then(color => {
+            const preset = getHuePresetForColor(color);
+            setHueLights(preset);
+            navigation.goBack();
+          });
         }
       } else {
         // Not the last exercise - go to rest
@@ -424,8 +434,12 @@ export function CircuitWorkoutLiveScreen() {
           </Text>
         ) : (
           <Pressable
-            onPress={() => {
+            onPress={async () => {
               console.log('[CircuitWorkoutLive] Back button pressed');
+              // Apply App Start color when leaving workout
+              const appStartColor = await getColorForPreset('app_start');
+              const preset = getHuePresetForColor(appStartColor);
+              await setHueLights(preset);
               navigation.goBack();
             }}
             focusable
