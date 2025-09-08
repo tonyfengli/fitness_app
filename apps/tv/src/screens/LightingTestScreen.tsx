@@ -1,15 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, Pressable } from 'react-native';
+import { View, Text, Pressable } from 'react-native';
 import { useNavigation } from '../App';
 import { 
   setHueLights, 
   LIGHTING_PRESETS,
-  startDriftAnimation,
-  startBreatheAnimation,
-  roundFlash,
-  startCountdownPulse,
-  setPauseState,
-  stopAnimation,
   subscribeLightingStatus
 } from '../lib/lighting';
 
@@ -32,6 +26,16 @@ const TOKENS = {
   },
 };
 
+// Hardcoded color palette
+const COLOR_PALETTE = [
+  { name: 'Red', value: '#ef4444', hue: 0 },
+  { name: 'Orange', value: '#f97316', hue: 8000 },
+  { name: 'Yellow', value: '#eab308', hue: 10000 },
+  { name: 'Green', value: '#22c55e', hue: 25000 },
+  { name: 'Blue', value: '#3b82f6', hue: 45000 },
+  { name: 'Purple', value: '#a855f7', hue: 50000 },
+];
+
 interface PresetButton {
   label: string;
   onPress: () => void;
@@ -40,15 +44,10 @@ interface PresetButton {
 
 export function LightingTestScreen() {
   const navigation = useNavigation();
-  const [customState, setCustomState] = useState({
-    on: true,
-    bri: 254,
-    hue: 0,
-    sat: 254,
-    transitiontime: 10,
-  });
   const [lightingStatus, setLightingStatus] = useState<'unknown' | 'success' | 'slow' | 'failed'>('unknown');
-  const [currentAnimation, setCurrentAnimation] = useState<string | null>(null);
+  const [selectedCircuitPreset, setSelectedCircuitPreset] = useState<string | null>(null);
+  const [selectedStrengthPreset, setSelectedStrengthPreset] = useState<string | null>(null);
+  const [selectedColors, setSelectedColors] = useState<{ [key: string]: string }>({});
 
   useEffect(() => {
     const unsubscribe = subscribeLightingStatus((status) => {
@@ -57,6 +56,25 @@ export function LightingTestScreen() {
     
     return () => unsubscribe();
   }, []);
+
+  const handlePresetClick = (preset: string, type: 'circuit' | 'strength') => {
+    if (type === 'circuit') {
+      setSelectedCircuitPreset(selectedCircuitPreset === preset ? null : preset);
+      setSelectedStrengthPreset(null);
+    } else {
+      setSelectedStrengthPreset(selectedStrengthPreset === preset ? null : preset);
+      setSelectedCircuitPreset(null);
+    }
+  };
+
+  const handleColorSelect = (presetKey: string, color: typeof COLOR_PALETTE[0]) => {
+    setSelectedColors({ ...selectedColors, [presetKey]: color.value });
+    // Collapse the color palette after selection
+    setSelectedCircuitPreset(null);
+    setSelectedStrengthPreset(null);
+    // For now, just update the visual state
+    console.log(`Color ${color.name} selected for ${presetKey}`);
+  };
 
   const circuitPresets: PresetButton[] = [
     { 
@@ -114,64 +132,6 @@ export function LightingTestScreen() {
     },
   ];
 
-  const animations: PresetButton[] = [
-    { 
-      label: 'Drift', 
-      onPress: () => {
-        stopAnimation();
-        startDriftAnimation();
-        setCurrentAnimation('drift');
-      }, 
-      color: '#a855f7' 
-    },
-    { 
-      label: 'Breathe', 
-      onPress: () => {
-        stopAnimation();
-        startBreatheAnimation();
-        setCurrentAnimation('breathe');
-      }, 
-      color: '#22c55e' 
-    },
-    { 
-      label: 'Countdown', 
-      onPress: () => {
-        stopAnimation();
-        startCountdownPulse();
-        setCurrentAnimation('countdown');
-      }, 
-      color: '#f97316' 
-    },
-    { 
-      label: 'Flash', 
-      onPress: () => {
-        roundFlash();
-      }, 
-      color: '#fbbf24' 
-    },
-    { 
-      label: 'Pause', 
-      onPress: () => {
-        stopAnimation();
-        setPauseState();
-        setCurrentAnimation(null);
-      }, 
-      color: '#6b7280' 
-    },
-    { 
-      label: 'Stop', 
-      onPress: () => {
-        stopAnimation();
-        setCurrentAnimation(null);
-      }, 
-      color: '#ef4444' 
-    },
-  ];
-
-  const applyCustomState = () => {
-    setHueLights(customState);
-  };
-
   const getStatusColor = () => {
     switch (lightingStatus) {
       case 'success': return TOKENS.color.success;
@@ -182,230 +142,200 @@ export function LightingTestScreen() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: TOKENS.color.bg }}>
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 48 }}>
-        {/* Header */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 32 }}>
-          <Text style={{ fontSize: 40, fontWeight: '900', color: TOKENS.color.text }}>
-            Lighting Test
-          </Text>
-          
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
-            {/* Status Indicator */}
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <View style={{ 
-                width: 12, 
-                height: 12, 
-                borderRadius: 6, 
-                backgroundColor: getStatusColor() 
-              }} />
-              <Text style={{ color: TOKENS.color.muted, fontSize: 16 }}>
-                {lightingStatus}
-              </Text>
-            </View>
-            
-            {/* Current Animation */}
-            {currentAnimation && (
-              <View style={{ 
-                backgroundColor: TOKENS.color.card, 
-                paddingHorizontal: 16, 
-                paddingVertical: 8, 
-                borderRadius: TOKENS.radius.card 
-              }}>
-                <Text style={{ color: TOKENS.color.success, fontSize: 14 }}>
-                  {currentAnimation} running
-                </Text>
-              </View>
-            )}
-            
-            {/* Back Button */}
-            <Pressable
-              onPress={() => navigation.goBack()}
-              focusable
-            >
-              {({ focused }) => (
-                <View style={{
-                  backgroundColor: focused ? 'rgba(255,255,255,0.16)' : TOKENS.color.card,
-                  borderColor: focused ? 'rgba(255,255,255,0.45)' : TOKENS.color.borderGlass,
-                  borderWidth: 1,
-                  borderRadius: TOKENS.radius.card,
-                  paddingHorizontal: 32,
-                  paddingVertical: 12,
-                  transform: focused ? [{ translateY: -1 }] : [],
-                }}>
-                  <Text style={{ color: TOKENS.color.text, fontSize: 18 }}>Back</Text>
-                </View>
-              )}
-            </Pressable>
-          </View>
-        </View>
-
-        {/* Custom State Controls */}
-        <View style={{
-          backgroundColor: TOKENS.color.card,
-          borderRadius: TOKENS.radius.card,
-          borderWidth: 1,
-          borderColor: TOKENS.color.borderGlass,
-          padding: 24,
-          marginBottom: 24,
-        }}>
-          <Text style={{ fontSize: 24, fontWeight: '700', color: TOKENS.color.text, marginBottom: 16 }}>
-            Custom State
-          </Text>
-          
-          <View style={{ gap: 16 }}>
-            {/* Brightness */}
-            <View>
-              <Text style={{ color: TOKENS.color.muted, marginBottom: 8 }}>
-                Brightness: {customState.bri}
-              </Text>
-              <Slider
-                value={customState.bri}
-                onValueChange={(val) => setCustomState({...customState, bri: Math.round(val)})}
-                minimumValue={1}
-                maximumValue={254}
-              />
-            </View>
-            
-            {/* Hue */}
-            <View>
-              <Text style={{ color: TOKENS.color.muted, marginBottom: 8 }}>
-                Hue: {customState.hue}
-              </Text>
-              <Slider
-                value={customState.hue}
-                onValueChange={(val) => setCustomState({...customState, hue: Math.round(val)})}
-                minimumValue={0}
-                maximumValue={65535}
-              />
-            </View>
-            
-            {/* Saturation */}
-            <View>
-              <Text style={{ color: TOKENS.color.muted, marginBottom: 8 }}>
-                Saturation: {customState.sat}
-              </Text>
-              <Slider
-                value={customState.sat}
-                onValueChange={(val) => setCustomState({...customState, sat: Math.round(val)})}
-                minimumValue={0}
-                maximumValue={254}
-              />
-            </View>
-            
-            {/* Transition Time */}
-            <View>
-              <Text style={{ color: TOKENS.color.muted, marginBottom: 8 }}>
-                Transition: {customState.transitiontime / 10}s
-              </Text>
-              <Slider
-                value={customState.transitiontime}
-                onValueChange={(val) => setCustomState({...customState, transitiontime: Math.round(val)})}
-                minimumValue={0}
-                maximumValue={50}
-              />
-            </View>
+    <View style={{ flex: 1, backgroundColor: TOKENS.color.bg, padding: 41 }}>
+      {/* Header */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 27 }}>
+        <Text style={{ fontSize: 34, fontWeight: '900', color: TOKENS.color.text }}>
+          Lighting Configuration
+        </Text>
+        
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+          {/* Status Indicator */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <View style={{ 
+              width: 12, 
+              height: 12, 
+              borderRadius: 6, 
+              backgroundColor: getStatusColor() 
+            }} />
+            <Text style={{ color: TOKENS.color.muted, fontSize: 14 }}>
+              {lightingStatus}
+            </Text>
           </View>
           
+          {/* Back Button */}
           <Pressable
-            onPress={applyCustomState}
+            onPress={() => navigation.goBack()}
             focusable
-            style={{ marginTop: 16 }}
           >
             {({ focused }) => (
               <View style={{
-                backgroundColor: focused ? '#4f46e5' : '#6366f1',
+                backgroundColor: focused ? 'rgba(255,255,255,0.16)' : TOKENS.color.card,
+                borderColor: focused ? 'rgba(255,255,255,0.45)' : TOKENS.color.borderGlass,
+                borderWidth: 1,
                 borderRadius: TOKENS.radius.card,
-                paddingVertical: 12,
-                alignItems: 'center',
+                paddingHorizontal: 27,
+                paddingVertical: 10,
                 transform: focused ? [{ translateY: -1 }] : [],
               }}>
-                <Text style={{ color: TOKENS.color.text, fontSize: 16, fontWeight: '600' }}>
-                  Apply Custom State
-                </Text>
+                <Text style={{ color: TOKENS.color.text, fontSize: 15 }}>Back</Text>
               </View>
             )}
           </Pressable>
         </View>
+      </View>
 
+      <View style={{ flex: 1, flexDirection: 'row', gap: 20 }}>
         {/* Circuit Presets */}
-        <PresetSection title="Circuit Presets" presets={circuitPresets} />
+        <PresetSection 
+          title="Circuit Presets" 
+          presets={circuitPresets}
+          selectedPreset={selectedCircuitPreset}
+          onPresetClick={(preset) => handlePresetClick(preset, 'circuit')}
+          onColorSelect={handleColorSelect}
+          selectedColors={selectedColors}
+          presetPrefix="circuit"
+        />
         
         {/* Strength Presets */}
-        <PresetSection title="Strength Presets" presets={strengthPresets} />
-        
-        {/* Animations */}
-        <PresetSection title="Animations" presets={animations} />
-      </ScrollView>
-    </View>
-  );
-}
-
-function PresetSection({ title, presets }: { title: string; presets: PresetButton[] }) {
-  return (
-    <View style={{
-      backgroundColor: TOKENS.color.card,
-      borderRadius: TOKENS.radius.card,
-      borderWidth: 1,
-      borderColor: TOKENS.color.borderGlass,
-      padding: 24,
-      marginBottom: 24,
-    }}>
-      <Text style={{ fontSize: 24, fontWeight: '700', color: TOKENS.color.text, marginBottom: 16 }}>
-        {title}
-      </Text>
-      
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
-        {presets.map((preset, index) => (
-          <Pressable
-            key={index}
-            onPress={preset.onPress}
-            focusable
-          >
-            {({ focused }) => (
-              <View style={{
-                backgroundColor: focused ? preset.color : `${preset.color}99`,
-                borderRadius: TOKENS.radius.card,
-                paddingHorizontal: 24,
-                paddingVertical: 12,
-                borderWidth: focused ? 2 : 0,
-                borderColor: preset.color,
-                transform: focused ? [{ translateY: -2, scale: 1.05 }] : [],
-              }}>
-                <Text style={{ color: TOKENS.color.text, fontSize: 16, fontWeight: '600' }}>
-                  {preset.label}
-                </Text>
-              </View>
-            )}
-          </Pressable>
-        ))}
+        <PresetSection 
+          title="Strength Presets" 
+          presets={strengthPresets}
+          selectedPreset={selectedStrengthPreset}
+          onPresetClick={(preset) => handlePresetClick(preset, 'strength')}
+          onColorSelect={handleColorSelect}
+          selectedColors={selectedColors}
+          presetPrefix="strength"
+        />
       </View>
     </View>
   );
 }
 
-// Simple slider component
-function Slider({ value, onValueChange, minimumValue, maximumValue }: {
-  value: number;
-  onValueChange: (value: number) => void;
-  minimumValue: number;
-  maximumValue: number;
+function PresetSection({ 
+  title, 
+  presets, 
+  selectedPreset, 
+  onPresetClick, 
+  onColorSelect,
+  selectedColors,
+  presetPrefix
+}: { 
+  title: string; 
+  presets: PresetButton[];
+  selectedPreset: string | null;
+  onPresetClick: (preset: string) => void;
+  onColorSelect: (presetKey: string, color: typeof COLOR_PALETTE[0]) => void;
+  selectedColors: { [key: string]: string };
+  presetPrefix: string;
 }) {
-  const percentage = ((value - minimumValue) / (maximumValue - minimumValue)) * 100;
-  
   return (
     <View style={{
-      height: 40,
-      backgroundColor: 'rgba(255,255,255,0.1)',
-      borderRadius: 20,
-      overflow: 'hidden',
+      flex: 1,
+      backgroundColor: TOKENS.color.card,
+      borderRadius: TOKENS.radius.card,
+      borderWidth: 1,
+      borderColor: TOKENS.color.borderGlass,
+      padding: 32,
     }}>
-      <View style={{
-        width: `${percentage}%`,
-        height: '100%',
-        backgroundColor: TOKENS.color.accent,
-        borderRadius: 20,
-      }} />
+      <Text style={{ fontSize: 20, fontWeight: '700', color: TOKENS.color.text, marginBottom: 14 }}>
+        {title}
+      </Text>
+      
+      <View style={{ gap: 10 }}>
+        {presets.map((preset, index) => {
+          const presetKey = `${presetPrefix}_${preset.label.toLowerCase().replace(' ', '_')}`;
+          const isSelected = selectedPreset === preset.label;
+          const selectedColor = selectedColors[presetKey];
+          
+          return (
+            <View key={index}>
+              <Pressable
+                onPress={() => {
+                  preset.onPress();
+                  onPresetClick(preset.label);
+                }}
+                focusable
+              >
+                {({ focused }) => (
+                  <View style={{
+                    backgroundColor: focused ? preset.color : `${preset.color}99`,
+                    borderRadius: TOKENS.radius.card,
+                    paddingHorizontal: 20,
+                    paddingVertical: 10,
+                    borderWidth: focused || isSelected ? 2 : 0,
+                    borderColor: focused || isSelected ? TOKENS.color.accent : 'transparent',
+                    transform: focused ? [{ translateY: -2 }, { scale: 1.05 }] : [],
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                  }}>
+                    <Text style={{ color: TOKENS.color.text, fontSize: 14, fontWeight: '600' }}>
+                      {preset.label}
+                    </Text>
+                    {selectedColor && (
+                      <View style={{
+                        width: 20,
+                        height: 20,
+                        borderRadius: 10,
+                        backgroundColor: selectedColor,
+                        borderWidth: 2,
+                        borderColor: TOKENS.color.text,
+                      }} />
+                    )}
+                  </View>
+                )}
+              </Pressable>
+              
+              {/* Color Palette Row */}
+              {isSelected && (
+                <View style={{ 
+                  flexDirection: 'row', 
+                  flexWrap: 'wrap',
+                  gap: 7, 
+                  marginTop: 10,
+                  paddingLeft: 20,
+                  paddingRight: 20,
+                }}>
+                  {COLOR_PALETTE.map((color, colorIndex) => {
+                    const isColorSelected = selectedColors[presetKey] === color.value;
+                    return (
+                      <Pressable
+                        key={colorIndex}
+                        onPress={() => onColorSelect(presetKey, color)}
+                        focusable
+                      >
+                        {({ focused }) => (
+                          <View style={{
+                            width: 41,
+                            height: 41,
+                            borderRadius: 20,
+                            backgroundColor: color.value,
+                            borderWidth: isColorSelected || focused ? 4 : 2,
+                            borderColor: isColorSelected || focused ? TOKENS.color.text : 'rgba(255,255,255,0.2)',
+                            transform: focused ? [{ scale: 1.1 }] : [],
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}>
+                            {isColorSelected && (
+                              <View style={{
+                                width: 14,
+                                height: 14,
+                                borderRadius: 7,
+                                backgroundColor: TOKENS.color.text,
+                              }} />
+                            )}
+                          </View>
+                        )}
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              )}
+            </View>
+          );
+        })}
+      </View>
     </View>
   );
 }
