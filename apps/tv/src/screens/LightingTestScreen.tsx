@@ -3,9 +3,14 @@ import { View, Text, Pressable } from 'react-native';
 import { useNavigation } from '../App';
 import { 
   setHueLights, 
-  LIGHTING_PRESETS,
   subscribeLightingStatus
 } from '../lib/lighting';
+import {
+  DEFAULT_CIRCUIT_COLORS,
+  getHuePresetForColor,
+  loadColorMappings,
+  saveColorMappings,
+} from '../lib/lighting/colorMappings';
 
 // Design tokens
 const TOKENS = {
@@ -20,6 +25,7 @@ const TOKENS = {
     error: '#ef4444',
     focusRing: 'rgba(124,255,181,0.6)',
     borderGlass: 'rgba(255,255,255,0.08)',
+    disabled: '#4b5563',
   },
   radius: {
     card: 16,
@@ -29,7 +35,7 @@ const TOKENS = {
 // Hardcoded color palette
 const COLOR_PALETTE = [
   { name: 'Red', value: '#ef4444', hue: 0 },
-  { name: 'Orange', value: '#f97316', hue: 8000 },
+  { name: 'Orange', value: '#fb923c', hue: 8000 },
   { name: 'Yellow', value: '#eab308', hue: 10000 },
   { name: 'Green', value: '#22c55e', hue: 25000 },
   { name: 'Blue', value: '#3b82f6', hue: 45000 },
@@ -40,6 +46,8 @@ interface PresetButton {
   label: string;
   onPress: () => void;
   color: string;
+  presetKey: string;
+  disabled?: boolean;
 }
 
 export function LightingTestScreen() {
@@ -54,10 +62,17 @@ export function LightingTestScreen() {
       setLightingStatus(status);
     });
     
+    // Load saved color mappings
+    loadColorMappings().then(mappings => {
+      setSelectedColors(mappings);
+    });
+    
     return () => unsubscribe();
   }, []);
 
-  const handlePresetClick = (preset: string, type: 'circuit' | 'strength') => {
+  const handlePresetClick = (preset: string, type: 'circuit' | 'strength', disabled?: boolean) => {
+    if (disabled) return;
+    
     if (type === 'circuit') {
       setSelectedCircuitPreset(selectedCircuitPreset === preset ? null : preset);
       setSelectedStrengthPreset(null);
@@ -67,68 +82,112 @@ export function LightingTestScreen() {
     }
   };
 
-  const handleColorSelect = (presetKey: string, color: typeof COLOR_PALETTE[0]) => {
-    setSelectedColors({ ...selectedColors, [presetKey]: color.value });
+  const handleColorSelect = async (presetKey: string, color: typeof COLOR_PALETTE[0]) => {
+    // Update local state
+    const newMappings = { ...selectedColors, [presetKey]: color.value };
+    setSelectedColors(newMappings);
+    
+    // Save to AsyncStorage
+    await saveColorMappings(newMappings);
+    
+    // Apply color to test immediately
+    const huePreset = getHuePresetForColor(color.value);
+    await setHueLights(huePreset);
+    
     // Collapse the color palette after selection
     setSelectedCircuitPreset(null);
     setSelectedStrengthPreset(null);
-    // For now, just update the visual state
-    console.log(`Color ${color.name} selected for ${presetKey}`);
+    
+    console.log(`Color ${color.name} selected and saved for ${presetKey}`);
+  };
+
+  const handleBackPress = async () => {
+    // Apply App Start color when going back
+    const appStartColor = selectedColors['circuit_app_start'] || DEFAULT_CIRCUIT_COLORS['circuit_app_start'];
+    const huePreset = getHuePresetForColor(appStartColor);
+    await setHueLights(huePreset);
+    navigation.goBack();
   };
 
   const circuitPresets: PresetButton[] = [
     { 
-      label: 'Warmup', 
-      onPress: () => setHueLights(LIGHTING_PRESETS.circuit.WARMUP), 
-      color: '#fb923c' 
+      label: 'App Start', 
+      onPress: async () => {
+        const color = selectedColors['circuit_app_start'] || DEFAULT_CIRCUIT_COLORS['circuit_app_start'];
+        await setHueLights(getHuePresetForColor(color));
+      },
+      color: '#fb923c',
+      presetKey: 'circuit_app_start'
     },
     { 
-      label: 'Work', 
-      onPress: () => setHueLights(LIGHTING_PRESETS.circuit.WORK), 
-      color: '#a855f7' 
+      label: 'Round Preview', 
+      onPress: async () => {
+        const color = selectedColors['circuit_round_preview'] || DEFAULT_CIRCUIT_COLORS['circuit_round_preview'];
+        await setHueLights(getHuePresetForColor(color));
+      },
+      color: '#a855f7',
+      presetKey: 'circuit_round_preview'
+    },
+    { 
+      label: 'Exercise Round', 
+      onPress: async () => {
+        const color = selectedColors['circuit_exercise_round'] || DEFAULT_CIRCUIT_COLORS['circuit_exercise_round'];
+        await setHueLights(getHuePresetForColor(color));
+      },
+      color: '#3b82f6',
+      presetKey: 'circuit_exercise_round'
     },
     { 
       label: 'Rest', 
-      onPress: () => setHueLights(LIGHTING_PRESETS.circuit.REST), 
-      color: '#22c55e' 
+      onPress: async () => {
+        const color = selectedColors['circuit_rest'] || DEFAULT_CIRCUIT_COLORS['circuit_rest'];
+        await setHueLights(getHuePresetForColor(color));
+      },
+      color: '#22c55e',
+      presetKey: 'circuit_rest'
     },
     { 
       label: 'Cooldown', 
-      onPress: () => setHueLights(LIGHTING_PRESETS.circuit.COOLDOWN), 
-      color: '#3b82f6' 
-    },
-    { 
-      label: 'Default', 
-      onPress: () => setHueLights(LIGHTING_PRESETS.circuit.DEFAULT), 
-      color: '#6b7280' 
+      onPress: async () => {
+        const color = selectedColors['circuit_cooldown'] || DEFAULT_CIRCUIT_COLORS['circuit_cooldown'];
+        await setHueLights(getHuePresetForColor(color));
+      },
+      color: '#06b6d4',
+      presetKey: 'circuit_cooldown',
+      disabled: true
     },
   ];
 
   const strengthPresets: PresetButton[] = [
     { 
       label: 'Warmup', 
-      onPress: () => setHueLights(LIGHTING_PRESETS.strength.WARMUP), 
-      color: '#fb923c' 
+      onPress: () => setHueLights({ on: true, bri: 150, hue: 8000, sat: 100, transitiontime: 20 }), 
+      color: '#fb923c',
+      presetKey: 'strength_warmup'
     },
     { 
       label: 'Round Start', 
-      onPress: () => setHueLights(LIGHTING_PRESETS.strength.ROUND_START), 
-      color: '#a855f7' 
+      onPress: () => setHueLights({ on: true, bri: 254, hue: 47000, sat: 200, transitiontime: 20 }), 
+      color: '#a855f7',
+      presetKey: 'strength_round_start'
     },
     { 
       label: 'Round Rest', 
-      onPress: () => setHueLights(LIGHTING_PRESETS.strength.ROUND_REST), 
-      color: '#f97316' 
+      onPress: () => setHueLights({ on: true, bri: 120, hue: 8000, sat: 140, transitiontime: 20 }), 
+      color: '#f97316',
+      presetKey: 'strength_round_rest'
     },
     { 
       label: 'Cooldown', 
-      onPress: () => setHueLights(LIGHTING_PRESETS.strength.COOLDOWN), 
-      color: '#3b82f6' 
+      onPress: () => setHueLights({ on: true, bri: 120, hue: 35000, sat: 80, transitiontime: 20 }), 
+      color: '#3b82f6',
+      presetKey: 'strength_cooldown'
     },
     { 
       label: 'Default', 
-      onPress: () => setHueLights(LIGHTING_PRESETS.strength.DEFAULT), 
-      color: '#6b7280' 
+      onPress: () => setHueLights({ on: true, bri: 180, hue: 8000, sat: 140, transitiontime: 10 }), 
+      color: '#6b7280',
+      presetKey: 'strength_default'
     },
   ];
 
@@ -165,7 +224,7 @@ export function LightingTestScreen() {
           
           {/* Back Button */}
           <Pressable
-            onPress={() => navigation.goBack()}
+            onPress={handleBackPress}
             focusable
           >
             {({ focused }) => (
@@ -191,10 +250,9 @@ export function LightingTestScreen() {
           title="Circuit Presets" 
           presets={circuitPresets}
           selectedPreset={selectedCircuitPreset}
-          onPresetClick={(preset) => handlePresetClick(preset, 'circuit')}
+          onPresetClick={(preset, presetButton) => handlePresetClick(preset, 'circuit', presetButton.disabled)}
           onColorSelect={handleColorSelect}
           selectedColors={selectedColors}
-          presetPrefix="circuit"
         />
         
         {/* Strength Presets */}
@@ -205,7 +263,6 @@ export function LightingTestScreen() {
           onPresetClick={(preset) => handlePresetClick(preset, 'strength')}
           onColorSelect={handleColorSelect}
           selectedColors={selectedColors}
-          presetPrefix="strength"
         />
       </View>
     </View>
@@ -219,15 +276,13 @@ function PresetSection({
   onPresetClick, 
   onColorSelect,
   selectedColors,
-  presetPrefix
 }: { 
   title: string; 
   presets: PresetButton[];
   selectedPreset: string | null;
-  onPresetClick: (preset: string) => void;
+  onPresetClick: (preset: string, presetButton: PresetButton) => void;
   onColorSelect: (presetKey: string, color: typeof COLOR_PALETTE[0]) => void;
   selectedColors: { [key: string]: string };
-  presetPrefix: string;
 }) {
   return (
     <View style={{
@@ -244,22 +299,29 @@ function PresetSection({
       
       <View style={{ gap: 10 }}>
         {presets.map((preset, index) => {
-          const presetKey = `${presetPrefix}_${preset.label.toLowerCase().replace(' ', '_')}`;
           const isSelected = selectedPreset === preset.label;
-          const selectedColor = selectedColors[presetKey];
+          const selectedColor = selectedColors[preset.presetKey] || 
+                              (DEFAULT_CIRCUIT_COLORS[preset.presetKey] || preset.color);
           
           return (
             <View key={index}>
               <Pressable
                 onPress={() => {
-                  preset.onPress();
-                  onPresetClick(preset.label);
+                  if (!preset.disabled) {
+                    preset.onPress();
+                  }
+                  onPresetClick(preset.label, preset);
                 }}
                 focusable
+                disabled={preset.disabled}
               >
                 {({ focused }) => (
                   <View style={{
-                    backgroundColor: focused ? preset.color : `${preset.color}99`,
+                    backgroundColor: preset.disabled 
+                      ? `${TOKENS.color.disabled}66` 
+                      : focused 
+                        ? preset.color 
+                        : `${preset.color}99`,
                     borderRadius: TOKENS.radius.card,
                     paddingHorizontal: 20,
                     paddingVertical: 10,
@@ -269,8 +331,13 @@ function PresetSection({
                     flexDirection: 'row',
                     alignItems: 'center',
                     justifyContent: 'space-between',
+                    opacity: preset.disabled ? 0.5 : 1,
                   }}>
-                    <Text style={{ color: TOKENS.color.text, fontSize: 14, fontWeight: '600' }}>
+                    <Text style={{ 
+                      color: preset.disabled ? TOKENS.color.muted : TOKENS.color.text, 
+                      fontSize: 14, 
+                      fontWeight: '600' 
+                    }}>
                       {preset.label}
                     </Text>
                     {selectedColor && (
@@ -288,7 +355,7 @@ function PresetSection({
               </Pressable>
               
               {/* Color Palette Row */}
-              {isSelected && (
+              {isSelected && !preset.disabled && (
                 <View style={{ 
                   flexDirection: 'row', 
                   flexWrap: 'wrap',
@@ -298,11 +365,11 @@ function PresetSection({
                   paddingRight: 20,
                 }}>
                   {COLOR_PALETTE.map((color, colorIndex) => {
-                    const isColorSelected = selectedColors[presetKey] === color.value;
+                    const isColorSelected = selectedColors[preset.presetKey] === color.value;
                     return (
                       <Pressable
                         key={colorIndex}
-                        onPress={() => onColorSelect(presetKey, color)}
+                        onPress={() => onColorSelect(preset.presetKey, color)}
                         focusable
                       >
                         {({ focused }) => (

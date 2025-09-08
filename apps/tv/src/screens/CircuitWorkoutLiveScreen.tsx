@@ -11,7 +11,6 @@ import {
   stopHealthCheck,
   startDriftAnimation,
   startBreatheAnimation,
-  roundFlash,
   startCountdownPulse,
   setPauseState,
   stopAnimation
@@ -211,10 +210,10 @@ export function CircuitWorkoutLiveScreen() {
     let lightingEvent = '';
     let currentPhase = '';
     
-    // Check warmup first (before workout starts)
-    if (currentScreen === 'round-preview' && currentRoundIndex === 0 && !isStarted) {
-      lightingEvent = 'warmup';
-      currentPhase = 'warmup';
+    // Check for round preview (applies to all rounds)
+    if (currentScreen === 'round-preview') {
+      lightingEvent = 'warmup';  // 'warmup' maps to Round Preview in our color mappings
+      currentPhase = 'round-preview';
     } else if (currentScreen === 'exercise') {
       lightingEvent = 'work';
       currentPhase = 'work';
@@ -242,22 +241,16 @@ export function CircuitWorkoutLiveScreen() {
       
       // Apply static preset (no animations)
       stopAnimation(); // Always stop any running animation
-      const preset = getPresetForEvent('circuit', lightingEvent);
-      if (preset) {
-        setHueLights(preset);
-      }
+      getPresetForEvent('circuit', lightingEvent).then(preset => {
+        if (preset) {
+          setHueLights(preset);
+        }
+      });
       
       setLastLightingEvent(lightingEvent);
     }
   }, [currentScreen, timeRemaining, isStarted, lastLightingEvent, currentRoundIndex, roundsData.length]);
 
-  // Handle round changes with flash
-  useEffect(() => {
-    if (currentRoundIndex > 0 && currentExerciseIndex === 0 && currentScreen === 'round-preview') {
-      console.log(`[CIRCUIT-LIGHTING] Round ${currentRoundIndex + 1} transition flash`);
-      roundFlash();
-    }
-  }, [currentRoundIndex, currentExerciseIndex, currentScreen]);
 
   // Handle pause state lighting (static)
   useEffect(() => {
@@ -314,6 +307,9 @@ export function CircuitWorkoutLiveScreen() {
     const currentRound = getCurrentRound();
     if (!currentRound) return;
 
+    // Reset lighting event to force re-application when navigating
+    setLastLightingEvent('');
+
     if (currentScreen === 'round-preview') {
       // Go to first exercise
       setCurrentScreen('exercise');
@@ -345,6 +341,9 @@ export function CircuitWorkoutLiveScreen() {
   };
 
   const handleBack = () => {
+    // Reset lighting event to force re-application when navigating
+    setLastLightingEvent('');
+    
     if (currentScreen === 'round-preview') {
       if (currentRoundIndex > 0) {
         // Go to previous round's last rest

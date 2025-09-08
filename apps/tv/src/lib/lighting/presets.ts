@@ -1,3 +1,5 @@
+import { getColorForPreset, getHuePresetForColor } from './colorMappings';
+
 export const LIGHTING_PRESETS = {
   circuit: {
     WARMUP: { bri: 150, hue: 8000, sat: 100, transitiontime: 20 },   // Keep original orange
@@ -16,15 +18,40 @@ export const LIGHTING_PRESETS = {
   }
 };
 
-// Map timer events to presets
-export function getPresetForEvent(template: 'circuit' | 'strength', event: string) {
-  const presets = LIGHTING_PRESETS[template];
+// Map timer events to presets using saved colors
+export async function getPresetForEvent(template: 'circuit' | 'strength', event: string) {
+  if (template === 'circuit') {
+    // Map event to preset key
+    let presetKey = '';
+    switch (event) {
+      case 'warmup': 
+        presetKey = 'circuit_round_preview';
+        break;
+      case 'work': 
+        presetKey = 'circuit_exercise_round';
+        break;
+      case 'rest': 
+        presetKey = 'circuit_rest';
+        break;
+      case 'cooldown': 
+        presetKey = 'circuit_cooldown';
+        break;
+      default:
+        return null;
+    }
+    
+    // Get saved color for this preset
+    const color = await getColorForPreset(presetKey);
+    return getHuePresetForColor(color);
+  }
   
+  // For strength, use original presets (not updated yet)
+  const presets = LIGHTING_PRESETS[template];
   switch (event) {
     case 'warmup': return presets.WARMUP;
-    case 'work': return template === 'circuit' ? presets.WORK : presets.ROUND_START;
-    case 'rest': return template === 'circuit' ? presets.REST : presets.ROUND_REST;
-    case 'round_start': return presets.ROUND || presets.DEFAULT;
+    case 'work': return presets.ROUND_START;
+    case 'rest': return presets.ROUND_REST;
+    case 'round_start': return presets.DEFAULT;
     case 'cooldown': return presets.COOLDOWN;
     case 'complete': return presets.DEFAULT;
     default: return null;

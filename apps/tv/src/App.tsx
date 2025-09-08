@@ -5,7 +5,8 @@ import { RealtimeProvider } from './providers/RealtimeProvider';
 import { BusinessProvider } from './providers/BusinessProvider';
 import { AuthProvider } from './providers/AuthProvider';
 import { useAuthCleanup } from './hooks/useAuthCleanup';
-import { setHueLights, LIGHTING_PRESETS, startHealthCheck } from './lib/lighting';
+import { setHueLights, startHealthCheck } from './lib/lighting';
+import { getColorForPreset, getHuePresetForColor } from './lib/lighting/colorMappings';
 
 // TVEventHandler might be in a different location for react-native-tvos
 let TVEventHandler: any;
@@ -87,6 +88,14 @@ function NavigationContainer({ children }: { children: React.ReactNode }) {
       screenHistory.current.pop();
       const previousScreen = screenHistory.current[screenHistory.current.length - 1];
       setNavigationState(prev => ({ ...prev, currentScreen: previousScreen }));
+      
+      // Apply App Start color when returning to Main screen
+      if (previousScreen === 'Main') {
+        getColorForPreset('circuit_app_start').then(color => {
+          const preset = getHuePresetForColor(color);
+          setHueLights(preset);
+        });
+      }
     }
   };
 
@@ -123,8 +132,11 @@ function NavigationContainer({ children }: { children: React.ReactNode }) {
     // Start health check
     startHealthCheck();
     
-    // Set default lighting
-    setHueLights(LIGHTING_PRESETS.circuit.DEFAULT);
+    // Apply App Start color
+    getColorForPreset('circuit_app_start').then(color => {
+      const preset = getHuePresetForColor(color);
+      setHueLights(preset);
+    });
   }, []);
 
   const navigationValue = {
