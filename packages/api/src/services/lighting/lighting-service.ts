@@ -435,6 +435,16 @@ export class LightingService {
   }
 
   /**
+   * Get current animation status
+   */
+  getAnimationStatus(): { isAnimating: boolean; type?: string } {
+    return {
+      isAnimating: !!this.currentAnimation,
+      type: this.animationType,
+    };
+  }
+
+  /**
    * Drift animation - gentle hue movement for work phase
    */
   private async startDriftAnimation(): Promise<void> {
