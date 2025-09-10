@@ -17,6 +17,7 @@ import {
 } from '../lib/lighting';
 import { getColorForPreset, getHuePresetForColor } from '../lib/lighting/colorMappings';
 import { LightingStatusDot } from '../components/LightingStatusDot';
+import { useSpotifySync } from '../hooks/useSpotifySync';
 
 // Design tokens
 const TOKENS = {
@@ -116,6 +117,18 @@ export function CircuitWorkoutLiveScreen() {
   // Lighting state
   const [lastLightingEvent, setLastLightingEvent] = useState<string>('');
   const [isStarted, setIsStarted] = useState(false);
+  
+  // Spotify integration
+  console.log('[CircuitWorkoutLive] About to call useSpotifySync with sessionId:', sessionId);
+  const { 
+    isConnected: isSpotifyConnected, 
+    playHypeMusic, 
+    handlePhaseChange,
+    pauseMusic,
+    resumeMusic,
+    error: spotifyError 
+  } = useSpotifySync(sessionId);
+  console.log('[CircuitWorkoutLive] Spotify connection state:', { isSpotifyConnected, spotifyError });
 
   // Get circuit config for timing
   const { data: circuitConfig } = useQuery(
@@ -201,7 +214,7 @@ export function CircuitWorkoutLiveScreen() {
     };
   }, []);
 
-  // Handle phase changes for lighting
+  // Handle phase changes for lighting and Spotify
   useEffect(() => {
     console.log('[CIRCUIT-LIGHTING] Phase detection:', {
       currentScreen,
@@ -214,15 +227,21 @@ export function CircuitWorkoutLiveScreen() {
     
     // Map current state to lighting event
     let lightingEvent = '';
-    let currentPhase = '';
+    let currentPhase: 'warmup' | 'work' | 'rest' | 'cooldown' | '' = '';
     
     // Check for round preview (applies to all rounds)
     if (currentScreen === 'round-preview') {
       lightingEvent = 'warmup';  // 'warmup' maps to Round Preview in our color mappings
-      currentPhase = 'round-preview';
+      currentPhase = 'warmup';
     } else if (currentScreen === 'exercise') {
       lightingEvent = 'work';
       currentPhase = 'work';
+      
+      // If this is the first exercise of a round, trigger hype music
+      if (currentExerciseIndex === 0 && lightingEvent !== lastLightingEvent) {
+        console.log('[SPOTIFY] Playing hype music for round', currentRoundIndex);
+        playHypeMusic(currentRoundIndex);
+      }
     } else if (currentScreen === 'rest') {
       lightingEvent = 'rest';
       currentPhase = 'rest';
@@ -253,17 +272,26 @@ export function CircuitWorkoutLiveScreen() {
         }
       });
       
+      // Handle Spotify phase changes
+      if (currentPhase) {
+        handlePhaseChange(currentPhase);
+      }
+      
       setLastLightingEvent(lightingEvent);
     }
-  }, [currentScreen, timeRemaining, isStarted, lastLightingEvent, currentRoundIndex, roundsData.length]);
+  }, [currentScreen, timeRemaining, isStarted, lastLightingEvent, currentRoundIndex, roundsData.length, currentExerciseIndex, playHypeMusic, handlePhaseChange]);
 
 
-  // Handle pause state lighting (static)
+  // Handle pause state lighting and Spotify
   useEffect(() => {
     if (isPaused) {
       setPauseState();
+      pauseMusic();
+    } else if (isStarted && !isPaused) {
+      // Resume music when unpausing (but only if workout has started)
+      resumeMusic();
     }
-  }, [isPaused]);
+  }, [isPaused, isStarted, pauseMusic, resumeMusic]);
 
   // Timer management
   useEffect(() => {
@@ -776,8 +804,44 @@ export function CircuitWorkoutLiveScreen() {
         )}
       </View>
       
-      {/* Lighting Status Indicator */}
-      <LightingStatusDot />
+      {/* Status Indicators */}
+      <View style={{ 
+        position: 'absolute', 
+        bottom: 40, 
+        left: 60, 
+        flexDirection: 'row', 
+        alignItems: 'center',
+        gap: 20 
+      }}>
+        <LightingStatusDot />
+        
+        {/* Spotify Connection Indicator */}
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <View style={{
+            width: 12,
+            height: 12,
+            borderRadius: 6,
+            backgroundColor: isSpotifyConnected ? '#1DB954' : '#666',
+            marginRight: 8,
+          }} />
+          <Text style={{
+            color: isSpotifyConnected ? '#1DB954' : '#666',
+            fontSize: 16,
+            fontWeight: '500',
+          }}>
+            Spotify {isSpotifyConnected ? 'Connected' : 'Disconnected'}
+          </Text>
+          {spotifyError && (
+            <Text style={{
+              color: '#ef4444',
+              fontSize: 14,
+              marginLeft: 8,
+            }}>
+              ({spotifyError})
+            </Text>
+          )}
+        </View>
+      </View>
     </View>
   );
 }

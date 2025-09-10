@@ -5,6 +5,7 @@ import { exerciseRouter } from "./router/exercise";
 import { lightingRouter } from "./router/lighting";
 import { muscleCoverageRouter } from "./router/muscle-coverage";
 import { postWorkoutFeedbackRouter } from "./router/post-workout-feedback";
+import { spotifyRouter } from "./router/spotify";
 import { trainingSessionRouter } from "./router/training-session";
 import { workoutRouter } from "./router/workout";
 import { workoutPreferencesRouter } from "./router/workout-preferences";
@@ -20,6 +21,7 @@ export const appRouter = createTRPCRouter({
   lighting: lightingRouter,
   muscleCoverage: muscleCoverageRouter,
   postWorkoutFeedback: postWorkoutFeedbackRouter,
+  spotify: spotifyRouter,
   trainingSession: trainingSessionRouter,
   workout: workoutRouter,
   workoutPreferences: workoutPreferencesRouter,

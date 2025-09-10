@@ -38,11 +38,13 @@
     "test:all": "turbo run test",
     "test:api": "turbo run test --filter=@acme/api",
     "test:ai": "turbo run test --filter=@acme/ai",
-    "test:e2e": "turbo run test:e2e --filter=@acme/nextjs"
+    "test:e2e": "turbo run test:e2e --filter=@acme/nextjs",
+    "spotify:auth": "node scripts/get-spotify-refresh-token.js"
   },
   "devDependencies": {
     "@acme/prettier-config": "workspace:*",
     "@turbo/gen": "^2.5.4",
+    "open": "10.2.0",
     "prettier": "catalog:",
     "tiktoken": "^1.0.21",
     "tsx": "^4.20.3",
