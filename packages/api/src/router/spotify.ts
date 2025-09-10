@@ -99,7 +99,7 @@ export const spotifyRouter = createTRPCRouter({
   }),
 
   // Control playback (play, pause, volume)
-  control: protectedProcedure
+  control: publicProcedure
     .input(z.object({
       action: z.enum(['play', 'pause', 'volume', 'transfer']),
       deviceId: z.string().optional(),
@@ -200,12 +200,12 @@ export const spotifyRouter = createTRPCRouter({
     }),
 
   // Get music configuration
-  getMusicConfig: protectedProcedure.query(() => {
+  getMusicConfig: publicProcedure.query(() => {
     return SPOTIFY_MUSIC_CONFIG;
   }),
 
   // Initialize music session for a training session
-  initializeMusicSession: protectedProcedure
+  initializeMusicSession: publicProcedure
     .input(z.object({
       sessionId: z.string(),
       deviceId: z.string().optional(),

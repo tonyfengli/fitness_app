@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../providers/TRPCProvider';
 import { useRealtimeCircuitConfig } from '../hooks/useRealtimeCircuitConfig';
 import { WorkoutGenerationLoader } from '../components/WorkoutGenerationLoader';
+import { useSpotifySync } from '../hooks/useSpotifySync';
 import type { CircuitConfig } from '@acme/db';
 
 // Design tokens - matching other screens
@@ -111,6 +112,31 @@ export function CircuitPreferencesScreen() {
 
   // Use realtime data if available, otherwise fall back to polling
   const circuitConfig = realtimeConfig || pollingData;
+  
+  // Initialize Spotify connection if device ID is available
+  const { 
+    isConnected: isSpotifyConnected,
+    connectionState: spotifyConnectionState,
+    currentDevice: spotifyDevice,
+    error: spotifyError
+  } = useSpotifySync(
+    sessionId || '', 
+    circuitConfig?.config?.spotifyDeviceId
+  );
+  
+  // Log Spotify connection state changes
+  useEffect(() => {
+    console.log('[CircuitPreferences] Spotify connection state:', {
+      sessionId,
+      deviceId: circuitConfig?.config?.spotifyDeviceId,
+      deviceName: circuitConfig?.config?.spotifyDeviceName,
+      isConnected: isSpotifyConnected,
+      connectionState: spotifyConnectionState,
+      currentDevice: spotifyDevice,
+      error: spotifyError,
+      timestamp: new Date().toISOString()
+    });
+  }, [sessionId, circuitConfig?.config?.spotifyDeviceId, isSpotifyConnected, spotifyConnectionState, spotifyDevice, spotifyError]);
 
   // Check for existing workout selections
   const { data: existingSelections } = useQuery(
@@ -634,19 +660,35 @@ export function CircuitPreferencesScreen() {
                 padding: 8, 
                 paddingHorizontal: 14,
                 borderWidth: 1,
-                borderColor: circuitConfig?.config?.spotifyDeviceId ? '#10b981' : '#254063',
+                borderColor: (() => {
+                  if (!circuitConfig?.config?.spotifyDeviceId) return '#254063';
+                  return isSpotifyConnected ? '#10b981' : '#6b7280';
+                })(),
                 borderStyle: 'dashed',
                 borderRadius: 10,
-                backgroundColor: circuitConfig?.config?.spotifyDeviceId ? 'rgba(16,185,129,0.1)' : 'rgba(12,28,47,0.25)',
+                backgroundColor: (() => {
+                  if (!circuitConfig?.config?.spotifyDeviceId) return 'rgba(12,28,47,0.25)';
+                  return isSpotifyConnected ? 'rgba(16,185,129,0.1)' : 'rgba(107,114,128,0.1)';
+                })(),
               }}>
                 <Text style={{ 
                   fontSize: 18, 
                   fontWeight: '800',
-                  color: circuitConfig?.config?.spotifyDeviceId ? '#10b981' : TOKENS.color.text 
+                  color: (() => {
+                    if (!circuitConfig?.config?.spotifyDeviceId) return TOKENS.color.text;
+                    return isSpotifyConnected ? '#10b981' : '#6b7280';
+                  })()
                 }}>
-                  {circuitConfig?.config?.spotifyDeviceId 
-                    ? circuitConfig?.config?.spotifyDeviceName || 'Connected'
-                    : 'Disconnected'}
+                  {(() => {
+                    if (!circuitConfig?.config?.spotifyDeviceId) return 'Disconnected';
+                    const deviceName = circuitConfig?.config?.spotifyDeviceName || 'Device';
+                    if (spotifyConnectionState === 'connecting') return `Connecting to ${deviceName}...`;
+                    if (isSpotifyConnected) return deviceName;
+                    // Don't show error if we're still in early loading states
+                    if (spotifyError && spotifyConnectionState !== 'disconnected') return `${deviceName} (Searching...)`;
+                    if (spotifyError) return `${deviceName} (Offline)`;
+                    return `${deviceName} (Stored)`;
+                  })()}
                 </Text>
               </View>
             </View>
