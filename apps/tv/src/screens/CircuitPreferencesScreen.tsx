@@ -554,7 +554,7 @@ export function CircuitPreferencesScreen() {
                   fontWeight: '800',
                   color: TOKENS.color.text 
                 }}>
-                  {formatDurationShort(circuitConfig?.config?.workDuration || circuitConfig?.workDuration || 45)}
+                  {formatDuration(circuitConfig?.config?.workDuration || circuitConfig?.workDuration || 45)}
                 </Text>
               </View>
             </View>
@@ -584,7 +584,7 @@ export function CircuitPreferencesScreen() {
                   fontWeight: '800',
                   color: TOKENS.color.text 
                 }}>
-                  {formatDurationShort(circuitConfig?.config?.restDuration || circuitConfig?.restDuration || 15)}
+                  {formatDuration(circuitConfig?.config?.restDuration || circuitConfig?.restDuration || 15)}
                 </Text>
               </View>
             </View>
@@ -614,7 +614,39 @@ export function CircuitPreferencesScreen() {
                   fontWeight: '800',
                   color: TOKENS.color.text 
                 }}>
-                  {formatDurationShort(circuitConfig?.config?.restBetweenRounds || circuitConfig?.restBetweenRounds || 60)}
+                  {formatDuration(circuitConfig?.config?.restBetweenRounds || circuitConfig?.restBetweenRounds || 60)}
+                </Text>
+              </View>
+            </View>
+
+            {/* Row 6 - Spotify Connection */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <View style={{ 
+                  width: 6, 
+                  height: 6, 
+                  borderRadius: 3, 
+                  backgroundColor: TOKENS.color.accent2 
+                }} />
+                <Text style={{ fontSize: 16, color: TOKENS.color.text }}>Spotify Connection</Text>
+              </View>
+              <View style={{ 
+                padding: 8, 
+                paddingHorizontal: 14,
+                borderWidth: 1,
+                borderColor: circuitConfig?.config?.spotifyDeviceId ? '#10b981' : '#254063',
+                borderStyle: 'dashed',
+                borderRadius: 10,
+                backgroundColor: circuitConfig?.config?.spotifyDeviceId ? 'rgba(16,185,129,0.1)' : 'rgba(12,28,47,0.25)',
+              }}>
+                <Text style={{ 
+                  fontSize: 18, 
+                  fontWeight: '800',
+                  color: circuitConfig?.config?.spotifyDeviceId ? '#10b981' : TOKENS.color.text 
+                }}>
+                  {circuitConfig?.config?.spotifyDeviceId 
+                    ? circuitConfig?.config?.spotifyDeviceName || 'Connected'
+                    : 'Disconnected'}
                 </Text>
               </View>
             </View>

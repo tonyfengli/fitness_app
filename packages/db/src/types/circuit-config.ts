@@ -12,6 +12,9 @@ export interface CircuitConfig {
     restDuration: number;        // Rest duration between exercises in seconds (e.g., 15)
     restBetweenRounds: number;   // Rest duration between rounds in seconds (e.g., 60)
     repeatRounds?: boolean;      // Whether to repeat the entire circuit (doubles the rounds)
+    // Spotify integration
+    spotifyDeviceId?: string;    // Selected Spotify device ID
+    spotifyDeviceName?: string;  // Selected Spotify device name (for display)
   };
   // Metadata
   lastUpdated?: string;  // ISO date string

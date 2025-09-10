@@ -5,41 +5,26 @@ export const SPOTIFY_MUSIC_CONFIG = {
   // Track configuration for circuit training
   tracks: {
     warmup: {
-      spotifyId: "spotify:track:2CgOd0Lj5MuvOqzqdaAXtS", // Eye of the Tiger - Survivor
+      spotifyId: "spotify:track:1nBs6CyPsd9THOxqsuLt0M",
       startPosition: 0,
     },
     
     // High-energy workout tracks with hype timestamps (in seconds)
     workout: [
       {
-        spotifyId: "spotify:track:32OlwWuMpZ6b0aN2RZOeMS", // Lose Yourself - Eminem
-        hypeTimestamps: [28, 84, 140], // Chorus drops
+        spotifyId: "spotify:track:1nBs6CyPsd9THOxqsuLt0M",
+        hypeTimestamps: [30, 60, 90], // Default timestamps
         energy: "high",
       },
       {
-        spotifyId: "spotify:track:2aJDlirz6v2a4HREki98cP", // Pump It - The Black Eyed Peas  
-        hypeTimestamps: [30, 75, 120],
-        energy: "high",
-      },
-      {
-        spotifyId: "spotify:track:0DiWol3AO6WpXZgp0goxAV", // Can't Stop - Red Hot Chili Peppers
-        hypeTimestamps: [43, 103, 163],
-        energy: "medium",
-      },
-      {
-        spotifyId: "spotify:track:7dt6x5M1jzdTEt8oCbisTK", // Power - Kanye West
-        hypeTimestamps: [21, 66, 111],
-        energy: "high",
-      },
-      {
-        spotifyId: "spotify:track:1PSBzsahR2AKwLJgx8ehBj", // Bad - David Guetta & Showtek
-        hypeTimestamps: [45, 90, 135],
+        spotifyId: "spotify:track:35FW5OEe4p38LdjK1KqT2X",
+        hypeTimestamps: [30, 60, 90], // Default timestamps
         energy: "high",
       },
     ],
     
     cooldown: {
-      spotifyId: "spotify:track:7qEHsqek33rTcFNT9PFqLf", // Someone Like You - Adele
+      spotifyId: "spotify:track:35FW5OEe4p38LdjK1KqT2X",
       startPosition: 0,
     }
   },

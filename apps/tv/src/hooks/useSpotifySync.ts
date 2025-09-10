@@ -11,7 +11,7 @@ interface SpotifyDevice {
   is_active: boolean;
 }
 
-export function useSpotifySync(sessionId: string) {
+export function useSpotifySync(sessionId: string, preSelectedDeviceId?: string | null) {
   const [connectionState, setConnectionState] = useState<SpotifyConnectionState>('disconnected');
   const [currentDevice, setCurrentDevice] = useState<SpotifyDevice | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -39,6 +39,25 @@ export function useSpotifySync(sessionId: string) {
       });
       
       const data = devicesQuery.data;
+      
+      // First, try to find pre-selected device
+      if (preSelectedDeviceId) {
+        const preSelectedDevice = data.devices.find(
+          (d: SpotifyDevice) => d.id === preSelectedDeviceId
+        );
+        
+        if (preSelectedDevice) {
+          console.log('[Spotify] Found pre-selected device:', preSelectedDevice.name, preSelectedDevice.id);
+          setCurrentDevice(preSelectedDevice);
+          setConnectionState('connected');
+          setError(null);
+          return;
+        } else {
+          console.log('[Spotify] Pre-selected device not found:', preSelectedDeviceId);
+        }
+      }
+      
+      // Fall back to original logic if no pre-selected device
       // Look for Android TV device
       const tvDevice = data.devices.find(
         (d: SpotifyDevice) => d.type === 'TV' || d.name.toLowerCase().includes('tv')
@@ -70,7 +89,7 @@ export function useSpotifySync(sessionId: string) {
       setConnectionState('error');
       setError('Failed to connect to Spotify');
     }
-  }, [devicesQuery.data, devicesQuery.isLoading, devicesQuery.error]);
+  }, [devicesQuery.data, devicesQuery.isLoading, devicesQuery.error, preSelectedDeviceId]);
 
   // Log query state
   useEffect(() => {

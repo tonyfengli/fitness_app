@@ -10,9 +10,9 @@ import { supabase } from "~/lib/supabase/client";
 import { useRealtimeCircuitConfig } from "@acme/ui-shared";
 import type { CircuitConfig } from "@acme/db";
 import { cn } from "@acme/ui-shared";
-import { RoundsStep, ExercisesStep, TimingStep, ReviewStep } from "./components";
+import { RoundsStep, ExercisesStep, TimingStep, ReviewStep, SpotifyStep } from "./components";
 
-const TOTAL_STEPS = 4;
+const TOTAL_STEPS = 5;
 
 export default function CircuitConfigPage() {
   const params = useParams();
@@ -25,6 +25,8 @@ export default function CircuitConfigPage() {
   // Local state for circuit configuration
   const [config, setConfig] = useState<CircuitConfig | null>(null);
   const [repeatRounds, setRepeatRounds] = useState(false);
+  const [spotifyDeviceId, setSpotifyDeviceId] = useState<string | null>(null);
+  const [spotifyDeviceName, setSpotifyDeviceName] = useState<string | null>(null);
 
   // Get TRPC client
   const trpc = useTRPC();
@@ -71,6 +73,8 @@ export default function CircuitConfigPage() {
   const updateConfig = async (updates: Partial<CircuitConfig['config']>) => {
     if (!config) return;
 
+    console.log('[CircuitConfig] updateConfig called with:', updates);
+
     setIsSaving(true);
     const newConfig = { ...config, config: { ...config.config, ...updates } };
     
@@ -78,13 +82,20 @@ export default function CircuitConfigPage() {
     setConfig(newConfig);
 
     try {
-      await updateConfigMutation.mutateAsync({
+      const mutationPayload = {
         sessionId,
         config: updates,
-      });
+      };
+      console.log('[CircuitConfig] Mutation payload:', mutationPayload);
+      
+      const result = await updateConfigMutation.mutateAsync(mutationPayload);
+      console.log('[CircuitConfig] Mutation result:', result);
+      return result;
     } catch (error) {
+      console.error('[CircuitConfig] Mutation error:', error);
       // Revert on error
       setConfig(config);
+      throw error;
     } finally {
       setIsSaving(false);
     }
@@ -149,6 +160,7 @@ export default function CircuitConfigPage() {
                 {currentStep === 2 && "Exercises"}
                 {currentStep === 3 && "Timing"}
                 {currentStep === 4 && "Review"}
+                {currentStep === 5 && "Music"}
               </h1>
             </div>
             
@@ -175,7 +187,7 @@ export default function CircuitConfigPage() {
           {/* Progress indicator */}
           <div className="px-4 pb-3">
             <div className="flex gap-1">
-              {[1, 2, 3, 4].map((step) => (
+              {[1, 2, 3, 4, 5].map((step) => (
                 <div
                   key={step}
                   className={cn(
@@ -240,6 +252,28 @@ export default function CircuitConfigPage() {
                 config={config}
                 repeatRounds={repeatRounds}
               />
+            )}
+
+            {/* Step 5: Spotify Connection */}
+            {currentStep === 5 && (
+              <>
+                {console.log('[CircuitConfig] Step 5 - Current Spotify state:', { spotifyDeviceId, spotifyDeviceName })}
+                <SpotifyStep
+                  deviceId={spotifyDeviceId}
+                  deviceName={spotifyDeviceName}
+                  onDeviceSelect={async (id, name) => {
+                    console.log('[CircuitConfig] Spotify device selected:', { id, name });
+                    setSpotifyDeviceId(id);
+                    setSpotifyDeviceName(name);
+                    
+                    // Save immediately like other settings
+                    await updateConfig({
+                      spotifyDeviceId: id || undefined,
+                      spotifyDeviceName: name || undefined
+                    });
+                  }}
+                />
+              </>
             )}
           </div>
         </Card>

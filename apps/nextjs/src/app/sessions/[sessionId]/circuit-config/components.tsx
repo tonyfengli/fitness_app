@@ -1,9 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Button, Loader2Icon as Loader2 } from "@acme/ui-shared";
 import { cn } from "@acme/ui-shared";
 import type { CircuitConfig } from "@acme/db";
+import { useTRPC } from "~/trpc/react";
 
 interface RoundsStepProps {
   rounds: number;
@@ -317,6 +319,201 @@ export function ReviewStep({ config, repeatRounds }: ReviewStepProps) {
           ✓ Configuration complete! Tap confirm to continue.
         </p>
       </div>
+    </div>
+  );
+}
+
+interface SpotifyStepProps {
+  deviceId: string | null;
+  deviceName: string | null;
+  onDeviceSelect: (deviceId: string | null, deviceName: string | null) => void | Promise<void>;
+}
+
+export function SpotifyStep({ deviceId, deviceName, onDeviceSelect }: SpotifyStepProps) {
+  const [devices, setDevices] = useState<Array<{ id: string; name: string; type: string; is_active: boolean }>>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  
+  const trpc = useTRPC();
+  
+  // Use TRPC query for devices (public endpoint)
+  const devicesQuery = useQuery({
+    ...trpc.spotify.getDevicesPublic.queryOptions(),
+    enabled: false, // Manual trigger
+  });
+
+  const loadDevices = async () => {
+    setError(null);
+    const result = await devicesQuery.refetch();
+    
+    if (result.error) {
+      setError('Failed to connect to Spotify. Please try again.');
+    } else if (result.data) {
+      if (result.data.devices.length === 0) {
+        setError('No Spotify devices found. Make sure Spotify is running on your device.');
+      } else {
+        setDevices(result.data.devices);
+        setError(null);
+      }
+    }
+  };
+
+  const handleDisconnect = async () => {
+    setIsSaving(true);
+    try {
+      await onDeviceSelect(null, null);
+      setDevices([]);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h3 className="text-lg font-semibold mb-1">Music Setup</h3>
+        <p className="text-sm text-muted-foreground mb-4">
+          Connect Spotify to sync music with your workout
+        </p>
+      </div>
+
+      {!deviceId ? (
+        <>
+          {/* Not Connected State */}
+          <div className="space-y-4">
+            <div className="rounded-xl bg-muted/50 p-6 text-center space-y-3">
+              <div className="w-12 h-12 bg-green-500/10 rounded-full flex items-center justify-center mx-auto">
+                <svg className="w-6 h-6 text-green-600" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
+                </svg>
+              </div>
+              <div>
+                <p className="font-medium">Spotify not connected</p>
+                <p className="text-sm text-muted-foreground">
+                  Music will enhance your workout experience
+                </p>
+              </div>
+            </div>
+
+            <Button
+              onClick={loadDevices}
+              disabled={devicesQuery.isLoading}
+              className="w-full h-12 bg-green-600 hover:bg-green-700 text-white"
+            >
+              {devicesQuery.isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Finding devices...
+                </>
+              ) : (
+                <>
+                  <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
+                  </svg>
+                  Connect Spotify
+                </>
+              )}
+            </Button>
+
+            {/* Device List */}
+            {!devicesQuery.isLoading && devices.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-muted-foreground">Select a device:</p>
+                {devices.map((device) => (
+                  <button
+                    key={device.id}
+                    onClick={async () => {
+                      console.log('[SpotifyStep] Device selected:', { id: device.id, name: device.name });
+                      setIsSaving(true);
+                      try {
+                        await onDeviceSelect(device.id, device.name);
+                      } finally {
+                        setIsSaving(false);
+                      }
+                    }}
+                    disabled={isSaving}
+                    className="w-full p-4 rounded-lg border bg-background hover:bg-muted/50 transition-colors text-left disabled:opacity-50"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-medium">{device.name}</p>
+                        <p className="text-sm text-muted-foreground">{device.type}</p>
+                      </div>
+                      {device.is_active && (
+                        <div className="flex items-center text-green-600">
+                          <div className="w-2 h-2 bg-green-600 rounded-full mr-2 animate-pulse" />
+                          <span className="text-sm">Active</span>
+                        </div>
+                      )}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Error State */}
+            {error && (
+              <div className="rounded-lg bg-red-50 dark:bg-red-900/20 p-4">
+                <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+              </div>
+            )}
+
+            {/* Skip Option */}
+            <div className="text-center pt-2">
+              <button
+                onClick={() => onDeviceSelect(null, null)}
+                className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Continue without music →
+              </button>
+            </div>
+          </div>
+        </>
+      ) : (
+        <>
+          {/* Connected State */}
+          <div className="space-y-4">
+            <div className="rounded-xl bg-green-500/10 border border-green-500/20 p-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-4">
+                  <div className="w-12 h-12 bg-green-600 rounded-full flex items-center justify-center">
+                    <svg className="w-6 h-6 text-white" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="text-sm text-green-700 font-medium">Connected to</p>
+                    <p className="font-semibold text-lg">{deviceName}</p>
+                  </div>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleDisconnect}
+                  disabled={isSaving}
+                  className="text-red-600 hover:text-red-700 disabled:opacity-50"
+                >
+                  {isSaving ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Disconnecting...
+                    </>
+                  ) : (
+                    'Disconnect'
+                  )}
+                </Button>
+              </div>
+            </div>
+
+            <div className="rounded-xl bg-muted/50 p-4">
+              <p className="text-sm text-muted-foreground">
+                <span className="font-medium">Note:</span> Music will start automatically when the workout begins. 
+                The TV will control playback timing to sync with exercise intervals.
+              </p>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

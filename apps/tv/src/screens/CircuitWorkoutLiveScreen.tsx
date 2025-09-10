@@ -118,19 +118,7 @@ export function CircuitWorkoutLiveScreen() {
   const [lastLightingEvent, setLastLightingEvent] = useState<string>('');
   const [isStarted, setIsStarted] = useState(false);
   
-  // Spotify integration
-  console.log('[CircuitWorkoutLive] About to call useSpotifySync with sessionId:', sessionId);
-  const { 
-    isConnected: isSpotifyConnected, 
-    playHypeMusic, 
-    handlePhaseChange,
-    pauseMusic,
-    resumeMusic,
-    error: spotifyError 
-  } = useSpotifySync(sessionId);
-  console.log('[CircuitWorkoutLive] Spotify connection state:', { isSpotifyConnected, spotifyError });
-
-  // Get circuit config for timing
+  // Get circuit config for timing and Spotify device
   const { data: circuitConfig } = useQuery(
     sessionId ? api.circuitConfig.getBySession.queryOptions({ sessionId }) : {
       enabled: false,
@@ -138,6 +126,20 @@ export function CircuitWorkoutLiveScreen() {
       queryFn: () => Promise.resolve(null)
     }
   );
+  
+  // Spotify integration with pre-selected device
+  console.log('[CircuitWorkoutLive] About to call useSpotifySync with sessionId:', sessionId);
+  console.log('[CircuitWorkoutLive] Pre-selected Spotify device:', circuitConfig?.config?.spotifyDeviceId);
+  const { 
+    isConnected: isSpotifyConnected, 
+    playHypeMusic, 
+    handlePhaseChange,
+    pauseMusic,
+    resumeMusic,
+    error: spotifyError,
+    refetchDevices 
+  } = useSpotifySync(sessionId, circuitConfig?.config?.spotifyDeviceId);
+  console.log('[CircuitWorkoutLive] Spotify connection state:', { isSpotifyConnected, spotifyError });
   
   // Get saved selections
   const selectionsQueryOptions = sessionId 
@@ -839,6 +841,31 @@ export function CircuitWorkoutLiveScreen() {
             }}>
               ({spotifyError})
             </Text>
+          )}
+          {!isSpotifyConnected && (
+            <Pressable
+              onPress={() => refetchDevices()}
+              focusable
+              style={({ focused }) => ({
+                marginLeft: 12,
+                paddingHorizontal: 16,
+                paddingVertical: 6,
+                backgroundColor: focused ? '#1DB954' : 'transparent',
+                borderWidth: 1,
+                borderColor: '#1DB954',
+                borderRadius: 16,
+              })}
+            >
+              {({ focused }) => (
+                <Text style={{
+                  color: focused ? '#000' : '#1DB954',
+                  fontSize: 14,
+                  fontWeight: '600',
+                }}>
+                  Retry
+                </Text>
+              )}
+            </Pressable>
           )}
         </View>
       </View>

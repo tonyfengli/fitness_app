@@ -44,7 +44,7 @@ class SpotifyAuthService {
       body: new URLSearchParams({
         grant_type: 'refresh_token',
         refresh_token: refreshToken,
-      }),
+      }).toString(),
     });
 
     console.log('[SpotifyAuth] Token refresh response:', {
@@ -61,13 +61,13 @@ class SpotifyAuthService {
       throw new Error(`Spotify token refresh failed: ${error}`);
     }
 
-    const data = await response.json();
+    const data = await response.json() as any;
     this.accessToken = data.access_token;
     this.tokenExpiry = new Date(Date.now() + (data.expires_in - 60) * 1000); // Refresh 1 min early
     
     console.log('[SpotifyAuth] Token refreshed successfully, new expiry:', this.tokenExpiry);
     
-    return this.accessToken;
+    return this.accessToken!;
   }
 
   async makeSpotifyRequest(

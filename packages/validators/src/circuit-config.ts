@@ -54,6 +54,9 @@ export const CircuitConfigSchema = z.object({
     restDuration: CircuitRestDurationSchema,
     restBetweenRounds: CircuitRestBetweenRoundsSchema,
     repeatRounds: z.boolean().optional().default(false),
+    // Spotify integration
+    spotifyDeviceId: z.string().optional(),
+    spotifyDeviceName: z.string().optional(),
   }),
   lastUpdated: z.string().optional(),
   updatedBy: z.string().optional(),
@@ -67,6 +70,9 @@ export const UpdateCircuitConfigSchema = z.object({
   restDuration: CircuitRestDurationSchema.optional(),
   restBetweenRounds: CircuitRestBetweenRoundsSchema.optional(),
   repeatRounds: z.boolean().optional(),
+  // Spotify integration
+  spotifyDeviceId: z.string().optional(),
+  spotifyDeviceName: z.string().optional(),
 });
 
 // Input schema for TRPC endpoints

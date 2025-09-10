@@ -237,6 +237,8 @@ export const circuitConfigRouter = createTRPCRouter({
   updatePublic: publicProcedure
     .input(CircuitConfigInputSchema)
     .mutation(async ({ ctx, input }) => {
+      console.log('[CircuitConfig API] updatePublic called with input:', JSON.stringify(input, null, 2));
+      
       // Get the session to verify it exists and is a circuit session
       const session = await ctx.db
         .select()
@@ -278,9 +280,13 @@ export const circuitConfigRouter = createTRPCRouter({
         lastUpdated: new Date().toISOString(),
         updatedBy: "anonymous", // Since it's public
       };
+      
+      console.log('[CircuitConfig API] Updated config before validation:', JSON.stringify(updatedConfig, null, 2));
 
       // Validate the complete config
       const validatedConfig = CircuitConfigSchema.parse(updatedConfig);
+      
+      console.log('[CircuitConfig API] Validated config:', JSON.stringify(validatedConfig, null, 2));
 
       // Update the session
       await ctx.db

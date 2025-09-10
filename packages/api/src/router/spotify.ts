@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { createTRPCRouter, protectedProcedure } from "../trpc";
+import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
 import { spotifyAuth } from "../services/spotify-auth";
 import { SPOTIFY_MUSIC_CONFIG } from "../config/spotify-music-config";
 
@@ -22,7 +22,41 @@ export const spotifyRouter = createTRPCRouter({
         throw new Error(`Failed to get devices: ${response.statusText} - ${errorText}`);
       }
       
-      const data = await response.json();
+      const data = await response.json() as any;
+      console.log('[Spotify API] Devices data:', {
+        devices: data.devices || [],
+        deviceCount: data.devices?.length || 0
+      });
+      
+      return {
+        devices: data.devices || [],
+        activeDevice: data.devices?.find((d: any) => d.is_active) || null,
+      };
+    } catch (error) {
+      console.error('[Spotify API] Failed to get devices - full error:', error);
+      throw new Error('Failed to get Spotify devices');
+    }
+  }),
+
+  // Public version of getDevices for circuit config
+  getDevicesPublic: publicProcedure.query(async () => {
+    console.log('[Spotify API] getDevicesPublic called');
+    try {
+      const response = await spotifyAuth.makeSpotifyRequest('/me/player/devices');
+      
+      console.log('[Spotify API] Devices response status:', response.status);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('[Spotify API] Devices error response:', {
+          status: response.status,
+          statusText: response.statusText,
+          body: errorText
+        });
+        throw new Error(`Failed to get devices: ${response.statusText} - ${errorText}`);
+      }
+      
+      const data = await response.json() as any;
       console.log('[Spotify API] Devices data:', {
         devices: data.devices || [],
         deviceCount: data.devices?.length || 0
@@ -51,7 +85,7 @@ export const spotifyRouter = createTRPCRouter({
         throw new Error(`Failed to get playback state: ${response.statusText}`);
       }
       
-      const data = await response.json();
+      const data = await response.json() as any;
       return {
         isPlaying: data.is_playing,
         device: data.device,
