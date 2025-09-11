@@ -132,8 +132,8 @@ export function CircuitWorkoutLiveScreen() {
     }
   );
   
-  // Spotify integration with pre-selected device
-  useSpotifySync(sessionId, circuitConfig?.config?.spotifyDeviceId);
+  // Spotify integration with pre-selected device (auto-play disabled since music already playing from preferences screen)
+  useSpotifySync(sessionId, circuitConfig?.config?.spotifyDeviceId, { autoPlay: false });
   
   // Get saved selections
   const selectionsQueryOptions = sessionId 
