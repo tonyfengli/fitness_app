@@ -3,10 +3,12 @@ export const SPOTIFY_MUSIC_CONFIG = {
   tracks: {
     workout: [
       {
-        spotifyId: "spotify:track:1nBs6CyPsd9THOxqsuLt0M",
+        spotifyId: "spotify:track:4xmrP0u72ox9OJ1cgJzZpQ",
+        hypeTimestamp: 23, // 0:23 - hype moment begins here
       },
       {
-        spotifyId: "spotify:track:35FW5OEe4p38LdjK1KqT2X",
+        spotifyId: "spotify:track:2pTIbtODPQ9dtQuD3rPaTp",
+        hypeTimestamp: 20, // 0:20 - hype moment begins here
       },
     ],
   }

@@ -255,12 +255,45 @@ export function useSpotifySync(sessionId: string, preSelectedDeviceId?: string |
     };
   }, [connectionState, currentDevice?.id]);
 
+  // Play a specific track at a specific position
+  const playTrackAtPosition = useCallback(async (trackUri: string, positionMs: number) => {
+    if (!currentDevice?.id) {
+      console.error('[Spotify] Cannot play track - no device connected');
+      return;
+    }
+    
+    console.log('[Spotify] Playing track at position:', {
+      trackUri,
+      positionMs,
+      deviceId: currentDevice.id,
+      timestamp: new Date().toISOString()
+    });
+    
+    controlMutation.mutate({
+      action: 'play',
+      deviceId: currentDevice.id,
+      trackUri,
+      positionMs,
+    }, {
+      onSuccess: () => {
+        console.log('[Spotify] ✅ Successfully started playback at position');
+      },
+      onError: (error: any) => {
+        console.error('[Spotify] ❌ Failed to play track at position:', error);
+        setError(`Failed to play track: ${error.message}`);
+      }
+    });
+  }, [currentDevice?.id, controlMutation]);
+
   return {
     // State
     isConnected: connectionState === 'connected',
     connectionState,
     currentDevice,
     error,
+    
+    // Actions
+    playTrackAtPosition,
     
     // Queries
     refetchDevices: devicesQuery.refetch,

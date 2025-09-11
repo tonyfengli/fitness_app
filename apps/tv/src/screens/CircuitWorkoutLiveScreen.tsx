@@ -132,8 +132,14 @@ export function CircuitWorkoutLiveScreen() {
     }
   );
   
+  // Get music config for track information
+  const { data: musicConfig } = useQuery({
+    ...api.spotify.getMusicConfig.queryOptions(),
+    enabled: !!sessionId,
+  });
+  
   // Spotify integration with pre-selected device (auto-play disabled since music already playing from preferences screen)
-  useSpotifySync(sessionId, circuitConfig?.config?.spotifyDeviceId, { autoPlay: false });
+  const { playTrackAtPosition } = useSpotifySync(sessionId, circuitConfig?.config?.spotifyDeviceId, { autoPlay: false });
   
   // Get saved selections
   const selectionsQueryOptions = sessionId 
@@ -306,6 +312,26 @@ export function CircuitWorkoutLiveScreen() {
     setShowCountdown(true);
     setCountdownValue(5);
     
+    // Sync music with countdown
+    if (musicConfig && playTrackAtPosition) {
+      // Pick a random track
+      const tracks = musicConfig.tracks.workout;
+      const randomTrack = tracks[Math.floor(Math.random() * tracks.length)];
+      
+      // Calculate seek position: hype moment - 5 seconds
+      const seekPositionMs = Math.max(0, (randomTrack.hypeTimestamp - 5) * 1000);
+      
+      console.log('[CircuitWorkoutLive] Syncing music for countdown:', {
+        track: randomTrack.spotifyId,
+        hypeTimestamp: randomTrack.hypeTimestamp,
+        seekPosition: seekPositionMs / 1000,
+        countdown: 5
+      });
+      
+      // Play the track at the calculated position
+      playTrackAtPosition(randomTrack.spotifyId, seekPositionMs);
+    }
+    
     countdownIntervalRef.current = setInterval(() => {
       setCountdownValue((prev) => {
         if (prev <= 1) {
@@ -322,7 +348,7 @@ export function CircuitWorkoutLiveScreen() {
         return prev - 1;
       });
     }, 1000);
-  }, [circuitConfig]);
+  }, [circuitConfig, musicConfig, playTrackAtPosition]);
 
   const startTimer = (duration: number) => {
     setTimeRemaining(duration);
