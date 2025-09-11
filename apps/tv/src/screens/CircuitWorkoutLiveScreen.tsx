@@ -114,6 +114,11 @@ export function CircuitWorkoutLiveScreen() {
   const [isPaused, setIsPaused] = useState(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   
+  // Countdown overlay state
+  const [showCountdown, setShowCountdown] = useState(false);
+  const [countdownValue, setCountdownValue] = useState(5);
+  const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  
   // Lighting state
   const [lastLightingEvent, setLastLightingEvent] = useState<string>('');
   const [isStarted, setIsStarted] = useState(false);
@@ -128,18 +133,7 @@ export function CircuitWorkoutLiveScreen() {
   );
   
   // Spotify integration with pre-selected device
-  console.log('[CircuitWorkoutLive] About to call useSpotifySync with sessionId:', sessionId);
-  console.log('[CircuitWorkoutLive] Pre-selected Spotify device:', circuitConfig?.config?.spotifyDeviceId);
-  const { 
-    isConnected: isSpotifyConnected, 
-    playHypeMusic, 
-    handlePhaseChange,
-    pauseMusic,
-    resumeMusic,
-    error: spotifyError,
-    refetchDevices 
-  } = useSpotifySync(sessionId, circuitConfig?.config?.spotifyDeviceId);
-  console.log('[CircuitWorkoutLive] Spotify connection state:', { isSpotifyConnected, spotifyError });
+  useSpotifySync(sessionId, circuitConfig?.config?.spotifyDeviceId);
   
   // Get saved selections
   const selectionsQueryOptions = sessionId 
@@ -229,33 +223,22 @@ export function CircuitWorkoutLiveScreen() {
     
     // Map current state to lighting event
     let lightingEvent = '';
-    let currentPhase: 'warmup' | 'work' | 'rest' | 'cooldown' | '' = '';
     
     // Check for round preview (applies to all rounds)
     if (currentScreen === 'round-preview') {
       lightingEvent = 'warmup';  // 'warmup' maps to Round Preview in our color mappings
-      currentPhase = 'warmup';
     } else if (currentScreen === 'exercise') {
       lightingEvent = 'work';
-      currentPhase = 'work';
       
-      // If this is the first exercise of a round, trigger hype music
-      if (currentExerciseIndex === 0 && lightingEvent !== lastLightingEvent) {
-        console.log('[SPOTIFY] Playing hype music for round', currentRoundIndex);
-        playHypeMusic(currentRoundIndex);
-      }
     } else if (currentScreen === 'rest') {
       lightingEvent = 'rest';
-      currentPhase = 'rest';
     } else if (timeRemaining === 0 && isStarted && currentRoundIndex === roundsData.length - 1 && currentScreen === 'exercise') {
       // Only mark as complete when the last exercise finishes
       lightingEvent = 'cooldown';
-      currentPhase = 'cooldown';
     }
     
     console.log('[CIRCUIT-LIGHTING] Detected event:', {
       lightingEvent,
-      currentPhase,
       willTrigger: lightingEvent && lightingEvent !== lastLightingEvent
     });
     
@@ -274,26 +257,18 @@ export function CircuitWorkoutLiveScreen() {
         }
       });
       
-      // Handle Spotify phase changes
-      if (currentPhase) {
-        handlePhaseChange(currentPhase);
-      }
       
       setLastLightingEvent(lightingEvent);
     }
-  }, [currentScreen, timeRemaining, isStarted, lastLightingEvent, currentRoundIndex, roundsData.length, currentExerciseIndex, playHypeMusic, handlePhaseChange]);
+  }, [currentScreen, timeRemaining, isStarted, lastLightingEvent, currentRoundIndex, roundsData.length, currentExerciseIndex]);
 
 
-  // Handle pause state lighting and Spotify
+  // Handle pause state lighting
   useEffect(() => {
     if (isPaused) {
       setPauseState();
-      pauseMusic();
-    } else if (isStarted && !isPaused) {
-      // Resume music when unpausing (but only if workout has started)
-      resumeMusic();
     }
-  }, [isPaused, isStarted, pauseMusic, resumeMusic]);
+  }, [isPaused]);
 
   // Timer management
   useEffect(() => {
@@ -326,6 +301,29 @@ export function CircuitWorkoutLiveScreen() {
     handleNext();
   }, [currentScreen, currentRoundIndex, currentExerciseIndex]);
 
+  // Start countdown and then proceed to exercise
+  const startCountdown = useCallback(() => {
+    setShowCountdown(true);
+    setCountdownValue(5);
+    
+    countdownIntervalRef.current = setInterval(() => {
+      setCountdownValue((prev) => {
+        if (prev <= 1) {
+          // Countdown complete
+          if (countdownIntervalRef.current) {
+            clearInterval(countdownIntervalRef.current);
+          }
+          setShowCountdown(false);
+          // Start the first exercise
+          setCurrentScreen('exercise');
+          startTimer(circuitConfig?.config?.workDuration || 45);
+          return 5; // Reset for next time
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  }, [circuitConfig]);
+
   const startTimer = (duration: number) => {
     setTimeRemaining(duration);
     setIsStarted(true);
@@ -347,9 +345,8 @@ export function CircuitWorkoutLiveScreen() {
     setLastLightingEvent('');
 
     if (currentScreen === 'round-preview') {
-      // Go to first exercise
-      setCurrentScreen('exercise');
-      startTimer(circuitConfig?.config?.workDuration || 45);
+      // Start countdown before going to first exercise
+      startCountdown();
     } else if (currentScreen === 'exercise') {
       // Check if this is the last exercise in the round
       if (currentExerciseIndex === currentRound.exercises.length - 1) {
@@ -417,8 +414,7 @@ export function CircuitWorkoutLiveScreen() {
   };
 
   const handleStartRound = () => {
-    setCurrentScreen('exercise');
-    startTimer(circuitConfig?.config?.workDuration || 45);
+    startCountdown();
   };
 
   const formatTime = (seconds: number) => {
@@ -806,6 +802,34 @@ export function CircuitWorkoutLiveScreen() {
         )}
       </View>
       
+      {/* Countdown Overlay */}
+      {showCountdown && (
+        <View style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.8)',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 1000,
+        }}>
+          <Text style={{
+            fontSize: 280,
+            fontWeight: '900',
+            color: '#ffffff',
+            textAlign: 'center',
+            letterSpacing: -8,
+            textShadowColor: 'rgba(0, 0, 0, 0.3)',
+            textShadowOffset: { width: 0, height: 4 },
+            textShadowRadius: 10,
+          }}>
+            {countdownValue}
+          </Text>
+        </View>
+      )}
+      
       {/* Status Indicators */}
       <View style={{ 
         position: 'absolute', 
@@ -816,58 +840,6 @@ export function CircuitWorkoutLiveScreen() {
         gap: 20 
       }}>
         <LightingStatusDot />
-        
-        {/* Spotify Connection Indicator */}
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <View style={{
-            width: 12,
-            height: 12,
-            borderRadius: 6,
-            backgroundColor: isSpotifyConnected ? '#1DB954' : '#666',
-            marginRight: 8,
-          }} />
-          <Text style={{
-            color: isSpotifyConnected ? '#1DB954' : '#666',
-            fontSize: 16,
-            fontWeight: '500',
-          }}>
-            Spotify {isSpotifyConnected ? 'Connected' : 'Disconnected'}
-          </Text>
-          {spotifyError && (
-            <Text style={{
-              color: '#ef4444',
-              fontSize: 14,
-              marginLeft: 8,
-            }}>
-              ({spotifyError})
-            </Text>
-          )}
-          {!isSpotifyConnected && (
-            <Pressable
-              onPress={() => refetchDevices()}
-              focusable
-              style={({ focused }) => ({
-                marginLeft: 12,
-                paddingHorizontal: 16,
-                paddingVertical: 6,
-                backgroundColor: focused ? '#1DB954' : 'transparent',
-                borderWidth: 1,
-                borderColor: '#1DB954',
-                borderRadius: 16,
-              })}
-            >
-              {({ focused }) => (
-                <Text style={{
-                  color: focused ? '#000' : '#1DB954',
-                  fontSize: 14,
-                  fontWeight: '600',
-                }}>
-                  Retry
-                </Text>
-              )}
-            </Pressable>
-          )}
-        </View>
       </View>
     </View>
   );

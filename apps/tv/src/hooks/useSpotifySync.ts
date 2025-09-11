@@ -48,8 +48,6 @@ export function useSpotifySync(sessionId: string, preSelectedDeviceId?: string |
     }
   }, [preSelectedDeviceId, currentDevice?.id]);
   
-  // Track the current volume level to restore after phase changes
-  const lastVolumeRef = useRef<number>(85);
   const deviceCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   console.log('[Spotify] Hook initialized with:', {
@@ -172,16 +170,6 @@ export function useSpotifySync(sessionId: string, preSelectedDeviceId?: string |
     },
   });
 
-  // Initialize session mutation
-  const initSessionMutation = useMutation({
-    ...api.spotify.initializeMusicSession.mutationOptions(),
-    onSuccess: () => {
-      console.log('[Spotify] Music session initialized');
-    },
-    onError: (err) => {
-      console.error('[Spotify] Failed to initialize session:', err);
-    },
-  });
 
   // Track if we've already started playing music
   const hasStartedPlaybackRef = useRef(false);
@@ -208,14 +196,8 @@ export function useSpotifySync(sessionId: string, preSelectedDeviceId?: string |
     const shouldAutoPlay = options?.autoPlay ?? true; // Default to true for backward compatibility
     
     if (currentDevice && sessionId && connectionState === 'connected' && musicConfigQuery.data && !hasStartedPlaybackRef.current && shouldAutoPlay) {
-      console.log('[Spotify] 🎵 Initializing music session and starting playback');
+      console.log('[Spotify] 🎵 Starting playback');
       hasStartedPlaybackRef.current = true;
-      
-      // Initialize session
-      initSessionMutation.mutate({
-        sessionId,
-        deviceId: currentDevice.id,
-      });
       
       // Pick a random track from the workout tracks
       const workoutTracks = musicConfigQuery.data.tracks.workout;
@@ -236,12 +218,6 @@ export function useSpotifySync(sessionId: string, preSelectedDeviceId?: string |
       }, {
         onSuccess: () => {
           console.log('[Spotify] ✅ Successfully started playback');
-          // Set initial volume
-          controlMutation.mutate({
-            action: 'volume',
-            deviceId: currentDevice.id,
-            volumePercent: musicConfigQuery.data.volume.warmup,
-          });
         },
         onError: (error: any) => {
           console.error('[Spotify] ❌ Failed to start playback:', error);
@@ -252,35 +228,6 @@ export function useSpotifySync(sessionId: string, preSelectedDeviceId?: string |
     }
   }, [currentDevice?.id, sessionId, connectionState, musicConfigQuery.data]);
 
-  // Play hype music for round start - NO-OP for MVP
-  const playHypeMusic = useCallback(async (roundIndex: number) => {
-    console.log('[Spotify] playHypeMusic called (disabled) for round:', roundIndex);
-    // Intentionally do nothing - just maintain connection
-  }, []);
-
-  // Set volume based on workout phase - NO-OP for MVP
-  const setVolume = useCallback(async (phase: 'work' | 'rest' | 'cooldown' | 'warmup') => {
-    console.log('[Spotify] setVolume called (disabled) for phase:', phase);
-    // Intentionally do nothing - just maintain connection
-  }, []);
-
-  // Pause music - NO-OP for MVP
-  const pauseMusic = useCallback(async () => {
-    console.log('[Spotify] pauseMusic called (disabled)');
-    // Intentionally do nothing - just maintain connection
-  }, []);
-
-  // Resume music - NO-OP for MVP
-  const resumeMusic = useCallback(async () => {
-    console.log('[Spotify] resumeMusic called (disabled)');
-    // Intentionally do nothing - just maintain connection
-  }, []);
-
-  // Handle phase changes - NO-OP for MVP
-  const handlePhaseChange = useCallback(async (phase: 'warmup' | 'work' | 'rest' | 'cooldown') => {
-    console.log('[Spotify] handlePhaseChange called (disabled) for phase:', phase);
-    // Intentionally do nothing - just maintain connection
-  }, []);
 
   // Cleanup interval on unmount and reset playback flag when disconnected
   useEffect(() => {
@@ -314,13 +261,6 @@ export function useSpotifySync(sessionId: string, preSelectedDeviceId?: string |
     connectionState,
     currentDevice,
     error,
-    
-    // Actions
-    playHypeMusic,
-    pauseMusic,
-    resumeMusic,
-    setVolume,
-    handlePhaseChange,
     
     // Queries
     refetchDevices: devicesQuery.refetch,

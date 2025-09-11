@@ -72,40 +72,14 @@ export const spotifyRouter = createTRPCRouter({
     }
   }),
 
-  // Get current playback state
-  getPlaybackState: protectedProcedure.query(async () => {
-    try {
-      const response = await spotifyAuth.makeSpotifyRequest('/me/player');
-      
-      if (response.status === 204) {
-        return { isPlaying: false, device: null };
-      }
-      
-      if (!response.ok) {
-        throw new Error(`Failed to get playback state: ${response.statusText}`);
-      }
-      
-      const data = await response.json() as any;
-      return {
-        isPlaying: data.is_playing,
-        device: data.device,
-        track: data.item,
-        progressMs: data.progress_ms,
-      };
-    } catch (error) {
-      console.error('[Spotify] Failed to get playback state:', error);
-      return { isPlaying: false, device: null };
-    }
-  }),
 
-  // Control playback (play, pause, volume)
+  // Control playback (play, pause only)
   control: publicProcedure
     .input(z.object({
-      action: z.enum(['play', 'pause', 'volume', 'transfer']),
+      action: z.enum(['play', 'pause']),
       deviceId: z.string().optional(),
       trackUri: z.string().optional(),
       positionMs: z.number().optional(),
-      volumePercent: z.number().min(0).max(100).optional(),
     }))
     .mutation(async ({ input }) => {
       try {
@@ -147,49 +121,6 @@ export const spotifyRouter = createTRPCRouter({
             }
             break;
           }
-          
-          case 'volume': {
-            if (input.volumePercent === undefined) {
-              throw new Error('Volume percent is required');
-            }
-            
-            const response = await spotifyAuth.makeSpotifyRequest(
-              `/me/player/volume?volume_percent=${input.volumePercent}${
-                input.deviceId ? `&device_id=${input.deviceId}` : ''
-              }`,
-              { method: 'PUT' }
-            );
-            
-            if (!response.ok && response.status !== 204) {
-              const error = await response.text();
-              throw new Error(`Volume change failed: ${error}`);
-            }
-            break;
-          }
-          
-          case 'transfer': {
-            if (!input.deviceId) {
-              throw new Error('Device ID is required for transfer');
-            }
-            
-            const response = await spotifyAuth.makeSpotifyRequest(
-              '/me/player',
-              {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  device_ids: [input.deviceId],
-                  play: true,
-                }),
-              }
-            );
-            
-            if (!response.ok && response.status !== 204) {
-              const error = await response.text();
-              throw new Error(`Transfer failed: ${error}`);
-            }
-            break;
-          }
         }
         
         return { success: true };
@@ -204,39 +135,4 @@ export const spotifyRouter = createTRPCRouter({
     return SPOTIFY_MUSIC_CONFIG;
   }),
 
-  // Initialize music session for a training session
-  initializeMusicSession: publicProcedure
-    .input(z.object({
-      sessionId: z.string(),
-      deviceId: z.string().optional(),
-    }))
-    .mutation(async ({ input }) => {
-      try {
-        // If device ID provided, transfer playback to it
-        if (input.deviceId) {
-          await spotifyAuth.makeSpotifyRequest(
-            '/me/player',
-            {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                device_ids: [input.deviceId],
-                play: false, // Don't start playing yet
-              }),
-            }
-          );
-        }
-        
-        // Return session info
-        return {
-          sessionId: input.sessionId,
-          deviceId: input.deviceId,
-          config: SPOTIFY_MUSIC_CONFIG,
-          initialized: true,
-        };
-      } catch (error) {
-        console.error('[Spotify] Failed to initialize session:', error);
-        throw new Error('Failed to initialize Spotify music session');
-      }
-    }),
 });
