@@ -11,7 +11,7 @@ interface SpotifyDevice {
   is_active: boolean;
 }
 
-export function useSpotifySync(sessionId: string, preSelectedDeviceId?: string | null) {
+export function useSpotifySync(sessionId: string, preSelectedDeviceId?: string | null, options?: { autoPlay?: boolean }) {
   // If we have a pre-selected device, start in connecting state
   const [connectionState, setConnectionState] = useState<SpotifyConnectionState>(
     preSelectedDeviceId ? 'connecting' : 'disconnected'
@@ -32,8 +32,21 @@ export function useSpotifySync(sessionId: string, preSelectedDeviceId?: string |
     if (preSelectedDeviceId && currentDevice?.id !== preSelectedDeviceId) {
       setHasSearchedForDevice(false);
       setError(null);
+    } else if (!preSelectedDeviceId && currentDevice?.id) {
+      // Device was removed (disconnected from mobile)
+      console.log('[Spotify] Device disconnected, stopping music');
+      controlMutation.mutate({
+        action: 'pause',
+        deviceId: currentDevice.id,
+      }, {
+        onError: (error: any) => {
+          console.error('[Spotify] Failed to stop music on device removal:', error);
+        }
+      });
+      setCurrentDevice(null);
+      setConnectionState('disconnected');
     }
-  }, [preSelectedDeviceId]);
+  }, [preSelectedDeviceId, currentDevice?.id]);
   
   // Track the current volume level to restore after phase changes
   const lastVolumeRef = useRef<number>(85);
@@ -119,29 +132,10 @@ export function useSpotifySync(sessionId: string, preSelectedDeviceId?: string |
       
       // Only use fallback logic if no pre-selected device was provided
       if (!preSelectedDeviceId) {
-        // Look for Android TV device
-        const tvDevice = data.devices.find(
-          (d: SpotifyDevice) => d.type === 'TV' || d.name.toLowerCase().includes('tv')
-        );
-        
-        console.log('[Spotify] TV device search result:', tvDevice);
-        
-        if (tvDevice) {
-          console.log('[Spotify] Found TV device:', tvDevice.name, tvDevice.id);
-          setCurrentDevice(tvDevice);
-          setConnectionState('connected');
-          setError(null);
-        } else if (data.devices.length > 0) {
-          // Use first available device if no TV found
-          console.log('[Spotify] No TV found, using first device:', data.devices[0]);
-          setCurrentDevice(data.devices[0]);
-          setConnectionState('connected');
-          setError('No TV device found, using first available device');
-        } else {
-          console.log('[Spotify] No devices found at all');
-          setConnectionState('disconnected');
-          setError('No Spotify devices available');
-        }
+        console.log('[Spotify] No pre-selected device, staying disconnected');
+        setConnectionState('disconnected');
+        setCurrentDevice(null);
+        // Don't set error - this is expected when no device is selected
       }
     } else if (devicesQuery.error) {
       console.error('[Spotify] Failed to get devices:', {
@@ -211,7 +205,9 @@ export function useSpotifySync(sessionId: string, preSelectedDeviceId?: string |
       timestamp: new Date().toISOString()
     });
     
-    if (currentDevice && sessionId && connectionState === 'connected' && musicConfigQuery.data && !hasStartedPlaybackRef.current) {
+    const shouldAutoPlay = options?.autoPlay ?? true; // Default to true for backward compatibility
+    
+    if (currentDevice && sessionId && connectionState === 'connected' && musicConfigQuery.data && !hasStartedPlaybackRef.current && shouldAutoPlay) {
       console.log('[Spotify] 🎵 Initializing music session and starting playback');
       hasStartedPlaybackRef.current = true;
       
@@ -290,6 +286,19 @@ export function useSpotifySync(sessionId: string, preSelectedDeviceId?: string |
   useEffect(() => {
     if (connectionState === 'disconnected' || connectionState === 'error') {
       hasStartedPlaybackRef.current = false;
+      
+      // Stop music if it was playing
+      if (currentDevice?.id) {
+        console.log('[Spotify] Stopping music due to disconnection');
+        controlMutation.mutate({
+          action: 'pause',
+          deviceId: currentDevice.id,
+        }, {
+          onError: (error: any) => {
+            console.error('[Spotify] Failed to stop music on disconnect:', error);
+          }
+        });
+      }
     }
     
     return () => {
@@ -297,7 +306,7 @@ export function useSpotifySync(sessionId: string, preSelectedDeviceId?: string |
         clearInterval(deviceCheckIntervalRef.current);
       }
     };
-  }, [connectionState]);
+  }, [connectionState, currentDevice?.id]);
 
   return {
     // State
