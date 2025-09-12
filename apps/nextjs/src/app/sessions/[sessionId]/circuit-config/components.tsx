@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button, Loader2Icon as Loader2 } from "@acme/ui-shared";
 import { cn } from "@acme/ui-shared";
 import type { CircuitConfig } from "@acme/db";
@@ -504,6 +504,7 @@ export function SpotifyStep({ deviceId, deviceName, onDeviceSelect }: SpotifySte
                 </Button>
               </div>
             </div>
+
 
             <div className="rounded-xl bg-muted/50 p-4">
               <p className="text-sm text-muted-foreground">

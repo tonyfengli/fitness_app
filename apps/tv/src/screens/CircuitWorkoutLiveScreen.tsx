@@ -116,7 +116,7 @@ export function CircuitWorkoutLiveScreen() {
   
   // Countdown overlay state
   const [showCountdown, setShowCountdown] = useState(false);
-  const [countdownValue, setCountdownValue] = useState(5);
+  const [countdownValue, setCountdownValue] = useState<number | string>(5);
   const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
   
   // Lighting state
@@ -314,28 +314,35 @@ export function CircuitWorkoutLiveScreen() {
     
     // Sync music with countdown
     if (musicConfig && playTrackAtPosition) {
-      // Pick a random track
-      const tracks = musicConfig.tracks.workout;
-      const randomTrack = tracks[Math.floor(Math.random() * tracks.length)];
+      // Filter tracks to only include those with hypeTimestamp
+      const tracksWithHype = musicConfig.tracks.workout.filter(track => track.hypeTimestamp !== undefined);
       
-      // Calculate seek position: hype moment - 5 seconds
-      const seekPositionMs = Math.max(0, (randomTrack.hypeTimestamp - 5) * 1000);
-      
-      console.log('[CircuitWorkoutLive] Syncing music for countdown:', {
-        track: randomTrack.spotifyId,
-        hypeTimestamp: randomTrack.hypeTimestamp,
-        seekPosition: seekPositionMs / 1000,
-        countdown: 5
-      });
-      
-      // Play the track at the calculated position
-      playTrackAtPosition(randomTrack.spotifyId, seekPositionMs);
+      if (tracksWithHype.length > 0) {
+        // Pick a random track from filtered list
+        const randomTrack = tracksWithHype[Math.floor(Math.random() * tracksWithHype.length)];
+        
+        // Calculate seek position: hype moment - 5 seconds
+        const seekPositionMs = Math.max(0, (randomTrack.hypeTimestamp - 5) * 1000);
+        
+        console.log('[CircuitWorkoutLive] Syncing music for countdown:', {
+          track: randomTrack.spotifyId,
+          hypeTimestamp: randomTrack.hypeTimestamp,
+          seekPosition: seekPositionMs / 1000,
+          countdown: 5,
+          totalTracksWithHype: tracksWithHype.length
+        });
+        
+        // Play the track at the calculated position
+        playTrackAtPosition(randomTrack.spotifyId, seekPositionMs);
+      } else {
+        console.warn('[CircuitWorkoutLive] No tracks with hypeTimestamp available for countdown sync');
+      }
     }
     
     countdownIntervalRef.current = setInterval(() => {
       setCountdownValue((prev) => {
-        if (prev <= 1) {
-          // Countdown complete
+        if (prev === 'GO!') {
+          // GO! complete - start exercise
           if (countdownIntervalRef.current) {
             clearInterval(countdownIntervalRef.current);
           }
@@ -345,7 +352,11 @@ export function CircuitWorkoutLiveScreen() {
           startTimer(circuitConfig?.config?.workDuration || 45);
           return 5; // Reset for next time
         }
-        return prev - 1;
+        if (prev === 1) {
+          // Show GO! after 1
+          return 'GO!';
+        }
+        return typeof prev === 'number' ? prev - 1 : 5;
       });
     }, 1000);
   }, [circuitConfig, musicConfig, playTrackAtPosition]);

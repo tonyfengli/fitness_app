@@ -389,14 +389,14 @@ export function CircuitWorkoutOverviewScreen() {
         paddingVertical: 16
       }}>
         <Pressable
-          onPress={() => navigation.goBack()}
-          focusable
-        >
-          {({ focused }) => (
-            <MattePanel 
-              focused={focused}
-              style={{ 
-                paddingHorizontal: 32,
+            onPress={() => navigation.goBack()}
+            focusable
+          >
+            {({ focused }) => (
+              <MattePanel 
+                focused={focused}
+                style={{ 
+                  paddingHorizontal: 32,
                 paddingVertical: 12,
                 backgroundColor: focused ? 'rgba(255,255,255,0.16)' : TOKENS.color.card,
                 borderColor: focused ? 'rgba(255,255,255,0.45)' : TOKENS.color.borderGlass,

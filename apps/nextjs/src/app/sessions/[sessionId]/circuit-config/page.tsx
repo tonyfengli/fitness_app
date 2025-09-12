@@ -65,6 +65,8 @@ export default function CircuitConfigPage() {
     if (initialConfig) {
       setConfig(initialConfig);
       setRepeatRounds(initialConfig.config.repeatRounds || false);
+      setSpotifyDeviceId(initialConfig.config.spotifyDeviceId || null);
+      setSpotifyDeviceName(initialConfig.config.spotifyDeviceName || null);
       setIsLoading(false);
     }
   }, [initialConfig]);

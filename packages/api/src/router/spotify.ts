@@ -73,7 +73,7 @@ export const spotifyRouter = createTRPCRouter({
   }),
 
 
-  // Control playback (play, pause only)
+  // Control playback (play, pause)
   control: publicProcedure
     .input(z.object({
       action: z.enum(['play', 'pause']),

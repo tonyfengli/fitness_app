@@ -324,13 +324,22 @@ function CircuitWorkoutOverviewContent() {
               )}
             </div>
           </div>
-          <Button
-            variant="outline"
-            onClick={() => router.back()}
-            className="font-medium"
-          >
-            ← Back
-          </Button>
+          <div className="flex items-center gap-3">
+            <Button
+              variant="outline"
+              onClick={() => router.push(`/sessions/${sessionId}/circuit-config?step=5`)}
+              className="font-medium"
+            >
+              Music Controls
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => router.back()}
+              className="font-medium"
+            >
+              ← Back
+            </Button>
+          </div>
         </div>
 
         {/* Content */}
