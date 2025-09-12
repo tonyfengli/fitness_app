@@ -154,7 +154,7 @@ export const spotifyRouter = createTRPCRouter({
       } catch (error) {
         console.warn('[Spotify] Volume control error:', error);
         // Don't throw - volume control is not critical
-        return { success: false, error: error.message };
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
       }
     }),
 
