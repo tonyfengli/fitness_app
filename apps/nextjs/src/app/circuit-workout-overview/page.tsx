@@ -465,6 +465,7 @@ function CircuitWorkoutOverviewContent() {
             </div>
           </Card>
         )}
+
       </div>
 
       {/* Exercise Selection Modal */}
