@@ -169,6 +169,14 @@ export function useSpotifySync(sessionId: string, preSelectedDeviceId?: string |
       setError(err.message);
     },
   });
+  
+  // Volume mutation
+  const volumeMutation = useMutation({
+    ...api.spotify.setVolume.mutationOptions(),
+    onError: (err: any) => {
+      console.warn('[Spotify] Volume control error (non-critical):', err);
+    },
+  });
 
 
   // Track if we've already started playing music
@@ -218,6 +226,24 @@ export function useSpotifySync(sessionId: string, preSelectedDeviceId?: string |
       }, {
         onSuccess: () => {
           console.log('[Spotify] ✅ Successfully started playback');
+          
+          // Set volume to 5% after starting playback
+          console.log('[Spotify] Setting volume to 5%');
+          volumeMutation.mutate({
+            volumePercent: 5,
+            deviceId: currentDevice.id,
+          }, {
+            onSuccess: (result) => {
+              if (result.success) {
+                console.log('[Spotify] ✅ Volume set to 5%');
+              } else {
+                console.log('[Spotify] ⚠️ Volume control not supported on this device');
+              }
+            },
+            onError: (error: any) => {
+              console.warn('[Spotify] Volume control error (non-critical):', error);
+            }
+          });
         },
         onError: (error: any) => {
           console.error('[Spotify] ❌ Failed to start playback:', error);

@@ -130,6 +130,34 @@ export const spotifyRouter = createTRPCRouter({
       }
     }),
 
+  // Set volume
+  setVolume: publicProcedure
+    .input(z.object({
+      volumePercent: z.number().min(0).max(100),
+      deviceId: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      try {
+        const response = await spotifyAuth.makeSpotifyRequest(
+          `/me/player/volume?volume_percent=${input.volumePercent}${input.deviceId ? `&device_id=${input.deviceId}` : ''}`,
+          { method: 'PUT' }
+        );
+        
+        if (!response.ok && response.status !== 204) {
+          const error = await response.text();
+          console.warn(`[Spotify] Volume control failed: ${error}`);
+          // Don't throw - just log and continue
+          return { success: false, error };
+        }
+        
+        return { success: true };
+      } catch (error) {
+        console.warn('[Spotify] Volume control error:', error);
+        // Don't throw - volume control is not critical
+        return { success: false, error: error.message };
+      }
+    }),
+
   // Get music configuration
   getMusicConfig: publicProcedure.query(() => {
     return SPOTIFY_MUSIC_CONFIG;
