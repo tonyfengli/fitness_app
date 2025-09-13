@@ -12,6 +12,7 @@ export * from "./schema/messages";
 export * from "./schema/conversation-state";
 export * from "./schema/workout-selections";
 export * from "./types/exerciseRatings";
+export * from "./schema/spotify-tracks";
 
 export const Business = pgTable("business", (t) => ({
   id: t.uuid().notNull().primaryKey().defaultRandom(),

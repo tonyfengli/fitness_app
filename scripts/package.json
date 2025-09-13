@@ -1,0 +1,8 @@
+{
+  "name": "fitness-app-scripts",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "populate-spotify": "node populate-spotify-tracks.js"
+  }
+}
