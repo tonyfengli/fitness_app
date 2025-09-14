@@ -6,6 +6,50 @@
 const fs = require('fs');
 const path = require('path');
 
+// Rest tracks to add
+const REST_TRACKS = [
+  "spotify:track:2gmqnkY0jrfz3vnO4FVS4p",
+  "spotify:track:66hLgDd6kk3GfzLej7t2eH",
+  "spotify:track:2GrIebBWhOlOVe7yykx50i",
+  "spotify:track:1ezVmdzA61xULe4dx1Slba",
+  "spotify:track:7I079hnzaP3BNu5Ra7h6q4",
+  "spotify:track:0EhihOUNnUG2rK9Z7ao4i5",
+  "spotify:track:0xn6LxYghEct04MQTcrtrJ",
+  "spotify:track:7h2yzh9vIBxSBN3885QyQt",
+  "spotify:track:56Q2OtRzToYHKxU9p6XWsn",
+  "spotify:track:4JR9blNFjAUiybd7RLYfkx",
+  "spotify:track:1eU3EhUwOa4a3qCM45HogQ",
+  "spotify:track:0GSEIffBQyILlI6FPzn6G0",
+  "spotify:track:5HumzUY33Lrl13NUjGGKr8",
+  "spotify:track:6PwW1zy9hmcP1VqqJaTcvo",
+  "spotify:track:7HX3ubSk3OVg7ymt5UCYpL",
+  "spotify:track:7iSuMiRlJNceKCE3ES6HBr",
+  "spotify:track:1zmxmacvgIcfC9VtKJ1SFl",
+  "spotify:track:2TCyoBUM7MNalMXmEQRlX8",
+  "spotify:track:3OWBvbyAMnKuZLviZ82hIr",
+  "spotify:track:0b79SWKCzxsKmuG5CBmeDs",
+  "spotify:track:6ZW8f8xNkauNEKBQthQaas",
+  "spotify:track:08iD88iFwW334KopqK0b8u",
+  "spotify:track:7eRU4hubXFooI0Qa7qouXM",
+  "spotify:track:322Be9xdBaPhiB8rX6BVls",
+  "spotify:track:21CDBaCTL0ZVJCSZNpBHFe",
+  "spotify:track:0IP3Dd9qchwml3dwBRnlda",
+  "spotify:track:2346Isr3M7QwGz5XyMeagQ",
+  "spotify:track:5lf8XNZKRv6rtbPzGoGd7S",
+  "spotify:track:4V7VTQQWHOCGNRy7iaFHLS",
+  "spotify:track:0auEaQZbRnomyp95qDher2",
+  "spotify:track:2hpdKwumbBoIkq5zaoXVOu",
+  "spotify:track:1FSqeugQ1A697oAv8EZ516",
+  "spotify:track:2PVhk6KhiF4yKXFVCACZuG",
+  "spotify:track:3GJpQY3I6YTgL3TtvvxmNm",
+  "spotify:track:0fPdM4EC9Fyh7Wk6SWVTht",
+  "spotify:track:5NsejBqTH83xlbKFdjScSw",
+  "spotify:track:6NiEYy97bODtt7ntvUmlvp",
+  "spotify:track:57sEnzGIfUU3BYAo8uvezv",
+  "spotify:track:4DVgIpxVlwCGKP4fwgetWM",
+  "spotify:track:10oQuQIQaOs6tExGsQnifs"
+];
+
 // Music config with all the tracks
 const SPOTIFY_MUSIC_CONFIG = {
   tracks: {
@@ -219,6 +263,21 @@ function loadEnv() {
   }
 }
 
+// Fetch tracks in batches (Spotify API limit is 50 per request)
+async function fetchTracksInBatches(trackUris, accessToken) {
+  const batchSize = 50;
+  const allTracks = [];
+  
+  for (let i = 0; i < trackUris.length; i += batchSize) {
+    const batch = trackUris.slice(i, i + batchSize);
+    console.log(`Fetching batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(trackUris.length/batchSize)} (${batch.length} tracks)...`);
+    const tracks = await fetchTrackDetails(batch, accessToken);
+    allTracks.push(...tracks);
+  }
+  
+  return allTracks;
+}
+
 // Main function
 async function main() {
   // Load environment variables
@@ -235,30 +294,67 @@ async function main() {
   console.log('Getting Spotify access token...');
   const accessToken = await getSpotifyAccessToken(CLIENT_ID, CLIENT_SECRET);
   
-  console.log('Fetching track details from Spotify...');
-  const tracks = SPOTIFY_MUSIC_CONFIG.tracks.workout;
-  const trackUris = tracks.map(t => t.spotifyId);
-  const spotifyTracks = await fetchTrackDetails(trackUris, accessToken);
+  // Process workout tracks
+  console.log('\n=== Processing Workout Tracks ===');
+  const workoutTracks = SPOTIFY_MUSIC_CONFIG.tracks.workout;
+  const workoutUris = workoutTracks.map(t => t.spotifyId);
+  const spotifyWorkoutTracks = await fetchTracksInBatches(workoutUris, accessToken);
+  console.log(`Fetched ${spotifyWorkoutTracks.length} workout tracks from Spotify`);
 
-  console.log(`Fetched ${spotifyTracks.length} tracks from Spotify`);
+  // Process rest tracks
+  console.log('\n=== Processing Rest Tracks ===');
+  const spotifyRestTracks = await fetchTracksInBatches(REST_TRACKS, accessToken);
+  console.log(`Fetched ${spotifyRestTracks.length} rest tracks from Spotify`);
 
   // Generate SQL statements
   const sqlStatements = [];
   
   // Create a map of our config by spotify ID for easy lookup
   const configMap = {};
-  tracks.forEach(track => {
+  workoutTracks.forEach(track => {
     configMap[track.spotifyId] = track;
   });
 
-  spotifyTracks.forEach((track, index) => {
+  // Process workout tracks
+  spotifyWorkoutTracks.forEach((track, index) => {
     if (!track) {
-      console.warn(`Track at index ${index} returned null from Spotify`);
+      console.warn(`Workout track at index ${index} returned null from Spotify`);
       return;
     }
 
     const spotifyId = `spotify:track:${track.id}`;
     const config = configMap[spotifyId];
+    
+    // Format artists as comma-separated string
+    const artists = track.artists.map(a => a.name).join(', ');
+    
+    // Determine usage based on hypeTimestamp
+    const usage = config.hypeTimestamp ? '{"hype"}' : '{"bridge"}';
+    
+    // Build the SQL statement
+    const values = [
+      `'${spotifyId}'`, // spotify_id
+      `'${escapeSql(track.name)}'`, // name
+      `'${escapeSql(artists)}'`, // artist
+      track.duration_ms, // duration_ms
+      `'{}'::text[]`, // genres (empty array)
+      `'${usage}'::text[]`, // usage based on hypeTimestamp
+      config.hypeTimestamp || 'NULL', // hype_timestamp
+      config.skipOutro || 'NULL', // skip_outro
+    ];
+
+    const sql = `INSERT INTO spotify_tracks (spotify_id, name, artist, duration_ms, genres, usage, hype_timestamp, skip_outro) VALUES (${values.join(', ')});`;
+    sqlStatements.push(sql);
+  });
+
+  // Process rest tracks
+  spotifyRestTracks.forEach((track, index) => {
+    if (!track) {
+      console.warn(`Rest track at index ${index} returned null from Spotify`);
+      return;
+    }
+
+    const spotifyId = `spotify:track:${track.id}`;
     
     // Format artists as comma-separated string
     const artists = track.artists.map(a => a.name).join(', ');
@@ -270,9 +366,9 @@ async function main() {
       `'${escapeSql(artists)}'`, // artist
       track.duration_ms, // duration_ms
       `'{}'::text[]`, // genres (empty array)
-      `'{}'::text[]`, // usage (empty array)
-      config.hypeTimestamp || 'NULL', // hype_timestamp
-      config.skipOutro || 'NULL', // skip_outro
+      `'{"rest"}'::text[]`, // usage for rest tracks
+      'NULL', // hype_timestamp
+      'NULL', // skip_outro
     ];
 
     const sql = `INSERT INTO spotify_tracks (spotify_id, name, artist, duration_ms, genres, usage, hype_timestamp, skip_outro) VALUES (${values.join(', ')});`;
@@ -284,14 +380,20 @@ async function main() {
   const sqlContent = [
     '-- Generated SQL to populate spotify_tracks table',
     `-- Generated on: ${new Date().toISOString()}`,
+    `-- Total workout tracks: ${spotifyWorkoutTracks.length}`,
+    `-- Total rest tracks: ${spotifyRestTracks.length}`,
     `-- Total tracks: ${sqlStatements.length}`,
     '',
-    ...sqlStatements
+    '-- Workout tracks (hype and bridge)',
+    ...sqlStatements.slice(0, spotifyWorkoutTracks.length),
+    '',
+    '-- Rest tracks',
+    ...sqlStatements.slice(spotifyWorkoutTracks.length)
   ].join('\n');
 
   fs.writeFileSync(outputPath, sqlContent);
   console.log(`\nSQL file generated: ${outputPath}`);
-  console.log(`Total tracks: ${sqlStatements.length}`);
+  console.log(`Total tracks: ${sqlStatements.length} (${spotifyWorkoutTracks.length} workout + ${spotifyRestTracks.length} rest)`);
   console.log('\nYou can now run this SQL file in your database.');
 }
 

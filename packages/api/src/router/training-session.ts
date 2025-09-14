@@ -1381,6 +1381,79 @@ export const trainingSessionRouter = {
    * Generate and create group workouts (full orchestration)
    * This is the production endpoint that generates blueprint + LLM + creates workouts
    */
+  regenerateCircuitSetlist: protectedProcedure
+    .input(
+      z.object({
+        sessionId: z.string().uuid(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const user = ctx.session?.user as SessionUser;
+
+      // Only trainers can regenerate setlists
+      if (user.role !== "trainer") {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Only trainers can regenerate circuit setlists",
+        });
+      }
+
+      // Get session with circuit config
+      const session = await ctx.db.query.TrainingSession.findFirst({
+        where: eq(TrainingSession.id, input.sessionId),
+      });
+
+      if (!session) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Training session not found",
+        });
+      }
+
+      if (session.templateType !== "circuit") {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Setlist generation is only available for circuit workouts",
+        });
+      }
+
+      const circuitConfig = session.templateConfig as any;
+      if (!circuitConfig?.config || !circuitConfig?.setlist?.rounds) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Circuit configuration or existing setlist not found",
+        });
+      }
+
+      // Generate new setlist
+      const { CircuitSetlistService } = await import("../services/circuit-setlist-service");
+      const setlistService = new CircuitSetlistService(ctx.db);
+      
+      const newSetlist = await setlistService.generateSetlist(
+        circuitConfig.config,
+        circuitConfig.setlist.rounds.length
+      );
+
+      // Update session with new setlist
+      const updatedTemplateConfig = {
+        ...circuitConfig,
+        setlist: newSetlist
+      };
+
+      await ctx.db
+        .update(TrainingSession)
+        .set({
+          templateConfig: updatedTemplateConfig
+        })
+        .where(eq(TrainingSession.id, input.sessionId));
+
+      return {
+        success: true,
+        setlist: newSetlist,
+        summary: CircuitSetlistService.getSetlistSummary(newSetlist)
+      };
+    }),
+
   generateAndCreateGroupWorkouts: protectedProcedure
     .input(
       z.object({

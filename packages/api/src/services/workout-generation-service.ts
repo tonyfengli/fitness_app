@@ -634,6 +634,60 @@ export class WorkoutGenerationService {
       }))
     });
 
+    // Generate setlist for circuit workout
+    let setlist = null;
+    if (circuitConfig && circuitConfig.config) {
+      try {
+        logger.info("Generating circuit setlist", {
+          rounds: normalizedResponse.circuit.rounds.length,
+          circuitConfig: circuitConfig.config
+        });
+
+        const { CircuitSetlistService } = await import("./circuit-setlist-service");
+        const setlistService = new CircuitSetlistService(this.ctx.db);
+        
+        // Calculate effective total rounds considering repeatRounds option
+        const baseRounds = normalizedResponse.circuit.rounds.length;
+        const effectiveTotalRounds = circuitConfig.config.repeatRounds ? baseRounds * 2 : baseRounds;
+        
+        logger.info("Calculating effective rounds for setlist", {
+          baseRounds,
+          repeatRounds: circuitConfig.config.repeatRounds,
+          effectiveTotalRounds
+        });
+        
+        // Generate the setlist
+        setlist = await setlistService.generateSetlist(
+          circuitConfig.config,
+          effectiveTotalRounds
+        );
+
+        logger.info("Circuit setlist generated", {
+          totalTracks: setlist.totalTracks,
+          rounds: setlist.rounds.length,
+          summary: CircuitSetlistService.getSetlistSummary(setlist)
+        });
+
+        // Update session with setlist in templateConfig
+        const updatedTemplateConfig = {
+          ...circuitConfig,
+          setlist
+        };
+
+        await this.ctx.db
+          .update(TrainingSession)
+          .set({
+            templateConfig: updatedTemplateConfig
+          })
+          .where(eq(TrainingSession.id, sessionId));
+
+        logger.info("Session updated with circuit setlist");
+      } catch (error) {
+        logger.error("Failed to generate circuit setlist", error);
+        // Don't fail the whole workout generation if setlist fails
+      }
+    }
+
     return {
       systemPrompt,
       userMessage,
@@ -642,6 +696,7 @@ export class WorkoutGenerationService {
       metadata: {
         templateType: "circuit",
         circuitConfig: circuitConfig || null,
+        setlist: setlist || null,
       },
     };
   }

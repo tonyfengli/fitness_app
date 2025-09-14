@@ -14,7 +14,93 @@ import {
   filterExercisesBySearch,
 } from "@acme/ui-shared";
 import { supabase } from "~/lib/supabase";
-import { useTRPC } from "~/trpc/react";
+import { api } from "~/trpc/react";
+
+// Circuit timing utilities
+function getEffectiveTrackDuration(trackDurationMs: number, hypeTimestamp?: number | null): number {
+  if (!hypeTimestamp) {
+    return trackDurationMs;
+  }
+  
+  // Track starts 5 seconds before hype moment (matching backend logic)
+  const offsetMs = Math.max(0, (hypeTimestamp - 5) * 1000);
+  return trackDurationMs - offsetMs;
+}
+
+interface RoundTiming {
+  roundNumber: number;
+  countdownStartMs: number;
+  workStartMs: number;
+  endTimeMs: number;
+  totalDurationMs: number;
+}
+
+interface CircuitTimingResult {
+  rounds: RoundTiming[];
+  totalWorkoutDurationMs: number;
+  totalWorkTimeMs: number;
+  totalRestTimeMs: number;
+}
+
+function calculateCircuitTiming(
+  config: any,
+  totalRounds: number
+): CircuitTimingResult {
+  const rounds: RoundTiming[] = [];
+  
+  // Convert to milliseconds
+  const countdownDurationMs = 6000; // 6 seconds
+  const workDurationMs = config.workDuration * 1000;
+  const restDurationMs = config.restDuration * 1000;
+  const restBetweenRoundsMs = config.restBetweenRounds * 1000;
+  
+  // Account for repeat rounds
+  const effectiveRounds = config.repeatRounds 
+    ? Math.min(totalRounds, config.rounds * 2)
+    : Math.min(totalRounds, config.rounds);
+  
+  let currentTimeMs = 0;
+  
+  for (let i = 0; i < effectiveRounds; i++) {
+    const roundNumber = i + 1;
+    const countdownStartMs = currentTimeMs;
+    const workStartMs = countdownStartMs + countdownDurationMs;
+    
+    // Calculate round duration
+    const roundWorkTimeMs = config.exercisesPerRound * workDurationMs;
+    const roundRestTimeMs = (config.exercisesPerRound - 1) * restDurationMs;
+    const roundDurationMs = countdownDurationMs + roundWorkTimeMs + roundRestTimeMs;
+    
+    const endTimeMs = countdownStartMs + roundDurationMs;
+    
+    rounds.push({
+      roundNumber,
+      countdownStartMs,
+      workStartMs,
+      endTimeMs,
+      totalDurationMs: roundDurationMs
+    });
+    
+    // Add rest between rounds (except after last round)
+    currentTimeMs = endTimeMs;
+    if (i < effectiveRounds - 1) {
+      currentTimeMs += restBetweenRoundsMs;
+    }
+  }
+  
+  // Calculate totals
+  const totalWorkTimeMs = effectiveRounds * config.exercisesPerRound * workDurationMs;
+  const totalRestTimeMs = 
+    (effectiveRounds * (config.exercisesPerRound - 1) * restDurationMs) + // Rest between exercises
+    ((effectiveRounds - 1) * restBetweenRoundsMs); // Rest between rounds
+  
+  return {
+    rounds,
+    totalWorkoutDurationMs: currentTimeMs,
+    totalWorkTimeMs,
+    totalRestTimeMs,
+  };
+}
 
 interface RoundData {
   roundName: string;
@@ -59,10 +145,12 @@ function CircuitWorkoutOverviewContent() {
   const searchParams = useSearchParams();
   const sessionId = searchParams.get("sessionId");
   const queryClient = useQueryClient();
-  const trpc = useTRPC();
+  const trpc = api();
   
   const [roundsData, setRoundsData] = useState<RoundData[]>([]);
   const [hasExercises, setHasExercises] = useState(false);
+  const [setlist, setSetlist] = useState<any>(null);
+  const [timingInfo, setTimingInfo] = useState<any>(null);
   
   // Modal state
   const [showExerciseSelection, setShowExerciseSelection] = useState(false);
@@ -133,17 +221,19 @@ function CircuitWorkoutOverviewContent() {
 
   // Fetch circuit config
   const { data: circuitConfig } = useQuery({
-    ...trpc.circuitConfig.getBySession.queryOptions({ 
-      sessionId: sessionId || "" 
-    }),
-    enabled: !!sessionId,
+    ...trpc.circuitConfig.getBySession.queryOptions({ sessionId: sessionId || "" }),
+    enabled: !!sessionId
+  });
+
+  // Fetch session data to get templateConfig with setlist
+  const { data: sessionData } = useQuery({
+    ...trpc.trainingSession.getSession.queryOptions({ id: sessionId || "" }),
+    enabled: !!sessionId
   });
 
   // Fetch saved selections (for circuit, we don't filter by clientId)
   const { data: savedSelections, isLoading: isLoadingSelections } = useQuery({
-    ...trpc.workoutSelections.getSelections.queryOptions({
-      sessionId: sessionId || "",
-    }),
+    ...trpc.workoutSelections.getSelections.queryOptions({ sessionId: sessionId || "" }),
     enabled: !!sessionId,
     refetchInterval: !hasExercises ? 5000 : false, // Poll when no exercises
   });
@@ -173,6 +263,34 @@ function CircuitWorkoutOverviewContent() {
   useEffect(() => {
     availableExercisesRef.current = availableExercises;
   }, [availableExercises]);
+
+  // Process setlist and timing from templateConfig
+  useEffect(() => {
+    console.log('[DEBUG] Setlist processing - sessionData:', sessionData);
+    console.log('[DEBUG] Setlist processing - circuitConfig:', circuitConfig);
+    
+    if (sessionData?.templateConfig && circuitConfig?.config) {
+      const templateConfig = sessionData.templateConfig as any;
+      
+      // Check for setlist in multiple possible locations
+      const setlistData = templateConfig.setlist || 
+                         templateConfig.visualizationData?.llmResult?.metadata?.setlist;
+      
+      console.log('[DEBUG] Found setlist at:', setlistData ? 'Found' : 'Not found');
+      console.log('[DEBUG] Setlist data:', setlistData);
+      
+      if (setlistData) {
+        setSetlist(setlistData);
+        
+        // Calculate timing info
+        const timing = calculateCircuitTiming(
+          circuitConfig.config,
+          setlistData.rounds.length
+        );
+        setTimingInfo(timing);
+      }
+    }
+  }, [sessionData, circuitConfig]);
 
   // Process selections into rounds
   useEffect(() => {
@@ -462,6 +580,114 @@ function CircuitWorkoutOverviewContent() {
                 <div className="w-2 h-2 bg-primary rounded-full animate-pulse"></div>
                 <span>Checking for updates every 5 seconds</span>
               </div>
+            </div>
+          </Card>
+        )}
+
+        {/* Music Setlist Section */}
+        {setlist && timingInfo && circuitConfig && (
+          <Card className="mt-6 p-8 border-2 shadow-lg bg-gradient-to-br from-purple-50/50 to-indigo-50/50 dark:from-purple-950/20 dark:to-indigo-950/20">
+            <h2 className="mb-6 text-2xl font-bold flex items-center gap-3">
+              <span className="w-10 h-10 bg-purple-100 dark:bg-purple-900/30 rounded-full flex items-center justify-center">
+                🎵
+              </span>
+              <span>Music Setlist</span>
+            </h2>
+            
+            <div className="space-y-4">
+              {setlist.rounds.map((round: any, index: number) => {
+                const roundTiming = timingInfo.rounds[index];
+                const roundDurationSec = Math.floor(roundTiming.totalDurationMs / 1000);
+                const roundMinutes = Math.floor(roundDurationSec / 60);
+                const roundSeconds = roundDurationSec % 60;
+                
+                // Calculate effective duration for track 1 (hype track)
+                // Note: If durationMs is missing, the workout was generated before tracks were in DB
+                const track1EffectiveDuration = round.track1.durationMs ? getEffectiveTrackDuration(
+                  round.track1.durationMs,
+                  round.track1.hypeTimestamp
+                ) : 0;
+                const track1EffectiveSec = Math.floor(track1EffectiveDuration / 1000);
+                const track1Minutes = Math.floor(track1EffectiveSec / 60);
+                const track1Seconds = track1EffectiveSec % 60;
+                
+                // Log if duration is missing
+                if (!round.track1.durationMs) {
+                  console.warn(`[Setlist] Track ${round.track1.trackName} missing durationMs - workout needs regeneration`);
+                }
+                
+                return (
+                  <div key={round.roundNumber} className="p-6 rounded-xl bg-white/50 dark:bg-gray-800/50 border border-purple-200 dark:border-purple-800">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-semibold flex items-center gap-2">
+                        <span className="w-8 h-8 bg-purple-100 dark:bg-purple-900/30 rounded-full flex items-center justify-center text-sm font-bold">
+                          {round.roundNumber}
+                        </span>
+                        Round {round.roundNumber}
+                      </h3>
+                      <div className="text-sm text-muted-foreground">
+                        <span className="font-medium">Round Duration:</span> {roundMinutes}:{roundSeconds.toString().padStart(2, '0')}
+                      </div>
+                    </div>
+                    
+                    <div className="grid gap-3">
+                      {/* Track 1 - Hype */}
+                      <div className="p-4 rounded-lg bg-gradient-to-r from-orange-50 to-red-50 dark:from-orange-950/20 dark:to-red-950/20 border border-orange-200 dark:border-orange-800">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-xs font-semibold px-2 py-1 bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 rounded-full">HYPE</span>
+                              <span className="text-xs text-muted-foreground">Starts at 6s countdown</span>
+                            </div>
+                            <p className="font-medium">{round.track1.trackName}</p>
+                          </div>
+                          <div className="text-right text-sm">
+                            <div className="text-muted-foreground">Effective length</div>
+                            <div className="font-medium">{track1Minutes}:{track1Seconds.toString().padStart(2, '0')}</div>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {/* Track 2 - Rest or Bridge */}
+                      <div className={`p-4 rounded-lg border ${
+                        round.track2.usage === 'rest' 
+                          ? 'bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-blue-950/20 dark:to-cyan-950/20 border-blue-200 dark:border-blue-800'
+                          : 'bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-950/20 dark:to-pink-950/20 border-purple-200 dark:border-purple-800'
+                      }`}>
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className={`text-xs font-semibold px-2 py-1 rounded-full ${
+                                round.track2.usage === 'rest'
+                                  ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                                  : 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300'
+                              }`}>
+                                {round.track2.usage.toUpperCase()}
+                              </span>
+                              <span className="text-xs text-muted-foreground">
+                                {round.coverageScenario === 'full-coverage' 
+                                  ? 'Plays during rest between rounds'
+                                  : 'Bridges to complete the round'}
+                              </span>
+                            </div>
+                            <p className="font-medium">{round.track2.trackName}</p>
+                          </div>
+                          <div className="text-right text-sm">
+                            <div className="text-muted-foreground">Type</div>
+                            <div className="font-medium capitalize">{round.track2.usage}</div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            
+            <div className="mt-6 p-4 bg-gray-100 dark:bg-gray-800 rounded-lg">
+              <p className="text-sm text-muted-foreground">
+                <span className="font-medium">Total Workout Duration:</span> {Math.floor(timingInfo.totalWorkoutDurationMs / 60000)}:{Math.floor((timingInfo.totalWorkoutDurationMs % 60000) / 1000).toString().padStart(2, '0')}
+              </p>
             </div>
           </Card>
         )}
