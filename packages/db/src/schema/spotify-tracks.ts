@@ -1,6 +1,5 @@
 import { sql } from "drizzle-orm";
 import { pgTable, text, integer, timestamp, uuid, index } from "drizzle-orm/pg-core";
-import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
 export const spotifyTracks = pgTable("spotify_tracks", (t) => ({
@@ -25,19 +24,15 @@ export const spotifyTracks = pgTable("spotify_tracks", (t) => ({
 }));
 
 // Create Zod schema for validation
-export const CreateSpotifyTrackSchema = createInsertSchema(spotifyTracks, {
+export const CreateSpotifyTrackSchema = z.object({
   spotifyId: z.string().min(1),
   name: z.string().min(1),
   artist: z.string().min(1),
   durationMs: z.number().positive(),
   genres: z.array(z.string()).optional(),
-  usage: z.array(z.enum(["rest", "bridge", "roundStart", "general"])).optional(),
+  usage: z.array(z.enum(["rest", "bridge", "hype"])).optional(),
   hypeTimestamp: z.number().nonnegative().optional(),
   skipOutro: z.number().nonnegative().optional(),
-}).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
 });
 
 export type SpotifyTrack = typeof spotifyTracks.$inferSelect;

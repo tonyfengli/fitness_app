@@ -175,15 +175,17 @@ export class CircuitSetlistService {
     if (unusedTracks.length > 0) {
       // Randomly select from unused tracks
       const selected = unusedTracks[Math.floor(Math.random() * unusedTracks.length)];
-      usedTrackIds.add(selected.spotifyId);
-      return selected;
+      if (selected) {
+        usedTrackIds.add(selected.spotifyId);
+        return selected;
+      }
     }
 
     // If all tracks are used, allow repeats
     console.log(`[SetlistService] All ${usage} tracks used, allowing repeats`);
     if (trackPool.length > 0) {
       const selected = trackPool[Math.floor(Math.random() * trackPool.length)];
-      return selected;
+      return selected ?? null;
     }
 
     return null;
