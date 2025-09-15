@@ -44,7 +44,7 @@ async function checkHueHealth(): Promise<boolean> {
     return isHealthyCache;
   }
 
-  console.log('[HUE-HEALTH] Checking bridge health...');
+  // Removed performance-impacting log
   const url = `http://${HUE_BRIDGE_IP}/api/${HUE_APP_KEY}/config`;
   
   try {
@@ -75,10 +75,7 @@ async function checkHueHealth(): Promise<boolean> {
     wasHealthy = isHealthyCache;
     return isHealthyCache;
   } catch (error) {
-    console.error('[HUE-HEALTH] ❌ Health check failed:', {
-      error: error.message,
-      url
-    });
+    // Silently handle health check failures
     isHealthyCache = false;
     lastHealthCheck = Date.now();
     wasHealthy = false;

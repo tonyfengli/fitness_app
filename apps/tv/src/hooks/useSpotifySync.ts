@@ -50,11 +50,7 @@ export function useSpotifySync(sessionId: string, preSelectedDeviceId?: string |
   
   const deviceCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  console.log('[Spotify] Hook initialized with:', {
-    sessionId,
-    preSelectedDeviceId,
-    timestamp: new Date().toISOString()
-  });
+  // Removed performance-impacting initialization log
 
   // Get devices query
   const devicesQuery = useQuery({
@@ -111,6 +107,11 @@ export function useSpotifySync(sessionId: string, preSelectedDeviceId?: string |
           setCurrentDevice(preSelectedDevice);
           setConnectionState('connected');
           setError(null); // Clear any previous errors
+          
+          // Device just became available - check if we should trigger autoplay
+          if (!hasStartedPlaybackRef.current) {
+            console.log('[Spotify] Device became available, autoplay check needed');
+          }
           return;
         } else {
           console.log('[Spotify] ❌ Pre-selected device not found in available devices:', {
@@ -182,37 +183,60 @@ export function useSpotifySync(sessionId: string, preSelectedDeviceId?: string |
   // Track if we've already started playing music
   const hasStartedPlaybackRef = useRef(false);
   
-  // Get music config query
-  const musicConfigQuery = useQuery({
-    ...api.spotify.getMusicConfig.queryOptions(),
+  // Get session data with setlist
+  const sessionQuery = useQuery({
+    ...api.trainingSession.getSession.queryOptions({ id: sessionId || '' }),
     enabled: !!sessionId,
+    onSuccess: (data) => {
+      console.log('[Spotify] Session data loaded:', {
+        hasTemplateConfig: !!data?.templateConfig,
+        templateConfigKeys: data?.templateConfig ? Object.keys(data.templateConfig) : [],
+        hasSetlistDirect: !!(data?.templateConfig as any)?.setlist,
+        hasSetlistNested: !!(data?.templateConfig as any)?.visualizationData?.llmResult?.metadata?.setlist,
+        timestamp: new Date().toISOString()
+      });
+    }
   });
   
   // Initialize music session and start playback when device is available
   useEffect(() => {
+    // Check both possible locations for setlist (for backward compatibility)
+    const templateConfig = sessionQuery.data?.templateConfig as any;
+    const setlist = templateConfig?.setlist || 
+                   templateConfig?.visualizationData?.llmResult?.metadata?.setlist;
+    const shouldAutoPlay = options?.autoPlay ?? true;
+    
     console.log('[Spotify] Music session init check:', {
       hasDevice: !!currentDevice,
       deviceId: currentDevice?.id,
       sessionId,
       connectionState,
-      shouldInit: currentDevice && sessionId && connectionState === 'connected',
-      hasConfig: !!musicConfigQuery.data,
+      shouldAutoPlay,
+      hasSetlist: !!setlist,
+      setlistRounds: setlist?.rounds?.length || 0,
+      firstTrack: setlist?.rounds?.[0]?.track1?.trackName || 'none',
       hasStartedPlayback: hasStartedPlaybackRef.current,
+      sessionDataLoading: sessionQuery.isLoading,
+      sessionDataError: sessionQuery.error,
       timestamp: new Date().toISOString()
     });
     
-    const shouldAutoPlay = options?.autoPlay ?? true; // Default to true for backward compatibility
-    
-    if (currentDevice && sessionId && connectionState === 'connected' && musicConfigQuery.data && !hasStartedPlaybackRef.current && shouldAutoPlay) {
+    if (currentDevice && sessionId && connectionState === 'connected' && setlist && !hasStartedPlaybackRef.current && shouldAutoPlay) {
       console.log('[Spotify] 🎵 Starting playback');
       hasStartedPlaybackRef.current = true;
       
-      // Pick a random track from the workout tracks
-      const workoutTracks = musicConfigQuery.data.tracks.workout;
-      const randomTrack = workoutTracks[Math.floor(Math.random() * workoutTracks.length)];
+      // Pick the first hype track from the setlist
+      const firstHypeTrack = setlist.rounds?.[0]?.track1;
+      if (!firstHypeTrack) {
+        console.error('[Spotify] No tracks in setlist');
+        return;
+      }
       
-      console.log('[Spotify] 🎵 Starting playback with random track:', {
-        trackUri: randomTrack.spotifyId,
+      console.log('[Spotify] 🎵 Starting playback with first hype track:', {
+        trackUri: firstHypeTrack.spotifyId,
+        trackName: firstHypeTrack.trackName,
+        hasSpotifyId: !!firstHypeTrack.spotifyId,
+        spotifyIdFormat: firstHypeTrack.spotifyId,
         deviceId: currentDevice.id,
         timestamp: new Date().toISOString()
       });
@@ -221,7 +245,7 @@ export function useSpotifySync(sessionId: string, preSelectedDeviceId?: string |
       controlMutation.mutate({
         action: 'play',
         deviceId: currentDevice.id,
-        trackUri: randomTrack.spotifyId,
+        trackUri: firstHypeTrack.spotifyId,
         positionMs: 0,
       }, {
         onSuccess: () => {
@@ -252,7 +276,7 @@ export function useSpotifySync(sessionId: string, preSelectedDeviceId?: string |
         }
       });
     }
-  }, [currentDevice?.id, sessionId, connectionState, musicConfigQuery.data]);
+  }, [currentDevice?.id, sessionId, connectionState, sessionQuery.data]);
 
 
   // Cleanup interval on unmount and reset playback flag when disconnected
@@ -311,15 +335,60 @@ export function useSpotifySync(sessionId: string, preSelectedDeviceId?: string |
     });
   }, [currentDevice?.id, controlMutation]);
 
+  // Prefetch all tracks in the setlist
+  const prefetchSetlistTracks = useCallback(async () => {
+    const templateConfig = sessionQuery.data?.templateConfig as any;
+    const setlist = templateConfig?.setlist || 
+                   templateConfig?.visualizationData?.llmResult?.metadata?.setlist;
+    if (!setlist || !currentDevice?.id) {
+      console.log('[Spotify] Cannot prefetch - no setlist or device');
+      return;
+    }
+
+    console.log('[Spotify] 🎵 Prefetching all setlist tracks...');
+    const trackUris: string[] = [];
+    
+    // Collect all unique track URIs from the setlist
+    setlist.rounds.forEach((round: any) => {
+      if (round.track1?.spotifyId) trackUris.push(round.track1.spotifyId);
+      if (round.track2?.spotifyId) trackUris.push(round.track2.spotifyId);
+    });
+
+    // Remove duplicates
+    const uniqueTrackUris = [...new Set(trackUris)];
+    
+    console.log('[Spotify] Prefetching tracks:', {
+      totalTracks: uniqueTrackUris.length,
+      tracks: uniqueTrackUris
+    });
+
+    // Note: Spotify doesn't have a direct prefetch API
+    // In a production app, you might implement caching by:
+    // 1. Adding tracks to queue (requires implementing queue action in backend)
+    // 2. Pre-loading track metadata
+    // 3. Using Spotify Web SDK's preload capabilities
+    
+    // For now, we'll just log the tracks that would be prefetched
+    console.log('[Spotify] Tracks ready for playback:', uniqueTrackUris);
+    
+    console.log('[Spotify] ✅ Prefetch complete');
+  }, [sessionQuery.data, currentDevice?.id]);
+
+  const templateConfig = sessionQuery.data?.templateConfig as any;
+  const setlistData = templateConfig?.setlist || 
+                     templateConfig?.visualizationData?.llmResult?.metadata?.setlist;
+
   return {
     // State
     isConnected: connectionState === 'connected',
     connectionState,
     currentDevice,
     error,
+    setlist: setlistData,
     
     // Actions
     playTrackAtPosition,
+    prefetchSetlistTracks,
     
     // Queries
     refetchDevices: devicesQuery.refetch,

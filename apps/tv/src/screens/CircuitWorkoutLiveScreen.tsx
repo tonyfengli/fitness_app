@@ -18,6 +18,7 @@ import {
 import { getColorForPreset, getHuePresetForColor } from '../lib/lighting/colorMappings';
 import { LightingStatusDot } from '../components/LightingStatusDot';
 import { useSpotifySync } from '../hooks/useSpotifySync';
+import { playCountdownSound, setCountdownVolume } from '../lib/sound/countdown-sound';
 
 // Design tokens
 const TOKENS = {
@@ -123,6 +124,9 @@ export function CircuitWorkoutLiveScreen() {
   const [lastLightingEvent, setLastLightingEvent] = useState<string>('');
   const [isStarted, setIsStarted] = useState(false);
   
+  // Sound settings
+  const [countdownSoundVolume, setCountdownSoundVolume] = useState(0.7);
+  
   // Get circuit config for timing and Spotify device
   const { data: circuitConfig } = useQuery(
     sessionId ? api.circuitConfig.getBySession.queryOptions({ sessionId }) : {
@@ -132,14 +136,8 @@ export function CircuitWorkoutLiveScreen() {
     }
   );
   
-  // Get music config for track information
-  const { data: musicConfig } = useQuery({
-    ...api.spotify.getMusicConfig.queryOptions(),
-    enabled: !!sessionId,
-  });
-  
   // Spotify integration with pre-selected device (auto-play disabled since music already playing from preferences screen)
-  const { playTrackAtPosition } = useSpotifySync(sessionId, circuitConfig?.config?.spotifyDeviceId, { autoPlay: false });
+  const { playTrackAtPosition, prefetchSetlistTracks, setlist } = useSpotifySync(sessionId, circuitConfig?.config?.spotifyDeviceId, { autoPlay: false });
   
   // Get saved selections
   const selectionsQueryOptions = sessionId 
@@ -150,6 +148,13 @@ export function CircuitWorkoutLiveScreen() {
     ...selectionsQueryOptions,
     enabled: !!sessionId && !!selectionsQueryOptions,
   });
+  
+  // Prefetch tracks when setlist is available
+  useEffect(() => {
+    if (setlist && prefetchSetlistTracks) {
+      prefetchSetlistTracks();
+    }
+  }, [setlist, prefetchSetlistTracks]);
   
   // Process selections into rounds
   useEffect(() => {
@@ -202,10 +207,8 @@ export function CircuitWorkoutLiveScreen() {
 
   // Start health check on mount and cleanup on unmount
   useEffect(() => {
-    console.log('[CIRCUIT-LIGHTING] Component mounted, starting health check');
     startHealthCheck();
     return () => {
-      console.log('[CIRCUIT-LIGHTING] Component unmounting, cleanup');
       stopHealthCheck();
       stopAnimation(); // Stop any running animations
       // Apply App Start color when leaving the workout screen
@@ -218,14 +221,6 @@ export function CircuitWorkoutLiveScreen() {
 
   // Handle phase changes for lighting and Spotify
   useEffect(() => {
-    console.log('[CIRCUIT-LIGHTING] Phase detection:', {
-      currentScreen,
-      timeRemaining,
-      isStarted,
-      currentRoundIndex,
-      totalRounds: roundsData.length,
-      lastLightingEvent
-    });
     
     // Map current state to lighting event
     let lightingEvent = '';
@@ -243,17 +238,9 @@ export function CircuitWorkoutLiveScreen() {
       lightingEvent = 'cooldown';
     }
     
-    console.log('[CIRCUIT-LIGHTING] Detected event:', {
-      lightingEvent,
-      willTrigger: lightingEvent && lightingEvent !== lastLightingEvent
-    });
     
     // Only trigger if event changed
     if (lightingEvent && lightingEvent !== lastLightingEvent) {
-      console.log('[CIRCUIT-LIGHTING] 🎨 Applying lighting effect:', {
-        event: lightingEvent,
-        timestamp: new Date().toISOString()
-      });
       
       // Apply static preset (no animations)
       stopAnimation(); // Always stop any running animation
@@ -276,7 +263,7 @@ export function CircuitWorkoutLiveScreen() {
     }
   }, [isPaused]);
 
-  // Timer management
+  // Timer management and bridge track triggering
   useEffect(() => {
     if (timeRemaining > 0 && !isPaused) {
       intervalRef.current = setInterval(() => {
@@ -286,6 +273,22 @@ export function CircuitWorkoutLiveScreen() {
             handleTimerComplete();
             return 0;
           }
+          
+          // Check if we need to trigger a BRIDGE track
+          if (currentScreen === 'exercise') {
+            const currentRound = getCurrentRound();
+            
+            // Removed performance-impacting timer logs
+          }
+          
+          // Play countdown sound for rest periods when 3 seconds remain
+          if ((currentScreen === 'rest' || (currentScreen === 'round-preview' && currentRoundIndex > 0)) && prev === 4) {
+            // Play at 4 seconds so it starts right when display shows 3
+            playCountdownSound().catch(error => {
+              console.error('[CircuitWorkoutLive] Failed to play countdown sound:', error);
+            });
+          }
+          
           return prev - 1;
         });
       }, 1000);
@@ -300,7 +303,7 @@ export function CircuitWorkoutLiveScreen() {
         clearInterval(intervalRef.current);
       }
     };
-  }, [timeRemaining, isPaused]);
+  }, [timeRemaining, isPaused, currentScreen, currentExerciseIndex, currentRoundIndex, setlist, playTrackAtPosition]);
 
   const handleTimerComplete = useCallback(() => {
     // Auto-advance to next screen
@@ -312,30 +315,29 @@ export function CircuitWorkoutLiveScreen() {
     setShowCountdown(true);
     setCountdownValue(5);
     
-    // Sync music with countdown
-    if (musicConfig && playTrackAtPosition) {
-      // Filter tracks to only include those with hypeTimestamp
-      const tracksWithHype = musicConfig.tracks.workout.filter(track => track.hypeTimestamp !== undefined);
+    // Sync music with countdown using setlist
+    if (setlist && playTrackAtPosition) {
+      // Get the track for the current round
+      const currentRoundMusic = setlist.rounds?.[currentRoundIndex];
+      const hypeTrack = currentRoundMusic?.track1;
       
-      if (tracksWithHype.length > 0) {
-        // Pick a random track from filtered list
-        const randomTrack = tracksWithHype[Math.floor(Math.random() * tracksWithHype.length)];
-        
+      if (hypeTrack && hypeTrack.hypeTimestamp !== undefined) {
         // Calculate seek position: hype moment - 5 seconds
-        const seekPositionMs = Math.max(0, (randomTrack.hypeTimestamp - 5) * 1000);
+        const seekPositionMs = Math.max(0, (hypeTrack.hypeTimestamp - 5) * 1000);
         
         console.log('[CircuitWorkoutLive] Syncing music for countdown:', {
-          track: randomTrack.spotifyId,
-          hypeTimestamp: randomTrack.hypeTimestamp,
+          round: currentRoundIndex + 1,
+          track: hypeTrack.spotifyId,
+          trackName: hypeTrack.trackName,
+          hypeTimestamp: hypeTrack.hypeTimestamp,
           seekPosition: seekPositionMs / 1000,
-          countdown: 5,
-          totalTracksWithHype: tracksWithHype.length
+          countdown: 5
         });
         
         // Play the track at the calculated position
-        playTrackAtPosition(randomTrack.spotifyId, seekPositionMs);
+        playTrackAtPosition(hypeTrack.spotifyId, seekPositionMs);
       } else {
-        console.warn('[CircuitWorkoutLive] No tracks with hypeTimestamp available for countdown sync');
+        console.warn('[CircuitWorkoutLive] No hype track available for round', currentRoundIndex + 1);
       }
     }
     
@@ -356,10 +358,18 @@ export function CircuitWorkoutLiveScreen() {
           // Show GO! after 1
           return 'GO!';
         }
+        
+        // Play countdown sound when we hit 3
+        if (prev === 4) { // Play at 4 so it starts when display shows 3
+          playCountdownSound().catch(error => {
+            console.error('[CircuitWorkoutLive] Failed to play countdown sound:', error);
+          });
+        }
+        
         return typeof prev === 'number' ? prev - 1 : 5;
       });
     }, 1000);
-  }, [circuitConfig, musicConfig, playTrackAtPosition]);
+  }, [circuitConfig, setlist, playTrackAtPosition, currentRoundIndex]);
 
   const startTimer = (duration: number) => {
     setTimeRemaining(duration);
@@ -387,7 +397,20 @@ export function CircuitWorkoutLiveScreen() {
     } else if (currentScreen === 'exercise') {
       // Check if this is the last exercise in the round
       if (currentExerciseIndex === currentRound.exercises.length - 1) {
-        // Last exercise of the round - skip rest and go to next round preview or complete
+        // Last exercise of the round - play REST track
+        const currentRoundMusic = setlist?.rounds?.[currentRoundIndex];
+        if (currentRoundMusic && playTrackAtPosition) {
+          const restTrack = currentRoundMusic.track3;
+          if (restTrack) {
+            console.log('[CircuitWorkoutLive] Playing REST track at round end:', {
+              round: currentRoundIndex + 1,
+              track: restTrack.spotifyId,
+              trackName: restTrack.trackName
+            });
+            playTrackAtPosition(restTrack.spotifyId, 0);
+          }
+        }
+        
         if (currentRoundIndex < roundsData.length - 1) {
           setCurrentRoundIndex(currentRoundIndex + 1);
           setCurrentExerciseIndex(0);
@@ -408,9 +431,26 @@ export function CircuitWorkoutLiveScreen() {
       }
     } else if (currentScreen === 'rest') {
       // Rest screen always leads to the next exercise
-      setCurrentExerciseIndex(currentExerciseIndex + 1);
+      const nextExerciseIndex = currentExerciseIndex + 1;
+      setCurrentExerciseIndex(nextExerciseIndex);
       setCurrentScreen('exercise');
       startTimer(circuitConfig?.config?.workDuration || 45);
+      
+      // Play BRIDGE track at start of exercise 2
+      if (nextExerciseIndex === 1) { // Exercise 2 (0-indexed)
+        const currentRoundMusic = setlist?.rounds?.[currentRoundIndex];
+        if (currentRoundMusic && playTrackAtPosition) {
+          const bridgeTrack = currentRoundMusic.track2;
+          if (bridgeTrack) {
+            console.log('[CircuitWorkoutLive] Playing BRIDGE track at exercise 2:', {
+              round: currentRoundIndex + 1,
+              track: bridgeTrack.spotifyId,
+              trackName: bridgeTrack.trackName
+            });
+            playTrackAtPosition(bridgeTrack.spotifyId, 0);
+          }
+        }
+      }
     }
   };
 
@@ -652,6 +692,32 @@ export function CircuitWorkoutLiveScreen() {
                 </MattePanel>
               )}
             </Pressable>
+            
+            {/* Sound Volume Indicator */}
+            <View style={{ 
+              marginLeft: 16,
+              paddingHorizontal: 16,
+              paddingVertical: 8,
+              backgroundColor: TOKENS.color.card,
+              borderRadius: 12,
+              borderWidth: 1,
+              borderColor: TOKENS.color.borderGlass,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 8
+            }}>
+              <Icon 
+                name="volume-up" 
+                size={18} 
+                color={TOKENS.color.muted} 
+              />
+              <Text style={{ 
+                color: TOKENS.color.muted, 
+                fontSize: 14
+              }}>
+                {Math.round(countdownSoundVolume * 100)}%
+              </Text>
+            </View>
           </View>
         )}
       </View>

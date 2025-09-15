@@ -6,11 +6,9 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { Database } from "@acme/db/client";
 import { spotifyTracks, type SpotifyTrack } from "@acme/db/schema";
-import type { CircuitConfig } from "@acme/validators/training-session";
+import type { CircuitConfig } from "@acme/db";
 import { 
-  calculateCircuitTiming, 
-  canTrackCoverRound,
-  getSecondTrackTriggerPoint,
+  calculateCircuitTiming,
   type RoundTiming,
   type CircuitTimingResult 
 } from "../utils/circuit-timing-calculator";
@@ -26,9 +24,9 @@ export interface SetlistTrack {
 
 export interface RoundSetlist {
   roundNumber: number;
-  track1: SetlistTrack;
-  track2: SetlistTrack;
-  coverageScenario: 'full-coverage' | 'bridge-needed';
+  track1: SetlistTrack; // Hype at countdown
+  track2: SetlistTrack; // Bridge at exercise 2
+  track3: SetlistTrack; // Rest at round end
 }
 
 export interface CircuitSetlist {
@@ -81,7 +79,7 @@ export class CircuitSetlistService {
 
     return {
       rounds,
-      totalTracks: rounds.length * 2,
+      totalTracks: rounds.length * 3,
       generatedAt: new Date().toISOString()
     };
   }
@@ -97,46 +95,49 @@ export class CircuitSetlistService {
     restTracks: SpotifyTrack[],
     usedTrackIds: Set<string>
   ): Promise<RoundSetlist> {
-    // Select track 1 (hype track)
+    // Select track 1 (hype track at countdown)
     const track1 = this.selectTrack(hypeTracks, usedTrackIds, 'hype');
     if (!track1) {
       throw new Error('No hype tracks available for round ' + roundTiming.roundNumber);
     }
-
-    // Check if track 1 covers the full round
-    const track1Coverage = canTrackCoverRound(
-      track1.durationMs,
-      roundTiming,
-      track1.hypeTimestamp
-    );
-    track1Coverage.trackId = track1.spotifyId;
-
-    // Determine second track based on coverage
-    const secondTrackTrigger = getSecondTrackTriggerPoint(
-      track1Coverage,
-      roundTiming,
-      circuitConfig
-    );
-
-    // Select track 2 based on trigger type
-    const track2Pool = secondTrackTrigger.triggerType === 'rest' ? restTracks : bridgeTracks;
-    let track2 = this.selectTrack(track2Pool, usedTrackIds, secondTrackTrigger.triggerType);
     
+    // Select track 2 (bridge track at exercise 2)
+    const track2 = this.selectTrack(bridgeTracks, usedTrackIds, 'bridge');
     if (!track2) {
-      // Fallback: use any available track from bridge pool if specific type is exhausted
-      const fallbackTrack = this.selectTrack(bridgeTracks, usedTrackIds, 'bridge');
-      if (!fallbackTrack) {
-        throw new Error(`No ${secondTrackTrigger.triggerType} tracks available for round ${roundTiming.roundNumber}`);
-      }
-      track2 = fallbackTrack;
+      throw new Error('No bridge tracks available for round ' + roundTiming.roundNumber);
     }
+    
+    // Select track 3 (rest track at round end)
+    const track3 = this.selectTrack(restTracks, usedTrackIds, 'rest');
+    if (!track3) {
+      throw new Error('No rest tracks available for round ' + roundTiming.roundNumber);
+    }
+
+    // Calculate trigger times
+    // Track 1: Hype at countdown start
+    const track1TriggerMs = roundTiming.countdownStartMs;
+    
+    // Track 2: Bridge at start of exercise 2
+    // After countdown (6s) + exercise 1 (workDuration) + rest between exercises (restDuration)
+    const track2TriggerMs = roundTiming.workStartMs + 
+      (circuitConfig.workDuration * 1000) + 
+      (circuitConfig.restDuration * 1000);
+    
+    // Track 3: Rest at round end (when last exercise finishes)
+    const track3TriggerMs = roundTiming.endTimeMs;
+
+    console.log(`[SetlistService] Round ${roundTiming.roundNumber} - Track timing:`, {
+      track1: `${track1.name} at ${track1TriggerMs / 1000}s (countdown)`,
+      track2: `${track2.name} at ${track2TriggerMs / 1000}s (exercise 2)`,
+      track3: `${track3.name} at ${track3TriggerMs / 1000}s (round end)`
+    });
 
     return {
       roundNumber: roundTiming.roundNumber,
       track1: {
         spotifyId: track1.spotifyId,
         trackName: track1.name,
-        triggerTimeMs: roundTiming.countdownStartMs,
+        triggerTimeMs: track1TriggerMs,
         usage: 'hype',
         durationMs: track1.durationMs,
         hypeTimestamp: track1.hypeTimestamp
@@ -144,12 +145,19 @@ export class CircuitSetlistService {
       track2: {
         spotifyId: track2.spotifyId,
         trackName: track2.name,
-        triggerTimeMs: secondTrackTrigger.triggerTimeMs,
-        usage: secondTrackTrigger.triggerType,
+        triggerTimeMs: track2TriggerMs,
+        usage: 'bridge',
         durationMs: track2.durationMs,
         hypeTimestamp: track2.hypeTimestamp
       },
-      coverageScenario: track1Coverage.coversFullRound ? 'full-coverage' : 'bridge-needed'
+      track3: {
+        spotifyId: track3.spotifyId,
+        trackName: track3.name,
+        triggerTimeMs: track3TriggerMs,
+        usage: 'rest',
+        durationMs: track3.durationMs,
+        hypeTimestamp: track3.hypeTimestamp
+      }
     };
   }
 
@@ -244,7 +252,7 @@ export class CircuitSetlistService {
     
     for (const round of setlist.rounds) {
       summaryLines.push(
-        `Round ${round.roundNumber}: ${round.track1.trackName} → ${round.track2.trackName} (${round.coverageScenario})`
+        `Round ${round.roundNumber}: ${round.track1.trackName} → ${round.track2.trackName} → ${round.track3.trackName}`
       );
     }
 

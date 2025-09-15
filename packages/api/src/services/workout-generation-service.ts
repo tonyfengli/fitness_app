@@ -636,7 +636,7 @@ export class WorkoutGenerationService {
 
     // Generate setlist for circuit workout
     let setlist = null;
-    if (circuitConfig && circuitConfig.config) {
+    if (circuitConfig && 'config' in circuitConfig && circuitConfig.config) {
       try {
         logger.info("Generating circuit setlist", {
           rounds: normalizedResponse.circuit.rounds.length,
@@ -648,17 +648,17 @@ export class WorkoutGenerationService {
         
         // Calculate effective total rounds considering repeatRounds option
         const baseRounds = normalizedResponse.circuit.rounds.length;
-        const effectiveTotalRounds = circuitConfig.config.repeatRounds ? baseRounds * 2 : baseRounds;
+        const effectiveTotalRounds = (circuitConfig as any).config.repeatRounds ? baseRounds * 2 : baseRounds;
         
         logger.info("Calculating effective rounds for setlist", {
           baseRounds,
-          repeatRounds: circuitConfig.config.repeatRounds,
+          repeatRounds: (circuitConfig as any).config.repeatRounds,
           effectiveTotalRounds
         });
         
         // Generate the setlist
         setlist = await setlistService.generateSetlist(
-          circuitConfig.config,
+          (circuitConfig as any).config,
           effectiveTotalRounds
         );
 

@@ -118,7 +118,9 @@ export function CircuitPreferencesScreen() {
     isConnected: isSpotifyConnected,
     connectionState: spotifyConnectionState,
     currentDevice: spotifyDevice,
-    error: spotifyError
+    error: spotifyError,
+    prefetchSetlistTracks,
+    setlist
   } = useSpotifySync(
     sessionId || '', 
     circuitConfig?.config?.spotifyDeviceId
@@ -134,9 +136,18 @@ export function CircuitPreferencesScreen() {
       connectionState: spotifyConnectionState,
       currentDevice: spotifyDevice,
       error: spotifyError,
+      hasSetlist: !!setlist,
       timestamp: new Date().toISOString()
     });
-  }, [sessionId, circuitConfig?.config?.spotifyDeviceId, isSpotifyConnected, spotifyConnectionState, spotifyDevice, spotifyError]);
+  }, [sessionId, circuitConfig?.config?.spotifyDeviceId, isSpotifyConnected, spotifyConnectionState, spotifyDevice, spotifyError, setlist]);
+
+  // Prefetch tracks when Spotify is connected and setlist is available
+  useEffect(() => {
+    if (isSpotifyConnected && setlist && prefetchSetlistTracks) {
+      console.log('[CircuitPreferences] Prefetching setlist tracks...');
+      prefetchSetlistTracks();
+    }
+  }, [isSpotifyConnected, setlist, prefetchSetlistTracks]);
 
   // Check for existing workout selections
   const { data: existingSelections } = useQuery(

@@ -371,6 +371,9 @@ importers:
       react-native-screens:
         specifier: ~4.11.1
         version: 4.11.1(react-native-tvos@0.79.2-0)(react@19.0.0)
+      react-native-sound:
+        specifier: 0.12.0
+        version: 0.12.0(react-native-tvos@0.79.2-0)(react@19.0.0)
       react-native-url-polyfill:
         specifier: ^2.0.0
         version: 2.0.0(react-native-tvos@0.79.2-0)
@@ -404,7 +407,7 @@ importers:
         version: 0.79.2(eslint@9.33.0(jiti@2.5.1))(prettier@3.6.2)(typescript@5.9.2)
       '@react-native/metro-config':
         specifier: 0.79.2
-        version: 0.79.2(@babel/core@7.28.3)(bufferutil@4.0.9)
+        version: 0.79.2(@babel/core@7.28.3)
       '@react-native/typescript-config':
         specifier: 0.79.2
         version: 0.79.2
@@ -7730,6 +7733,12 @@ packages:
       react: '*'
       react-native: '*'
 
+  react-native-sound@0.12.0:
+    resolution: {integrity: sha512-uOtM/PJ8+xmuXwgS2WMYEcokE/oFE8MV6glZHmB5RYHZ+yzD/0Z7cDL+QJpetTYBbEFOirfcE42o6YfPMJfJfg==}
+    peerDependencies:
+      react: '*'
+      react-native: '*'
+
   react-native-tvos@0.79.2-0:
     resolution: {integrity: sha512-zgc8SQ+dW5vVOoPfpoDae419vPa//R2kUM4t4kyXgtVtBvObBd+MV5Zn9K4hxS+D5pdBBInVvtfS3yQ1eh34Gw==}
     engines: {node: '>=18'}
@@ -12103,7 +12112,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@react-native/metro-config@0.79.2(@babel/core@7.28.3)(bufferutil@4.0.9)':
+  '@react-native/metro-config@0.79.2(@babel/core@7.28.3)':
     dependencies:
       '@react-native/js-polyfills': 0.79.2
       '@react-native/metro-babel-transformer': 0.79.2(@babel/core@7.28.3)
@@ -12111,9 +12120,7 @@ snapshots:
       metro-runtime: 0.82.5
     transitivePeerDependencies:
       - '@babel/core'
-      - bufferutil
       - supports-color
-      - utf-8-validate
 
   '@react-native/normalize-colors@0.74.89': {}
 
@@ -17019,6 +17026,11 @@ snapshots:
       react-native: 0.79.2(@babel/core@7.28.3)(@react-native-community/cli@19.1.1(bufferutil@4.0.9)(typescript@5.9.2))(@types/react@19.1.10)(bufferutil@4.0.9)(react@19.0.0)
       react-native-is-edge-to-edge: 1.2.1(react-native@0.79.2(@babel/core@7.28.3)(@react-native-community/cli@19.1.1(bufferutil@4.0.9)(typescript@5.9.2))(@types/react@19.1.10)(bufferutil@4.0.9)(react@19.0.0))(react@19.0.0)
       warn-once: 0.1.1
+
+  react-native-sound@0.12.0(react-native-tvos@0.79.2-0)(react@19.0.0):
+    dependencies:
+      react: 19.0.0
+      react-native: react-native-tvos@0.79.2-0(@babel/core@7.28.3)(@react-native-community/cli@19.1.1(bufferutil@4.0.9)(typescript@5.9.2))(@types/react@19.1.10)(bufferutil@4.0.9)(react-native-tvos@0.79.2-0)(react@19.0.0)
 
   react-native-tvos@0.79.2-0(@babel/core@7.28.3)(@react-native-community/cli@19.1.1(bufferutil@4.0.9)(typescript@5.9.2))(@types/react@19.1.10)(bufferutil@4.0.9)(react-native-tvos@0.79.2-0)(react@19.0.0):
     dependencies:

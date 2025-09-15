@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
 import { spotifyAuth } from "../services/spotify-auth";
-import { SPOTIFY_MUSIC_CONFIG } from "../config/spotify-music-config";
 
 export const spotifyRouter = createTRPCRouter({
   // Get available Spotify Connect devices
@@ -93,6 +92,13 @@ export const spotifyRouter = createTRPCRouter({
               body.position_ms = input.positionMs;
             }
             
+            console.log('[Spotify API] Play request:', {
+              deviceId: input.deviceId,
+              trackUri: input.trackUri,
+              positionMs: input.positionMs,
+              body: JSON.stringify(body)
+            });
+            
             const response = await spotifyAuth.makeSpotifyRequest(
               `/me/player/play${input.deviceId ? `?device_id=${input.deviceId}` : ''}`,
               {
@@ -158,10 +164,6 @@ export const spotifyRouter = createTRPCRouter({
       }
     }),
 
-  // Get music configuration
-  getMusicConfig: publicProcedure.query(() => {
-    return SPOTIFY_MUSIC_CONFIG;
-  }),
 
   // Search for low energy Christian rap tracks (now actually high energy)
   searchLowEnergyChristianRap: publicProcedure

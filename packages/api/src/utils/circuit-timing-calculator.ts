@@ -3,7 +3,7 @@
  * Calculates precise timing for circuit workouts including track coverage
  */
 
-import type { CircuitConfig } from "@acme/validators/training-session";
+import type { CircuitConfig } from "@acme/db";
 
 export interface RoundTiming {
   roundNumber: number;
@@ -39,12 +39,28 @@ export function getEffectiveTrackDuration(
   hypeTimestamp?: number | null
 ): number {
   if (!hypeTimestamp) {
+    console.log('[CircuitTimingCalculator] No hype timestamp, using full duration:', {
+      trackDurationMs,
+      trackDurationSec: trackDurationMs / 1000
+    });
     return trackDurationMs;
   }
   
   // Track starts 5 seconds before hype moment
   const offsetMs = Math.max(0, (hypeTimestamp - 5) * 1000);
-  return trackDurationMs - offsetMs;
+  const effectiveDuration = trackDurationMs - offsetMs;
+  
+  console.log('[CircuitTimingCalculator] Effective duration calculated:', {
+    trackDurationMs,
+    trackDurationSec: trackDurationMs / 1000,
+    hypeTimestamp,
+    offsetMs,
+    offsetSec: offsetMs / 1000,
+    effectiveDurationMs: effectiveDuration,
+    effectiveDurationSec: effectiveDuration / 1000
+  });
+  
+  return effectiveDuration;
 }
 
 /**
@@ -54,6 +70,15 @@ export function calculateCircuitTiming(
   config: CircuitConfig["config"],
   totalRounds: number
 ): CircuitTimingResult {
+  console.log('[CircuitTimingCalculator] Starting calculation:', {
+    workDuration: config.workDuration,
+    restDuration: config.restDuration,
+    restBetweenRounds: config.restBetweenRounds,
+    exercisesPerRound: config.exercisesPerRound,
+    repeatRounds: config.repeatRounds,
+    totalRounds
+  });
+
   const rounds: RoundTiming[] = [];
   let currentTimeMs = 0;
   
@@ -83,7 +108,7 @@ export function calculateCircuitTiming(
     const totalRoundDurationMs = countdownDurationMs + exerciseDurationMs;
     const endTimeMs = countdownStartMs + totalRoundDurationMs;
     
-    rounds.push({
+    const roundInfo = {
       roundNumber: isRepeat ? roundNumber : roundNumber,
       startTimeMs: countdownStartMs,
       countdownStartMs,
@@ -91,7 +116,20 @@ export function calculateCircuitTiming(
       endTimeMs,
       totalDurationMs: totalRoundDurationMs,
       exerciseCount: config.exercisesPerRound,
+    };
+    
+    console.log(`[CircuitTimingCalculator] Round ${i + 1} timing:`, {
+      displayRoundNumber: roundInfo.roundNumber,
+      actualRoundIndex: i,
+      isRepeat,
+      startTime: `${Math.floor(countdownStartMs / 1000)}s`,
+      workStartTime: `${Math.floor(workStartMs / 1000)}s`,
+      endTime: `${Math.floor(endTimeMs / 1000)}s`,
+      duration: `${Math.floor(totalRoundDurationMs / 1000)}s`,
+      exerciseTimeTotal: `${Math.floor(exerciseDurationMs / 1000)}s`
     });
+    
+    rounds.push(roundInfo);
     
     // Add rest between rounds (except after last round)
     currentTimeMs = endTimeMs;
@@ -125,7 +163,7 @@ export function canTrackCoverRound(
   const effectiveDurationMs = getEffectiveTrackDuration(trackDurationMs, hypeTimestamp);
   const roundDurationFromCountdown = roundTiming.totalDurationMs;
   
-  return {
+  const coverage = {
     trackId: '', // Will be set by caller
     startTimeMs: roundTiming.countdownStartMs,
     endTimeMs: roundTiming.countdownStartMs + trackDurationMs,
@@ -136,6 +174,18 @@ export function canTrackCoverRound(
       roundTiming.endTimeMs
     ),
   };
+  
+  console.log('[CircuitTimingCalculator] Track coverage analysis:', {
+    roundNumber: roundTiming.roundNumber,
+    effectiveDurationSec: effectiveDurationMs / 1000,
+    roundDurationSec: roundDurationFromCountdown / 1000,
+    coversFullRound: coverage.coversFullRound,
+    shortfallSec: coverage.coversFullRound ? 0 : (roundDurationFromCountdown - effectiveDurationMs) / 1000,
+    coverageEndTime: `${Math.floor(coverage.coverageEndMs / 1000)}s`,
+    roundEndTime: `${Math.floor(roundTiming.endTimeMs / 1000)}s`
+  });
+  
+  return coverage;
 }
 
 /**
@@ -148,6 +198,7 @@ export function getSecondTrackTriggerPoint(
 ): { triggerTimeMs: number; triggerType: 'bridge' | 'rest' } {
   if (firstTrackCoverage.coversFullRound) {
     // First track covers full round, second track starts at rest between rounds
+    console.log('[CircuitTimingCalculator] Track covers full round, REST track at round end');
     return {
       triggerTimeMs: roundTiming.endTimeMs,
       triggerType: 'rest',
@@ -158,6 +209,19 @@ export function getSecondTrackTriggerPoint(
       roundTiming.workStartMs + 
       ((config.exercisesPerRound - 1) * (config.workDuration * 1000)) +
       ((config.exercisesPerRound - 1) * (config.restDuration * 1000));
+    
+    console.log('[CircuitTimingCalculator] Track needs bridge, calculating trigger:', {
+      roundNumber: roundTiming.roundNumber,
+      workStartMs: roundTiming.workStartMs,
+      workStartSec: roundTiming.workStartMs / 1000,
+      exercisesPerRound: config.exercisesPerRound,
+      workDuration: config.workDuration,
+      restDuration: config.restDuration,
+      lastExerciseStartMs,
+      lastExerciseStartSec: lastExerciseStartMs / 1000,
+      trackEndsAtSec: firstTrackCoverage.coverageEndMs / 1000,
+      gapSec: (lastExerciseStartMs - firstTrackCoverage.coverageEndMs) / 1000
+    });
     
     return {
       triggerTimeMs: lastExerciseStartMs,
