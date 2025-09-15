@@ -52,11 +52,11 @@ export function useSpotifySync(sessionId: string, preSelectedDeviceId?: string |
 
   // Removed performance-impacting initialization log
 
-  // Get devices query
+  // Get devices query - with optimized polling
   const devicesQuery = useQuery({
     ...api.spotify.getDevices.queryOptions(),
-    enabled: !!sessionId,
-    refetchInterval: 5000, // Check every 5 seconds for faster connection
+    enabled: !!sessionId && connectionState !== 'connected', // Stop polling when connected
+    refetchInterval: connectionState === 'connecting' ? 5000 : 15000, // Fast when connecting, slow otherwise
     onSuccess: (data) => {
       console.log('[Spotify] Device query success:', {
         deviceCount: data?.devices?.length || 0,
@@ -273,6 +273,14 @@ export function useSpotifySync(sessionId: string, preSelectedDeviceId?: string |
           console.error('[Spotify] ❌ Failed to start playback:', error);
           setError(`Failed to start music: ${error.message}`);
           hasStartedPlaybackRef.current = false; // Reset so we can retry
+          
+          // Check if device is still connected - if not, trigger a refresh
+          if (error.message?.includes('Device not found') || error.message?.includes('404')) {
+            console.log('[Spotify] Device appears disconnected, resetting connection state');
+            setConnectionState('disconnected');
+            setCurrentDevice(null);
+            // This will trigger the device query to restart polling
+          }
         }
       });
     }
@@ -331,6 +339,14 @@ export function useSpotifySync(sessionId: string, preSelectedDeviceId?: string |
       onError: (error: any) => {
         console.error('[Spotify] ❌ Failed to play track at position:', error);
         setError(`Failed to play track: ${error.message}`);
+        
+        // Check if device is still connected - if not, trigger a refresh
+        if (error.message?.includes('Device not found') || error.message?.includes('404')) {
+          console.log('[Spotify] Device appears disconnected, resetting connection state');
+          setConnectionState('disconnected');
+          setCurrentDevice(null);
+          // This will trigger the device query to restart polling
+        }
       }
     });
   }, [currentDevice?.id, controlMutation]);

@@ -124,8 +124,16 @@ export function CircuitWorkoutLiveScreen() {
   const [lastLightingEvent, setLastLightingEvent] = useState<string>('');
   const [isStarted, setIsStarted] = useState(false);
   
-  // Sound settings
-  const [countdownSoundVolume, setCountdownSoundVolume] = useState(0.7);
+  
+  // Ref to store current values for timer without causing re-renders
+  const timerStateRef = useRef({
+    currentScreen,
+    currentRoundIndex,
+    currentExerciseIndex,
+    isPaused,
+    setlist: null as any,
+    playTrackAtPosition: null as any,
+  });
   
   // Get circuit config for timing and Spotify device
   const { data: circuitConfig } = useQuery(
@@ -138,6 +146,18 @@ export function CircuitWorkoutLiveScreen() {
   
   // Spotify integration with pre-selected device (auto-play disabled since music already playing from preferences screen)
   const { playTrackAtPosition, prefetchSetlistTracks, setlist } = useSpotifySync(sessionId, circuitConfig?.config?.spotifyDeviceId, { autoPlay: false });
+  
+  // Update ref when values change
+  useEffect(() => {
+    timerStateRef.current = {
+      currentScreen,
+      currentRoundIndex,
+      currentExerciseIndex,
+      isPaused,
+      setlist,
+      playTrackAtPosition,
+    };
+  }, [currentScreen, currentRoundIndex, currentExerciseIndex, isPaused, setlist, playTrackAtPosition]);
   
   // Get saved selections
   const selectionsQueryOptions = sessionId 
@@ -263,9 +283,15 @@ export function CircuitWorkoutLiveScreen() {
     }
   }, [isPaused]);
 
-  // Timer management and bridge track triggering
+  // Timer management - optimized to prevent restarts
   useEffect(() => {
-    if (timeRemaining > 0 && !isPaused) {
+    // Clear any existing interval
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+    }
+    
+    // Only start interval if time remaining and not paused
+    if (timeRemaining > 0 && !timerStateRef.current.isPaused) {
       intervalRef.current = setInterval(() => {
         setTimeRemaining((prev) => {
           if (prev <= 1) {
@@ -274,19 +300,22 @@ export function CircuitWorkoutLiveScreen() {
             return 0;
           }
           
-          // Check if we need to trigger a BRIDGE track
-          if (currentScreen === 'exercise') {
-            const currentRound = getCurrentRound();
-            
-            // Removed performance-impacting timer logs
-          }
+          // Use ref values to avoid dependencies
+          const { currentScreen: screen, currentRoundIndex: roundIdx } = timerStateRef.current;
           
-          // Play countdown sound for rest periods when 3 seconds remain
-          if ((currentScreen === 'rest' || (currentScreen === 'round-preview' && currentRoundIndex > 0)) && prev === 4) {
+          // Play countdown sound for rest periods when 3 seconds remain (but not round previews)
+          if (screen === 'rest' && prev === 4) {
             // Play at 4 seconds so it starts right when display shows 3
             playCountdownSound().catch(error => {
               console.error('[CircuitWorkoutLive] Failed to play countdown sound:', error);
             });
+          }
+          
+          // Start countdown overlay for round previews at 0:05
+          if (screen === 'round-preview' && roundIdx > 0 && prev === 6) {
+            // Timer shows 0:05, start the countdown
+            handleTimerComplete();
+            return 0; // Stop the timer
           }
           
           return prev - 1;
@@ -303,7 +332,41 @@ export function CircuitWorkoutLiveScreen() {
         clearInterval(intervalRef.current);
       }
     };
-  }, [timeRemaining, isPaused, currentScreen, currentExerciseIndex, currentRoundIndex, setlist, playTrackAtPosition]);
+  }, [timeRemaining > 0]); // Only restart when timer starts/stops
+  
+  // Handle pause/resume separately
+  useEffect(() => {
+    if (intervalRef.current && isPaused) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    } else if (!intervalRef.current && timeRemaining > 0 && !isPaused) {
+      // Restart the interval
+      intervalRef.current = setInterval(() => {
+        setTimeRemaining((prev) => {
+          if (prev <= 1) {
+            handleTimerComplete();
+            return 0;
+          }
+          
+          const { currentScreen: screen, currentRoundIndex: roundIdx } = timerStateRef.current;
+          
+          if (screen === 'rest' && prev === 4) {
+            playCountdownSound().catch(error => {
+              console.error('[CircuitWorkoutLive] Failed to play countdown sound:', error);
+            });
+          }
+          
+          // Start countdown overlay for round previews at 0:05
+          if (screen === 'round-preview' && roundIdx > 0 && prev === 6) {
+            handleTimerComplete();
+            return 0;
+          }
+          
+          return prev - 1;
+        });
+      }, 1000);
+    }
+  }, [isPaused]);
 
   const handleTimerComplete = useCallback(() => {
     // Auto-advance to next screen
@@ -693,31 +756,6 @@ export function CircuitWorkoutLiveScreen() {
               )}
             </Pressable>
             
-            {/* Sound Volume Indicator */}
-            <View style={{ 
-              marginLeft: 16,
-              paddingHorizontal: 16,
-              paddingVertical: 8,
-              backgroundColor: TOKENS.color.card,
-              borderRadius: 12,
-              borderWidth: 1,
-              borderColor: TOKENS.color.borderGlass,
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: 8
-            }}>
-              <Icon 
-                name="volume-up" 
-                size={18} 
-                color={TOKENS.color.muted} 
-              />
-              <Text style={{ 
-                color: TOKENS.color.muted, 
-                fontSize: 14
-              }}>
-                {Math.round(countdownSoundVolume * 100)}%
-              </Text>
-            </View>
           </View>
         )}
       </View>
