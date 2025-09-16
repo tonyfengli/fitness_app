@@ -55,11 +55,6 @@ export class CircuitSetlistService {
       this.getTracksByUsage('rest')
     ]);
 
-    console.log('[SetlistService] Available tracks:', {
-      hype: hypeTracks.length,
-      bridge: bridgeTracks.length,
-      rest: restTracks.length
-    });
 
     // Generate setlist for each round
     const rounds: RoundSetlist[] = [];
@@ -126,11 +121,6 @@ export class CircuitSetlistService {
     // Track 3: Rest at round end (when last exercise finishes)
     const track3TriggerMs = roundTiming.endTimeMs;
 
-    console.log(`[SetlistService] Round ${roundTiming.roundNumber} - Track timing:`, {
-      track1: `${track1.name} at ${track1TriggerMs / 1000}s (countdown)`,
-      track2: `${track2.name} at ${track2TriggerMs / 1000}s (exercise 2)`,
-      track3: `${track3.name} at ${track3TriggerMs / 1000}s (round end)`
-    });
 
     return {
       roundNumber: roundTiming.roundNumber,
@@ -182,7 +172,6 @@ export class CircuitSetlistService {
     }
 
     // If all tracks are used, allow repeats
-    console.log(`[SetlistService] All ${usage} tracks used, allowing repeats`);
     if (trackPool.length > 0) {
       const selected = trackPool[Math.floor(Math.random() * trackPool.length)];
       return selected ?? null;

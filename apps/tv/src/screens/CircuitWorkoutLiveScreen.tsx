@@ -104,11 +104,22 @@ export function CircuitWorkoutLiveScreen() {
   const navigation = useNavigation();
   const sessionId = navigation.getParam('sessionId');
   
+  // Generate unique component instance ID
+  const componentInstanceId = useRef(`cwl-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`);
+  
+  
   // State for rounds and navigation
-  const [roundsData, setRoundsData] = useState<RoundData[]>([]);
-  const [currentRoundIndex, setCurrentRoundIndex] = useState(0);
-  const [currentExerciseIndex, setCurrentExerciseIndex] = useState(0);
-  const [currentScreen, setCurrentScreen] = useState<ScreenType>('round-preview');
+  const [roundsData, setRoundsDataInternal] = useState<RoundData[]>([]);
+  
+  const setRoundsData = setRoundsDataInternal;
+  
+  const [currentRoundIndex, setCurrentRoundIndexInternal] = useState(0);
+  const [currentExerciseIndex, setCurrentExerciseIndexInternal] = useState(0);
+  const [currentScreen, setCurrentScreenInternal] = useState<ScreenType>('round-preview');
+  
+  const setCurrentRoundIndex = setCurrentRoundIndexInternal;
+  const setCurrentExerciseIndex = setCurrentExerciseIndexInternal;
+  const setCurrentScreen = setCurrentScreenInternal;
   
   // Timer state
   const [timeRemaining, setTimeRemaining] = useState(0);
@@ -118,6 +129,27 @@ export function CircuitWorkoutLiveScreen() {
   // Countdown overlay state
   const [showCountdown, setShowCountdown] = useState(false);
   const [countdownValue, setCountdownValue] = useState<number | string>(5);
+  
+  // Log when showCountdown changes
+  useEffect(() => {
+    console.log('[COUNTDOWN-DEBUG] showCountdown state changed', {
+      showCountdown,
+      timestamp: new Date().toISOString()
+    });
+  }, [showCountdown]);
+  
+  // Cleanup and unmount logging
+  useEffect(() => {
+    return () => {
+      console.log('[COUNTDOWN-DEBUG] CircuitWorkoutLiveScreen unmounting', {
+        showCountdown,
+        currentScreen,
+        timestamp: new Date().toISOString()
+      });
+      if (intervalRef.current) clearInterval(intervalRef.current);
+      if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+    };
+  }, []);
   const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
   
   // Lighting state
@@ -133,6 +165,7 @@ export function CircuitWorkoutLiveScreen() {
     isPaused,
     setlist: null as any,
     playTrackAtPosition: null as any,
+    roundsData: [] as RoundData[],
   });
   
   // Get circuit config for timing and Spotify device
@@ -145,7 +178,7 @@ export function CircuitWorkoutLiveScreen() {
   );
   
   // Spotify integration with pre-selected device (auto-play disabled since music already playing from preferences screen)
-  const { playTrackAtPosition, prefetchSetlistTracks, setlist } = useSpotifySync(sessionId, circuitConfig?.config?.spotifyDeviceId, { autoPlay: false });
+  const { playTrackAtPosition, prefetchSetlistTracks, setlist, isConnected: spotifyConnectionState, refetchDevices } = useSpotifySync(sessionId, circuitConfig?.config?.spotifyDeviceId, { autoPlay: false });
   
   // Update ref when values change
   useEffect(() => {
@@ -156,8 +189,9 @@ export function CircuitWorkoutLiveScreen() {
       isPaused,
       setlist,
       playTrackAtPosition,
+      roundsData,
     };
-  }, [currentScreen, currentRoundIndex, currentExerciseIndex, isPaused, setlist, playTrackAtPosition]);
+  }, [currentScreen, currentRoundIndex, currentExerciseIndex, isPaused, setlist, playTrackAtPosition, roundsData]);
   
   // Get saved selections
   const selectionsQueryOptions = sessionId 
@@ -167,6 +201,9 @@ export function CircuitWorkoutLiveScreen() {
   const { data: selections, isLoading: selectionsLoading } = useQuery({
     ...selectionsQueryOptions,
     enabled: !!sessionId && !!selectionsQueryOptions,
+    onError: (error) => {
+      console.error('[CircuitWorkoutLive] Failed to load selections:', error);
+    }
   });
   
   // Prefetch tracks when setlist is available
@@ -179,8 +216,6 @@ export function CircuitWorkoutLiveScreen() {
   // Process selections into rounds
   useEffect(() => {
     if (selections && selections.length > 0) {
-      console.log('[CircuitWorkoutLive] Processing selections:', selections.length);
-      
       // For circuits, deduplicate by exerciseId + groupName
       const exerciseMap = new Map<string, CircuitExercise>();
       
@@ -239,6 +274,7 @@ export function CircuitWorkoutLiveScreen() {
     };
   }, []);
 
+  
   // Handle phase changes for lighting and Spotify
   useEffect(() => {
     
@@ -296,11 +332,6 @@ export function CircuitWorkoutLiveScreen() {
         setTimeRemaining((prev) => {
           if (prev <= 1) {
             // Timer reached 0, advance to next screen
-            console.log('[CircuitWorkoutLive] Timer reached 0 - normal completion', {
-              screen: timerStateRef.current.currentScreen,
-              roundIdx: timerStateRef.current.currentRoundIndex,
-              exerciseIdx: timerStateRef.current.currentExerciseIndex
-            });
             handleTimerComplete();
             return 0;
           }
@@ -311,7 +342,6 @@ export function CircuitWorkoutLiveScreen() {
           // Play countdown sound for rest periods when 3 seconds remain (but not round previews)
           if (screen === 'rest' && prev === 4) {
             // Play at 4 seconds so it starts right when display shows 3
-            console.log('[CircuitWorkoutLive] Playing countdown sound for rest period');
             playCountdownSound().catch(error => {
               console.error('[CircuitWorkoutLive] Failed to play countdown sound:', error);
             });
@@ -319,12 +349,13 @@ export function CircuitWorkoutLiveScreen() {
           
           // Start countdown overlay for round previews at 0:05
           if (screen === 'round-preview' && roundIdx > 0 && prev === 6) {
-            // Timer shows 0:05, start the countdown
-            console.log('[CircuitWorkoutLive] Round preview at 0:05 - triggering countdown', {
+            console.log('[COUNTDOWN-DEBUG] Timer effect triggering countdown at 0:05', {
               screen,
               roundIdx,
-              exerciseIdx
+              prev,
+              timestamp: new Date().toISOString()
             });
+            // Timer shows 0:05, start the countdown
             handleTimerComplete();
             return 0; // Stop the timer
           }
@@ -369,6 +400,13 @@ export function CircuitWorkoutLiveScreen() {
           
           // Start countdown overlay for round previews at 0:05
           if (screen === 'round-preview' && roundIdx > 0 && prev === 6) {
+            console.log('[COUNTDOWN-DEBUG] Pause timer effect triggering countdown at 0:05', {
+              screen,
+              roundIdx,
+              prev,
+              isPaused,
+              timestamp: new Date().toISOString()
+            });
             handleTimerComplete();
             return 0;
           }
@@ -380,24 +418,20 @@ export function CircuitWorkoutLiveScreen() {
   }, [isPaused]);
 
   const handleTimerComplete = useCallback(() => {
-    console.log('[CircuitWorkoutLive] Timer complete - calling handleNext', {
-      currentScreen: timerStateRef.current.currentScreen,
-      currentRoundIndex: timerStateRef.current.currentRoundIndex,
-      currentExerciseIndex: timerStateRef.current.currentExerciseIndex,
-      timestamp: new Date().toISOString()
-    });
     // Auto-advance to next screen
     handleNext();
-  }, []);
+  }, [handleNext]);
 
   // Start countdown and then proceed to exercise
   const startCountdown = useCallback(() => {
-    console.log('[CircuitWorkoutLive] Starting countdown overlay', {
+    console.log('[COUNTDOWN-DEBUG] startCountdown called', {
+      currentTimeRemaining: timeRemaining,
       currentScreen,
       currentRoundIndex,
-      currentExerciseIndex,
+      showCountdownBefore: showCountdown,
       timestamp: new Date().toISOString()
     });
+    
     setShowCountdown(true);
     setCountdownValue(5);
     
@@ -407,37 +441,59 @@ export function CircuitWorkoutLiveScreen() {
       const currentRoundMusic = setlist.rounds?.[currentRoundIndex];
       const hypeTrack = currentRoundMusic?.track1;
       
+      console.log('[COUNTDOWN-DEBUG] Countdown music sync attempt', {
+        round: currentRoundIndex + 1,
+        hasSetlist: !!setlist,
+        hasPlayFunction: !!playTrackAtPosition,
+        hasRoundMusic: !!currentRoundMusic,
+        hasHypeTrack: !!hypeTrack,
+        hypeTimestamp: hypeTrack?.hypeTimestamp,
+        isConnected: spotifyConnectionState,
+        timestamp: new Date().toISOString()
+      });
+      
+      // Force a device check before playing music on rounds > 1
+      if (currentRoundIndex > 0 && !spotifyConnectionState) {
+        console.log('[UNMOUNT-DEBUG] Device not connected for Round', currentRoundIndex + 1, '- attempting to reconnect');
+        refetchDevices?.();
+        // Try to play anyway - the hook might reconnect
+      }
+      
       if (hypeTrack && hypeTrack.hypeTimestamp !== undefined) {
         // Calculate seek position: hype moment - 5 seconds
         const seekPositionMs = Math.max(0, (hypeTrack.hypeTimestamp - 5) * 1000);
-        
-        console.log('[CircuitWorkoutLive] Syncing music for countdown:', {
-          round: currentRoundIndex + 1,
-          track: hypeTrack.spotifyId,
-          trackName: hypeTrack.trackName,
-          hypeTimestamp: hypeTrack.hypeTimestamp,
-          seekPosition: seekPositionMs / 1000,
-          countdown: 5
-        });
-        
-        // Play the track at the calculated position
         playTrackAtPosition(hypeTrack.spotifyId, seekPositionMs);
       } else {
-        console.warn('[CircuitWorkoutLive] No hype track available for round', currentRoundIndex + 1);
+        console.warn('[UNMOUNT-DEBUG] Cannot play hype track', {
+          round: currentRoundIndex + 1,
+          reason: !hypeTrack ? 'No hype track' : 'No hype timestamp',
+          trackData: hypeTrack
+        });
       }
+    } else {
+      console.warn('[UNMOUNT-DEBUG] Missing requirements for countdown music', {
+        hasSetlist: !!setlist,
+        hasPlayFunction: !!playTrackAtPosition
+      });
     }
     
     countdownIntervalRef.current = setInterval(() => {
       setCountdownValue((prev) => {
+        console.log('[COUNTDOWN-DEBUG] Countdown tick', {
+          prevValue: prev,
+          currentTimeRemaining: timeRemaining,
+          timestamp: new Date().toISOString()
+        });
+        
         if (prev === 'GO!') {
-          // GO! complete - start exercise
-          console.log('[CircuitWorkoutLive] Countdown complete - starting exercise', {
+          console.log('[COUNTDOWN-DEBUG] Countdown complete - starting exercise', {
             currentScreen,
-            currentRoundIndex,
-            currentExerciseIndex,
-            workDuration: circuitConfig?.config?.workDuration || 45,
+            willSetScreen: 'exercise',
+            willStartTimer: circuitConfig?.config?.workDuration || 45,
             timestamp: new Date().toISOString()
           });
+          
+          // GO! complete - start exercise
           if (countdownIntervalRef.current) {
             clearInterval(countdownIntervalRef.current);
           }
@@ -468,13 +524,14 @@ export function CircuitWorkoutLiveScreen() {
   }, [circuitConfig, setlist, playTrackAtPosition, currentRoundIndex]);
 
   const startTimer = (duration: number) => {
-    console.log('[CircuitWorkoutLive] Starting timer', {
-      duration,
+    console.log('[COUNTDOWN-DEBUG] startTimer called', {
+      newDuration: duration,
+      currentTimeRemaining: timeRemaining,
       currentScreen,
-      currentRoundIndex,
-      currentExerciseIndex,
+      caller: new Error().stack?.split('\n')[2]?.trim(),
       timestamp: new Date().toISOString()
     });
+    
     setTimeRemaining(duration);
     setIsStarted(true);
   };
@@ -487,46 +544,63 @@ export function CircuitWorkoutLiveScreen() {
 
   const getTotalRounds = () => roundsData.length;
 
-  const handleNext = () => {
-    // Use ref values to avoid stale closures
-    const { currentScreen: screen, currentRoundIndex: roundIdx, currentExerciseIndex: exerciseIdx } = timerStateRef.current;
-    
-    const currentRound = roundsData[roundIdx];
-    if (!currentRound) return;
-
-    console.log('[CircuitWorkoutLive] handleNext called', {
-      currentScreen: screen,
-      currentRoundIndex: roundIdx,
+  const handleNext = useCallback(() => {
+    // Get ALL values from ref to avoid stale closures
+    const { 
+      currentScreen: screen, 
+      currentRoundIndex: roundIdx, 
       currentExerciseIndex: exerciseIdx,
-      roundExercises: currentRound.exercises.length,
+      roundsData: rounds,
+      setlist: currentSetlist,
+      playTrackAtPosition: playTrack
+    } = timerStateRef.current;
+    
+    console.log('[COUNTDOWN-DEBUG] handleNext called', {
+      currentScreen: screen,
+      roundIndex: roundIdx,
+      exerciseIndex: exerciseIdx,
+      timeRemaining,
+      showCountdown,
       timestamp: new Date().toISOString()
     });
+    
+    const currentRound = rounds[roundIdx];
+    if (!currentRound) {
+      console.error('[CircuitWorkoutLive] handleNext - No currentRound', {
+        roundIdx,
+        roundsDataLength: rounds.length
+      });
+      return;
+    }
 
     // Reset lighting event to force re-application when navigating
     setLastLightingEvent('');
 
     if (screen === 'round-preview') {
-      console.log('[CircuitWorkoutLive] Round preview - starting countdown');
+      console.log('[COUNTDOWN-DEBUG] Starting countdown from round-preview');
       // Start countdown before going to first exercise
       startCountdown();
     } else if (screen === 'exercise') {
       // Check if this is the last exercise in the round
       if (exerciseIdx === currentRound.exercises.length - 1) {
         // Last exercise of the round - play REST track
-        const currentRoundMusic = setlist?.rounds?.[roundIdx];
-        if (currentRoundMusic && playTrackAtPosition) {
+        const currentRoundMusic = currentSetlist?.rounds?.[roundIdx];
+        if (currentRoundMusic && playTrack) {
           const restTrack = currentRoundMusic.track3;
           if (restTrack) {
-            console.log('[CircuitWorkoutLive] Playing REST track at round end:', {
+            console.log('[UNMOUNT-DEBUG] Playing REST track at round end', {
               round: roundIdx + 1,
               track: restTrack.spotifyId,
-              trackName: restTrack.trackName
+              trackName: restTrack.trackName,
+              timestamp: new Date().toISOString()
             });
-            playTrackAtPosition(restTrack.spotifyId, 0);
+            playTrack(restTrack.spotifyId, 0);
+          } else {
+            console.warn('[UNMOUNT-DEBUG] No REST track available for round', roundIdx + 1);
           }
         }
         
-        if (roundIdx < roundsData.length - 1) {
+        if (roundIdx < rounds.length - 1) {
           setCurrentRoundIndex(roundIdx + 1);
           setCurrentExerciseIndex(0);
           setCurrentScreen('round-preview');
@@ -541,43 +615,28 @@ export function CircuitWorkoutLiveScreen() {
         }
       } else {
         // Not the last exercise - go to rest
-        console.log('[CircuitWorkoutLive] Exercise complete - going to rest', {
-          currentExerciseIndex: exerciseIdx,
-          nextExerciseIndex: exerciseIdx + 1,
-          restDuration: circuitConfig?.config?.restDuration || 15
-        });
         setCurrentScreen('rest');
         startTimer(circuitConfig?.config?.restDuration || 15);
       }
     } else if (screen === 'rest') {
       // Rest screen always leads to the next exercise
       const nextExerciseIndex = exerciseIdx + 1;
-      console.log('[CircuitWorkoutLive] Rest complete - going to next exercise', {
-        currentExerciseIndex: exerciseIdx,
-        nextExerciseIndex,
-        workDuration: circuitConfig?.config?.workDuration || 45
-      });
       setCurrentExerciseIndex(nextExerciseIndex);
       setCurrentScreen('exercise');
       startTimer(circuitConfig?.config?.workDuration || 45);
       
       // Play BRIDGE track at start of exercise 2
       if (nextExerciseIndex === 1) { // Exercise 2 (0-indexed)
-        const currentRoundMusic = setlist?.rounds?.[roundIdx];
-        if (currentRoundMusic && playTrackAtPosition) {
+        const currentRoundMusic = currentSetlist?.rounds?.[roundIdx];
+        if (currentRoundMusic && playTrack) {
           const bridgeTrack = currentRoundMusic.track2;
           if (bridgeTrack) {
-            console.log('[CircuitWorkoutLive] Playing BRIDGE track at exercise 2:', {
-              round: roundIdx + 1,
-              track: bridgeTrack.spotifyId,
-              trackName: bridgeTrack.trackName
-            });
-            playTrackAtPosition(bridgeTrack.spotifyId, 0);
+            playTrack(bridgeTrack.spotifyId, 0);
           }
         }
       }
     }
-  };
+  }, []); // No dependencies - function is stable and uses ref values
 
   const handleBack = () => {
     // Reset lighting event to force re-application when navigating
@@ -663,7 +722,6 @@ export function CircuitWorkoutLiveScreen() {
         ) : (
           <Pressable
             onPress={async () => {
-              console.log('[CircuitWorkoutLive] Back button pressed');
               // Apply App Start color when leaving workout
               const appStartColor = await getColorForPreset('app_start');
               const preset = getHuePresetForColor(appStartColor);
@@ -1017,6 +1075,11 @@ export function CircuitWorkoutLiveScreen() {
           justifyContent: 'center',
           alignItems: 'center',
           zIndex: 1000,
+        }}
+        onLayout={() => {
+          console.log('[COUNTDOWN-DEBUG] Countdown overlay mounted', {
+            timestamp: new Date().toISOString()
+          });
         }}>
           <Text style={{
             fontSize: 280,

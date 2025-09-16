@@ -26,8 +26,6 @@ export function playCountdownSound(): Promise<void> {
     return Promise.reject(new Error('CountdownSound native module not available'));
   }
 
-  console.log('[CountdownSound] Playing 3-2-1 countdown at volume:', currentVolume);
-  
   return CountdownSound.play().catch((error: any) => {
     console.error('[CountdownSound] Failed to play sound:', error);
     throw error;
@@ -51,6 +49,4 @@ if (CountdownSound) {
   CountdownSound.setVolume(currentVolume).catch((error: any) => {
     console.error('[CountdownSound] Failed to set initial volume:', error);
   });
-} else {
-  console.warn('[CountdownSound] Native module not available - sound playback will not work');
 }

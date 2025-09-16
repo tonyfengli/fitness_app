@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../providers/TRPCProvider';
 
 type SpotifyConnectionState = 'disconnected' | 'connecting' | 'connected' | 'error';
@@ -24,17 +24,11 @@ export function useSpotifySync(sessionId: string, preSelectedDeviceId?: string |
   
   // Reset search state when device ID changes
   useEffect(() => {
-    console.log('[Spotify] Pre-selected device ID changed:', {
-      old: currentDevice?.id,
-      new: preSelectedDeviceId,
-      timestamp: new Date().toISOString()
-    });
     if (preSelectedDeviceId && currentDevice?.id !== preSelectedDeviceId) {
       setHasSearchedForDevice(false);
       setError(null);
     } else if (!preSelectedDeviceId && currentDevice?.id) {
       // Device was removed (disconnected from mobile)
-      console.log('[Spotify] Device disconnected, stopping music');
       controlMutation.mutate({
         action: 'pause',
         deviceId: currentDevice.id,
@@ -49,47 +43,23 @@ export function useSpotifySync(sessionId: string, preSelectedDeviceId?: string |
   }, [preSelectedDeviceId, currentDevice?.id]);
   
   const deviceCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const queryClient = useQueryClient();
 
-  // Removed performance-impacting initialization log
 
   // Get devices query - with optimized polling
   const devicesQuery = useQuery({
     ...api.spotify.getDevices.queryOptions(),
     enabled: !!sessionId && connectionState !== 'connected', // Stop polling when connected
     refetchInterval: connectionState === 'connecting' ? 5000 : 15000, // Fast when connecting, slow otherwise
-    onSuccess: (data) => {
-      console.log('[Spotify] Device query success:', {
-        deviceCount: data?.devices?.length || 0,
-        timestamp: new Date().toISOString()
-      });
-    },
-    onError: (error) => {
-      console.log('[Spotify] Device query error:', {
-        error: error.message,
-        timestamp: new Date().toISOString()
-      });
-    }
   });
 
   // Handle query results with useEffect
   useEffect(() => {
     if (devicesQuery.data && !devicesQuery.isLoading) {
-      console.log('[Spotify] Processing devices data:', {
-        devices: devicesQuery.data.devices,
-        deviceCount: devicesQuery.data.devices?.length || 0,
-        activeDevice: devicesQuery.data.activeDevice
-      });
-      
       const data = devicesQuery.data;
       
       // First, try to find pre-selected device
       if (preSelectedDeviceId) {
-        console.log('[Spotify] Looking for pre-selected device:', {
-          preSelectedDeviceId,
-          availableDevices: data.devices.map((d: SpotifyDevice) => ({ id: d.id, name: d.name })),
-          timestamp: new Date().toISOString()
-        });
-        
         if (!hasSearchedForDevice) {
           setHasSearchedForDevice(true);
           setConnectionState('connecting');
@@ -100,27 +70,26 @@ export function useSpotifySync(sessionId: string, preSelectedDeviceId?: string |
         );
         
         if (preSelectedDevice) {
-          console.log('[Spotify] ✅ Found pre-selected device:', {
-            device: preSelectedDevice,
-            timestamp: new Date().toISOString()
-          });
+          if (!currentDevice || currentDevice.id !== preSelectedDevice.id) {
+            console.log('[Spotify] Device connected:', preSelectedDevice.name, {
+              deviceId: preSelectedDevice.id,
+              wasConnected: !!currentDevice,
+              previousState: connectionState,
+              timestamp: new Date().toISOString()
+            });
+          }
           setCurrentDevice(preSelectedDevice);
           setConnectionState('connected');
           setError(null); // Clear any previous errors
-          
-          // Device just became available - check if we should trigger autoplay
-          if (!hasStartedPlaybackRef.current) {
-            console.log('[Spotify] Device became available, autoplay check needed');
-          }
           return;
         } else {
-          console.log('[Spotify] ❌ Pre-selected device not found in available devices:', {
-            preSelectedDeviceId,
-            availableDeviceIds: data.devices.map((d: SpotifyDevice) => d.id),
-            timestamp: new Date().toISOString()
-          });
-          // Keep in connecting state if we haven't searched for long
-          if (!hasSearchedForDevice) {
+          // Device was connected but now it's gone
+          if (connectionState === 'connected' && currentDevice?.id === preSelectedDeviceId) {
+            console.log('[Spotify] Device disconnected during workout');
+            setCurrentDevice(null);
+            setConnectionState('disconnected');
+            setError('Spotify device disconnected');
+          } else if (!hasSearchedForDevice) {
             setConnectionState('connecting');
           } else {
             setConnectionState('disconnected');
@@ -131,36 +100,100 @@ export function useSpotifySync(sessionId: string, preSelectedDeviceId?: string |
       
       // Only use fallback logic if no pre-selected device was provided
       if (!preSelectedDeviceId) {
-        console.log('[Spotify] No pre-selected device, staying disconnected');
         setConnectionState('disconnected');
         setCurrentDevice(null);
         // Don't set error - this is expected when no device is selected
       }
     } else if (devicesQuery.error) {
-      console.error('[Spotify] Failed to get devices:', {
-        error: devicesQuery.error,
-        message: (devicesQuery.error as any)?.message,
-        timestamp: new Date().toISOString()
-      });
+      console.error('[Spotify] Failed to get devices:', devicesQuery.error);
       setConnectionState('error');
       setError('Failed to connect to Spotify');
-    } else if (devicesQuery.isLoading) {
-      console.log('[Spotify] Devices query is loading...', {
-        timestamp: new Date().toISOString()
-      });
     }
   }, [devicesQuery.data, devicesQuery.isLoading, devicesQuery.error, preSelectedDeviceId]);
-
-  // Log query state
+  
+  // Log connection state changes
   useEffect(() => {
-    console.log('[Spotify] Query state:', {
-      isLoading: devicesQuery.isLoading,
-      isError: devicesQuery.isError,
-      isFetching: devicesQuery.isFetching,
-      data: devicesQuery.data,
-      error: devicesQuery.error
+    console.log('[Spotify] Connection state changed:', {
+      state: connectionState,
+      hasDevice: !!currentDevice,
+      deviceId: currentDevice?.id,
+      preSelectedDeviceId,
+      timestamp: new Date().toISOString()
     });
-  }, [devicesQuery.isLoading, devicesQuery.isError, devicesQuery.data]);
+  }, [connectionState, currentDevice?.id]);
+  
+  // Manual device polling when connected to detect disconnections
+  useEffect(() => {
+    console.log('[Spotify] Polling effect triggered', {
+      sessionId: !!sessionId,
+      preSelectedDeviceId: !!preSelectedDeviceId,
+      connectionState,
+      currentDevice: !!currentDevice,
+      timestamp: new Date().toISOString()
+    });
+    
+    if (!sessionId || !preSelectedDeviceId) {
+      console.log('[Spotify] Polling skipped - missing sessionId or deviceId');
+      return;
+    }
+    
+    // Only poll when we're connected or think we're connected
+    if (connectionState === 'disconnected' || connectionState === 'error') {
+      console.log('[Spotify] Polling skipped - not connected', { connectionState });
+      return;
+    }
+    
+    console.log('[Spotify] Starting device keep-alive polling', {
+      connectionState,
+      currentDevice: currentDevice?.name,
+      timestamp: new Date().toISOString()
+    });
+    
+    const checkDevice = async () => {
+      console.log('[Spotify] Polling check running', { timestamp: new Date().toISOString() });
+      try {
+        const result = await queryClient.fetchQuery({
+          ...api.spotify.getDevices.queryOptions(),
+          staleTime: 0, // Always fetch fresh data
+        });
+        const device = result.devices.find((d: SpotifyDevice) => d.id === preSelectedDeviceId);
+        
+        console.log('[Spotify] Poll result:', {
+          foundDevice: !!device,
+          deviceCount: result.devices.length,
+          currentDevice: !!currentDevice,
+          timestamp: new Date().toISOString()
+        });
+        
+        if (!device && currentDevice) {
+          // Device disappeared - only log if we had a device before
+          console.log('[Spotify] Device disconnected during polling check');
+          setCurrentDevice(null);
+          setConnectionState('disconnected');
+          setError('Spotify device disconnected');
+          hasStartedPlaybackRef.current = false;
+        } else if (device && !currentDevice) {
+          // Device reappeared
+          console.log('[Spotify] Device reconnected during polling check');
+          setCurrentDevice(device);
+          setConnectionState('connected');
+          setError(null);
+        }
+      } catch (error) {
+        // Silent fail - don't affect UI
+        console.log('[Spotify] Keep-alive poll failed (non-critical):', error);
+      }
+    };
+    
+    // Check immediately, then every 20 seconds (more frequent)
+    checkDevice();
+    const interval = setInterval(checkDevice, 20000);
+    
+    return () => {
+      console.log('[Spotify] Stopping device keep-alive polling');
+      clearInterval(interval);
+    };
+  }, [sessionId, preSelectedDeviceId, connectionState, currentDevice, queryClient]);
 
   // Control mutations
   const controlMutation = useMutation({
@@ -187,15 +220,6 @@ export function useSpotifySync(sessionId: string, preSelectedDeviceId?: string |
   const sessionQuery = useQuery({
     ...api.trainingSession.getSession.queryOptions({ id: sessionId || '' }),
     enabled: !!sessionId,
-    onSuccess: (data) => {
-      console.log('[Spotify] Session data loaded:', {
-        hasTemplateConfig: !!data?.templateConfig,
-        templateConfigKeys: data?.templateConfig ? Object.keys(data.templateConfig) : [],
-        hasSetlistDirect: !!(data?.templateConfig as any)?.setlist,
-        hasSetlistNested: !!(data?.templateConfig as any)?.visualizationData?.llmResult?.metadata?.setlist,
-        timestamp: new Date().toISOString()
-      });
-    }
   });
   
   // Initialize music session and start playback when device is available
@@ -206,23 +230,18 @@ export function useSpotifySync(sessionId: string, preSelectedDeviceId?: string |
                    templateConfig?.visualizationData?.llmResult?.metadata?.setlist;
     const shouldAutoPlay = options?.autoPlay ?? true;
     
-    console.log('[Spotify] Music session init check:', {
+    console.log('[Spotify] Auto-play check:', {
       hasDevice: !!currentDevice,
       deviceId: currentDevice?.id,
-      sessionId,
       connectionState,
-      shouldAutoPlay,
       hasSetlist: !!setlist,
-      setlistRounds: setlist?.rounds?.length || 0,
-      firstTrack: setlist?.rounds?.[0]?.track1?.trackName || 'none',
       hasStartedPlayback: hasStartedPlaybackRef.current,
-      sessionDataLoading: sessionQuery.isLoading,
-      sessionDataError: sessionQuery.error,
+      shouldAutoPlay,
       timestamp: new Date().toISOString()
     });
     
     if (currentDevice && sessionId && connectionState === 'connected' && setlist && !hasStartedPlaybackRef.current && shouldAutoPlay) {
-      console.log('[Spotify] 🎵 Starting playback');
+      console.log('[Spotify] Starting auto-playback');
       hasStartedPlaybackRef.current = true;
       
       // Pick the first hype track from the setlist
@@ -232,15 +251,6 @@ export function useSpotifySync(sessionId: string, preSelectedDeviceId?: string |
         return;
       }
       
-      console.log('[Spotify] 🎵 Starting playback with first hype track:', {
-        trackUri: firstHypeTrack.spotifyId,
-        trackName: firstHypeTrack.trackName,
-        hasSpotifyId: !!firstHypeTrack.spotifyId,
-        spotifyIdFormat: firstHypeTrack.spotifyId,
-        deviceId: currentDevice.id,
-        timestamp: new Date().toISOString()
-      });
-      
       // Start playing music
       controlMutation.mutate({
         action: 'play',
@@ -249,24 +259,10 @@ export function useSpotifySync(sessionId: string, preSelectedDeviceId?: string |
         positionMs: 0,
       }, {
         onSuccess: () => {
-          console.log('[Spotify] ✅ Successfully started playback');
-          
           // Set volume to 5% after starting playback
-          console.log('[Spotify] Setting volume to 5%');
           volumeMutation.mutate({
             volumePercent: 5,
             deviceId: currentDevice.id,
-          }, {
-            onSuccess: (result) => {
-              if (result.success) {
-                console.log('[Spotify] ✅ Volume set to 5%');
-              } else {
-                console.log('[Spotify] ⚠️ Volume control not supported on this device');
-              }
-            },
-            onError: (error: any) => {
-              console.warn('[Spotify] Volume control error (non-critical):', error);
-            }
           });
         },
         onError: (error: any) => {
@@ -276,7 +272,6 @@ export function useSpotifySync(sessionId: string, preSelectedDeviceId?: string |
           
           // Check if device is still connected - if not, trigger a refresh
           if (error.message?.includes('Device not found') || error.message?.includes('404')) {
-            console.log('[Spotify] Device appears disconnected, resetting connection state');
             setConnectionState('disconnected');
             setCurrentDevice(null);
             // This will trigger the device query to restart polling
@@ -294,14 +289,9 @@ export function useSpotifySync(sessionId: string, preSelectedDeviceId?: string |
       
       // Stop music if it was playing
       if (currentDevice?.id) {
-        console.log('[Spotify] Stopping music due to disconnection');
         controlMutation.mutate({
           action: 'pause',
           deviceId: currentDevice.id,
-        }, {
-          onError: (error: any) => {
-            console.error('[Spotify] Failed to stop music on disconnect:', error);
-          }
         });
       }
     }
@@ -316,16 +306,22 @@ export function useSpotifySync(sessionId: string, preSelectedDeviceId?: string |
   // Play a specific track at a specific position
   const playTrackAtPosition = useCallback(async (trackUri: string, positionMs: number) => {
     if (!currentDevice?.id) {
-      console.error('[Spotify] Cannot play track - no device connected');
+      console.error('[Spotify] Cannot play track - no device connected', {
+        currentDevice,
+        connectionState,
+        preSelectedDeviceId,
+        hasStartedPlayback: hasStartedPlaybackRef.current,
+        trackUri,
+        timestamp: new Date().toISOString()
+      });
+      
+      // Try to refetch devices once if disconnected
+      if (preSelectedDeviceId && connectionState !== 'connecting') {
+        console.log('[Spotify] Attempting to refetch devices...');
+        devicesQuery.refetch();
+      }
       return;
     }
-    
-    console.log('[Spotify] Playing track at position:', {
-      trackUri,
-      positionMs,
-      deviceId: currentDevice.id,
-      timestamp: new Date().toISOString()
-    });
     
     controlMutation.mutate({
       action: 'play',
@@ -333,16 +329,12 @@ export function useSpotifySync(sessionId: string, preSelectedDeviceId?: string |
       trackUri,
       positionMs,
     }, {
-      onSuccess: () => {
-        console.log('[Spotify] ✅ Successfully started playback at position');
-      },
       onError: (error: any) => {
-        console.error('[Spotify] ❌ Failed to play track at position:', error);
+        console.error('[Spotify] Failed to play track:', error);
         setError(`Failed to play track: ${error.message}`);
         
         // Check if device is still connected - if not, trigger a refresh
         if (error.message?.includes('Device not found') || error.message?.includes('404')) {
-          console.log('[Spotify] Device appears disconnected, resetting connection state');
           setConnectionState('disconnected');
           setCurrentDevice(null);
           // This will trigger the device query to restart polling
@@ -357,11 +349,9 @@ export function useSpotifySync(sessionId: string, preSelectedDeviceId?: string |
     const setlist = templateConfig?.setlist || 
                    templateConfig?.visualizationData?.llmResult?.metadata?.setlist;
     if (!setlist || !currentDevice?.id) {
-      console.log('[Spotify] Cannot prefetch - no setlist or device');
       return;
     }
 
-    console.log('[Spotify] 🎵 Prefetching all setlist tracks...');
     const trackUris: string[] = [];
     
     // Collect all unique track URIs from the setlist
@@ -373,21 +363,11 @@ export function useSpotifySync(sessionId: string, preSelectedDeviceId?: string |
     // Remove duplicates
     const uniqueTrackUris = [...new Set(trackUris)];
     
-    console.log('[Spotify] Prefetching tracks:', {
-      totalTracks: uniqueTrackUris.length,
-      tracks: uniqueTrackUris
-    });
-
     // Note: Spotify doesn't have a direct prefetch API
     // In a production app, you might implement caching by:
     // 1. Adding tracks to queue (requires implementing queue action in backend)
     // 2. Pre-loading track metadata
     // 3. Using Spotify Web SDK's preload capabilities
-    
-    // For now, we'll just log the tracks that would be prefetched
-    console.log('[Spotify] Tracks ready for playback:', uniqueTrackUris);
-    
-    console.log('[Spotify] ✅ Prefetch complete');
   }, [sessionQuery.data, currentDevice?.id]);
 
   const templateConfig = sessionQuery.data?.templateConfig as any;
