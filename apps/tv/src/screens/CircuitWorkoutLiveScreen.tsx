@@ -126,23 +126,15 @@ export function CircuitWorkoutLiveScreen() {
   const [isPaused, setIsPaused] = useState(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   
-  // Countdown overlay state
+  // Countdown overlay state - only for Round 1
   const [showCountdown, setShowCountdown] = useState(false);
   const [countdownValue, setCountdownValue] = useState<number | string>(5);
-  
-  // Log when showCountdown changes
-  useEffect(() => {
-    console.log('[COUNTDOWN-DEBUG] showCountdown state changed', {
-      showCountdown,
-      timestamp: new Date().toISOString()
-    });
-  }, [showCountdown]);
+  const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
   
   // Cleanup and unmount logging
   useEffect(() => {
     return () => {
       console.log('[COUNTDOWN-DEBUG] CircuitWorkoutLiveScreen unmounting', {
-        showCountdown,
         currentScreen,
         timestamp: new Date().toISOString()
       });
@@ -150,7 +142,6 @@ export function CircuitWorkoutLiveScreen() {
       if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
     };
   }, []);
-  const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
   
   // Lighting state
   const [lastLightingEvent, setLastLightingEvent] = useState<string>('');
@@ -347,17 +338,34 @@ export function CircuitWorkoutLiveScreen() {
             });
           }
           
-          // Start countdown overlay for round previews at 0:05
-          if (screen === 'round-preview' && roundIdx > 0 && prev === 6) {
-            console.log('[COUNTDOWN-DEBUG] Timer effect triggering countdown at 0:05', {
+          // Start music early for round previews at 0:06
+          if (screen === 'round-preview' && roundIdx > 0 && prev === 7) {
+            console.log('[MUSIC-DEBUG] Starting music early at 0:06', {
               screen,
               roundIdx,
-              prev,
               timestamp: new Date().toISOString()
             });
-            // Timer shows 0:05, start the countdown
-            handleTimerComplete();
-            return 0; // Stop the timer
+            
+            // Get values from ref
+            const { setlist: currentSetlist, playTrackAtPosition: playTrack } = timerStateRef.current;
+            
+            if (currentSetlist && playTrack) {
+              const currentRoundMusic = currentSetlist.rounds?.[roundIdx];
+              const hypeTrack = currentRoundMusic?.track1;
+              
+              if (hypeTrack && hypeTrack.hypeTimestamp !== undefined) {
+                // Calculate seek position: hype moment - 6 seconds
+                const seekPositionMs = Math.max(0, (hypeTrack.hypeTimestamp - 6) * 1000);
+                console.log('[MUSIC-DEBUG] Playing hype track early', {
+                  round: roundIdx + 1,
+                  track: hypeTrack.spotifyId,
+                  hypeTimestamp: hypeTrack.hypeTimestamp,
+                  seekPosition: seekPositionMs / 1000,
+                  timestamp: new Date().toISOString()
+                });
+                playTrack(hypeTrack.spotifyId, seekPositionMs);
+              }
+            }
           }
           
           return prev - 1;
@@ -398,17 +406,34 @@ export function CircuitWorkoutLiveScreen() {
             });
           }
           
-          // Start countdown overlay for round previews at 0:05
-          if (screen === 'round-preview' && roundIdx > 0 && prev === 6) {
-            console.log('[COUNTDOWN-DEBUG] Pause timer effect triggering countdown at 0:05', {
+          // Start music early for round previews at 0:06 (pause/resume effect)
+          if (screen === 'round-preview' && roundIdx > 0 && prev === 7) {
+            console.log('[MUSIC-DEBUG] Starting music early at 0:06 (pause timer)', {
               screen,
               roundIdx,
-              prev,
-              isPaused,
               timestamp: new Date().toISOString()
             });
-            handleTimerComplete();
-            return 0;
+            
+            // Get values from ref
+            const { setlist: currentSetlist, playTrackAtPosition: playTrack } = timerStateRef.current;
+            
+            if (currentSetlist && playTrack) {
+              const currentRoundMusic = currentSetlist.rounds?.[roundIdx];
+              const hypeTrack = currentRoundMusic?.track1;
+              
+              if (hypeTrack && hypeTrack.hypeTimestamp !== undefined) {
+                // Calculate seek position: hype moment - 6 seconds
+                const seekPositionMs = Math.max(0, (hypeTrack.hypeTimestamp - 6) * 1000);
+                console.log('[MUSIC-DEBUG] Playing hype track early', {
+                  round: roundIdx + 1,
+                  track: hypeTrack.spotifyId,
+                  hypeTimestamp: hypeTrack.hypeTimestamp,
+                  seekPosition: seekPositionMs / 1000,
+                  timestamp: new Date().toISOString()
+                });
+                playTrack(hypeTrack.spotifyId, seekPositionMs);
+              }
+            }
           }
           
           return prev - 1;
@@ -418,113 +443,128 @@ export function CircuitWorkoutLiveScreen() {
   }, [isPaused]);
 
   const handleTimerComplete = useCallback(() => {
-    // Auto-advance to next screen
-    handleNext();
+    // Auto-advance to next screen (not a manual skip)
+    handleNext(false);
   }, [handleNext]);
 
-  // Start countdown and then proceed to exercise
-  const startCountdown = useCallback(() => {
-    console.log('[COUNTDOWN-DEBUG] startCountdown called', {
-      currentTimeRemaining: timeRemaining,
-      currentScreen,
-      currentRoundIndex,
-      showCountdownBefore: showCountdown,
-      timestamp: new Date().toISOString()
-    });
-    
+  // Start countdown for Round 1 only
+  const startCountdownRound1 = useCallback(() => {
+    console.log('[COUNTDOWN-DEBUG] Starting Round 1 countdown');
     setShowCountdown(true);
     setCountdownValue(5);
     
-    // Sync music with countdown using setlist
-    if (setlist && playTrackAtPosition) {
-      // Get the track for the current round
-      const currentRoundMusic = setlist.rounds?.[currentRoundIndex];
+    // Get values from ref
+    const { setlist: currentSetlist, playTrackAtPosition: playTrack } = timerStateRef.current;
+    
+    // Sync music with countdown
+    if (currentSetlist && playTrack) {
+      const currentRoundMusic = currentSetlist.rounds?.[0]; // Round 1
       const hypeTrack = currentRoundMusic?.track1;
       
-      console.log('[COUNTDOWN-DEBUG] Countdown music sync attempt', {
-        round: currentRoundIndex + 1,
-        hasSetlist: !!setlist,
-        hasPlayFunction: !!playTrackAtPosition,
-        hasRoundMusic: !!currentRoundMusic,
-        hasHypeTrack: !!hypeTrack,
-        hypeTimestamp: hypeTrack?.hypeTimestamp,
-        isConnected: spotifyConnectionState,
-        timestamp: new Date().toISOString()
-      });
-      
-      // Force a device check before playing music on rounds > 1
-      if (currentRoundIndex > 0 && !spotifyConnectionState) {
-        console.log('[UNMOUNT-DEBUG] Device not connected for Round', currentRoundIndex + 1, '- attempting to reconnect');
-        refetchDevices?.();
-        // Try to play anyway - the hook might reconnect
-      }
-      
       if (hypeTrack && hypeTrack.hypeTimestamp !== undefined) {
-        // Calculate seek position: hype moment - 5 seconds
+        // Calculate seek position: hype moment - 5 seconds for countdown
         const seekPositionMs = Math.max(0, (hypeTrack.hypeTimestamp - 5) * 1000);
-        playTrackAtPosition(hypeTrack.spotifyId, seekPositionMs);
-      } else {
-        console.warn('[UNMOUNT-DEBUG] Cannot play hype track', {
-          round: currentRoundIndex + 1,
-          reason: !hypeTrack ? 'No hype track' : 'No hype timestamp',
-          trackData: hypeTrack
+        console.log('[MUSIC-DEBUG] Playing Round 1 hype track for countdown', {
+          track: hypeTrack.spotifyId,
+          hypeTimestamp: hypeTrack.hypeTimestamp,
+          seekPosition: seekPositionMs / 1000,
+          timestamp: new Date().toISOString()
         });
+        playTrack(hypeTrack.spotifyId, seekPositionMs);
       }
-    } else {
-      console.warn('[UNMOUNT-DEBUG] Missing requirements for countdown music', {
-        hasSetlist: !!setlist,
-        hasPlayFunction: !!playTrackAtPosition
-      });
     }
     
     countdownIntervalRef.current = setInterval(() => {
       setCountdownValue((prev) => {
-        console.log('[COUNTDOWN-DEBUG] Countdown tick', {
-          prevValue: prev,
-          currentTimeRemaining: timeRemaining,
-          timestamp: new Date().toISOString()
-        });
-        
         if (prev === 'GO!') {
-          console.log('[COUNTDOWN-DEBUG] Countdown complete - starting exercise', {
-            currentScreen,
-            willSetScreen: 'exercise',
-            willStartTimer: circuitConfig?.config?.workDuration || 45,
-            timestamp: new Date().toISOString()
-          });
-          
           // GO! complete - start exercise
           if (countdownIntervalRef.current) {
             clearInterval(countdownIntervalRef.current);
           }
           setShowCountdown(false);
-          // Start the first exercise
           setCurrentScreen('exercise');
           startTimer(circuitConfig?.config?.workDuration || 45);
           return 5; // Reset for next time
         }
         if (prev === 1) {
-          // Show GO! after 1
           return 'GO!';
         }
         
-        // Play countdown sound slightly early to account for audio delay
+        // Play countdown sound at 3
         if (prev === 4) {
-          // Schedule sound to play 250ms early to sync with visual
           setTimeout(() => {
             playCountdownSound().catch(error => {
               console.error('[CircuitWorkoutLive] Failed to play countdown sound:', error);
             });
-          }, 750); // Play 250ms before the next second tick
+          }, 750);
         }
         
         return typeof prev === 'number' ? prev - 1 : 5;
       });
     }, 1000);
-  }, [circuitConfig, setlist, playTrackAtPosition, currentRoundIndex]);
+  }, [circuitConfig]);
+
+  // Start the first exercise with music
+  const startFirstExercise = useCallback(() => {
+    // Get values from ref to avoid stale closure issues
+    const { 
+      currentRoundIndex: roundIdx,
+      setlist: currentSetlist,
+      playTrackAtPosition: playTrack
+    } = timerStateRef.current;
+    
+    // Sync music with exercise start using setlist
+    if (currentSetlist && playTrack) {
+      // Get the track for the current round
+      const currentRoundMusic = currentSetlist.rounds?.[roundIdx];
+      const hypeTrack = currentRoundMusic?.track1;
+      
+      console.log('[MUSIC-DEBUG] Starting first exercise with music', {
+        round: roundIdx + 1,
+        hasSetlist: !!currentSetlist,
+        hasPlayFunction: !!playTrack,
+        hasRoundMusic: !!currentRoundMusic,
+        hasHypeTrack: !!hypeTrack,
+        hypeTimestamp: hypeTrack?.hypeTimestamp,
+        timestamp: new Date().toISOString()
+      });
+      
+      if (hypeTrack && hypeTrack.hypeTimestamp !== undefined) {
+        // Start at the hype moment (music should already be playing from 0:06)
+        // Only play if we're on round 1 (round 2+ starts early at 0:06)
+        if (roundIdx === 0) {
+          const seekPositionMs = hypeTrack.hypeTimestamp * 1000;
+          playTrack(hypeTrack.spotifyId, seekPositionMs);
+        }
+      } else {
+        console.warn('[MUSIC-DEBUG] Cannot play hype track', {
+          round: roundIdx + 1,
+          reason: !hypeTrack ? 'No hype track' : 'No hype timestamp',
+          trackData: hypeTrack
+        });
+      }
+    } else {
+      console.warn('[MUSIC-DEBUG] Missing requirements for exercise music', {
+        hasSetlist: !!currentSetlist,
+        hasPlayFunction: !!playTrack
+      });
+    }
+    
+    // For Round 1, use countdown instead
+    if (roundIdx === 0) {
+      startCountdownRound1();
+      return;
+    }
+    
+    // For Round 2+, music should already be playing from 0:06
+    // Just start the exercise
+    console.log('[MUSIC-DEBUG] Starting exercise (music already playing from 0:06)');
+    setCurrentScreen('exercise');
+    startTimer(circuitConfig?.config?.workDuration || 45);
+  }, [circuitConfig, startCountdownRound1]);
 
   const startTimer = (duration: number) => {
-    console.log('[COUNTDOWN-DEBUG] startTimer called', {
+    console.log('[TIMER-DEBUG] startTimer called', {
       newDuration: duration,
       currentTimeRemaining: timeRemaining,
       currentScreen,
@@ -544,7 +584,7 @@ export function CircuitWorkoutLiveScreen() {
 
   const getTotalRounds = () => roundsData.length;
 
-  const handleNext = useCallback(() => {
+  const handleNext = useCallback((isManualSkip = true) => {
     // Get ALL values from ref to avoid stale closures
     const { 
       currentScreen: screen, 
@@ -555,12 +595,11 @@ export function CircuitWorkoutLiveScreen() {
       playTrackAtPosition: playTrack
     } = timerStateRef.current;
     
-    console.log('[COUNTDOWN-DEBUG] handleNext called', {
+    console.log('[FLOW-DEBUG] handleNext called', {
       currentScreen: screen,
       roundIndex: roundIdx,
       exerciseIndex: exerciseIdx,
       timeRemaining,
-      showCountdown,
       timestamp: new Date().toISOString()
     });
     
@@ -577,9 +616,37 @@ export function CircuitWorkoutLiveScreen() {
     setLastLightingEvent('');
 
     if (screen === 'round-preview') {
-      console.log('[COUNTDOWN-DEBUG] Starting countdown from round-preview');
-      // Start countdown before going to first exercise
-      startCountdown();
+      console.log('[FLOW-DEBUG] Round preview complete, starting first exercise', {
+        isManualSkip,
+        roundIdx,
+        timestamp: new Date().toISOString()
+      });
+      
+      // For Round 2+, when MANUALLY skipping from preview, go directly to hype moment
+      if (roundIdx > 0 && isManualSkip) {
+        // Play hype track at the exact hype moment
+        const currentRoundMusic = currentSetlist?.rounds?.[roundIdx];
+        if (currentRoundMusic && playTrack) {
+          const hypeTrack = currentRoundMusic.track1;
+          if (hypeTrack && hypeTrack.hypeTimestamp !== undefined) {
+            const seekPositionMs = hypeTrack.hypeTimestamp * 1000;
+            console.log('[MUSIC-DEBUG] Manual skip from Round preview - seeking to hype moment', {
+              round: roundIdx + 1,
+              track: hypeTrack.spotifyId,
+              hypeTimestamp: hypeTrack.hypeTimestamp,
+              timestamp: new Date().toISOString()
+            });
+            playTrack(hypeTrack.spotifyId, seekPositionMs);
+          }
+        }
+        
+        // Start the exercise
+        setCurrentScreen('exercise');
+        startTimer(circuitConfig?.config?.workDuration || 45);
+      } else {
+        // Round 1 or natural timer progression - use the normal flow
+        startFirstExercise();
+      }
     } else if (screen === 'exercise') {
       // Check if this is the last exercise in the round
       if (exerciseIdx === currentRound.exercises.length - 1) {
@@ -675,7 +742,8 @@ export function CircuitWorkoutLiveScreen() {
   };
 
   const handleStartRound = () => {
-    startCountdown();
+    // For round 1, start countdown with music
+    startCountdownRound1();
   };
 
   const formatTime = (seconds: number) => {
@@ -1063,7 +1131,7 @@ export function CircuitWorkoutLiveScreen() {
         )}
       </View>
       
-      {/* Countdown Overlay */}
+      {/* Countdown Overlay - Round 1 only */}
       {showCountdown && (
         <View style={{
           position: 'absolute',
@@ -1075,11 +1143,6 @@ export function CircuitWorkoutLiveScreen() {
           justifyContent: 'center',
           alignItems: 'center',
           zIndex: 1000,
-        }}
-        onLayout={() => {
-          console.log('[COUNTDOWN-DEBUG] Countdown overlay mounted', {
-            timestamp: new Date().toISOString()
-          });
         }}>
           <Text style={{
             fontSize: 280,
