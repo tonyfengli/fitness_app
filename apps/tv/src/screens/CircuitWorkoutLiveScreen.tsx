@@ -330,9 +330,19 @@ export function CircuitWorkoutLiveScreen() {
           // Use ref values to avoid dependencies
           const { currentScreen: screen, currentRoundIndex: roundIdx, currentExerciseIndex: exerciseIdx } = timerStateRef.current;
           
-          // Play countdown sound for rest periods when 3 seconds remain (but not round previews)
-          if (screen === 'rest' && prev === 4) {
-            // Play at 4 seconds so it starts right when display shows 3
+          // Play countdown sound for rest periods when about to show 3 seconds
+          if (screen === 'rest' && prev === 5) {
+            // Trigger at 5 but play 250ms before 3 appears
+            setTimeout(() => {
+              playCountdownSound().catch(error => {
+                console.error('[CircuitWorkoutLive] Failed to play countdown sound:', error);
+              });
+            }, 750); // Play 250ms before the display changes to 3
+          }
+          
+          // Play countdown sound for round 2+ previews at 0:03
+          if (screen === 'round-preview' && roundIdx > 0 && prev === 4) {
+            // Play immediately when timer shows 3
             playCountdownSound().catch(error => {
               console.error('[CircuitWorkoutLive] Failed to play countdown sound:', error);
             });
@@ -400,7 +410,18 @@ export function CircuitWorkoutLiveScreen() {
           
           const { currentScreen: screen, currentRoundIndex: roundIdx } = timerStateRef.current;
           
-          if (screen === 'rest' && prev === 4) {
+          if (screen === 'rest' && prev === 5) {
+            // Trigger at 5 but play 50ms before 3 appears
+            setTimeout(() => {
+              playCountdownSound().catch(error => {
+                console.error('[CircuitWorkoutLive] Failed to play countdown sound:', error);
+              });
+            }, 950); // Play 50ms before the display changes to 3
+          }
+          
+          // Play countdown sound for round 2+ previews at 0:03 (pause/resume effect)
+          if (screen === 'round-preview' && roundIdx > 0 && prev === 4) {
+            // Play immediately when timer shows 3
             playCountdownSound().catch(error => {
               console.error('[CircuitWorkoutLive] Failed to play countdown sound:', error);
             });
@@ -490,13 +511,14 @@ export function CircuitWorkoutLiveScreen() {
           return 'GO!';
         }
         
-        // Play countdown sound at 3
-        if (prev === 4) {
+        // Play countdown sound when about to show 3
+        if (prev === 5) {
+          // Trigger at 4, play 50ms before 3 appears
           setTimeout(() => {
             playCountdownSound().catch(error => {
               console.error('[CircuitWorkoutLive] Failed to play countdown sound:', error);
             });
-          }, 750);
+          }, 950); // Play 50ms before the display changes to 3
         }
         
         return typeof prev === 'number' ? prev - 1 : 5;

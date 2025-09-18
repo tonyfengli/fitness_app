@@ -16,7 +16,8 @@
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:debug": "playwright test --debug",
     "test:e2e:list": "playwright test --reporter=list",
-    "test:e2e:ci": "playwright test --reporter=line"
+    "test:e2e:ci": "playwright test --reporter=line",
+    "generate-pricing-pdf": "node scripts/generate-pricing-pdf.js"
   },
   "dependencies": {
     "@acme/ai": "workspace:*",
@@ -52,6 +53,7 @@
     "eslint": "catalog:",
     "jiti": "^2.4.2",
     "prettier": "catalog:",
+    "puppeteer": "24.22.0",
     "tailwindcss": "catalog:",
     "typescript": "catalog:"
   },
