@@ -137,6 +137,12 @@ export const circuitConfigRouter = createTRPCRouter({
         config: {
           ...existingConfig.config,
           ...input.config,
+          // Ensure legacy fields are preserved when updating roundTemplates
+          ...(input.config.roundTemplates ? {
+            workDuration: existingConfig.config.workDuration || 45,
+            restDuration: existingConfig.config.restDuration || 15,
+            exercisesPerRound: existingConfig.config.exercisesPerRound || 6,
+          } : {}),
         },
         lastUpdated: new Date().toISOString(),
         updatedBy: user.id,
@@ -306,6 +312,12 @@ export const circuitConfigRouter = createTRPCRouter({
         config: {
           ...existingConfig.config,
           ...input.config,
+          // Ensure legacy fields are preserved when updating roundTemplates
+          ...(input.config.roundTemplates ? {
+            workDuration: existingConfig.config.workDuration || 45,
+            restDuration: existingConfig.config.restDuration || 15,
+            exercisesPerRound: existingConfig.config.exercisesPerRound || 6,
+          } : {}),
         },
         lastUpdated: new Date().toISOString(),
         updatedBy: "anonymous", // Since it's public
@@ -315,11 +327,18 @@ export const circuitConfigRouter = createTRPCRouter({
 
       // Ensure round templates exist
       const configWithRoundTemplates = ensureRoundTemplates(updatedConfig);
+      
+      console.log('[CircuitConfig API] Config after ensureRoundTemplates:', JSON.stringify(configWithRoundTemplates, null, 2));
 
       // Validate the complete config
-      const validatedConfig = CircuitConfigSchema.parse(configWithRoundTemplates);
-      
-      console.log('[CircuitConfig API] Validated config:', JSON.stringify(validatedConfig, null, 2));
+      let validatedConfig;
+      try {
+        validatedConfig = CircuitConfigSchema.parse(configWithRoundTemplates);
+        console.log('[CircuitConfig API] Validated config:', JSON.stringify(validatedConfig, null, 2));
+      } catch (error) {
+        console.error('[CircuitConfig API] Validation error:', error);
+        throw error;
+      }
 
       // Update the session
       await ctx.db

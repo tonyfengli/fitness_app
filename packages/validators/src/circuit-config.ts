@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from "zod/v4";
 
 // Define validation limits locally to avoid circular dependencies
 const CIRCUIT_CONFIG_LIMITS = {
@@ -21,9 +21,15 @@ export const CircuitRoundTemplateSchema = z.object({
   restDuration: z.number().int().min(CIRCUIT_CONFIG_LIMITS.restDuration.min).max(CIRCUIT_CONFIG_LIMITS.restDuration.max),
 });
 
+export const StationsRoundTemplateSchema = z.object({
+  type: z.literal('stations_round'),
+  exercisesPerRound: z.number().int().min(CIRCUIT_CONFIG_LIMITS.exercisesPerRound.min).max(CIRCUIT_CONFIG_LIMITS.exercisesPerRound.max),
+});
+
 // Union for future round types
 export const RoundTemplateSchema = z.discriminatedUnion('type', [
   CircuitRoundTemplateSchema,
+  StationsRoundTemplateSchema,
   // Future: AMRAPRoundTemplateSchema,
   // Future: EMOMRoundTemplateSchema,
 ]);
@@ -109,6 +115,7 @@ export const UpdateCircuitConfigSchema = z.object({
   restDuration: CircuitRestDurationSchema.optional(),
   restBetweenRounds: CircuitRestBetweenRoundsSchema.optional(),
   repeatRounds: z.boolean().optional(),
+  roundTemplates: z.array(RoundConfigSchema).optional(),
   // Spotify integration
   spotifyDeviceId: z.string().optional(),
   spotifyDeviceName: z.string().optional(),

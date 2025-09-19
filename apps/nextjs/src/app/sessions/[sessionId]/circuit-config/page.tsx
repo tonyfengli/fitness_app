@@ -10,9 +10,9 @@ import { supabase } from "~/lib/supabase/client";
 import { useRealtimeCircuitConfig } from "@acme/ui-shared";
 import type { CircuitConfig } from "@acme/db";
 import { cn } from "@acme/ui-shared";
-import { RoundsStep, ExercisesStep, TimingStep, ReviewStep, SpotifyStep } from "./components";
+import { RoundsStep, RoundTypesStep, ExercisesStep, TimingStep, ReviewStep, SpotifyStep } from "./components";
 
-const TOTAL_STEPS = 5;
+const TOTAL_STEPS = 6;
 
 export default function CircuitConfigPage() {
   const params = useParams();
@@ -159,10 +159,11 @@ export default function CircuitConfigPage() {
               <p className="text-xs text-muted-foreground">Step {currentStep} of {TOTAL_STEPS}</p>
               <h1 className="text-sm font-medium">
                 {currentStep === 1 && "Rounds"}
-                {currentStep === 2 && "Exercises"}
-                {currentStep === 3 && "Timing"}
-                {currentStep === 4 && "Review"}
-                {currentStep === 5 && "Music"}
+                {currentStep === 2 && "Round Types"}
+                {currentStep === 3 && "Exercises"}
+                {currentStep === 4 && "Timing"}
+                {currentStep === 5 && "Review"}
+                {currentStep === 6 && "Music"}
               </h1>
             </div>
             
@@ -189,7 +190,7 @@ export default function CircuitConfigPage() {
           {/* Progress indicator */}
           <div className="px-4 pb-3">
             <div className="flex gap-1">
-              {[1, 2, 3, 4, 5].map((step) => (
+              {[1, 2, 3, 4, 5, 6].map((step) => (
                 <div
                   key={step}
                   className={cn(
@@ -226,8 +227,18 @@ export default function CircuitConfigPage() {
               />
             )}
 
-            {/* Step 2: Exercises */}
+            {/* Step 2: Round Types */}
             {currentStep === 2 && (
+              <RoundTypesStep
+                rounds={config.config.rounds}
+                roundTemplates={config.config.roundTemplates || []}
+                onRoundTemplatesChange={(roundTemplates) => updateConfig({ roundTemplates })}
+                isSaving={isSaving}
+              />
+            )}
+
+            {/* Step 3: Exercises */}
+            {currentStep === 3 && (
               <ExercisesStep
                 exercises={config.config.exercisesPerRound}
                 onExercisesChange={(exercisesPerRound) => updateConfig({ exercisesPerRound })}
@@ -235,8 +246,8 @@ export default function CircuitConfigPage() {
               />
             )}
 
-            {/* Step 3: Timing */}
-            {currentStep === 3 && (
+            {/* Step 4: Timing */}
+            {currentStep === 4 && (
               <TimingStep
                 workDuration={config.config.workDuration}
                 restDuration={config.config.restDuration}
@@ -248,16 +259,16 @@ export default function CircuitConfigPage() {
               />
             )}
 
-            {/* Step 4: Review */}
-            {currentStep === 4 && (
+            {/* Step 5: Review */}
+            {currentStep === 5 && (
               <ReviewStep
                 config={config}
                 repeatRounds={repeatRounds}
               />
             )}
 
-            {/* Step 5: Spotify Connection */}
-            {currentStep === 5 && (
+            {/* Step 6: Spotify Connection */}
+            {currentStep === 6 && (
               <>
                 {console.log('[CircuitConfig] Step 5 - Current Spotify state:', { spotifyDeviceId, spotifyDeviceName })}
                 <SpotifyStep

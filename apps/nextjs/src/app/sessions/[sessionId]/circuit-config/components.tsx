@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button, Loader2Icon as Loader2 } from "@acme/ui-shared";
 import { cn } from "@acme/ui-shared";
-import type { CircuitConfig } from "@acme/db";
+import type { CircuitConfig, RoundConfig } from "@acme/db";
 import { useTRPC } from "~/trpc/react";
 
 interface RoundsStepProps {
@@ -86,6 +86,106 @@ export function RoundsStep({
         {repeatRounds && (
           <p className="text-xs text-muted-foreground mt-1">({rounds} × 2)</p>
         )}
+      </div>
+    </div>
+  );
+}
+
+interface RoundTypesStepProps {
+  rounds: number;
+  roundTemplates: RoundConfig[];
+  onRoundTemplatesChange: (roundTemplates: RoundConfig[]) => void;
+  isSaving: boolean;
+}
+
+export function RoundTypesStep({
+  rounds,
+  roundTemplates,
+  onRoundTemplatesChange,
+  isSaving,
+}: RoundTypesStepProps) {
+  // Ensure we have the correct number of round templates
+  const ensuredRoundTemplates = Array.from({ length: rounds }, (_, i) => {
+    const existing = roundTemplates.find(rt => rt.roundNumber === i + 1);
+    if (existing) return existing;
+    
+    // Default to circuit_round
+    return {
+      roundNumber: i + 1,
+      template: {
+        type: 'circuit_round' as const,
+        exercisesPerRound: 6,
+        workDuration: 45,
+        restDuration: 15,
+      }
+    };
+  });
+
+  const handleRoundTypeChange = (roundNumber: number, type: 'circuit_round' | 'stations_round') => {
+    const newRoundTemplates = ensuredRoundTemplates.map(rt => {
+      if (rt.roundNumber === roundNumber) {
+        return {
+          ...rt,
+          template: {
+            type,
+            exercisesPerRound: rt.template.exercisesPerRound,
+            // For circuit_round, include work and rest durations
+            ...(type === 'circuit_round' ? {
+              workDuration: (rt.template as any).workDuration || 45,
+              restDuration: (rt.template as any).restDuration || 15,
+            } : {})
+          }
+        };
+      }
+      return rt;
+    });
+    
+    onRoundTemplatesChange(newRoundTemplates);
+  };
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h3 className="text-lg font-semibold mb-1">Round Types</h3>
+        <p className="text-sm text-muted-foreground mb-4">
+          Choose the type for each round
+        </p>
+      </div>
+
+      <div className="space-y-3">
+        {ensuredRoundTemplates.map((roundConfig) => (
+          <div 
+            key={roundConfig.roundNumber}
+            className="flex items-center justify-between p-4 rounded-lg bg-muted/50"
+          >
+            <span className="text-base font-medium">
+              Round {roundConfig.roundNumber}
+            </span>
+            
+            <select
+              value={roundConfig.template.type}
+              onChange={(e) => handleRoundTypeChange(roundConfig.roundNumber, e.target.value as any)}
+              disabled={isSaving}
+              className={cn(
+                "px-3 py-2 rounded-md border bg-background text-sm font-medium",
+                "focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent",
+                isSaving && "opacity-50 cursor-not-allowed"
+              )}
+            >
+              <option value="circuit_round">Circuit</option>
+              <option value="stations_round">Stations</option>
+            </select>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-6 p-4 rounded-lg bg-primary/10">
+        <p className="text-sm text-muted-foreground">
+          <strong>Circuit:</strong> Traditional work/rest intervals
+        </p>
+        <p className="text-sm text-muted-foreground mt-1">
+          <strong>Stations:</strong> Work at each station (coming soon)
+        </p>
       </div>
     </div>
   );

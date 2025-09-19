@@ -16,6 +16,11 @@ export interface CircuitRoundTemplate extends BaseRoundTemplate {
   restDuration: number;        // Rest duration between exercises in seconds
 }
 
+// Stations round - work at each station for a set duration
+export interface StationsRoundTemplate extends BaseRoundTemplate {
+  type: 'stations_round';
+}
+
 // Future round types (commented out for now)
 // export interface AMRAPRoundTemplate extends BaseRoundTemplate {
 //   type: 'amrap_round';
@@ -29,7 +34,7 @@ export interface CircuitRoundTemplate extends BaseRoundTemplate {
 // }
 
 // Union type for all round templates
-export type RoundTemplate = CircuitRoundTemplate; // | AMRAPRoundTemplate | EMOMRoundTemplate;
+export type RoundTemplate = CircuitRoundTemplate | StationsRoundTemplate; // | AMRAPRoundTemplate | EMOMRoundTemplate;
 
 // Round configuration with template
 export interface RoundConfig {

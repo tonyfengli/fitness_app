@@ -273,7 +273,7 @@ export default function CircuitTemplateView({
                   <ul className="mt-1 ml-4 space-y-1">
                     {circuitConfig.config.roundTemplates.map((roundConfig: any) => (
                       <li key={roundConfig.roundNumber} className="text-gray-600">
-                        • Round {roundConfig.roundNumber}: {roundConfig.template.type} ({roundConfig.template.exercisesPerRound} exercises, {roundConfig.template.workDuration}s work, {roundConfig.template.restDuration}s rest)
+                        • Round {roundConfig.roundNumber}: {roundConfig.template.type} ({roundConfig.template.exercisesPerRound} exercises{roundConfig.template.type === 'circuit_round' ? `, ${roundConfig.template.workDuration}s work, ${roundConfig.template.restDuration}s rest` : ''})
                       </li>
                     ))}
                   </ul>
