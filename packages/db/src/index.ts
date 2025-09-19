@@ -3,5 +3,6 @@ export { alias } from "drizzle-orm/pg-core";
 export { eq, and, or, desc, asc, sql } from "drizzle-orm";
 
 // Export types
-export type { CircuitConfig } from "./types/circuit-config";
-export { DEFAULT_CIRCUIT_CONFIG } from "./types/circuit-config";
+export type { CircuitConfig, LegacyCircuitConfig } from "./types/circuit-config";
+export { DEFAULT_CIRCUIT_CONFIG, createDefaultRoundTemplates, migrateToRoundTemplates } from "./types/circuit-config";
+export type { RoundTemplate, CircuitRoundTemplate, RoundConfig } from "./types/round-templates";

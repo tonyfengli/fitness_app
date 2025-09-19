@@ -13,7 +13,27 @@ const CIRCUIT_CONFIG_LIMITS = {
  * Zod schemas for circuit configuration validation
  */
 
-// Individual field schemas with constraints
+// Round template schemas
+export const CircuitRoundTemplateSchema = z.object({
+  type: z.literal('circuit_round'),
+  exercisesPerRound: z.number().int().min(CIRCUIT_CONFIG_LIMITS.exercisesPerRound.min).max(CIRCUIT_CONFIG_LIMITS.exercisesPerRound.max),
+  workDuration: z.number().int().min(CIRCUIT_CONFIG_LIMITS.workDuration.min).max(CIRCUIT_CONFIG_LIMITS.workDuration.max),
+  restDuration: z.number().int().min(CIRCUIT_CONFIG_LIMITS.restDuration.min).max(CIRCUIT_CONFIG_LIMITS.restDuration.max),
+});
+
+// Union for future round types
+export const RoundTemplateSchema = z.discriminatedUnion('type', [
+  CircuitRoundTemplateSchema,
+  // Future: AMRAPRoundTemplateSchema,
+  // Future: EMOMRoundTemplateSchema,
+]);
+
+export const RoundConfigSchema = z.object({
+  roundNumber: z.number().int().positive(),
+  template: RoundTemplateSchema,
+});
+
+// Individual field schemas with constraints (kept for backward compatibility)
 export const CircuitRoundsSchema = z
   .number()
   .int()
@@ -44,8 +64,28 @@ export const CircuitRestBetweenRoundsSchema = z
   .min(CIRCUIT_CONFIG_LIMITS.restBetweenRounds.min)
   .max(CIRCUIT_CONFIG_LIMITS.restBetweenRounds.max);
 
-// Complete circuit config schema
+// Complete circuit config schema with round templates
 export const CircuitConfigSchema = z.object({
+  type: z.literal('circuit'),
+  config: z.object({
+    rounds: CircuitRoundsSchema,
+    restBetweenRounds: CircuitRestBetweenRoundsSchema,
+    repeatRounds: z.boolean().optional().default(false),
+    roundTemplates: z.array(RoundConfigSchema),
+    // Spotify integration
+    spotifyDeviceId: z.string().optional(),
+    spotifyDeviceName: z.string().optional(),
+    // Legacy fields (optional for backward compatibility)
+    exercisesPerRound: CircuitExercisesSchema.optional(),
+    workDuration: CircuitWorkDurationSchema.optional(),
+    restDuration: CircuitRestDurationSchema.optional(),
+  }),
+  lastUpdated: z.string().optional(),
+  updatedBy: z.string().optional(),
+});
+
+// Legacy circuit config schema (for parsing old format)
+export const LegacyCircuitConfigSchema = z.object({
   type: z.literal('circuit'),
   config: z.object({
     rounds: CircuitRoundsSchema,
@@ -54,7 +94,6 @@ export const CircuitConfigSchema = z.object({
     restDuration: CircuitRestDurationSchema,
     restBetweenRounds: CircuitRestBetweenRoundsSchema,
     repeatRounds: z.boolean().optional().default(false),
-    // Spotify integration
     spotifyDeviceId: z.string().optional(),
     spotifyDeviceName: z.string().optional(),
   }),
