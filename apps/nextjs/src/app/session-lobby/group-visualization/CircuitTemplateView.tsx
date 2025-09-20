@@ -20,6 +20,7 @@ interface CircuitTemplateViewProps {
   sessionData?: any;
   isFromSavedData?: boolean;
   isSaving?: boolean;
+  circuitConfig?: any;
 }
 
 // Helper to format muscle names
@@ -39,8 +40,25 @@ export default function CircuitTemplateView({
   sessionData,
   isFromSavedData,
   isSaving,
+  circuitConfig,
 }: CircuitTemplateViewProps) {
   const [showRawData, setShowRawData] = useState(false);
+  
+  // Log circuit config for debugging
+  useEffect(() => {
+    console.log('[CircuitTemplateView] Circuit Config:', {
+      hasCircuitConfig: !!circuitConfig,
+      type: circuitConfig?.type,
+      rounds: circuitConfig?.config?.rounds,
+      hasRoundTemplates: !!circuitConfig?.config?.roundTemplates,
+      roundTemplatesCount: circuitConfig?.config?.roundTemplates?.length,
+      roundTemplates: circuitConfig?.config?.roundTemplates,
+      // Legacy fields
+      legacyExercisesPerRound: circuitConfig?.config?.exercisesPerRound,
+      legacyWorkDuration: circuitConfig?.config?.workDuration,
+      legacyRestDuration: circuitConfig?.config?.restDuration,
+    });
+  }, [circuitConfig]);
   
   // Get the circuit exercises block
   const circuitBlock = blueprint.blocks?.find(b => b.blockId === 'circuit_exercises');
@@ -234,6 +252,34 @@ export default function CircuitTemplateView({
                     ))}
                   </ul>
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Circuit Configuration */}
+        {circuitConfig && (
+          <div className="mb-6 rounded-lg border border-gray-200 bg-white p-4">
+            <h3 className="text-lg font-medium text-gray-900 mb-3">
+              Circuit Configuration
+            </h3>
+            <div className="space-y-2 text-sm">
+              <div>
+                <span className="font-medium text-gray-700">Total Rounds:</span> {circuitConfig.config?.rounds || 'N/A'}
+              </div>
+              <div>
+                <span className="font-medium text-gray-700">Round Templates:</span>
+                {circuitConfig.config?.roundTemplates ? (
+                  <ul className="mt-1 ml-4 space-y-1">
+                    {circuitConfig.config.roundTemplates.map((roundConfig: any) => (
+                      <li key={roundConfig.roundNumber} className="text-gray-600">
+                        • Round {roundConfig.roundNumber}: {roundConfig.template.type} ({roundConfig.template.exercisesPerRound} exercises{roundConfig.template.type === 'circuit_round' ? `, ${roundConfig.template.workDuration}s work, ${roundConfig.template.restDuration}s rest` : ''})
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <span className="ml-2 text-gray-500">No round templates defined</span>
+                )}
               </div>
             </div>
           </div>

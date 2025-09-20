@@ -531,7 +531,7 @@ export function SessionLobbyScreen() {
           <View className="flex-row items-center">
             <Text style={{ fontSize: 16, color: TOKENS.color.text }}>
               Text <Text style={{ fontWeight: '600', color: TOKENS.color.text }}>'here'</Text> to{' '}
-              <Text style={{ fontWeight: '600', color: TOKENS.color.text }}>562-608-1666</Text>
+              <Text style={{ fontWeight: '600', color: TOKENS.color.text }}>714-902-2495</Text>
             </Text>
             <Text className="text-base ml-2">🎉</Text>
           </View>

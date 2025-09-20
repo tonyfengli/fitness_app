@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { View, Text, Pressable, ActivityIndicator } from 'react-native';
 import { useNavigation } from '../App';
 import { useQuery } from '@tanstack/react-query';
@@ -19,9 +19,20 @@ import { getColorForPreset, getHuePresetForColor } from '../lib/lighting/colorMa
 import { LightingStatusDot } from '../components/LightingStatusDot';
 import { useSpotifySync } from '../hooks/useSpotifySync';
 import { playCountdownSound, setCountdownVolume } from '../lib/sound/countdown-sound';
+import type { CircuitConfig } from '@acme/db';
+import { 
+  CircuitRoundPreview, 
+  StationsRoundPreview,
+  AMRAPRoundPreview, 
+  CircuitExerciseView, 
+  StationsExerciseView,
+  AMRAPExerciseView,
+  StationsRestView,
+  WarmupCooldownExerciseView
+} from '../components/workout-round';
 
 // Design tokens
-const TOKENS = {
+export const TOKENS = {
   color: {
     bg: '#070b18',
     card: '#111928',
@@ -40,7 +51,7 @@ const TOKENS = {
 };
 
 // Matte panel helper component
-function MattePanel({
+export function MattePanel({
   children,
   style,
   focused = false,
@@ -82,6 +93,24 @@ function MattePanel({
       {children}
     </View>
   );
+}
+
+// Simple debounce utility
+function debounce<T extends (...args: any[]) => any>(
+  func: T,
+  delay: number
+): (...args: Parameters<T>) => void {
+  let timeoutId: NodeJS.Timeout | null = null;
+  
+  return (...args: Parameters<T>) => {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+    
+    timeoutId = setTimeout(() => {
+      func(...args);
+    }, delay);
+  };
 }
 
 interface CircuitExercise {
@@ -168,6 +197,90 @@ export function CircuitWorkoutLiveScreen() {
     }
   );
   
+  // Helper function to get round-specific timing
+  const getRoundTiming = useCallback((roundIndex: number) => {
+    if (!circuitConfig?.config) {
+      return {
+        workDuration: 45,
+        restDuration: 15,
+        roundType: 'circuit_round' as const
+      };
+    }
+    
+    const { roundTemplates, workDuration = 45, restDuration = 15 } = circuitConfig.config;
+    
+    // If no roundTemplates, use legacy timing
+    if (!roundTemplates || roundTemplates.length === 0) {
+      return {
+        workDuration,
+        restDuration,
+        roundType: 'circuit_round' as const
+      };
+    }
+    
+    // Find template for current round (roundTemplates are 1-indexed)
+    const roundTemplate = roundTemplates.find(rt => rt.roundNumber === roundIndex + 1);
+    
+    if (!roundTemplate) {
+      // Fallback to legacy timing
+      return {
+        workDuration,
+        restDuration,
+        roundType: 'circuit_round' as const
+      };
+    }
+    
+    // Return round-specific timing
+    const template = roundTemplate.template;
+    if (template.type === 'circuit_round') {
+      return {
+        workDuration: template.workDuration || workDuration,
+        restDuration: template.restDuration || restDuration,
+        roundType: 'circuit_round' as const
+      };
+    } else if (template.type === 'stations_round') {
+      // For stations, get timing from a circuit_round template
+      const circuitTemplate = roundTemplates.find(rt => rt.template.type === 'circuit_round');
+      if (circuitTemplate && circuitTemplate.template.type === 'circuit_round') {
+        return {
+          workDuration: circuitTemplate.template.workDuration,
+          restDuration: circuitTemplate.template.restDuration,
+          roundType: 'stations_round' as const
+        };
+      }
+      // Fallback to global timing
+      return {
+        workDuration: workDuration,
+        restDuration: restDuration,
+        roundType: 'stations_round' as const
+      };
+    } else if (template.type === 'amrap_round') {
+      // AMRAP uses a single long work duration (10 minutes = 600 seconds)
+      return {
+        workDuration: 600, // 10 minutes hardcoded for now
+        restDuration: 0,   // No rest in AMRAP
+        roundType: 'amrap_round' as const
+      };
+    } else if (template.type === 'warmup_cooldown_round') {
+      return {
+        workDuration: template.workDuration || workDuration,
+        restDuration: template.restDuration || restDuration,
+        roundType: 'warmup_cooldown_round' as const,
+        position: template.position
+      };
+    }
+    
+    // Default fallback
+    return {
+      workDuration,
+      restDuration,
+      roundType: 'circuit_round' as const
+    };
+  }, [circuitConfig]);
+  
+  // Get current round type
+  const currentRoundType = getRoundTiming(currentRoundIndex).roundType;
+  
   // Spotify integration with pre-selected device (auto-play disabled since music already playing from preferences screen)
   const { playTrackAtPosition, prefetchSetlistTracks, setlist, isConnected: spotifyConnectionState, refetchDevices } = useSpotifySync(sessionId, circuitConfig?.config?.spotifyDeviceId, { autoPlay: false });
   
@@ -248,8 +361,19 @@ export function CircuitWorkoutLiveScreen() {
         });
       
       setRoundsData(rounds);
+      
+      // Check if first round is warmup - if so, skip preview and go directly to exercise
+      if (rounds.length > 0 && circuitConfig?.config?.roundTemplates) {
+        const firstRoundTemplate = circuitConfig.config.roundTemplates.find(rt => rt.roundNumber === 1);
+        if (firstRoundTemplate?.template.type === 'warmup_cooldown_round') {
+          // Skip preview for warmup/cooldown rounds
+          setCurrentScreen('exercise');
+          const timing = getRoundTiming(0);
+          setTimeRemaining(timing.workDuration);
+        }
+      }
     }
-  }, [selections]);
+  }, [selections, circuitConfig, getRoundTiming]);
 
   // Start health check on mount and cleanup on unmount
   useEffect(() => {
@@ -330,9 +454,19 @@ export function CircuitWorkoutLiveScreen() {
           // Use ref values to avoid dependencies
           const { currentScreen: screen, currentRoundIndex: roundIdx, currentExerciseIndex: exerciseIdx } = timerStateRef.current;
           
-          // Play countdown sound for rest periods when 3 seconds remain (but not round previews)
-          if (screen === 'rest' && prev === 4) {
-            // Play at 4 seconds so it starts right when display shows 3
+          // Play countdown sound for rest periods when about to show 3 seconds
+          if (screen === 'rest' && prev === 5) {
+            // Trigger at 5 but play 250ms before 3 appears
+            setTimeout(() => {
+              playCountdownSound().catch(error => {
+                console.error('[CircuitWorkoutLive] Failed to play countdown sound:', error);
+              });
+            }, 750); // Play 250ms before the display changes to 3
+          }
+          
+          // Play countdown sound for round 2+ previews at 0:03
+          if (screen === 'round-preview' && roundIdx > 0 && prev === 4) {
+            // Play immediately when timer shows 3
             playCountdownSound().catch(error => {
               console.error('[CircuitWorkoutLive] Failed to play countdown sound:', error);
             });
@@ -400,7 +534,18 @@ export function CircuitWorkoutLiveScreen() {
           
           const { currentScreen: screen, currentRoundIndex: roundIdx } = timerStateRef.current;
           
-          if (screen === 'rest' && prev === 4) {
+          if (screen === 'rest' && prev === 5) {
+            // Trigger at 5 but play 50ms before 3 appears
+            setTimeout(() => {
+              playCountdownSound().catch(error => {
+                console.error('[CircuitWorkoutLive] Failed to play countdown sound:', error);
+              });
+            }, 950); // Play 50ms before the display changes to 3
+          }
+          
+          // Play countdown sound for round 2+ previews at 0:03 (pause/resume effect)
+          if (screen === 'round-preview' && roundIdx > 0 && prev === 4) {
+            // Play immediately when timer shows 3
             playCountdownSound().catch(error => {
               console.error('[CircuitWorkoutLive] Failed to play countdown sound:', error);
             });
@@ -445,7 +590,7 @@ export function CircuitWorkoutLiveScreen() {
   const handleTimerComplete = useCallback(() => {
     // Auto-advance to next screen (not a manual skip)
     handleNext(false);
-  }, [handleNext]);
+  }, []);
 
   // Start countdown for Round 1 only
   const startCountdownRound1 = useCallback(() => {
@@ -483,20 +628,22 @@ export function CircuitWorkoutLiveScreen() {
           }
           setShowCountdown(false);
           setCurrentScreen('exercise');
-          startTimer(circuitConfig?.config?.workDuration || 45);
+          const { workDuration } = getRoundTiming(0); // Round 1 countdown
+          startTimer(workDuration);
           return 5; // Reset for next time
         }
         if (prev === 1) {
           return 'GO!';
         }
         
-        // Play countdown sound at 3
-        if (prev === 4) {
+        // Play countdown sound when about to show 3
+        if (prev === 5) {
+          // Trigger at 4, play 50ms before 3 appears
           setTimeout(() => {
             playCountdownSound().catch(error => {
               console.error('[CircuitWorkoutLive] Failed to play countdown sound:', error);
             });
-          }, 750);
+          }, 950); // Play 50ms before the display changes to 3
         }
         
         return typeof prev === 'number' ? prev - 1 : 5;
@@ -550,6 +697,17 @@ export function CircuitWorkoutLiveScreen() {
       });
     }
     
+    // Check if this is an AMRAP round
+    const { roundType, workDuration } = getRoundTiming(roundIdx);
+    
+    if (roundType === 'amrap_round') {
+      // For AMRAP, just start the single long work timer
+      setCurrentScreen('exercise');
+      startTimer(workDuration);
+      return;
+    }
+    
+    // For Circuit/Stations rounds
     // For Round 1, use countdown instead
     if (roundIdx === 0) {
       startCountdownRound1();
@@ -560,8 +718,8 @@ export function CircuitWorkoutLiveScreen() {
     // Just start the exercise
     console.log('[MUSIC-DEBUG] Starting exercise (music already playing from 0:06)');
     setCurrentScreen('exercise');
-    startTimer(circuitConfig?.config?.workDuration || 45);
-  }, [circuitConfig, startCountdownRound1]);
+    startTimer(workDuration);
+  }, [getRoundTiming, startCountdownRound1]);
 
   const startTimer = (duration: number) => {
     console.log('[TIMER-DEBUG] startTimer called', {
@@ -642,38 +800,25 @@ export function CircuitWorkoutLiveScreen() {
         
         // Start the exercise
         setCurrentScreen('exercise');
-        startTimer(circuitConfig?.config?.workDuration || 45);
+        const { workDuration } = getRoundTiming(roundIdx);
+        startTimer(workDuration);
       } else {
         // Round 1 or natural timer progression - use the normal flow
         startFirstExercise();
       }
     } else if (screen === 'exercise') {
-      // Check if this is the last exercise in the round
-      if (exerciseIdx === currentRound.exercises.length - 1) {
-        // Last exercise of the round - play REST track
-        const currentRoundMusic = currentSetlist?.rounds?.[roundIdx];
-        if (currentRoundMusic && playTrack) {
-          const restTrack = currentRoundMusic.track3;
-          if (restTrack) {
-            console.log('[UNMOUNT-DEBUG] Playing REST track at round end', {
-              round: roundIdx + 1,
-              track: restTrack.spotifyId,
-              trackName: restTrack.trackName,
-              timestamp: new Date().toISOString()
-            });
-            playTrack(restTrack.spotifyId, 0);
-          } else {
-            console.warn('[UNMOUNT-DEBUG] No REST track available for round', roundIdx + 1);
-          }
-        }
-        
+      const currentRoundType = getRoundTiming(roundIdx).roundType;
+      
+      if (currentRoundType === 'amrap_round') {
+        // For AMRAP, when timer completes, go directly to next round or finish
         if (roundIdx < rounds.length - 1) {
           setCurrentRoundIndex(roundIdx + 1);
           setCurrentExerciseIndex(0);
           setCurrentScreen('round-preview');
-          startTimer(circuitConfig?.config?.restBetweenRounds || 60);
+          const restBetweenRounds = circuitConfig?.config?.restBetweenRounds || 60;
+          startTimer(restBetweenRounds);
         } else {
-          // Workout complete - apply App Start color
+          // Workout complete
           getColorForPreset('app_start').then(color => {
             const preset = getHuePresetForColor(color);
             setHueLights(preset);
@@ -681,16 +826,63 @@ export function CircuitWorkoutLiveScreen() {
           });
         }
       } else {
-        // Not the last exercise - go to rest
-        setCurrentScreen('rest');
-        startTimer(circuitConfig?.config?.restDuration || 15);
+        // Circuit, Stations, or Warmup/Cooldown round - normal exercise progression
+        // Check if this is the last exercise in the round
+        if (exerciseIdx === currentRound.exercises.length - 1) {
+          // Last exercise of the round - play REST track
+          const currentRoundMusic = currentSetlist?.rounds?.[roundIdx];
+          if (currentRoundMusic && playTrack) {
+            const restTrack = currentRoundMusic.track3;
+            if (restTrack) {
+              console.log('[UNMOUNT-DEBUG] Playing REST track at round end', {
+                round: roundIdx + 1,
+                track: restTrack.spotifyId,
+                trackName: restTrack.trackName,
+                timestamp: new Date().toISOString()
+              });
+              playTrack(restTrack.spotifyId, 0);
+            } else {
+              console.warn('[UNMOUNT-DEBUG] No REST track available for round', roundIdx + 1);
+            }
+          }
+          
+          if (roundIdx < rounds.length - 1) {
+            setCurrentRoundIndex(roundIdx + 1);
+            setCurrentExerciseIndex(0);
+            
+            // Check if next round is warmup/cooldown - skip preview if so
+            const nextRoundTiming = getRoundTiming(roundIdx + 1);
+            if (nextRoundTiming.roundType === 'warmup_cooldown_round') {
+              setCurrentScreen('exercise');
+              startTimer(nextRoundTiming.workDuration);
+            } else {
+              setCurrentScreen('round-preview');
+              // Use round-specific rest between rounds if available, otherwise default
+              const restBetweenRounds = circuitConfig?.config?.restBetweenRounds || 60;
+              startTimer(restBetweenRounds);
+            }
+          } else {
+            // Workout complete - apply App Start color
+            getColorForPreset('app_start').then(color => {
+              const preset = getHuePresetForColor(color);
+              setHueLights(preset);
+              navigation.goBack();
+            });
+          }
+        } else {
+          // Not the last exercise - go to rest
+          setCurrentScreen('rest');
+          const { restDuration } = getRoundTiming(roundIdx);
+          startTimer(restDuration);
+        }
       }
     } else if (screen === 'rest') {
       // Rest screen always leads to the next exercise
       const nextExerciseIndex = exerciseIdx + 1;
       setCurrentExerciseIndex(nextExerciseIndex);
       setCurrentScreen('exercise');
-      startTimer(circuitConfig?.config?.workDuration || 45);
+      const { workDuration } = getRoundTiming(roundIdx);
+      startTimer(workDuration);
       
       // Play BRIDGE track at start of exercise 2
       if (nextExerciseIndex === 1) { // Exercise 2 (0-indexed)
@@ -705,7 +897,7 @@ export function CircuitWorkoutLiveScreen() {
     }
   }, []); // No dependencies - function is stable and uses ref values
 
-  const handleBack = () => {
+  const handleBack = useCallback(() => {
     // Reset lighting event to force re-application when navigating
     setLastLightingEvent('');
     
@@ -716,7 +908,8 @@ export function CircuitWorkoutLiveScreen() {
         const prevRound = roundsData[currentRoundIndex - 1];
         setCurrentExerciseIndex(prevRound.exercises.length - 1);
         setCurrentScreen('rest');
-        startTimer(circuitConfig?.config?.restDuration || 15);
+        const { restDuration } = getRoundTiming(currentRoundIndex - 1);
+        startTimer(restDuration);
       }
     } else if (currentScreen === 'exercise') {
       if (currentExerciseIndex === 0) {
@@ -724,7 +917,8 @@ export function CircuitWorkoutLiveScreen() {
         setCurrentScreen('round-preview');
         // No timer for first round, otherwise use rest between rounds
         if (currentRoundIndex > 0) {
-          startTimer(circuitConfig?.config?.restBetweenRounds || 60);
+          const restBetweenRounds = circuitConfig?.config?.restBetweenRounds || 60;
+          startTimer(restBetweenRounds);
         } else {
           setTimeRemaining(0);
         }
@@ -732,19 +926,32 @@ export function CircuitWorkoutLiveScreen() {
         // Go to previous rest
         setCurrentExerciseIndex(currentExerciseIndex - 1);
         setCurrentScreen('rest');
-        startTimer(circuitConfig?.config?.restDuration || 15);
+        const { restDuration } = getRoundTiming(currentRoundIndex);
+        startTimer(restDuration);
       }
     } else if (currentScreen === 'rest') {
       // Go back to current exercise
       setCurrentScreen('exercise');
-      startTimer(circuitConfig?.config?.workDuration || 45);
+      const { workDuration } = getRoundTiming(currentRoundIndex);
+      startTimer(workDuration);
     }
-  };
+  }, [currentScreen, currentRoundIndex, currentExerciseIndex, roundsData, circuitConfig, getRoundTiming, startTimer]);
 
   const handleStartRound = () => {
     // For round 1, start countdown with music
     startCountdownRound1();
   };
+
+  // Create debounced versions of navigation functions to prevent rapid clicks
+  const debouncedHandleNext = useMemo(
+    () => debounce(handleNext, 300),
+    [handleNext]
+  );
+
+  const debouncedHandleBack = useMemo(
+    () => debounce(handleBack, 300),
+    [handleBack]
+  );
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -776,17 +983,77 @@ export function CircuitWorkoutLiveScreen() {
         paddingBottom: 20
       }}>
         {!(currentScreen === 'round-preview' && currentRoundIndex === 0) ? (
-          <Text style={{ 
-            fontSize: 40, 
-            fontWeight: '900', 
-            color: currentScreen === 'round-preview' && currentRoundIndex > 0 && timeRemaining > 0 ? TOKENS.color.muted : TOKENS.color.text,
-            letterSpacing: 0.5,
-            textTransform: 'uppercase'
-          }}>
-            {currentScreen === 'round-preview' && currentRoundIndex > 0 && timeRemaining > 0 
-              ? formatTime(timeRemaining)
-              : currentRound?.roundName || `Round ${currentRoundIndex + 1}`}
-          </Text>
+          <View>
+            <Text style={{ 
+              fontSize: 40, 
+              fontWeight: '900', 
+              color: currentScreen === 'round-preview' && currentRoundIndex > 0 && timeRemaining > 0 ? TOKENS.color.muted : TOKENS.color.text,
+              letterSpacing: 0.5,
+              textTransform: 'uppercase'
+            }}>
+              {currentScreen === 'round-preview' && currentRoundIndex > 0 && timeRemaining > 0 
+                ? formatTime(timeRemaining)
+                : currentRound?.roundName || `Round ${currentRoundIndex + 1}`}
+            </Text>
+            {currentRoundType === 'stations_round' && currentRound && (
+              <View style={{ 
+                height: 24, 
+                marginTop: 8,
+                justifyContent: 'center',
+              }}>
+                {currentScreen === 'exercise' ? (
+                  <View style={{ 
+                    flexDirection: 'row', 
+                    alignItems: 'center', 
+                    gap: 12, 
+                  }}>
+                    <View style={{ 
+                      flexDirection: 'row', 
+                      alignItems: 'center', 
+                      gap: 6, 
+                    }}>
+                      {currentRound.exercises.map((_, index) => (
+                        <View
+                          key={index}
+                          style={{
+                            width: index === currentExerciseIndex ? 8 : 6,
+                            height: index === currentExerciseIndex ? 8 : 6,
+                            borderRadius: 4,
+                            backgroundColor: index === currentExerciseIndex 
+                              ? TOKENS.color.accent
+                              : index < currentExerciseIndex 
+                                ? 'rgba(156, 176, 255, 0.6)' // completed
+                                : 'rgba(156, 176, 255, 0.25)', // future
+                            transform: index === currentExerciseIndex ? [{ scale: 1.2 }] : [],
+                          }}
+                        />
+                      ))}
+                    </View>
+                    <Text style={{
+                      fontSize: 14,
+                      fontWeight: '600',
+                      color: TOKENS.color.accent,
+                      fontStyle: 'italic',
+                      letterSpacing: 0.5,
+                    }}>
+                      Let's Go!
+                    </Text>
+                  </View>
+                ) : currentScreen === 'rest' ? (
+                  <Text style={{
+                    fontSize: 16,
+                    fontWeight: '700',
+                    color: TOKENS.color.muted,
+                    opacity: 0.8,
+                    textTransform: 'uppercase',
+                    letterSpacing: 1.2,
+                  }}>
+                    Switch Stations
+                  </Text>
+                ) : null}
+              </View>
+            )}
+          </View>
         ) : (
           <Pressable
             onPress={async () => {
@@ -817,8 +1084,38 @@ export function CircuitWorkoutLiveScreen() {
           </Pressable>
         )}
         
-        {currentScreen === 'exercise' ? (
-          null  // No centered header text for exercise screen
+        {(currentScreen === 'exercise' || currentScreen === 'rest') && currentRoundType === 'stations_round' ? (
+          // Timer for stations exercise and rest
+          <Text style={{ 
+            fontSize: 120, 
+            fontWeight: '900', 
+            color: TOKENS.color.accent,
+            letterSpacing: -2,
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            textAlign: 'center',
+            pointerEvents: 'none'
+          }}>
+            {formatTime(timeRemaining)}
+          </Text>
+        ) : currentScreen === 'exercise' && currentRoundType === 'amrap_round' ? (
+          // Timer for AMRAP exercise
+          <Text style={{ 
+            fontSize: 120, 
+            fontWeight: '900', 
+            color: TOKENS.color.accent,
+            letterSpacing: -2,
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            textAlign: 'center',
+            pointerEvents: 'none'
+          }}>
+            {formatTime(timeRemaining)}
+          </Text>
+        ) : currentScreen === 'exercise' ? (
+          null  // No centered header text for circuit exercise screen
         ) : currentScreen === 'rest' ? (
           null  // No centered header text for rest screen
         ) : currentScreen === 'round-preview' ? (
@@ -837,6 +1134,7 @@ export function CircuitWorkoutLiveScreen() {
             {currentRound?.roundName || `Round ${currentRoundIndex + 1}`}
           </Text>
         ) : null}
+        
         
         {currentScreen === 'round-preview' && currentRoundIndex === 0 && timeRemaining === 0 ? (
           <Pressable
@@ -862,7 +1160,7 @@ export function CircuitWorkoutLiveScreen() {
         ) : (
           <View style={{ flexDirection: 'row', gap: 16 }}>
             <Pressable
-              onPress={handleBack}
+              onPress={debouncedHandleBack}
               focusable
               disabled={currentRoundIndex === 0 && currentScreen === 'round-preview'}
             >
@@ -918,7 +1216,7 @@ export function CircuitWorkoutLiveScreen() {
             </Pressable>
             
             <Pressable
-              onPress={handleNext}
+              onPress={debouncedHandleNext}
               focusable
             >
               {({ focused }) => (
@@ -950,184 +1248,92 @@ export function CircuitWorkoutLiveScreen() {
 
       {/* Main content */}
       <View style={{ flex: 1, paddingHorizontal: 48, paddingBottom: 48 }}>
-        {currentScreen === 'round-preview' && currentRound && (() => {
-            // Calculate grid layout based on number of exercises
-            const exerciseCount = currentRound.exercises.length;
-            let columns = 4; // Default to 4 columns
-            
-            if (exerciseCount <= 2) {
-              columns = exerciseCount; // 1-2 exercises: show in single row
-            } else if (exerciseCount === 3) {
-              columns = 2; // 3 exercises: 2 on top, 1 on bottom
-            } else if (exerciseCount === 6) {
-              columns = 3; // 6 exercises: 3x2 grid
-            } else if (exerciseCount === 5) {
-              columns = 3; // 5 exercises: 3 on top, 2 on bottom
-            } else if (exerciseCount === 7) {
-              columns = 4; // 7 exercises: 4 on top, 3 on bottom
-            } else if (exerciseCount === 8) {
-              columns = 4; // 8 exercises: 4x2 grid
-            }
-            
-            // Calculate rows to determine if we need to scale down
-            const rows = Math.ceil(exerciseCount / columns);
-            const needsScaling = rows > 1; // Scale for ANY multi-row layout
-            
-            return (
-              <View style={{ flex: 1, width: '100%' }}>
-                {/* Exercise Grid */}
-                <View style={{ 
-                  flex: 1, 
-                  justifyContent: 'center',
-                  paddingTop: needsScaling ? 60 : 0, // Add padding when more than 1 row
-                }}>
-                  <View style={{ 
-                    flexDirection: 'row',
-                    flexWrap: 'wrap',
-                    justifyContent: 'center',
-                    marginHorizontal: -10,
-                  }}>
-                    {currentRound.exercises.map((exercise, idx) => {
-                    
-                    // Fixed width for cards - scale down by 5% if more than 1 row
-                    const baseCardWidth = 380;
-                    const cardWidth = needsScaling ? baseCardWidth * 0.95 : baseCardWidth;
-                    
-                    // Adjust vertical padding when scaled
-                    const verticalPadding = needsScaling ? 8 : 10;
-                    
-                    return (
-                      <View key={exercise.id} style={{ 
-                        width: cardWidth,
-                        paddingHorizontal: 10,
-                        paddingVertical: verticalPadding,
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                      }}>
-                        {/* Number outside the card */}
-                        <Text style={{ 
-                          fontSize: needsScaling ? 46 : 48, 
-                          fontWeight: '900',
-                          color: TOKENS.color.muted,
-                          marginRight: needsScaling ? 14 : 16,
-                          opacity: 0.3,
-                          minWidth: needsScaling ? 57 : 60,
-                          textAlign: 'right'
-                        }}>
-                          {idx + 1}
-                        </Text>
-                        
-                        <MattePanel style={{ 
-                          flex: 1,
-                          paddingHorizontal: needsScaling ? 22 : 24,
-                          paddingVertical: needsScaling ? 18 : 20,
-                          height: needsScaling ? 114 : 120,
-                          justifyContent: 'center',
-                        }}>
-                          {/* Exercise Name */}
-                          <Text style={{ 
-                            fontSize: needsScaling ? 22 : 24, 
-                            fontWeight: '900',
-                            color: TOKENS.color.text,
-                            lineHeight: needsScaling ? 26 : 28,
-                            marginBottom: 4,
-                            minHeight: needsScaling ? 26 : 28, // Ensures at least one line height
-                          }} numberOfLines={2}>
-                            {exercise.exerciseName}
-                          </Text>
-                          
-                          {/* Equipment or default text */}
-                          <Text style={{ 
-                            fontSize: needsScaling ? 15 : 16, 
-                            fontWeight: '600',
-                            color: '#9ca3af',
-                          }}>
-                            {Array.isArray(exercise.equipment) && exercise.equipment.length > 0
-                              ? exercise.equipment.join(', ') 
-                              : 'bodyweight'}
-                          </Text>
-                        </MattePanel>
-                      </View>
-                    );
-                  })}
-                </View>
-              </View>
-
-              {/* Timer now shown in header for round 2+ previews */}
-            </View>
-            );
-          })()}
-
-        {currentScreen === 'exercise' && currentExercise && (
-          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingBottom: 60 }}>
-            {/* Main Timer - Primary Focus */}
-            <Text style={{ 
-              fontSize: 180, 
-              fontWeight: '900', 
-              color: TOKENS.color.accent,
-              marginBottom: 40,
-              letterSpacing: -2
-            }}>
-              {formatTime(timeRemaining)}
-            </Text>
-            
-            {/* Exercise Name - Secondary Focus */}
-            <Text style={{ 
-              fontSize: 48, 
-              fontWeight: '700', 
-              color: TOKENS.color.text, 
-              marginBottom: 12,
-              textAlign: 'center'
-            }} numberOfLines={1}>
-              {currentExercise.exerciseName}
-            </Text>
-            
-            {/* Progress Indicator - Tertiary */}
-            <Text style={{ 
-              fontSize: 20, 
-              fontWeight: '500',
-              color: TOKENS.color.muted,
-              opacity: 0.7
-            }}>
-              Exercise {currentExerciseIndex + 1} of {currentRound?.exercises.length}
-            </Text>
-          </View>
+        {currentScreen === 'round-preview' && currentRound && (
+          currentRoundType === 'stations_round' 
+            ? <StationsRoundPreview currentRound={currentRound} />
+            : currentRoundType === 'amrap_round'
+            ? <AMRAPRoundPreview currentRound={currentRound} />
+            : <CircuitRoundPreview currentRound={currentRound} />
         )}
 
-        {currentScreen === 'rest' && (
-          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingBottom: 60 }}>
-            {/* Main Timer - Primary Focus */}
-            <Text style={{ 
-              fontSize: 180, 
-              fontWeight: '900', 
-              color: TOKENS.color.accent,
-              marginBottom: 40,
-              letterSpacing: -2
-            }}>
-              {formatTime(timeRemaining)}
-            </Text>
-            
-            {/* Rest Label - Secondary Focus */}
-            <Text style={{ 
-              fontSize: 48, 
-              fontWeight: '700', 
-              color: TOKENS.color.text, 
-              marginBottom: 12,
-              textAlign: 'center'
-            }}>
-              Rest
-            </Text>
-            
-            {/* Next Exercise - Tertiary */}
-            <Text style={{ 
-              fontSize: 20, 
-              fontWeight: '500',
-              color: TOKENS.color.muted,
-              opacity: 0.7
-            }}>
-              Next up: {currentRound?.exercises[currentExerciseIndex + 1]?.exerciseName || 'Complete'}
-            </Text>
-          </View>
+        {currentScreen === 'exercise' && currentExercise && currentRound && (
+          currentRoundType === 'stations_round' 
+            ? <StationsExerciseView 
+                currentRound={currentRound}
+                currentExercise={currentExercise}
+                currentExerciseIndex={currentExerciseIndex}
+                timeRemaining={timeRemaining}
+                isPaused={isPaused}
+              />
+            : currentRoundType === 'amrap_round'
+            ? <AMRAPExerciseView 
+                currentRound={currentRound}
+                currentExercise={currentExercise}
+                currentExerciseIndex={currentExerciseIndex}
+                timeRemaining={timeRemaining}
+                isPaused={isPaused}
+              />
+            : currentRoundType === 'warmup_cooldown_round'
+            ? <WarmupCooldownExerciseView 
+                currentRound={currentRound as any}
+                currentExercise={currentExercise}
+                currentExerciseIndex={currentExerciseIndex}
+                timeRemaining={timeRemaining}
+                isPaused={isPaused}
+              />
+            : <CircuitExerciseView 
+                currentRound={currentRound}
+                currentExercise={currentExercise}
+                currentExerciseIndex={currentExerciseIndex}
+                timeRemaining={timeRemaining}
+                isPaused={isPaused}
+              />
+        )}
+
+        {currentScreen === 'rest' && currentRound && (
+          currentRoundType === 'stations_round' 
+            ? <StationsRestView 
+                currentRound={currentRound}
+                currentExerciseIndex={currentExerciseIndex}
+                timeRemaining={timeRemaining}
+                isPaused={isPaused}
+              />
+            : (
+              <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingBottom: 60 }}>
+                {/* Main Timer - Primary Focus */}
+                <Text style={{ 
+                  fontSize: 180, 
+                  fontWeight: '900', 
+                  color: TOKENS.color.accent,
+                  marginBottom: 40,
+                  letterSpacing: -2
+                }}>
+                  {formatTime(timeRemaining)}
+                </Text>
+                
+                {/* Rest Label - Secondary Focus */}
+                <Text style={{ 
+                  fontSize: 48, 
+                  fontWeight: '700', 
+                  color: TOKENS.color.text, 
+                  marginBottom: 12,
+                  textAlign: 'center'
+                }}>
+                  Rest
+                </Text>
+                
+                {/* Next Exercise - Tertiary */}
+                <Text style={{ 
+                  fontSize: 20, 
+                  fontWeight: '500',
+                  color: TOKENS.color.muted,
+                  opacity: 0.7
+                }}>
+                  Next up: {currentRound?.exercises[currentExerciseIndex + 1]?.exerciseName || 'Complete'}
+                </Text>
+                
+              </View>
+            )
         )}
       </View>
       

@@ -2,7 +2,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { eq, and } from "@acme/db";
 import { TrainingSession } from "@acme/db/schema";
-import { DEFAULT_CIRCUIT_CONFIG } from "@acme/db";
+import { DEFAULT_CIRCUIT_CONFIG, createDefaultRoundTemplates, migrateToRoundTemplates } from "@acme/db";
 import {
   CircuitConfigInputSchema,
   UpdateCircuitConfigSchema,
@@ -11,6 +11,33 @@ import {
 
 import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
 import { getSessionUserWithBusiness } from "../utils/session";
+
+// Helper to ensure round templates exist in config
+function ensureRoundTemplates(config: any) {
+  // If roundTemplates already exist, return as-is
+  if (config.config?.roundTemplates?.length > 0) {
+    return config;
+  }
+  
+  // Otherwise create round templates from legacy fields
+  const rounds = config.config?.rounds || 3;
+  const exercisesPerRound = config.config?.exercisesPerRound || 6;
+  const workDuration = config.config?.workDuration || 45;
+  const restDuration = config.config?.restDuration || 15;
+  
+  return {
+    ...config,
+    config: {
+      ...config.config,
+      roundTemplates: createDefaultRoundTemplates(
+        rounds,
+        exercisesPerRound,
+        workDuration,
+        restDuration
+      ),
+    },
+  };
+}
 
 export const circuitConfigRouter = createTRPCRouter({
   /**
@@ -41,7 +68,7 @@ export const circuitConfigRouter = createTRPCRouter({
         "type" in session.templateConfig &&
         session.templateConfig.type === "circuit"
       ) {
-        return session.templateConfig;
+        return ensureRoundTemplates(session.templateConfig);
       }
 
       // Return default config for circuit sessions without config
@@ -110,13 +137,22 @@ export const circuitConfigRouter = createTRPCRouter({
         config: {
           ...existingConfig.config,
           ...input.config,
+          // Ensure legacy fields are preserved when updating roundTemplates
+          ...(input.config.roundTemplates ? {
+            workDuration: existingConfig.config.workDuration || 45,
+            restDuration: existingConfig.config.restDuration || 15,
+            exercisesPerRound: existingConfig.config.exercisesPerRound || 6,
+          } : {}),
         },
         lastUpdated: new Date().toISOString(),
         updatedBy: user.id,
       };
 
+      // Ensure round templates exist
+      const configWithRoundTemplates = ensureRoundTemplates(updatedConfig);
+
       // Validate the complete config
-      const validatedConfig = CircuitConfigSchema.parse(updatedConfig);
+      const validatedConfig = CircuitConfigSchema.parse(configWithRoundTemplates);
 
       // Update the session
       await ctx.db
@@ -224,7 +260,7 @@ export const circuitConfigRouter = createTRPCRouter({
         "type" in session.templateConfig &&
         session.templateConfig.type === "circuit"
       ) {
-        return session.templateConfig;
+        return ensureRoundTemplates(session.templateConfig);
       }
 
       return DEFAULT_CIRCUIT_CONFIG;
@@ -276,6 +312,12 @@ export const circuitConfigRouter = createTRPCRouter({
         config: {
           ...existingConfig.config,
           ...input.config,
+          // Ensure legacy fields are preserved when updating roundTemplates
+          ...(input.config.roundTemplates ? {
+            workDuration: existingConfig.config.workDuration || 45,
+            restDuration: existingConfig.config.restDuration || 15,
+            exercisesPerRound: existingConfig.config.exercisesPerRound || 6,
+          } : {}),
         },
         lastUpdated: new Date().toISOString(),
         updatedBy: "anonymous", // Since it's public
@@ -283,10 +325,20 @@ export const circuitConfigRouter = createTRPCRouter({
       
       console.log('[CircuitConfig API] Updated config before validation:', JSON.stringify(updatedConfig, null, 2));
 
-      // Validate the complete config
-      const validatedConfig = CircuitConfigSchema.parse(updatedConfig);
+      // Ensure round templates exist
+      const configWithRoundTemplates = ensureRoundTemplates(updatedConfig);
       
-      console.log('[CircuitConfig API] Validated config:', JSON.stringify(validatedConfig, null, 2));
+      console.log('[CircuitConfig API] Config after ensureRoundTemplates:', JSON.stringify(configWithRoundTemplates, null, 2));
+
+      // Validate the complete config
+      let validatedConfig;
+      try {
+        validatedConfig = CircuitConfigSchema.parse(configWithRoundTemplates);
+        console.log('[CircuitConfig API] Validated config:', JSON.stringify(validatedConfig, null, 2));
+      } catch (error) {
+        console.error('[CircuitConfig API] Validation error:', error);
+        throw error;
+      }
 
       // Update the session
       await ctx.db

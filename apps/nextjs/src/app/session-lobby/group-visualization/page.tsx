@@ -803,6 +803,7 @@ function GroupVisualizationPageContent() {
         sessionData={sessionData}
         isFromSavedData={!!savedDataQuery.data}
         isSaving={saveVisualizationMutation.isPending}
+        circuitConfig={sessionData?.templateConfig}
       />
     );
   }
