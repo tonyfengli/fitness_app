@@ -150,6 +150,17 @@ export function calculateCircuitTiming(
       
       // Update totals (all work, no rest within round)
       totalWorkTimeMs += exerciseDurationMs;
+    } else if (template.type === 'warmup_cooldown_round') {
+      // Warmup/Cooldown uses work/rest intervals
+      const workDurationMs = template.workDuration * 1000;
+      const restDurationMs = template.restDuration * 1000;
+      exerciseDurationMs = 
+        (template.exercisesPerRound * workDurationMs) + 
+        ((template.exercisesPerRound - 1) * restDurationMs);
+      
+      // Update totals
+      totalWorkTimeMs += template.exercisesPerRound * workDurationMs;
+      totalRestTimeMs += (template.exercisesPerRound - 1) * restDurationMs;
     }
     
     const totalRoundDurationMs = countdownDurationMs + exerciseDurationMs;

@@ -115,8 +115,8 @@ export class CircuitSetlistService {
     // Track 2: Bridge at start of exercise 2
     // After countdown (6s) + exercise 1 (workDuration) + rest between exercises (restDuration)
     const track2TriggerMs = roundTiming.workStartMs + 
-      (circuitConfig.workDuration * 1000) + 
-      (circuitConfig.restDuration * 1000);
+      ((circuitConfig.workDuration || 45) * 1000) + 
+      ((circuitConfig.restDuration || 15) * 1000);
     
     // Track 3: Rest at round end (when last exercise finishes)
     const track3TriggerMs = roundTiming.endTimeMs;

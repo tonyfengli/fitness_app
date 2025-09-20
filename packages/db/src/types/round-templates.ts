@@ -26,6 +26,14 @@ export interface AMRAPRoundTemplate extends BaseRoundTemplate {
   type: 'amrap_round';
 }
 
+// Warmup/Cooldown round - Simple timed exercises
+export interface WarmupCooldownRoundTemplate extends BaseRoundTemplate {
+  type: 'warmup_cooldown_round';
+  position: 'warmup' | 'cooldown';
+  workDuration: number;        // Work duration in seconds
+  restDuration: number;        // Rest duration between exercises in seconds
+}
+
 // Future round types (commented out for now)
 // export interface EMOMRoundTemplate extends BaseRoundTemplate {
 //   type: 'emom_round';
@@ -34,7 +42,7 @@ export interface AMRAPRoundTemplate extends BaseRoundTemplate {
 // }
 
 // Union type for all round templates
-export type RoundTemplate = CircuitRoundTemplate | StationsRoundTemplate | AMRAPRoundTemplate; // | EMOMRoundTemplate;
+export type RoundTemplate = CircuitRoundTemplate | StationsRoundTemplate | AMRAPRoundTemplate | WarmupCooldownRoundTemplate; // | EMOMRoundTemplate;
 
 // Round configuration with template
 export interface RoundConfig {

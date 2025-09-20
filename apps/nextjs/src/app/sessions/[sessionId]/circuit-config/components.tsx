@@ -121,7 +121,7 @@ export function RoundTypesStep({
     };
   });
 
-  const handleRoundTypeChange = (roundNumber: number, type: 'circuit_round' | 'stations_round' | 'amrap_round') => {
+  const handleRoundTypeChange = (roundNumber: number, type: 'circuit_round' | 'stations_round' | 'amrap_round' | 'warmup_cooldown_round') => {
     const newRoundTemplates = ensuredRoundTemplates.map(rt => {
       if (rt.roundNumber === roundNumber) {
         return {
@@ -129,10 +129,14 @@ export function RoundTypesStep({
           template: {
             type,
             exercisesPerRound: rt.template.exercisesPerRound,
-            // For circuit_round and amrap_round, include work and rest durations
-            ...((type === 'circuit_round' || type === 'amrap_round') ? {
+            // For circuit_round, amrap_round, and warmup_cooldown_round, include work and rest durations
+            ...((type === 'circuit_round' || type === 'amrap_round' || type === 'warmup_cooldown_round') ? {
               workDuration: (rt.template as any).workDuration || 45,
               restDuration: (rt.template as any).restDuration || 15,
+            } : {}),
+            // For warmup_cooldown_round, default to warmup position
+            ...(type === 'warmup_cooldown_round' ? {
+              position: (rt.template as any).position || 'warmup'
             } : {})
           }
         };
@@ -175,7 +179,38 @@ export function RoundTypesStep({
               <option value="circuit_round">Circuit</option>
               <option value="stations_round">Stations</option>
               <option value="amrap_round">AMRAP</option>
+              <option value="warmup_cooldown_round">Warm-up/Cool-down</option>
             </select>
+            
+            {roundConfig.template.type === 'warmup_cooldown_round' && (
+              <select
+                value={(roundConfig.template as any).position || 'warmup'}
+                onChange={(e) => {
+                  const newRoundTemplates = ensuredRoundTemplates.map(rt => {
+                    if (rt.roundNumber === roundConfig.roundNumber) {
+                      return {
+                        ...rt,
+                        template: {
+                          ...rt.template,
+                          position: e.target.value as 'warmup' | 'cooldown'
+                        }
+                      };
+                    }
+                    return rt;
+                  });
+                  onRoundTemplatesChange(newRoundTemplates);
+                }}
+                disabled={isSaving}
+                className={cn(
+                  "ml-2 px-3 py-2 rounded-md border bg-background text-sm font-medium",
+                  "focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent",
+                  isSaving && "opacity-50 cursor-not-allowed"
+                )}
+              >
+                <option value="warmup">Warm-up</option>
+                <option value="cooldown">Cool-down</option>
+              </select>
+            )}
           </div>
         ))}
       </div>
@@ -415,6 +450,27 @@ export function ReviewStep({ config, repeatRounds }: ReviewStepProps) {
             </span>
           </div>
         </div>
+        
+        {/* Round Types */}
+        {config.config.roundTemplates && config.config.roundTemplates.length > 0 && (
+          <div className="mt-4">
+            <h4 className="text-sm font-semibold text-muted-foreground mb-3">Round Types</h4>
+            <div className="space-y-2">
+              {config.config.roundTemplates.map((rt) => (
+                <div key={rt.roundNumber} className="flex items-center justify-between p-2 rounded-lg bg-muted/30 text-sm">
+                  <span>Round {rt.roundNumber}</span>
+                  <span className="font-medium">
+                    {rt.template.type === 'circuit_round' && 'Circuit'}
+                    {rt.template.type === 'stations_round' && 'Stations'}
+                    {rt.template.type === 'amrap_round' && 'AMRAP'}
+                    {rt.template.type === 'warmup_cooldown_round' && 
+                      `${(rt.template as any).position === 'cooldown' ? 'Cool-down' : 'Warm-up'}`}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Ready Message */}

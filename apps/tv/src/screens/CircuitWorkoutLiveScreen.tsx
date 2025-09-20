@@ -27,7 +27,8 @@ import {
   CircuitExerciseView, 
   StationsExerciseView,
   AMRAPExerciseView,
-  StationsRestView 
+  StationsRestView,
+  WarmupCooldownExerciseView
 } from '../components/workout-round';
 
 // Design tokens
@@ -260,6 +261,13 @@ export function CircuitWorkoutLiveScreen() {
         restDuration: 0,   // No rest in AMRAP
         roundType: 'amrap_round' as const
       };
+    } else if (template.type === 'warmup_cooldown_round') {
+      return {
+        workDuration: template.workDuration || workDuration,
+        restDuration: template.restDuration || restDuration,
+        roundType: 'warmup_cooldown_round' as const,
+        position: template.position
+      };
     }
     
     // Default fallback
@@ -353,8 +361,19 @@ export function CircuitWorkoutLiveScreen() {
         });
       
       setRoundsData(rounds);
+      
+      // Check if first round is warmup - if so, skip preview and go directly to exercise
+      if (rounds.length > 0 && circuitConfig?.config?.roundTemplates) {
+        const firstRoundTemplate = circuitConfig.config.roundTemplates.find(rt => rt.roundNumber === 1);
+        if (firstRoundTemplate?.template.type === 'warmup_cooldown_round') {
+          // Skip preview for warmup/cooldown rounds
+          setCurrentScreen('exercise');
+          const timing = getRoundTiming(0);
+          setTimeRemaining(timing.workDuration);
+        }
+      }
     }
-  }, [selections]);
+  }, [selections, circuitConfig, getRoundTiming]);
 
   // Start health check on mount and cleanup on unmount
   useEffect(() => {
@@ -807,7 +826,7 @@ export function CircuitWorkoutLiveScreen() {
           });
         }
       } else {
-        // Circuit or Stations round - normal exercise progression
+        // Circuit, Stations, or Warmup/Cooldown round - normal exercise progression
         // Check if this is the last exercise in the round
         if (exerciseIdx === currentRound.exercises.length - 1) {
           // Last exercise of the round - play REST track
@@ -830,11 +849,18 @@ export function CircuitWorkoutLiveScreen() {
           if (roundIdx < rounds.length - 1) {
             setCurrentRoundIndex(roundIdx + 1);
             setCurrentExerciseIndex(0);
-            setCurrentScreen('round-preview');
-            // Use round-specific rest between rounds if available, otherwise default
+            
+            // Check if next round is warmup/cooldown - skip preview if so
             const nextRoundTiming = getRoundTiming(roundIdx + 1);
-            const restBetweenRounds = circuitConfig?.config?.restBetweenRounds || 60;
-            startTimer(restBetweenRounds);
+            if (nextRoundTiming.roundType === 'warmup_cooldown_round') {
+              setCurrentScreen('exercise');
+              startTimer(nextRoundTiming.workDuration);
+            } else {
+              setCurrentScreen('round-preview');
+              // Use round-specific rest between rounds if available, otherwise default
+              const restBetweenRounds = circuitConfig?.config?.restBetweenRounds || 60;
+              startTimer(restBetweenRounds);
+            }
           } else {
             // Workout complete - apply App Start color
             getColorForPreset('app_start').then(color => {
@@ -1242,6 +1268,14 @@ export function CircuitWorkoutLiveScreen() {
             : currentRoundType === 'amrap_round'
             ? <AMRAPExerciseView 
                 currentRound={currentRound}
+                currentExercise={currentExercise}
+                currentExerciseIndex={currentExerciseIndex}
+                timeRemaining={timeRemaining}
+                isPaused={isPaused}
+              />
+            : currentRoundType === 'warmup_cooldown_round'
+            ? <WarmupCooldownExerciseView 
+                currentRound={currentRound as any}
                 currentExercise={currentExercise}
                 currentExerciseIndex={currentExerciseIndex}
                 timeRemaining={timeRemaining}

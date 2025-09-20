@@ -31,11 +31,20 @@ export const AMRAPRoundTemplateSchema = z.object({
   exercisesPerRound: z.number().int().min(CIRCUIT_CONFIG_LIMITS.exercisesPerRound.min).max(CIRCUIT_CONFIG_LIMITS.exercisesPerRound.max),
 });
 
+export const WarmupCooldownRoundTemplateSchema = z.object({
+  type: z.literal('warmup_cooldown_round'),
+  position: z.enum(['warmup', 'cooldown']),
+  exercisesPerRound: z.number().int().min(CIRCUIT_CONFIG_LIMITS.exercisesPerRound.min).max(CIRCUIT_CONFIG_LIMITS.exercisesPerRound.max),
+  workDuration: z.number().int().min(CIRCUIT_CONFIG_LIMITS.workDuration.min).max(CIRCUIT_CONFIG_LIMITS.workDuration.max),
+  restDuration: z.number().int().min(CIRCUIT_CONFIG_LIMITS.restDuration.min).max(CIRCUIT_CONFIG_LIMITS.restDuration.max),
+});
+
 // Union for future round types
 export const RoundTemplateSchema = z.discriminatedUnion('type', [
   CircuitRoundTemplateSchema,
   StationsRoundTemplateSchema,
   AMRAPRoundTemplateSchema,
+  WarmupCooldownRoundTemplateSchema,
   // Future: EMOMRoundTemplateSchema,
 ]);
 
