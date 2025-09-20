@@ -48,20 +48,20 @@ export default function PricingPage() {
             </div>
 
             {/* Kingdom Builder */}
-            <div className="relative rounded-2xl border border-amber-200 bg-white shadow-sm">
-              <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full text-xs font-semibold bg-amber-500 text-white shadow">Best Value</div>
+            <div className="relative rounded-2xl border-2 border-amber-300 bg-gradient-to-b from-amber-50 to-white shadow-lg ring-2 ring-amber-200 ring-offset-2">
+              <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1.5 rounded-full text-sm font-bold bg-gradient-to-r from-amber-500 to-amber-600 text-white shadow-md">Best Value</div>
               <div className="p-6">
                 <div className="flex items-center gap-2 text-amber-700">
-                  <span className="text-xl" aria-hidden>👑</span>
-                  <h2 className="text-lg font-semibold">Kingdom Builder</h2>
+                  <span className="text-2xl" aria-hidden>👑</span>
+                  <h2 className="text-xl font-bold">Kingdom Builder</h2>
                 </div>
 
                 <div className="mt-4">
-                  <div className="text-6xl font-extrabold tracking-tight">$10
-                    <span className="text-lg font-medium text-slate-500"> / session</span>
+                  <div className="text-6xl font-extrabold tracking-tight text-amber-700">$10
+                    <span className="text-lg font-medium text-slate-600"> / session</span>
                   </div>
-                  <p className="mt-2 text-slate-800">3 sessions per week</p>
-                  <p className="mt-1 text-sm text-slate-500">$30/week → $120/month</p>
+                  <p className="mt-2 text-slate-800 font-semibold">3 sessions per week</p>
+                  <p className="mt-1 text-sm text-slate-600 font-medium">$30/week → $120/month</p>
                 </div>
               </div>
             </div>
@@ -74,6 +74,14 @@ export default function PricingPage() {
         <h2 className="text-xl md:text-2xl font-semibold tracking-tight mb-4 text-blue-900">
           Every session contributes 100% to the Anaheim Church Building
         </h2>
+        
+        {/* Matching Donation Notice */}
+        <div className="mb-6">
+          <p className="text-base md:text-lg text-slate-800 font-medium">
+            <span className="text-blue-700">✨</span> We will also match your contribution dollar-for-dollar, doubling your impact! <span className="text-blue-700">✨</span>
+          </p>
+        </div>
+        
         <p className="text-slate-700 text-base md:text-lg leading-relaxed">
           A focused 3-month program blending weights and cardio, designed to help you burn fat, feel stronger, and look leaner. Held in a private boutique studio, each session offers an intimate environment open to all fitness levels, led by Freedomhouse coaches. More than a workout, it's a chance to connect in faith and fellowship while building both body and spirit.
         </p>
