@@ -184,11 +184,18 @@ export function generateCircuitGroupPrompt(config: CircuitPromptConfig): string 
   
   // Get circuit configuration from session settings (no flexibility)
   const rounds = circuitConfig?.config?.rounds || 3;
-  const exercisesPerRound = circuitConfig?.config?.exercisesPerRound || 6;
   const workDuration = circuitConfig?.config?.workDuration || 45;
   const restDuration = circuitConfig?.config?.restDuration || 15;
   const restBetweenRounds = circuitConfig?.config?.restBetweenRounds || 60;
   const repeatRounds = circuitConfig?.config?.repeatRounds || false;
+  
+  // Get exercises per round from round templates if available
+  let exercisesPerRound = circuitConfig?.config?.exercisesPerRound || 6;
+  if (circuitConfig?.config?.roundTemplates && circuitConfig.config.roundTemplates.length > 0) {
+    // Use the first round template's exercisesPerRound as the default
+    // (assuming all rounds have the same number of exercises for now)
+    exercisesPerRound = circuitConfig.config.roundTemplates[0]?.template?.exercisesPerRound || exercisesPerRound;
+  }
   
   // Calculate total rounds including repeats
   const totalRounds = repeatRounds ? rounds * 2 : rounds;
@@ -304,7 +311,18 @@ export function generateCircuitGroupPrompt(config: CircuitPromptConfig): string 
   } else {
     sections.push(`- Total rounds: ${rounds}`);
   }
-  sections.push(`- Each round = ${exercisesPerRound} exercises`);
+  
+  // Handle variable exercises per round
+  if (circuitConfig?.config?.roundTemplates && circuitConfig.config.roundTemplates.length > 0) {
+    sections.push("- Exercises per round:");
+    for (let i = 0; i < rounds; i++) {
+      const template = circuitConfig.config.roundTemplates[i];
+      const exerciseCount = template?.template?.exercisesPerRound || exercisesPerRound;
+      sections.push(`  - Round ${i + 1}: ${exerciseCount} exercises`);
+    }
+  } else {
+    sections.push(`- Each round = ${exercisesPerRound} exercises`);
+  }
   sections.push("");
   
   // Core Rules
@@ -362,17 +380,48 @@ export function generateCircuitGroupPrompt(config: CircuitPromptConfig): string 
   
   // Task
   sections.push("## Task:");
-  if (repeatRounds) {
-    sections.push(`Create ${rounds} rounds with ${exercisesPerRound} exercises per round.`);
-    sections.push(`IMPORTANT: These ${rounds} rounds will be repeated twice in sequence, so design them to work well when performed back-to-back.`);
+  
+  // Check if we have round templates for per-round exercise counts
+  let totalExercisesNeeded = 0;
+  const roundExerciseCounts: number[] = [];
+  
+  if (circuitConfig?.config?.roundTemplates && circuitConfig.config.roundTemplates.length > 0) {
+    // Use round templates to get per-round exercise counts
+    for (let i = 0; i < rounds; i++) {
+      const template = circuitConfig.config.roundTemplates[i];
+      const exerciseCount = template?.template?.exercisesPerRound || exercisesPerRound;
+      roundExerciseCounts.push(exerciseCount);
+      totalExercisesNeeded += exerciseCount;
+    }
+    
+    sections.push(`Create ${rounds} rounds with the following exercise counts:`);
+    roundExerciseCounts.forEach((count, idx) => {
+      sections.push(`- Round ${idx + 1}: ${count} exercises`);
+    });
+    
+    if (repeatRounds) {
+      sections.push(`IMPORTANT: These ${rounds} rounds will be repeated twice in sequence, so design them to work well when performed back-to-back.`);
+    }
   } else {
-    sections.push(`Create ${rounds} rounds with ${exercisesPerRound} exercises per round.`);
+    // Fallback to uniform exercise count
+    totalExercisesNeeded = rounds * exercisesPerRound;
+    for (let i = 0; i < rounds; i++) {
+      roundExerciseCounts.push(exercisesPerRound);
+    }
+    
+    if (repeatRounds) {
+      sections.push(`Create ${rounds} rounds with ${exercisesPerRound} exercises per round.`);
+      sections.push(`IMPORTANT: These ${rounds} rounds will be repeated twice in sequence, so design them to work well when performed back-to-back.`);
+    } else {
+      sections.push(`Create ${rounds} rounds with ${exercisesPerRound} exercises per round.`);
+    }
   }
+  
   sections.push("");
   sections.push("You MUST:");
   sections.push(`1. Generate EXACTLY ${rounds} complete rounds`);
-  sections.push(`2. Each round MUST have EXACTLY ${exercisesPerRound} exercises`);
-  sections.push(`3. Total exercises needed: ${rounds * exercisesPerRound}`);
+  sections.push(`2. Each round MUST have EXACTLY the specified number of exercises`);
+  sections.push(`3. Total exercises needed: ${totalExercisesNeeded}`);
   sections.push("4. Ensure no movement pattern repeats within a round");
   sections.push("5. Balance movement patterns across the entire circuit");
   sections.push("6. Consider equipment flow and transitions");
@@ -388,10 +437,22 @@ export function generateCircuitGroupPrompt(config: CircuitPromptConfig): string 
   sections.push("```json");
   sections.push("{");
   sections.push('  "rounds": [');
-  sections.push('    {"r":1,"ex":["ex_1","ex_2","ex_3"]},');
-  sections.push('    {"r":2,"ex":["ex_4","ex_5","ex_6"]},');
-  sections.push('    {"r":3,"ex":["ex_7","ex_8","ex_9"]},');
-  sections.push('    {"r":4,"ex":["ex_10","ex_11","ex_12"]}');
+  
+  // Generate example based on actual round exercise counts
+  let exerciseIndex = 1;
+  const exampleRounds: string[] = [];
+  
+  roundExerciseCounts.forEach((count, roundIdx) => {
+    const exercises: string[] = [];
+    for (let i = 0; i < count; i++) {
+      exercises.push(`"ex_${exerciseIndex}"`);
+      exerciseIndex++;
+    }
+    const roundLine = `    {"r":${roundIdx + 1},"ex":[${exercises.join(",")}]}`;
+    exampleRounds.push(roundLine);
+  });
+  
+  sections.push(exampleRounds.join(",\n"));
   sections.push('  ]');
   sections.push("}");
   sections.push("```");

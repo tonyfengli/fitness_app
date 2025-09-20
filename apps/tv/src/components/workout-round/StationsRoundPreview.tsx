@@ -37,8 +37,8 @@ export function StationsRoundPreview({ currentRound }: StationsRoundPreviewProps
     <View style={{ flex: 1, width: '100%' }}>
       {/* Header Section */}
       <View style={{ 
-        paddingTop: 20,
-        paddingBottom: 20,
+        paddingTop: 0,
+        paddingBottom: 30,
         alignItems: 'center',
       }}>
         <Text style={{

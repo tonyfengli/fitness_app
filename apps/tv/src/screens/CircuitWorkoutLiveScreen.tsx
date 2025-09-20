@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { View, Text, Pressable, ActivityIndicator } from 'react-native';
 import { useNavigation } from '../App';
 import { useQuery } from '@tanstack/react-query';
@@ -22,9 +22,11 @@ import { playCountdownSound, setCountdownVolume } from '../lib/sound/countdown-s
 import type { CircuitConfig } from '@acme/db';
 import { 
   CircuitRoundPreview, 
-  StationsRoundPreview, 
+  StationsRoundPreview,
+  AMRAPRoundPreview, 
   CircuitExerciseView, 
   StationsExerciseView,
+  AMRAPExerciseView,
   StationsRestView 
 } from '../components/workout-round';
 
@@ -90,6 +92,24 @@ export function MattePanel({
       {children}
     </View>
   );
+}
+
+// Simple debounce utility
+function debounce<T extends (...args: any[]) => any>(
+  func: T,
+  delay: number
+): (...args: Parameters<T>) => void {
+  let timeoutId: NodeJS.Timeout | null = null;
+  
+  return (...args: Parameters<T>) => {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+    
+    timeoutId = setTimeout(() => {
+      func(...args);
+    }, delay);
+  };
 }
 
 interface CircuitExercise {
@@ -218,11 +238,27 @@ export function CircuitWorkoutLiveScreen() {
         roundType: 'circuit_round' as const
       };
     } else if (template.type === 'stations_round') {
-      // For stations, we'll use the same timing for now but mark it as stations
+      // For stations, get timing from a circuit_round template
+      const circuitTemplate = roundTemplates.find(rt => rt.template.type === 'circuit_round');
+      if (circuitTemplate && circuitTemplate.template.type === 'circuit_round') {
+        return {
+          workDuration: circuitTemplate.template.workDuration,
+          restDuration: circuitTemplate.template.restDuration,
+          roundType: 'stations_round' as const
+        };
+      }
+      // Fallback to global timing
       return {
-        workDuration: workDuration, // Stations will use global timing for now
+        workDuration: workDuration,
         restDuration: restDuration,
         roundType: 'stations_round' as const
+      };
+    } else if (template.type === 'amrap_round') {
+      // AMRAP uses a single long work duration (10 minutes = 600 seconds)
+      return {
+        workDuration: 600, // 10 minutes hardcoded for now
+        restDuration: 0,   // No rest in AMRAP
+        roundType: 'amrap_round' as const
       };
     }
     
@@ -642,6 +678,17 @@ export function CircuitWorkoutLiveScreen() {
       });
     }
     
+    // Check if this is an AMRAP round
+    const { roundType, workDuration } = getRoundTiming(roundIdx);
+    
+    if (roundType === 'amrap_round') {
+      // For AMRAP, just start the single long work timer
+      setCurrentScreen('exercise');
+      startTimer(workDuration);
+      return;
+    }
+    
+    // For Circuit/Stations rounds
     // For Round 1, use countdown instead
     if (roundIdx === 0) {
       startCountdownRound1();
@@ -652,8 +699,6 @@ export function CircuitWorkoutLiveScreen() {
     // Just start the exercise
     console.log('[MUSIC-DEBUG] Starting exercise (music already playing from 0:06)');
     setCurrentScreen('exercise');
-    const roundIndex = timerStateRef.current.currentRoundIndex;
-    const { workDuration } = getRoundTiming(roundIndex);
     startTimer(workDuration);
   }, [getRoundTiming, startCountdownRound1]);
 
@@ -743,35 +788,18 @@ export function CircuitWorkoutLiveScreen() {
         startFirstExercise();
       }
     } else if (screen === 'exercise') {
-      // Check if this is the last exercise in the round
-      if (exerciseIdx === currentRound.exercises.length - 1) {
-        // Last exercise of the round - play REST track
-        const currentRoundMusic = currentSetlist?.rounds?.[roundIdx];
-        if (currentRoundMusic && playTrack) {
-          const restTrack = currentRoundMusic.track3;
-          if (restTrack) {
-            console.log('[UNMOUNT-DEBUG] Playing REST track at round end', {
-              round: roundIdx + 1,
-              track: restTrack.spotifyId,
-              trackName: restTrack.trackName,
-              timestamp: new Date().toISOString()
-            });
-            playTrack(restTrack.spotifyId, 0);
-          } else {
-            console.warn('[UNMOUNT-DEBUG] No REST track available for round', roundIdx + 1);
-          }
-        }
-        
+      const currentRoundType = getRoundTiming(roundIdx).roundType;
+      
+      if (currentRoundType === 'amrap_round') {
+        // For AMRAP, when timer completes, go directly to next round or finish
         if (roundIdx < rounds.length - 1) {
           setCurrentRoundIndex(roundIdx + 1);
           setCurrentExerciseIndex(0);
           setCurrentScreen('round-preview');
-          // Use round-specific rest between rounds if available, otherwise default
-          const nextRoundTiming = getRoundTiming(roundIdx + 1);
           const restBetweenRounds = circuitConfig?.config?.restBetweenRounds || 60;
           startTimer(restBetweenRounds);
         } else {
-          // Workout complete - apply App Start color
+          // Workout complete
           getColorForPreset('app_start').then(color => {
             const preset = getHuePresetForColor(color);
             setHueLights(preset);
@@ -779,10 +807,48 @@ export function CircuitWorkoutLiveScreen() {
           });
         }
       } else {
-        // Not the last exercise - go to rest
-        setCurrentScreen('rest');
-        const { restDuration } = getRoundTiming(roundIdx);
-        startTimer(restDuration);
+        // Circuit or Stations round - normal exercise progression
+        // Check if this is the last exercise in the round
+        if (exerciseIdx === currentRound.exercises.length - 1) {
+          // Last exercise of the round - play REST track
+          const currentRoundMusic = currentSetlist?.rounds?.[roundIdx];
+          if (currentRoundMusic && playTrack) {
+            const restTrack = currentRoundMusic.track3;
+            if (restTrack) {
+              console.log('[UNMOUNT-DEBUG] Playing REST track at round end', {
+                round: roundIdx + 1,
+                track: restTrack.spotifyId,
+                trackName: restTrack.trackName,
+                timestamp: new Date().toISOString()
+              });
+              playTrack(restTrack.spotifyId, 0);
+            } else {
+              console.warn('[UNMOUNT-DEBUG] No REST track available for round', roundIdx + 1);
+            }
+          }
+          
+          if (roundIdx < rounds.length - 1) {
+            setCurrentRoundIndex(roundIdx + 1);
+            setCurrentExerciseIndex(0);
+            setCurrentScreen('round-preview');
+            // Use round-specific rest between rounds if available, otherwise default
+            const nextRoundTiming = getRoundTiming(roundIdx + 1);
+            const restBetweenRounds = circuitConfig?.config?.restBetweenRounds || 60;
+            startTimer(restBetweenRounds);
+          } else {
+            // Workout complete - apply App Start color
+            getColorForPreset('app_start').then(color => {
+              const preset = getHuePresetForColor(color);
+              setHueLights(preset);
+              navigation.goBack();
+            });
+          }
+        } else {
+          // Not the last exercise - go to rest
+          setCurrentScreen('rest');
+          const { restDuration } = getRoundTiming(roundIdx);
+          startTimer(restDuration);
+        }
       }
     } else if (screen === 'rest') {
       // Rest screen always leads to the next exercise
@@ -805,7 +871,7 @@ export function CircuitWorkoutLiveScreen() {
     }
   }, []); // No dependencies - function is stable and uses ref values
 
-  const handleBack = () => {
+  const handleBack = useCallback(() => {
     // Reset lighting event to force re-application when navigating
     setLastLightingEvent('');
     
@@ -843,12 +909,23 @@ export function CircuitWorkoutLiveScreen() {
       const { workDuration } = getRoundTiming(currentRoundIndex);
       startTimer(workDuration);
     }
-  };
+  }, [currentScreen, currentRoundIndex, currentExerciseIndex, roundsData, circuitConfig, getRoundTiming, startTimer]);
 
   const handleStartRound = () => {
     // For round 1, start countdown with music
     startCountdownRound1();
   };
+
+  // Create debounced versions of navigation functions to prevent rapid clicks
+  const debouncedHandleNext = useMemo(
+    () => debounce(handleNext, 300),
+    [handleNext]
+  );
+
+  const debouncedHandleBack = useMemo(
+    () => debounce(handleBack, 300),
+    [handleBack]
+  );
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -996,6 +1073,21 @@ export function CircuitWorkoutLiveScreen() {
           }}>
             {formatTime(timeRemaining)}
           </Text>
+        ) : currentScreen === 'exercise' && currentRoundType === 'amrap_round' ? (
+          // Timer for AMRAP exercise
+          <Text style={{ 
+            fontSize: 120, 
+            fontWeight: '900', 
+            color: TOKENS.color.accent,
+            letterSpacing: -2,
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            textAlign: 'center',
+            pointerEvents: 'none'
+          }}>
+            {formatTime(timeRemaining)}
+          </Text>
         ) : currentScreen === 'exercise' ? (
           null  // No centered header text for circuit exercise screen
         ) : currentScreen === 'rest' ? (
@@ -1042,7 +1134,7 @@ export function CircuitWorkoutLiveScreen() {
         ) : (
           <View style={{ flexDirection: 'row', gap: 16 }}>
             <Pressable
-              onPress={handleBack}
+              onPress={debouncedHandleBack}
               focusable
               disabled={currentRoundIndex === 0 && currentScreen === 'round-preview'}
             >
@@ -1098,7 +1190,7 @@ export function CircuitWorkoutLiveScreen() {
             </Pressable>
             
             <Pressable
-              onPress={handleNext}
+              onPress={debouncedHandleNext}
               focusable
             >
               {({ focused }) => (
@@ -1133,12 +1225,22 @@ export function CircuitWorkoutLiveScreen() {
         {currentScreen === 'round-preview' && currentRound && (
           currentRoundType === 'stations_round' 
             ? <StationsRoundPreview currentRound={currentRound} />
+            : currentRoundType === 'amrap_round'
+            ? <AMRAPRoundPreview currentRound={currentRound} />
             : <CircuitRoundPreview currentRound={currentRound} />
         )}
 
         {currentScreen === 'exercise' && currentExercise && currentRound && (
           currentRoundType === 'stations_round' 
             ? <StationsExerciseView 
+                currentRound={currentRound}
+                currentExercise={currentExercise}
+                currentExerciseIndex={currentExerciseIndex}
+                timeRemaining={timeRemaining}
+                isPaused={isPaused}
+              />
+            : currentRoundType === 'amrap_round'
+            ? <AMRAPExerciseView 
                 currentRound={currentRound}
                 currentExercise={currentExercise}
                 currentExerciseIndex={currentExerciseIndex}

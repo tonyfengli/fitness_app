@@ -3,7 +3,7 @@
  * Calculates precise timing for circuit workouts including track coverage
  */
 
-import type { CircuitConfig } from "@acme/db";
+import type { CircuitConfig, RoundTemplate } from "@acme/db";
 
 export interface RoundTiming {
   roundNumber: number;
@@ -71,19 +71,18 @@ export function calculateCircuitTiming(
   totalRounds: number
 ): CircuitTimingResult {
   console.log('[CircuitTimingCalculator] Starting calculation:', {
-    workDuration: config.workDuration,
-    restDuration: config.restDuration,
+    rounds: config.rounds,
     restBetweenRounds: config.restBetweenRounds,
-    exercisesPerRound: config.exercisesPerRound,
     repeatRounds: config.repeatRounds,
-    totalRounds
+    totalRounds,
+    roundTemplatesCount: config.roundTemplates?.length
   });
 
   const rounds: RoundTiming[] = [];
   let currentTimeMs = 0;
+  let totalWorkTimeMs = 0;
+  let totalRestTimeMs = 0;
   
-  const workDurationMs = config.workDuration * 1000;
-  const restDurationMs = config.restDuration * 1000;
   const restBetweenRoundsMs = config.restBetweenRounds * 1000;
   const countdownDurationMs = 6000; // 6 seconds (5, 4, 3, 2, 1, GO!)
   
@@ -96,14 +95,62 @@ export function calculateCircuitTiming(
     const roundNumber = config.repeatRounds ? (i % baseRounds) + 1 : i + 1;
     const isRepeat = config.repeatRounds && i >= baseRounds;
     
+    // Get the round template for this round
+    const roundTemplate = config.roundTemplates?.[roundNumber - 1];
+    if (!roundTemplate) {
+      throw new Error(`No round template found for round ${roundNumber}`);
+    }
+    
     // Round starts with countdown
     const countdownStartMs = currentTimeMs;
     const workStartMs = countdownStartMs + countdownDurationMs;
     
-    // Calculate round duration (excluding rest between rounds)
-    const exerciseDurationMs = 
-      (config.exercisesPerRound * workDurationMs) + 
-      ((config.exercisesPerRound - 1) * restDurationMs);
+    // Calculate round duration based on template type
+    let exerciseDurationMs = 0;
+    const template = roundTemplate.template;
+    
+    if (template.type === 'circuit_round') {
+      // Circuit uses work/rest intervals
+      const workDurationMs = template.workDuration * 1000;
+      const restDurationMs = template.restDuration * 1000;
+      exerciseDurationMs = 
+        (template.exercisesPerRound * workDurationMs) + 
+        ((template.exercisesPerRound - 1) * restDurationMs);
+      
+      // Update totals
+      totalWorkTimeMs += template.exercisesPerRound * workDurationMs;
+      totalRestTimeMs += (template.exercisesPerRound - 1) * restDurationMs;
+    } else if (template.type === 'stations_round') {
+      // Stations also use work/rest intervals (from circuit_round in same session)
+      // Find a circuit_round template to get work/rest durations
+      const circuitTemplate = config.roundTemplates?.find(rt => rt.template.type === 'circuit_round');
+      if (!circuitTemplate || circuitTemplate.template.type !== 'circuit_round') {
+        throw new Error('Stations round requires a circuit_round template for work/rest durations');
+      }
+      
+      const workDurationMs = circuitTemplate.template.workDuration * 1000;
+      const restDurationMs = circuitTemplate.template.restDuration * 1000;
+      exerciseDurationMs = 
+        (template.exercisesPerRound * workDurationMs) + 
+        ((template.exercisesPerRound - 1) * restDurationMs);
+      
+      // Update totals
+      totalWorkTimeMs += template.exercisesPerRound * workDurationMs;
+      totalRestTimeMs += (template.exercisesPerRound - 1) * restDurationMs;
+    } else if (template.type === 'amrap_round') {
+      // AMRAP is continuous work
+      // Find a circuit_round template to get work duration for total time calculation
+      const circuitTemplate = config.roundTemplates?.find(rt => rt.template.type === 'circuit_round');
+      if (!circuitTemplate || circuitTemplate.template.type !== 'circuit_round') {
+        throw new Error('AMRAP round requires a circuit_round template for duration reference');
+      }
+      
+      const workDurationMs = circuitTemplate.template.workDuration * 1000;
+      exerciseDurationMs = template.exercisesPerRound * workDurationMs;
+      
+      // Update totals (all work, no rest within round)
+      totalWorkTimeMs += exerciseDurationMs;
+    }
     
     const totalRoundDurationMs = countdownDurationMs + exerciseDurationMs;
     const endTimeMs = countdownStartMs + totalRoundDurationMs;
@@ -115,13 +162,14 @@ export function calculateCircuitTiming(
       workStartMs,
       endTimeMs,
       totalDurationMs: totalRoundDurationMs,
-      exerciseCount: config.exercisesPerRound,
+      exerciseCount: template.exercisesPerRound,
     };
     
     console.log(`[CircuitTimingCalculator] Round ${i + 1} timing:`, {
       displayRoundNumber: roundInfo.roundNumber,
       actualRoundIndex: i,
       isRepeat,
+      templateType: template.type,
       startTime: `${Math.floor(countdownStartMs / 1000)}s`,
       workStartTime: `${Math.floor(workStartMs / 1000)}s`,
       endTime: `${Math.floor(endTimeMs / 1000)}s`,
@@ -135,14 +183,9 @@ export function calculateCircuitTiming(
     currentTimeMs = endTimeMs;
     if (i < effectiveRounds - 1) {
       currentTimeMs += restBetweenRoundsMs;
+      totalRestTimeMs += restBetweenRoundsMs;
     }
   }
-  
-  // Calculate totals
-  const totalWorkTimeMs = effectiveRounds * config.exercisesPerRound * workDurationMs;
-  const totalRestTimeMs = 
-    (effectiveRounds * (config.exercisesPerRound - 1) * restDurationMs) + // Rest between exercises
-    ((effectiveRounds - 1) * restBetweenRoundsMs); // Rest between rounds
   
   return {
     rounds,
@@ -194,7 +237,8 @@ export function canTrackCoverRound(
 export function getSecondTrackTriggerPoint(
   firstTrackCoverage: TrackCoverage,
   roundTiming: RoundTiming,
-  config: CircuitConfig["config"]
+  config: CircuitConfig["config"],
+  roundNumber: number
 ): { triggerTimeMs: number; triggerType: 'bridge' | 'rest' } {
   if (firstTrackCoverage.coversFullRound) {
     // First track covers full round, second track starts at rest between rounds
@@ -204,19 +248,42 @@ export function getSecondTrackTriggerPoint(
       triggerType: 'rest',
     };
   } else {
+    // Get the round template
+    const roundTemplate = config.roundTemplates?.[roundNumber - 1];
+    if (!roundTemplate) {
+      throw new Error(`No round template found for round ${roundNumber}`);
+    }
+    
+    const template = roundTemplate.template;
+    let workDurationMs = 0;
+    let restDurationMs = 0;
+    
+    if (template.type === 'circuit_round') {
+      workDurationMs = template.workDuration * 1000;
+      restDurationMs = template.restDuration * 1000;
+    } else if (template.type === 'stations_round' || template.type === 'amrap_round') {
+      // Find circuit_round template for durations
+      const circuitTemplate = config.roundTemplates?.find(rt => rt.template.type === 'circuit_round');
+      if (!circuitTemplate || circuitTemplate.template.type !== 'circuit_round') {
+        throw new Error('Non-circuit rounds require a circuit_round template for duration reference');
+      }
+      workDurationMs = circuitTemplate.template.workDuration * 1000;
+      restDurationMs = circuitTemplate.template.restDuration * 1000;
+    }
+    
     // First track doesn't cover full round, trigger during last exercise
     const lastExerciseStartMs = 
       roundTiming.workStartMs + 
-      ((config.exercisesPerRound - 1) * (config.workDuration * 1000)) +
-      ((config.exercisesPerRound - 1) * (config.restDuration * 1000));
+      ((template.exercisesPerRound - 1) * workDurationMs) +
+      ((template.exercisesPerRound - 1) * restDurationMs);
     
     console.log('[CircuitTimingCalculator] Track needs bridge, calculating trigger:', {
       roundNumber: roundTiming.roundNumber,
       workStartMs: roundTiming.workStartMs,
       workStartSec: roundTiming.workStartMs / 1000,
-      exercisesPerRound: config.exercisesPerRound,
-      workDuration: config.workDuration,
-      restDuration: config.restDuration,
+      exercisesPerRound: template.exercisesPerRound,
+      workDuration: workDurationMs / 1000,
+      restDuration: restDurationMs / 1000,
       lastExerciseStartMs,
       lastExerciseStartSec: lastExerciseStartMs / 1000,
       trackEndsAtSec: firstTrackCoverage.coverageEndMs / 1000,

@@ -121,7 +121,7 @@ export function RoundTypesStep({
     };
   });
 
-  const handleRoundTypeChange = (roundNumber: number, type: 'circuit_round' | 'stations_round') => {
+  const handleRoundTypeChange = (roundNumber: number, type: 'circuit_round' | 'stations_round' | 'amrap_round') => {
     const newRoundTemplates = ensuredRoundTemplates.map(rt => {
       if (rt.roundNumber === roundNumber) {
         return {
@@ -129,8 +129,8 @@ export function RoundTypesStep({
           template: {
             type,
             exercisesPerRound: rt.template.exercisesPerRound,
-            // For circuit_round, include work and rest durations
-            ...(type === 'circuit_round' ? {
+            // For circuit_round and amrap_round, include work and rest durations
+            ...((type === 'circuit_round' || type === 'amrap_round') ? {
               workDuration: (rt.template as any).workDuration || 45,
               restDuration: (rt.template as any).restDuration || 15,
             } : {})
@@ -174,6 +174,7 @@ export function RoundTypesStep({
             >
               <option value="circuit_round">Circuit</option>
               <option value="stations_round">Stations</option>
+              <option value="amrap_round">AMRAP</option>
             </select>
           </div>
         ))}
@@ -184,7 +185,10 @@ export function RoundTypesStep({
           <strong>Circuit:</strong> Traditional work/rest intervals
         </p>
         <p className="text-sm text-muted-foreground mt-1">
-          <strong>Stations:</strong> Work at each station (coming soon)
+          <strong>Stations:</strong> Work at each station
+        </p>
+        <p className="text-sm text-muted-foreground mt-1">
+          <strong>AMRAP:</strong> As Many Rounds As Possible
         </p>
       </div>
     </div>

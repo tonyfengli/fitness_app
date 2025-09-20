@@ -21,12 +21,12 @@ export interface StationsRoundTemplate extends BaseRoundTemplate {
   type: 'stations_round';
 }
 
-// Future round types (commented out for now)
-// export interface AMRAPRoundTemplate extends BaseRoundTemplate {
-//   type: 'amrap_round';
-//   duration: number;           // Total round duration in seconds
-// }
+// AMRAP round - As Many Rounds As Possible
+export interface AMRAPRoundTemplate extends BaseRoundTemplate {
+  type: 'amrap_round';
+}
 
+// Future round types (commented out for now)
 // export interface EMOMRoundTemplate extends BaseRoundTemplate {
 //   type: 'emom_round';
 //   minuteDuration: number;     // Duration per minute (usually 60)
@@ -34,7 +34,7 @@ export interface StationsRoundTemplate extends BaseRoundTemplate {
 // }
 
 // Union type for all round templates
-export type RoundTemplate = CircuitRoundTemplate | StationsRoundTemplate; // | AMRAPRoundTemplate | EMOMRoundTemplate;
+export type RoundTemplate = CircuitRoundTemplate | StationsRoundTemplate | AMRAPRoundTemplate; // | EMOMRoundTemplate;
 
 // Round configuration with template
 export interface RoundConfig {

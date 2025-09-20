@@ -31,11 +31,29 @@ export function CircuitRoundPreview({ currentRound }: CircuitRoundPreviewProps) 
   
   return (
     <View style={{ flex: 1, width: '100%' }}>
+      {/* Header Section */}
+      <View style={{ 
+        paddingTop: 0,
+        paddingBottom: 30,
+        alignItems: 'center',
+      }}>
+        <Text style={{
+          fontSize: 13,
+          fontWeight: '800',
+          color: TOKENS.color.muted,
+          textTransform: 'uppercase',
+          letterSpacing: 2,
+          marginBottom: 8,
+        }}>
+          ALL TOGETHER
+        </Text>
+      </View>
+
       {/* Exercise Grid */}
       <View style={{ 
         flex: 1, 
         justifyContent: 'center',
-        paddingTop: needsScaling ? 60 : 0, // Add padding when more than 1 row
+        paddingTop: needsScaling ? 20 : 0, // Reduced padding to account for header
       }}>
         <View style={{ 
           flexDirection: 'row',

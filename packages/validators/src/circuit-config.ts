@@ -26,11 +26,16 @@ export const StationsRoundTemplateSchema = z.object({
   exercisesPerRound: z.number().int().min(CIRCUIT_CONFIG_LIMITS.exercisesPerRound.min).max(CIRCUIT_CONFIG_LIMITS.exercisesPerRound.max),
 });
 
+export const AMRAPRoundTemplateSchema = z.object({
+  type: z.literal('amrap_round'),
+  exercisesPerRound: z.number().int().min(CIRCUIT_CONFIG_LIMITS.exercisesPerRound.min).max(CIRCUIT_CONFIG_LIMITS.exercisesPerRound.max),
+});
+
 // Union for future round types
 export const RoundTemplateSchema = z.discriminatedUnion('type', [
   CircuitRoundTemplateSchema,
   StationsRoundTemplateSchema,
-  // Future: AMRAPRoundTemplateSchema,
+  AMRAPRoundTemplateSchema,
   // Future: EMOMRoundTemplateSchema,
 ]);
 

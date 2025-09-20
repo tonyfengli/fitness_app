@@ -42,7 +42,9 @@ export function StationsRestView({
   const cardWidth = columns <= 3 ? 380 : columns === 4 ? 300 : 260;
   
   // Next exercise index (what we're transitioning to)
-  const nextExerciseIndex = currentExerciseIndex + 1;
+  // For the last exercise, there's no "next" - we're going to round preview
+  const isLastExercise = currentExerciseIndex === exerciseCount - 1;
+  const nextExerciseIndex = isLastExercise ? 0 : currentExerciseIndex + 1;
   
   return (
     <View style={{ flex: 1, width: '100%' }}>
@@ -100,80 +102,102 @@ export function StationsRestView({
                 </Text>
                 
                 {/* Team Transition */}
-                <View style={{ 
-                  flexDirection: 'row', 
-                  alignItems: 'center',
-                  gap: 10,
-                }}>
-                  {/* Old Team - Crossed Out */}
+                {isLastExercise ? (
+                  // For last exercise, show "Round Complete" instead of team transition
                   <View style={{ 
+                    alignSelf: 'flex-start',
                     paddingHorizontal: 12,
                     paddingVertical: 7,
                     borderRadius: 10,
-                    backgroundColor: `${currentTeam.color}08`,
+                    backgroundColor: TOKENS.color.accent + '15',
                     borderWidth: 1,
-                    borderColor: `${currentTeam.color}30`,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: 8,
-                    opacity: 0.4,
+                    borderColor: TOKENS.color.accent,
                   }}>
-                    <View style={{
-                      width: 12,
-                      height: 12,
-                      borderRadius: 999,
-                      backgroundColor: currentTeam.color,
-                      opacity: 0.3,
-                    }} />
                     <Text style={{ 
-                      color: currentTeam.color, 
+                      color: TOKENS.color.accent, 
                       fontWeight: '800',
                       fontSize: 14,
                       letterSpacing: 0.3,
-                      textDecorationLine: 'line-through',
+                    }}>
+                      Round Complete
+                    </Text>
+                  </View>
+                ) : (
+                  <View style={{ 
+                    flexDirection: 'row', 
+                    alignItems: 'center',
+                    gap: 10,
+                  }}>
+                    {/* Old Team - Crossed Out */}
+                    <View style={{ 
+                      paddingHorizontal: 12,
+                      paddingVertical: 7,
+                      borderRadius: 10,
+                      backgroundColor: `${currentTeam.color}08`,
+                      borderWidth: 1,
+                      borderColor: `${currentTeam.color}30`,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 8,
+                      opacity: 0.4,
+                    }}>
+                      <View style={{
+                        width: 12,
+                        height: 12,
+                        borderRadius: 999,
+                        backgroundColor: currentTeam.color,
+                        opacity: 0.3,
+                      }} />
+                      <Text style={{ 
+                        color: currentTeam.color, 
+                        fontWeight: '800',
+                        fontSize: 14,
+                        letterSpacing: 0.3,
+                        textDecorationLine: 'line-through',
+                        opacity: 0.6,
+                      }}>
+                        {currentTeam.name} Team
+                      </Text>
+                    </View>
+                    
+                    {/* Arrow */}
+                    <Text style={{ 
+                      fontSize: 16, 
+                      color: TOKENS.color.muted,
                       opacity: 0.6,
                     }}>
-                      {currentTeam.name} Team
+                      →
                     </Text>
-                  </View>
-                  
-                  {/* Arrow */}
-                  <Text style={{ 
-                    fontSize: 16, 
-                    color: TOKENS.color.muted,
-                    opacity: 0.6,
-                  }}>
-                    →
-                  </Text>
-                  
-                  {/* New Team */}
-                  <View style={{ 
-                    paddingHorizontal: 12,
-                    paddingVertical: 7,
-                    borderRadius: 10,
-                    backgroundColor: `${nextTeam.color}15`,
-                    borderWidth: 1,
-                    borderColor: nextTeam.color,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: 8,
-                  }}>
-                    <View style={{
-                      width: 12,
-                      height: 12,
-                      borderRadius: 999,
-                      backgroundColor: nextTeam.color,
-                    }} />
-                    <Text style={{ 
-                      color: nextTeam.color, 
-                      fontWeight: '800',
-                      fontSize: 14,
-                      letterSpacing: 0.3,
+                    
+                    {/* New Team */}
+                    <View style={{ 
+                      paddingHorizontal: 12,
+                      paddingVertical: 7,
+                      borderRadius: 10,
+                      backgroundColor: `${nextTeam.color}15`,
+                      borderWidth: 1,
+                      borderColor: nextTeam.color,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 8,
                     }}>
-                      {nextTeam.name} Team
-                    </Text>
+                      <View style={{
+                        width: 12,
+                        height: 12,
+                        borderRadius: 999,
+                        backgroundColor: nextTeam.color,
+                      }} />
+                      <Text style={{ 
+                        color: nextTeam.color, 
+                        fontWeight: '800',
+                        fontSize: 14,
+                        letterSpacing: 0.3,
+                      }}>
+                        {nextTeam.name} Team
+                      </Text>
+                    </View>
                   </View>
-                </View>
+                )}
                 
               </MattePanel>
             );
