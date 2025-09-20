@@ -20,7 +20,13 @@ import { LightingStatusDot } from '../components/LightingStatusDot';
 import { useSpotifySync } from '../hooks/useSpotifySync';
 import { playCountdownSound, setCountdownVolume } from '../lib/sound/countdown-sound';
 import type { CircuitConfig } from '@acme/db';
-import { CircuitRoundPreview, StationsRoundPreview } from '../components/workout-round';
+import { 
+  CircuitRoundPreview, 
+  StationsRoundPreview, 
+  CircuitExerciseView, 
+  StationsExerciseView,
+  StationsRestView 
+} from '../components/workout-round';
 
 // Design tokens
 export const TOKENS = {
@@ -874,17 +880,77 @@ export function CircuitWorkoutLiveScreen() {
         paddingBottom: 20
       }}>
         {!(currentScreen === 'round-preview' && currentRoundIndex === 0) ? (
-          <Text style={{ 
-            fontSize: 40, 
-            fontWeight: '900', 
-            color: currentScreen === 'round-preview' && currentRoundIndex > 0 && timeRemaining > 0 ? TOKENS.color.muted : TOKENS.color.text,
-            letterSpacing: 0.5,
-            textTransform: 'uppercase'
-          }}>
-            {currentScreen === 'round-preview' && currentRoundIndex > 0 && timeRemaining > 0 
-              ? formatTime(timeRemaining)
-              : currentRound?.roundName || `Round ${currentRoundIndex + 1}`}
-          </Text>
+          <View>
+            <Text style={{ 
+              fontSize: 40, 
+              fontWeight: '900', 
+              color: currentScreen === 'round-preview' && currentRoundIndex > 0 && timeRemaining > 0 ? TOKENS.color.muted : TOKENS.color.text,
+              letterSpacing: 0.5,
+              textTransform: 'uppercase'
+            }}>
+              {currentScreen === 'round-preview' && currentRoundIndex > 0 && timeRemaining > 0 
+                ? formatTime(timeRemaining)
+                : currentRound?.roundName || `Round ${currentRoundIndex + 1}`}
+            </Text>
+            {currentRoundType === 'stations_round' && currentRound && (
+              <View style={{ 
+                height: 24, 
+                marginTop: 8,
+                justifyContent: 'center',
+              }}>
+                {currentScreen === 'exercise' ? (
+                  <View style={{ 
+                    flexDirection: 'row', 
+                    alignItems: 'center', 
+                    gap: 12, 
+                  }}>
+                    <View style={{ 
+                      flexDirection: 'row', 
+                      alignItems: 'center', 
+                      gap: 6, 
+                    }}>
+                      {currentRound.exercises.map((_, index) => (
+                        <View
+                          key={index}
+                          style={{
+                            width: index === currentExerciseIndex ? 8 : 6,
+                            height: index === currentExerciseIndex ? 8 : 6,
+                            borderRadius: 4,
+                            backgroundColor: index === currentExerciseIndex 
+                              ? TOKENS.color.accent
+                              : index < currentExerciseIndex 
+                                ? 'rgba(156, 176, 255, 0.6)' // completed
+                                : 'rgba(156, 176, 255, 0.25)', // future
+                            transform: index === currentExerciseIndex ? [{ scale: 1.2 }] : [],
+                          }}
+                        />
+                      ))}
+                    </View>
+                    <Text style={{
+                      fontSize: 14,
+                      fontWeight: '600',
+                      color: TOKENS.color.accent,
+                      fontStyle: 'italic',
+                      letterSpacing: 0.5,
+                    }}>
+                      Let's Go!
+                    </Text>
+                  </View>
+                ) : currentScreen === 'rest' ? (
+                  <Text style={{
+                    fontSize: 16,
+                    fontWeight: '700',
+                    color: TOKENS.color.muted,
+                    opacity: 0.8,
+                    textTransform: 'uppercase',
+                    letterSpacing: 1.2,
+                  }}>
+                    Switch Stations
+                  </Text>
+                ) : null}
+              </View>
+            )}
+          </View>
         ) : (
           <Pressable
             onPress={async () => {
@@ -915,8 +981,23 @@ export function CircuitWorkoutLiveScreen() {
           </Pressable>
         )}
         
-        {currentScreen === 'exercise' ? (
-          null  // No centered header text for exercise screen
+        {(currentScreen === 'exercise' || currentScreen === 'rest') && currentRoundType === 'stations_round' ? (
+          // Timer for stations exercise and rest
+          <Text style={{ 
+            fontSize: 120, 
+            fontWeight: '900', 
+            color: TOKENS.color.accent,
+            letterSpacing: -2,
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            textAlign: 'center',
+            pointerEvents: 'none'
+          }}>
+            {formatTime(timeRemaining)}
+          </Text>
+        ) : currentScreen === 'exercise' ? (
+          null  // No centered header text for circuit exercise screen
         ) : currentScreen === 'rest' ? (
           null  // No centered header text for rest screen
         ) : currentScreen === 'round-preview' ? (
@@ -936,24 +1017,6 @@ export function CircuitWorkoutLiveScreen() {
           </Text>
         ) : null}
         
-        {/* Stations Round Indicator */}
-        {currentScreen === 'round-preview' && currentRoundType === 'stations_round' && (
-          <Text style={{ 
-            fontSize: 18, 
-            fontWeight: '600', 
-            color: TOKENS.color.accent2,
-            letterSpacing: 0.5,
-            textTransform: 'uppercase',
-            position: 'absolute',
-            left: 0,
-            right: 0,
-            textAlign: 'center',
-            pointerEvents: 'none',
-            top: 170
-          }}>
-            Stations Round
-          </Text>
-        )}
         
         {currentScreen === 'round-preview' && currentRoundIndex === 0 && timeRemaining === 0 ? (
           <Pressable
@@ -1073,106 +1136,68 @@ export function CircuitWorkoutLiveScreen() {
             : <CircuitRoundPreview currentRound={currentRound} />
         )}
 
-        {currentScreen === 'exercise' && currentExercise && (
-          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingBottom: 60 }}>
-            {/* Main Timer - Primary Focus */}
-            <Text style={{ 
-              fontSize: 180, 
-              fontWeight: '900', 
-              color: TOKENS.color.accent,
-              marginBottom: 40,
-              letterSpacing: -2
-            }}>
-              {formatTime(timeRemaining)}
-            </Text>
-            
-            {/* Exercise Name - Secondary Focus */}
-            <Text style={{ 
-              fontSize: 48, 
-              fontWeight: '700', 
-              color: TOKENS.color.text, 
-              marginBottom: 12,
-              textAlign: 'center'
-            }} numberOfLines={1}>
-              {currentExercise.exerciseName}
-            </Text>
-            
-            {/* Progress Indicator - Tertiary */}
-            <Text style={{ 
-              fontSize: 20, 
-              fontWeight: '500',
-              color: TOKENS.color.muted,
-              opacity: 0.7
-            }}>
-              Exercise {currentExerciseIndex + 1} of {currentRound?.exercises.length}
-            </Text>
-            
-            {/* Stations Round Indicator */}
-            {currentRoundType === 'stations_round' && (
-              <Text style={{ 
-                fontSize: 16, 
-                fontWeight: '600', 
-                color: TOKENS.color.accent2,
-                letterSpacing: 0.5,
-                textTransform: 'uppercase',
-                marginTop: 20,
-                opacity: 0.8
-              }}>
-                Stations Round
-              </Text>
-            )}
-          </View>
+        {currentScreen === 'exercise' && currentExercise && currentRound && (
+          currentRoundType === 'stations_round' 
+            ? <StationsExerciseView 
+                currentRound={currentRound}
+                currentExercise={currentExercise}
+                currentExerciseIndex={currentExerciseIndex}
+                timeRemaining={timeRemaining}
+                isPaused={isPaused}
+              />
+            : <CircuitExerciseView 
+                currentRound={currentRound}
+                currentExercise={currentExercise}
+                currentExerciseIndex={currentExerciseIndex}
+                timeRemaining={timeRemaining}
+                isPaused={isPaused}
+              />
         )}
 
-        {currentScreen === 'rest' && (
-          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingBottom: 60 }}>
-            {/* Main Timer - Primary Focus */}
-            <Text style={{ 
-              fontSize: 180, 
-              fontWeight: '900', 
-              color: TOKENS.color.accent,
-              marginBottom: 40,
-              letterSpacing: -2
-            }}>
-              {formatTime(timeRemaining)}
-            </Text>
-            
-            {/* Rest Label - Secondary Focus */}
-            <Text style={{ 
-              fontSize: 48, 
-              fontWeight: '700', 
-              color: TOKENS.color.text, 
-              marginBottom: 12,
-              textAlign: 'center'
-            }}>
-              Rest
-            </Text>
-            
-            {/* Next Exercise - Tertiary */}
-            <Text style={{ 
-              fontSize: 20, 
-              fontWeight: '500',
-              color: TOKENS.color.muted,
-              opacity: 0.7
-            }}>
-              Next up: {currentRound?.exercises[currentExerciseIndex + 1]?.exerciseName || 'Complete'}
-            </Text>
-            
-            {/* Stations Round Indicator */}
-            {currentRoundType === 'stations_round' && (
-              <Text style={{ 
-                fontSize: 16, 
-                fontWeight: '600', 
-                color: TOKENS.color.accent2,
-                letterSpacing: 0.5,
-                textTransform: 'uppercase',
-                marginTop: 20,
-                opacity: 0.8
-              }}>
-                Stations Round
-              </Text>
-            )}
-          </View>
+        {currentScreen === 'rest' && currentRound && (
+          currentRoundType === 'stations_round' 
+            ? <StationsRestView 
+                currentRound={currentRound}
+                currentExerciseIndex={currentExerciseIndex}
+                timeRemaining={timeRemaining}
+                isPaused={isPaused}
+              />
+            : (
+              <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingBottom: 60 }}>
+                {/* Main Timer - Primary Focus */}
+                <Text style={{ 
+                  fontSize: 180, 
+                  fontWeight: '900', 
+                  color: TOKENS.color.accent,
+                  marginBottom: 40,
+                  letterSpacing: -2
+                }}>
+                  {formatTime(timeRemaining)}
+                </Text>
+                
+                {/* Rest Label - Secondary Focus */}
+                <Text style={{ 
+                  fontSize: 48, 
+                  fontWeight: '700', 
+                  color: TOKENS.color.text, 
+                  marginBottom: 12,
+                  textAlign: 'center'
+                }}>
+                  Rest
+                </Text>
+                
+                {/* Next Exercise - Tertiary */}
+                <Text style={{ 
+                  fontSize: 20, 
+                  fontWeight: '500',
+                  color: TOKENS.color.muted,
+                  opacity: 0.7
+                }}>
+                  Next up: {currentRound?.exercises[currentExerciseIndex + 1]?.exerciseName || 'Complete'}
+                </Text>
+                
+              </View>
+            )
         )}
       </View>
       

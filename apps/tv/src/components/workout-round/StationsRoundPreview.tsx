@@ -6,138 +6,135 @@ interface StationsRoundPreviewProps {
   currentRound: RoundData;
 }
 
+// Team configuration - supports up to 6 teams
+const TEAMS = [
+  { name: 'Red', color: '#ef4444' },
+  { name: 'Blue', color: '#3b82f6' },
+  { name: 'Green', color: '#22c55e' },
+  { name: 'Orange', color: '#f59e0b' },
+  { name: 'Purple', color: '#a855f7' },
+  { name: 'Teal', color: '#14b8a6' },
+];
+
 export function StationsRoundPreview({ currentRound }: StationsRoundPreviewProps) {
-  // For stations, we'll create a different layout
-  // Show exercises as "stations" in a more visual layout
   const exerciseCount = currentRound.exercises.length;
   
-  // For now, let's create a simple stations layout
-  // We can enhance this with more visual elements later
+  // Use only as many teams as there are stations
+  const activeTeams = TEAMS.slice(0, exerciseCount);
+  
+  // Calculate grid columns based on number of stations
+  const getGridColumns = () => {
+    if (exerciseCount <= 3) return exerciseCount;
+    if (exerciseCount <= 6) return 3;
+    if (exerciseCount <= 8) return 4;
+    return 5;
+  };
+  
+  const columns = getGridColumns();
+  const cardWidth = columns <= 3 ? 380 : columns === 4 ? 300 : 260;
+  
   return (
     <View style={{ flex: 1, width: '100%' }}>
-      {/* Station Layout Title */}
+      {/* Header Section */}
       <View style={{ 
+        paddingTop: 20,
+        paddingBottom: 20,
         alignItems: 'center',
-        marginBottom: 40,
-        paddingTop: 40,
       }}>
         <Text style={{
-          fontSize: 24,
-          fontWeight: '600',
-          color: TOKENS.color.accent2,
-          textTransform: 'uppercase',
-          letterSpacing: 1.5,
-        }}>
-          Station Circuit
-        </Text>
-        <Text style={{
-          fontSize: 16,
-          fontWeight: '500',
+          fontSize: 13,
+          fontWeight: '800',
           color: TOKENS.color.muted,
-          marginTop: 8,
+          textTransform: 'uppercase',
+          letterSpacing: 2,
+          marginBottom: 8,
         }}>
-          {exerciseCount} Stations • Move through each station
+          ROTATE THROUGH {exerciseCount} STATIONS
         </Text>
       </View>
 
-      {/* Stations Grid - Different layout than circuit */}
+      {/* Stations Grid */}
       <View style={{ 
         flex: 1, 
-        justifyContent: 'center',
-        paddingHorizontal: 40,
+        paddingHorizontal: 28,
       }}>
         <View style={{ 
           flexDirection: 'row',
           flexWrap: 'wrap',
           justifyContent: 'center',
-          gap: 24,
+          gap: 16,
         }}>
           {currentRound.exercises.map((exercise, idx) => {
-            // Create a more station-focused card design
             const stationNumber = idx + 1;
+            const team = activeTeams[idx % activeTeams.length];
             
             return (
               <MattePanel 
                 key={exercise.id} 
                 style={{ 
-                  width: 320,
-                  height: 160,
-                  padding: 24,
-                  justifyContent: 'space-between',
-                  borderWidth: 2,
-                  borderColor: stationNumber === 1 ? TOKENS.color.accent2 : TOKENS.color.borderGlass,
+                  width: cardWidth,
+                  padding: 16,
+                  gap: 10,
                 }}
               >
-                {/* Station Header */}
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Text style={{ 
-                    fontSize: 14, 
-                    fontWeight: '700',
-                    color: TOKENS.color.accent2,
-                    textTransform: 'uppercase',
-                    letterSpacing: 1,
-                  }}>
-                    Station {stationNumber}
-                  </Text>
-                  {stationNumber === 1 && (
-                    <View style={{
-                      paddingHorizontal: 12,
-                      paddingVertical: 4,
-                      backgroundColor: TOKENS.color.accent2,
-                      borderRadius: 12,
-                    }}>
-                      <Text style={{
-                        fontSize: 12,
-                        fontWeight: '600',
-                        color: TOKENS.color.bg,
-                      }}>
-                        START HERE
-                      </Text>
-                    </View>
-                  )}
-                </View>
-                
-                {/* Exercise Name */}
+                {/* Station Title */}
                 <Text style={{ 
-                  fontSize: 24, 
-                  fontWeight: '800',
+                  fontSize: 18, 
+                  fontWeight: '900',
                   color: TOKENS.color.text,
-                  lineHeight: 28,
-                }} numberOfLines={2}>
-                  {exercise.exerciseName}
+                  marginBottom: 4,
+                }}>
+                  Station {stationNumber} — {exercise.exerciseName}
                 </Text>
                 
                 {/* Equipment */}
                 <Text style={{ 
-                  fontSize: 16, 
-                  fontWeight: '600',
+                  fontSize: 12, 
+                  fontWeight: '700',
                   color: TOKENS.color.muted,
+                  textTransform: 'uppercase',
+                  letterSpacing: 1.2,
                 }}>
                   {Array.isArray(exercise.equipment) && exercise.equipment.length > 0
                     ? exercise.equipment.join(', ') 
-                    : 'Bodyweight'}
+                    : 'bodyweight'}
                 </Text>
+                
+                {/* Team Badge */}
+                <View style={{ 
+                  alignSelf: 'flex-start',
+                  paddingHorizontal: 12,
+                  paddingVertical: 7,
+                  borderRadius: 10,
+                  backgroundColor: `${team.color}15`,
+                  borderWidth: 1,
+                  borderColor: team.color,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 8,
+                }}>
+                  <View style={{
+                    width: 12,
+                    height: 12,
+                    borderRadius: 999,
+                    backgroundColor: team.color,
+                  }} />
+                  <Text style={{ 
+                    color: team.color, 
+                    fontWeight: '800',
+                    fontSize: 14,
+                    letterSpacing: 0.3,
+                  }}>
+                    {team.name} Team
+                  </Text>
+                </View>
+                
               </MattePanel>
             );
           })}
         </View>
       </View>
 
-      {/* Station Instructions */}
-      <View style={{
-        paddingTop: 20,
-        paddingBottom: 40,
-        alignItems: 'center',
-      }}>
-        <Text style={{
-          fontSize: 18,
-          fontWeight: '600',
-          color: TOKENS.color.muted,
-          textAlign: 'center',
-        }}>
-          Complete each station • Follow the numbered order
-        </Text>
-      </View>
     </View>
   );
 }
