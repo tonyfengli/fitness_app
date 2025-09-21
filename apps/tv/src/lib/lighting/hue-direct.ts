@@ -228,3 +228,94 @@ export function stopHealthCheck() {
     healthCheckInterval = null;
   }
 }
+
+// Fetch all scenes from Hue Bridge
+export async function fetchHueScenes(): Promise<Array<{ id: string; name: string; group?: string }>> {
+  const url = `https://${HUE_BRIDGE_IP}/clip/v2/resource/scene`;
+  
+  console.log('[HUE-SCENES] Fetching scenes from:', url);
+  
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 3000);
+    
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: { 
+        'hue-application-key': HUE_APP_KEY,
+        'Accept': 'application/json'
+      },
+      signal: controller.signal,
+      // @ts-ignore - React Native fetch doesn't type this properly
+      rejectUnauthorized: false  // For self-signed certificates
+    });
+    
+    clearTimeout(timeout);
+    
+    if (response.ok) {
+      const data = await response.json();
+      console.log('[HUE-SCENES] Raw response:', data);
+      
+      // Extract relevant scene data
+      const scenes = data.data?.map((scene: any) => ({
+        id: scene.id,
+        name: scene.metadata?.name || 'Unnamed Scene',
+        group: scene.group?.rid
+      })) || [];
+      
+      console.log('[HUE-SCENES] Found', scenes.length, 'scenes');
+      return scenes;
+    } else {
+      console.error('[HUE-SCENES] Failed to fetch scenes:', response.status);
+      return [];
+    }
+  } catch (error) {
+    console.error('[HUE-SCENES] Error fetching scenes:', error);
+    return [];
+  }
+}
+
+// Activate a scene
+export async function activateHueScene(sceneId: string): Promise<boolean> {
+  const url = `https://${HUE_BRIDGE_IP}/clip/v2/resource/scene/${sceneId}`;
+  
+  console.log('[HUE-SCENES] Activating scene:', sceneId);
+  
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 2000);
+    
+    const response = await fetch(url, {
+      method: 'PUT',
+      headers: { 
+        'hue-application-key': HUE_APP_KEY,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        recall: { 
+          action: 'active' 
+        }
+      }),
+      signal: controller.signal,
+      // @ts-ignore
+      rejectUnauthorized: false
+    });
+    
+    clearTimeout(timeout);
+    
+    if (response.ok) {
+      console.log('[HUE-SCENES] Scene activated successfully');
+      updateStatus('success');
+      return true;
+    } else {
+      const errorText = await response.text();
+      console.error('[HUE-SCENES] Failed to activate scene:', response.status, errorText);
+      updateStatus('failed');
+      return false;
+    }
+  } catch (error) {
+    console.error('[HUE-SCENES] Error activating scene:', error);
+    updateStatus('failed');
+    return false;
+  }
+}

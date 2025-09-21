@@ -3,7 +3,9 @@ import { View, Text, Pressable } from 'react-native';
 import { useNavigation } from '../App';
 import { 
   setHueLights, 
-  subscribeLightingStatus
+  subscribeLightingStatus,
+  fetchHueScenes,
+  activateHueScene
 } from '../lib/lighting';
 import {
   DEFAULT_PRESET_COLORS,
@@ -56,6 +58,7 @@ export function LightingTestScreen() {
   const [selectedCircuitPreset, setSelectedCircuitPreset] = useState<string | null>(null);
   const [selectedStrengthPreset, setSelectedStrengthPreset] = useState<string | null>(null);
   const [selectedColors, setSelectedColors] = useState<{ [key: string]: string }>({});
+  const [hueScenes, setHueScenes] = useState<Array<{ id: string; name: string; group?: string }>>([]);
 
   useEffect(() => {
     const unsubscribe = subscribeLightingStatus((status) => {
@@ -65,6 +68,12 @@ export function LightingTestScreen() {
     // Load saved color mappings
     loadColorMappings().then(mappings => {
       setSelectedColors(mappings);
+    });
+    
+    // Fetch Hue scenes
+    fetchHueScenes().then(scenes => {
+      console.log('[LightingTestScreen] Fetched scenes:', scenes);
+      setHueScenes(scenes);
     });
     
     return () => unsubscribe();
@@ -99,6 +108,17 @@ export function LightingTestScreen() {
     setSelectedStrengthPreset(null);
     
     console.log(`Color ${color.name} selected and saved for ${presetKey}`);
+  };
+
+  const handleSceneSelect = async (sceneId: string, sceneName: string) => {
+    console.log(`[LightingTestScreen] Activating scene: ${sceneName} (${sceneId})`);
+    const success = await activateHueScene(sceneId);
+    if (success) {
+      console.log('[LightingTestScreen] Scene activated successfully');
+      // Collapse the palette after scene selection
+      setSelectedCircuitPreset(null);
+      setSelectedStrengthPreset(null);
+    }
   };
 
   const handleBackPress = async () => {
@@ -268,6 +288,8 @@ export function LightingTestScreen() {
           onPresetClick={(preset, presetButton) => handlePresetClick(preset, 'circuit', presetButton.disabled)}
           onColorSelect={handleColorSelect}
           selectedColors={selectedColors}
+          hueScenes={hueScenes}
+          onSceneSelect={handleSceneSelect}
         />
         
         {/* Strength Presets */}
@@ -278,6 +300,8 @@ export function LightingTestScreen() {
           onPresetClick={(preset) => handlePresetClick(preset, 'strength')}
           onColorSelect={handleColorSelect}
           selectedColors={selectedColors}
+          hueScenes={hueScenes}
+          onSceneSelect={handleSceneSelect}
         />
       </View>
     </View>
@@ -291,6 +315,8 @@ function PresetSection({
   onPresetClick, 
   onColorSelect,
   selectedColors,
+  hueScenes,
+  onSceneSelect,
 }: { 
   title: string; 
   presets: PresetButton[];
@@ -298,6 +324,8 @@ function PresetSection({
   onPresetClick: (preset: string, presetButton: PresetButton) => void;
   onColorSelect: (presetKey: string, color: typeof COLOR_PALETTE[0]) => void;
   selectedColors: { [key: string]: string };
+  hueScenes: Array<{ id: string; name: string; group?: string }>;
+  onSceneSelect: (sceneId: string, sceneName: string) => void;
 }) {
   return (
     <View style={{
@@ -371,48 +399,90 @@ function PresetSection({
               
               {/* Color Palette Row */}
               {isSelected && !preset.disabled && (
-                <View style={{ 
-                  flexDirection: 'row', 
-                  flexWrap: 'wrap',
-                  gap: 7, 
-                  marginTop: 10,
-                  paddingLeft: 20,
-                  paddingRight: 20,
-                }}>
-                  {COLOR_PALETTE.map((color, colorIndex) => {
-                    const isColorSelected = selectedColors[preset.presetKey] === color.value;
-                    return (
-                      <Pressable
-                        key={colorIndex}
-                        onPress={() => onColorSelect(preset.presetKey, color)}
-                        focusable
-                      >
-                        {({ focused }) => (
-                          <View style={{
-                            width: 41,
-                            height: 41,
-                            borderRadius: 20,
-                            backgroundColor: color.value,
-                            borderWidth: isColorSelected || focused ? 4 : 2,
-                            borderColor: isColorSelected || focused ? TOKENS.color.text : 'rgba(255,255,255,0.2)',
-                            transform: focused ? [{ scale: 1.1 }] : [],
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                          }}>
-                            {isColorSelected && (
-                              <View style={{
-                                width: 14,
-                                height: 14,
-                                borderRadius: 7,
-                                backgroundColor: TOKENS.color.text,
-                              }} />
-                            )}
-                          </View>
-                        )}
-                      </Pressable>
-                    );
-                  })}
-                </View>
+                <>
+                  <View style={{ 
+                    flexDirection: 'row', 
+                    flexWrap: 'wrap',
+                    gap: 7, 
+                    marginTop: 10,
+                    paddingLeft: 20,
+                    paddingRight: 20,
+                  }}>
+                    {COLOR_PALETTE.map((color, colorIndex) => {
+                      const isColorSelected = selectedColors[preset.presetKey] === color.value;
+                      return (
+                        <Pressable
+                          key={colorIndex}
+                          onPress={() => onColorSelect(preset.presetKey, color)}
+                          focusable
+                        >
+                          {({ focused }) => (
+                            <View style={{
+                              width: 41,
+                              height: 41,
+                              borderRadius: 20,
+                              backgroundColor: color.value,
+                              borderWidth: isColorSelected || focused ? 4 : 2,
+                              borderColor: isColorSelected || focused ? TOKENS.color.text : 'rgba(255,255,255,0.2)',
+                              transform: focused ? [{ scale: 1.1 }] : [],
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                            }}>
+                              {isColorSelected && (
+                                <View style={{
+                                  width: 14,
+                                  height: 14,
+                                  borderRadius: 7,
+                                  backgroundColor: TOKENS.color.text,
+                                }} />
+                              )}
+                            </View>
+                          )}
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                  
+                  {/* Scenes Row */}
+                  {hueScenes.length > 0 && (
+                    <View style={{ 
+                      flexDirection: 'row', 
+                      flexWrap: 'wrap',
+                      gap: 8, 
+                      marginTop: 12,
+                      paddingLeft: 20,
+                      paddingRight: 20,
+                    }}>
+                      {hueScenes.map((scene) => (
+                        <Pressable
+                          key={scene.id}
+                          onPress={() => onSceneSelect(scene.id, scene.name)}
+                          focusable
+                        >
+                          {({ focused }) => (
+                            <View style={{
+                              paddingHorizontal: 14,
+                              paddingVertical: 8,
+                              borderRadius: 18,
+                              backgroundColor: focused ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.08)',
+                              borderWidth: focused ? 2 : 1,
+                              borderColor: focused ? TOKENS.color.accent : 'rgba(255,255,255,0.2)',
+                              transform: focused ? [{ scale: 1.05 }] : [],
+                            }}>
+                              <Text style={{
+                                color: TOKENS.color.text,
+                                fontSize: 13,
+                                fontWeight: '500',
+                              }}>
+                                {scene.name}
+                              </Text>
+                            </View>
+                          )}
+                        </Pressable>
+                      ))}
+                    </View>
+                  )}
+                </>
               )}
             </View>
           );
