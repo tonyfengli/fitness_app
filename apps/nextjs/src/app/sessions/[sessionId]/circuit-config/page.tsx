@@ -278,6 +278,7 @@ export default function CircuitConfigPage() {
             {/* Step 3: Per-Round Configuration */}
             {currentStep === 3 && (
               <PerRoundConfigStep
+                rounds={config.config.rounds}
                 roundTemplates={config.config.roundTemplates || []}
                 onRoundTemplatesChange={(roundTemplates) => updateConfig({ roundTemplates })}
                 warmupEnabled={config.config.warmup?.enabled || false}

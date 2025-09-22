@@ -322,6 +322,7 @@ export function RoundTypesStep({
 }
 
 interface PerRoundConfigStepProps {
+  rounds?: number;
   roundTemplates: RoundConfig[];
   onRoundTemplatesChange: (roundTemplates: RoundConfig[]) => void;
   warmupEnabled: boolean;
@@ -335,6 +336,7 @@ interface PerRoundConfigStepProps {
 }
 
 export function PerRoundConfigStep({
+  rounds,
   roundTemplates,
   onRoundTemplatesChange,
   warmupEnabled,
@@ -342,8 +344,29 @@ export function PerRoundConfigStep({
   onWarmupChange,
   isSaving,
 }: PerRoundConfigStepProps) {
+  // If rounds is provided, ensure we have templates for all rounds
+  const totalRounds = rounds || roundTemplates.length;
+  
+  // Create templates for all rounds
+  const allRoundTemplates = Array.from({ length: totalRounds }, (_, i) => {
+    const existing = roundTemplates.find(rt => rt.roundNumber === i + 1);
+    if (existing) {
+      return existing;
+    }
+    // Create default template for missing rounds
+    return {
+      roundNumber: i + 1,
+      template: {
+        type: 'circuit_round' as const,
+        exercisesPerRound: 6,
+        workDuration: 45,
+        restDuration: 15,
+      }
+    };
+  });
+  
   // Ensure all templates have required fields with defaults
-  const normalizedTemplates = roundTemplates.map(rt => {
+  const normalizedTemplates = allRoundTemplates.map(rt => {
     if (rt.template.type === 'circuit_round' || rt.template.type === 'stations_round') {
       return {
         ...rt,
