@@ -14,7 +14,7 @@ import {
   filterExercisesBySearch,
 } from "@acme/ui-shared";
 import { supabase } from "~/lib/supabase";
-import { api } from "~/trpc/react";
+import { api, useTRPC } from "~/trpc/react";
 
 // Circuit timing utilities
 function getEffectiveTrackDuration(trackDurationMs: number, hypeTimestamp?: number | null): number {
@@ -310,9 +310,16 @@ function CircuitWorkoutOverviewContent() {
         }
       });
       
-      // Group by round
+      // Group by round, excluding warm-up exercises
       uniqueExercises.forEach((selection) => {
         const round = selection.groupName || 'Round 1';
+        
+        // Skip warm-up exercises from regular rounds
+        if (round === 'Warm-up') {
+          console.log("[CircuitWorkoutOverview] Excluding warm-up exercise from rounds:", selection.exerciseName);
+          return;
+        }
+        
         if (!roundsMap.has(round)) {
           roundsMap.set(round, []);
         }
@@ -459,6 +466,35 @@ function CircuitWorkoutOverviewContent() {
             </Button>
           </div>
         </div>
+
+        {/* Warm-up Section */}
+        {circuitConfig?.config?.warmup?.enabled && (
+          <Card className="mb-8 p-8 border-2 shadow-lg bg-gradient-to-br from-orange-50 to-red-50 dark:from-orange-950/10 dark:to-red-950/10 border-orange-400 dark:border-orange-500/40">
+            <h2 className="mb-6 text-2xl font-bold flex items-center gap-3">
+              <span className="w-10 h-10 rounded-full bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 ring-2 ring-orange-400 dark:ring-orange-500/50 flex items-center justify-center">
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M10 2L10 10M6 6L10 10L14 6M4 14H16M4 18H16" />
+                </svg>
+              </span>
+              <span>Warm-up</span>
+              <span className="ml-auto text-lg font-medium text-muted-foreground">
+                {Math.floor((circuitConfig.config.warmup.duration || 300) / 60)} minutes
+              </span>
+            </h2>
+            
+            <div className="space-y-3">
+              <WarmupExercisesList 
+                sessionId={sessionId!} 
+                onReplaceClick={(exercise, round, exerciseIndex) => {
+                  setSelectedExercise(exercise);
+                  setSelectedRound(round);
+                  setSelectedExerciseIndex(exerciseIndex);
+                  setShowExerciseSelection(true);
+                }}
+              />
+            </div>
+          </Card>
+        )}
 
         {/* Content */}
         {roundsData.length > 0 ? (
@@ -998,6 +1034,96 @@ function CircuitWorkoutOverviewContent() {
         </>
       )}
     </div>
+  );
+}
+
+// Warm-up exercises component
+function WarmupExercisesList({ 
+  sessionId,
+  onReplaceClick 
+}: { 
+  sessionId: string;
+  onReplaceClick: (exercise: any, round: string, exerciseIndex: number) => void;
+}) {
+  const trpc = useTRPC();
+  
+  // Get saved selections (warm-up exercises will have groupName: "Warm-up")
+  const { data: savedSelections, isLoading } = useQuery({
+    ...trpc.workoutSelections.getSelections.queryOptions({ sessionId }),
+    enabled: !!sessionId,
+  });
+  
+  // Filter for warm-up exercises
+  const warmupExercises = useMemo(() => {
+    if (!savedSelections) return [];
+    
+    // Get unique warm-up exercises (deduplicate since circuit exercises are shared)
+    const uniqueExercises = new Map<string, any>();
+    
+    savedSelections
+      .filter((selection: any) => selection.groupName === "Warm-up")
+      .forEach((selection: any) => {
+        if (!uniqueExercises.has(selection.exerciseId)) {
+          uniqueExercises.set(selection.exerciseId, selection);
+        }
+      });
+    
+    // Sort by orderIndex
+    return Array.from(uniqueExercises.values())
+      .sort((a: any, b: any) => a.orderIndex - b.orderIndex);
+  }, [savedSelections]);
+  
+  console.log('[WarmupExercises] Component data:', { 
+    savedSelectionsCount: savedSelections?.length,
+    warmupExercisesCount: warmupExercises.length,
+    warmupExercises: warmupExercises.map(ex => ({
+      name: ex.exerciseName,
+      orderIndex: ex.orderIndex,
+      id: ex.id,
+      exerciseId: ex.exerciseId
+    })),
+  });
+  
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-8">
+        <Loader2 className="h-6 w-6 animate-spin" />
+      </div>
+    );
+  }
+  
+  if (warmupExercises.length === 0) {
+    return (
+      <div className="p-4 text-center text-muted-foreground">
+        No warm-up exercises selected yet
+      </div>
+    );
+  }
+  
+  return (
+    <>
+      {warmupExercises.map((exercise, idx) => (
+        <div key={exercise.id} className="flex items-center justify-between p-4 rounded-xl bg-orange-100/30 dark:bg-orange-900/10 hover:bg-orange-100/50 dark:hover:bg-orange-900/20 transition-all border border-transparent hover:border-orange-300/50 dark:hover:border-orange-700/50 min-h-[72px]">
+          <div className="flex items-center gap-4 flex-1">
+            <span className="w-8 h-8 bg-orange-200/50 dark:bg-orange-800/50 rounded-lg flex items-center justify-center text-sm font-semibold text-orange-700 dark:text-orange-300 flex-shrink-0">
+              {idx + 1}
+            </span>
+            <span className="font-medium text-lg leading-tight py-1">{exercise.exerciseName}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            {/* Replace button */}
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => onReplaceClick(exercise, "Warm-up", exercise.orderIndex)}
+              className="h-8 px-3 font-medium"
+            >
+              Replace
+            </Button>
+          </div>
+        </div>
+      ))}
+    </>
   );
 }
 

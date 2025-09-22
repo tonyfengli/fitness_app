@@ -324,12 +324,22 @@ export function RoundTypesStep({
 interface PerRoundConfigStepProps {
   roundTemplates: RoundConfig[];
   onRoundTemplatesChange: (roundTemplates: RoundConfig[]) => void;
+  warmupEnabled: boolean;
+  warmupConfig?: {
+    enabled: boolean;
+    exercisesCount: number;
+    duration: number;
+  };
+  onWarmupChange: (warmup: any) => void;
   isSaving: boolean;
 }
 
 export function PerRoundConfigStep({
   roundTemplates,
   onRoundTemplatesChange,
+  warmupEnabled,
+  warmupConfig,
+  onWarmupChange,
   isSaving,
 }: PerRoundConfigStepProps) {
   // Ensure all templates have required fields with defaults
@@ -409,6 +419,98 @@ export function PerRoundConfigStep({
           Configure exercises and timing for each round
         </p>
       </div>
+
+      {/* Warm-up Section */}
+      {warmupEnabled && (
+        <div className="space-y-4">
+          <div className={cn(
+            "space-y-3 p-4 rounded-lg border transition-all",
+            "bg-orange-50/30 border-orange-200/50 hover:border-orange-300 dark:bg-opacity-10"
+          )}>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-base font-medium">Warm-up</span>
+              <span className={cn(
+                "text-xs font-bold px-2.5 py-1 rounded-full",
+                "bg-orange-500 text-white"
+              )}>
+                WARM-UP
+              </span>
+            </div>
+            
+            {/* Warm-up Description */}
+            <div className={cn(
+              "text-xs px-3 py-2 rounded-md -mx-1 mb-3",
+              "bg-orange-100/50 text-orange-700 dark:bg-orange-900/20 dark:text-orange-300"
+            )}>
+              🔥 Prepare your body with dynamic movements
+            </div>
+            
+            {/* Exercises */}
+            <div className="space-y-2">
+              <span className="text-xs font-medium text-muted-foreground">EXERCISES</span>
+              <div className="grid grid-cols-4 gap-1">
+                {[3, 4, 5, 6].map((option) => {
+                  const isSelected = warmupConfig?.exercisesCount === option;
+                  return (
+                    <Button
+                      key={option}
+                      variant={isSelected ? "primary" : "outline"}
+                      className={cn(
+                        "relative h-10 min-w-0 text-xs transition-all",
+                        isSelected && "ring-2 ring-offset-1 ring-primary"
+                      )}
+                      onClick={() => onWarmupChange({
+                        ...warmupConfig,
+                        enabled: true,
+                        exercisesCount: option,
+                        duration: warmupConfig?.duration || 300
+                      })}
+                      disabled={isSaving}
+                      size="sm"
+                    >
+                      <span className={cn(isSelected && "font-bold")}>
+                        {option}
+                      </span>
+                    </Button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Total Duration */}
+            <div className="space-y-2">
+              <span className="text-xs font-medium text-muted-foreground">TOTAL TIME</span>
+              <div className="grid grid-cols-5 gap-1">
+                {[180, 240, 300, 360, 420].map((option) => { // 3-7 minutes
+                  const isSelected = warmupConfig?.duration === option;
+                  return (
+                    <Button
+                      key={option}
+                      variant={isSelected ? "primary" : "outline"}
+                      className={cn(
+                        "relative h-9 min-w-0 text-xs transition-all",
+                        isSelected && "ring-2 ring-offset-1 ring-primary"
+                      )}
+                      onClick={() => onWarmupChange({
+                        ...warmupConfig,
+                        enabled: true,
+                        exercisesCount: warmupConfig?.exercisesCount || 6,
+                        duration: option
+                      })}
+                      disabled={isSaving}
+                      size="sm"
+                    >
+                      <span className={cn(isSelected && "font-bold")}>
+                        {Math.floor(option / 60)}m
+                      </span>
+                    </Button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="space-y-4">
         {sortedRounds.map((round) => {

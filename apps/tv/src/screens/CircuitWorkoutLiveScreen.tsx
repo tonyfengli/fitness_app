@@ -327,10 +327,22 @@ export function CircuitWorkoutLiveScreen() {
   // Process selections into rounds
   useEffect(() => {
     if (selections && selections.length > 0) {
+      console.log('[CircuitWorkout] Processing selections:', {
+        totalSelections: selections.length,
+        groupNames: [...new Set(selections.map(s => s.groupName))],
+        warmupEnabled: circuitConfig?.config?.warmup?.enabled,
+      });
+      
       // For circuits, deduplicate by exerciseId + groupName
       const exerciseMap = new Map<string, CircuitExercise>();
       
       selections.forEach((selection) => {
+        // Skip warm-up exercises from being added to regular rounds
+        if (selection.groupName === 'Warm-up') {
+          console.log('[CircuitWorkout] Skipping warm-up exercise from rounds:', selection.exerciseName);
+          return;
+        }
+        
         const key = `${selection.exerciseId}-${selection.groupName}`;
         
         if (!exerciseMap.has(key)) {
@@ -367,30 +379,53 @@ export function CircuitWorkoutLiveScreen() {
           return aNum - bNum;
         });
       
+      console.log('[CircuitWorkout] Final rounds data:', {
+        roundCount: rounds.length,
+        rounds: rounds.map(r => ({
+          name: r.roundName,
+          exerciseCount: r.exercises.length
+        }))
+      });
+      
       setRoundsData(rounds);
       
       // Check if warmup is configured and enabled
       if (circuitConfig?.config?.warmup?.enabled && !warmupData && !warmupCompleted) {
         // Only set up warmup if we haven't already done so and haven't completed it
-        // For now, use exercises from first round as warmup exercises
-        // In the future, this could be separate warmup-specific exercises
-        const warmupExerciseCount = circuitConfig.config.warmup.exercisesCount || 6;
-        const allExercises = rounds.flatMap(r => r.exercises);
-        const warmupRound: RoundData = {
-          roundName: 'Warm-up',
-          exercises: allExercises.slice(0, Math.min(warmupExerciseCount, allExercises.length))
-        };
-        setWarmupData(warmupRound);
-        setCurrentScreen('warmup');
-        // Start warmup timer - just use the total duration
-        const warmupDuration = circuitConfig.config.warmup.duration; // Total warmup time
-        console.log('[WARMUP-INIT-DEBUG] Initializing warmup', {
-          warmupDuration,
-          currentScreen,
-          hasWarmupData: !!warmupData,
-          timestamp: new Date().toISOString()
-        });
-        startTimer(warmupDuration);
+        // Look for exercises with groupName "Warm-up"
+        const warmupExercises = selections
+          .filter(s => s.groupName === 'Warm-up')
+          .sort((a, b) => a.orderIndex - b.orderIndex)
+          .map(s => ({
+            id: s.id,
+            exerciseId: s.exerciseId,
+            exerciseName: s.exerciseName,
+            orderIndex: s.orderIndex
+          }));
+        
+        if (warmupExercises.length > 0) {
+          const warmupRound: RoundData = {
+            roundName: 'Warm-up',
+            exercises: warmupExercises
+          };
+          setWarmupData(warmupRound);
+          setCurrentScreen('warmup');
+          // Start warmup timer - just use the total duration
+          const warmupDuration = circuitConfig.config.warmup.duration; // Total warmup time
+          console.log('[WARMUP-INIT-DEBUG] Initializing warmup', {
+            warmupDuration,
+            currentScreen,
+            hasWarmupData: !!warmupData,
+            warmupExerciseCount: warmupExercises.length,
+            timestamp: new Date().toISOString()
+          });
+          startTimer(warmupDuration);
+        } else {
+          console.log('[WARMUP-INIT-DEBUG] No warm-up exercises found in selections', {
+            totalSelections: selections.length,
+            groupNames: [...new Set(selections.map(s => s.groupName))]
+          });
+        }
       }
     }
   }, [selections, circuitConfig, getRoundTiming, warmupCompleted]);

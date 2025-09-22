@@ -2013,12 +2013,77 @@ export class WorkoutGenerationService {
       logger.warn("No circuit rounds found in LLM assignments");
     }
     
+    // Check if warm-up is enabled
+    const warmupConfig = metadata?.circuitConfig?.config?.warmup;
+    const warmupEnabled = warmupConfig?.enabled || false;
+    const warmupExerciseCount = warmupConfig?.exercisesCount || 6;
+    
+    logger.info("createCircuitExerciseRecords - warmup check", {
+      warmupEnabled,
+      warmupExerciseCount,
+      warmupConfig,
+    });
+    
+    // Hard-coded warm-up exercise IDs
+    const warmupExerciseIds = [
+      "c01f87ab-b75a-4d7c-8c9d-b4bd6c00654a", // Squat Jump
+      "c0fb46fd-9b4e-4115-b830-279f81ddbc10", // Push-Ups
+      "8596d22e-6349-45e6-83f1-835e3360771f", // Plank
+      "71aee1c7-b87e-48fb-a28f-7a5c251b0808", // Plank Jack
+      "620165b8-278c-48cd-a8a1-9f9aa1f37e80", // Flutter Kicks
+      "62b56e4c-c89e-4308-9949-d7ad61420b99", // Glute Bridge
+    ];
+    
     // Create exercise records for each client
     for (const client of groupContext.clients) {
       const workoutId = clientWorkouts.get(client.user_id);
       if (!workoutId) continue;
       
       let globalIndex = 1;
+      
+      // Add warm-up exercises if enabled
+      if (warmupEnabled) {
+        // Randomly select the specified number of warm-up exercises
+        const selectedWarmupIds = [...warmupExerciseIds]
+          .sort(() => Math.random() - 0.5)
+          .slice(0, warmupExerciseCount);
+        
+        logger.info("Adding warm-up exercises", {
+          clientId: client.user_id,
+          selectedWarmupIds,
+          warmupExerciseCount,
+        });
+        
+        // Create WorkoutExercise entries for warm-up
+        for (const exerciseId of selectedWarmupIds) {
+          const exercise = exercisePool.find(ex => ex.id === exerciseId);
+          if (exercise) {
+            allExercises.push({
+              workoutId: workoutId,
+              exerciseId: exercise.id,
+              orderIndex: globalIndex++,
+              setsCompleted: 0,
+              groupName: "Warm-up",
+              isShared: groupContext.clients.length > 1,
+              sharedWithClients: groupContext.clients.length > 1 
+                ? groupContext.clients
+                    .filter(c => c.user_id !== client.user_id)
+                    .map(c => c.user_id)
+                : [],
+              template: "circuit",
+              metadata: {
+                phase: "warmup",
+                movementPattern: exercise.movementPattern,
+              }
+            });
+          } else {
+            logger.warn("Warm-up exercise not found in pool", {
+              exerciseId,
+              availableCount: exercisePool.length,
+            });
+          }
+        }
+      }
       
       // If repeat is enabled, we'll process rounds twice
       const iterations = repeatRounds ? 2 : 1;
