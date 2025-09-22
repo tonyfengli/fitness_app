@@ -84,6 +84,13 @@ export const CircuitRestBetweenRoundsSchema = z
   .min(CIRCUIT_CONFIG_LIMITS.restBetweenRounds.min)
   .max(CIRCUIT_CONFIG_LIMITS.restBetweenRounds.max);
 
+// Warmup configuration schema
+export const WarmupConfigSchema = z.object({
+  enabled: z.boolean(),
+  exercisesCount: z.number().int().min(2).max(8).default(6),
+  duration: z.number().int().min(60).max(600).default(300), // 1-10 minutes, default 5 minutes
+});
+
 // Complete circuit config schema with round templates
 export const CircuitConfigSchema = z.object({
   type: z.literal('circuit'),
@@ -92,6 +99,8 @@ export const CircuitConfigSchema = z.object({
     restBetweenRounds: CircuitRestBetweenRoundsSchema,
     repeatRounds: z.boolean().optional().default(false),
     roundTemplates: z.array(RoundConfigSchema),
+    // Warmup configuration (separate from rounds)
+    warmup: WarmupConfigSchema.optional(),
     // Spotify integration
     spotifyDeviceId: z.string().optional(),
     spotifyDeviceName: z.string().optional(),
@@ -130,6 +139,8 @@ export const UpdateCircuitConfigSchema = z.object({
   restBetweenRounds: CircuitRestBetweenRoundsSchema.optional(),
   repeatRounds: z.boolean().optional(),
   roundTemplates: z.array(RoundConfigSchema).optional(),
+  // Warmup configuration
+  warmup: WarmupConfigSchema.optional(),
   // Spotify integration
   spotifyDeviceId: z.string().optional(),
   spotifyDeviceName: z.string().optional(),

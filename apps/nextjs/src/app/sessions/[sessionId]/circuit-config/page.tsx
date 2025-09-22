@@ -233,6 +233,14 @@ export default function CircuitConfigPage() {
                 rounds={config.config.rounds}
                 roundTemplates={config.config.roundTemplates || []}
                 onRoundTemplatesChange={(roundTemplates) => updateConfig({ roundTemplates })}
+                warmupEnabled={config.config.warmup?.enabled || false}
+                onWarmupToggle={(enabled) => updateConfig({ 
+                  warmup: {
+                    enabled,
+                    exercisesCount: 6,
+                    duration: 300 // 5 minutes total
+                  }
+                })}
                 isSaving={isSaving}
               />
             )}
@@ -270,7 +278,7 @@ export default function CircuitConfigPage() {
             {/* Step 6: Spotify Connection */}
             {currentStep === 6 && (
               <>
-                {console.log('[CircuitConfig] Step 5 - Current Spotify state:', { spotifyDeviceId, spotifyDeviceName })}
+                {console.log('[CircuitConfig] Step 6 - Current Spotify state:', { spotifyDeviceId, spotifyDeviceName })}
                 <SpotifyStep
                   deviceId={spotifyDeviceId}
                   deviceName={spotifyDeviceName}

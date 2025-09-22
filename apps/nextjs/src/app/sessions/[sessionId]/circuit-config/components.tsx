@@ -95,6 +95,8 @@ interface RoundTypesStepProps {
   rounds: number;
   roundTemplates: RoundConfig[];
   onRoundTemplatesChange: (roundTemplates: RoundConfig[]) => void;
+  warmupEnabled: boolean;
+  onWarmupToggle: (enabled: boolean) => void;
   isSaving: boolean;
 }
 
@@ -102,6 +104,8 @@ export function RoundTypesStep({
   rounds,
   roundTemplates,
   onRoundTemplatesChange,
+  warmupEnabled,
+  onWarmupToggle,
   isSaving,
 }: RoundTypesStepProps) {
   // Ensure we have the correct number of round templates
@@ -121,7 +125,7 @@ export function RoundTypesStep({
     };
   });
 
-  const handleRoundTypeChange = (roundNumber: number, type: 'circuit_round' | 'stations_round' | 'amrap_round' | 'warmup_cooldown_round') => {
+  const handleRoundTypeChange = (roundNumber: number, type: 'circuit_round' | 'stations_round' | 'amrap_round') => {
     const newRoundTemplates = ensuredRoundTemplates.map(rt => {
       if (rt.roundNumber === roundNumber) {
         return {
@@ -129,14 +133,10 @@ export function RoundTypesStep({
           template: {
             type,
             exercisesPerRound: rt.template.exercisesPerRound,
-            // For circuit_round, amrap_round, and warmup_cooldown_round, include work and rest durations
-            ...((type === 'circuit_round' || type === 'amrap_round' || type === 'warmup_cooldown_round') ? {
+            // For circuit_round and amrap_round, include work and rest durations
+            ...((type === 'circuit_round' || type === 'amrap_round') ? {
               workDuration: (rt.template as any).workDuration || 45,
               restDuration: (rt.template as any).restDuration || 15,
-            } : {}),
-            // For warmup_cooldown_round, default to warmup position
-            ...(type === 'warmup_cooldown_round' ? {
-              position: (rt.template as any).position || 'warmup'
             } : {})
           }
         };
@@ -179,40 +179,38 @@ export function RoundTypesStep({
               <option value="circuit_round">Circuit</option>
               <option value="stations_round">Stations</option>
               <option value="amrap_round">AMRAP</option>
-              <option value="warmup_cooldown_round">Warm-up/Cool-down</option>
             </select>
-            
-            {roundConfig.template.type === 'warmup_cooldown_round' && (
-              <select
-                value={(roundConfig.template as any).position || 'warmup'}
-                onChange={(e) => {
-                  const newRoundTemplates = ensuredRoundTemplates.map(rt => {
-                    if (rt.roundNumber === roundConfig.roundNumber) {
-                      return {
-                        ...rt,
-                        template: {
-                          ...rt.template,
-                          position: e.target.value as 'warmup' | 'cooldown'
-                        }
-                      };
-                    }
-                    return rt;
-                  });
-                  onRoundTemplatesChange(newRoundTemplates);
-                }}
-                disabled={isSaving}
-                className={cn(
-                  "ml-2 px-3 py-2 rounded-md border bg-background text-sm font-medium",
-                  "focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent",
-                  isSaving && "opacity-50 cursor-not-allowed"
-                )}
-              >
-                <option value="warmup">Warm-up</option>
-                <option value="cooldown">Cool-down</option>
-              </select>
-            )}
           </div>
         ))}
+      </div>
+
+      {/* Warmup Toggle */}
+      <div className="flex items-center justify-between rounded-xl bg-muted/50 p-4 mt-6">
+        <div className="space-y-0.5">
+          <label htmlFor="enable-warmup" className="text-base font-medium">
+            Add warm-up
+          </label>
+          <p className="text-sm text-muted-foreground">
+            6 exercises, 5 minutes total
+          </p>
+        </div>
+        <button
+          id="enable-warmup"
+          role="switch"
+          aria-checked={warmupEnabled}
+          onClick={() => onWarmupToggle(!warmupEnabled)}
+          disabled={isSaving}
+          className={cn(
+            "relative inline-flex h-8 w-14 items-center rounded-full transition-colors",
+            warmupEnabled ? "bg-primary" : "bg-gray-200",
+            isSaving && "opacity-50 cursor-not-allowed"
+          )}
+        >
+          <span className={cn(
+            "inline-block h-6 w-6 transform rounded-full bg-white transition-transform shadow-sm",
+            warmupEnabled ? "translate-x-7" : "translate-x-1"
+          )} />
+        </button>
       </div>
 
       <div className="mt-6 p-4 rounded-lg bg-primary/10">
@@ -403,7 +401,13 @@ export function ReviewStep({ config, repeatRounds }: ReviewStepProps) {
   const totalRestTime = 
     (totalExercises - totalRounds) * config.config.restDuration + 
     (totalRounds - 1) * config.config.restBetweenRounds;
-  const totalTime = totalWorkTime + totalRestTime;
+  
+  // Add warmup time if enabled
+  const warmupTime = config.config.warmup?.enabled
+    ? config.config.warmup.duration
+    : 0;
+  
+  const totalTime = totalWorkTime + totalRestTime + warmupTime;
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -463,11 +467,28 @@ export function ReviewStep({ config, repeatRounds }: ReviewStepProps) {
                     {rt.template.type === 'circuit_round' && 'Circuit'}
                     {rt.template.type === 'stations_round' && 'Stations'}
                     {rt.template.type === 'amrap_round' && 'AMRAP'}
-                    {rt.template.type === 'warmup_cooldown_round' && 
-                      `${(rt.template as any).position === 'cooldown' ? 'Cool-down' : 'Warm-up'}`}
                   </span>
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+        
+        {/* Warmup Configuration */}
+        {config.config.warmup?.enabled && (
+          <div className="mt-4">
+            <h4 className="text-sm font-semibold text-muted-foreground mb-3">Warm-up</h4>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between p-2 rounded-lg bg-orange-500/10 text-sm">
+                <span>Exercises</span>
+                <span className="font-medium">{config.config.warmup.exercisesCount}</span>
+              </div>
+              <div className="flex items-center justify-between p-2 rounded-lg bg-orange-500/10 text-sm">
+                <span>Total duration</span>
+                <span className="font-medium">
+                  {formatTime(config.config.warmup.duration)}
+                </span>
+              </div>
             </div>
           </div>
         )}

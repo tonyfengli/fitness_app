@@ -23,12 +23,12 @@ import type { CircuitConfig } from '@acme/db';
 import { 
   CircuitRoundPreview, 
   StationsRoundPreview,
-  AMRAPRoundPreview, 
+  AMRAPRoundPreview,
+  WarmupRoundPreview,
   CircuitExerciseView, 
   StationsExerciseView,
   AMRAPExerciseView,
-  StationsRestView,
-  WarmupCooldownExerciseView
+  StationsRestView
 } from '../components/workout-round';
 
 // Design tokens
@@ -127,7 +127,7 @@ interface RoundData {
   exercises: CircuitExercise[];
 }
 
-type ScreenType = 'round-preview' | 'exercise' | 'rest';
+type ScreenType = 'warmup' | 'round-preview' | 'exercise' | 'rest';
 
 export function CircuitWorkoutLiveScreen() {
   const navigation = useNavigation();
@@ -139,6 +139,8 @@ export function CircuitWorkoutLiveScreen() {
   
   // State for rounds and navigation
   const [roundsData, setRoundsDataInternal] = useState<RoundData[]>([]);
+  const [warmupData, setWarmupData] = useState<RoundData | null>(null);
+  const [warmupCompleted, setWarmupCompleted] = useState(false);
   
   const setRoundsData = setRoundsDataInternal;
   
@@ -221,6 +223,14 @@ export function CircuitWorkoutLiveScreen() {
     // Find template for current round (roundTemplates are 1-indexed)
     const roundTemplate = roundTemplates.find(rt => rt.roundNumber === roundIndex + 1);
     
+    console.log('[TIMING-DEBUG] getRoundTiming:', {
+      roundIndex,
+      lookingForRoundNumber: roundIndex + 1,
+      foundTemplate: !!roundTemplate,
+      templateType: roundTemplate?.template?.type,
+      allTemplates: roundTemplates.map(rt => ({ round: rt.roundNumber, type: rt.template.type }))
+    });
+    
     if (!roundTemplate) {
       // Fallback to legacy timing
       return {
@@ -261,13 +271,6 @@ export function CircuitWorkoutLiveScreen() {
         restDuration: 0,   // No rest in AMRAP
         roundType: 'amrap_round' as const
       };
-    } else if (template.type === 'warmup_cooldown_round') {
-      return {
-        workDuration: template.workDuration || workDuration,
-        restDuration: template.restDuration || restDuration,
-        roundType: 'warmup_cooldown_round' as const,
-        position: template.position
-      };
     }
     
     // Default fallback
@@ -280,6 +283,18 @@ export function CircuitWorkoutLiveScreen() {
   
   // Get current round type
   const currentRoundType = getRoundTiming(currentRoundIndex).roundType;
+  
+  // Log round type for debugging
+  useEffect(() => {
+    console.log('[ROUND-TYPE-DEBUG] Current round type:', {
+      currentRoundType,
+      currentRoundIndex,
+      currentScreen,
+      isStarted,
+      timeRemaining,
+      timestamp: new Date().toISOString()
+    });
+  }, [currentRoundType, currentRoundIndex, currentScreen, isStarted, timeRemaining]);
   
   // Spotify integration with pre-selected device (auto-play disabled since music already playing from preferences screen)
   const { playTrackAtPosition, prefetchSetlistTracks, setlist, isConnected: spotifyConnectionState, refetchDevices } = useSpotifySync(sessionId, circuitConfig?.config?.spotifyDeviceId, { autoPlay: false });
@@ -362,18 +377,31 @@ export function CircuitWorkoutLiveScreen() {
       
       setRoundsData(rounds);
       
-      // Check if first round is warmup - if so, skip preview and go directly to exercise
-      if (rounds.length > 0 && circuitConfig?.config?.roundTemplates) {
-        const firstRoundTemplate = circuitConfig.config.roundTemplates.find(rt => rt.roundNumber === 1);
-        if (firstRoundTemplate?.template.type === 'warmup_cooldown_round') {
-          // Skip preview for warmup/cooldown rounds
-          setCurrentScreen('exercise');
-          const timing = getRoundTiming(0);
-          setTimeRemaining(timing.workDuration);
-        }
+      // Check if warmup is configured and enabled
+      if (circuitConfig?.config?.warmup?.enabled && !warmupData && !warmupCompleted) {
+        // Only set up warmup if we haven't already done so and haven't completed it
+        // For now, use exercises from first round as warmup exercises
+        // In the future, this could be separate warmup-specific exercises
+        const warmupExerciseCount = circuitConfig.config.warmup.exercisesCount || 6;
+        const allExercises = rounds.flatMap(r => r.exercises);
+        const warmupRound: RoundData = {
+          roundName: 'Warm-up',
+          exercises: allExercises.slice(0, Math.min(warmupExerciseCount, allExercises.length))
+        };
+        setWarmupData(warmupRound);
+        setCurrentScreen('warmup');
+        // Start warmup timer - just use the total duration
+        const warmupDuration = circuitConfig.config.warmup.duration; // Total warmup time
+        console.log('[WARMUP-INIT-DEBUG] Initializing warmup', {
+          warmupDuration,
+          currentScreen,
+          hasWarmupData: !!warmupData,
+          timestamp: new Date().toISOString()
+        });
+        startTimer(warmupDuration);
       }
     }
-  }, [selections, circuitConfig, getRoundTiming]);
+  }, [selections, circuitConfig, getRoundTiming, warmupCompleted]);
 
   // Start health check on mount and cleanup on unmount
   useEffect(() => {
@@ -627,6 +655,7 @@ export function CircuitWorkoutLiveScreen() {
             clearInterval(countdownIntervalRef.current);
           }
           setShowCountdown(false);
+          setIsStarted(true); // Mark workout as started
           setCurrentScreen('exercise');
           const { workDuration } = getRoundTiming(0); // Round 1 countdown
           startTimer(workDuration);
@@ -697,7 +726,7 @@ export function CircuitWorkoutLiveScreen() {
       });
     }
     
-    // Check if this is an AMRAP round
+    // Check round type
     const { roundType, workDuration } = getRoundTiming(roundIdx);
     
     if (roundType === 'amrap_round') {
@@ -706,6 +735,7 @@ export function CircuitWorkoutLiveScreen() {
       startTimer(workDuration);
       return;
     }
+    
     
     // For Circuit/Stations rounds
     // For Round 1, use countdown instead
@@ -730,8 +760,16 @@ export function CircuitWorkoutLiveScreen() {
       timestamp: new Date().toISOString()
     });
     
+    console.log('[TIMER-SET-DEBUG] setTimeRemaining called', {
+      duration,
+      oldTimeRemaining: timeRemaining,
+      currentScreen,
+      currentRoundIndex,
+      caller: new Error().stack?.split('\n')[3]?.trim(),
+      timestamp: new Date().toISOString()
+    });
     setTimeRemaining(duration);
-    setIsStarted(true);
+    // Don't set isStarted here - it should only be set when actual workout rounds begin
   };
 
   const getCurrentRound = () => roundsData[currentRoundIndex];
@@ -773,12 +811,46 @@ export function CircuitWorkoutLiveScreen() {
     // Reset lighting event to force re-application when navigating
     setLastLightingEvent('');
 
-    if (screen === 'round-preview') {
-      console.log('[FLOW-DEBUG] Round preview complete, starting first exercise', {
+    if (screen === 'warmup') {
+      console.log('[FLOW-DEBUG] Warmup complete, moving to Round 1', {
         isManualSkip,
-        roundIdx,
         timestamp: new Date().toISOString()
       });
+      
+      // Warmup complete - go to Round 1 preview
+      console.log('[WARMUP-COMPLETE-DEBUG] Warmup finished, clearing timer and transitioning', {
+        oldScreen: screen,
+        newScreen: 'round-preview',
+        currentTimeRemaining: timeRemaining,
+        timestamp: new Date().toISOString()
+      });
+      
+      // Clear any running timer
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+      
+      // Reset all states for round preview
+      setCurrentRoundIndex(0);
+      setCurrentExerciseIndex(0);
+      setCurrentScreen('round-preview');
+      setTimeRemaining(0); // Set to 0 so Start button shows
+      setWarmupCompleted(true); // Mark warmup as done
+      
+      // Don't start timer - wait for user to click "Start"
+      return;
+    }
+    
+    if (screen === 'round-preview') {
+      console.log('[FLOW-DEBUG] Round preview complete', {
+        isManualSkip,
+        roundIdx,
+        roundType: getRoundTiming(roundIdx).roundType,
+        timestamp: new Date().toISOString()
+      });
+      
+      const currentRoundType = getRoundTiming(roundIdx).roundType;
       
       // For Round 2+, when MANUALLY skipping from preview, go directly to hype moment
       if (roundIdx > 0 && isManualSkip) {
@@ -814,6 +886,8 @@ export function CircuitWorkoutLiveScreen() {
         if (roundIdx < rounds.length - 1) {
           setCurrentRoundIndex(roundIdx + 1);
           setCurrentExerciseIndex(0);
+          
+          // Move to next round preview
           setCurrentScreen('round-preview');
           const restBetweenRounds = circuitConfig?.config?.restBetweenRounds || 60;
           startTimer(restBetweenRounds);
@@ -850,17 +924,11 @@ export function CircuitWorkoutLiveScreen() {
             setCurrentRoundIndex(roundIdx + 1);
             setCurrentExerciseIndex(0);
             
-            // Check if next round is warmup/cooldown - skip preview if so
-            const nextRoundTiming = getRoundTiming(roundIdx + 1);
-            if (nextRoundTiming.roundType === 'warmup_cooldown_round') {
-              setCurrentScreen('exercise');
-              startTimer(nextRoundTiming.workDuration);
-            } else {
-              setCurrentScreen('round-preview');
-              // Use round-specific rest between rounds if available, otherwise default
-              const restBetweenRounds = circuitConfig?.config?.restBetweenRounds || 60;
-              startTimer(restBetweenRounds);
-            }
+            // Move to next round preview
+            setCurrentScreen('round-preview');
+            // Use round-specific rest between rounds if available, otherwise default
+            const restBetweenRounds = circuitConfig?.config?.restBetweenRounds || 60;
+            startTimer(restBetweenRounds);
           } else {
             // Workout complete - apply App Start color
             getColorForPreset('app_start').then(color => {
@@ -938,8 +1006,41 @@ export function CircuitWorkoutLiveScreen() {
   }, [currentScreen, currentRoundIndex, currentExerciseIndex, roundsData, circuitConfig, getRoundTiming, startTimer]);
 
   const handleStartRound = () => {
-    // For round 1, start countdown with music
-    startCountdownRound1();
+    console.log('[START-DEBUG] handleStartRound called:', {
+      currentRoundType,
+      currentScreen,
+      currentRoundIndex,
+      isStarted,
+      timestamp: new Date().toISOString()
+    });
+    
+    // For circuit rounds, start countdown with music
+    // For stations/AMRAP, go directly to exercise
+    if (currentRoundType === 'circuit_round') {
+      console.log('[START-DEBUG] Starting circuit countdown');
+      startCountdownRound1();
+    } else {
+      console.log('[START-DEBUG] Starting stations/AMRAP directly');
+      // For stations and AMRAP, skip countdown and start directly
+      setIsStarted(true);
+      setCurrentScreen('exercise');
+      const { workDuration } = getRoundTiming(0);
+      console.log('[START-DEBUG] Work duration:', workDuration);
+      startTimer(workDuration);
+      
+      // Play music for Round 1 if available
+      const currentSetlist = timerStateRef.current.setlist;
+      const playTrack = timerStateRef.current.playTrackAtPosition;
+      const currentRoundMusic = currentSetlist?.rounds?.[0];
+      if (currentRoundMusic && playTrack) {
+        const hypeTrack = currentRoundMusic.track1;
+        if (hypeTrack && hypeTrack.hypeTimestamp !== undefined) {
+          const seekPositionMs = hypeTrack.hypeTimestamp * 1000;
+          console.log('[START-DEBUG] Playing music:', hypeTrack.spotifyId);
+          playTrack(hypeTrack.spotifyId, seekPositionMs);
+        }
+      }
+    }
   };
 
   // Create debounced versions of navigation functions to prevent rapid clicks
@@ -980,10 +1081,41 @@ export function CircuitWorkoutLiveScreen() {
         alignItems: 'center',
         paddingHorizontal: 48,
         paddingTop: 20,
-        paddingBottom: 20
+        paddingBottom: 20,
+        position: 'relative'
       }}>
-        {!(currentScreen === 'round-preview' && currentRoundIndex === 0) ? (
-          <View>
+        {currentScreen === 'warmup' && (
+          <View style={{
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            alignItems: 'center',
+            zIndex: 0,
+            paddingTop: 20
+          }}>
+            <Text style={{ 
+              fontSize: 80, 
+              fontWeight: '900', 
+              color: TOKENS.color.text,
+              letterSpacing: 1,
+              textTransform: 'uppercase'
+            }}>
+              WARM-UP
+            </Text>
+            <Text style={{
+              fontSize: 24,
+              fontWeight: '700',
+              color: TOKENS.color.accent,
+              letterSpacing: 0.5,
+              marginTop: 8,
+            }}>
+              {formatTime(timeRemaining)}
+            </Text>
+          </View>
+        )}
+        
+        {!(currentScreen === 'round-preview' && currentRoundIndex === 0) && currentScreen !== 'warmup' ? (
+          <View style={{ alignItems: 'center' }}>
             <Text style={{ 
               fontSize: 40, 
               fontWeight: '900', 
@@ -1136,7 +1268,18 @@ export function CircuitWorkoutLiveScreen() {
         ) : null}
         
         
-        {currentScreen === 'round-preview' && currentRoundIndex === 0 && timeRemaining === 0 ? (
+        {(() => {
+          const shouldShowStartButton = currentScreen === 'round-preview' && currentRoundIndex === 0 && !isStarted;
+          console.log('[CONTROL-DEBUG] Button logic:', {
+            shouldShowStartButton,
+            currentScreen,
+            currentRoundIndex,
+            isStarted,
+            currentRoundType,
+            timestamp: new Date().toISOString()
+          });
+          return shouldShowStartButton;
+        })() ? (
           <Pressable
             onPress={handleStartRound}
             focusable
@@ -1158,11 +1301,11 @@ export function CircuitWorkoutLiveScreen() {
             )}
           </Pressable>
         ) : (
-          <View style={{ flexDirection: 'row', gap: 16 }}>
+          <View style={{ flexDirection: 'row', gap: 16, zIndex: 1 }}>
             <Pressable
               onPress={debouncedHandleBack}
               focusable
-              disabled={currentRoundIndex === 0 && currentScreen === 'round-preview'}
+              disabled={(currentRoundIndex === 0 && currentScreen === 'round-preview') || currentScreen === 'warmup'}
             >
               {({ focused }) => (
                 <MattePanel 
@@ -1172,7 +1315,7 @@ export function CircuitWorkoutLiveScreen() {
                     height: 50,
                     alignItems: 'center',
                     justifyContent: 'center',
-                    opacity: (currentRoundIndex === 0 && currentScreen === 'round-preview') ? 0.5 : 1,
+                    opacity: ((currentRoundIndex === 0 && currentScreen === 'round-preview') || currentScreen === 'warmup') ? 0.5 : 1,
                     backgroundColor: focused ? 'rgba(255,255,255,0.16)' : TOKENS.color.card,
                     borderColor: focused ? 'rgba(255,255,255,0.45)' : TOKENS.color.borderGlass,
                     borderWidth: focused ? 1 : 1,
@@ -1248,6 +1391,10 @@ export function CircuitWorkoutLiveScreen() {
 
       {/* Main content */}
       <View style={{ flex: 1, paddingHorizontal: 48, paddingBottom: 48 }}>
+        {currentScreen === 'warmup' && warmupData && (
+          <WarmupRoundPreview currentRound={warmupData} />
+        )}
+        
         {currentScreen === 'round-preview' && currentRound && (
           currentRoundType === 'stations_round' 
             ? <StationsRoundPreview currentRound={currentRound} />
@@ -1268,14 +1415,6 @@ export function CircuitWorkoutLiveScreen() {
             : currentRoundType === 'amrap_round'
             ? <AMRAPExerciseView 
                 currentRound={currentRound}
-                currentExercise={currentExercise}
-                currentExerciseIndex={currentExerciseIndex}
-                timeRemaining={timeRemaining}
-                isPaused={isPaused}
-              />
-            : currentRoundType === 'warmup_cooldown_round'
-            ? <WarmupCooldownExerciseView 
-                currentRound={currentRound as any}
                 currentExercise={currentExercise}
                 currentExerciseIndex={currentExerciseIndex}
                 timeRemaining={timeRemaining}
