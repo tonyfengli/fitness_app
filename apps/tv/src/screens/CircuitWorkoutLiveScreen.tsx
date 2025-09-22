@@ -349,8 +349,8 @@ export function CircuitWorkoutLiveScreen() {
         warmupEnabled: circuitConfig?.config?.warmup?.enabled,
       });
       
-      // For circuits, deduplicate by exerciseId + groupName
-      const exerciseMap = new Map<string, CircuitExercise>();
+      // Process all exercises without deduplication to allow duplicates
+      const allExercises: CircuitExercise[] = [];
       
       selections.forEach((selection) => {
         // Skip warm-up exercises from being added to regular rounds
@@ -359,23 +359,19 @@ export function CircuitWorkoutLiveScreen() {
           return;
         }
         
-        const key = `${selection.exerciseId}-${selection.groupName}`;
-        
-        if (!exerciseMap.has(key)) {
-          exerciseMap.set(key, {
-            id: selection.id,
-            exerciseId: selection.exerciseId,
-            exerciseName: selection.exerciseName,
-            orderIndex: selection.orderIndex || 0,
-            groupName: selection.groupName || 'Round 1',
-            equipment: selection.equipment,
-          });
-        }
+        allExercises.push({
+          id: selection.id,
+          exerciseId: selection.exerciseId,
+          exerciseName: selection.exerciseName,
+          orderIndex: selection.orderIndex || 0,
+          groupName: selection.groupName || 'Round 1',
+          equipment: selection.equipment,
+        });
       });
       
       // Group by round
       const roundsMap = new Map<string, CircuitExercise[]>();
-      exerciseMap.forEach((exercise) => {
+      allExercises.forEach((exercise) => {
         const round = exercise.groupName;
         if (!roundsMap.has(round)) {
           roundsMap.set(round, []);

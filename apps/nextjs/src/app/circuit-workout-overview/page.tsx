@@ -300,18 +300,11 @@ function CircuitWorkoutOverviewContent() {
       // Group exercises by round (using groupName)
       const roundsMap = new Map<string, typeof savedSelections>();
       
-      // Deduplicate exercises since circuit exercises are shared
-      const uniqueExercises = new Map<string, any>();
-      
-      savedSelections.forEach((selection: any) => {
-        const key = `${selection.exerciseId}-${selection.groupName}`;
-        if (!uniqueExercises.has(key)) {
-          uniqueExercises.set(key, selection);
-        }
-      });
+      // Use all exercises without deduplication to allow duplicates in the same round
+      const allExercises = savedSelections;
       
       // Group by round, excluding warm-up exercises
-      uniqueExercises.forEach((selection) => {
+      allExercises.forEach((selection) => {
         const round = selection.groupName || 'Round 1';
         
         // Skip warm-up exercises from regular rounds
@@ -368,11 +361,6 @@ function CircuitWorkoutOverviewContent() {
       return [];
     }
 
-    // Get already selected exercise IDs from all rounds
-    const selectedIds = new Set(
-      roundsData.flatMap(round => round.exercises.map(ex => ex.exerciseId))
-    );
-
     // First filter by template type - only show exercises suitable for circuit
     const templateFiltered = availableExercises.filter((exercise) => {
       // If exercise has no templateType, include it (backwards compatibility)
@@ -388,8 +376,8 @@ function CircuitWorkoutOverviewContent() {
       ? filterExercisesBySearch(templateFiltered, searchQuery)
       : templateFiltered;
 
-    // Finally remove already selected exercises
-    return searchFiltered.filter((exercise) => !selectedIds.has(exercise.id));
+    // Return all filtered exercises (allowing duplicates)
+    return searchFiltered;
   }, [availableExercises, searchQuery, showExerciseSelection, selectedExercise, roundsData]);
 
   // Group filtered exercises by muscle
