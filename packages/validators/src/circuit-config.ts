@@ -19,6 +19,7 @@ export const CircuitRoundTemplateSchema = z.object({
   exercisesPerRound: z.number().int().min(CIRCUIT_CONFIG_LIMITS.exercisesPerRound.min).max(CIRCUIT_CONFIG_LIMITS.exercisesPerRound.max),
   workDuration: z.number().int().min(CIRCUIT_CONFIG_LIMITS.workDuration.min).max(CIRCUIT_CONFIG_LIMITS.workDuration.max),
   restDuration: z.number().int().min(CIRCUIT_CONFIG_LIMITS.restDuration.min).max(CIRCUIT_CONFIG_LIMITS.restDuration.max),
+  repeatTimes: z.number().int().min(1).max(5).default(1),
 });
 
 export const StationsRoundTemplateSchema = z.object({

@@ -14,11 +14,15 @@ export interface CircuitRoundTemplate extends BaseRoundTemplate {
   type: 'circuit_round';
   workDuration: number;        // Work duration in seconds
   restDuration: number;        // Rest duration between exercises in seconds
+  repeatTimes?: number;        // Number of times to repeat the round (default: 1)
 }
 
 // Stations round - work at each station for a set duration
 export interface StationsRoundTemplate extends BaseRoundTemplate {
   type: 'stations_round';
+  workDuration: number;        // Work duration in seconds
+  restDuration: number;        // Rest duration between exercises in seconds
+  repeatTimes?: number;        // Number of times to repeat the round (default: 1)
 }
 
 // AMRAP round - As Many Rounds As Possible

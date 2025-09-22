@@ -248,7 +248,8 @@ export function CircuitWorkoutLiveScreen() {
       return {
         workDuration: template.workDuration || workDuration,
         restDuration: template.restDuration || restDuration,
-        roundType: 'circuit_round' as const
+        roundType: 'circuit_round' as const,
+        repeatTimes: (template as any).repeatTimes || 1
       };
     } else if (template.type === 'stations_round') {
       // Stations now have their own timing
@@ -281,9 +282,9 @@ export function CircuitWorkoutLiveScreen() {
   const currentRoundType = currentRoundTiming.roundType;
   const currentRepeatTimes = currentRoundTiming.repeatTimes || 1;
   
-  // Calculate which repeat we're currently on for stations rounds
+  // Calculate which repeat we're currently on for circuit/stations rounds
   const getCurrentRepeatNumber = useCallback(() => {
-    if (currentRoundType !== 'stations_round' || currentRepeatTimes <= 1) {
+    if ((currentRoundType !== 'stations_round' && currentRoundType !== 'circuit_round') || currentRepeatTimes <= 1) {
       return 1;
     }
     return currentSetNumber;
@@ -1111,13 +1112,54 @@ export function CircuitWorkoutLiveScreen() {
         setCurrentRoundIndex(currentRoundIndex - 1);
         const prevRound = roundsData[currentRoundIndex - 1];
         setCurrentExerciseIndex(prevRound.exercises.length - 1);
+        
+        // Check if previous round has multiple sets and set to the last set
+        const prevRoundTiming = getRoundTiming(currentRoundIndex - 1);
+        const hasMultipleSets = (prevRoundTiming.roundType === 'stations_round' || 
+                                prevRoundTiming.roundType === 'circuit_round') && 
+                               (prevRoundTiming.repeatTimes || 1) > 1;
+        
+        if (hasMultipleSets) {
+          // Set to the last set of the previous round
+          setCurrentSetNumber(prevRoundTiming.repeatTimes || 1);
+          console.log('[SKIP-BACK] From round preview to previous round last set', {
+            fromRound: currentRoundIndex,
+            toRound: currentRoundIndex - 1,
+            toSet: prevRoundTiming.repeatTimes,
+            roundType: prevRoundTiming.roundType
+          });
+        }
+        
         setCurrentScreen('rest');
-        const { restDuration } = getRoundTiming(currentRoundIndex - 1);
+        const { restDuration } = prevRoundTiming;
         startTimer(restDuration);
       }
     } else if (currentScreen === 'exercise') {
       if (currentExerciseIndex === 0) {
-        // First exercise, go back to round preview
+        // Check if this is a multi-set round and we're not on the first set
+        const roundTiming = getRoundTiming(currentRoundIndex);
+        const hasMultipleSets = (roundTiming.roundType === 'stations_round' || 
+                                roundTiming.roundType === 'circuit_round') && 
+                               (roundTiming.repeatTimes || 1) > 1;
+        
+        if (hasMultipleSets && currentSetNumber > 1) {
+          // Go back to previous set's last exercise (in rest)
+          console.log('[SKIP-BACK] Going to previous set', {
+            currentSet: currentSetNumber,
+            previousSet: currentSetNumber - 1,
+            roundType: roundTiming.roundType,
+            totalSets: roundTiming.repeatTimes
+          });
+          
+          setCurrentSetNumber(currentSetNumber - 1);
+          const currentRound = roundsData[currentRoundIndex];
+          setCurrentExerciseIndex(currentRound.exercises.length - 1);
+          setCurrentScreen('rest');
+          startTimer(roundTiming.restDuration);
+          return;
+        }
+        
+        // First exercise of first set (or single-set round), go back to round preview
         setCurrentScreen('round-preview');
         // No timer for first round, otherwise use rest between rounds
         if (currentRoundIndex > 0) {
@@ -1139,7 +1181,7 @@ export function CircuitWorkoutLiveScreen() {
       const { workDuration } = getRoundTiming(currentRoundIndex);
       startTimer(workDuration);
     }
-  }, [currentScreen, currentRoundIndex, currentExerciseIndex, roundsData, circuitConfig, getRoundTiming, startTimer]);
+  }, [currentScreen, currentRoundIndex, currentExerciseIndex, currentSetNumber, roundsData, circuitConfig, getRoundTiming, startTimer]);
 
   const handleStartRound = () => {
     console.log('[START-DEBUG] handleStartRound called:', {
@@ -1569,8 +1611,8 @@ export function CircuitWorkoutLiveScreen() {
               />
             }
             
-            {/* Repeat Progress Indicator for Stations */}
-            {currentRoundType === 'stations_round' && currentRepeatTimes > 1 && (
+            {/* Repeat Progress Indicator for Circuit/Stations */}
+            {(currentRoundType === 'stations_round' || currentRoundType === 'circuit_round') && currentRepeatTimes > 1 && (
               <View style={{
                 position: 'absolute',
                 top: 0,

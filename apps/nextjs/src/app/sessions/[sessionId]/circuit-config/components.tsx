@@ -673,8 +673,8 @@ export function PerRoundConfigStep({
                     </div>
                   </div>
                   
-                  {/* Repeat Times - Only for Stations */}
-                  {isStations && (
+                  {/* Repeat Times - For both Circuit and Stations */}
+                  {(isCircuit || isStations) && (
                     <div className="space-y-2">
                       <span className="text-xs font-medium text-muted-foreground">REPEAT</span>
                       <div className="grid grid-cols-5 gap-1">
