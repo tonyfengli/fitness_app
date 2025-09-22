@@ -454,6 +454,8 @@ export const exerciseRouter = {
           movementPattern: exercises.movementPattern,
           modality: exercises.modality,
           templateType: exercises.templateType,
+          movementTags: exercises.movementTags,
+          functionTags: exercises.functionTags,
         })
         .from(exercises)
         .innerJoin(

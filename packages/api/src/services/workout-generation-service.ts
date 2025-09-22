@@ -17,7 +17,7 @@ import {
   StandardWorkoutGenerator,
   WorkoutPromptBuilder,
 } from "@acme/ai";
-import { and, eq, or } from "@acme/db";
+import { and, eq, or, sql } from "@acme/db";
 import { db } from "@acme/db/client";
 import {
   exercises,
@@ -2026,12 +2026,14 @@ export class WorkoutGenerationService {
     
     // Hard-coded warm-up exercise IDs
     const warmupExerciseIds = [
-      "c01f87ab-b75a-4d7c-8c9d-b4bd6c00654a", // Squat Jump
-      "c0fb46fd-9b4e-4115-b830-279f81ddbc10", // Push-Ups
-      "8596d22e-6349-45e6-83f1-835e3360771f", // Plank
-      "71aee1c7-b87e-48fb-a28f-7a5c251b0808", // Plank Jack
-      "620165b8-278c-48cd-a8a1-9f9aa1f37e80", // Flutter Kicks
-      "62b56e4c-c89e-4308-9949-d7ad61420b99", // Glute Bridge
+      "6a3f1ffb-07ef-4938-80b6-0efd3fe0eb68", // Jumping Jacks
+      "c0fb46fd-9b4e-4115-b830-279f81ddbc10", // Push-Ups (existing)
+      "0bf6ddc3-bbe3-47a7-87e6-53937c26b692", // High Knees
+      "48d80f90-38b3-4cd4-ba25-b12854c76c09", // Leg Swings
+      "c0f944b5-a750-476f-b030-ea026c9a24c4", // Hip Circles
+      "62b56e4c-c89e-4308-9949-d7ad61420b99", // Glute Bridge (existing)
+      "ccec7a78-7ddb-41da-9a50-875a53d5db79", // Arm Circles
+      "110b46e5-c3e3-46d8-8719-d0b60adbd209", // Jogging
     ];
     
     // Create exercise records for each client
@@ -2054,34 +2056,41 @@ export class WorkoutGenerationService {
           warmupExerciseCount,
         });
         
+        // Fetch warm-up exercises directly from database
+        const warmupExercises = await tx
+          .select()
+          .from(exercises)
+          .where(sql`${exercises.id} IN (${sql.join(
+            selectedWarmupIds.map(id => sql`${id}`),
+            sql`, `
+          )})`);
+        
+        logger.info("Fetched warm-up exercises from database", {
+          requestedCount: selectedWarmupIds.length,
+          foundCount: warmupExercises.length,
+          foundExercises: warmupExercises.map(ex => ({ id: ex.id, name: ex.name }))
+        });
+        
         // Create WorkoutExercise entries for warm-up
-        for (const exerciseId of selectedWarmupIds) {
-          const exercise = exercisePool.find(ex => ex.id === exerciseId);
-          if (exercise) {
-            allExercises.push({
-              workoutId: workoutId,
-              exerciseId: exercise.id,
-              orderIndex: globalIndex++,
-              setsCompleted: 0,
-              groupName: "Warm-up",
-              isShared: groupContext.clients.length > 1,
-              sharedWithClients: groupContext.clients.length > 1 
-                ? groupContext.clients
-                    .filter(c => c.user_id !== client.user_id)
-                    .map(c => c.user_id)
-                : [],
-              template: "circuit",
-              metadata: {
-                phase: "warmup",
-                movementPattern: exercise.movementPattern,
-              }
-            });
-          } else {
-            logger.warn("Warm-up exercise not found in pool", {
-              exerciseId,
-              availableCount: exercisePool.length,
-            });
-          }
+        for (const exercise of warmupExercises) {
+          allExercises.push({
+            workoutId: workoutId,
+            exerciseId: exercise.id,
+            orderIndex: globalIndex++,
+            setsCompleted: 0,
+            groupName: "Warm-up",
+            isShared: groupContext.clients.length > 1,
+            sharedWithClients: groupContext.clients.length > 1 
+              ? groupContext.clients
+                  .filter(c => c.user_id !== client.user_id)
+                  .map(c => c.user_id)
+              : [],
+            template: "circuit",
+            metadata: {
+              phase: "warmup",
+              movementPattern: exercise.movementPattern,
+            }
+          });
         }
       }
       

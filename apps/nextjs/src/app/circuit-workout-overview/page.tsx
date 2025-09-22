@@ -363,8 +363,15 @@ function CircuitWorkoutOverviewContent() {
       return [];
     }
 
+    console.log('[Exercise Modal] Starting exercise filtering', {
+      totalAvailable: availableExercises.length,
+      selectedRound,
+      selectedExercise: selectedExercise?.exerciseName,
+      searchQuery
+    });
+
     // First filter by template type - only show exercises suitable for circuit
-    const templateFiltered = availableExercises.filter((exercise) => {
+    let templateFiltered = availableExercises.filter((exercise) => {
       // If exercise has no templateType, include it (backwards compatibility)
       if (!exercise.templateType || exercise.templateType.length === 0) {
         return true;
@@ -373,14 +380,66 @@ function CircuitWorkoutOverviewContent() {
       return exercise.templateType.includes('circuit');
     });
 
+    console.log('[Exercise Modal] After template filter:', {
+      count: templateFiltered.length,
+      filtered: templateFiltered.slice(0, 5).map(e => ({ name: e.name, templateType: e.templateType }))
+    });
+
+    // Then filter based on whether we're replacing a warm-up or regular exercise
+    const isReplacingWarmup = selectedRound === 'Warm-up';
+    
+    if (isReplacingWarmup) {
+      console.log('[Exercise Modal] Filtering for WARM-UP exercises');
+      // When replacing warm-up exercises, ONLY show exercises with warmup_friendly tag
+      // or warmup_only function tag
+      templateFiltered = templateFiltered.filter((exercise: any) => {
+        const hasWarmupFriendlyTag = exercise.movementTags?.includes('warmup_friendly');
+        const hasWarmupOnlyFunction = exercise.functionTags?.includes('warmup_only');
+        const include = hasWarmupFriendlyTag || hasWarmupOnlyFunction;
+        
+        if (include) {
+          console.log('[Exercise Modal] Including warm-up exercise:', {
+            name: exercise.name,
+            movementTags: exercise.movementTags,
+            functionTags: exercise.functionTags
+          });
+        }
+        
+        return include;
+      });
+    } else {
+      console.log('[Exercise Modal] Filtering for REGULAR round exercises');
+      // When replacing regular round exercises, EXCLUDE warmup_only exercises
+      const beforeCount = templateFiltered.length;
+      templateFiltered = templateFiltered.filter((exercise: any) => {
+        const hasWarmupOnlyFunction = exercise.functionTags?.includes('warmup_only');
+        if (hasWarmupOnlyFunction) {
+          console.log('[Exercise Modal] Excluding warmup_only exercise:', exercise.name);
+        }
+        return !hasWarmupOnlyFunction;
+      });
+      console.log(`[Exercise Modal] Excluded ${beforeCount - templateFiltered.length} warmup_only exercises`);
+    }
+
+    console.log('[Exercise Modal] After warm-up filter:', {
+      count: templateFiltered.length,
+      isReplacingWarmup,
+      sampleExercises: templateFiltered.slice(0, 5).map(e => e.name)
+    });
+
     // Then filter by search query
     const searchFiltered = searchQuery.trim()
       ? filterExercisesBySearch(templateFiltered, searchQuery)
       : templateFiltered;
 
+    console.log('[Exercise Modal] Final filtered exercises:', {
+      count: searchFiltered.length,
+      hasSearchQuery: !!searchQuery.trim()
+    });
+
     // Return all filtered exercises (allowing duplicates)
     return searchFiltered;
-  }, [availableExercises, searchQuery, showExerciseSelection, selectedExercise, roundsData]);
+  }, [availableExercises, searchQuery, showExerciseSelection, selectedExercise, selectedRound, roundsData]);
 
   // Group filtered exercises by muscle
   const groupedExercises = useMemo(() => {
@@ -1047,19 +1106,9 @@ function WarmupExercisesList({
   const warmupExercises = useMemo(() => {
     if (!savedSelections) return [];
     
-    // Get unique warm-up exercises (deduplicate since circuit exercises are shared)
-    const uniqueExercises = new Map<string, any>();
-    
-    savedSelections
+    // Get all warm-up exercises (allow duplicates)
+    return savedSelections
       .filter((selection: any) => selection.groupName === "Warm-up")
-      .forEach((selection: any) => {
-        if (!uniqueExercises.has(selection.exerciseId)) {
-          uniqueExercises.set(selection.exerciseId, selection);
-        }
-      });
-    
-    // Sort by orderIndex
-    return Array.from(uniqueExercises.values())
       .sort((a: any, b: any) => a.orderIndex - b.orderIndex);
   }, [savedSelections]);
   
