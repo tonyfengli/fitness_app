@@ -429,6 +429,19 @@ export function CircuitWorkoutLiveScreen() {
       
       // Check if warmup is configured and enabled
       if (circuitConfig?.config?.warmup?.enabled && !warmupData && !warmupCompleted) {
+        console.log('[WARMUP-DEBUG] Checking for warmup exercises:', {
+          warmupConfig: circuitConfig.config.warmup,
+          expectedExercises: circuitConfig.config.warmup.exercisesCount,
+          totalSelections: selections.length,
+          allGroupNames: [...new Set(selections.map(s => s.groupName))],
+          warmupSelections: selections.filter(s => s.groupName === 'Warm-up').map(s => ({
+            id: s.id,
+            exerciseName: s.exerciseName,
+            groupName: s.groupName,
+            orderIndex: s.orderIndex
+          }))
+        });
+        
         // Only set up warmup if we haven't already done so and haven't completed it
         // Look for exercises with groupName "Warm-up"
         const warmupExercises = selections
@@ -440,6 +453,12 @@ export function CircuitWorkoutLiveScreen() {
             exerciseName: s.exerciseName,
             orderIndex: s.orderIndex
           }));
+        
+        console.log('[WARMUP-DEBUG] Filtered warmup exercises:', {
+          count: warmupExercises.length,
+          exercises: warmupExercises,
+          expectedCount: circuitConfig.config.warmup.exercisesCount
+        });
         
         if (warmupExercises.length > 0) {
           const warmupRound: RoundData = {

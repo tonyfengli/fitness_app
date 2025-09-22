@@ -183,6 +183,7 @@ export const exercises = pgTable("exercises", {
       "accessory",
       "core",
       "capacity",
+      "warmup_only",
     ],
   }).array(),
   fatigueProfile: fatigueProfileEnum("fatigue_profile").notNull(),
