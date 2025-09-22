@@ -24,11 +24,14 @@ export const CircuitRoundTemplateSchema = z.object({
 export const StationsRoundTemplateSchema = z.object({
   type: z.literal('stations_round'),
   exercisesPerRound: z.number().int().min(CIRCUIT_CONFIG_LIMITS.exercisesPerRound.min).max(CIRCUIT_CONFIG_LIMITS.exercisesPerRound.max),
+  workDuration: z.number().int().min(CIRCUIT_CONFIG_LIMITS.workDuration.min).max(CIRCUIT_CONFIG_LIMITS.workDuration.max),
+  restDuration: z.number().int().min(CIRCUIT_CONFIG_LIMITS.restDuration.min).max(CIRCUIT_CONFIG_LIMITS.restDuration.max),
 });
 
 export const AMRAPRoundTemplateSchema = z.object({
   type: z.literal('amrap_round'),
   exercisesPerRound: z.number().int().min(CIRCUIT_CONFIG_LIMITS.exercisesPerRound.min).max(CIRCUIT_CONFIG_LIMITS.exercisesPerRound.max),
+  totalDuration: z.number().int().min(60).max(600), // 1-10 minutes
 });
 
 export const WarmupCooldownRoundTemplateSchema = z.object({

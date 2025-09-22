@@ -14,9 +14,35 @@ import { getSessionUserWithBusiness } from "../utils/session";
 
 // Helper to ensure round templates exist in config
 function ensureRoundTemplates(config: any) {
-  // If roundTemplates already exist, return as-is
+  // If roundTemplates already exist, normalize them
   if (config.config?.roundTemplates?.length > 0) {
-    return config;
+    return {
+      ...config,
+      config: {
+        ...config.config,
+        roundTemplates: config.config.roundTemplates.map((rt: any) => {
+          if (rt.template.type === 'circuit_round' || rt.template.type === 'stations_round') {
+            return {
+              ...rt,
+              template: {
+                ...rt.template,
+                workDuration: rt.template.workDuration ?? config.config.workDuration ?? 45,
+                restDuration: rt.template.restDuration ?? config.config.restDuration ?? 15,
+              }
+            };
+          } else if (rt.template.type === 'amrap_round') {
+            return {
+              ...rt,
+              template: {
+                ...rt.template,
+                totalDuration: rt.template.totalDuration ?? 300, // Default 5 minutes
+              }
+            };
+          }
+          return rt;
+        }),
+      },
+    };
   }
   
   // Otherwise create round templates from legacy fields

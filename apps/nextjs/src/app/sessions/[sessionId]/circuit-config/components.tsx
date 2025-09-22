@@ -10,20 +10,25 @@ import { useTRPC } from "~/trpc/react";
 interface RoundsStepProps {
   rounds: number;
   repeatRounds: boolean;
+  restBetweenRounds: number;
   onRoundsChange: (rounds: number) => void;
   onRepeatToggle: (repeat: boolean) => void;
+  onRoundRestChange: (restBetweenRounds: number) => void;
   isSaving: boolean;
 }
 
 export function RoundsStep({
   rounds,
   repeatRounds,
+  restBetweenRounds,
   onRoundsChange,
   onRepeatToggle,
+  onRoundRestChange,
   isSaving,
 }: RoundsStepProps) {
   const roundOptions = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
   const totalRounds = repeatRounds ? rounds * 2 : rounds;
+  const roundRestOptions = [60, 90, 120];
 
   return (
     <div className="space-y-6">
@@ -43,6 +48,38 @@ export function RoundsStep({
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               )}
               {option}
+            </Button>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <div className="flex items-baseline justify-between mb-3">
+          <div>
+            <h3 className="text-base font-semibold">Round Break</h3>
+            <p className="text-sm text-muted-foreground">Between rounds</p>
+          </div>
+          <div className="text-2xl font-bold text-green-600">
+            {restBetweenRounds}s
+          </div>
+        </div>
+        <div className="grid grid-cols-3 gap-2">
+          {roundRestOptions.map((option) => (
+            <Button
+              key={option}
+              variant={restBetweenRounds === option ? "primary" : "outline"}
+              className={cn(
+                "relative h-12 min-w-0 touch-manipulation text-sm font-medium transition-all",
+                restBetweenRounds === option && "bg-green-600 text-white hover:bg-green-700"
+              )}
+              onClick={() => onRoundRestChange(option)}
+              disabled={isSaving}
+            >
+              {isSaving && restBetweenRounds === option ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                `${option}s`
+              )}
             </Button>
           ))}
         </div>
@@ -111,7 +148,28 @@ export function RoundTypesStep({
   // Ensure we have the correct number of round templates
   const ensuredRoundTemplates = Array.from({ length: rounds }, (_, i) => {
     const existing = roundTemplates.find(rt => rt.roundNumber === i + 1);
-    if (existing) return existing;
+    if (existing) {
+      // Ensure existing templates have required fields
+      if (existing.template.type === 'circuit_round' || existing.template.type === 'stations_round') {
+        return {
+          ...existing,
+          template: {
+            ...existing.template,
+            workDuration: (existing.template as any).workDuration ?? 45,
+            restDuration: (existing.template as any).restDuration ?? 15,
+          }
+        };
+      } else if (existing.template.type === 'amrap_round') {
+        return {
+          ...existing,
+          template: {
+            ...existing.template,
+            totalDuration: (existing.template as any).totalDuration ?? 300,
+          }
+        };
+      }
+      return existing;
+    }
     
     // Default to circuit_round
     return {
@@ -128,18 +186,39 @@ export function RoundTypesStep({
   const handleRoundTypeChange = (roundNumber: number, type: 'circuit_round' | 'stations_round' | 'amrap_round') => {
     const newRoundTemplates = ensuredRoundTemplates.map(rt => {
       if (rt.roundNumber === roundNumber) {
-        return {
-          ...rt,
-          template: {
-            type,
-            exercisesPerRound: rt.template.exercisesPerRound,
-            // For circuit_round and amrap_round, include work and rest durations
-            ...((type === 'circuit_round' || type === 'amrap_round') ? {
-              workDuration: (rt.template as any).workDuration || 45,
-              restDuration: (rt.template as any).restDuration || 15,
-            } : {})
-          }
+        // Reset to defaults when changing round type
+        const baseConfig = {
+          type,
+          exercisesPerRound: 6, // Default to 6 exercises
         };
+        
+        if (type === 'circuit_round') {
+          return {
+            ...rt,
+            template: {
+              ...baseConfig,
+              workDuration: 45,
+              restDuration: 15,
+            }
+          };
+        } else if (type === 'stations_round') {
+          return {
+            ...rt,
+            template: {
+              ...baseConfig,
+              workDuration: 45,
+              restDuration: 15,
+            }
+          };
+        } else if (type === 'amrap_round') {
+          return {
+            ...rt,
+            template: {
+              ...baseConfig,
+              totalDuration: 300, // Default to 5 minutes
+            }
+          };
+        }
       }
       return rt;
     });
@@ -156,36 +235,8 @@ export function RoundTypesStep({
         </p>
       </div>
 
-      <div className="space-y-3">
-        {ensuredRoundTemplates.map((roundConfig) => (
-          <div 
-            key={roundConfig.roundNumber}
-            className="flex items-center justify-between p-4 rounded-lg bg-muted/50"
-          >
-            <span className="text-base font-medium">
-              Round {roundConfig.roundNumber}
-            </span>
-            
-            <select
-              value={roundConfig.template.type}
-              onChange={(e) => handleRoundTypeChange(roundConfig.roundNumber, e.target.value as any)}
-              disabled={isSaving}
-              className={cn(
-                "px-3 py-2 rounded-md border bg-background text-sm font-medium",
-                "focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent",
-                isSaving && "opacity-50 cursor-not-allowed"
-              )}
-            >
-              <option value="circuit_round">Circuit</option>
-              <option value="stations_round">Stations</option>
-              <option value="amrap_round">AMRAP</option>
-            </select>
-          </div>
-        ))}
-      </div>
-
       {/* Warmup Toggle */}
-      <div className="flex items-center justify-between rounded-xl bg-muted/50 p-4 mt-6">
+      <div className="flex items-center justify-between rounded-xl bg-muted/50 p-4">
         <div className="space-y-0.5">
           <label htmlFor="enable-warmup" className="text-base font-medium">
             Add warm-up
@@ -213,16 +264,315 @@ export function RoundTypesStep({
         </button>
       </div>
 
-      <div className="mt-6 p-4 rounded-lg bg-primary/10">
-        <p className="text-sm text-muted-foreground">
-          <strong>Circuit:</strong> Traditional work/rest intervals
+      {/* Separator */}
+      <div className="border-t border-border" />
+
+      <div className="space-y-3">
+        {ensuredRoundTemplates.map((roundConfig) => (
+          <div 
+            key={roundConfig.roundNumber}
+            className="space-y-2"
+          >
+            <span className="text-base font-medium">
+              Round {roundConfig.roundNumber}
+            </span>
+            
+            <div className="grid grid-cols-3 gap-2">
+              <Button
+                variant={roundConfig.template.type === 'circuit_round' ? "primary" : "outline"}
+                className="relative h-12 min-w-0 touch-manipulation text-sm"
+                onClick={() => handleRoundTypeChange(roundConfig.roundNumber, 'circuit_round')}
+                disabled={isSaving}
+              >
+                {isSaving && roundConfig.template.type === 'circuit_round' && (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                )}
+                Circuit
+              </Button>
+              
+              <Button
+                variant={roundConfig.template.type === 'stations_round' ? "primary" : "outline"}
+                className="relative h-12 min-w-0 touch-manipulation text-sm"
+                onClick={() => handleRoundTypeChange(roundConfig.roundNumber, 'stations_round')}
+                disabled={isSaving}
+              >
+                {isSaving && roundConfig.template.type === 'stations_round' && (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                )}
+                Stations
+              </Button>
+              
+              <Button
+                variant={roundConfig.template.type === 'amrap_round' ? "primary" : "outline"}
+                className="relative h-12 min-w-0 touch-manipulation text-sm"
+                onClick={() => handleRoundTypeChange(roundConfig.roundNumber, 'amrap_round')}
+                disabled={isSaving}
+              >
+                {isSaving && roundConfig.template.type === 'amrap_round' && (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                )}
+                AMRAP
+              </Button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+interface PerRoundConfigStepProps {
+  roundTemplates: RoundConfig[];
+  onRoundTemplatesChange: (roundTemplates: RoundConfig[]) => void;
+  isSaving: boolean;
+}
+
+export function PerRoundConfigStep({
+  roundTemplates,
+  onRoundTemplatesChange,
+  isSaving,
+}: PerRoundConfigStepProps) {
+  // Ensure all templates have required fields with defaults
+  const normalizedTemplates = roundTemplates.map(rt => {
+    if (rt.template.type === 'circuit_round' || rt.template.type === 'stations_round') {
+      return {
+        ...rt,
+        template: {
+          ...rt.template,
+          workDuration: (rt.template as any).workDuration ?? 45,
+          restDuration: (rt.template as any).restDuration ?? 15,
+        }
+      };
+    } else if (rt.template.type === 'amrap_round') {
+      return {
+        ...rt,
+        template: {
+          ...rt.template,
+          totalDuration: (rt.template as any).totalDuration ?? 300,
+        }
+      };
+    }
+    return rt;
+  });
+
+  const handleExercisesChange = (roundNumber: number, exercises: number) => {
+    const newRoundTemplates = normalizedTemplates.map(rt => {
+      if (rt.roundNumber === roundNumber) {
+        return {
+          ...rt,
+          template: {
+            ...rt.template,
+            exercisesPerRound: exercises,
+          }
+        };
+      }
+      return rt;
+    });
+    onRoundTemplatesChange(newRoundTemplates);
+  };
+
+  const handleTimingChange = (roundNumber: number, field: 'workDuration' | 'restDuration' | 'totalDuration', value: number) => {
+    const newRoundTemplates = normalizedTemplates.map(rt => {
+      if (rt.roundNumber === roundNumber) {
+        return {
+          ...rt,
+          template: {
+            ...rt.template,
+            [field]: value,
+          }
+        };
+      }
+      return rt;
+    });
+    onRoundTemplatesChange(newRoundTemplates);
+  };
+
+  // Sort by round number
+  const sortedRounds = [...normalizedTemplates].sort((a, b) => a.roundNumber - b.roundNumber);
+
+  const exerciseOptions = [2, 3, 4, 5, 6, 7];
+  const workOptions = [20, 30, 40, 45, 60];
+  const restOptions = [10, 15, 20, 30];
+  const amrapOptions = [120, 180, 240, 300, 360]; // 2-6 minutes
+  
+  // Recommended values based on fitness science
+  const recommendedExercises = 6;
+  const recommendedWork = 45;
+  const recommendedRest = 15;
+  const recommendedAMRAP = 300; // 5 minutes
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h3 className="text-lg font-semibold mb-1">Round Configuration</h3>
+        <p className="text-sm text-muted-foreground mb-4">
+          Configure exercises and timing for each round
         </p>
-        <p className="text-sm text-muted-foreground mt-1">
-          <strong>Stations:</strong> Work at each station
-        </p>
-        <p className="text-sm text-muted-foreground mt-1">
-          <strong>AMRAP:</strong> As Many Rounds As Possible
-        </p>
+      </div>
+
+      <div className="space-y-4">
+        {sortedRounds.map((round) => {
+          const isCircuit = round.template.type === 'circuit_round';
+          const isStations = round.template.type === 'stations_round';
+          const isAMRAP = round.template.type === 'amrap_round';
+          
+          return (
+            <div key={round.roundNumber} className={cn(
+              "space-y-3 p-4 rounded-lg border transition-all",
+              isCircuit && "bg-blue-50/30 border-blue-200/50 hover:border-blue-300",
+              isStations && "bg-green-50/30 border-green-200/50 hover:border-green-300",
+              isAMRAP && "bg-purple-50/30 border-purple-200/50 hover:border-purple-300",
+              "dark:bg-opacity-10"
+            )}>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-base font-medium">Round {round.roundNumber}</span>
+                <span className={cn(
+                  "text-xs font-bold px-2.5 py-1 rounded-full",
+                  isCircuit && "bg-blue-500 text-white",
+                  isStations && "bg-green-500 text-white",
+                  isAMRAP && "bg-purple-500 text-white"
+                )}>
+                  {isCircuit && 'CIRCUIT'}
+                  {isStations && 'STATIONS'}
+                  {isAMRAP && 'AMRAP'}
+                </span>
+              </div>
+              
+              {/* Round Type Description */}
+              <div className={cn(
+                "text-xs px-3 py-2 rounded-md -mx-1 mb-3",
+                isCircuit && "bg-blue-100/50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300",
+                isStations && "bg-green-100/50 text-green-700 dark:bg-green-900/20 dark:text-green-300",
+                isAMRAP && "bg-purple-100/50 text-purple-700 dark:bg-purple-900/20 dark:text-purple-300"
+              )}>
+                {isCircuit && '💫 Move through exercises with timed work/rest intervals'}
+                {isStations && '🔄 Teams rotate between stations simultaneously'}
+                {isAMRAP && '🔥 Complete as many rounds as possible in the time limit'}
+              </div>
+              
+              {/* Exercises */}
+              <div className="space-y-2">
+                <span className="text-xs font-medium text-muted-foreground">
+                  {isStations ? 'STATIONS' : 'EXERCISES'}
+                </span>
+                <div className="grid grid-cols-6 gap-1">
+                  {exerciseOptions.map((option) => {
+                    const isSelected = round.template.exercisesPerRound === option;
+                    const isRecommended = option === recommendedExercises;
+                    return (
+                      <Button
+                        key={option}
+                        variant={isSelected ? "primary" : "outline"}
+                        className={cn(
+                          "relative h-10 min-w-0 text-xs transition-all",
+                          isSelected && "ring-2 ring-offset-1 ring-primary",
+                          !isSelected && isRecommended && "border-primary/50 hover:border-primary"
+                        )}
+                        onClick={() => handleExercisesChange(round.roundNumber, option)}
+                        disabled={isSaving}
+                        size="sm"
+                      >
+                        <span className={cn(
+                          isSelected && "font-bold",
+                          !isSelected && isRecommended && "font-medium"
+                        )}>
+                          {option}
+                        </span>
+                      </Button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Timing Configuration */}
+              {(isCircuit || isStations) && (
+                <div className="space-y-3">
+                  <div className="space-y-2">
+                    <span className="text-xs font-medium text-muted-foreground">WORK TIME</span>
+                    <div className="grid grid-cols-5 gap-1">
+                      {workOptions.map((option) => {
+                        const isSelected = (round.template as any).workDuration === option;
+                        const isRecommended = option === recommendedWork;
+                        return (
+                          <Button
+                            key={option}
+                            variant={isSelected ? "primary" : "outline"}
+                            className={cn(
+                              "relative h-9 min-w-0 text-xs transition-all",
+                              isSelected && "ring-2 ring-offset-1 ring-primary",
+                              !isSelected && isRecommended && "border-primary/50 hover:border-primary"
+                            )}
+                            onClick={() => handleTimingChange(round.roundNumber, 'workDuration', option)}
+                            disabled={isSaving}
+                            size="sm"
+                          >
+                            <span className={cn(
+                              isSelected && "font-bold",
+                              !isSelected && isRecommended && "font-medium"
+                            )}>
+                              {option}s
+                            </span>
+                          </Button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <span className="text-xs font-medium text-muted-foreground">REST TIME</span>
+                    <div className="grid grid-cols-5 gap-1">
+                      {restOptions.slice(0, 4).map((option) => {
+                        const isSelected = (round.template as any).restDuration === option;
+                        const isRecommended = option === recommendedRest;
+                        return (
+                          <Button
+                            key={option}
+                            variant={isSelected ? "primary" : "outline"}
+                            className={cn(
+                              "relative h-9 min-w-0 text-xs transition-all",
+                              isSelected && "ring-2 ring-offset-1 ring-primary",
+                              !isSelected && isRecommended && "border-primary/50 hover:border-primary"
+                            )}
+                            onClick={() => handleTimingChange(round.roundNumber, 'restDuration', option)}
+                            disabled={isSaving}
+                            size="sm"
+                          >
+                            <span className={cn(
+                              isSelected && "font-bold",
+                              !isSelected && isRecommended && "font-medium"
+                            )}>
+                              {option}s
+                            </span>
+                          </Button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              {/* AMRAP Total Duration */}
+              {isAMRAP && (
+                <div className="space-y-2">
+                  <span className="text-xs font-medium text-muted-foreground">TOTAL TIME</span>
+                  <div className="grid grid-cols-5 gap-1">
+                    {amrapOptions.map((option) => (
+                      <Button
+                        key={option}
+                        variant={(round.template as any).totalDuration === option ? "primary" : "outline"}
+                        className="relative h-9 min-w-0 text-xs"
+                        onClick={() => handleTimingChange(round.roundNumber, 'totalDuration', option)}
+                        disabled={isSaving}
+                        size="sm"
+                      >
+                        {Math.floor(option / 60)}m
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -275,24 +625,25 @@ export function ExercisesStep({
 interface TimingStepProps {
   workDuration: number;
   restDuration: number;
-  restBetweenRounds: number;
   onWorkChange: (duration: number) => void;
   onRestChange: (duration: number) => void;
-  onRoundRestChange: (duration: number) => void;
   isSaving: boolean;
 }
 
 export function TimingStep({
   workDuration,
   restDuration,
-  restBetweenRounds,
   onWorkChange,
   onRestChange,
-  onRoundRestChange,
   isSaving,
 }: TimingStepProps) {
   return (
     <div className="space-y-8">
+      <div>
+        <h3 className="text-lg font-semibold mb-1">Set your intervals</h3>
+        <p className="text-sm text-muted-foreground mb-6">Configure work and rest periods</p>
+      </div>
+      
       <div className="space-y-6">
         <TimingOption
           label="Work"
@@ -312,16 +663,6 @@ export function TimingStep({
           onChange={onRestChange}
           isSaving={isSaving}
           color="secondary"
-        />
-
-        <TimingOption
-          label="Round Break"
-          description="Between rounds"
-          value={restBetweenRounds}
-          options={[60, 90, 120]}
-          onChange={onRoundRestChange}
-          isSaving={isSaving}
-          color="accent"
         />
       </div>
     </div>

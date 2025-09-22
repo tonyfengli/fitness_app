@@ -10,9 +10,9 @@ import { supabase } from "~/lib/supabase/client";
 import { useRealtimeCircuitConfig } from "@acme/ui-shared";
 import type { CircuitConfig } from "@acme/db";
 import { cn } from "@acme/ui-shared";
-import { RoundsStep, RoundTypesStep, ExercisesStep, TimingStep, ReviewStep, SpotifyStep } from "./components";
+import { RoundsStep, RoundTypesStep, PerRoundConfigStep, ExercisesStep, TimingStep, ReviewStep, SpotifyStep } from "./components";
 
-const TOTAL_STEPS = 6;
+const TOTAL_STEPS = 5;
 
 export default function CircuitConfigPage() {
   const params = useParams();
@@ -63,7 +63,36 @@ export default function CircuitConfigPage() {
   // Initialize config from query result
   useEffect(() => {
     if (initialConfig) {
-      setConfig(initialConfig);
+      // Ensure roundTemplates have required timing fields
+      const normalizedConfig = {
+        ...initialConfig,
+        config: {
+          ...initialConfig.config,
+          roundTemplates: initialConfig.config.roundTemplates?.map(rt => {
+            if (rt.template.type === 'circuit_round' || rt.template.type === 'stations_round') {
+              return {
+                ...rt,
+                template: {
+                  ...rt.template,
+                  workDuration: (rt.template as any).workDuration ?? 45,
+                  restDuration: (rt.template as any).restDuration ?? 15,
+                }
+              };
+            } else if (rt.template.type === 'amrap_round') {
+              return {
+                ...rt,
+                template: {
+                  ...rt.template,
+                  totalDuration: (rt.template as any).totalDuration ?? 300,
+                }
+              };
+            }
+            return rt;
+          }) || []
+        }
+      };
+      
+      setConfig(normalizedConfig);
       setRepeatRounds(initialConfig.config.repeatRounds || false);
       setSpotifyDeviceId(initialConfig.config.spotifyDeviceId || null);
       setSpotifyDeviceName(initialConfig.config.spotifyDeviceName || null);
@@ -160,10 +189,9 @@ export default function CircuitConfigPage() {
               <h1 className="text-sm font-medium">
                 {currentStep === 1 && "Rounds"}
                 {currentStep === 2 && "Round Types"}
-                {currentStep === 3 && "Exercises"}
-                {currentStep === 4 && "Timing"}
-                {currentStep === 5 && "Review"}
-                {currentStep === 6 && "Music"}
+                {currentStep === 3 && "Round Configuration"}
+                {currentStep === 4 && "Review"}
+                {currentStep === 5 && "Music"}
               </h1>
             </div>
             
@@ -190,7 +218,7 @@ export default function CircuitConfigPage() {
           {/* Progress indicator */}
           <div className="px-4 pb-3">
             <div className="flex gap-1">
-              {[1, 2, 3, 4, 5, 6].map((step) => (
+              {[1, 2, 3, 4, 5].map((step) => (
                 <div
                   key={step}
                   className={cn(
@@ -218,11 +246,13 @@ export default function CircuitConfigPage() {
               <RoundsStep
                 rounds={config.config.rounds}
                 repeatRounds={repeatRounds}
+                restBetweenRounds={config.config.restBetweenRounds}
                 onRoundsChange={(rounds) => updateConfig({ rounds })}
                 onRepeatToggle={(value) => {
                   setRepeatRounds(value);
                   updateConfig({ repeatRounds: value });
                 }}
+                onRoundRestChange={(restBetweenRounds) => updateConfig({ restBetweenRounds })}
                 isSaving={isSaving}
               />
             )}
@@ -245,38 +275,25 @@ export default function CircuitConfigPage() {
               />
             )}
 
-            {/* Step 3: Exercises */}
+            {/* Step 3: Per-Round Configuration */}
             {currentStep === 3 && (
-              <ExercisesStep
-                exercises={config.config.exercisesPerRound}
-                onExercisesChange={(exercisesPerRound) => updateConfig({ exercisesPerRound })}
+              <PerRoundConfigStep
+                roundTemplates={config.config.roundTemplates || []}
+                onRoundTemplatesChange={(roundTemplates) => updateConfig({ roundTemplates })}
                 isSaving={isSaving}
               />
             )}
 
-            {/* Step 4: Timing */}
+            {/* Step 4: Review */}
             {currentStep === 4 && (
-              <TimingStep
-                workDuration={config.config.workDuration}
-                restDuration={config.config.restDuration}
-                restBetweenRounds={config.config.restBetweenRounds}
-                onWorkChange={(workDuration) => updateConfig({ workDuration })}
-                onRestChange={(restDuration) => updateConfig({ restDuration })}
-                onRoundRestChange={(restBetweenRounds) => updateConfig({ restBetweenRounds })}
-                isSaving={isSaving}
-              />
-            )}
-
-            {/* Step 5: Review */}
-            {currentStep === 5 && (
               <ReviewStep
                 config={config}
                 repeatRounds={repeatRounds}
               />
             )}
 
-            {/* Step 6: Spotify Connection */}
-            {currentStep === 6 && (
+            {/* Step 5: Music */}
+            {currentStep === 5 && (
               <>
                 {console.log('[CircuitConfig] Step 6 - Current Spotify state:', { spotifyDeviceId, spotifyDeviceName })}
                 <SpotifyStep

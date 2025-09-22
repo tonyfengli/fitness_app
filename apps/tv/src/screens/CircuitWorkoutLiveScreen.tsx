@@ -249,25 +249,17 @@ export function CircuitWorkoutLiveScreen() {
         roundType: 'circuit_round' as const
       };
     } else if (template.type === 'stations_round') {
-      // For stations, get timing from a circuit_round template
-      const circuitTemplate = roundTemplates.find(rt => rt.template.type === 'circuit_round');
-      if (circuitTemplate && circuitTemplate.template.type === 'circuit_round') {
-        return {
-          workDuration: circuitTemplate.template.workDuration,
-          restDuration: circuitTemplate.template.restDuration,
-          roundType: 'stations_round' as const
-        };
-      }
-      // Fallback to global timing
+      // Stations now have their own timing
       return {
-        workDuration: workDuration,
-        restDuration: restDuration,
+        workDuration: (template as any).workDuration || workDuration,
+        restDuration: (template as any).restDuration || restDuration,
         roundType: 'stations_round' as const
       };
     } else if (template.type === 'amrap_round') {
-      // AMRAP uses a single long work duration (10 minutes = 600 seconds)
+      // AMRAP uses totalDuration from template
+      const totalDuration = (template as any).totalDuration || 300; // Default 5 minutes
       return {
-        workDuration: 600, // 10 minutes hardcoded for now
+        workDuration: totalDuration,
         restDuration: 0,   // No rest in AMRAP
         roundType: 'amrap_round' as const
       };
