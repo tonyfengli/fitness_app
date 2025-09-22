@@ -2068,7 +2068,7 @@ export class WorkoutGenerationService {
         logger.info("Fetched warm-up exercises from database", {
           requestedCount: selectedWarmupIds.length,
           foundCount: warmupExercises.length,
-          foundExercises: warmupExercises.map(ex => ({ id: ex.id, name: ex.name }))
+          foundExercises: warmupExercises.map((ex: any) => ({ id: ex.id, name: ex.name }))
         });
         
         // Create WorkoutExercise entries for warm-up
