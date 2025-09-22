@@ -1532,23 +1532,27 @@ export function CircuitWorkoutLiveScreen() {
             {currentRoundType === 'stations_round' && currentRepeatTimes > 1 && (
               <View style={{
                 position: 'absolute',
-                bottom: 40,
-                right: 48,
+                top: 0,
+                left: 0,
+                right: 0,
+                alignItems: 'center',
+                zIndex: 10,
               }}>
-                <MattePanel style={{
-                  paddingHorizontal: 20,
-                  paddingVertical: 12,
+                <View style={{
+                  paddingHorizontal: 16,
+                  paddingVertical: 8,
                   gap: 6,
                   flexDirection: 'row',
                   alignItems: 'center',
-                  backgroundColor: `${TOKENS.color.cardGlass}`,
-                  borderColor: TOKENS.color.accent + '30',
+                  backgroundColor: TOKENS.color.accent + '15',
+                  borderColor: TOKENS.color.accent,
                   borderWidth: 1,
+                  borderRadius: 999,
                 }}>
                   <Text style={{
                     fontSize: 13,
-                    fontWeight: '600',
-                    color: TOKENS.color.muted,
+                    fontWeight: '700',
+                    color: TOKENS.color.accent,
                     textTransform: 'uppercase',
                     letterSpacing: 1.2,
                   }}>
@@ -1556,8 +1560,8 @@ export function CircuitWorkoutLiveScreen() {
                   </Text>
                   <Text style={{
                     fontSize: 16,
-                    fontWeight: '700',
-                    color: TOKENS.color.text,
+                    fontWeight: '800',
+                    color: TOKENS.color.accent,
                     marginLeft: 2,
                   }}>
                     {currentRepeatNumber}
@@ -1565,19 +1569,19 @@ export function CircuitWorkoutLiveScreen() {
                   <Text style={{
                     fontSize: 13,
                     fontWeight: '500',
-                    color: TOKENS.color.muted,
+                    color: TOKENS.color.accent,
                     marginHorizontal: 3,
                   }}>
                     of
                   </Text>
                   <Text style={{
                     fontSize: 16,
-                    fontWeight: '700',
-                    color: TOKENS.color.text,
+                    fontWeight: '800',
+                    color: TOKENS.color.accent,
                   }}>
                     {currentRepeatTimes}
                   </Text>
-                </MattePanel>
+                </View>
               </View>
             )}
           </>
@@ -1635,23 +1639,27 @@ export function CircuitWorkoutLiveScreen() {
             {currentRoundType === 'stations_round' && currentRepeatTimes > 1 && (
               <View style={{
                 position: 'absolute',
-                bottom: 40,
-                right: 48,
+                top: 0,
+                left: 0,
+                right: 0,
+                alignItems: 'center',
+                zIndex: 10,
               }}>
-                <MattePanel style={{
-                  paddingHorizontal: 20,
-                  paddingVertical: 12,
+                <View style={{
+                  paddingHorizontal: 16,
+                  paddingVertical: 8,
                   gap: 6,
                   flexDirection: 'row',
                   alignItems: 'center',
-                  backgroundColor: `${TOKENS.color.cardGlass}`,
-                  borderColor: TOKENS.color.accent + '30',
+                  backgroundColor: TOKENS.color.accent + '15',
+                  borderColor: TOKENS.color.accent,
                   borderWidth: 1,
+                  borderRadius: 999,
                 }}>
                   <Text style={{
                     fontSize: 13,
-                    fontWeight: '600',
-                    color: TOKENS.color.muted,
+                    fontWeight: '700',
+                    color: TOKENS.color.accent,
                     textTransform: 'uppercase',
                     letterSpacing: 1.2,
                   }}>
@@ -1659,8 +1667,8 @@ export function CircuitWorkoutLiveScreen() {
                   </Text>
                   <Text style={{
                     fontSize: 16,
-                    fontWeight: '700',
-                    color: TOKENS.color.text,
+                    fontWeight: '800',
+                    color: TOKENS.color.accent,
                     marginLeft: 2,
                   }}>
                     {currentRepeatNumber}
@@ -1668,19 +1676,19 @@ export function CircuitWorkoutLiveScreen() {
                   <Text style={{
                     fontSize: 13,
                     fontWeight: '500',
-                    color: TOKENS.color.muted,
+                    color: TOKENS.color.accent,
                     marginHorizontal: 3,
                   }}>
                     of
                   </Text>
                   <Text style={{
                     fontSize: 16,
-                    fontWeight: '700',
-                    color: TOKENS.color.text,
+                    fontWeight: '800',
+                    color: TOKENS.color.accent,
                   }}>
                     {currentRepeatTimes}
                   </Text>
-                </MattePanel>
+                </View>
               </View>
             )}
           </>
