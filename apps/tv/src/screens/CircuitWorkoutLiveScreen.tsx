@@ -147,6 +147,7 @@ export function CircuitWorkoutLiveScreen() {
   const [currentRoundIndex, setCurrentRoundIndexInternal] = useState(0);
   const [currentExerciseIndex, setCurrentExerciseIndexInternal] = useState(0);
   const [currentScreen, setCurrentScreenInternal] = useState<ScreenType>('round-preview');
+  const [currentSetNumber, setCurrentSetNumber] = useState(1); // Track current set for stations rounds
   
   const setCurrentRoundIndex = setCurrentRoundIndexInternal;
   const setCurrentExerciseIndex = setCurrentExerciseIndexInternal;
@@ -184,6 +185,7 @@ export function CircuitWorkoutLiveScreen() {
     currentScreen,
     currentRoundIndex,
     currentExerciseIndex,
+    currentSetNumber,
     isPaused,
     setlist: null as any,
     playTrackAtPosition: null as any,
@@ -253,7 +255,8 @@ export function CircuitWorkoutLiveScreen() {
       return {
         workDuration: (template as any).workDuration || workDuration,
         restDuration: (template as any).restDuration || restDuration,
-        roundType: 'stations_round' as const
+        roundType: 'stations_round' as const,
+        repeatTimes: (template as any).repeatTimes || 1
       };
     } else if (template.type === 'amrap_round') {
       // AMRAP uses totalDuration from template
@@ -273,8 +276,20 @@ export function CircuitWorkoutLiveScreen() {
     };
   }, [circuitConfig]);
   
-  // Get current round type
-  const currentRoundType = getRoundTiming(currentRoundIndex).roundType;
+  // Get current round type and repeat times
+  const currentRoundTiming = getRoundTiming(currentRoundIndex);
+  const currentRoundType = currentRoundTiming.roundType;
+  const currentRepeatTimes = currentRoundTiming.repeatTimes || 1;
+  
+  // Calculate which repeat we're currently on for stations rounds
+  const getCurrentRepeatNumber = useCallback(() => {
+    if (currentRoundType !== 'stations_round' || currentRepeatTimes <= 1) {
+      return 1;
+    }
+    return currentSetNumber;
+  }, [currentRoundType, currentRepeatTimes, currentSetNumber]);
+  
+  const currentRepeatNumber = getCurrentRepeatNumber();
   
   // Log round type for debugging
   useEffect(() => {
@@ -297,12 +312,13 @@ export function CircuitWorkoutLiveScreen() {
       currentScreen,
       currentRoundIndex,
       currentExerciseIndex,
+      currentSetNumber,
       isPaused,
       setlist,
       playTrackAtPosition,
       roundsData,
     };
-  }, [currentScreen, currentRoundIndex, currentExerciseIndex, isPaused, setlist, playTrackAtPosition, roundsData]);
+  }, [currentScreen, currentRoundIndex, currentExerciseIndex, currentSetNumber, isPaused, setlist, playTrackAtPosition, roundsData]);
   
   // Get saved selections
   const selectionsQueryOptions = sessionId 
@@ -861,6 +877,7 @@ export function CircuitWorkoutLiveScreen() {
       // Reset all states for round preview
       setCurrentRoundIndex(0);
       setCurrentExerciseIndex(0);
+      setCurrentSetNumber(1); // Reset set number
       setCurrentScreen('round-preview');
       setTimeRemaining(0); // Set to 0 so Start button shows
       setWarmupCompleted(true); // Mark warmup as done
@@ -930,7 +947,36 @@ export function CircuitWorkoutLiveScreen() {
         // Circuit, Stations, or Warmup/Cooldown round - normal exercise progression
         // Check if this is the last exercise in the round
         if (exerciseIdx === currentRound.exercises.length - 1) {
-          // Last exercise of the round - play REST track
+          // Last exercise of the round
+          const roundTiming = getRoundTiming(roundIdx);
+          const isStationsRound = roundTiming.roundType === 'stations_round';
+          const repeatTimes = roundTiming.repeatTimes || 1;
+          const currentSet = timerStateRef.current.currentSetNumber;
+          
+          // Check if this is a stations round with more sets to do
+          if (isStationsRound && currentSet < repeatTimes) {
+            // More sets to do - go to rest screen for set break
+            console.log('[STATIONS-REPEAT] Starting set break before next set', {
+              currentSet,
+              nextSet: currentSet + 1,
+              totalSets: repeatTimes,
+              timestamp: new Date().toISOString()
+            });
+            
+            // Move to rest screen for set break
+            setCurrentScreen('rest');
+            const { restDuration } = roundTiming;
+            startTimer(restDuration);
+            
+            // Keep the same music playing for the next set
+            return;
+          }
+          
+          // All sets complete for this round (or not a stations round)
+          // Reset set number for next round
+          setCurrentSetNumber(1);
+          
+          // Play REST track at round end
           const currentRoundMusic = currentSetlist?.rounds?.[roundIdx];
           if (currentRoundMusic && playTrack) {
             const restTrack = currentRoundMusic.track3;
@@ -972,20 +1018,42 @@ export function CircuitWorkoutLiveScreen() {
         }
       }
     } else if (screen === 'rest') {
-      // Rest screen always leads to the next exercise
-      const nextExerciseIndex = exerciseIdx + 1;
-      setCurrentExerciseIndex(nextExerciseIndex);
-      setCurrentScreen('exercise');
-      const { workDuration } = getRoundTiming(roundIdx);
-      startTimer(workDuration);
+      // Check if this is a set break (last exercise of a stations round with more sets to do)
+      const roundTiming = getRoundTiming(roundIdx);
+      const isStationsRound = roundTiming.roundType === 'stations_round';
+      const repeatTimes = roundTiming.repeatTimes || 1;
+      const currentSet = timerStateRef.current.currentSetNumber;
+      const isLastExercise = exerciseIdx === currentRound.exercises.length - 1;
       
-      // Play BRIDGE track at start of exercise 2
-      if (nextExerciseIndex === 1) { // Exercise 2 (0-indexed)
-        const currentRoundMusic = currentSetlist?.rounds?.[roundIdx];
-        if (currentRoundMusic && playTrack) {
-          const bridgeTrack = currentRoundMusic.track2;
-          if (bridgeTrack) {
-            playTrack(bridgeTrack.spotifyId, 0);
+      if (isStationsRound && isLastExercise && currentSet < repeatTimes) {
+        // This is a set break - start next set from first exercise
+        console.log('[STATIONS-REPEAT] Set break complete, starting next set', {
+          currentSet,
+          nextSet: currentSet + 1,
+          timestamp: new Date().toISOString()
+        });
+        
+        setCurrentSetNumber(currentSet + 1);
+        setCurrentExerciseIndex(0);
+        setCurrentScreen('exercise');
+        const { workDuration } = roundTiming;
+        startTimer(workDuration);
+      } else {
+        // Normal rest between exercises
+        const nextExerciseIndex = exerciseIdx + 1;
+        setCurrentExerciseIndex(nextExerciseIndex);
+        setCurrentScreen('exercise');
+        const { workDuration } = getRoundTiming(roundIdx);
+        startTimer(workDuration);
+        
+        // Play BRIDGE track at start of exercise 2
+        if (nextExerciseIndex === 1) { // Exercise 2 (0-indexed)
+          const currentRoundMusic = currentSetlist?.rounds?.[roundIdx];
+          if (currentRoundMusic && playTrack) {
+            const bridgeTrack = currentRoundMusic.track2;
+            if (bridgeTrack) {
+              playTrack(bridgeTrack.spotifyId, 0);
+            }
           }
         }
       }
@@ -1424,21 +1492,25 @@ export function CircuitWorkoutLiveScreen() {
         
         {currentScreen === 'round-preview' && currentRound && (
           currentRoundType === 'stations_round' 
-            ? <StationsRoundPreview currentRound={currentRound} />
+            ? <StationsRoundPreview 
+                currentRound={currentRound} 
+                repeatTimes={getRoundTiming(currentRoundIndex).repeatTimes || 1}
+              />
             : currentRoundType === 'amrap_round'
             ? <AMRAPRoundPreview currentRound={currentRound} />
             : <CircuitRoundPreview currentRound={currentRound} />
         )}
 
         {currentScreen === 'exercise' && currentExercise && currentRound && (
-          currentRoundType === 'stations_round' 
-            ? <StationsExerciseView 
-                currentRound={currentRound}
-                currentExercise={currentExercise}
-                currentExerciseIndex={currentExerciseIndex}
-                timeRemaining={timeRemaining}
-                isPaused={isPaused}
-              />
+          <>
+            {currentRoundType === 'stations_round' 
+              ? <StationsExerciseView 
+                  currentRound={currentRound}
+                  currentExercise={currentExercise}
+                  currentExerciseIndex={currentExerciseIndex}
+                  timeRemaining={timeRemaining}
+                  isPaused={isPaused}
+                />
             : currentRoundType === 'amrap_round'
             ? <AMRAPExerciseView 
                 currentRound={currentRound}
@@ -1454,16 +1526,73 @@ export function CircuitWorkoutLiveScreen() {
                 timeRemaining={timeRemaining}
                 isPaused={isPaused}
               />
+            }
+            
+            {/* Repeat Progress Indicator for Stations */}
+            {currentRoundType === 'stations_round' && currentRepeatTimes > 1 && (
+              <View style={{
+                position: 'absolute',
+                bottom: 40,
+                right: 48,
+              }}>
+                <MattePanel style={{
+                  paddingHorizontal: 20,
+                  paddingVertical: 12,
+                  gap: 6,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  backgroundColor: `${TOKENS.color.cardGlass}`,
+                  borderColor: TOKENS.color.accent + '30',
+                  borderWidth: 1,
+                }}>
+                  <Text style={{
+                    fontSize: 13,
+                    fontWeight: '600',
+                    color: TOKENS.color.muted,
+                    textTransform: 'uppercase',
+                    letterSpacing: 1.2,
+                  }}>
+                    Set
+                  </Text>
+                  <Text style={{
+                    fontSize: 16,
+                    fontWeight: '700',
+                    color: TOKENS.color.text,
+                    marginLeft: 2,
+                  }}>
+                    {currentRepeatNumber}
+                  </Text>
+                  <Text style={{
+                    fontSize: 13,
+                    fontWeight: '500',
+                    color: TOKENS.color.muted,
+                    marginHorizontal: 3,
+                  }}>
+                    of
+                  </Text>
+                  <Text style={{
+                    fontSize: 16,
+                    fontWeight: '700',
+                    color: TOKENS.color.text,
+                  }}>
+                    {currentRepeatTimes}
+                  </Text>
+                </MattePanel>
+              </View>
+            )}
+          </>
         )}
 
         {currentScreen === 'rest' && currentRound && (
-          currentRoundType === 'stations_round' 
-            ? <StationsRestView 
-                currentRound={currentRound}
-                currentExerciseIndex={currentExerciseIndex}
-                timeRemaining={timeRemaining}
-                isPaused={isPaused}
-              />
+          <>
+            {currentRoundType === 'stations_round' 
+              ? <StationsRestView 
+                  currentRound={currentRound}
+                  currentExerciseIndex={currentExerciseIndex}
+                  timeRemaining={timeRemaining}
+                  isPaused={isPaused}
+                  isSetBreak={currentExerciseIndex === currentRound.exercises.length - 1 && currentSetNumber < (getRoundTiming(currentRoundIndex).repeatTimes || 1)}
+                />
             : (
               <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingBottom: 60 }}>
                 {/* Main Timer - Primary Focus */}
@@ -1500,6 +1629,61 @@ export function CircuitWorkoutLiveScreen() {
                 
               </View>
             )
+            }
+            
+            {/* Repeat Progress Indicator for Stations Rest */}
+            {currentRoundType === 'stations_round' && currentRepeatTimes > 1 && (
+              <View style={{
+                position: 'absolute',
+                bottom: 40,
+                right: 48,
+              }}>
+                <MattePanel style={{
+                  paddingHorizontal: 20,
+                  paddingVertical: 12,
+                  gap: 6,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  backgroundColor: `${TOKENS.color.cardGlass}`,
+                  borderColor: TOKENS.color.accent + '30',
+                  borderWidth: 1,
+                }}>
+                  <Text style={{
+                    fontSize: 13,
+                    fontWeight: '600',
+                    color: TOKENS.color.muted,
+                    textTransform: 'uppercase',
+                    letterSpacing: 1.2,
+                  }}>
+                    Set
+                  </Text>
+                  <Text style={{
+                    fontSize: 16,
+                    fontWeight: '700',
+                    color: TOKENS.color.text,
+                    marginLeft: 2,
+                  }}>
+                    {currentRepeatNumber}
+                  </Text>
+                  <Text style={{
+                    fontSize: 13,
+                    fontWeight: '500',
+                    color: TOKENS.color.muted,
+                    marginHorizontal: 3,
+                  }}>
+                    of
+                  </Text>
+                  <Text style={{
+                    fontSize: 16,
+                    fontWeight: '700',
+                    color: TOKENS.color.text,
+                  }}>
+                    {currentRepeatTimes}
+                  </Text>
+                </MattePanel>
+              </View>
+            )}
+          </>
         )}
       </View>
       

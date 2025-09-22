@@ -4,6 +4,7 @@ import { TOKENS, MattePanel, CircuitExercise, RoundData } from './shared';
 
 interface StationsRoundPreviewProps {
   currentRound: RoundData;
+  repeatTimes?: number;
 }
 
 // Team configuration - supports up to 6 teams
@@ -16,7 +17,7 @@ const TEAMS = [
   { name: 'Teal', color: '#14b8a6' },
 ];
 
-export function StationsRoundPreview({ currentRound }: StationsRoundPreviewProps) {
+export function StationsRoundPreview({ currentRound, repeatTimes = 1 }: StationsRoundPreviewProps) {
   const exerciseCount = currentRound.exercises.length;
   
   // Use only as many teams as there are stations
@@ -134,6 +135,43 @@ export function StationsRoundPreview({ currentRound }: StationsRoundPreviewProps
           })}
         </View>
       </View>
+      
+      {/* Repeat Indicator - Bottom Right */}
+      {repeatTimes > 1 && (
+        <View style={{
+          position: 'absolute',
+          bottom: 40,
+          right: 48,
+        }}>
+          <MattePanel style={{
+            paddingHorizontal: 20,
+            paddingVertical: 12,
+            gap: 6,
+            flexDirection: 'row',
+            alignItems: 'center',
+            backgroundColor: `${TOKENS.color.cardGlass}`,
+            borderColor: TOKENS.color.accent + '30',
+            borderWidth: 1,
+          }}>
+            <Text style={{
+              fontSize: 14,
+              fontWeight: '700',
+              color: TOKENS.color.muted,
+              textTransform: 'uppercase',
+              letterSpacing: 1.5,
+            }}>
+              Repeat
+            </Text>
+            <Text style={{
+              fontSize: 22,
+              fontWeight: '800',
+              color: TOKENS.color.accent,
+            }}>
+              {repeatTimes}×
+            </Text>
+          </MattePanel>
+        </View>
+      )}
 
     </View>
   );

@@ -381,7 +381,7 @@ export function PerRoundConfigStep({
     onRoundTemplatesChange(newRoundTemplates);
   };
 
-  const handleTimingChange = (roundNumber: number, field: 'workDuration' | 'restDuration' | 'totalDuration', value: number) => {
+  const handleTimingChange = (roundNumber: number, field: 'workDuration' | 'restDuration' | 'totalDuration' | 'repeatTimes', value: number) => {
     const newRoundTemplates = normalizedTemplates.map(rt => {
       if (rt.roundNumber === roundNumber) {
         return {
@@ -649,6 +649,35 @@ export function PerRoundConfigStep({
                       })}
                     </div>
                   </div>
+                  
+                  {/* Repeat Times - Only for Stations */}
+                  {isStations && (
+                    <div className="space-y-2">
+                      <span className="text-xs font-medium text-muted-foreground">REPEAT</span>
+                      <div className="grid grid-cols-5 gap-1">
+                        {[1, 2, 3, 4, 5].map((option) => {
+                          const isSelected = (round.template as any).repeatTimes === option || (!round.template.repeatTimes && option === 1);
+                          return (
+                            <Button
+                              key={option}
+                              variant={isSelected ? "primary" : "outline"}
+                              className={cn(
+                                "relative h-9 min-w-0 text-xs transition-all",
+                                isSelected && "ring-2 ring-offset-1 ring-primary"
+                              )}
+                              onClick={() => handleTimingChange(round.roundNumber, 'repeatTimes', option)}
+                              disabled={isSaving}
+                              size="sm"
+                            >
+                              <span className={cn(isSelected && "font-bold")}>
+                                {option}x
+                              </span>
+                            </Button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
               

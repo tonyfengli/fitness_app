@@ -7,6 +7,7 @@ interface StationsRestViewProps {
   currentExerciseIndex: number;
   timeRemaining: number;
   isPaused: boolean;
+  isSetBreak?: boolean;
 }
 
 // Team configuration - matches the preview
@@ -23,7 +24,8 @@ export function StationsRestView({
   currentRound, 
   currentExerciseIndex,
   timeRemaining,
-  isPaused 
+  isPaused,
+  isSetBreak = false
 }: StationsRestViewProps) {
   const exerciseCount = currentRound.exercises.length;
   
@@ -43,11 +45,58 @@ export function StationsRestView({
   
   // Next exercise index (what we're transitioning to)
   // For the last exercise, there's no "next" - we're going to round preview
-  const isLastExercise = currentExerciseIndex === exerciseCount - 1;
-  const nextExerciseIndex = isLastExercise ? 0 : currentExerciseIndex + 1;
+  // But for set breaks, we're transitioning to the first exercise of the next set
+  const isLastExercise = currentExerciseIndex === exerciseCount - 1 && !isSetBreak;
+  const nextExerciseIndex = isLastExercise ? 0 : (currentExerciseIndex + 1) % exerciseCount;
   
   return (
     <View style={{ flex: 1, width: '100%' }}>
+      {/* New Set Indicator - Only shows during set breaks */}
+      {isSetBreak && (
+        <View style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          alignItems: 'center',
+          zIndex: 10,
+        }}>
+          <View style={{
+            backgroundColor: TOKENS.color.accent + '15',
+            borderColor: TOKENS.color.accent,
+            borderWidth: 1,
+            paddingHorizontal: 16,
+            paddingVertical: 8,
+            borderRadius: 999,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 6,
+          }}>
+            <View style={{
+              width: 6,
+              height: 6,
+              borderRadius: 999,
+              backgroundColor: TOKENS.color.accent,
+            }} />
+            <Text style={{
+              fontSize: 13,
+              fontWeight: '700',
+              color: TOKENS.color.accent,
+              textTransform: 'uppercase',
+              letterSpacing: 1.2,
+            }}>
+              New Set Starting
+            </Text>
+            <View style={{
+              width: 6,
+              height: 6,
+              borderRadius: 999,
+              backgroundColor: TOKENS.color.accent,
+            }} />
+          </View>
+        </View>
+      )}
+      
       {/* Stations Grid - Exact same layout as exercise view */}
       <View style={{ 
         flex: 1, 

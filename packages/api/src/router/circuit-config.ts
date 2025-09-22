@@ -21,13 +21,23 @@ function ensureRoundTemplates(config: any) {
       config: {
         ...config.config,
         roundTemplates: config.config.roundTemplates.map((rt: any) => {
-          if (rt.template.type === 'circuit_round' || rt.template.type === 'stations_round') {
+          if (rt.template.type === 'circuit_round') {
             return {
               ...rt,
               template: {
                 ...rt.template,
                 workDuration: rt.template.workDuration ?? config.config.workDuration ?? 45,
                 restDuration: rt.template.restDuration ?? config.config.restDuration ?? 15,
+              }
+            };
+          } else if (rt.template.type === 'stations_round') {
+            return {
+              ...rt,
+              template: {
+                ...rt.template,
+                workDuration: rt.template.workDuration ?? config.config.workDuration ?? 45,
+                restDuration: rt.template.restDuration ?? config.config.restDuration ?? 15,
+                repeatTimes: rt.template.repeatTimes ?? 1,
               }
             };
           } else if (rt.template.type === 'amrap_round') {
