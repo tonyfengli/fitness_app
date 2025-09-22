@@ -95,6 +95,13 @@ export async function setHueLights(
   },
   skipCache = false
 ): Promise<boolean> {
+  // Check if lighting is enabled
+  const lightingEnabled = await AsyncStorage.getItem('lightingEnabled');
+  if (lightingEnabled === 'false') {
+    console.log('[HUE-DIRECT] Lighting is disabled, skipping command');
+    return true; // Return success to avoid breaking the flow
+  }
+  
   const startTime = Date.now();
   
   console.log('[HUE-DIRECT] setHueLights called:', {

@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, Pressable } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '../App';
 import { 
-  setHueLights, 
-  subscribeLightingStatus
+  setHueLights
 } from '../lib/lighting';
 import {
   DEFAULT_PRESET_COLORS,
@@ -52,26 +52,35 @@ interface PresetButton {
 
 export function LightingTestScreen() {
   const navigation = useNavigation();
-  const [lightingStatus, setLightingStatus] = useState<'unknown' | 'success' | 'slow' | 'failed'>('unknown');
   const [selectedCircuitPreset, setSelectedCircuitPreset] = useState<string | null>(null);
   const [selectedStrengthPreset, setSelectedStrengthPreset] = useState<string | null>(null);
   const [selectedColors, setSelectedColors] = useState<{ [key: string]: string }>({});
+  const [lightingEnabled, setLightingEnabled] = useState<boolean>(true);
 
   useEffect(() => {
-    const unsubscribe = subscribeLightingStatus((status) => {
-      setLightingStatus(status);
-    });
     
-    // Load saved color mappings
+    // Load saved color mappings and enabled state
     loadColorMappings().then(mappings => {
       setSelectedColors(mappings);
     });
     
-    return () => unsubscribe();
+    // Load lighting enabled state
+    AsyncStorage.getItem('lightingEnabled').then(value => {
+      if (value !== null) {
+        setLightingEnabled(value === 'true');
+      }
+    });
   }, []);
 
+  const handleToggleLighting = async () => {
+    const newState = !lightingEnabled;
+    setLightingEnabled(newState);
+    await AsyncStorage.setItem('lightingEnabled', newState.toString());
+    console.log('[LightingTest] Lighting toggled:', newState ? 'ON' : 'OFF');
+  };
+
   const handlePresetClick = (preset: string, type: 'circuit' | 'strength', disabled?: boolean) => {
-    if (disabled) return;
+    if (disabled || !lightingEnabled) return;
     
     if (type === 'circuit') {
       setSelectedCircuitPreset(selectedCircuitPreset === preset ? null : preset);
@@ -83,6 +92,8 @@ export function LightingTestScreen() {
   };
 
   const handleColorSelect = async (presetKey: string, color: typeof COLOR_PALETTE[0]) => {
+    if (!lightingEnabled) return;
+    
     // Update local state
     const newMappings = { ...selectedColors, [presetKey]: color.value };
     setSelectedColors(newMappings);
@@ -102,10 +113,12 @@ export function LightingTestScreen() {
   };
 
   const handleBackPress = async () => {
-    // Apply App Start color when going back
-    const appStartColor = selectedColors['app_start'] || DEFAULT_PRESET_COLORS['app_start'];
-    const huePreset = getHuePresetForColor(appStartColor);
-    await setHueLights(huePreset);
+    // Apply App Start color when going back (only if lighting is enabled)
+    if (lightingEnabled) {
+      const appStartColor = selectedColors['app_start'] || DEFAULT_PRESET_COLORS['app_start'];
+      const huePreset = getHuePresetForColor(appStartColor);
+      await setHueLights(huePreset);
+    }
     navigation.goBack();
   };
 
@@ -113,6 +126,7 @@ export function LightingTestScreen() {
     { 
       label: 'App Start', 
       onPress: async () => {
+        if (!lightingEnabled) return;
         const color = selectedColors['app_start'] || DEFAULT_PRESET_COLORS['app_start'];
         await setHueLights(getHuePresetForColor(color));
       },
@@ -122,6 +136,7 @@ export function LightingTestScreen() {
     { 
       label: 'Round Preview', 
       onPress: async () => {
+        if (!lightingEnabled) return;
         const color = selectedColors['circuit_round_preview'] || DEFAULT_PRESET_COLORS['circuit_round_preview'];
         await setHueLights(getHuePresetForColor(color));
       },
@@ -131,6 +146,7 @@ export function LightingTestScreen() {
     { 
       label: 'Exercise Round', 
       onPress: async () => {
+        if (!lightingEnabled) return;
         const color = selectedColors['circuit_exercise_round'] || DEFAULT_PRESET_COLORS['circuit_exercise_round'];
         await setHueLights(getHuePresetForColor(color));
       },
@@ -140,6 +156,7 @@ export function LightingTestScreen() {
     { 
       label: 'Rest', 
       onPress: async () => {
+        if (!lightingEnabled) return;
         const color = selectedColors['circuit_rest'] || DEFAULT_PRESET_COLORS['circuit_rest'];
         await setHueLights(getHuePresetForColor(color));
       },
@@ -149,6 +166,7 @@ export function LightingTestScreen() {
     { 
       label: 'Cooldown', 
       onPress: async () => {
+        if (!lightingEnabled) return;
         const color = selectedColors['circuit_cooldown'] || DEFAULT_PRESET_COLORS['circuit_cooldown'];
         await setHueLights(getHuePresetForColor(color));
       },
@@ -162,6 +180,7 @@ export function LightingTestScreen() {
     { 
       label: 'App Start', 
       onPress: async () => {
+        if (!lightingEnabled) return;
         const color = selectedColors['app_start'] || DEFAULT_PRESET_COLORS['app_start'];
         await setHueLights(getHuePresetForColor(color));
       },
@@ -171,6 +190,7 @@ export function LightingTestScreen() {
     { 
       label: '0-5 Minutes', 
       onPress: async () => {
+        if (!lightingEnabled) return;
         const color = selectedColors['strength_0_5_min'] || DEFAULT_PRESET_COLORS['strength_0_5_min'];
         await setHueLights(getHuePresetForColor(color));
       },
@@ -180,6 +200,7 @@ export function LightingTestScreen() {
     { 
       label: '5-9 Minutes', 
       onPress: async () => {
+        if (!lightingEnabled) return;
         const color = selectedColors['strength_5_9_min'] || DEFAULT_PRESET_COLORS['strength_5_9_min'];
         await setHueLights(getHuePresetForColor(color));
       },
@@ -189,6 +210,7 @@ export function LightingTestScreen() {
     { 
       label: '9-10 Minutes', 
       onPress: async () => {
+        if (!lightingEnabled) return;
         const color = selectedColors['strength_9_10_min'] || DEFAULT_PRESET_COLORS['strength_9_10_min'];
         await setHueLights(getHuePresetForColor(color));
       },
@@ -198,6 +220,7 @@ export function LightingTestScreen() {
     { 
       label: 'Cooldown', 
       onPress: async () => {
+        if (!lightingEnabled) return;
         const color = selectedColors['strength_cooldown'] || DEFAULT_PRESET_COLORS['strength_cooldown'];
         await setHueLights(getHuePresetForColor(color));
       },
@@ -206,14 +229,6 @@ export function LightingTestScreen() {
     },
   ];
 
-  const getStatusColor = () => {
-    switch (lightingStatus) {
-      case 'success': return TOKENS.color.success;
-      case 'slow': return TOKENS.color.warning;
-      case 'failed': return TOKENS.color.error;
-      default: return TOKENS.color.muted;
-    }
-  };
 
   return (
     <View style={{ flex: 1, backgroundColor: TOKENS.color.bg, padding: 41 }}>
@@ -224,18 +239,30 @@ export function LightingTestScreen() {
         </Text>
         
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
-          {/* Status Indicator */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <View style={{ 
-              width: 12, 
-              height: 12, 
-              borderRadius: 6, 
-              backgroundColor: getStatusColor() 
-            }} />
-            <Text style={{ color: TOKENS.color.muted, fontSize: 14 }}>
-              {lightingStatus}
-            </Text>
-          </View>
+          {/* On/Off Toggle */}
+          <Pressable
+            onPress={handleToggleLighting}
+            focusable
+          >
+            {({ focused }) => (
+              <View style={{
+                backgroundColor: focused ? 'rgba(255,255,255,0.16)' : lightingEnabled ? TOKENS.color.accent : TOKENS.color.disabled,
+                borderColor: focused ? 'rgba(255,255,255,0.45)' : TOKENS.color.borderGlass,
+                borderWidth: 1,
+                borderRadius: TOKENS.radius.card,
+                paddingHorizontal: 20,
+                paddingVertical: 10,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 8,
+                transform: focused ? [{ translateY: -1 }] : [],
+              }}>
+                <Text style={{ color: TOKENS.color.bg, fontSize: 15, fontWeight: '600' }}>
+                  {lightingEnabled ? 'ON' : 'OFF'}
+                </Text>
+              </View>
+            )}
+          </Pressable>
           
           {/* Back Button */}
           <Pressable
@@ -259,7 +286,7 @@ export function LightingTestScreen() {
         </View>
       </View>
 
-      <View style={{ flex: 1, flexDirection: 'row', gap: 20 }}>
+      <View style={{ flex: 1, flexDirection: 'row', gap: 20, opacity: lightingEnabled ? 1 : 0.4 }}>
         {/* Circuit Presets */}
         <PresetSection 
           title="Circuit Presets" 
@@ -268,6 +295,7 @@ export function LightingTestScreen() {
           onPresetClick={(preset, presetButton) => handlePresetClick(preset, 'circuit', presetButton.disabled)}
           onColorSelect={handleColorSelect}
           selectedColors={selectedColors}
+          lightingEnabled={lightingEnabled}
         />
         
         {/* Strength Presets */}
@@ -278,6 +306,7 @@ export function LightingTestScreen() {
           onPresetClick={(preset) => handlePresetClick(preset, 'strength')}
           onColorSelect={handleColorSelect}
           selectedColors={selectedColors}
+          lightingEnabled={lightingEnabled}
         />
       </View>
     </View>
@@ -291,6 +320,7 @@ function PresetSection({
   onPresetClick, 
   onColorSelect,
   selectedColors,
+  lightingEnabled,
 }: { 
   title: string; 
   presets: PresetButton[];
@@ -298,6 +328,7 @@ function PresetSection({
   onPresetClick: (preset: string, presetButton: PresetButton) => void;
   onColorSelect: (presetKey: string, color: typeof COLOR_PALETTE[0]) => void;
   selectedColors: { [key: string]: string };
+  lightingEnabled: boolean;
 }) {
   return (
     <View style={{

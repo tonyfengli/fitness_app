@@ -16,7 +16,6 @@ import {
   stopAnimation
 } from '../lib/lighting';
 import { getColorForPreset, getHuePresetForColor } from '../lib/lighting/colorMappings';
-import { LightingStatusDot } from '../components/LightingStatusDot';
 import { useSpotifySync } from '../hooks/useSpotifySync';
 import { playCountdownSound, setCountdownVolume } from '../lib/sound/countdown-sound';
 import type { CircuitConfig } from '@acme/db';
@@ -1811,17 +1810,6 @@ export function CircuitWorkoutLiveScreen() {
         </View>
       )}
       
-      {/* Status Indicators */}
-      <View style={{ 
-        position: 'absolute', 
-        bottom: 40, 
-        left: 60, 
-        flexDirection: 'row', 
-        alignItems: 'center',
-        gap: 20 
-      }}>
-        <LightingStatusDot />
-      </View>
     </View>
   );
 }

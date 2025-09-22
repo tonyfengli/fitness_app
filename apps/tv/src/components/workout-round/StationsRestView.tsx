@@ -68,12 +68,27 @@ export function StationsRestView({
             const stationNumber = idx + 1;
             
             // Current team (what's leaving this station)
-            const currentTeamIndex = (idx - currentExerciseIndex + activeTeams.length) % activeTeams.length;
+            // Ensure currentExerciseIndex is within bounds
+            const safeCurrentIndex = Math.min(Math.max(0, currentExerciseIndex), exerciseCount - 1);
+            const currentTeamIndex = (idx - safeCurrentIndex + activeTeams.length) % activeTeams.length;
             const currentTeam = activeTeams[currentTeamIndex];
             
             // Next team (what's coming to this station)
             const nextTeamIndex = (idx - nextExerciseIndex + activeTeams.length) % activeTeams.length;
             const nextTeam = activeTeams[nextTeamIndex];
+            
+            // Safety check - this should never happen but prevents crashes
+            if (!currentTeam || !nextTeam) {
+              console.error('[StationsRestView] Team calculation error:', {
+                currentExerciseIndex,
+                safeCurrentIndex,
+                exerciseCount,
+                activeTeams: activeTeams.length,
+                currentTeamIndex,
+                nextTeamIndex
+              });
+              return null;
+            }
             
             return (
               <MattePanel 
