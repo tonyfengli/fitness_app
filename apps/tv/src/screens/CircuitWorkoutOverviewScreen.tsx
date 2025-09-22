@@ -290,31 +290,24 @@ export function CircuitWorkoutOverviewScreen() {
       console.log('[CircuitWorkoutOverview] Processing selections:', selections.length);
       console.log('[CircuitWorkoutOverview] Raw selections:', selections);
       
-      // For circuits, we should get exercises from just ONE client since they're all shared
-      // Group exercises by exerciseId + groupName to eliminate duplicates
-      const exerciseMap = new Map<string, CircuitExercise>();
+      // Process all exercises without deduplication to allow duplicates
+      const allExercises: CircuitExercise[] = [];
       
       selections.forEach((selection) => {
-        // Use exerciseId + groupName as unique key
-        const key = `${selection.exerciseId}-${selection.groupName}`;
-        
-        // Only add if we haven't seen this exercise+round combination
-        if (!exerciseMap.has(key)) {
-          exerciseMap.set(key, {
-            id: selection.id,
-            exerciseId: selection.exerciseId,
-            exerciseName: selection.exerciseName,
-            orderIndex: selection.orderIndex || 0,
-            groupName: selection.groupName || 'Round 1',
-          });
-        }
+        allExercises.push({
+          id: selection.id,
+          exerciseId: selection.exerciseId,
+          exerciseName: selection.exerciseName,
+          orderIndex: selection.orderIndex || 0,
+          groupName: selection.groupName || 'Round 1',
+        });
       });
       
-      console.log('[CircuitWorkoutOverview] Unique exercises found:', exerciseMap.size);
+      console.log('[CircuitWorkoutOverview] Total exercises found:', allExercises.length);
       
       // Group by round
       const roundsMap = new Map<string, CircuitExercise[]>();
-      exerciseMap.forEach((exercise) => {
+      allExercises.forEach((exercise) => {
         const round = exercise.groupName;
         if (!roundsMap.has(round)) {
           roundsMap.set(round, []);

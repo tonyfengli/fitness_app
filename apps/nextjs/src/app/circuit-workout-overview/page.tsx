@@ -296,12 +296,14 @@ function CircuitWorkoutOverviewContent() {
   useEffect(() => {
     if (savedSelections && savedSelections.length > 0) {
       console.log("[CircuitWorkoutOverview] Processing selections:", savedSelections.length);
+      console.log("[CircuitWorkoutOverview] Raw selections:", savedSelections);
       
       // Group exercises by round (using groupName)
       const roundsMap = new Map<string, typeof savedSelections>();
       
       // Use all exercises without deduplication to allow duplicates in the same round
       const allExercises = savedSelections;
+      console.log("[CircuitWorkoutOverview] All exercises (no deduplication):", allExercises.length);
       
       // Group by round, excluding warm-up exercises
       allExercises.forEach((selection) => {

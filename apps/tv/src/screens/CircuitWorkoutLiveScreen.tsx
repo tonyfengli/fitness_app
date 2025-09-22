@@ -352,21 +352,47 @@ export function CircuitWorkoutLiveScreen() {
       // Process all exercises without deduplication to allow duplicates
       const allExercises: CircuitExercise[] = [];
       
-      selections.forEach((selection) => {
+      console.log('[DEDUP-DEBUG] Starting to process selections:', {
+        totalSelections: selections.length,
+        selectionsPreview: selections.slice(0, 5).map(s => ({
+          id: s.id,
+          exerciseName: s.exerciseName,
+          groupName: s.groupName
+        }))
+      });
+      
+      selections.forEach((selection, index) => {
         // Skip warm-up exercises from being added to regular rounds
         if (selection.groupName === 'Warm-up') {
           console.log('[CircuitWorkout] Skipping warm-up exercise from rounds:', selection.exerciseName);
           return;
         }
         
-        allExercises.push({
+        const exercise = {
           id: selection.id,
           exerciseId: selection.exerciseId,
           exerciseName: selection.exerciseName,
           orderIndex: selection.orderIndex || 0,
           groupName: selection.groupName || 'Round 1',
           equipment: selection.equipment,
+        };
+        
+        console.log(`[DEDUP-DEBUG] Adding exercise ${index}:`, {
+          selectionId: selection.id,
+          exerciseId: selection.exerciseId,
+          exerciseName: selection.exerciseName,
+          groupName: selection.groupName
         });
+        
+        allExercises.push(exercise);
+      });
+      
+      console.log('[DEDUP-DEBUG] After processing all selections:', {
+        totalExercises: allExercises.length,
+        exercisesByGroup: allExercises.reduce((acc, ex) => {
+          acc[ex.groupName] = (acc[ex.groupName] || 0) + 1;
+          return acc;
+        }, {} as Record<string, number>)
       });
       
       // Group by round
