@@ -4,9 +4,10 @@ import { TOKENS, MattePanel, CircuitExercise, RoundData } from './shared';
 
 interface CircuitRoundPreviewProps {
   currentRound: RoundData;
+  repeatTimes?: number;
 }
 
-export function CircuitRoundPreview({ currentRound }: CircuitRoundPreviewProps) {
+export function CircuitRoundPreview({ currentRound, repeatTimes = 1 }: CircuitRoundPreviewProps) {
   // Calculate grid layout based on number of exercises
   const exerciseCount = currentRound.exercises.length;
   let columns = 4; // Default to 4 columns
@@ -125,6 +126,43 @@ export function CircuitRoundPreview({ currentRound }: CircuitRoundPreviewProps) 
           })}
         </View>
       </View>
+      
+      {/* Repeat Indicator - Bottom Right */}
+      {repeatTimes > 1 && (
+        <View style={{
+          position: 'absolute',
+          bottom: 40,
+          right: 48,
+        }}>
+          <MattePanel style={{
+            paddingHorizontal: 20,
+            paddingVertical: 12,
+            gap: 6,
+            flexDirection: 'row',
+            alignItems: 'center',
+            backgroundColor: TOKENS.color.blue + '10',
+            borderColor: TOKENS.color.blue,
+            borderWidth: 1,
+          }}>
+            <Text style={{
+              fontSize: 13,
+              fontWeight: '700',
+              color: TOKENS.color.blue,
+              textTransform: 'uppercase',
+              letterSpacing: 1.2,
+            }}>
+              Repeat
+            </Text>
+            <Text style={{
+              fontSize: 18,
+              fontWeight: '900',
+              color: TOKENS.color.blue,
+            }}>
+              {repeatTimes}×
+            </Text>
+          </MattePanel>
+        </View>
+      )}
     </View>
   );
 }

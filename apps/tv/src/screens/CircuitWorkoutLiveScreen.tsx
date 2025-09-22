@@ -992,13 +992,14 @@ export function CircuitWorkoutLiveScreen() {
           // Last exercise of the round
           const roundTiming = getRoundTiming(roundIdx);
           const isStationsRound = roundTiming.roundType === 'stations_round';
+          const isCircuitRound = roundTiming.roundType === 'circuit_round';
           const repeatTimes = roundTiming.repeatTimes || 1;
           const currentSet = timerStateRef.current.currentSetNumber;
           
-          // Check if this is a stations round with more sets to do
-          if (isStationsRound && currentSet < repeatTimes) {
+          // Check if this is a stations or circuit round with more sets to do
+          if ((isStationsRound || isCircuitRound) && currentSet < repeatTimes) {
             // More sets to do - go to rest screen for set break
-            console.log('[STATIONS-REPEAT] Starting set break before next set', {
+            console.log('[MULTI-SET] Starting set break before next set', {
               currentSet,
               nextSet: currentSet + 1,
               totalSets: repeatTimes,
@@ -1060,16 +1061,17 @@ export function CircuitWorkoutLiveScreen() {
         }
       }
     } else if (screen === 'rest') {
-      // Check if this is a set break (last exercise of a stations round with more sets to do)
+      // Check if this is a set break (last exercise of a stations or circuit round with more sets to do)
       const roundTiming = getRoundTiming(roundIdx);
       const isStationsRound = roundTiming.roundType === 'stations_round';
+      const isCircuitRound = roundTiming.roundType === 'circuit_round';
       const repeatTimes = roundTiming.repeatTimes || 1;
       const currentSet = timerStateRef.current.currentSetNumber;
       const isLastExercise = exerciseIdx === currentRound.exercises.length - 1;
       
-      if (isStationsRound && isLastExercise && currentSet < repeatTimes) {
+      if ((isStationsRound || isCircuitRound) && isLastExercise && currentSet < repeatTimes) {
         // This is a set break - start next set from first exercise
-        console.log('[STATIONS-REPEAT] Set break complete, starting next set', {
+        console.log('[MULTI-SET] Set break complete, starting next set', {
           currentSet,
           nextSet: currentSet + 1,
           timestamp: new Date().toISOString()
@@ -1581,7 +1583,10 @@ export function CircuitWorkoutLiveScreen() {
               />
             : currentRoundType === 'amrap_round'
             ? <AMRAPRoundPreview currentRound={currentRound} />
-            : <CircuitRoundPreview currentRound={currentRound} />
+            : <CircuitRoundPreview 
+                currentRound={currentRound} 
+                repeatTimes={getRoundTiming(currentRoundIndex).repeatTimes || 1}
+              />
         )}
 
         {currentScreen === 'exercise' && currentExercise && currentRound && (
@@ -1615,7 +1620,7 @@ export function CircuitWorkoutLiveScreen() {
             {(currentRoundType === 'stations_round' || currentRoundType === 'circuit_round') && currentRepeatTimes > 1 && (
               <View style={{
                 position: 'absolute',
-                top: 0,
+                top: currentRoundType === 'circuit_round' ? -28 : 0,
                 left: 0,
                 right: 0,
                 alignItems: 'center',
@@ -1718,11 +1723,11 @@ export function CircuitWorkoutLiveScreen() {
             )
             }
             
-            {/* Repeat Progress Indicator for Stations Rest */}
-            {currentRoundType === 'stations_round' && currentRepeatTimes > 1 && (
+            {/* Repeat Progress Indicator for Stations/Circuit Rest */}
+            {(currentRoundType === 'stations_round' || currentRoundType === 'circuit_round') && currentRepeatTimes > 1 && (
               <View style={{
                 position: 'absolute',
-                top: 0,
+                top: currentRoundType === 'circuit_round' ? -28 : 0,
                 left: 0,
                 right: 0,
                 alignItems: 'center',
