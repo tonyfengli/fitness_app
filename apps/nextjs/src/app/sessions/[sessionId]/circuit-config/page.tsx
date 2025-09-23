@@ -167,26 +167,29 @@ export default function CircuitConfigPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-white dark:bg-gray-900">
       {/* Fixed Header with Navigation */}
-      <div className="fixed top-0 left-0 right-0 z-40 bg-background/95 backdrop-blur-sm border-b">
+      <div className="fixed top-0 left-0 right-0 z-40 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm border-b">
         <div className="mx-auto max-w-md">
           {/* Top Navigation Row */}
           <div className="flex items-center justify-between p-4 pb-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleBack}
-              disabled={currentStep === 1}
-              className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <ChevronLeft className="h-4 w-4" />
-              <span className="text-sm">Back</span>
-            </Button>
+            {currentStep > 1 ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleBack}
+                className="flex items-center gap-1 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
+              >
+                <ChevronLeft className="h-4 w-4" />
+                <span className="text-sm">Back</span>
+              </Button>
+            ) : (
+              <div className="w-20" />
+            )}
             
             <div className="text-center">
-              <p className="text-xs text-muted-foreground">Step {currentStep} of {TOTAL_STEPS}</p>
-              <h1 className="text-sm font-medium">
+              <p className="text-xs text-gray-500 dark:text-white">Step {currentStep} of {TOTAL_STEPS}</p>
+              <h1 className="text-sm font-medium text-gray-900 dark:text-gray-100">
                 {currentStep === 1 && "Rounds"}
                 {currentStep === 2 && "Round Types"}
                 {currentStep === 3 && "Round Configuration"}
@@ -239,7 +242,7 @@ export default function CircuitConfigPage() {
         <div className="mx-auto max-w-md">
 
         {/* Step content */}
-        <Card className="p-0 shadow-sm">
+        <Card className="p-0 shadow-sm bg-white dark:bg-gray-800">
           <div className="p-6 space-y-6">
             {/* Step 1: Rounds */}
             {currentStep === 1 && (

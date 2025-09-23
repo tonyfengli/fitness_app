@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Button, Loader2Icon as Loader2 } from "@acme/ui-shared";
+import { Button, Loader2Icon as Loader2, ChevronRightIcon as ChevronRight } from "@acme/ui-shared";
 import { cn } from "@acme/ui-shared";
 import type { CircuitConfig, RoundConfig } from "@acme/db";
 import { useTRPC } from "~/trpc/react";
@@ -28,19 +28,22 @@ export function RoundsStep({
 }: RoundsStepProps) {
   const roundOptions = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
   const totalRounds = repeatRounds ? rounds * 2 : rounds;
-  const roundRestOptions = [60, 90, 120];
+  const roundRestOptions = [30, 45, 60, 90, 120, 150];
 
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-lg font-semibold mb-1">How many rounds?</h3>
-        <p className="text-sm text-muted-foreground mb-4">Each round contains all exercises</p>
+        <h3 className="text-lg font-semibold mb-1 text-gray-900 dark:text-white">How many rounds?</h3>
+        <p className="text-sm text-gray-600 dark:text-white mb-4">Each round contains all exercises</p>
         <div className="grid grid-cols-5 gap-2">
           {roundOptions.map((option) => (
             <Button
               key={option}
               variant={rounds === option ? "primary" : "outline"}
-              className="relative h-14 min-w-0 touch-manipulation text-base"
+              className={cn(
+                "relative h-14 min-w-0 touch-manipulation text-base",
+                rounds !== option && "dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:hover:bg-gray-600"
+              )}
               onClick={() => onRoundsChange(option)}
               disabled={isSaving}
             >
@@ -56,21 +59,22 @@ export function RoundsStep({
       <div>
         <div className="flex items-baseline justify-between mb-3">
           <div>
-            <h3 className="text-base font-semibold">Round Break</h3>
-            <p className="text-sm text-muted-foreground">Between rounds</p>
+            <h3 className="text-base font-semibold text-foreground">Round Break</h3>
+            <p className="text-sm text-gray-600 dark:text-white">Between rounds</p>
           </div>
           <div className="text-2xl font-bold text-green-600">
             {restBetweenRounds}s
           </div>
         </div>
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
           {roundRestOptions.map((option) => (
             <Button
               key={option}
               variant={restBetweenRounds === option ? "primary" : "outline"}
               className={cn(
                 "relative h-12 min-w-0 touch-manipulation text-sm font-medium transition-all",
-                restBetweenRounds === option && "bg-green-600 text-white hover:bg-green-700"
+                restBetweenRounds === option && "bg-green-600 text-white hover:bg-green-700",
+                restBetweenRounds !== option && "dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:hover:bg-gray-600"
               )}
               onClick={() => onRoundRestChange(option)}
               disabled={isSaving}
@@ -85,12 +89,13 @@ export function RoundsStep({
         </div>
       </div>
 
-      <div className="flex items-center justify-between rounded-xl bg-muted/50 p-4">
+      {/* Repeat rounds toggle - removed per request */}
+      {/* <div className="flex items-center justify-between rounded-xl bg-gray-100 dark:bg-gray-700/50 p-4">
         <div className="space-y-0.5">
-          <label htmlFor="repeat-rounds" className="text-base font-medium">
+          <label htmlFor="repeat-rounds" className="text-base font-medium text-foreground">
             Repeat rounds
           </label>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-gray-600 dark:text-white">
             Double the workout intensity
           </p>
         </div>
@@ -106,7 +111,7 @@ export function RoundsStep({
           disabled={isSaving}
           className={cn(
             "relative inline-flex h-8 w-14 items-center rounded-full transition-colors touch-manipulation",
-            repeatRounds ? "bg-primary" : "bg-gray-200",
+            repeatRounds ? "bg-primary dark:bg-primary/80" : "bg-gray-200 dark:bg-gray-600",
             isSaving && "opacity-50 cursor-not-allowed"
           )}
         >
@@ -115,15 +120,16 @@ export function RoundsStep({
             repeatRounds ? "translate-x-7" : "translate-x-1"
           )} />
         </button>
-      </div>
+      </div> */}
 
-      <div className="rounded-xl bg-primary/10 p-6 text-center">
+      {/* Total rounds display - removed per request */}
+      {/* <div className="rounded-xl bg-primary/10 p-6 text-center">
         <p className="text-sm text-muted-foreground mb-1">Total rounds</p>
         <p className="text-3xl font-bold text-primary">{totalRounds}</p>
         {repeatRounds && (
           <p className="text-xs text-muted-foreground mt-1">({rounds} × 2)</p>
         )}
-      </div>
+      </div> */}
     </div>
   );
 }
@@ -229,58 +235,70 @@ export function RoundTypesStep({
   return (
     <div className="space-y-4">
       <div>
-        <h3 className="text-lg font-semibold mb-1">Round Types</h3>
+        <h3 className="text-lg font-semibold mb-1 text-foreground">Round Types</h3>
         <p className="text-sm text-muted-foreground mb-4">
           Choose the type for each round
         </p>
       </div>
 
-      {/* Warmup Toggle */}
-      <div className="flex items-center justify-between rounded-xl bg-muted/50 p-4">
-        <div className="space-y-0.5">
-          <label htmlFor="enable-warmup" className="text-base font-medium">
-            Add warm-up
-          </label>
-          <p className="text-sm text-muted-foreground">
-            6 exercises, 5 minutes total
-          </p>
-        </div>
-        <button
-          id="enable-warmup"
-          role="switch"
-          aria-checked={warmupEnabled}
-          onClick={() => onWarmupToggle(!warmupEnabled)}
-          disabled={isSaving}
-          className={cn(
-            "relative inline-flex h-8 w-14 items-center rounded-full transition-colors",
-            warmupEnabled ? "bg-primary" : "bg-gray-200",
-            isSaving && "opacity-50 cursor-not-allowed"
-          )}
-        >
-          <span className={cn(
-            "inline-block h-6 w-6 transform rounded-full bg-white transition-transform shadow-sm",
-            warmupEnabled ? "translate-x-7" : "translate-x-1"
-          )} />
-        </button>
-      </div>
-
-      {/* Separator */}
-      <div className="border-t border-border" />
 
       <div className="space-y-3">
+        {/* Warmup */}
+        <div className="space-y-2">
+          <span className="text-base font-medium text-gray-900 dark:text-gray-100">
+            Warm-up
+          </span>
+          
+          <div className="grid grid-cols-2 gap-2">
+            <Button
+              variant={warmupEnabled ? "primary" : "outline"}
+              className={cn(
+                "relative h-12 min-w-0 touch-manipulation text-sm",
+                !warmupEnabled && "dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:hover:bg-gray-600"
+              )}
+              onClick={() => onWarmupToggle(true)}
+              disabled={isSaving}
+            >
+              {isSaving && warmupEnabled && (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              )}
+              Yes
+            </Button>
+            
+            <Button
+              variant={!warmupEnabled ? "primary" : "outline"}
+              className={cn(
+                "relative h-12 min-w-0 touch-manipulation text-sm",
+                warmupEnabled && "dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:hover:bg-gray-600"
+              )}
+              onClick={() => onWarmupToggle(false)}
+              disabled={isSaving}
+            >
+              {isSaving && !warmupEnabled && (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              )}
+              No
+            </Button>
+          </div>
+        </div>
+
+        {/* Regular Rounds */}
         {ensuredRoundTemplates.map((roundConfig) => (
           <div 
             key={roundConfig.roundNumber}
             className="space-y-2"
           >
-            <span className="text-base font-medium">
+            <span className="text-base font-medium text-gray-900 dark:text-gray-100">
               Round {roundConfig.roundNumber}
             </span>
             
             <div className="grid grid-cols-3 gap-2">
               <Button
                 variant={roundConfig.template.type === 'circuit_round' ? "primary" : "outline"}
-                className="relative h-12 min-w-0 touch-manipulation text-sm"
+                className={cn(
+                  "relative h-12 min-w-0 touch-manipulation text-sm",
+                  roundConfig.template.type !== 'circuit_round' && "dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:hover:bg-gray-600"
+                )}
                 onClick={() => handleRoundTypeChange(roundConfig.roundNumber, 'circuit_round')}
                 disabled={isSaving}
               >
@@ -292,7 +310,10 @@ export function RoundTypesStep({
               
               <Button
                 variant={roundConfig.template.type === 'stations_round' ? "primary" : "outline"}
-                className="relative h-12 min-w-0 touch-manipulation text-sm"
+                className={cn(
+                  "relative h-12 min-w-0 touch-manipulation text-sm",
+                  roundConfig.template.type !== 'stations_round' && "dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:hover:bg-gray-600"
+                )}
                 onClick={() => handleRoundTypeChange(roundConfig.roundNumber, 'stations_round')}
                 disabled={isSaving}
               >
@@ -304,7 +325,10 @@ export function RoundTypesStep({
               
               <Button
                 variant={roundConfig.template.type === 'amrap_round' ? "primary" : "outline"}
-                className="relative h-12 min-w-0 touch-manipulation text-sm"
+                className={cn(
+                  "relative h-12 min-w-0 touch-manipulation text-sm",
+                  roundConfig.template.type !== 'amrap_round' && "dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:hover:bg-gray-600"
+                )}
                 onClick={() => handleRoundTypeChange(roundConfig.roundNumber, 'amrap_round')}
                 disabled={isSaving}
               >
@@ -437,7 +461,7 @@ export function PerRoundConfigStep({
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-lg font-semibold mb-1">Round Configuration</h3>
+        <h3 className="text-lg font-semibold mb-1 text-foreground">Round Configuration</h3>
         <p className="text-sm text-muted-foreground mb-4">
           Configure exercises and timing for each round
         </p>
@@ -451,7 +475,7 @@ export function PerRoundConfigStep({
             "bg-orange-50/30 border-orange-200/50 hover:border-orange-300 dark:bg-opacity-10"
           )}>
             <div className="flex items-center justify-between mb-2">
-              <span className="text-base font-medium">Warm-up</span>
+              <span className="text-base font-medium text-gray-900 dark:text-gray-100">Warm-up</span>
               <span className={cn(
                 "text-xs font-bold px-2.5 py-1 rounded-full",
                 "bg-orange-500 text-white"
@@ -470,7 +494,7 @@ export function PerRoundConfigStep({
             
             {/* Exercises */}
             <div className="space-y-2">
-              <span className="text-xs font-medium text-muted-foreground">EXERCISES</span>
+              <span className="text-xs font-medium text-gray-600 dark:text-white">EXERCISES</span>
               <div className="grid grid-cols-4 gap-1">
                 {[3, 4, 5, 6].map((option) => {
                   const isSelected = warmupConfig?.exercisesCount === option;
@@ -480,7 +504,8 @@ export function PerRoundConfigStep({
                       variant={isSelected ? "primary" : "outline"}
                       className={cn(
                         "relative h-10 min-w-0 text-xs transition-all",
-                        isSelected && "ring-2 ring-offset-1 ring-primary"
+                        isSelected && "ring-2 ring-offset-1 ring-primary",
+                        !isSelected && "dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:hover:bg-gray-600"
                       )}
                       onClick={() => onWarmupChange({
                         ...warmupConfig,
@@ -550,7 +575,7 @@ export function PerRoundConfigStep({
               "dark:bg-opacity-10"
             )}>
               <div className="flex items-center justify-between mb-2">
-                <span className="text-base font-medium">Round {round.roundNumber}</span>
+                <span className="text-base font-medium text-gray-900 dark:text-gray-100">Round {round.roundNumber}</span>
                 <span className={cn(
                   "text-xs font-bold px-2.5 py-1 rounded-full",
                   isCircuit && "bg-blue-500 text-white",
@@ -577,7 +602,7 @@ export function PerRoundConfigStep({
               
               {/* Exercises */}
               <div className="space-y-2">
-                <span className="text-xs font-medium text-muted-foreground">
+                <span className="text-xs font-medium text-gray-600 dark:text-white">
                   {isStations ? 'STATIONS' : 'EXERCISES'}
                 </span>
                 <div className="grid grid-cols-6 gap-1">
@@ -591,7 +616,8 @@ export function PerRoundConfigStep({
                         className={cn(
                           "relative h-10 min-w-0 text-xs transition-all",
                           isSelected && "ring-2 ring-offset-1 ring-primary",
-                          !isSelected && isRecommended && "border-primary/50 hover:border-primary"
+                          !isSelected && isRecommended && "border-primary/50 hover:border-primary",
+                          !isSelected && "dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:hover:bg-gray-600"
                         )}
                         onClick={() => handleExercisesChange(round.roundNumber, option)}
                         disabled={isSaving}
@@ -613,7 +639,7 @@ export function PerRoundConfigStep({
               {(isCircuit || isStations) && (
                 <div className="space-y-3">
                   <div className="space-y-2">
-                    <span className="text-xs font-medium text-muted-foreground">WORK TIME</span>
+                    <span className="text-xs font-medium text-gray-600 dark:text-white">WORK TIME</span>
                     <div className="grid grid-cols-5 gap-1">
                       {workOptions.map((option) => {
                         const isSelected = (round.template as any).workDuration === option;
@@ -625,7 +651,8 @@ export function PerRoundConfigStep({
                             className={cn(
                               "relative h-9 min-w-0 text-xs transition-all",
                               isSelected && "ring-2 ring-offset-1 ring-primary",
-                              !isSelected && isRecommended && "border-primary/50 hover:border-primary"
+                              !isSelected && isRecommended && "border-primary/50 hover:border-primary",
+                              !isSelected && "dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:hover:bg-gray-600"
                             )}
                             onClick={() => handleTimingChange(round.roundNumber, 'workDuration', option)}
                             disabled={isSaving}
@@ -643,7 +670,7 @@ export function PerRoundConfigStep({
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <span className="text-xs font-medium text-muted-foreground">REST TIME</span>
+                    <span className="text-xs font-medium text-gray-600 dark:text-white">REST TIME</span>
                     <div className="grid grid-cols-5 gap-1">
                       {restOptions.slice(0, 4).map((option) => {
                         const isSelected = (round.template as any).restDuration === option;
@@ -655,7 +682,8 @@ export function PerRoundConfigStep({
                             className={cn(
                               "relative h-9 min-w-0 text-xs transition-all",
                               isSelected && "ring-2 ring-offset-1 ring-primary",
-                              !isSelected && isRecommended && "border-primary/50 hover:border-primary"
+                              !isSelected && isRecommended && "border-primary/50 hover:border-primary",
+                              !isSelected && "dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:hover:bg-gray-600"
                             )}
                             onClick={() => handleTimingChange(round.roundNumber, 'restDuration', option)}
                             disabled={isSaving}
@@ -676,7 +704,7 @@ export function PerRoundConfigStep({
                   {/* Repeat Times - For both Circuit and Stations */}
                   {(isCircuit || isStations) && (
                     <div className="space-y-2">
-                      <span className="text-xs font-medium text-muted-foreground">REPEAT</span>
+                      <span className="text-xs font-medium text-gray-600 dark:text-white">REPEAT</span>
                       <div className="grid grid-cols-5 gap-1">
                         {[1, 2, 3, 4, 5].map((option) => {
                           const isSelected = (round.template as any).repeatTimes === option || (!round.template.repeatTimes && option === 1);
@@ -686,7 +714,8 @@ export function PerRoundConfigStep({
                               variant={isSelected ? "primary" : "outline"}
                               className={cn(
                                 "relative h-9 min-w-0 text-xs transition-all",
-                                isSelected && "ring-2 ring-offset-1 ring-primary"
+                                isSelected && "ring-2 ring-offset-1 ring-primary",
+                                !isSelected && "dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:hover:bg-gray-600"
                               )}
                               onClick={() => handleTimingChange(round.roundNumber, 'repeatTimes', option)}
                               disabled={isSaving}
@@ -707,13 +736,16 @@ export function PerRoundConfigStep({
               {/* AMRAP Total Duration */}
               {isAMRAP && (
                 <div className="space-y-2">
-                  <span className="text-xs font-medium text-muted-foreground">TOTAL TIME</span>
+                  <span className="text-xs font-medium text-gray-600 dark:text-white">TOTAL TIME</span>
                   <div className="grid grid-cols-5 gap-1">
                     {amrapOptions.map((option) => (
                       <Button
                         key={option}
                         variant={(round.template as any).totalDuration === option ? "primary" : "outline"}
-                        className="relative h-9 min-w-0 text-xs"
+                        className={cn(
+                          "relative h-9 min-w-0 text-xs",
+                          (round.template as any).totalDuration !== option && "dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:hover:bg-gray-600"
+                        )}
                         onClick={() => handleTimingChange(round.roundNumber, 'totalDuration', option)}
                         disabled={isSaving}
                         size="sm"
@@ -748,7 +780,7 @@ export function ExercisesStep({
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-lg font-semibold mb-1">
+        <h3 className="text-lg font-semibold mb-1 text-foreground">
           Exercises per round
         </h3>
         <p className="text-sm text-muted-foreground mb-4">
@@ -794,7 +826,7 @@ export function TimingStep({
   return (
     <div className="space-y-8">
       <div>
-        <h3 className="text-lg font-semibold mb-1">Set your intervals</h3>
+        <h3 className="text-lg font-semibold mb-1 text-foreground">Set your intervals</h3>
         <p className="text-sm text-muted-foreground mb-6">Configure work and rest periods</p>
       </div>
       
@@ -846,7 +878,7 @@ function TimingOption({
     <div className="space-y-3">
       <div className="flex items-baseline justify-between">
         <div>
-          <h4 className="text-base font-semibold">{label}</h4>
+          <h4 className="text-base font-semibold text-foreground">{label}</h4>
           <p className="text-sm text-muted-foreground">{description}</p>
         </div>
         <div className={cn(
@@ -890,7 +922,21 @@ interface ReviewStepProps {
 }
 
 export function ReviewStep({ config, repeatRounds }: ReviewStepProps) {
-  const totalRounds = repeatRounds ? config.config.rounds * 2 : config.config.rounds;
+  // Calculate total rounds including repeats/sets
+  let totalRounds = 0;
+  if (config.config.roundTemplates && config.config.roundTemplates.length > 0) {
+    config.config.roundTemplates.forEach((rt) => {
+      if (rt.template.type === 'circuit_round' || rt.template.type === 'stations_round') {
+        totalRounds += (rt.template as any).repeatTimes || 1;
+      } else {
+        totalRounds += 1; // AMRAP rounds don't have repeats
+      }
+    });
+  } else {
+    // Fallback for legacy configs
+    totalRounds = repeatRounds ? config.config.rounds * 2 : config.config.rounds;
+  }
+  
   const totalExercises = totalRounds * config.config.exercisesPerRound;
   const totalWorkTime = totalExercises * config.config.workDuration;
   const totalRestTime = 
@@ -919,74 +965,100 @@ export function ReviewStep({ config, repeatRounds }: ReviewStepProps) {
           <p className="text-2xl font-bold text-primary">{formatTime(totalTime)}</p>
         </div>
         <div className="rounded-xl bg-green-500/10 p-4 text-center">
-          <p className="text-sm text-muted-foreground">Total Exercises</p>
-          <p className="text-2xl font-bold text-green-600">{totalExercises}</p>
+          <p className="text-sm text-muted-foreground">Total Rounds</p>
+          <p className="text-2xl font-bold text-green-600">{totalRounds}</p>
         </div>
       </div>
 
-      {/* Configuration Details */}
-      <div className="space-y-1">
-        <h4 className="text-sm font-semibold text-muted-foreground mb-3">Configuration Summary</h4>
-        
-        <div className="space-y-3">
-          <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
-            <span className="text-sm">Rounds</span>
-            <span className="font-semibold">
-              {config.config.rounds}
-              {repeatRounds && ` × 2 = ${totalRounds}`}
-            </span>
-          </div>
-
-          <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
-            <span className="text-sm">Exercises per round</span>
-            <span className="font-semibold">{config.config.exercisesPerRound}</span>
-          </div>
-
-          <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
-            <span className="text-sm">Work / Rest / Round Break</span>
-            <span className="font-semibold">
-              {config.config.workDuration}s / {config.config.restDuration}s / {config.config.restBetweenRounds}s
-            </span>
-          </div>
-        </div>
-        
-        {/* Round Types */}
-        {config.config.roundTemplates && config.config.roundTemplates.length > 0 && (
-          <div className="mt-4">
-            <h4 className="text-sm font-semibold text-muted-foreground mb-3">Round Types</h4>
-            <div className="space-y-2">
-              {config.config.roundTemplates.map((rt) => (
-                <div key={rt.roundNumber} className="flex items-center justify-between p-2 rounded-lg bg-muted/30 text-sm">
-                  <span>Round {rt.roundNumber}</span>
-                  <span className="font-medium">
-                    {rt.template.type === 'circuit_round' && 'Circuit'}
-                    {rt.template.type === 'stations_round' && 'Stations'}
-                    {rt.template.type === 'amrap_round' && 'AMRAP'}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-        
-        {/* Warmup Configuration */}
-        {config.config.warmup?.enabled && (
-          <div className="mt-4">
-            <h4 className="text-sm font-semibold text-muted-foreground mb-3">Warm-up</h4>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between p-2 rounded-lg bg-orange-500/10 text-sm">
-                <span>Exercises</span>
-                <span className="font-medium">{config.config.warmup.exercisesCount}</span>
-              </div>
-              <div className="flex items-center justify-between p-2 rounded-lg bg-orange-500/10 text-sm">
-                <span>Total duration</span>
-                <span className="font-medium">
-                  {formatTime(config.config.warmup.duration)}
+      {/* Round Types Display */}
+      <div className="space-y-4">
+        <h4 className="text-sm font-semibold text-gray-600 dark:text-white">Round Types</h4>
+        <div className="space-y-2">
+          {/* Warmup */}
+          {config.config.warmup?.enabled && (
+            <div className="rounded-lg bg-orange-50/20 dark:bg-orange-500/10 border border-orange-200/30 dark:border-orange-500/20 p-3 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-gray-900 dark:text-white">Warm-up</span>
+                <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-orange-500/20 text-orange-700 dark:bg-orange-500/30 dark:text-orange-300">
+                  WARM-UP
                 </span>
               </div>
+              <div className="space-y-2 text-xs">
+                <div className="flex justify-between text-gray-600 dark:text-gray-300">
+                  <span>Exercises</span>
+                  <span className="font-medium">{config.config.warmup.exercisesCount || 6}</span>
+                </div>
+                <div className="flex justify-between text-gray-600 dark:text-gray-300">
+                  <span>Duration</span>
+                  <span className="font-medium">{formatTime(config.config.warmup.duration || 300)}</span>
+                </div>
+              </div>
             </div>
-          </div>
-        )}
+          )}
+          
+          {/* Regular Rounds */}
+          {config.config.roundTemplates && config.config.roundTemplates.map((rt) => {
+            const isCircuit = rt.template.type === 'circuit_round';
+            const isStations = rt.template.type === 'stations_round';
+            const isAMRAP = rt.template.type === 'amrap_round';
+            
+            return (
+              <div key={rt.roundNumber} className={cn(
+                "rounded-lg p-3 space-y-3 border",
+                isCircuit && "bg-blue-50/20 dark:bg-blue-500/10 border-blue-200/30 dark:border-blue-500/20",
+                isStations && "bg-green-50/20 dark:bg-green-500/10 border-green-200/30 dark:border-green-500/20",
+                isAMRAP && "bg-purple-50/20 dark:bg-purple-500/10 border-purple-200/30 dark:border-purple-500/20"
+              )}>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-gray-900 dark:text-white">Round {rt.roundNumber}</span>
+                  <span className={cn(
+                    "text-xs font-semibold px-2 py-0.5 rounded-full",
+                    isCircuit && "bg-blue-500/20 text-blue-700 dark:bg-blue-500/30 dark:text-blue-300",
+                    isStations && "bg-green-500/20 text-green-700 dark:bg-green-500/30 dark:text-green-300",
+                    isAMRAP && "bg-purple-500/20 text-purple-700 dark:bg-purple-500/30 dark:text-purple-300"
+                  )}>
+                    {isCircuit && 'CIRCUIT'}
+                    {isStations && 'STATIONS'}
+                    {isAMRAP && 'AMRAP'}
+                  </span>
+                </div>
+                
+                <div className="space-y-2 text-xs">
+                  <div className="flex justify-between text-gray-600 dark:text-gray-300">
+                    <span>Exercises</span>
+                    <span className="font-medium">{rt.template.exercisesPerRound || 6}</span>
+                  </div>
+                  
+                  {(rt.template.type === 'circuit_round' || rt.template.type === 'stations_round') && (
+                    <>
+                      <div className="flex justify-between text-gray-600 dark:text-gray-300">
+                        <span>Work time</span>
+                        <span className="font-medium">{(rt.template as any).workDuration || 45}s</span>
+                      </div>
+                      <div className="flex justify-between text-gray-600 dark:text-gray-300">
+                        <span>Rest time</span>
+                        <span className="font-medium">{(rt.template as any).restDuration || 15}s</span>
+                      </div>
+                      {((rt.template as any).repeatTimes || 1) > 1 && (
+                        <div className="flex justify-between text-gray-600 dark:text-gray-300">
+                          <span>Sets</span>
+                          <span className="font-medium">{(rt.template as any).repeatTimes}x</span>
+                        </div>
+                      )}
+                    </>
+                  )}
+                  
+                  {rt.template.type === 'amrap_round' && (
+                    <div className="flex justify-between text-gray-600 dark:text-gray-300">
+                      <span>Total time</span>
+                      <span className="font-medium">{formatTime((rt.template as any).totalDuration || 300)}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       {/* Ready Message */}
@@ -1047,7 +1119,7 @@ export function SpotifyStep({ deviceId, deviceName, onDeviceSelect }: SpotifySte
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-lg font-semibold mb-1">Music Setup</h3>
+        <h3 className="text-lg font-semibold mb-1 text-foreground">Music Setup</h3>
         <p className="text-sm text-muted-foreground mb-4">
           Connect Spotify to sync music with your workout
         </p>
