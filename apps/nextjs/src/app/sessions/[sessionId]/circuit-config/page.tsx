@@ -174,15 +174,13 @@ export default function CircuitConfigPage() {
           {/* Top Navigation Row */}
           <div className="flex items-center justify-between p-4 pb-2">
             {currentStep > 1 ? (
-              <Button
-                variant="ghost"
-                size="sm"
+              <button
                 onClick={handleBack}
-                className="flex items-center gap-1 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
+                className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 transition-colors rounded-md"
               >
                 <ChevronLeft className="h-4 w-4" />
                 <span className="text-sm">Back</span>
-              </Button>
+              </button>
             ) : (
               <div className="w-20" />
             )}

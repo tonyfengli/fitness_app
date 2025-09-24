@@ -537,7 +537,8 @@ export function PerRoundConfigStep({
                       variant={isSelected ? "primary" : "outline"}
                       className={cn(
                         "relative h-9 min-w-0 text-xs transition-all",
-                        isSelected && "ring-2 ring-offset-1 ring-primary"
+                        isSelected && "ring-2 ring-offset-1 ring-primary",
+                        !isSelected && "dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:hover:bg-gray-600"
                       )}
                       onClick={() => onWarmupChange({
                         ...warmupConfig,
