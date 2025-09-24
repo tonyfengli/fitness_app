@@ -6,12 +6,16 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { 
   Card, 
   Button, 
-  Loader2Icon as Loader2, 
+  Loader2Icon as Loader2,
+  ChevronLeftIcon,
+  ChevronUpIcon,
+  ChevronDownIcon,
   useRealtimeExerciseSwaps,
   SearchIcon,
   SpinnerIcon,
   XIcon,
   filterExercisesBySearch,
+  cn,
 } from "@acme/ui-shared";
 import { supabase } from "~/lib/supabase";
 import { api, useTRPC } from "~/trpc/react";
@@ -111,6 +115,7 @@ interface RoundData {
     orderIndex: number;
   }>;
   isRepeat?: boolean;
+  roundType?: string;
 }
 
 // Group exercises by muscle
@@ -346,11 +351,21 @@ function CircuitWorkoutOverviewContent() {
         ? Math.floor(rounds.length / 2) 
         : rounds.length;
       
-      // Mark which rounds are repeats
-      const roundsWithMetadata = rounds.map((round, index) => ({
-        ...round,
-        isRepeat: circuitConfig?.config?.repeatRounds && index >= baseRoundCount
-      }));
+      // Mark which rounds are repeats and get round type
+      const roundsWithMetadata = rounds.map((round, index) => {
+        const actualRoundIndex = circuitConfig?.config?.repeatRounds && index >= baseRoundCount 
+          ? index - baseRoundCount 
+          : index;
+        
+        const roundTemplate = circuitConfig?.config?.roundTemplates?.[actualRoundIndex];
+        const roundType = roundTemplate?.template?.type || 'circuit_round';
+        
+        return {
+          ...round,
+          isRepeat: circuitConfig?.config?.repeatRounds && index >= baseRoundCount,
+          roundType
+        };
+      });
       
       setRoundsData(roundsWithMetadata);
       setHasExercises(true);
@@ -479,60 +494,83 @@ function CircuitWorkoutOverviewContent() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background to-muted/20 p-4">
-      <div className="mx-auto max-w-5xl">
-        {/* Header */}
-        <div className="mb-12 flex items-center justify-between">
-          <div>
-            <h1 className="text-4xl font-bold tracking-tight bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
-              Circuit Workout Overview
-            </h1>
-            <div className="mt-2 flex items-center gap-4">
-              <span className="text-lg text-muted-foreground font-medium">
-                {roundsData.length} rounds × {circuitConfig?.config?.exercisesPerRound || 0} exercises
-              </span>
-              {circuitConfig?.config?.repeatRounds && (
-                <span className="px-3 py-1 text-sm font-semibold bg-gradient-to-r from-purple-500/20 to-indigo-500/20 text-purple-300 rounded-full border border-purple-500/30">
-                  {circuitConfig.config.rounds} base + {circuitConfig.config.rounds} repeat
-                </span>
-              )}
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <Button
-              variant="outline"
-              onClick={() => router.push(`/sessions/${sessionId}/circuit-config?step=5`)}
-              className="font-medium"
-            >
-              Music Controls
-            </Button>
-            <Button
-              variant="outline"
+    <div className="min-h-screen bg-white dark:bg-gray-900">
+      {/* Fixed Header */}
+      <div className="fixed top-0 left-0 right-0 z-30 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm border-b border-gray-200 dark:border-gray-800">
+        <div className="mx-auto max-w-md">
+          <div className="flex items-center justify-between p-4">
+            <button
               onClick={() => router.back()}
-              className="font-medium"
+              className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 transition-colors rounded-md focus:outline-none focus:ring-0"
             >
-              ← Back
+              <ChevronLeftIcon className="h-4 w-4" />
+              <span>Back</span>
+            </button>
+            
+            <div className="text-center">
+              <h1 className="text-sm font-medium text-gray-900 dark:text-gray-100">Circuit Overview</h1>
+            </div>
+            
+            <Button
+              size="sm"
+              onClick={() => router.push('/workout-tv')}
+              className="bg-green-600 hover:bg-green-700 text-white focus:outline-none focus:ring-0"
+            >
+              Finalize
             </Button>
           </div>
         </div>
+      </div>
+
+      {/* Content with top padding */}
+      <div className="pt-16 p-4 pb-8">
+        <div className="mx-auto max-w-md">
+
+        {/* Total Time Display */}
+        {timingInfo && (
+          <Card className="mb-6 p-0 shadow-sm bg-white dark:bg-gray-800">
+            <div className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Total Time</h2>
+                  <div className="mt-1 space-y-1">
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      Work: {Math.floor(timingInfo.totalWorkTimeMs / 60000)}:{String(Math.floor((timingInfo.totalWorkTimeMs % 60000) / 1000)).padStart(2, '0')}
+                    </p>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      Rest: {Math.floor(timingInfo.totalRestTimeMs / 60000)}:{String(Math.floor((timingInfo.totalRestTimeMs % 60000) / 1000)).padStart(2, '0')}
+                    </p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="text-3xl font-bold text-gray-900 dark:text-white">
+                    {Math.floor(timingInfo.totalWorkoutDurationMs / 60000)}:{String(Math.floor((timingInfo.totalWorkoutDurationMs % 60000) / 1000)).padStart(2, '0')}
+                  </div>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">minutes</p>
+                </div>
+              </div>
+            </div>
+          </Card>
+        )}
 
         {/* Warm-up Section */}
         {circuitConfig?.config?.warmup?.enabled && (
-          <Card className="mb-8 p-8 border-2 shadow-lg bg-gradient-to-br from-orange-50 to-red-50 dark:from-orange-950/10 dark:to-red-950/10 border-orange-400 dark:border-orange-500/40">
-            <h2 className="mb-6 text-2xl font-bold flex items-center gap-3">
-              <span className="w-10 h-10 rounded-full bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 ring-2 ring-orange-400 dark:ring-orange-500/50 flex items-center justify-center">
-                <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M10 2L10 10M6 6L10 10L14 6M4 14H16M4 18H16" />
-                </svg>
-              </span>
-              <span>Warm-up</span>
-              <span className="ml-auto text-lg font-medium text-muted-foreground">
+          <Card className="mb-6 p-0 shadow-sm border-2 bg-orange-50/50 dark:bg-amber-300/5 border-orange-200 dark:border-amber-300/25">
+            <div className="p-6 space-y-4">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-3">
+                <span className="w-8 h-8 rounded-full bg-orange-500/20 dark:bg-amber-300/20 text-orange-700 dark:text-amber-200 ring-2 ring-orange-400/50 dark:ring-amber-300/40 flex items-center justify-center">
+                  <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M10 2L10 10M6 6L10 10L14 6M4 14H16M4 18H16" />
+                  </svg>
+                </span>
+                <span>Warm-up</span>
+                <span className="ml-auto text-sm font-medium text-gray-600 dark:text-gray-300">
                 {Math.floor((circuitConfig.config.warmup.duration || 300) / 60)} minutes
               </span>
-            </h2>
-            
-            <div className="space-y-3">
-              <WarmupExercisesList 
+              </h2>
+              
+              <div className="space-y-3">
+                <WarmupExercisesList 
                 sessionId={sessionId!} 
                 onReplaceClick={(exercise, round, exerciseIndex) => {
                   setSelectedExercise(exercise);
@@ -541,6 +579,7 @@ function CircuitWorkoutOverviewContent() {
                   setShowExerciseSelection(true);
                 }}
               />
+              </div>
             </div>
           </Card>
         )}
@@ -565,44 +604,98 @@ function CircuitWorkoutOverviewContent() {
               return (
               <Card 
                 key={round.roundName} 
-                className={`p-8 border-2 shadow-lg hover:shadow-xl transition-all ${
-                  round.isRepeat 
-                    ? 'bg-gradient-to-br from-purple-50 to-indigo-50 dark:from-purple-950/10 dark:to-indigo-950/10 border-purple-400 dark:border-purple-500/40' 
-                    : ''
-                }`}
+                className={`${roundIndex === 0 ? 'mt-4' : ''} mb-6 p-0 shadow-sm border-2 ${(() => {
+                  const type = round.roundType || 'circuit_round';
+                  if (round.isRepeat) return 'bg-purple-50/50 dark:bg-violet-300/5 border-purple-200 dark:border-violet-300/25';
+                  switch (type) {
+                    case 'amrap_round':
+                      return 'bg-purple-50/50 dark:bg-violet-300/5 border-purple-200 dark:border-violet-300/25';
+                    case 'stations_round':
+                      return 'bg-green-50/50 dark:bg-emerald-300/5 border-green-200 dark:border-emerald-300/25';
+                    case 'circuit_round':
+                    default:
+                      return 'bg-blue-50/50 dark:bg-sky-300/5 border-blue-200 dark:border-sky-300/25';
+                  }
+                })()}`}
               >
-                <h2 className="mb-6 text-2xl font-bold flex items-center gap-3">
-                  <span className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${
-                    round.isRepeat 
-                      ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 ring-2 ring-purple-400 dark:ring-purple-500/50' 
-                      : 'bg-primary/10 text-primary'
-                  }`}>
-                    {round.roundName.match(/\d+/)?.[0] || ''}
-                  </span>
-                  <span className="flex items-center gap-3">
-                    {round.roundName}
-                    {round.isRepeat && (
-                      <span className="px-3 py-1 text-sm font-semibold bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-full">
-                        Repeat
+                <div className="p-6 space-y-4">
+                  <div>
+                    <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-3">
+                      <span className={`w-8 h-8 rounded-full flex items-center justify-center font-bold ${(() => {
+                        const type = round.roundType || 'circuit_round';
+                        if (round.isRepeat) return 'bg-purple-500/20 dark:bg-violet-300/20 text-purple-700 dark:text-violet-200 ring-2 ring-purple-400/50 dark:ring-violet-300/40';
+                        switch (type) {
+                          case 'amrap_round':
+                            return 'bg-purple-500/20 dark:bg-violet-300/20 text-purple-700 dark:text-violet-200 ring-2 ring-purple-400/50 dark:ring-violet-300/40';
+                          case 'stations_round':
+                            return 'bg-green-500/20 dark:bg-emerald-300/20 text-green-700 dark:text-emerald-200 ring-2 ring-green-400/50 dark:ring-emerald-300/40';
+                          case 'circuit_round':
+                          default:
+                            return 'bg-blue-500/20 dark:bg-sky-300/20 text-blue-700 dark:text-sky-200 ring-2 ring-blue-400/50 dark:ring-sky-300/40';
+                        }
+                      })()}`}>
+                        {round.roundName.match(/\d+/)?.[0] || ''}
                       </span>
-                    )}
-                  </span>
-                </h2>
+                      <span className="flex items-center gap-2">
+                        {round.roundName}
+                        {round.isRepeat && (
+                          <span className="px-2 py-1 text-xs font-medium bg-purple-100 dark:bg-violet-300/20 text-purple-700 dark:text-violet-200 rounded-full">
+                            Repeat
+                          </span>
+                        )}
+                      </span>
+                    </h2>
+                    <p className="mt-1 text-sm text-gray-600 dark:text-gray-400 flex items-center gap-2">
+                      {(() => {
+                        const roundType = round.roundType || 'circuit_round';
+                        switch (roundType) {
+                          case 'amrap_round':
+                            return (
+                              <>
+                                <svg className="w-4 h-4 text-violet-500 dark:text-violet-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                <span>AMRAP • As many rounds as possible</span>
+                              </>
+                            );
+                          case 'stations_round':
+                            return (
+                              <>
+                                <svg className="w-4 h-4 text-emerald-500 dark:text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                                </svg>
+                                <span>Stations • Team-based rotation</span>
+                              </>
+                            );
+                          case 'circuit_round':
+                          default:
+                            return (
+                              <>
+                                <svg className="w-4 h-4 text-sky-500 dark:text-sky-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                </svg>
+                                <span>Circuit • {circuitConfig?.config?.workDuration || 45}s work / {circuitConfig?.config?.restDuration || 15}s rest</span>
+                              </>
+                            );
+                        }
+                      })()}
+                    </p>
+                  </div>
                 
-                {/* HYPE Track - Plays at countdown */}
-                {roundMusic && (
-                  <div className="mb-4 p-4 rounded-lg bg-gradient-to-r from-orange-50 to-red-50 dark:from-orange-950/20 dark:to-red-950/20 border border-orange-200 dark:border-orange-800">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="text-xs font-semibold px-2 py-1 bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 rounded-full">🎵 HYPE</span>
-                          <span className="text-xs text-muted-foreground">Starts at 6s countdown</span>
+                  {/* HYPE Track - Plays at countdown */}
+                  {roundMusic && (
+                    <div className="p-3 rounded-lg bg-orange-50 dark:bg-orange-500/10 border border-orange-200 dark:border-orange-500/30">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-xs font-semibold px-2 py-1 bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 rounded-full">🎵 HYPE</span>
+                            <span className="text-xs text-gray-600 dark:text-gray-400">Starts at 6s countdown</span>
+                          </div>
+                          <p className="font-medium text-gray-900 dark:text-gray-100">{roundMusic.track1.trackName}</p>
                         </div>
-                        <p className="font-medium">{roundMusic.track1.trackName}</p>
-                      </div>
-                      <div className="text-right text-sm">
-                        <div className="text-muted-foreground">Effective length</div>
-                        <div className="font-medium">{track1Minutes}:{track1Seconds.toString().padStart(2, '0')}</div>
+                        <div className="text-right text-sm">
+                          <div className="text-gray-600 dark:text-gray-400">Effective length</div>
+                          <div className="font-medium text-gray-900 dark:text-gray-100">{track1Minutes}:{track1Seconds.toString().padStart(2, '0')}</div>
                       </div>
                     </div>
                   </div>
@@ -610,12 +703,24 @@ function CircuitWorkoutOverviewContent() {
                 
                 <div className="space-y-3">
                   {round.exercises.map((exercise, idx) => (
-                    <div key={exercise.id} className="flex items-center justify-between p-4 rounded-xl bg-muted/30 hover:bg-muted/50 transition-all border border-transparent hover:border-primary/20 min-h-[72px]">
+                    <div key={exercise.id} className={`flex items-center justify-between p-4 rounded-xl transition-all min-h-[72px] focus-within:outline-none focus-within:ring-0 ${(() => {
+                      const type = round.roundType || 'circuit_round';
+                      if (round.isRepeat) return 'bg-purple-50/70 border border-purple-200/50 dark:bg-gray-800/50 dark:border-transparent';
+                      switch (type) {
+                        case 'amrap_round':
+                          return 'bg-purple-50/70 border border-purple-200/50 dark:bg-gray-800/50 dark:border-transparent';
+                        case 'stations_round':
+                          return 'bg-green-50/70 border border-green-200/50 dark:bg-gray-800/50 dark:border-transparent';
+                        case 'circuit_round':
+                        default:
+                          return 'bg-blue-50/70 border border-blue-200/50 dark:bg-gray-800/50 dark:border-transparent';
+                      }
+                    })()}`}>
                       <div className="flex items-center gap-4 flex-1">
-                        <span className="w-8 h-8 bg-background rounded-lg flex items-center justify-center text-sm font-semibold text-muted-foreground flex-shrink-0">
+                        <span className="w-8 h-8 bg-white dark:bg-gray-800 rounded-lg flex items-center justify-center text-sm font-semibold text-gray-600 dark:text-gray-400 flex-shrink-0">
                           {idx + 1}
                         </span>
-                        <span className="font-medium text-lg leading-tight py-1">{exercise.exerciseName}</span>
+                        <span className="font-medium text-base leading-tight py-1 text-gray-900 dark:text-gray-100">{exercise.exerciseName}</span>
                       </div>
                       <div className="flex items-center gap-2">
                         {/* Up button */}
@@ -631,7 +736,7 @@ function CircuitWorkoutOverviewContent() {
                               direction: "up",
                             });
                           }}
-                          className="h-8 w-8 p-0 disabled:opacity-50"
+                          className="h-8 w-8 p-0 disabled:opacity-50 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:hover:bg-gray-600 focus:outline-none focus:ring-0"
                         >
                           <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2">
                             <path d="M10.5 8.75L7 5.25L3.5 8.75" />
@@ -651,7 +756,7 @@ function CircuitWorkoutOverviewContent() {
                               direction: "down",
                             });
                           }}
-                          className="h-8 w-8 p-0 disabled:opacity-50"
+                          className="h-8 w-8 p-0 disabled:opacity-50 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:hover:bg-gray-600 focus:outline-none focus:ring-0"
                         >
                           <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2">
                             <path d="M3.5 5.25L7 8.75L10.5 5.25" />
@@ -668,7 +773,7 @@ function CircuitWorkoutOverviewContent() {
                             setSelectedExerciseIndex(exercise.orderIndex);
                             setShowExerciseSelection(true);
                           }}
-                          className="h-8 px-3 font-medium"
+                          className="h-8 px-3 font-medium dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:hover:bg-gray-600 focus:outline-none focus:ring-0"
                         >
                           Replace
                         </Button>
@@ -678,18 +783,18 @@ function CircuitWorkoutOverviewContent() {
                   
                   {/* BRIDGE Track - Plays at exercise 2 */}
                   {roundMusic && roundMusic.track2 && (
-                    <div className="mt-3 p-4 rounded-lg bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-950/20 dark:to-pink-950/20 border border-purple-200 dark:border-purple-800">
+                    <div className="mt-3 p-3 rounded-lg bg-purple-50 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/30">
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-1">
                             <span className="text-xs font-semibold px-2 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-full">🎵 BRIDGE</span>
-                            <span className="text-xs text-muted-foreground">Starts at exercise 2</span>
+                            <span className="text-xs text-gray-600 dark:text-gray-400">Starts at exercise 2</span>
                           </div>
-                          <p className="font-medium">{roundMusic.track2.trackName}</p>
+                          <p className="font-medium text-gray-900 dark:text-gray-100">{roundMusic.track2.trackName}</p>
                         </div>
                         <div className="text-right text-sm">
-                          <div className="text-muted-foreground">When</div>
-                          <div className="font-medium">Exercise 2</div>
+                          <div className="text-gray-600 dark:text-gray-400">When</div>
+                          <div className="font-medium text-gray-900 dark:text-gray-100">Exercise 2</div>
                         </div>
                       </div>
                     </div>
@@ -698,14 +803,14 @@ function CircuitWorkoutOverviewContent() {
                 
                 {/* REST Track - Plays at round end */}
                 {roundMusic && roundMusic.track3 && (
-                  <div className="mt-4 p-4 rounded-lg bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-blue-950/20 dark:to-cyan-950/20 border border-blue-200 dark:border-blue-800">
+                  <div className="mt-4 p-3 rounded-lg bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/30">
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-1">
                           <span className="text-xs font-semibold px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full">🎵 REST</span>
-                          <span className="text-xs text-muted-foreground">Plays at round end</span>
+                          <span className="text-xs text-gray-600 dark:text-gray-400">Plays at round end</span>
                         </div>
-                        <p className="font-medium">{roundMusic.track3.trackName}</p>
+                        <p className="font-medium text-gray-900 dark:text-gray-100">{roundMusic.track3.trackName}</p>
                       </div>
                       <div className="text-right text-sm">
                         <div className="text-muted-foreground">When</div>
@@ -714,12 +819,13 @@ function CircuitWorkoutOverviewContent() {
                     </div>
                   </div>
                 )}
+                </div>
               </Card>
             )})
             }
           </div>
         ) : (
-          <Card className="p-16 text-center border-2 border-dashed">
+          <Card className="p-16 text-center border-2 border-dashed dark:bg-gray-800 dark:border-gray-700">
             <div className="flex flex-col items-center justify-center">
               <div className="mb-6 w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center">
                 <svg width="40" height="40" viewBox="0 0 24 24" fill="none" className="text-primary animate-pulse">
@@ -727,13 +833,13 @@ function CircuitWorkoutOverviewContent() {
                   <path d="M12 6V12L16 14" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
                 </svg>
               </div>
-              <h2 className="mb-3 text-2xl font-bold">
+              <h2 className="mb-3 text-2xl font-bold text-gray-900 dark:text-gray-100">
                 Generating Your Circuit...
               </h2>
-              <p className="text-muted-foreground max-w-md">
+              <p className="text-gray-600 dark:text-gray-400 max-w-md">
                 The AI is creating your personalized circuit workout. This page will update automatically when ready.
               </p>
-              <div className="mt-6 flex items-center gap-2 text-sm text-muted-foreground">
+              <div className="mt-6 flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
                 <div className="w-2 h-2 bg-primary rounded-full animate-pulse"></div>
                 <span>Checking for updates every 5 seconds</span>
               </div>
@@ -741,7 +847,7 @@ function CircuitWorkoutOverviewContent() {
           </Card>
         )}
 
-
+        </div>
       </div>
 
       {/* Exercise Selection Modal */}
@@ -757,18 +863,18 @@ function CircuitWorkoutOverviewContent() {
           />
 
           {/* Modal */}
-          <div className="fixed inset-x-4 top-1/2 z-50 mx-auto flex h-[80vh] max-w-lg -translate-y-1/2 flex-col rounded-2xl bg-white shadow-2xl">
+          <div className="fixed inset-x-4 top-1/2 z-50 mx-auto flex h-[80vh] max-w-lg -translate-y-1/2 flex-col rounded-2xl bg-white dark:bg-gray-800 shadow-2xl">
             {/* Header */}
-            <div className="flex-shrink-0 border-b border-gray-200 px-6 py-4">
+            <div className="flex-shrink-0 border-b border-gray-200 dark:border-gray-700 px-6 py-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <h2 className="text-lg font-bold text-gray-900">
+                  <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">
                     Change Exercise
                   </h2>
-                  <p className="mt-1 text-sm text-gray-500">
+                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                     Replacing: {selectedExercise?.exerciseName}
                   </p>
-                  <p className="text-xs text-amber-600 font-medium mt-1">
+                  <p className="text-xs text-amber-600 dark:text-amber-400 font-medium mt-1">
                     This will update the exercise for all participants
                   </p>
                 </div>
@@ -777,7 +883,7 @@ function CircuitWorkoutOverviewContent() {
                     setShowExerciseSelection(false);
                     setSelectedReplacement(null);
                   }}
-                  className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
+                  className="rounded-lg p-2 text-gray-400 dark:text-gray-500 transition-colors hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-600 dark:hover:text-gray-300 focus:outline-none focus:ring-0"
                 >
                   <XIcon />
                 </button>
@@ -787,16 +893,16 @@ function CircuitWorkoutOverviewContent() {
             {/* Content */}
             <div className="flex-1 overflow-y-auto">
               {/* Search Bar */}
-              <div className="sticky top-0 z-10 border-b bg-gray-50 px-6 py-4">
+              <div className="sticky top-0 z-10 border-b bg-gray-50 dark:bg-gray-900 px-6 py-4">
                 <div className="relative">
-                  <SearchIcon className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
+                  <SearchIcon className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400 dark:text-gray-500" />
                   <input
                     type="text"
                     placeholder="Search exercises..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     disabled={isLoadingExercises}
-                    className="w-full rounded-lg border border-gray-300 bg-white py-2 pl-10 pr-4 text-gray-900 placeholder-gray-400 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-100 disabled:text-gray-500"
+                    className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 py-2 pl-10 pr-4 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-0 focus:border-gray-300 dark:focus:border-gray-600 disabled:bg-gray-100 dark:disabled:bg-gray-700 disabled:text-gray-500 dark:disabled:text-gray-400"
                   />
                 </div>
               </div>
@@ -805,8 +911,8 @@ function CircuitWorkoutOverviewContent() {
                 {/* Loading state */}
                 {isLoadingExercises && (
                   <div className="py-8 text-center">
-                    <SpinnerIcon className="mx-auto mb-4 h-8 w-8 animate-spin text-indigo-600" />
-                    <p className="text-gray-500">Loading exercises...</p>
+                    <SpinnerIcon className="mx-auto mb-4 h-8 w-8 animate-spin text-indigo-600 dark:text-indigo-400" />
+                    <p className="text-gray-500 dark:text-gray-400">Loading exercises...</p>
                   </div>
                 )}
 
@@ -815,7 +921,7 @@ function CircuitWorkoutOverviewContent() {
                   searchQuery.trim() &&
                   filteredExercises.length === 0 && (
                     <div className="py-8 text-center">
-                      <p className="text-gray-500">
+                      <p className="text-gray-500 dark:text-gray-400">
                         No exercises found matching "{searchQuery}"
                       </p>
                     </div>
@@ -825,21 +931,21 @@ function CircuitWorkoutOverviewContent() {
                 {!isLoadingExercises && filteredExercises.length > 0 && (
                   <div className="space-y-3">
                     {groupedExercises.map(([muscle, exercises]) => (
-                      <div key={muscle} className="rounded-lg border border-gray-200 bg-white">
+                      <div key={muscle} className="rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700">
                         {/* Muscle group header */}
                         <button
                           onClick={() => toggleMuscleGroup(muscle)}
-                          className="flex w-full items-center justify-between px-4 py-3 text-left transition-colors hover:bg-gray-50"
+                          className="flex w-full items-center justify-between px-4 py-3 text-left transition-colors hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-0"
                         >
-                          <span className="font-medium text-gray-900 capitalize">
+                          <span className="font-medium text-gray-900 dark:text-gray-100 capitalize">
                             {muscle.toLowerCase().replace(/_/g, ' ')}
                           </span>
                           <div className="flex items-center gap-2">
-                            <span className="text-sm text-gray-500">
+                            <span className="text-sm text-gray-500 dark:text-gray-400">
                               {exercises.length} exercise{exercises.length !== 1 ? 's' : ''}
                             </span>
                             <svg
-                              className={`h-5 w-5 text-gray-400 transition-transform ${
+                              className={`h-5 w-5 text-gray-400 dark:text-gray-500 transition-transform ${
                                 expandedMuscles.has(muscle) ? 'rotate-180' : ''
                               }`}
                               fill="none"
@@ -858,24 +964,24 @@ function CircuitWorkoutOverviewContent() {
                         
                         {/* Exercise list */}
                         {expandedMuscles.has(muscle) && (
-                          <div className="border-t border-gray-100 px-4 py-2">
+                          <div className="border-t border-gray-100 dark:border-gray-600 px-4 py-2">
                             <div className="space-y-2">
                               {exercises.map((exercise: any) => (
                                 <button
                                   key={exercise.id}
                                   onClick={() => setSelectedReplacement(exercise.id)}
-                                  className={`flex w-full items-center justify-between rounded-md px-3 py-2.5 text-left transition-colors ${
+                                  className={`flex w-full items-center justify-between rounded-md px-3 py-2.5 text-left transition-colors focus:outline-none focus:ring-0 ${
                                     selectedReplacement === exercise.id
-                                      ? 'bg-indigo-50 text-indigo-700'
-                                      : 'hover:bg-gray-50'
+                                      ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300'
+                                      : 'hover:bg-gray-50 dark:hover:bg-gray-600'
                                   }`}
                                 >
-                                  <span className="font-medium text-black">
+                                  <span className="font-medium text-black dark:text-gray-100">
                                     {exercise.name}
                                   </span>
                                   {exercise.movementPattern && (
                                     <span className={`text-xs px-2 py-1 rounded-full ${
-                                      MOVEMENT_PATTERN_COLORS[exercise.movementPattern] || 'bg-gray-100 text-gray-800'
+                                      MOVEMENT_PATTERN_COLORS[exercise.movementPattern] || 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200'
                                     }`}>
                                       {exercise.movementPattern.replace(/_/g, ' ')}
                                     </span>
@@ -895,20 +1001,20 @@ function CircuitWorkoutOverviewContent() {
                   !searchQuery.trim() &&
                   filteredExercises.length === 0 && (
                     <div className="py-8 text-center">
-                      <p className="text-gray-500">No exercises available</p>
+                      <p className="text-gray-500 dark:text-gray-400">No exercises available</p>
                     </div>
                   )}
               </div>
             </div>
 
             {/* Footer */}
-            <div className="flex flex-shrink-0 justify-end gap-3 border-t bg-gray-50 px-6 py-4">
+            <div className="flex flex-shrink-0 justify-end gap-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 px-6 py-4">
               <button
                 onClick={() => {
                   setShowExerciseSelection(false);
                   setSelectedReplacement(null);
                 }}
-                className="px-4 py-2 text-gray-700 transition-colors hover:text-gray-900"
+                className="px-4 py-2 text-gray-700 dark:text-gray-300 transition-colors hover:text-gray-900 dark:hover:text-gray-100 focus:outline-none focus:ring-0"
               >
                 Cancel
               </button>
@@ -965,10 +1071,10 @@ function CircuitWorkoutOverviewContent() {
                 disabled={
                   !selectedReplacement || swapExerciseMutation.isPending
                 }
-                className={`flex items-center gap-2 rounded-lg px-4 py-2 transition-colors ${
+                className={`flex items-center gap-2 rounded-lg px-4 py-2 transition-colors focus:outline-none focus:ring-0 ${
                   selectedReplacement && !swapExerciseMutation.isPending
                     ? "bg-indigo-600 text-white hover:bg-indigo-700"
-                    : "cursor-not-allowed bg-gray-300 text-gray-500"
+                    : "cursor-not-allowed bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400"
                 }`}
               >
                 {swapExerciseMutation.isPending ? (
@@ -996,7 +1102,7 @@ function CircuitWorkoutOverviewContent() {
 
           {/* Modal */}
           <div className="fixed inset-x-4 top-1/2 z-50 mx-auto max-w-md -translate-y-1/2">
-            <Card className="p-6 shadow-2xl border-2">
+            <Card className="p-6 shadow-2xl border-2 bg-white dark:bg-gray-800 dark:border-gray-700">
               <div className="space-y-4">
                 <div className="flex items-start gap-3">
                   <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/30 rounded-full flex items-center justify-center flex-shrink-0">
@@ -1126,14 +1232,14 @@ function WarmupExercisesList({
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-8">
-        <Loader2 className="h-6 w-6 animate-spin" />
+        <Loader2 className="h-6 w-6 animate-spin text-gray-600 dark:text-gray-400" />
       </div>
     );
   }
   
   if (warmupExercises.length === 0) {
     return (
-      <div className="p-4 text-center text-muted-foreground">
+      <div className="p-4 text-center text-gray-600 dark:text-gray-400">
         No warm-up exercises selected yet
       </div>
     );
@@ -1142,12 +1248,12 @@ function WarmupExercisesList({
   return (
     <>
       {warmupExercises.map((exercise, idx) => (
-        <div key={exercise.id} className="flex items-center justify-between p-4 rounded-xl bg-orange-100/30 dark:bg-orange-900/10 hover:bg-orange-100/50 dark:hover:bg-orange-900/20 transition-all border border-transparent hover:border-orange-300/50 dark:hover:border-orange-700/50 min-h-[72px]">
+        <div key={exercise.id} className="flex items-center justify-between p-4 rounded-xl bg-orange-50/70 border border-orange-200/50 dark:bg-gray-800/50 dark:border-transparent transition-all min-h-[72px] focus-within:outline-none focus-within:ring-0">
           <div className="flex items-center gap-4 flex-1">
-            <span className="w-8 h-8 bg-orange-200/50 dark:bg-orange-800/50 rounded-lg flex items-center justify-center text-sm font-semibold text-orange-700 dark:text-orange-300 flex-shrink-0">
+            <span className="w-8 h-8 bg-white dark:bg-gray-800 rounded-lg flex items-center justify-center text-sm font-semibold text-gray-600 dark:text-gray-400 flex-shrink-0">
               {idx + 1}
             </span>
-            <span className="font-medium text-lg leading-tight py-1">{exercise.exerciseName}</span>
+            <span className="font-medium text-base leading-tight py-1 text-gray-900 dark:text-gray-100">{exercise.exerciseName}</span>
           </div>
           <div className="flex items-center gap-2">
             {/* Replace button */}
@@ -1155,7 +1261,7 @@ function WarmupExercisesList({
               size="sm"
               variant="outline"
               onClick={() => onReplaceClick(exercise, "Warm-up", exercise.orderIndex)}
-              className="h-8 px-3 font-medium"
+              className="h-8 px-3 font-medium dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:hover:bg-gray-600 focus:outline-none focus:ring-0"
             >
               Replace
             </Button>
