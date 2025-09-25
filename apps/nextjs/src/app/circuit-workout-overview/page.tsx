@@ -589,7 +589,7 @@ function CircuitWorkoutOverviewContent() {
 
         {/* Warm-up Section */}
         {circuitConfig?.config?.warmup?.enabled && (
-          <Card className="mb-6 p-0 shadow-sm bg-white dark:bg-gray-800">
+          <Card className="mt-8 mb-6 p-0 shadow-sm bg-white dark:bg-gray-800">
             <div className="p-6 space-y-4">
               <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-3">
                 <span className="w-8 h-8 rounded-full bg-orange-500/20 dark:bg-amber-300/20 text-orange-700 dark:text-amber-200 ring-2 ring-orange-400/50 dark:ring-amber-300/40 flex items-center justify-center">
@@ -1300,7 +1300,18 @@ function CircuitWorkoutOverviewContent() {
                             name: ex.name,
                             equipment: ex.equipment,
                             equipmentType: typeof ex.equipment,
-                            equipmentIsArray: Array.isArray(ex.equipment)
+                            equipmentIsArray: Array.isArray(ex.equipment),
+                            equipmentLength: Array.isArray(ex.equipment) ? ex.equipment.length : 'N/A'
+                          }))
+                        });
+                        
+                        // Log exercises that have any equipment data
+                        const exercisesWithEquipment = filtered.filter(ex => ex.equipment && (Array.isArray(ex.equipment) ? ex.equipment.length > 0 : true));
+                        console.log('[DEBUG] Exercises with equipment data:', {
+                          count: exercisesWithEquipment.length,
+                          sample: exercisesWithEquipment.slice(0, 3).map(ex => ({
+                            name: ex.name,
+                            equipment: ex.equipment
                           }))
                         });
                         
@@ -1393,7 +1404,10 @@ function CircuitWorkoutOverviewContent() {
                                 if (selectedCategory?.type === 'muscle') {
                                   return selectedCategory.value;
                                 } else if (selectedCategory?.type === 'equipment') {
-                                  return selectedCategory.value;
+                                  // Format equipment value for display
+                                  return selectedCategory.value.split('_').map(word => 
+                                    word.charAt(0).toUpperCase() + word.slice(1)
+                                  ).join(' ');
                                 } else {
                                   return selectedCategory?.value.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
                                 }
@@ -1459,7 +1473,7 @@ function CircuitWorkoutOverviewContent() {
                             <div className="p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
                               <div>
                                 <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">Muscle Groups</h4>
-                                <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                                <div className="space-y-2 max-h-[300px] overflow-y-auto">
                                   {['Chest', 'Back', 'Shoulders', 'Biceps', 'Triceps', 'Quads', 'Hamstrings', 'Glutes', 'Core', 'Calves'].map((muscle) => (
                                     <button
                                       key={muscle}
@@ -1494,7 +1508,7 @@ function CircuitWorkoutOverviewContent() {
                             <div className="p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
                               <div>
                                 <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">Movement Patterns</h4>
-                                <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                                <div className="space-y-2 max-h-[300px] overflow-y-auto">
                                   {[
                                     { value: 'horizontal_push', label: 'Horizontal Push' },
                                     { value: 'horizontal_pull', label: 'Horizontal Pull' },
@@ -1540,29 +1554,24 @@ function CircuitWorkoutOverviewContent() {
                             <div className="p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
                               <div>
                                 <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">Equipment</h4>
-                                <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                                <div className="space-y-2 max-h-[300px] overflow-y-auto">
                                   {[
-                                    'Barbell',
-                                    'Dumbbell',
-                                    'Kettlebell',
-                                    'Cable',
-                                    'Bodyweight',
-                                    'Band',
-                                    'Machine',
-                                    'TRX',
-                                    'Medicine Ball',
-                                    'Box/Bench',
-                                    'Pull-up Bar'
-                                  ].map((equipment) => (
+                                    { value: 'dumbbells', label: 'Dumbbells' },
+                                    { value: 'kettlebell', label: 'Kettlebell' },
+                                    { value: 'bodyweight', label: 'Bodyweight' },
+                                    { value: 'bands', label: 'Bands' },
+                                    { value: 'box', label: 'Box' },
+                                    { value: 'bench', label: 'Bench' }
+                                  ].map(({ value, label }) => (
                                     <button
-                                      key={equipment}
+                                      key={value}
                                       onClick={() => {
-                                        setSelectedCategory({ type: 'equipment', value: equipment });
+                                        setSelectedCategory({ type: 'equipment', value });
                                         setInlineSearchQuery('');
                                       }}
                                       className="w-full px-4 py-3 text-sm font-medium rounded-md bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 transition-colors text-left"
                                     >
-                                      {equipment}
+                                      {label}
                                     </button>
                                   ))}
                                 </div>
@@ -1586,7 +1595,7 @@ function CircuitWorkoutOverviewContent() {
                       setSelectedCategory(null);
                       setCategoryMode('choice');
                     }}
-                    className="px-5 py-2.5 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-200/50 dark:hover:bg-gray-700/50 rounded-lg transition-all focus:outline-none focus:ring-0"
+                    className="px-8 py-4 text-lg font-medium text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-200/50 dark:hover:bg-gray-700/50 rounded-lg transition-all focus:outline-none focus:ring-0"
                   >
                     Cancel
                   </button>
