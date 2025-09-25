@@ -48,6 +48,14 @@ export class CheckInHandler {
       // Build response message
       let responseMessage = checkInResult.message;
 
+      logger.info("[CIRCUIT CHECK-IN DEBUG] Initial check-in result", {
+        success: checkInResult.success,
+        sessionId: checkInResult.sessionId,
+        shouldStartPreferences: checkInResult.shouldStartPreferences,
+        hasSessionId: !!checkInResult.sessionId,
+        initialMessage: responseMessage
+      });
+
       // Add preference prompt if needed
       if (checkInResult.success && checkInResult.shouldStartPreferences) {
         // Get user info to include their name
@@ -65,11 +73,21 @@ export class CheckInHandler {
 
         // Check if this is a BMF template that needs deterministic selections
         if (checkInResult.sessionId) {
+          logger.info("[CIRCUIT DEBUG] Fetching session template type", {
+            sessionId: checkInResult.sessionId
+          });
+
           const [session] = await db
             .select({ templateType: TrainingSession.templateType })
             .from(TrainingSession)
             .where(eq(TrainingSession.id, checkInResult.sessionId))
             .limit(1);
+
+          logger.info("[CIRCUIT DEBUG] Session query result", {
+            sessionId: checkInResult.sessionId,
+            sessionFound: !!session,
+            templateType: session?.templateType
+          });
 
           const template = session?.templateType
             ? getWorkoutTemplate(session.templateType)
@@ -86,8 +104,32 @@ export class CheckInHandler {
           });
 
           // Handle circuit template
+          logger.info("[CIRCUIT CHECK-IN DEBUG] Checking if circuit template", {
+            sessionId: checkInResult.sessionId,
+            templateType: session?.templateType,
+            isCircuit: session?.templateType === "circuit",
+            sessionExists: !!session
+          });
+
           if (session?.templateType === "circuit") {
-            responseMessage = `Hello${userName ? ` ${userName}` : ""}! You're checked in for the circuit training session. We'll get started once everyone joins.`;
+            // Generate circuit config link for all users
+            const baseUrl = process.env.SMS_BASE_URL || process.env.NEXTAUTH_URL || "http://192.168.68.133:3000";
+            const circuitConfigLink = `${baseUrl}/sessions/${checkInResult.sessionId}/circuit-config`;
+            
+            logger.info("[CIRCUIT CHECK-IN DEBUG] Generating circuit response", {
+              sessionId: checkInResult.sessionId,
+              baseUrl,
+              circuitConfigLink,
+              userName,
+              previousMessage: responseMessage
+            });
+            
+            responseMessage = `Hello${userName ? ` ${userName}` : ""}! You're checked in for the circuit training session.\n\nConfigure the workout: ${circuitConfigLink}`;
+            
+            logger.info("[CIRCUIT CHECK-IN DEBUG] Circuit response set", {
+              responseMessage,
+              messageLength: responseMessage.length
+            });
           }
           // Show deterministic exercise preview for BMF templates
           else if (
@@ -198,6 +240,13 @@ export class CheckInHandler {
         checkInResult,
       );
 
+      logger.info("[CIRCUIT CHECK-IN DEBUG] Final response message", {
+        responseMessage,
+        sessionId: checkInResult.sessionId,
+        messageLength: responseMessage.length,
+        includesConfigLink: responseMessage.includes("Configure the workout:")
+      });
+
       return {
         success: true,
         message: responseMessage,
@@ -289,6 +338,7 @@ export class CheckInHandler {
       return undefined;
     }
   }
+
 
   private async processCheckInByUserId(userId: string): Promise<any> {
     try {

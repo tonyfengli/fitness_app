@@ -30,12 +30,13 @@ import { WorkoutCompleteScreen } from './screens/WorkoutCompleteScreen';
 import { SessionMonitorScreen } from './screens/SessionMonitorScreen';
 import { TestTailwindScreen } from './screens/TestTailwindScreen';
 import { CircuitPreferencesScreen } from './screens/CircuitPreferencesScreen';
+import { CircuitWorkoutGenerationScreen } from './screens/CircuitWorkoutGenerationScreen';
 import { CircuitWorkoutOverviewScreen } from './screens/CircuitWorkoutOverviewScreen';
 import { CircuitWorkoutLiveScreen } from './screens/CircuitWorkoutLiveScreen';
 import { LightingTestScreen } from './screens/LightingTestScreen';
 
 
-type ScreenName = 'Main' | 'SessionLobby' | 'GlobalPreferences' | 'CircuitPreferences' | 'WorkoutOverview' | 'CircuitWorkoutOverview' | 'CircuitWorkoutLive' | 'WorkoutLive' | 'WorkoutComplete' | 'SessionMonitor' | 'TestTailwind' | 'LightingTest';
+type ScreenName = 'Main' | 'SessionLobby' | 'GlobalPreferences' | 'CircuitPreferences' | 'CircuitWorkoutGeneration' | 'WorkoutOverview' | 'CircuitWorkoutOverview' | 'CircuitWorkoutLive' | 'WorkoutLive' | 'WorkoutComplete' | 'SessionMonitor' | 'TestTailwind' | 'LightingTest';
 
 interface NavigationState {
   currentScreen: ScreenName;
@@ -159,6 +160,9 @@ function NavigationContainer({ children }: { children: React.ReactNode }) {
         )}
         {navigationState.currentScreen === 'CircuitPreferences' && (
           <CircuitPreferencesScreen />
+        )}
+        {navigationState.currentScreen === 'CircuitWorkoutGeneration' && (
+          <CircuitWorkoutGenerationScreen />
         )}
         {navigationState.currentScreen === 'WorkoutOverview' && (
           <WorkoutOverviewScreen />

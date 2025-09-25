@@ -289,7 +289,8 @@ export function SessionLobbyScreen() {
       console.log('[TV SessionLobby] SMS send result:', data);
       // Navigate based on template type
       if (templateType === 'circuit') {
-        navigation.navigate('CircuitPreferences', { sessionId });
+        // For circuit workouts, skip preferences and go directly to workout generation
+        navigation.navigate('CircuitWorkoutGeneration', { sessionId });
       } else {
         navigation.navigate('GlobalPreferences', { sessionId });
       }
@@ -306,7 +307,7 @@ export function SessionLobbyScreen() {
             text: 'Continue',
             onPress: () => {
               if (templateType === 'circuit') {
-                navigation.navigate('CircuitPreferences', { sessionId });
+                navigation.navigate('CircuitWorkoutGeneration', { sessionId });
               } else {
                 navigation.navigate('GlobalPreferences', { sessionId });
               }
@@ -331,7 +332,7 @@ export function SessionLobbyScreen() {
 
   const handleBack = () => {
     console.log('[SessionLobby] Navigating back to MainScreen');
-    navigation.goBack();
+    navigation.navigate('Main', {});
   };
 
   return (

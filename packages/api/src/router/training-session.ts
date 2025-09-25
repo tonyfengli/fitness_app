@@ -1893,27 +1893,30 @@ export const trainingSessionRouter = {
         // Send messages to all checked-in clients
         const sendPromises = checkedInClients.map(async (client) => {
           try {
+            // Skip sending messages for circuit sessions - they already got the config link at check-in
+            if (session.templateType === "circuit") {
+              console.log(
+                `Skipping start message for circuit session - ${client.userName} already has config link from check-in`,
+              );
+              return {
+                success: true,
+                userId: client.userId,
+                channel: "skipped",
+                reason: "circuit session - link sent at check-in"
+              };
+            }
+            
             // Generate appropriate link based on template type
             const baseUrl =
               process.env.SMS_BASE_URL ||
               process.env.NEXTAUTH_URL ||
               "http://192.168.68.133:3000";
             
-            let messageBody: string;
-            
-            if (session.templateType === "circuit") {
-              const circuitConfigLink = `${baseUrl}/sessions/${session.id}/circuit-config`;
-              messageBody = `Your circuit workout is ready to configure: 
-${circuitConfigLink}
-
-Set up your rounds, exercises, and timing for today's session.`;
-            } else {
-              const preferenceLink = `${baseUrl}/preferences/client/${session.id}/${client.userId}`;
-              messageBody = `Your workout preferences are ready to customize: 
+            const preferenceLink = `${baseUrl}/preferences/client/${session.id}/${client.userId}`;
+            const messageBody = `Your workout preferences are ready to customize: 
 ${preferenceLink}
 
 Set your goals and preferences for today's session.`;
-            }
 
             // Create message record in database for all clients
             await db.insert(messages).values({

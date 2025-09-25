@@ -382,7 +382,7 @@ export function CircuitWorkoutOverviewScreen() {
         paddingVertical: 16
       }}>
         <Pressable
-            onPress={() => navigation.goBack()}
+            onPress={() => navigation.navigate('SessionLobby', { sessionId })}
             focusable
           >
             {({ focused }) => (

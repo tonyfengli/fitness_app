@@ -177,7 +177,18 @@ export class CheckInHandler extends BaseMessageHandler {
       let responseMessage: string;
       
       if (openSession.templateType === "circuit") {
-        responseMessage = `Hello${message.userName ? ` ${message.userName}` : ""}! You're checked in for the circuit training session. We'll get started once everyone joins.`;
+        // Generate circuit config link for circuit sessions
+        const baseUrl = process.env.SMS_BASE_URL || process.env.NEXTAUTH_URL || "http://192.168.68.133:3000";
+        const circuitConfigLink = `${baseUrl}/sessions/${openSession.id}/circuit-config`;
+        
+        console.log("[CIRCUIT CHECK-IN] Generating circuit response", {
+          sessionId: openSession.id,
+          baseUrl,
+          circuitConfigLink,
+          userName: message.userName
+        });
+        
+        responseMessage = `Hello${message.userName ? ` ${message.userName}` : ""}! You're checked in for the circuit training session.\n\nConfigure the workout: ${circuitConfigLink}`;
       } else {
         responseMessage = `Welcome, ${this.formatClientName(message.userName)}! You're checked in. We'll get started once everyone joins.`;
       }
