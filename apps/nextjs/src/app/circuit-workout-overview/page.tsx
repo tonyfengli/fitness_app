@@ -172,6 +172,9 @@ function CircuitWorkoutOverviewContent() {
   const [inlineSearchQuery, setInlineSearchQuery] = useState("");
   const [inlineSelectedId, setInlineSelectedId] = useState<string | null>(null);
   
+  // Spotify section expansion state
+  const [expandedSpotifyRounds, setExpandedSpotifyRounds] = useState<Set<string>>(new Set());
+  
   // Mirror update confirmation state
   const [showMirrorConfirm, setShowMirrorConfirm] = useState(false);
   const [mirrorRoundName, setMirrorRoundName] = useState("");
@@ -507,7 +510,7 @@ function CircuitWorkoutOverviewContent() {
     <div className="min-h-screen bg-white dark:bg-gray-900">
       {/* Fixed Header */}
       <div className="fixed top-0 left-0 right-0 z-30 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm border-b border-gray-200 dark:border-gray-800">
-        <div className="mx-auto max-w-md">
+        <div className="mx-auto max-w-2xl">
           <div className="flex items-center justify-between p-4">
             <button
               onClick={() => router.back()}
@@ -533,8 +536,8 @@ function CircuitWorkoutOverviewContent() {
       </div>
 
       {/* Content with top padding */}
-      <div className="pt-16 p-4 pb-8">
-        <div className="mx-auto max-w-md">
+      <div className="pt-16 px-4 pb-8">
+        <div className="mx-auto max-w-2xl">
 
         {/* Total Time Display */}
         {timingInfo && (
@@ -692,31 +695,13 @@ function CircuitWorkoutOverviewContent() {
                     </p>
                   </div>
                 
-                  {/* HYPE Track - Plays at countdown */}
-                  {roundMusic && (
-                    <div className="p-3 rounded-lg bg-orange-50 dark:bg-orange-500/10 border border-orange-200 dark:border-orange-500/30">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="text-xs font-semibold px-2 py-1 bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 rounded-full">🎵 HYPE</span>
-                            <span className="text-xs text-gray-600 dark:text-gray-400">Starts at 6s countdown</span>
-                          </div>
-                          <p className="font-medium text-gray-900 dark:text-gray-100">{roundMusic.track1.trackName}</p>
-                        </div>
-                        <div className="text-right text-sm">
-                          <div className="text-gray-600 dark:text-gray-400">Effective length</div>
-                          <div className="font-medium text-gray-900 dark:text-gray-100">{track1Minutes}:{track1Seconds.toString().padStart(2, '0')}</div>
-                      </div>
-                    </div>
-                  </div>
-                )}
                 
                 <div className="space-y-3">
                   {round.exercises.map((exercise, idx) => {
                     const isEditing = editingExerciseId === exercise.id;
                     return (
                       <div key={exercise.id} className="relative">
-                        <div className={`p-4 rounded-xl transition-all focus-within:outline-none focus-within:ring-0 ${(() => {
+                        <div className={`p-6 rounded-xl transition-all focus-within:outline-none focus-within:ring-0 ${(() => {
                           const type = round.roundType || 'circuit_round';
                           if (round.isRepeat) return 'bg-purple-50/70 border border-purple-200/50 dark:bg-gray-800/50 dark:border-transparent';
                           switch (type) {
@@ -730,118 +715,90 @@ function CircuitWorkoutOverviewContent() {
                           }
                         })()}`}>
                           <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-4 flex-1">
-                              <span className="w-8 h-8 bg-white dark:bg-gray-800 rounded-lg flex items-center justify-center text-sm font-semibold text-gray-600 dark:text-gray-400 flex-shrink-0">
-                                {idx + 1}
-                              </span>
-                              <span className="font-medium text-base leading-tight py-1 text-gray-900 dark:text-gray-100">{exercise.exerciseName}</span>
-                            </div>
-                            <div className="flex items-center gap-1.5">
-                              {!isEditing ? (
-                                <>
-                                  {/* Up button */}
-                                  <button
-                                    disabled={idx === 0 || reorderExerciseMutation.isPending}
-                                    onClick={() => {
-                                      reorderExerciseMutation.mutate({
-                                        sessionId: sessionId!,
-                                        roundName: round.roundName,
-                                        currentIndex: exercise.orderIndex,
-                                        direction: "up",
-                                      });
-                                    }}
-                                    className="h-7 w-7 p-0 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 disabled:opacity-50 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-0 transition-colors"
-                                  >
-                                    <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" className="mx-auto">
-                                      <path d="M10.5 8.75L7 5.25L3.5 8.75" />
-                                    </svg>
-                                  </button>
-                                  
-                                  {/* Down button */}
-                                  <button
-                                    disabled={idx === round.exercises.length - 1 || reorderExerciseMutation.isPending}
-                                    onClick={() => {
-                                      reorderExerciseMutation.mutate({
-                                        sessionId: sessionId!,
-                                        roundName: round.roundName,
-                                        currentIndex: exercise.orderIndex,
-                                        direction: "down",
-                                      });
-                                    }}
-                                    className="h-7 w-7 p-0 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 disabled:opacity-50 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-0 transition-colors"
-                                  >
-                                    <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" className="mx-auto">
-                                      <path d="M3.5 5.25L7 8.75L10.5 5.25" />
-                                    </svg>
-                                  </button>
-                                  
-                                  {/* Replace button */}
-                                  <button
-                                    onClick={() => {
-                                      setEditingExerciseId(exercise.id);
-                                      setInlineSearchQuery("");
-                                      setInlineSelectedId(null);
-                                    }}
-                                    className="h-7 px-2 text-xs font-medium rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-0 transition-colors"
-                                  >
-                                    Edit
-                                  </button>
-                                </>
-                              ) : (
-                                <>
-                                  {/* Save button */}
-                                  <button
-                                    onClick={() => {
-                                      if (inlineSelectedId) {
-                                        swapExerciseMutation.mutate({
+                            <div className="flex items-center gap-6 flex-1">
+                              <div className="flex items-center gap-2">
+                                <span className="w-10 h-10 bg-white dark:bg-gray-800 rounded-lg flex items-center justify-center text-sm font-semibold text-gray-600 dark:text-gray-400 flex-shrink-0">
+                                  {idx + 1}
+                                </span>
+                                {/* Reorder buttons - subtle positioning */}
+                                {!isEditing && (
+                                  <div className="flex flex-col gap-1">
+                                    <button
+                                      disabled={idx === 0 || reorderExerciseMutation.isPending}
+                                      onClick={() => {
+                                        reorderExerciseMutation.mutate({
                                           sessionId: sessionId!,
                                           roundName: round.roundName,
-                                          exerciseIndex: exercise.orderIndex,
-                                          originalExerciseId: exercise.exerciseId,
-                                          newExerciseId: inlineSelectedId,
-                                          reason: "Circuit exercise swap",
-                                          swappedBy: dummyUserId || "unknown",
+                                          currentIndex: exercise.orderIndex,
+                                          direction: "up",
                                         });
-                                      }
-                                    }}
-                                    disabled={!inlineSelectedId || swapExerciseMutation.isPending}
-                                    className={`h-7 px-3 text-xs font-medium rounded transition-colors focus:outline-none focus:ring-0 ${
-                                      inlineSelectedId && !swapExerciseMutation.isPending
-                                        ? 'bg-blue-600 text-white hover:bg-blue-700' 
-                                        : 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
-                                    }`}
-                                  >
-                                    {swapExerciseMutation.isPending ? (
-                                      <SpinnerIcon className="h-3 w-3 animate-spin" />
-                                    ) : (
-                                      'Save'
-                                    )}
-                                  </button>
-                                  
-                                  {/* Cancel button */}
-                                  <button
-                                    onClick={() => {
-                                      setEditingExerciseId(null);
-                                      setInlineSearchQuery("");
-                                      setInlineSelectedId(null);
-                                    }}
-                                    className="h-7 px-3 text-xs font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors focus:outline-none focus:ring-0"
-                                  >
-                                    Cancel
-                                  </button>
-                                </>
-                              )}
+                                      }}
+                                      className="h-8 w-8 p-0 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-30 transition-colors focus:outline-none focus:ring-0"
+                                    >
+                                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" className="mx-auto text-gray-400 dark:text-gray-500">
+                                        <path d="M10.5 8.75L7 5.25L3.5 8.75" />
+                                      </svg>
+                                    </button>
+                                    <button
+                                      disabled={idx === round.exercises.length - 1 || reorderExerciseMutation.isPending}
+                                      onClick={() => {
+                                        reorderExerciseMutation.mutate({
+                                          sessionId: sessionId!,
+                                          roundName: round.roundName,
+                                          currentIndex: exercise.orderIndex,
+                                          direction: "down",
+                                        });
+                                      }}
+                                      className="h-8 w-8 p-0 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-30 transition-colors focus:outline-none focus:ring-0"
+                                    >
+                                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" className="mx-auto text-gray-400 dark:text-gray-500">
+                                        <path d="M3.5 5.25L7 8.75L10.5 5.25" />
+                                      </svg>
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                              <span className="font-medium text-base leading-tight py-1 text-gray-900 dark:text-gray-100">{exercise.exerciseName}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {!isEditing ? (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => {
+                                    setEditingExerciseId(exercise.id);
+                                    setInlineSearchQuery("");
+                                    setInlineSelectedId(null);
+                                  }}
+                                  className="h-8 px-3 font-medium dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:hover:bg-gray-600 focus:outline-none focus:ring-0"
+                                >
+                                  Replace
+                                </Button>
+                              ) : null}
                             </div>
                           </div>
                         </div>
                         
                         {/* Absolute positioned edit overlay */}
                         {isEditing && (
-                          <div className="absolute left-0 right-0 top-0 z-10 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
-                            <div className="p-4">
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-4 flex-1">
-                                  <span className="w-8 h-8 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center text-sm font-semibold text-gray-600 dark:text-gray-400 flex-shrink-0">
+                          <>
+                            {/* Backdrop overlay */}
+                            <div 
+                              className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm"
+                              onClick={() => {
+                                setEditingExerciseId(null);
+                                setInlineSearchQuery("");
+                                setInlineSelectedId(null);
+                              }}
+                            />
+                            
+                            {/* Search component */}
+                            <div className="absolute left-0 right-0 top-0 z-50 rounded-xl shadow-2xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 ring-2 ring-black/5 dark:ring-white/5">
+                            <div className="p-6 bg-gray-50 dark:bg-gray-900 rounded-xl">
+                              <div className="space-y-4">
+                                {/* Search input row */}
+                                <div className="flex items-center gap-6">
+                                  <span className="w-10 h-10 bg-gray-200 dark:bg-gray-700 rounded-lg flex items-center justify-center text-sm font-semibold text-gray-700 dark:text-gray-300 flex-shrink-0">
                                     {idx + 1}
                                   </span>
                                   <input
@@ -857,10 +814,22 @@ function CircuitWorkoutOverviewContent() {
                                       }
                                     }}
                                     autoFocus
-                                    className="flex-1 bg-transparent border-0 text-base font-medium text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-0"
+                                    className="flex-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 text-base font-medium text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-100 focus:border-transparent"
                                   />
                                 </div>
-                                <div className="flex items-center gap-1.5">
+                                
+                                {/* Buttons row */}
+                                <div className="flex items-center justify-end gap-2 ml-16">
+                                  <button
+                                    onClick={() => {
+                                      setEditingExerciseId(null);
+                                      setInlineSearchQuery("");
+                                      setInlineSelectedId(null);
+                                    }}
+                                    className="h-8 px-4 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors focus:outline-none focus:ring-0"
+                                  >
+                                    Cancel
+                                  </button>
                                   <button
                                     onClick={() => {
                                       if (inlineSelectedId) {
@@ -876,33 +845,23 @@ function CircuitWorkoutOverviewContent() {
                                       }
                                     }}
                                     disabled={!inlineSelectedId || swapExerciseMutation.isPending}
-                                    className={`h-7 px-3 text-xs font-medium rounded transition-colors focus:outline-none focus:ring-0 ${
+                                    className={`h-8 px-6 text-sm font-medium rounded-lg transition-all focus:outline-none focus:ring-0 ${
                                       inlineSelectedId && !swapExerciseMutation.isPending
-                                        ? 'bg-blue-600 text-white hover:bg-blue-700' 
+                                        ? 'bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 hover:bg-gray-800 dark:hover:bg-gray-200 shadow-md' 
                                         : 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
                                     }`}
                                   >
                                     {swapExerciseMutation.isPending ? (
-                                      <SpinnerIcon className="h-3 w-3 animate-spin" />
+                                      <SpinnerIcon className="h-4 w-4 animate-spin" />
                                     ) : (
-                                      'Save'
+                                      'Replace'
                                     )}
-                                  </button>
-                                  <button
-                                    onClick={() => {
-                                      setEditingExerciseId(null);
-                                      setInlineSearchQuery("");
-                                      setInlineSelectedId(null);
-                                    }}
-                                    className="h-7 px-3 text-xs font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors focus:outline-none focus:ring-0"
-                                  >
-                                    Cancel
                                   </button>
                                 </div>
                               </div>
                               
-                              {/* Search results dropdown */}
-                              {inlineSearchQuery && (() => {
+                              {/* Search results dropdown - only show when no selection made */}
+                              {inlineSearchQuery && !inlineSelectedId && (() => {
                                 const isReplacingWarmup = round.roundName === 'Warm-up';
                                 let filtered = availableExercises.filter((ex: any) => {
                                   if (ex.templateType && ex.templateType.length > 0 && !ex.templateType.includes('circuit')) {
@@ -929,10 +888,10 @@ function CircuitWorkoutOverviewContent() {
                                           setInlineSearchQuery(ex.name);
                                           setInlineSelectedId(ex.id);
                                         }}
-                                        className={`w-full px-4 py-2.5 text-left transition-colors ${
+                                        className={`w-full px-4 py-2.5 text-left transition-all ${
                                           inlineSelectedId === ex.id 
-                                            ? 'bg-blue-50 dark:bg-blue-900/20' 
-                                            : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                                            ? 'bg-gray-100 dark:bg-gray-800 border-l-4 border-gray-900 dark:border-gray-100' 
+                                            : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'
                                         }`}
                                       >
                                         <div className="text-sm font-medium text-gray-900 dark:text-gray-100">{ex.name}</div>
@@ -946,47 +905,101 @@ function CircuitWorkoutOverviewContent() {
                               })()}
                             </div>
                           </div>
+                          </>
                         )}
                       </div>
                     );
                   })}
                   
-                  {/* BRIDGE Track - Plays at exercise 2 */}
-                  {roundMusic && roundMusic.track2 && (
-                    <div className="mt-3 p-3 rounded-lg bg-purple-50 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/30">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="text-xs font-semibold px-2 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-full">🎵 BRIDGE</span>
-                            <span className="text-xs text-gray-600 dark:text-gray-400">Starts at exercise 2</span>
-                          </div>
-                          <p className="font-medium text-gray-900 dark:text-gray-100">{roundMusic.track2.trackName}</p>
-                        </div>
-                        <div className="text-right text-sm">
-                          <div className="text-gray-600 dark:text-gray-400">When</div>
-                          <div className="font-medium text-gray-900 dark:text-gray-100">Exercise 2</div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
                 </div>
                 
-                {/* REST Track - Plays at round end */}
-                {roundMusic && roundMusic.track3 && (
-                  <div className="mt-4 p-3 rounded-lg bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/30">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="text-xs font-semibold px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full">🎵 REST</span>
-                          <span className="text-xs text-gray-600 dark:text-gray-400">Plays at round end</span>
+                {/* Spotify Music Section - Expandable */}
+                {roundMusic && (
+                  <div className="mt-4">
+                    <button
+                      onClick={() => {
+                        const newExpanded = new Set(expandedSpotifyRounds);
+                        if (newExpanded.has(round.roundName)) {
+                          newExpanded.delete(round.roundName);
+                        } else {
+                          newExpanded.add(round.roundName);
+                        }
+                        setExpandedSpotifyRounds(newExpanded);
+                      }}
+                      className="w-full p-4 rounded-lg bg-gray-50/50 dark:bg-gray-800/30 hover:bg-gray-100/50 dark:hover:bg-gray-800/50 transition-colors text-left focus:outline-none focus:ring-0"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <svg className="w-5 h-5 text-gray-400 dark:text-gray-500" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
+                          </svg>
+                          <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Spotify Music</span>
                         </div>
-                        <p className="font-medium text-gray-900 dark:text-gray-100">{roundMusic.track3.trackName}</p>
+                        <svg
+                          className={`w-4 h-4 text-gray-400 dark:text-gray-500 transition-transform ${
+                            expandedSpotifyRounds.has(round.roundName) ? 'rotate-180' : ''
+                          }`}
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
                       </div>
-                      <div className="text-right text-sm">
-                        <div className="text-muted-foreground">When</div>
-                        <div className="font-medium">Round End</div>
+                    </button>
+                    
+                    {/* Expanded content */}
+                    {expandedSpotifyRounds.has(round.roundName) && (
+                      <div className="mt-2 space-y-2 pl-4">
+                        {/* HYPE Track */}
+                        {roundMusic.track1 && (
+                          <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-800/50 border border-gray-200/50 dark:border-gray-700/50">
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="text-xs font-medium text-gray-500 dark:text-gray-400">HYPE</span>
+                                  <span className="text-xs text-gray-400 dark:text-gray-500">Starts at countdown</span>
+                                </div>
+                                <p className="text-sm text-gray-700 dark:text-gray-300">{roundMusic.track1.trackName}</p>
+                              </div>
+                              <div className="text-right">
+                                <div className="text-xs text-gray-400 dark:text-gray-500">{track1Minutes}:{track1Seconds.toString().padStart(2, '0')}</div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                        
+                        {/* BRIDGE Track */}
+                        {roundMusic.track2 && (
+                          <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-800/50 border border-gray-200/50 dark:border-gray-700/50">
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="text-xs font-medium text-gray-500 dark:text-gray-400">BRIDGE</span>
+                                  <span className="text-xs text-gray-400 dark:text-gray-500">Exercise 2</span>
+                                </div>
+                                <p className="text-sm text-gray-700 dark:text-gray-300">{roundMusic.track2.trackName}</p>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                        
+                        {/* REST Track */}
+                        {roundMusic.track3 && (
+                          <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-800/50 border border-gray-200/50 dark:border-gray-700/50">
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="text-xs font-medium text-gray-500 dark:text-gray-400">REST</span>
+                                  <span className="text-xs text-gray-400 dark:text-gray-500">Round end</span>
+                                </div>
+                                <p className="text-sm text-gray-700 dark:text-gray-300">{roundMusic.track3.trackName}</p>
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </div>
-                    </div>
+                    )}
                   </div>
                 )}
                 </div>
@@ -1418,9 +1431,9 @@ function WarmupExercisesList({
   return (
     <>
       {warmupExercises.map((exercise, idx) => (
-        <div key={exercise.id} className="flex items-center justify-between p-4 rounded-xl bg-orange-50/70 border border-orange-200/50 dark:bg-gray-800/50 dark:border-transparent transition-all min-h-[72px] focus-within:outline-none focus-within:ring-0">
-          <div className="flex items-center gap-4 flex-1">
-            <span className="w-8 h-8 bg-white dark:bg-gray-800 rounded-lg flex items-center justify-center text-sm font-semibold text-gray-600 dark:text-gray-400 flex-shrink-0">
+        <div key={exercise.id} className="flex items-center justify-between p-6 rounded-xl bg-orange-50/70 border border-orange-200/50 dark:bg-gray-800/50 dark:border-transparent transition-all min-h-[72px] focus-within:outline-none focus-within:ring-0">
+          <div className="flex items-center gap-6 flex-1">
+            <span className="w-10 h-10 bg-white dark:bg-gray-800 rounded-lg flex items-center justify-center text-sm font-semibold text-gray-600 dark:text-gray-400 flex-shrink-0">
               {idx + 1}
             </span>
             <span className="font-medium text-base leading-tight py-1 text-gray-900 dark:text-gray-100">{exercise.exerciseName}</span>
