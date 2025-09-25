@@ -167,6 +167,11 @@ function CircuitWorkoutOverviewContent() {
   const [expandedMuscles, setExpandedMuscles] = useState<Set<string>>(new Set());
   const availableExercisesRef = useRef<any[]>([]);
   
+  // Inline editing state
+  const [editingExerciseId, setEditingExerciseId] = useState<string | null>(null);
+  const [inlineSearchQuery, setInlineSearchQuery] = useState("");
+  const [inlineSelectedId, setInlineSelectedId] = useState<string | null>(null);
+  
   // Mirror update confirmation state
   const [showMirrorConfirm, setShowMirrorConfirm] = useState(false);
   const [mirrorRoundName, setMirrorRoundName] = useState("");
@@ -195,6 +200,11 @@ function CircuitWorkoutOverviewContent() {
       setShowExerciseSelection(false);
       setSelectedExercise(null);
       setSelectedReplacement(null);
+      
+      // Reset inline editing state
+      setEditingExerciseId(null);
+      setInlineSearchQuery("");
+      setInlineSelectedId(null);
 
       // Invalidate queries to refresh data
       queryClient.invalidateQueries({
@@ -253,13 +263,13 @@ function CircuitWorkoutOverviewContent() {
     return "";
   }, [savedSelections]);
 
-  // Fetch available exercises when modal is open
+  // Fetch available exercises when modal is open or inline editing
   const { data: exercisesData, isLoading: isLoadingExercises } = useQuery({
     ...trpc.exercise.getAvailablePublic.queryOptions({
       sessionId: sessionId || "",
       userId: dummyUserId || "",
     }),
-    enabled: !!sessionId && !!dummyUserId && showExerciseSelection,
+    enabled: !!sessionId && !!dummyUserId && (showExerciseSelection || !!editingExerciseId),
   });
 
   const availableExercises = exercisesData?.exercises || [];
@@ -702,84 +712,244 @@ function CircuitWorkoutOverviewContent() {
                 )}
                 
                 <div className="space-y-3">
-                  {round.exercises.map((exercise, idx) => (
-                    <div key={exercise.id} className={`flex items-center justify-between p-4 rounded-xl transition-all min-h-[72px] focus-within:outline-none focus-within:ring-0 ${(() => {
-                      const type = round.roundType || 'circuit_round';
-                      if (round.isRepeat) return 'bg-purple-50/70 border border-purple-200/50 dark:bg-gray-800/50 dark:border-transparent';
-                      switch (type) {
-                        case 'amrap_round':
-                          return 'bg-purple-50/70 border border-purple-200/50 dark:bg-gray-800/50 dark:border-transparent';
-                        case 'stations_round':
-                          return 'bg-green-50/70 border border-green-200/50 dark:bg-gray-800/50 dark:border-transparent';
-                        case 'circuit_round':
-                        default:
-                          return 'bg-blue-50/70 border border-blue-200/50 dark:bg-gray-800/50 dark:border-transparent';
-                      }
-                    })()}`}>
-                      <div className="flex items-center gap-4 flex-1">
-                        <span className="w-8 h-8 bg-white dark:bg-gray-800 rounded-lg flex items-center justify-center text-sm font-semibold text-gray-600 dark:text-gray-400 flex-shrink-0">
-                          {idx + 1}
-                        </span>
-                        <span className="font-medium text-base leading-tight py-1 text-gray-900 dark:text-gray-100">{exercise.exerciseName}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {/* Up button */}
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={idx === 0 || reorderExerciseMutation.isPending}
-                          onClick={() => {
-                            reorderExerciseMutation.mutate({
-                              sessionId: sessionId!,
-                              roundName: round.roundName,
-                              currentIndex: exercise.orderIndex,
-                              direction: "up",
-                            });
-                          }}
-                          className="h-8 w-8 p-0 disabled:opacity-50 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:hover:bg-gray-600 focus:outline-none focus:ring-0"
-                        >
-                          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M10.5 8.75L7 5.25L3.5 8.75" />
-                          </svg>
-                        </Button>
+                  {round.exercises.map((exercise, idx) => {
+                    const isEditing = editingExerciseId === exercise.id;
+                    return (
+                      <div key={exercise.id} className="relative">
+                        <div className={`p-4 rounded-xl transition-all focus-within:outline-none focus-within:ring-0 ${(() => {
+                          const type = round.roundType || 'circuit_round';
+                          if (round.isRepeat) return 'bg-purple-50/70 border border-purple-200/50 dark:bg-gray-800/50 dark:border-transparent';
+                          switch (type) {
+                            case 'amrap_round':
+                              return 'bg-purple-50/70 border border-purple-200/50 dark:bg-gray-800/50 dark:border-transparent';
+                            case 'stations_round':
+                              return 'bg-green-50/70 border border-green-200/50 dark:bg-gray-800/50 dark:border-transparent';
+                            case 'circuit_round':
+                            default:
+                              return 'bg-blue-50/70 border border-blue-200/50 dark:bg-gray-800/50 dark:border-transparent';
+                          }
+                        })()}`}>
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-4 flex-1">
+                              <span className="w-8 h-8 bg-white dark:bg-gray-800 rounded-lg flex items-center justify-center text-sm font-semibold text-gray-600 dark:text-gray-400 flex-shrink-0">
+                                {idx + 1}
+                              </span>
+                              <span className="font-medium text-base leading-tight py-1 text-gray-900 dark:text-gray-100">{exercise.exerciseName}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              {!isEditing ? (
+                                <>
+                                  {/* Up button */}
+                                  <button
+                                    disabled={idx === 0 || reorderExerciseMutation.isPending}
+                                    onClick={() => {
+                                      reorderExerciseMutation.mutate({
+                                        sessionId: sessionId!,
+                                        roundName: round.roundName,
+                                        currentIndex: exercise.orderIndex,
+                                        direction: "up",
+                                      });
+                                    }}
+                                    className="h-7 w-7 p-0 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 disabled:opacity-50 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-0 transition-colors"
+                                  >
+                                    <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" className="mx-auto">
+                                      <path d="M10.5 8.75L7 5.25L3.5 8.75" />
+                                    </svg>
+                                  </button>
+                                  
+                                  {/* Down button */}
+                                  <button
+                                    disabled={idx === round.exercises.length - 1 || reorderExerciseMutation.isPending}
+                                    onClick={() => {
+                                      reorderExerciseMutation.mutate({
+                                        sessionId: sessionId!,
+                                        roundName: round.roundName,
+                                        currentIndex: exercise.orderIndex,
+                                        direction: "down",
+                                      });
+                                    }}
+                                    className="h-7 w-7 p-0 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 disabled:opacity-50 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-0 transition-colors"
+                                  >
+                                    <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" className="mx-auto">
+                                      <path d="M3.5 5.25L7 8.75L10.5 5.25" />
+                                    </svg>
+                                  </button>
+                                  
+                                  {/* Replace button */}
+                                  <button
+                                    onClick={() => {
+                                      setEditingExerciseId(exercise.id);
+                                      setInlineSearchQuery("");
+                                      setInlineSelectedId(null);
+                                    }}
+                                    className="h-7 px-2 text-xs font-medium rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-0 transition-colors"
+                                  >
+                                    Edit
+                                  </button>
+                                </>
+                              ) : (
+                                <>
+                                  {/* Save button */}
+                                  <button
+                                    onClick={() => {
+                                      if (inlineSelectedId) {
+                                        swapExerciseMutation.mutate({
+                                          sessionId: sessionId!,
+                                          roundName: round.roundName,
+                                          exerciseIndex: exercise.orderIndex,
+                                          originalExerciseId: exercise.exerciseId,
+                                          newExerciseId: inlineSelectedId,
+                                          reason: "Circuit exercise swap",
+                                          swappedBy: dummyUserId || "unknown",
+                                        });
+                                      }
+                                    }}
+                                    disabled={!inlineSelectedId || swapExerciseMutation.isPending}
+                                    className={`h-7 px-3 text-xs font-medium rounded transition-colors focus:outline-none focus:ring-0 ${
+                                      inlineSelectedId && !swapExerciseMutation.isPending
+                                        ? 'bg-blue-600 text-white hover:bg-blue-700' 
+                                        : 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
+                                    }`}
+                                  >
+                                    {swapExerciseMutation.isPending ? (
+                                      <SpinnerIcon className="h-3 w-3 animate-spin" />
+                                    ) : (
+                                      'Save'
+                                    )}
+                                  </button>
+                                  
+                                  {/* Cancel button */}
+                                  <button
+                                    onClick={() => {
+                                      setEditingExerciseId(null);
+                                      setInlineSearchQuery("");
+                                      setInlineSelectedId(null);
+                                    }}
+                                    className="h-7 px-3 text-xs font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors focus:outline-none focus:ring-0"
+                                  >
+                                    Cancel
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        </div>
                         
-                        {/* Down button */}
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={idx === round.exercises.length - 1 || reorderExerciseMutation.isPending}
-                          onClick={() => {
-                            reorderExerciseMutation.mutate({
-                              sessionId: sessionId!,
-                              roundName: round.roundName,
-                              currentIndex: exercise.orderIndex,
-                              direction: "down",
-                            });
-                          }}
-                          className="h-8 w-8 p-0 disabled:opacity-50 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:hover:bg-gray-600 focus:outline-none focus:ring-0"
-                        >
-                          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M3.5 5.25L7 8.75L10.5 5.25" />
-                          </svg>
-                        </Button>
-                        
-                        {/* Replace button */}
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => {
-                            setSelectedExercise(exercise);
-                            setSelectedRound(round.roundName);
-                            setSelectedExerciseIndex(exercise.orderIndex);
-                            setShowExerciseSelection(true);
-                          }}
-                          className="h-8 px-3 font-medium dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:hover:bg-gray-600 focus:outline-none focus:ring-0"
-                        >
-                          Replace
-                        </Button>
+                        {/* Absolute positioned edit overlay */}
+                        {isEditing && (
+                          <div className="absolute left-0 right-0 top-0 z-10 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+                            <div className="p-4">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-4 flex-1">
+                                  <span className="w-8 h-8 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center text-sm font-semibold text-gray-600 dark:text-gray-400 flex-shrink-0">
+                                    {idx + 1}
+                                  </span>
+                                  <input
+                                    type="text"
+                                    placeholder="Search exercises..."
+                                    value={inlineSearchQuery}
+                                    onChange={(e) => setInlineSearchQuery(e.target.value)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Escape') {
+                                        setEditingExerciseId(null);
+                                        setInlineSearchQuery("");
+                                        setInlineSelectedId(null);
+                                      }
+                                    }}
+                                    autoFocus
+                                    className="flex-1 bg-transparent border-0 text-base font-medium text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-0"
+                                  />
+                                </div>
+                                <div className="flex items-center gap-1.5">
+                                  <button
+                                    onClick={() => {
+                                      if (inlineSelectedId) {
+                                        swapExerciseMutation.mutate({
+                                          sessionId: sessionId!,
+                                          roundName: round.roundName,
+                                          exerciseIndex: exercise.orderIndex,
+                                          originalExerciseId: exercise.exerciseId,
+                                          newExerciseId: inlineSelectedId,
+                                          reason: "Circuit exercise swap",
+                                          swappedBy: dummyUserId || "unknown",
+                                        });
+                                      }
+                                    }}
+                                    disabled={!inlineSelectedId || swapExerciseMutation.isPending}
+                                    className={`h-7 px-3 text-xs font-medium rounded transition-colors focus:outline-none focus:ring-0 ${
+                                      inlineSelectedId && !swapExerciseMutation.isPending
+                                        ? 'bg-blue-600 text-white hover:bg-blue-700' 
+                                        : 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
+                                    }`}
+                                  >
+                                    {swapExerciseMutation.isPending ? (
+                                      <SpinnerIcon className="h-3 w-3 animate-spin" />
+                                    ) : (
+                                      'Save'
+                                    )}
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      setEditingExerciseId(null);
+                                      setInlineSearchQuery("");
+                                      setInlineSelectedId(null);
+                                    }}
+                                    className="h-7 px-3 text-xs font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors focus:outline-none focus:ring-0"
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              </div>
+                              
+                              {/* Search results dropdown */}
+                              {inlineSearchQuery && (() => {
+                                const isReplacingWarmup = round.roundName === 'Warm-up';
+                                let filtered = availableExercises.filter((ex: any) => {
+                                  if (ex.templateType && ex.templateType.length > 0 && !ex.templateType.includes('circuit')) {
+                                    return false;
+                                  }
+                                  
+                                  if (isReplacingWarmup) {
+                                    return ex.movementTags?.includes('warmup_friendly') || ex.functionTags?.includes('warmup_only');
+                                  } else {
+                                    return !ex.functionTags?.includes('warmup_only');
+                                  }
+                                });
+                                
+                                filtered = filterExercisesBySearch(filtered, inlineSearchQuery);
+                                
+                                if (filtered.length === 0) return null;
+                                
+                                return (
+                                  <div className="mt-3 border-t border-gray-200 dark:border-gray-700">
+                                    {filtered.slice(0, 5).map((ex: any) => (
+                                      <button
+                                        key={ex.id}
+                                        onClick={() => {
+                                          setInlineSearchQuery(ex.name);
+                                          setInlineSelectedId(ex.id);
+                                        }}
+                                        className={`w-full px-4 py-2.5 text-left transition-colors ${
+                                          inlineSelectedId === ex.id 
+                                            ? 'bg-blue-50 dark:bg-blue-900/20' 
+                                            : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                                        }`}
+                                      >
+                                        <div className="text-sm font-medium text-gray-900 dark:text-gray-100">{ex.name}</div>
+                                        <div className="text-xs text-gray-500 dark:text-gray-400">
+                                          {ex.primaryMuscle?.toLowerCase().replace(/_/g, ' ')}
+                                        </div>
+                                      </button>
+                                    ))}
+                                  </div>
+                                );
+                              })()}
+                            </div>
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                   
                   {/* BRIDGE Track - Plays at exercise 2 */}
                   {roundMusic && roundMusic.track2 && (
