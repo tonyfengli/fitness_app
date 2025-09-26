@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, Pressable } from 'react-native';
+import Icon from 'react-native-vector-icons/MaterialIcons';
 import { useBusiness } from '../providers/BusinessProvider';
 import { useAuth } from '../providers/AuthProvider';
 import { supabase } from '../lib/supabase';
@@ -90,6 +91,55 @@ interface TrainingSession {
   };
 }
 
+// Hardcoded sessions for UI development
+const HARDCODED_SESSIONS: TrainingSession[] = [
+  {
+    id: 'session-1',
+    business_id: 'placeholder',
+    template_type: 'Circuit',
+    status: 'open',
+    scheduled_at: null,
+    created_at: new Date(Date.now() - 30 * 60 * 1000).toISOString(), // 30 min ago
+    updated_at: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
+    trainer_id: 'trainer-1',
+    trainer: {
+      id: 'trainer-1',
+      name: 'Sarah Johnson',
+      email: 'sarah@example.com'
+    }
+  },
+  {
+    id: 'session-2',
+    business_id: 'placeholder',
+    template_type: 'Strength',
+    status: 'complete',
+    scheduled_at: null,
+    created_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(), // 2 days ago
+    updated_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+    trainer_id: 'trainer-2',
+    trainer: {
+      id: 'trainer-2',
+      name: 'Mike Chen',
+      email: 'mike@example.com'
+    }
+  },
+  {
+    id: 'session-3',
+    business_id: 'placeholder',
+    template_type: 'Circuit',
+    status: 'complete',
+    scheduled_at: null,
+    created_at: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(), // 1 week ago
+    updated_at: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+    trainer_id: 'trainer-3',
+    trainer: {
+      id: 'trainer-3',
+      name: 'Alex Rivera',
+      email: 'alex@example.com'
+    }
+  }
+];
+
 export function MainScreen() {
   const navigation = useNavigation();
   const queryClient = useQueryClient();
@@ -102,12 +152,19 @@ export function MainScreen() {
   const [loadingSessionId, setLoadingSessionId] = useState<string | null>(null);
   const [sessionError, setSessionError] = useState<{ id: string; message: string } | null>(null);
   const firstTemplateRef = useRef<any>(null);
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
+  const [shouldRefocusCard, setShouldRefocusCard] = useState(false);
 
   // Template options matching the webapp
   const templates = [
     { id: 'standard', name: 'Strength', description: 'Client-pooled organization' },
     { id: 'circuit', name: 'Circuit', description: 'Time-based circuit training' },
   ];
+
+  // Debug selectedSessionId changes
+  useEffect(() => {
+    console.log('[MainScreen] selectedSessionId changed to:', selectedSessionId);
+  }, [selectedSessionId]);
 
   // Delete session mutation
   const deleteSessionMutation = useMutation({
@@ -543,8 +600,8 @@ export function MainScreen() {
               setShowTemplates(true);
               console.log('[MainScreen] 📋 Templates shown, hasTVPreferredFocus should handle focus');
             }}
-            disabled={isAuthLoading || createSessionMutation.isPending || openSessions.length > 0}
-            focusable
+            disabled={isAuthLoading || createSessionMutation.isPending || openSessions.length > 0 || !!selectedSessionId}
+            focusable={!selectedSessionId}
           >
             {({ focused }) => (
               <MattePanel 
@@ -572,7 +629,7 @@ export function MainScreen() {
               console.log('[MainScreen] 💡 Lighting Test button pressed');
               navigation.navigate('LightingTest');
             }}
-            focusable
+            focusable={!selectedSessionId}
           >
             {({ focused }) => (
               <MattePanel 
@@ -607,7 +664,7 @@ export function MainScreen() {
               <Pressable
                 key={template.id}
                 ref={index === 0 ? firstTemplateRef : undefined}
-                hasTVPreferredFocus={showTemplates && index === 0}
+                hasTVPreferredFocus={showTemplates && index === 0 && !selectedSessionId}
                 onPress={() => {
                   handleCreateSession(template.id);
                 }}
@@ -617,7 +674,7 @@ export function MainScreen() {
                 onBlur={() => {
                   console.log(`[MainScreen] 🔸 Template "${template.name}" (index ${index}) lost focus`);
                 }}
-                focusable
+                focusable={!selectedSessionId}
               >
                 {({ focused }) => (
                   <MattePanel
@@ -649,7 +706,7 @@ export function MainScreen() {
                   onPress={() => {
                     setShowTemplates(false);
                   }}
-                  focusable
+                  focusable={!selectedSessionId}
                 >
               {({ focused }) => (
                 <MattePanel
@@ -680,8 +737,8 @@ export function MainScreen() {
           {/* Refresh (Gym) Button - Top Right */}
           <Pressable
             onPress={() => handleEnvironmentChange('gym')}
-            disabled={isSwitching || showTemplates}
-            focusable={!showTemplates}
+            disabled={isSwitching || showTemplates || !!selectedSessionId}
+            focusable={!showTemplates && !selectedSessionId}
           >
             {({ focused }) => (
               <MattePanel 
@@ -711,156 +768,166 @@ export function MainScreen() {
 
       {/* Main Content */}
       <View style={styles.mainContent}>
-        {isLoadingSessions ? (
-          <View style={[styles.card, styles.centerContent]}>
-            <ActivityIndicator size="large" color={TOKENS.color.accent} />
-            <Text style={[styles.loadingText, { marginTop: 16 }]}>Loading sessions...</Text>
-          </View>
-        ) : openSessions.length > 0 ? (
-          <View>
-            {isSwitching && (
-              <View style={styles.switchingOverlay}>
-                <ActivityIndicator size="small" color={TOKENS.color.accent} />
-                <Text style={styles.switchingText}>Switching accounts...</Text>
-              </View>
-            )}
-            {openSessions.map((session) => (
-              <View
+        <View style={styles.sessionsContainer}>
+          <View style={styles.sessionsRowWrapper}>
+            <View style={styles.sessionsRow}>
+            {HARDCODED_SESSIONS.map((session) => (
+              <Pressable
                 key={session.id}
-                style={[styles.sessionCard, (isSwitching || isLoadingSessions) && styles.disabledCard]}
+                focusable={!selectedSessionId}
+                hasTVPreferredFocus={shouldRefocusCard && selectedSessionId === session.id}
+                style={styles.sessionCardWrapper}
+                onPress={() => {
+                  console.log('[MainScreen] Session card pressed. Current:', selectedSessionId, 'New:', session.id);
+                  setSelectedSessionId(selectedSessionId === session.id ? null : session.id);
+                  setShouldRefocusCard(false);
+                }}
+                onFocus={() => {
+                  if (shouldRefocusCard && selectedSessionId === session.id) {
+                    setShouldRefocusCard(false);
+                  }
+                }}
               >
-                <View style={styles.sessionHeader}>
-                  <Text style={styles.sessionTitle}>
-                    {session.template_type || 'Training Session'}
-                  </Text>
-                  <View style={styles.statusBadge}>
-                    <View style={styles.statusDot} />
-                    <Text style={styles.statusText}>Open</Text>
-                  </View>
-                </View>
-                <View style={styles.sessionDetails}>
-                  <View style={styles.sessionInfo}>
-                    <Text style={styles.sessionLabel}>Started</Text>
-                    <Text style={styles.sessionValue}>
-                      {formatSessionTime(session.created_at)}
-                    </Text>
-                  </View>
-                  <View style={styles.sessionInfo}>
-                    <Text style={styles.sessionLabel}>USER</Text>
-                    <Text style={[styles.sessionValue, styles.sessionId]}>
-                      {session.trainer?.name || 'Unknown'}
-                    </Text>
-                  </View>
-                </View>
-                
-                {/* Action buttons for the session */}
-                <View style={styles.sessionActions}>
-                  <Pressable
-                    onPress={() => handleSessionClick(session)}
-                    focusable
-                    disabled={loadingSessionId === session.id}
-                    style={{ flex: 1 }}
-                  >
-                    {({ focused }) => (
-                      <MattePanel
-                        focused={focused}
-                        style={{
-                          paddingVertical: 12,
-                          paddingHorizontal: 20,
-                          alignItems: 'center',
-                          backgroundColor: focused ? 'rgba(255,255,255,0.16)' : TOKENS.color.card,
-                          borderColor: focused ? 'rgba(255,255,255,0.45)' : TOKENS.color.borderGlass,
-                          borderWidth: focused ? 1 : 1,
-                          transform: focused ? [{ translateY: -1 }] : [],
-                          opacity: loadingSessionId === session.id ? 0.7 : 1,
-                        }}
-                      >
-                        {loadingSessionId === session.id ? (
-                          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                            <ActivityIndicator size="small" color={TOKENS.color.accent} style={{ marginRight: 8 }} />
-                            <Text style={{ 
-                              color: TOKENS.color.accent, 
-                              fontSize: 18, 
-                              letterSpacing: 0.2 
-                            }}>
-                              Opening...
-                            </Text>
-                          </View>
-                        ) : (
-                          <Text style={{ 
-                            color: TOKENS.color.text, 
-                            fontSize: 18, 
-                            letterSpacing: 0.2 
-                          }}>
-                            Open Session
-                          </Text>
-                        )}
-                      </MattePanel>
-                    )}
-                  </Pressable>
-                  
-                  <Pressable
-                    onPress={() => handleCloseSession(session.id)}
-                    focusable
-                    style={{ flex: 1 }}
-                  >
-                    {({ focused }) => (
-                      <MattePanel
-                        focused={focused}
-                        style={{
-                          paddingVertical: 12,
-                          paddingHorizontal: 20,
-                          alignItems: 'center',
-                          backgroundColor: focused ? 'rgba(255,255,255,0.16)' : TOKENS.color.card,
-                          borderColor: focused ? 'rgba(255,255,255,0.45)' : TOKENS.color.borderGlass,
-                          borderWidth: focused ? 1 : 1,
-                          transform: focused ? [{ translateY: -1 }] : [],
-                        }}
-                      >
-                        <Text style={{ 
-                          color: TOKENS.color.text, 
-                          fontSize: 18, 
-                          letterSpacing: 0.2 
-                        }}>
-                          Delete Session
-                        </Text>
-                      </MattePanel>
-                    )}
-                  </Pressable>
-                </View>
-                
-                {/* Error message if this session had an error */}
-                {sessionError?.id === session.id && (
-                  <View style={styles.errorContainer}>
-                    <Text style={styles.errorText}>
-                      {sessionError.message}
-                    </Text>
+                {({ focused }) => (
+                  <View style={[
+                    styles.simpleSessionCard,
+                    focused && styles.simpleSessionCardFocused,
+                    selectedSessionId === session.id && styles.simpleSessionCardSelected
+                  ]}>
+                    <View style={[
+                      styles.simpleStatusBadge,
+                      session.status === 'open' && styles.openBadge,
+                      session.status === 'complete' && styles.completeBadge,
+                      session.status === 'incomplete' && styles.incompleteBadge,
+                    ]}>
+                      <Text style={[
+                        styles.simpleStatusText,
+                        session.status === 'open' && styles.openText,
+                        session.status === 'complete' && styles.completeText,
+                        session.status === 'incomplete' && styles.incompleteText,
+                      ]}>
+                        {session.status.toUpperCase()}
+                      </Text>
+                    </View>
+                    <View style={styles.sessionInfo}>
+                      <Text style={styles.simpleSessionName}>
+                        Session {session.id.split('-')[1]}
+                      </Text>
+                      <Text style={styles.simpleSessionType}>
+                        {session.template_type}
+                      </Text>
+                    </View>
                   </View>
                 )}
-              </View>
+              </Pressable>
             ))}
-          </View>
-        ) : (
-          <View style={styles.card}>
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyStateText}>No active sessions</Text>
-              <Text style={[styles.emptyStateText, styles.emptySubtext]}>
-                Logged in as: {currentEnvironment === 'gym' ? 'Gym' : 'Developer'}
-              </Text>
-              <Text style={[styles.emptyStateText, styles.emptySubtext, { marginTop: 8 }]}>
-                {user?.email}
-              </Text>
             </View>
           </View>
-        )}
+          
+          {/* Action Buttons */}
+          <View style={[styles.actionButtonsContainer, { opacity: selectedSessionId ? 1 : 0 }]}>
+              <Pressable
+                focusable={!!selectedSessionId}
+                hasTVPreferredFocus={!!selectedSessionId}
+                onFocus={() => console.log('[MainScreen] Open button focused')}
+                onPress={() => {
+                  console.log('Open session:', selectedSessionId);
+                  setSelectedSessionId(null);
+                }}
+                style={styles.actionButtonWrapper}
+              >
+                {({ focused }) => (
+                  <View style={[
+                    styles.actionButton,
+                    focused && styles.actionButtonFocused
+                  ]}>
+                    <Icon name="play-arrow" size={20} color={TOKENS.color.text} />
+                    <Text style={styles.actionButtonText}>Open</Text>
+                  </View>
+                )}
+              </Pressable>
+              
+              <Pressable
+                focusable={!!selectedSessionId}
+                onPress={() => {
+                  console.log('Delete session:', selectedSessionId);
+                  setSelectedSessionId(null);
+                }}
+                style={styles.actionButtonWrapper}
+              >
+                {({ focused }) => (
+                  <View style={[
+                    styles.actionButton,
+                    focused && styles.actionButtonFocused
+                  ]}>
+                    <Icon name="delete" size={20} color={TOKENS.color.text} />
+                    <Text style={styles.actionButtonText}>Delete</Text>
+                  </View>
+                )}
+              </Pressable>
+              
+              <Pressable
+                focusable={!!selectedSessionId}
+                onPress={() => {
+                  console.log('Complete session:', selectedSessionId);
+                  setSelectedSessionId(null);
+                }}
+                style={styles.actionButtonWrapper}
+              >
+                {({ focused }) => (
+                  <View style={[
+                    styles.actionButton,
+                    focused && styles.actionButtonFocused
+                  ]}>
+                    <Icon name="check-circle" size={20} color={TOKENS.color.text} />
+                    <Text style={styles.actionButtonText}>Complete</Text>
+                  </View>
+                )}
+              </Pressable>
+              
+              <Pressable
+                focusable={!!selectedSessionId}
+                onFocus={() => console.log('[MainScreen] Cancel button focused')}
+                onPress={() => {
+                  console.log('[MainScreen] Cancel pressed');
+                  setShouldRefocusCard(true);
+                  // Small delay to allow state to update before clearing selection
+                  setTimeout(() => {
+                    setSelectedSessionId(null);
+                  }, 50);
+                }}
+                style={styles.cancelButtonWrapper}
+              >
+                {({ focused }) => (
+                  <MattePanel
+                    focused={focused}
+                    style={{
+                      width: 48,
+                      height: 48,
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                      backgroundColor: focused ? 'rgba(255,255,255,0.16)' : TOKENS.color.card,
+                      borderColor: focused ? 'rgba(255,255,255,0.45)' : TOKENS.color.borderGlass,
+                      borderWidth: 1,
+                      transform: focused ? [{ translateY: -1 }] : [],
+                    }}
+                    radius={24}
+                  >
+                    <Icon name="close" size={20} color={TOKENS.color.text} />
+                  </MattePanel>
+                )}
+              </Pressable>
+          </View>
+        </View>
       </View>
       
       {/* Developer Button - Bottom Right */}
       <View style={{ position: 'absolute', bottom: 32, right: 32 }}>
         <Pressable
           onPress={() => handleEnvironmentChange('developer')}
-          disabled={isSwitching || showTemplates}
-          focusable={!showTemplates}
+          disabled={isSwitching || showTemplates || !!selectedSessionId}
+          focusable={!showTemplates && !selectedSessionId}
+          onFocus={() => console.log('[MainScreen] Developer button focused. selectedSessionId:', selectedSessionId)}
         >
           {({ focused }) => (
             <MattePanel 
@@ -962,6 +1029,9 @@ const styles = StyleSheet.create({
   },
   mainContent: {
     flex: 1,
+    justifyContent: 'center',
+    paddingTop: 60,
+    paddingBottom: 20, // Reduced since we're shifting down
   },
   card: {
     backgroundColor: TOKENS.color.card,
@@ -1174,5 +1244,150 @@ const styles = StyleSheet.create({
     color: TOKENS.color.danger,
     fontSize: 14,
     textAlign: 'center',
+  },
+  sessionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    flex: 1,
+    gap: 24,
+  },
+  sessionCardWrapper: {
+    flex: 1,
+    maxWidth: 255, // Reduced by 15% from 300
+  },
+  simpleSessionCard: {
+    backgroundColor: TOKENS.color.card,
+    borderColor: TOKENS.color.borderGlass,
+    borderWidth: 1,
+    borderRadius: TOKENS.radius.card,
+    padding: 24,
+    height: 177,
+    position: 'relative',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.40,
+    shadowRadius: 22,
+    elevation: 8,
+  },
+  simpleSessionCardFocused: {
+    backgroundColor: 'rgba(255,255,255,0.16)',
+    borderColor: 'rgba(255,255,255,0.45)',
+    borderWidth: 1,
+    transform: [{ translateY: -1 }],
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.36,
+    shadowRadius: 40,
+    elevation: 12,
+  },
+  sessionInfo: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  simpleSessionName: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: TOKENS.color.text,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  simpleSessionType: {
+    fontSize: 18,
+    color: TOKENS.color.muted,
+    textAlign: 'center',
+  },
+  simpleStatusBadge: {
+    position: 'absolute',
+    top: 20,
+    right: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: TOKENS.radius.chip,
+    borderWidth: 1,
+  },
+  simpleStatusText: {
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  openBadge: {
+    backgroundColor: 'rgba(124,255,181,0.1)',
+    borderColor: 'rgba(124,255,181,0.3)',
+  },
+  openText: {
+    color: TOKENS.color.accent,
+  },
+  completeBadge: {
+    backgroundColor: 'rgba(156,176,255,0.1)',
+    borderColor: 'rgba(156,176,255,0.3)',
+  },
+  completeText: {
+    color: TOKENS.color.muted,
+  },
+  incompleteBadge: {
+    backgroundColor: 'rgba(239,68,68,0.1)',
+    borderColor: 'rgba(239,68,68,0.3)',
+  },
+  incompleteText: {
+    color: TOKENS.color.danger,
+  },
+  sessionsContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  sessionsRowWrapper: {
+    alignItems: 'center',
+  },
+  simpleSessionCardSelected: {
+    borderColor: 'rgba(255,255,255,0.8)',
+    borderWidth: 2,
+  },
+  actionButtonsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 20,
+    height: 60,
+    marginTop: 100,
+  },
+  actionButtonWrapper: {
+    minWidth: 120,
+  },
+  cancelButtonWrapper: {
+    marginLeft: 20,
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    borderRadius: TOKENS.radius.button,
+    borderWidth: 1,
+    backgroundColor: TOKENS.color.card,
+    borderColor: TOKENS.color.borderGlass,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.30,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  actionButtonFocused: {
+    backgroundColor: 'rgba(255,255,255,0.16)',
+    borderColor: 'rgba(255,255,255,0.45)',
+    transform: [{ translateY: -1 }],
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.40,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  actionButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: TOKENS.color.text,
   },
 });

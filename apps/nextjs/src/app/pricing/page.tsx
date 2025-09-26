@@ -1,6 +1,6 @@
 export default function PricingPage() {
   return (
-    <div className="min-h-screen w-full bg-gradient-to-b from-white to-slate-50 text-slate-900 p-6 md:p-10 print:p-4 print:bg-white">
+    <div className="min-h-screen w-full bg-gradient-to-b from-white to-slate-50 text-slate-900 p-6 md:p-10 print:p-4 print:bg-white print:min-h-0">
       {/* Header (primary brand heading) */}
       <header className="max-w-5xl mx-auto text-center mb-6">
         <h1 className="text-3xl md:text-4xl font-bold tracking-tight">Heart for the House Fitness</h1>
@@ -78,7 +78,7 @@ export default function PricingPage() {
         {/* Matching Donation Notice */}
         <div className="mb-6">
           <p className="text-base md:text-lg text-slate-800 font-medium">
-            <span className="text-blue-700">✨</span> We will also match your contribution dollar-for-dollar, doubling your impact! <span className="text-blue-700">✨</span>
+            <span className="text-blue-700">✨</span> We'll match contributions dollar-for-dollar up to $15,000, doubling your impact! <span className="text-blue-700">✨</span>
           </p>
         </div>
         
@@ -88,26 +88,44 @@ export default function PricingPage() {
       </div>
 
       {/* Schedule + Location (hierarchy #3) */}
-      <div className="max-w-5xl mx-auto mb-6">
-        <div className="rounded-2xl border border-slate-200 bg-white p-10 shadow-sm">
-          <div className="grid grid-cols-1 md:grid-cols-2 text-base md:text-lg">
-            <div className="flex items-start gap-4 justify-center pb-6 md:pb-0 md:pr-6">
-              <div className="text-2xl" aria-hidden>🕔</div>
-              <div>
-                <div className="font-semibold mb-2">Schedule</div>
-                <div className="text-slate-700">Mon • Wed • Fri</div>
-                <div className="mt-2 space-y-1">
-                  <div className="text-slate-600">Morning: 5:00–6:00 AM</div>
-                  <div className="text-slate-600">Evening: 5:00–6:00 PM</div>
+      <div className="max-w-5xl mx-auto mb-6 print:mb-0">
+        <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-slate-100">
+            <div className="p-8 md:p-10">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="text-xl" aria-hidden>🕔</div>
+                <h3 className="font-semibold text-lg">Class Schedule</h3>
+              </div>
+              <div className="space-y-4 pl-8">
+                <div>
+                  <div className="text-slate-900 font-semibold text-lg">5:00 – 6:00 AM</div>
+                  <div className="text-slate-600">Monday • Wednesday • Friday</div>
+                </div>
+                <div>
+                  <div className="text-slate-900 font-semibold text-lg">5:00 – 6:00 PM</div>
+                  <div className="text-slate-600">Monday through Friday (All weekdays)</div>
                 </div>
               </div>
             </div>
-            <div className="flex items-start gap-4 justify-center pt-6 md:pt-0 md:pl-6">
-              <div className="text-2xl" aria-hidden>📍</div>
-              <div>
-                <div className="font-semibold mb-2">Location</div>
-                <div className="text-slate-700">3111 W. Lincoln Ave</div>
-                <div className="text-slate-700">Anaheim, CA 92801</div>
+            <div className="p-8 md:p-10">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="text-xl" aria-hidden>📍</div>
+                <h3 className="font-semibold text-lg">Studio Location</h3>
+              </div>
+              <div className="pl-8">
+                <div className="text-slate-900 leading-relaxed">
+                  3111 W. Lincoln Ave<br />
+                  Anaheim, CA 92801
+                </div>
+                <div className="mt-3">
+                  <a href="https://maps.google.com/?q=3111+W+Lincoln+Ave+Anaheim+CA+92801" 
+                     target="_blank" 
+                     rel="noopener noreferrer"
+                     className="text-blue-600 hover:text-blue-700 text-sm font-medium inline-flex items-center gap-1">
+                    View on Google Maps
+                    <span aria-hidden>→</span>
+                  </a>
+                </div>
               </div>
             </div>
           </div>
