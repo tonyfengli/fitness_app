@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, Pressable } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, Pressable, TVFocusGuideView } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { useBusiness } from '../providers/BusinessProvider';
 import { useAuth } from '../providers/AuthProvider';
 import { supabase } from '../lib/supabase';
 import { useNavigation } from '../App';
 import { api } from '../providers/TRPCProvider';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 // Design tokens - matching TV app theme
 const TOKENS = {
@@ -77,13 +77,14 @@ function MattePanel({
 
 interface TrainingSession {
   id: string;
-  business_id: string;
-  template_type: string;
-  status: string;
-  scheduled_at: string | null;
-  created_at: string;
-  updated_at: string;
-  trainer_id: string | null;
+  businessId: string;
+  templateType: string;
+  status: 'open' | 'in_progress' | 'completed' | 'cancelled';
+  scheduledAt: Date | null;
+  name: string;
+  createdAt: Date;
+  updatedAt: Date;
+  trainerId: string | null;
   trainer?: {
     id: string;
     name: string;
@@ -91,54 +92,21 @@ interface TrainingSession {
   };
 }
 
-// Hardcoded sessions for UI development
-const HARDCODED_SESSIONS: TrainingSession[] = [
-  {
-    id: 'session-1',
-    business_id: 'placeholder',
-    template_type: 'Circuit',
-    status: 'open',
-    scheduled_at: null,
-    created_at: new Date(Date.now() - 30 * 60 * 1000).toISOString(), // 30 min ago
-    updated_at: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
-    trainer_id: 'trainer-1',
-    trainer: {
-      id: 'trainer-1',
-      name: 'Sarah Johnson',
-      email: 'sarah@example.com'
-    }
-  },
-  {
-    id: 'session-2',
-    business_id: 'placeholder',
-    template_type: 'Strength',
-    status: 'complete',
-    scheduled_at: null,
-    created_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(), // 2 days ago
-    updated_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-    trainer_id: 'trainer-2',
-    trainer: {
-      id: 'trainer-2',
-      name: 'Mike Chen',
-      email: 'mike@example.com'
-    }
-  },
-  {
-    id: 'session-3',
-    business_id: 'placeholder',
-    template_type: 'Circuit',
-    status: 'complete',
-    scheduled_at: null,
-    created_at: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(), // 1 week ago
-    updated_at: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
-    trainer_id: 'trainer-3',
-    trainer: {
-      id: 'trainer-3',
-      name: 'Alex Rivera',
-      email: 'alex@example.com'
-    }
+// Helper to format template type for display
+function formatTemplateType(type: string): string {
+  switch(type) {
+    case 'standard':
+      return 'Strength';
+    case 'circuit':
+      return 'Circuit';
+    case 'full_body_bmf':
+      return 'BMF';
+    default:
+      return type.charAt(0).toUpperCase() + type.slice(1);
   }
-];
+}
+
+// Removed hardcoded sessions - now using real data from API
 
 export function MainScreen() {
   const navigation = useNavigation();
@@ -154,6 +122,16 @@ export function MainScreen() {
   const firstTemplateRef = useRef<any>(null);
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const [shouldRefocusCard, setShouldRefocusCard] = useState(false);
+
+  // Query to fetch recent sessions
+  const { data: recentSessions, isLoading: isLoadingRecentSessions } = useQuery({
+    ...api.trainingSession.list.queryOptions({
+      limit: 3,
+      offset: 0
+    }),
+    enabled: !!businessId && !isAuthLoading,
+    staleTime: 30000, // Cache for 30 seconds
+  });
 
   // Template options matching the webapp
   const templates = [
@@ -467,9 +445,9 @@ export function MainScreen() {
     setSessionError(null);
     
     // Verify session belongs to current business
-    if (session.business_id !== businessId) {
-      console.error('[MainScreen] ⚠️ WARNING: Session business_id mismatch!');
-      console.error('[MainScreen] Session belongs to:', session.business_id);
+    if (session.businessId !== businessId) {
+      console.error('[MainScreen] ⚠️ WARNING: Session businessId mismatch!');
+      console.error('[MainScreen] Session belongs to:', session.businessId);
       console.error('[MainScreen] Current business:', businessId);
       Alert.alert(
         'Session Unavailable',
@@ -771,7 +749,18 @@ export function MainScreen() {
         <View style={styles.sessionsContainer}>
           <View style={styles.sessionsRowWrapper}>
             <View style={styles.sessionsRow}>
-            {HARDCODED_SESSIONS.map((session) => (
+            {isLoadingRecentSessions && !recentSessions ? (
+              <View style={[styles.sessionCardWrapper, { justifyContent: 'center', alignItems: 'center', width: '100%' }]}>
+                <ActivityIndicator size="large" color={TOKENS.color.accent} />
+                <Text style={{ color: TOKENS.color.muted, marginTop: 16 }}>Loading sessions...</Text>
+              </View>
+            ) : !recentSessions || recentSessions.length === 0 ? (
+              <View style={[styles.sessionCardWrapper, { justifyContent: 'center', alignItems: 'center', width: '100%' }]}>
+                <Icon name="inbox" size={48} color={TOKENS.color.muted} />
+                <Text style={{ color: TOKENS.color.muted, marginTop: 16, fontSize: 16 }}>No sessions available</Text>
+                <Text style={{ color: TOKENS.color.muted, marginTop: 8, fontSize: 14 }}>Create a session to get started</Text>
+              </View>
+            ) : recentSessions.map((session) => (
               <Pressable
                 key={session.id}
                 focusable={!selectedSessionId}
@@ -797,24 +786,33 @@ export function MainScreen() {
                     <View style={[
                       styles.simpleStatusBadge,
                       session.status === 'open' && styles.openBadge,
-                      session.status === 'complete' && styles.completeBadge,
-                      session.status === 'incomplete' && styles.incompleteBadge,
+                      session.status === 'completed' && styles.completeBadge,
+                      session.status === 'cancelled' && styles.incompleteBadge,
+                      session.status === 'in_progress' && styles.openBadge,
                     ]}>
                       <Text style={[
                         styles.simpleStatusText,
                         session.status === 'open' && styles.openText,
-                        session.status === 'complete' && styles.completeText,
-                        session.status === 'incomplete' && styles.incompleteText,
+                        session.status === 'completed' && styles.completeText,
+                        session.status === 'cancelled' && styles.incompleteText,
+                        session.status === 'in_progress' && styles.openText,
                       ]}>
-                        {session.status.toUpperCase()}
+                        {session.status === 'in_progress' ? 'IN PROGRESS' : session.status.toUpperCase()}
                       </Text>
                     </View>
                     <View style={styles.sessionInfo}>
-                      <Text style={styles.simpleSessionName}>
-                        Session {session.id.split('-')[1]}
+                      <Text style={styles.simpleSessionName} numberOfLines={2} ellipsizeMode="tail">
+                        {session.name || `Session ${session.id.split('-')[0].slice(0, 6)}`}
                       </Text>
                       <Text style={styles.simpleSessionType}>
-                        {session.template_type}
+                        {formatTemplateType(session.templateType)}
+                      </Text>
+                      <Text style={styles.simpleSessionDate}>
+                        {new Date(session.createdAt).toLocaleDateString('en-US', { 
+                          month: 'short', 
+                          day: 'numeric',
+                          year: 'numeric'
+                        })}
                       </Text>
                     </View>
                   </View>
@@ -825,14 +823,23 @@ export function MainScreen() {
           </View>
           
           {/* Action Buttons */}
-          <View style={[styles.actionButtonsContainer, { opacity: selectedSessionId ? 1 : 0 }]}>
+          <TVFocusGuideView 
+            style={[styles.actionButtonsContainer, { opacity: selectedSessionId ? 1 : 0 }]}
+            trapFocusUp={!!selectedSessionId}
+            trapFocusDown={!!selectedSessionId}
+            trapFocusLeft={!!selectedSessionId}
+            trapFocusRight={!!selectedSessionId}
+          >
               <Pressable
                 focusable={!!selectedSessionId}
                 hasTVPreferredFocus={!!selectedSessionId}
                 onFocus={() => console.log('[MainScreen] Open button focused')}
-                onPress={() => {
-                  console.log('Open session:', selectedSessionId);
-                  setSelectedSessionId(null);
+                onPress={async () => {
+                  const session = recentSessions?.find(s => s.id === selectedSessionId);
+                  if (session) {
+                    setSelectedSessionId(null);
+                    await handleSessionClick(session);
+                  }
                 }}
                 style={styles.actionButtonWrapper}
               >
@@ -850,27 +857,23 @@ export function MainScreen() {
               <Pressable
                 focusable={!!selectedSessionId}
                 onPress={() => {
-                  console.log('Delete session:', selectedSessionId);
-                  setSelectedSessionId(null);
-                }}
-                style={styles.actionButtonWrapper}
-              >
-                {({ focused }) => (
-                  <View style={[
-                    styles.actionButton,
-                    focused && styles.actionButtonFocused
-                  ]}>
-                    <Icon name="delete" size={20} color={TOKENS.color.text} />
-                    <Text style={styles.actionButtonText}>Delete</Text>
-                  </View>
-                )}
-              </Pressable>
-              
-              <Pressable
-                focusable={!!selectedSessionId}
-                onPress={() => {
-                  console.log('Complete session:', selectedSessionId);
-                  setSelectedSessionId(null);
+                  if (selectedSessionId) {
+                    Alert.alert(
+                      'Complete Session',
+                      'Are you sure you want to mark this session as complete?',
+                      [
+                        { text: 'Cancel', style: 'cancel' },
+                        { 
+                          text: 'Complete', 
+                          onPress: () => {
+                            // TODO: Implement complete session mutation
+                            console.log('Complete session:', selectedSessionId);
+                            setSelectedSessionId(null);
+                          }
+                        }
+                      ]
+                    );
+                  }
                 }}
                 style={styles.actionButtonWrapper}
               >
@@ -881,6 +884,27 @@ export function MainScreen() {
                   ]}>
                     <Icon name="check-circle" size={20} color={TOKENS.color.text} />
                     <Text style={styles.actionButtonText}>Complete</Text>
+                  </View>
+                )}
+              </Pressable>
+              
+              <Pressable
+                focusable={!!selectedSessionId}
+                onPress={() => {
+                  if (selectedSessionId) {
+                    handleCloseSession(selectedSessionId);
+                    setSelectedSessionId(null);
+                  }
+                }}
+                style={styles.actionButtonWrapper}
+              >
+                {({ focused }) => (
+                  <View style={[
+                    styles.actionButton,
+                    focused && styles.actionButtonFocused
+                  ]}>
+                    <Icon name="delete" size={20} color={TOKENS.color.text} />
+                    <Text style={styles.actionButtonText}>Delete</Text>
                   </View>
                 )}
               </Pressable>
@@ -917,7 +941,7 @@ export function MainScreen() {
                   </MattePanel>
                 )}
               </Pressable>
-          </View>
+          </TVFocusGuideView>
         </View>
       </View>
       
@@ -1262,7 +1286,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: TOKENS.radius.card,
     padding: 24,
-    height: 177,
+    height: 230,
     position: 'relative',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 8 },
@@ -1290,13 +1314,24 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '700',
     color: TOKENS.color.text,
+    marginTop: 24,
     marginBottom: 8,
     textAlign: 'center',
+    numberOfLines: 2,
+    lineHeight: 30,
+    minHeight: 60,
   },
   simpleSessionType: {
     fontSize: 18,
     color: TOKENS.color.muted,
     textAlign: 'center',
+  },
+  simpleSessionDate: {
+    fontSize: 14,
+    color: TOKENS.color.muted,
+    textAlign: 'center',
+    marginTop: 4,
+    opacity: 0.7,
   },
   simpleStatusBadge: {
     position: 'absolute',
@@ -1351,7 +1386,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 20,
     height: 60,
-    marginTop: 100,
+    marginTop: 130,
   },
   actionButtonWrapper: {
     minWidth: 120,
