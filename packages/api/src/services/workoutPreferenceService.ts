@@ -52,7 +52,7 @@ export class WorkoutPreferenceService {
         return { waiting: false };
       }
 
-      // Check if user is checked into an open session without preferences
+      // Check if user is checked into an in-progress session without preferences
       const [activeCheckIn] = await db
         .select({
           trainingSessionId: UserTrainingSession.trainingSessionId,
@@ -90,7 +90,7 @@ export class WorkoutPreferenceService {
                 "preferences_active",
               ),
             ),
-            eq(TrainingSession.status, "open"),
+            eq(TrainingSession.status, "in_progress"),
           ),
         )
         .limit(1);

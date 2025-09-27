@@ -448,7 +448,7 @@ export function PerRoundConfigStep({
   const sortedRounds = [...normalizedTemplates].sort((a, b) => a.roundNumber - b.roundNumber);
 
   const exerciseOptions = [2, 3, 4, 5, 6, 7];
-  const workOptions = [20, 30, 40, 45, 60];
+  const workOptions = [20, 30, 40, 45, 60, 90, 120, 150, 180, 210, 240];
   const restOptions = [10, 15, 20, 30];
   const amrapOptions = [120, 180, 240, 300, 360]; // 2-6 minutes
   
@@ -663,7 +663,7 @@ export function PerRoundConfigStep({
                               isSelected && "font-bold",
                               !isSelected && isRecommended && "font-medium"
                             )}>
-                              {option}s
+                              {option >= 60 ? `${option / 60}m` : `${option}s`}
                             </span>
                           </Button>
                         );
@@ -836,7 +836,7 @@ export function TimingStep({
           label="Work"
           description="Time for each exercise"
           value={workDuration}
-          options={[20, 30, 40, 45, 60]}
+          options={[20, 30, 40, 45, 60, 90, 120, 150, 180, 210, 240]}
           onChange={onWorkChange}
           isSaving={isSaving}
           color="primary"
@@ -888,7 +888,7 @@ function TimingOption({
           color === "secondary" && "text-blue-600",
           color === "accent" && "text-green-600"
         )}>
-          {value}s
+          {value >= 60 ? `${value / 60}m` : `${value}s`}
         </div>
       </div>
       <div className="grid grid-cols-5 gap-1.5">
@@ -908,7 +908,7 @@ function TimingOption({
             {isSaving && value === option ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
-              `${option}s`
+              option >= 60 ? `${option / 60}m` : `${option}s`
             )}
           </Button>
         ))}

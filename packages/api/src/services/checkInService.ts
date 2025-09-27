@@ -56,7 +56,7 @@ export async function getUserByPhone(
         and(
           eq(UserTrainingSession.userId, foundUser[0].id),
           eq(UserTrainingSession.status, "checked_in"),
-          eq(TrainingSession.status, "open"),
+          eq(TrainingSession.status, "in_progress"),
         ),
       )
       .limit(1);
@@ -114,31 +114,31 @@ export async function processCheckIn(
       name: clientUser.name,
     });
 
-    // 2. Find open session for user's business
+    // 2. Find in-progress session for user's business
     const now = new Date();
-    const openSession = await db
+    const activeSession = await db
       .select()
       .from(TrainingSession)
       .where(
         and(
           eq(TrainingSession.businessId, clientUser.businessId),
-          eq(TrainingSession.status, "open"),
+          eq(TrainingSession.status, "in_progress"),
         ),
       )
       .limit(1);
 
-    if (!openSession.length || !openSession[0]) {
-      logger.warn("No open session found", {
+    if (!activeSession.length || !activeSession[0]) {
+      logger.warn("No in-progress session found", {
         businessId: clientUser.businessId,
       });
       return {
         success: false,
-        message: `Hello ${clientUser.name}! There's no open session at your gym right now. Please check with your trainer.`,
+        message: `Hello ${clientUser.name}! There's no active session at your gym right now. Please check with your trainer.`,
       };
     }
 
-    const session = openSession[0];
-    logger.info("Open session found", { sessionId: session.id });
+    const session = activeSession[0];
+    logger.info("In-progress session found", { sessionId: session.id });
 
     // 3. Check if already checked in
     const existingCheckIn = await db

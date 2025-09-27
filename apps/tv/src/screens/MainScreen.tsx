@@ -113,7 +113,7 @@ export function MainScreen() {
   const queryClient = useQueryClient();
   const { businessId } = useBusiness();
   const { user, isLoading: isAuthLoading, isAuthenticated, error: authError, retry, switchAccount, currentEnvironment, signOut } = useAuth();
-  const [openSessions, setOpenSessions] = useState<TrainingSession[]>([]);
+  // Removed openSessions state - no longer needed since we allow multiple open sessions
   const [isLoadingSessions, setIsLoadingSessions] = useState(false);
   const [isSwitching, setIsSwitching] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
@@ -122,6 +122,7 @@ export function MainScreen() {
   const firstTemplateRef = useRef<any>(null);
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const [shouldRefocusCard, setShouldRefocusCard] = useState(false);
+  const [activeOperation, setActiveOperation] = useState<'open' | 'complete' | 'delete' | null>(null);
 
   // Query to fetch recent sessions
   const { data: recentSessions, isLoading: isLoadingRecentSessions } = useQuery({
@@ -147,10 +148,16 @@ export function MainScreen() {
   // Delete session mutation
   const deleteSessionMutation = useMutation({
     ...api.trainingSession.deleteSession.mutationOptions(),
+    onMutate: () => {
+      setActiveOperation('delete');
+    },
     onSuccess: () => {
       console.log('[MainScreen] ✅ Session deleted successfully');
-      // Refresh the sessions list
-      fetchOpenSessions();
+      // Invalidate the training session list query to refresh the UI
+      queryClient.invalidateQueries({ 
+        queryKey: api.trainingSession.list.queryOptions({ limit: 3, offset: 0 }).queryKey 
+      });
+      setSelectedSessionId(null);
     },
     onError: (error: any) => {
       console.error('[MainScreen] ❌ Failed to delete session:', error);
@@ -160,20 +167,76 @@ export function MainScreen() {
         [{ text: 'OK' }]
       );
     },
+    onSettled: () => {
+      setActiveOperation(null);
+    },
+  });
+
+  // Update session status mutation
+  const updateSessionStatusMutation = useMutation({
+    ...api.trainingSession.updateSessionStatus.mutationOptions(),
+    onSuccess: (data) => {
+      console.log('[MainScreen] ✅ Session status updated:', data.status);
+      queryClient.invalidateQueries({ queryKey: ['trainingSession'] });
+    },
+    onError: (error: any) => {
+      console.error('[MainScreen] ❌ Failed to update session status:', error);
+      // Don't show alert for status updates - handle silently
+    },
+  });
+
+  // Complete session mutation
+  const completeSessionMutation = useMutation({
+    ...api.trainingSession.completeSession.mutationOptions(),
+    onMutate: () => {
+      setActiveOperation('complete');
+    },
+    onSuccess: () => {
+      console.log('[MainScreen] ✅ Session completed successfully');
+      // Invalidate the training session list query to refresh the UI
+      queryClient.invalidateQueries({ 
+        queryKey: api.trainingSession.list.queryOptions({ limit: 3, offset: 0 }).queryKey 
+      });
+      setSelectedSessionId(null);
+    },
+    onError: (error: any) => {
+      console.error('[MainScreen] ❌ Failed to complete session:', error);
+      Alert.alert(
+        'Failed to Complete Session',
+        error.message || 'Something went wrong. Please try again.',
+        [{ text: 'OK' }]
+      );
+    },
+    onSettled: () => {
+      setActiveOperation(null);
+    },
   });
 
   // Create session mutation
   const createSessionMutation = useMutation({
     ...api.trainingSession.create.mutationOptions(),
-    onSuccess: (newSession) => {
+    onSuccess: async (newSession) => {
       console.log('[MainScreen] ✅ Session created:', newSession.id);
       console.log('[MainScreen] Template type:', newSession.templateType);
       
       // Hide template selector
       setShowTemplates(false);
       
-      // Refresh the sessions list
-      fetchOpenSessions();
+      // Invalidate the training session list query to show the new session
+      queryClient.invalidateQueries({ 
+        queryKey: api.trainingSession.list.queryOptions({ limit: 3, offset: 0 }).queryKey 
+      });
+      
+      // Update session status to in_progress
+      console.log('[MainScreen] 🔄 Updating new session status to in_progress');
+      try {
+        await updateSessionStatusMutation.mutateAsync({
+          sessionId: newSession.id,
+          status: 'in_progress' as const
+        });
+      } catch (statusError) {
+        console.warn('[MainScreen] ⚠️ Failed to update status for new session, continuing anyway:', statusError);
+      }
       
       // Navigate to the new session with isNewSession flag
       navigation.navigate('SessionLobby', { 
@@ -314,75 +377,9 @@ export function MainScreen() {
     });
   };
 
-  // Extract fetchOpenSessions to be reusable
-  const fetchOpenSessions = async () => {
-    if (!businessId) {
-      console.log('[MainScreen] No businessId yet, skipping session fetch');
-      return;
-    }
+  // Removed fetchOpenSessions - using React Query for all session data
 
-    console.log('[MainScreen] 🔍 Fetching open sessions for business:', businessId);
-    console.log('[MainScreen] Current user businessId:', user?.businessId);
-    setIsLoadingSessions(true);
-    
-    try {
-      const { data, error } = await supabase
-        .from('training_session')
-        .select(`
-          *,
-          trainer:user!trainer_id (
-            id,
-            name,
-            email
-          )
-        `)
-        .eq('business_id', businessId)
-        .eq('status', 'open')
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        console.error('[MainScreen] ❌ Error fetching sessions:', error);
-      } else {
-        console.log('[MainScreen] ✅ Found open sessions:', data?.length || 0);
-        // Double-check sessions belong to current business
-        const validSessions = data?.filter(s => s.business_id === businessId) || [];
-        if (validSessions.length !== data?.length) {
-          console.warn('[MainScreen] ⚠️ Filtered out sessions from wrong business');
-        }
-        setOpenSessions(validSessions);
-      }
-    } catch (error) {
-      console.error('[MainScreen] ❌ Exception fetching sessions:', error);
-    } finally {
-      setIsLoadingSessions(false);
-    }
-  };
-
-  // Fetch open sessions when businessId changes
-  useEffect(() => {
-    // Skip fetch if switching accounts
-    if (isSwitching) {
-      console.log('[MainScreen] 🚫 Skipping fetch during account switch');
-      return;
-    }
-    
-    if (!businessId) {
-      console.log('[MainScreen] No businessId yet, skipping session fetch');
-      // Clear any stale sessions when businessId is null
-      setOpenSessions([]);
-      return;
-    }
-
-    // Verify businessId matches current user before fetching
-    if (user && user.businessId !== businessId) {
-      console.log('[MainScreen] ⚠️ BusinessId mismatch - user:', user.businessId, 'context:', businessId);
-      // Clear sessions on mismatch
-      setOpenSessions([]);
-      return;
-    }
-
-    fetchOpenSessions();
-  }, [businessId, user, isSwitching]);
+  // Sessions are now managed entirely through React Query
 
   // Handle environment toggle
   const handleEnvironmentChange = async (newEnv: 'gym' | 'developer') => {
@@ -393,9 +390,8 @@ export function MainScreen() {
       console.log('[MainScreen] 🔄 Re-logging into same environment:', newEnv);
       setIsSwitching(true);
       
-      // Clear sessions
-      console.log('[MainScreen] 🧹 Clearing sessions for re-login');
-      setOpenSessions([]);
+      // Sessions will be refreshed automatically via React Query
+      console.log('[MainScreen] 🧹 Sessions will refresh after re-login');
       setIsLoadingSessions(true);
       
       try {
@@ -413,9 +409,8 @@ export function MainScreen() {
       console.log('[MainScreen] 🔄 Environment toggle:', currentEnvironment, '->', newEnv);
       setIsSwitching(true);
       
-      // Clear sessions immediately when switching accounts
-      console.log('[MainScreen] 🧹 Clearing sessions for account switch');
-      setOpenSessions([]);
+      // Sessions will be refreshed automatically via React Query
+      console.log('[MainScreen] 🧹 Sessions will refresh after account switch');
       setIsLoadingSessions(true); // Show loading state
       
       try {
@@ -459,6 +454,7 @@ export function MainScreen() {
     
     // Set loading state
     setLoadingSessionId(session.id);
+    setActiveOperation('open');
     
     try {
       // Create a timeout promise
@@ -483,6 +479,18 @@ export function MainScreen() {
         hasSessionData: !!sessionData,
         clientCount: checkedInClients?.length || 0
       });
+      
+      // Update session status to in_progress
+      console.log('[MainScreen] 🔄 Updating session status to in_progress');
+      try {
+        await updateSessionStatusMutation.mutateAsync({
+          sessionId: session.id,
+          status: 'in_progress' as const
+        });
+      } catch (statusError) {
+        console.warn('[MainScreen] ⚠️ Failed to update status, continuing anyway:', statusError);
+        // Continue even if status update fails
+      }
       
       // Navigate with pre-fetched data
       navigation.navigate('SessionLobby', { 
@@ -510,6 +518,7 @@ export function MainScreen() {
       );
     } finally {
       setLoadingSessionId(null);
+      setActiveOperation(null);
     }
   };
 
@@ -578,7 +587,7 @@ export function MainScreen() {
               setShowTemplates(true);
               console.log('[MainScreen] 📋 Templates shown, hasTVPreferredFocus should handle focus');
             }}
-            disabled={isAuthLoading || createSessionMutation.isPending || openSessions.length > 0 || !!selectedSessionId}
+            disabled={isAuthLoading || createSessionMutation.isPending || !!selectedSessionId}
             focusable={!selectedSessionId}
           >
             {({ focused }) => (
@@ -587,7 +596,7 @@ export function MainScreen() {
                 style={{ 
                   paddingHorizontal: 32,
                   paddingVertical: 12,
-                  opacity: (isAuthLoading || createSessionMutation.isPending || openSessions.length > 0) ? 0.5 : 1,
+                  opacity: (isAuthLoading || createSessionMutation.isPending) ? 0.5 : 1,
                   backgroundColor: focused ? 'rgba(255,255,255,0.16)' : TOKENS.color.card,
                   borderColor: focused ? 'rgba(255,255,255,0.45)' : TOKENS.color.borderGlass,
                   borderWidth: focused ? 1 : 1,
@@ -823,80 +832,93 @@ export function MainScreen() {
           </View>
           
           {/* Action Buttons */}
-          <TVFocusGuideView 
-            style={[styles.actionButtonsContainer, { opacity: selectedSessionId ? 1 : 0 }]}
-            trapFocusUp={!!selectedSessionId}
-            trapFocusDown={!!selectedSessionId}
-            trapFocusLeft={!!selectedSessionId}
-            trapFocusRight={!!selectedSessionId}
-          >
-              <Pressable
-                focusable={!!selectedSessionId}
-                hasTVPreferredFocus={!!selectedSessionId}
-                onFocus={() => console.log('[MainScreen] Open button focused')}
-                onPress={async () => {
-                  const session = recentSessions?.find(s => s.id === selectedSessionId);
-                  if (session) {
-                    setSelectedSessionId(null);
-                    await handleSessionClick(session);
-                  }
-                }}
-                style={styles.actionButtonWrapper}
+          {(() => {
+            const selectedSession = recentSessions?.find(s => s.id === selectedSessionId);
+            const isCompleted = selectedSession?.status === 'completed';
+            
+            return (
+              <TVFocusGuideView 
+                style={[styles.actionButtonsContainer, { opacity: selectedSessionId ? 1 : 0 }]}
+                trapFocusUp={!!selectedSessionId}
+                trapFocusDown={!!selectedSessionId}
+                trapFocusLeft={!!selectedSessionId}
+                trapFocusRight={!!selectedSessionId}
               >
-                {({ focused }) => (
-                  <View style={[
-                    styles.actionButton,
-                    focused && styles.actionButtonFocused
-                  ]}>
-                    <Icon name="play-arrow" size={20} color={TOKENS.color.text} />
-                    <Text style={styles.actionButtonText}>Open</Text>
-                  </View>
-                )}
-              </Pressable>
-              
-              <Pressable
-                focusable={!!selectedSessionId}
-                onPress={() => {
-                  if (selectedSessionId) {
-                    Alert.alert(
-                      'Complete Session',
-                      'Are you sure you want to mark this session as complete?',
-                      [
-                        { text: 'Cancel', style: 'cancel' },
-                        { 
-                          text: 'Complete', 
-                          onPress: () => {
-                            // TODO: Implement complete session mutation
-                            console.log('Complete session:', selectedSessionId);
-                            setSelectedSessionId(null);
-                          }
+                {!isCompleted && (
+                  <>
+                    <Pressable
+                      focusable={!!selectedSessionId && !activeOperation}
+                      hasTVPreferredFocus={!!selectedSessionId && !activeOperation}
+                      disabled={!!activeOperation}
+                      onFocus={() => console.log('[MainScreen] Open button focused')}
+                      onPress={async () => {
+                        const session = recentSessions?.find(s => s.id === selectedSessionId);
+                        if (session && !activeOperation) {
+                          setSelectedSessionId(null);
+                          await handleSessionClick(session);
                         }
-                      ]
-                    );
-                  }
-                }}
-                style={styles.actionButtonWrapper}
-              >
-                {({ focused }) => (
-                  <View style={[
-                    styles.actionButton,
-                    focused && styles.actionButtonFocused
-                  ]}>
-                    <Icon name="check-circle" size={20} color={TOKENS.color.text} />
-                    <Text style={styles.actionButtonText}>Complete</Text>
-                  </View>
+                      }}
+                      style={[styles.actionButtonWrapper, { opacity: activeOperation ? 0.5 : 1 }]}
+                    >
+                      {({ focused }) => (
+                        <View style={[
+                          styles.actionButton,
+                          focused && styles.actionButtonFocused
+                        ]}>
+                          <Icon name="play-arrow" size={20} color={TOKENS.color.text} />
+                          <Text style={styles.actionButtonText}>Open</Text>
+                        </View>
+                      )}
+                    </Pressable>
+                    
+                    <Pressable
+                      focusable={!!selectedSessionId && !activeOperation}
+                      disabled={!!activeOperation}
+                      onPress={() => {
+                        if (selectedSessionId && !activeOperation) {
+                          Alert.alert(
+                            'Complete Session',
+                            'Are you sure you want to mark this session as complete?',
+                            [
+                              { text: 'Cancel', style: 'cancel' },
+                              { 
+                                text: 'Complete', 
+                                onPress: () => {
+                                  if (selectedSessionId) {
+                                    completeSessionMutation.mutate({ sessionId: selectedSessionId });
+                                  }
+                                }
+                              }
+                            ]
+                          );
+                        }
+                      }}
+                      style={[styles.actionButtonWrapper, { opacity: activeOperation ? 0.5 : 1 }]}
+                    >
+                      {({ focused }) => (
+                        <View style={[
+                          styles.actionButton,
+                          focused && styles.actionButtonFocused
+                        ]}>
+                          <Icon name="check-circle" size={20} color={TOKENS.color.text} />
+                          <Text style={styles.actionButtonText}>Complete</Text>
+                        </View>
+                      )}
+                    </Pressable>
+                  </>
                 )}
-              </Pressable>
-              
-              <Pressable
-                focusable={!!selectedSessionId}
+                
+                <Pressable
+                  focusable={!!selectedSessionId && !activeOperation}
+                  hasTVPreferredFocus={!!selectedSessionId && isCompleted && !activeOperation}
+                  disabled={!!activeOperation}
                 onPress={() => {
-                  if (selectedSessionId) {
+                  if (selectedSessionId && !activeOperation) {
                     handleCloseSession(selectedSessionId);
                     setSelectedSessionId(null);
                   }
                 }}
-                style={styles.actionButtonWrapper}
+                style={[styles.actionButtonWrapper, { opacity: activeOperation ? 0.5 : 1 }]}
               >
                 {({ focused }) => (
                   <View style={[
@@ -941,7 +963,9 @@ export function MainScreen() {
                   </MattePanel>
                 )}
               </Pressable>
-          </TVFocusGuideView>
+            </TVFocusGuideView>
+            );
+          })()}
         </View>
       </View>
       
@@ -977,6 +1001,40 @@ export function MainScreen() {
           )}
         </Pressable>
       </View>
+
+      {/* Subtle Loading Indicator */}
+      {activeOperation && (
+        <View style={{
+          position: 'absolute',
+          bottom: 120,
+          left: 0,
+          right: 0,
+          alignItems: 'center',
+          pointerEvents: 'none',
+        }}>
+          <View style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            backgroundColor: TOKENS.color.card,
+            borderColor: TOKENS.color.borderGlass,
+            borderWidth: 1,
+            borderRadius: TOKENS.radius.chip,
+            paddingVertical: 8,
+            paddingHorizontal: 16,
+            gap: 8,
+          }}>
+            <ActivityIndicator size="small" color={TOKENS.color.accent} />
+            <Text style={{ 
+              color: TOKENS.color.muted, 
+              fontSize: 14,
+            }}>
+              {activeOperation === 'open' && 'Opening...'}
+              {activeOperation === 'complete' && 'Completing...'}
+              {activeOperation === 'delete' && 'Deleting...'}
+            </Text>
+          </View>
+        </View>
+      )}
     </View>
   );
 }

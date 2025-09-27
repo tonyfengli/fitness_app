@@ -31,23 +31,23 @@ export class CheckInHandler extends BaseMessageHandler {
         },
       );
 
-      // Find open session for user's business
+      // Find in-progress session for user's business
       const now = new Date();
-      const [openSession] = await db
+      const [activeSession] = await db
         .select()
         .from(TrainingSession)
         .where(
           and(
             eq(TrainingSession.businessId, message.businessId),
-            eq(TrainingSession.status, "open"),
+            eq(TrainingSession.status, "in_progress"),
           ),
         )
         .limit(1);
 
-      if (!openSession) {
+      if (!activeSession) {
         return {
           success: false,
-          message: `Hello ${this.formatClientName(message.userName)}! There's no open session at your gym right now. Please check with your trainer.`,
+          message: `Hello ${this.formatClientName(message.userName)}! There's no active session at your gym right now. Please check with your trainer.`,
           metadata: {
             userId: message.userId,
             businessId: message.businessId,
@@ -57,7 +57,7 @@ export class CheckInHandler extends BaseMessageHandler {
 
       console.log(
         `[${new Date().toISOString()}] Found open session:`,
-        openSession.id,
+        activeSession.id,
       );
 
       // Check if already checked in
@@ -67,7 +67,7 @@ export class CheckInHandler extends BaseMessageHandler {
         .where(
           and(
             eq(UserTrainingSession.userId, message.userId),
-            eq(UserTrainingSession.trainingSessionId, openSession.id),
+            eq(UserTrainingSession.trainingSessionId, activeSession.id),
           ),
         )
         .limit(1);
@@ -121,7 +121,7 @@ export class CheckInHandler extends BaseMessageHandler {
           .insert(UserTrainingSession)
           .values({
             userId: message.userId,
-            trainingSessionId: openSession.id,
+            trainingSessionId: activeSession.id,
             status: "checked_in",
             checkedInAt: now,
           })
@@ -160,15 +160,15 @@ export class CheckInHandler extends BaseMessageHandler {
       // Auto-create preferences for standard templates
       const autoPrefsCreated = await createDefaultPreferencesIfNeeded({
         userId: message.userId,
-        sessionId: openSession.id,
-        businessId: message.businessId || openSession.businessId,
+        sessionId: activeSession.id,
+        businessId: message.businessId || activeSession.businessId,
       });
 
       console.log(
         `[${new Date().toISOString()}] Auto preference creation result:`,
         {
           userId: message.userId,
-          sessionId: openSession.id,
+          sessionId: activeSession.id,
           autoPrefsCreated,
         },
       );
@@ -176,13 +176,13 @@ export class CheckInHandler extends BaseMessageHandler {
       // Build check-in response based on template type
       let responseMessage: string;
       
-      if (openSession.templateType === "circuit") {
+      if (activeSession.templateType === "circuit") {
         // Generate circuit config link for circuit sessions
         const baseUrl = process.env.SMS_BASE_URL || process.env.NEXTAUTH_URL || "http://192.168.68.133:3000";
-        const circuitConfigLink = `${baseUrl}/sessions/${openSession.id}/circuit-config`;
+        const circuitConfigLink = `${baseUrl}/sessions/${activeSession.id}/circuit-config`;
         
         console.log("[CIRCUIT CHECK-IN] Generating circuit response", {
-          sessionId: openSession.id,
+          sessionId: activeSession.id,
           baseUrl,
           circuitConfigLink,
           userName: message.userName
@@ -199,7 +199,7 @@ export class CheckInHandler extends BaseMessageHandler {
         metadata: {
           userId: message.userId,
           businessId: message.businessId,
-          sessionId: openSession.id,
+          sessionId: activeSession.id,
           checkInId,
           checkInSuccess: true,
         },

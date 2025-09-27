@@ -386,22 +386,6 @@ export const trainingSessionRouter = {
         });
       }
 
-      // Check if there's already an open session for this business
-      const existingOpenSession = await ctx.db.query.TrainingSession.findFirst({
-        where: and(
-          eq(TrainingSession.businessId, user.businessId),
-          eq(TrainingSession.status, "open"),
-        ),
-      });
-
-      if (existingOpenSession) {
-        throw new TRPCError({
-          code: "CONFLICT",
-          message:
-            "There is already an open session for this business. Please close it before creating a new one.",
-        });
-      }
-
       // Add default circuit config if creating a circuit session
       const sessionData = {
         ...input,
@@ -459,7 +443,17 @@ export const trainingSessionRouter = {
         .select()
         .from(TrainingSession)
         .where(and(...conditions))
-        .orderBy(desc(TrainingSession.scheduledAt))
+        .orderBy(
+          // Order by status priority: in_progress (1), open (2), completed (3), others (4)
+          sql`CASE 
+            WHEN ${TrainingSession.status} = 'in_progress' THEN 1
+            WHEN ${TrainingSession.status} = 'open' THEN 2
+            WHEN ${TrainingSession.status} = 'completed' THEN 3
+            ELSE 4 
+          END`,
+          // Then by scheduledAt descending (most recent first)
+          desc(TrainingSession.scheduledAt)
+        )
         .limit(input.limit)
         .offset(input.offset);
 
@@ -4139,6 +4133,83 @@ Set your goals and preferences for today's session.`;
         success: true,
         workoutIds,
         message: "Workouts created successfully",
+      };
+    }),
+
+  /**
+   * Update session status (for navigation state management)
+   */
+  updateSessionStatus: protectedProcedure
+    .input(
+      z.object({
+        sessionId: z.string().uuid(),
+        status: z.enum(["open", "in_progress"]),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const user = ctx.session?.user as SessionUser;
+
+      // Get the session to verify ownership and current status
+      const [session] = await ctx.db
+        .select()
+        .from(TrainingSession)
+        .where(eq(TrainingSession.id, input.sessionId))
+        .limit(1);
+
+      if (!session) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Session not found",
+        });
+      }
+
+      // Verify session belongs to user's business
+      if (session.businessId !== user.businessId) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "You can only update sessions from your own business",
+        });
+      }
+
+      // If trying to set to in_progress, check if there's already one
+      if (input.status === "in_progress") {
+        const [existingInProgress] = await ctx.db
+          .select()
+          .from(TrainingSession)
+          .where(
+            and(
+              eq(TrainingSession.businessId, user.businessId),
+              eq(TrainingSession.status, "in_progress"),
+              // Exclude current session
+              sql`${TrainingSession.id} != ${input.sessionId}`,
+            ),
+          )
+          .limit(1);
+
+        if (existingInProgress) {
+          throw new TRPCError({
+            code: "CONFLICT",
+            message:
+              "There is already a session in progress. Please complete or close it before opening another.",
+          });
+        }
+      }
+
+      // Update the session status
+      await ctx.db
+        .update(TrainingSession)
+        .set({
+          status: input.status,
+          updatedAt: new Date(),
+        })
+        .where(eq(TrainingSession.id, input.sessionId));
+
+      console.log(`[updateSessionStatus] Session ${input.sessionId} status updated to: ${input.status}`);
+
+      return {
+        success: true,
+        sessionId: input.sessionId,
+        newStatus: input.status,
       };
     }),
 } satisfies TRPCRouterRecord;

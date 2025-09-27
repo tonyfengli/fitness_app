@@ -672,31 +672,39 @@ function CircuitWorkoutOverviewContent() {
                         const roundType = round.roundType || 'circuit_round';
                         switch (roundType) {
                           case 'amrap_round':
+                            const amrapRoundTemplate = circuitConfig?.config?.roundTemplates?.find(rt => rt.roundNumber === parseInt(round.roundName.match(/\d+/)?.[0] || '1'));
+                            const amrapDuration = amrapRoundTemplate?.template?.totalDuration ? Math.floor(amrapRoundTemplate.template.totalDuration / 60) : 5;
                             return (
                               <>
                                 <svg className="w-4 h-4 text-violet-500 dark:text-violet-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                                 </svg>
-                                <span>AMRAP • {circuitConfig?.config?.amrapDuration || 5} min rounds / {circuitConfig?.config?.restBetweenRounds || 60}s rest</span>
+                                <span>AMRAP • {amrapDuration} min rounds / {circuitConfig?.config?.restBetweenRounds || 60}s rest</span>
                               </>
                             );
                           case 'stations_round':
+                            const stationsRoundTemplate = circuitConfig?.config?.roundTemplates?.find(rt => rt.roundNumber === parseInt(round.roundName.match(/\d+/)?.[0] || '1'));
+                            const stationsWorkDuration = stationsRoundTemplate?.template?.workDuration || circuitConfig?.config?.workDuration || 60;
+                            const stationsRestDuration = stationsRoundTemplate?.template?.restDuration || circuitConfig?.config?.restDuration || 15;
                             return (
                               <>
                                 <svg className="w-4 h-4 text-emerald-500 dark:text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                                   <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                                 </svg>
-                                <span>Stations • {circuitConfig?.config?.stationDuration || 60}s work / {circuitConfig?.config?.transitionTime || 15}s transition</span>
+                                <span>Stations • {stationsWorkDuration}s work / {stationsRestDuration}s transition</span>
                               </>
                             );
                           case 'circuit_round':
                           default:
+                            const circuitRoundTemplate = circuitConfig?.config?.roundTemplates?.find(rt => rt.roundNumber === parseInt(round.roundName.match(/\d+/)?.[0] || '1'));
+                            const circuitWorkDuration = circuitRoundTemplate?.template?.workDuration || circuitConfig?.config?.workDuration || 45;
+                            const circuitRestDuration = circuitRoundTemplate?.template?.restDuration || circuitConfig?.config?.restDuration || 15;
                             return (
                               <>
                                 <svg className="w-4 h-4 text-sky-500 dark:text-sky-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                                   <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                                 </svg>
-                                <span>Circuit • {circuitConfig?.config?.workDuration || 45}s work / {circuitConfig?.config?.restDuration || 15}s rest</span>
+                                <span>Circuit • {circuitWorkDuration}s work / {circuitRestDuration}s rest</span>
                               </>
                             );
                         }

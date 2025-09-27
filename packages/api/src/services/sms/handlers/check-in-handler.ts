@@ -365,30 +365,30 @@ export class CheckInHandler {
         name: userRecord.name,
       });
 
-      // Find open session for user's business
+      // Find in-progress session for user's business
       const now = new Date();
-      const [openSession] = await db
+      const [activeSession] = await db
         .select()
         .from(TrainingSession)
         .where(
           and(
             eq(TrainingSession.businessId, userRecord.businessId),
-            eq(TrainingSession.status, "open"),
+            eq(TrainingSession.status, "in_progress"),
           ),
         )
         .limit(1);
 
-      if (!openSession) {
-        logger.warn("No open session found", {
+      if (!activeSession) {
+        logger.warn("No in-progress session found", {
           businessId: userRecord.businessId,
         });
         return {
           success: false,
-          message: `Hello ${userRecord.name}! There's no open session at your gym right now. Please check with your trainer.`,
+          message: `Hello ${userRecord.name}! There's no active session at your gym right now. Please check with your trainer.`,
         };
       }
 
-      logger.info("Open session found", { sessionId: openSession.id });
+      logger.info("In-progress session found", { sessionId: activeSession.id });
 
       // Check if already checked in
       const [existingCheckIn] = await db
@@ -397,7 +397,7 @@ export class CheckInHandler {
         .where(
           and(
             eq(UserTrainingSession.userId, userRecord.id),
-            eq(UserTrainingSession.trainingSessionId, openSession.id),
+            eq(UserTrainingSession.trainingSessionId, activeSession.id),
           ),
         )
         .limit(1);
@@ -405,14 +405,14 @@ export class CheckInHandler {
       if (existingCheckIn && existingCheckIn.status === "checked_in") {
         logger.info("User already checked in", {
           userId: userRecord.id,
-          sessionId: openSession.id,
+          sessionId: activeSession.id,
         });
         return {
           success: true,
           message: `Hello ${userRecord.name}! You're already checked in for this session!`,
           userId: userRecord.id,
           businessId: userRecord.businessId,
-          sessionId: openSession.id,
+          sessionId: activeSession.id,
           checkInId: existingCheckIn.id,
           phoneNumber: userRecord.phone,
           shouldStartPreferences:
@@ -433,7 +433,7 @@ export class CheckInHandler {
 
         logger.info("Updated check-in status", {
           userId: userRecord.id,
-          sessionId: openSession.id,
+          sessionId: activeSession.id,
           checkInId: existingCheckIn.id,
         });
 
@@ -442,7 +442,7 @@ export class CheckInHandler {
           message: `Hello ${userRecord.name}! You're checked in for the session. Welcome!`,
           userId: userRecord.id,
           businessId: userRecord.businessId,
-          sessionId: openSession.id,
+          sessionId: activeSession.id,
           checkInId: existingCheckIn.id,
           phoneNumber: userRecord.phone,
           shouldStartPreferences: true,
@@ -453,7 +453,7 @@ export class CheckInHandler {
           .insert(UserTrainingSession)
           .values({
             userId: userRecord.id,
-            trainingSessionId: openSession.id,
+            trainingSessionId: activeSession.id,
             status: "checked_in",
             checkedInAt: now,
           })
@@ -465,7 +465,7 @@ export class CheckInHandler {
 
         logger.info("Created new check-in", {
           userId: userRecord.id,
-          sessionId: openSession.id,
+          sessionId: activeSession.id,
           checkInId: newCheckIn.id,
         });
 
@@ -474,7 +474,7 @@ export class CheckInHandler {
           message: `Hello ${userRecord.name}! You're checked in for the session. Welcome!`,
           userId: userRecord.id,
           businessId: userRecord.businessId,
-          sessionId: openSession.id,
+          sessionId: activeSession.id,
           checkInId: newCheckIn.id,
           phoneNumber: userRecord.phone,
           shouldStartPreferences: true,

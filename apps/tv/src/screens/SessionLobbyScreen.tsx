@@ -4,7 +4,7 @@ import Icon from 'react-native-vector-icons/MaterialIcons';
 import { useNavigation } from '../App';
 import { useBusiness } from '../providers/BusinessProvider';
 import { supabase } from '../lib/supabase';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../providers/TRPCProvider';
 import { useRealtimeCheckIns } from '../hooks/useRealtimeCheckIns';
 
@@ -103,6 +103,7 @@ function formatTime12Hour(date: Date): string {
 
 export function SessionLobbyScreen() {
   const navigation = useNavigation();
+  const queryClient = useQueryClient();
   const { businessId, isLoading: isBusinessLoading } = useBusiness();
   const sessionId = navigation.getParam('sessionId');
   const prefetchedData = navigation.getParam('prefetchedData');
@@ -330,8 +331,37 @@ export function SessionLobbyScreen() {
     sendStartMessagesMutation.mutate({ sessionId });
   };
 
-  const handleBack = () => {
+  // Update session status mutation
+  const updateSessionStatusMutation = useMutation({
+    ...api.trainingSession.updateSessionStatus.mutationOptions(),
+    onSuccess: (data) => {
+      console.log('[SessionLobby] ✅ Session status updated:', data.status);
+      // Invalidate queries to ensure MainScreen shows updated status
+      queryClient.invalidateQueries({ 
+        queryKey: api.trainingSession.list.queryOptions({ limit: 3, offset: 0 }).queryKey 
+      });
+    },
+    onError: (error: any) => {
+      console.error('[SessionLobby] ❌ Failed to update session status:', error);
+    },
+  });
+
+  const handleBack = async () => {
     console.log('[SessionLobby] Navigating back to MainScreen');
+    
+    // Update session status back to open if it's not completed
+    if (currentSession && currentSession.status !== 'completed' && currentSession.status !== 'cancelled') {
+      console.log('[SessionLobby] 🔄 Updating session status back to open');
+      try {
+        await updateSessionStatusMutation.mutateAsync({
+          sessionId: sessionId || '',
+          status: 'open' as const
+        });
+      } catch (error) {
+        console.warn('[SessionLobby] ⚠️ Failed to update status on back, continuing anyway:', error);
+      }
+    }
+    
     navigation.navigate('Main', {});
   };
 
