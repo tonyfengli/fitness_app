@@ -82,6 +82,10 @@ interface CircuitExercise {
 interface RoundData {
   roundName: string;
   exercises: CircuitExercise[];
+  roundType?: 'circuit_round' | 'stations_round' | 'amrap_round';
+  workDuration?: number;
+  restDuration?: number;
+  totalDuration?: number; // For AMRAP
 }
 
 // Helper function to format time in 12-hour format with AM/PM
@@ -181,16 +185,46 @@ function RoundContent({ round, isCompact }: {
     );
   };
   
+  // Format round type info - shortened for inline display
+  const getRoundTypeInfo = () => {
+    if (!round.roundType) return '';
+    
+    switch (round.roundType) {
+      case 'circuit_round':
+        return ` • ${round.workDuration || 45}/${round.restDuration || 15}s`;
+      case 'stations_round':
+        return ` • Stations ${round.workDuration || 60}/${round.restDuration || 15}s`;
+      case 'amrap_round':
+        const minutes = round.totalDuration ? Math.floor(round.totalDuration / 60) : 5;
+        return ` • AMRAP ${minutes}min`;
+      default:
+        return '';
+    }
+  };
+  
   return (
     <View style={{ flex: 1 }}>
-      <Text style={{ 
-        fontSize: getTitleSize(), 
-        fontWeight: '700', 
-        color: TOKENS.color.text,
-        marginBottom: isCompact ? 16 : 24
+      <View style={{ 
+        flexDirection: 'row', 
+        alignItems: 'baseline',
+        marginBottom: isCompact ? 16 : 24,
+        gap: 8
       }}>
-        {round.roundName}
-      </Text>
+        <Text style={{ 
+          fontSize: getTitleSize(), 
+          fontWeight: '700', 
+          color: TOKENS.color.text,
+        }}>
+          {round.roundName}
+        </Text>
+        <Text style={{ 
+          fontSize: isCompact ? 16 : 20, 
+          color: TOKENS.color.muted,
+          fontWeight: '400'
+        }}>
+          {getRoundTypeInfo()}
+        </Text>
+      </View>
       
       <View style={{ flex: 1, justifyContent: 'space-between' }}>
         {renderExercises()}
@@ -319,10 +353,35 @@ export function CircuitWorkoutOverviewScreen() {
       
       // Sort exercises within each round and create final structure
       let rounds: RoundData[] = Array.from(roundsMap.entries())
-        .map(([roundName, exercises]) => ({
-          roundName,
-          exercises: exercises.sort((a, b) => a.orderIndex - b.orderIndex)
-        }))
+        .map(([roundName, exercises]) => {
+          // Extract round number
+          const roundNum = parseInt(roundName.match(/\d+/)?.[0] || '1');
+          
+          // Find the round template for this round
+          const roundTemplate = circuitConfig?.config?.roundTemplates?.find(
+            rt => rt.roundNumber === roundNum
+          );
+          
+          // Extract timing information based on round type
+          let roundData: RoundData = {
+            roundName,
+            exercises: exercises.sort((a, b) => a.orderIndex - b.orderIndex),
+            roundType: roundTemplate?.template?.type as any
+          };
+          
+          // Add timing info based on round type
+          if (roundTemplate?.template) {
+            const template = roundTemplate.template as any;
+            if (template.type === 'circuit_round' || template.type === 'stations_round') {
+              roundData.workDuration = template.workDuration || circuitConfig?.config?.workDuration;
+              roundData.restDuration = template.restDuration || circuitConfig?.config?.restDuration;
+            } else if (template.type === 'amrap_round') {
+              roundData.totalDuration = template.totalDuration;
+            }
+          }
+          
+          return roundData;
+        })
         .sort((a, b) => {
           // Extract round numbers for sorting
           const aNum = parseInt(a.roundName.match(/\d+/)?.[0] || '0');
