@@ -27,7 +27,10 @@ const AVATAR_API_URL = "https://api.dicebear.com/7.x/avataaars/svg";
 interface SelectedExercise {
   exerciseId: string;
   exerciseName: string;
-  reasoning: string;
+  customExercise?: {
+    customName?: string;
+    originalExerciseId?: string;
+  };
   isShared: boolean;
 }
 
@@ -409,7 +412,7 @@ function ClientWorkoutOverviewContent() {
         name: exercise.exerciseName || exercise.name,
         primaryMuscle: exercise.primaryMuscle, // Will be undefined initially
         source: "llm_phase1",
-        reasoning: "Selected by AI",
+        customExercise: undefined,
         isShared: exercise.isShared || false,
         isPreAssigned: false,
         orderIndex: exercise.orderIndex || index,
@@ -423,10 +426,7 @@ function ClientWorkoutOverviewContent() {
         name: selection.exerciseName,
         primaryMuscle: undefined, // Will be populated later
         source: selection.selectionSource,
-        reasoning:
-          selection.selectionSource === "manual_swap"
-            ? "Manually selected by client"
-            : "Selected by AI",
+        customExercise: selection.custom_exercise,
         isShared: selection.isShared || false,
         isPreAssigned: selection.selectionSource === "pre_assigned",
         orderIndex: index,
@@ -466,7 +466,7 @@ function ClientWorkoutOverviewContent() {
           id: pa.exercise.id,
           name: pa.exercise.name,
           source: pa.source,
-          reasoning: `Pre-assigned from ${pa.source.toLowerCase()}`,
+          customExercise: undefined,
           isPreAssigned: true,
           orderIndex: index,
         });
@@ -521,7 +521,7 @@ function ClientWorkoutOverviewContent() {
         const exercise = {
           id: ex.exerciseId || ex.id,
           name: ex.exerciseName || ex.name,
-          reasoning: ex.reasoning || "",
+          customExercise: ex.custom_exercise,
           isShared: ex.isShared || false,
           isPreAssigned: false,
           orderIndex: exercises.length + index,

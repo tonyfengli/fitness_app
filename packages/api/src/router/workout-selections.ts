@@ -85,13 +85,14 @@ export const workoutSelectionsRouter = {
         sessionId: input.sessionId,
         clientId: input.clientId,
         exerciseId: row.we.exerciseId,
-        exerciseName: row.exercise.name,
+        exerciseName: (row.we.custom_exercise as any)?.customName || row.exercise.name,
         equipment: row.exercise.equipment,
         isShared: row.we.isShared || false,
         sharedWithClients: row.we.sharedWithClients,
         selectionSource: row.we.selectionSource,
         groupName: row.we.groupName,
         orderIndex: row.we.orderIndex,
+        custom_exercise: row.we.custom_exercise,
       }));
     }),
 
@@ -182,13 +183,14 @@ export const workoutSelectionsRouter = {
         sessionId: input.sessionId,
         clientId: row.userId,
         exerciseId: row.we.exerciseId,
-        exerciseName: row.exercise.name,
+        exerciseName: (row.we.custom_exercise as any)?.customName || row.exercise.name,
         equipment: row.exercise.equipment,
         isShared: row.we.isShared || false,
         sharedWithClients: row.we.sharedWithClients,
         selectionSource: row.we.selectionSource,
         groupName: row.we.groupName,
         orderIndex: row.we.orderIndex,
+        custom_exercise: row.we.custom_exercise,
       }));
     }),
 
@@ -409,7 +411,8 @@ export const workoutSelectionsRouter = {
         roundName: z.string(), // e.g., "Round 1"
         exerciseIndex: z.number(), // orderIndex of the exercise
         originalExerciseId: z.string(),
-        newExerciseId: z.string(),
+        newExerciseId: z.string().nullable(), // null for custom exercises
+        customName: z.string().optional(), // custom exercise name
         reason: z.string().optional(),
         swappedBy: z.string(), // clientId of who initiated the swap
       }),
@@ -417,16 +420,20 @@ export const workoutSelectionsRouter = {
     .mutation(async ({ ctx, input }) => {
       console.log("[swapCircuitExercise] Starting circuit swap with input:", input);
 
-      // Get the new exercise details
-      const newExercise = await ctx.db.query.exercises.findFirst({
-        where: eq(exercises.id, input.newExerciseId),
-      });
-
-      if (!newExercise) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "New exercise not found",
+      // Get the new exercise details if not custom
+      let newExerciseName = input.customName;
+      if (input.newExerciseId) {
+        const newExercise = await ctx.db.query.exercises.findFirst({
+          where: eq(exercises.id, input.newExerciseId),
         });
+
+        if (!newExercise) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "New exercise not found",
+          });
+        }
+        newExerciseName = newExercise.name;
       }
 
       return await ctx.db.transaction(async (tx) => {
@@ -457,14 +464,27 @@ export const workoutSelectionsRouter = {
         const workoutIds = workouts.map((w) => w.id);
 
         // 2. Update all matching workout exercises across all clients
+        const updateData: any = {
+          selectionSource: "manual_swap",
+          // Keep isShared as true for circuit exercises
+          isShared: true,
+        };
+        
+        if (input.newExerciseId) {
+          // Regular exercise swap
+          updateData.exerciseId = input.newExerciseId;
+          updateData.custom_exercise = null; // Clear any custom data
+        } else {
+          // Custom exercise - keep original exerciseId, set custom data
+          updateData.custom_exercise = {
+            customName: input.customName,
+            originalExerciseId: input.originalExerciseId,
+          };
+        }
+        
         const updateResult = await tx
           .update(WorkoutExercise)
-          .set({
-            exerciseId: input.newExerciseId,
-            selectionSource: "manual_swap",
-            // Keep isShared as true for circuit exercises
-            isShared: true,
-          })
+          .set(updateData)
           .where(
             and(
               sql`${WorkoutExercise.workoutId} IN (${sql.join(
@@ -486,8 +506,8 @@ export const workoutSelectionsRouter = {
             trainingSessionId: input.sessionId,
             clientId: workout.userId,
             originalExerciseId: input.originalExerciseId,
-            newExerciseId: input.newExerciseId,
-            swapReason: input.reason || `Circuit swap by participant`,
+            newExerciseId: input.newExerciseId || input.originalExerciseId, // Use original ID for custom exercises
+            swapReason: input.reason || (input.customName ? `Circuit swap to custom: ${input.customName}` : `Circuit swap by participant`),
             swappedBy: input.swappedBy,
           });
         }
@@ -497,7 +517,7 @@ export const workoutSelectionsRouter = {
         return { 
           success: true, 
           affectedClients: workouts.length,
-          newExerciseName: newExercise.name 
+          newExerciseName: newExerciseName || 'Custom Exercise' 
         };
       });
     }),

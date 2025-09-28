@@ -1242,21 +1242,22 @@ function CircuitWorkoutOverviewContent() {
                     <div className="ml-16 mt-3">
                       <button
                         onClick={() => {
-                          if (inlineSelectedId && editingExercise && editingRound) {
+                          if ((inlineSelectedId || inlineSearchQuery.trim()) && editingExercise && editingRound) {
                             swapExerciseMutation.mutate({
                               sessionId: sessionId!,
                               roundName: editingRound.roundName,
                               exerciseIndex: editingExercise.orderIndex,
                               originalExerciseId: editingExercise.exerciseId,
-                              newExerciseId: inlineSelectedId,
+                              newExerciseId: inlineSelectedId || null, // null for custom exercises
+                              customName: inlineSelectedId ? undefined : inlineSearchQuery.trim(), // custom name if no selection
                               reason: "Circuit exercise swap",
                               swappedBy: dummyUserId || "unknown",
                             });
                           }
                         }}
-                        disabled={!inlineSelectedId || swapExerciseMutation.isPending}
+                        disabled={(!inlineSelectedId && !inlineSearchQuery.trim()) || swapExerciseMutation.isPending}
                         className={`h-12 px-10 text-base font-semibold rounded-lg transition-all focus:outline-none focus:ring-0 ${
-                          inlineSelectedId && !swapExerciseMutation.isPending
+                          (inlineSelectedId || inlineSearchQuery.trim()) && !swapExerciseMutation.isPending
                             ? 'bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 hover:bg-gray-800 dark:hover:bg-gray-200 shadow-md' 
                             : 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
                         }`}

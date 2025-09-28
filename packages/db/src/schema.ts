@@ -350,7 +350,12 @@ export const WorkoutExercise = pgTable("workout_exercise", (t) => ({
   selectionSource: t.varchar("selection_source", { length: 50 }), // 'llm_phase1', 'manual_swap', 'pre_assigned'
   phase: t.varchar("phase", { length: 50 }), // 'main_strength', 'accessory', 'core', 'power_conditioning'
   template: t.jsonb("template"), // { type: 'reps', sets: 3, reps: '8-10' } or { type: 'time', work: '30s', rest: '15s', rounds: 3 }
-  reasoning: t.text("reasoning"), // LLM reasoning for exercise selection
+  custom_exercise: t
+    .jsonb("custom_exercise")
+    .$type<{
+      customName?: string;
+      originalExerciseId?: string;
+    }>(), // Custom exercise data for overrides
   createdAt: t.timestamp().defaultNow().notNull(),
 }));
 
@@ -378,7 +383,10 @@ export const CreateWorkoutExerciseSchema = createInsertSchema(WorkoutExercise, {
       rounds: z.number().optional(),
     })
     .optional(),
-  reasoning: z.string().optional(),
+  custom_exercise: z.object({
+    customName: z.string().optional(),
+    originalExerciseId: z.string().optional(),
+  }).optional(),
 }).omit({
   id: true,
   createdAt: true,
