@@ -5,6 +5,7 @@ import { TOKENS, MattePanel, CircuitExercise, RoundData } from './shared';
 interface StationsRoundPreviewProps {
   currentRound: RoundData;
   repeatTimes?: number;
+  workDuration?: number;
 }
 
 // Team configuration - supports up to 6 teams
@@ -17,29 +18,19 @@ const TEAMS = [
   { name: 'Teal', color: '#14b8a6' },
 ];
 
-export function StationsRoundPreview({ currentRound, repeatTimes = 1 }: StationsRoundPreviewProps) {
+export function StationsRoundPreview({ currentRound, repeatTimes = 1, workDuration = 45 }: StationsRoundPreviewProps) {
+  // Use actual number of exercises as stations
   const exerciseCount = currentRound.exercises.length;
   
   // Use only as many teams as there are stations
   const activeTeams = TEAMS.slice(0, exerciseCount);
-  
-  // Calculate grid columns based on number of stations
-  const getGridColumns = () => {
-    if (exerciseCount <= 3) return exerciseCount;
-    if (exerciseCount <= 6) return 3;
-    if (exerciseCount <= 8) return 4;
-    return 5;
-  };
-  
-  const columns = getGridColumns();
-  const cardWidth = columns <= 3 ? 380 : columns === 4 ? 300 : 260;
   
   return (
     <View style={{ flex: 1, width: '100%' }}>
       {/* Header Section */}
       <View style={{ 
         paddingTop: 0,
-        paddingBottom: 30,
+        paddingBottom: 20,
         alignItems: 'center',
       }}>
         <Text style={{
@@ -54,86 +45,93 @@ export function StationsRoundPreview({ currentRound, repeatTimes = 1 }: Stations
         </Text>
       </View>
 
-      {/* Stations Grid */}
+      {/* Horizontal Columns Layout */}
       <View style={{ 
         flex: 1, 
-        paddingHorizontal: 28,
+        paddingHorizontal: 48,
+        flexDirection: 'row',
+        gap: 2, // Minimal gap for connected feel
       }}>
-        <View style={{ 
-          flexDirection: 'row',
-          flexWrap: 'wrap',
-          justifyContent: 'center',
-          gap: 16,
-        }}>
-          {currentRound.exercises.map((exercise, idx) => {
-            const stationNumber = idx + 1;
-            const team = activeTeams[idx % activeTeams.length];
-            
-            return (
-              <MattePanel 
-                key={exercise.id} 
-                style={{ 
-                  width: cardWidth,
-                  padding: 16,
-                  gap: 10,
-                }}
-              >
-                {/* Station Title */}
-                <Text style={{ 
-                  fontSize: 18, 
-                  fontWeight: '900',
-                  color: TOKENS.color.text,
-                  marginBottom: 4,
-                }}>
-                  Station {stationNumber} — {exercise.exerciseName}
-                </Text>
-                
-                {/* Equipment */}
-                <Text style={{ 
-                  fontSize: 12, 
-                  fontWeight: '700',
-                  color: TOKENS.color.muted,
-                  textTransform: 'uppercase',
-                  letterSpacing: 1.2,
-                }}>
-                  {Array.isArray(exercise.equipment) && exercise.equipment.length > 0
-                    ? exercise.equipment.join(', ') 
-                    : ''}
-                </Text>
-                
+        {currentRound.exercises.map((exercise, idx) => {
+          const stationNumber = idx + 1;
+          const team = activeTeams[idx % activeTeams.length];
+          
+          return (
+            <View 
+              key={exercise.id} 
+              style={{ 
+                flex: 1,
+                backgroundColor: TOKENS.color.cardGlass,
+                borderRadius: 0,
+                borderTopLeftRadius: stationNumber === 1 ? 16 : 0,
+                borderBottomLeftRadius: stationNumber === 1 ? 16 : 0,
+                borderTopRightRadius: stationNumber === exerciseCount ? 16 : 0,
+                borderBottomRightRadius: stationNumber === exerciseCount ? 16 : 0,
+                overflow: 'hidden',
+              }}
+            >
+              {/* Team Color Bar */}
+              <View style={{
+                height: 6,
+                backgroundColor: team.color,
+              }} />
+              
+              {/* Content */}
+              <View style={{ 
+                flex: 1,
+                padding: 20,
+                paddingTop: 24,
+              }}>
                 {/* Team Badge */}
-                <View style={{ 
-                  alignSelf: 'flex-start',
-                  paddingHorizontal: 12,
-                  paddingVertical: 7,
-                  borderRadius: 10,
-                  backgroundColor: `${team.color}15`,
-                  borderWidth: 1,
-                  borderColor: team.color,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 8,
-                }}>
+                <View style={{ marginBottom: 24 }}>
                   <View style={{
-                    width: 12,
-                    height: 12,
-                    borderRadius: 999,
-                    backgroundColor: team.color,
-                  }} />
-                  <Text style={{ 
-                    color: team.color, 
-                    fontWeight: '800',
-                    fontSize: 14,
-                    letterSpacing: 0.3,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 8,
                   }}>
-                    {team.name} Team
-                  </Text>
+                    <View style={{
+                      width: 12,
+                      height: 12,
+                      borderRadius: 6,
+                      backgroundColor: team.color,
+                    }} />
+                    <Text style={{ 
+                      color: team.color, 
+                      fontWeight: '800',
+                      fontSize: 14,
+                      letterSpacing: 0.3,
+                      textTransform: 'uppercase',
+                    }}>
+                      {team.name}
+                    </Text>
+                  </View>
                 </View>
                 
-              </MattePanel>
-            );
-          })}
-        </View>
+                {/* Exercise Display */}
+                <View style={{ flex: 1 }}>
+                  <View>
+                    <Text style={{ 
+                      fontSize: exerciseCount === 1 ? 28 : 18, 
+                      fontWeight: exerciseCount === 1 ? '800' : '700',
+                      color: TOKENS.color.text,
+                      marginBottom: exerciseCount === 1 ? 12 : 6,
+                    }}>
+                      {exercise.exerciseName}
+                    </Text>
+                    <Text style={{ 
+                      fontSize: exerciseCount === 1 ? 16 : 14, 
+                      fontWeight: '600',
+                      color: team.color,
+                      letterSpacing: 0.5,
+                    }}>
+                      {workDuration} seconds
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            </View>
+          );
+        })}
       </View>
       
       {/* Repeat Indicator - Bottom Right */}

@@ -1579,6 +1579,7 @@ export function CircuitWorkoutLiveScreen() {
             ? <StationsRoundPreview 
                 currentRound={currentRound} 
                 repeatTimes={getRoundTiming(currentRoundIndex).repeatTimes || 1}
+                workDuration={getRoundTiming(currentRoundIndex).workDuration}
               />
             : currentRoundType === 'amrap_round'
             ? <AMRAPRoundPreview currentRound={currentRound} />
