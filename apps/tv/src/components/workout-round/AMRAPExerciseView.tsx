@@ -89,7 +89,7 @@ export function AMRAPExerciseView({
                 }}>
                   {Array.isArray(exercise.equipment) && exercise.equipment.length > 0
                     ? exercise.equipment.join(', ') 
-                    : 'bodyweight'}
+                    : ''}
                 </Text>
               </View>
             </MattePanel>

@@ -340,7 +340,6 @@ export const WorkoutExercise = pgTable("workout_exercise", (t) => ({
     .references(() => Workout.id, { onDelete: "cascade" }),
   exerciseId: t
     .uuid()
-    .notNull()
     .references(() => exercises.id),
   orderIndex: t.integer().notNull(),
   setsCompleted: t.integer().notNull(),
@@ -361,7 +360,7 @@ export const WorkoutExercise = pgTable("workout_exercise", (t) => ({
 
 export const CreateWorkoutExerciseSchema = createInsertSchema(WorkoutExercise, {
   workoutId: z.string().uuid(),
-  exerciseId: z.string().uuid(),
+  exerciseId: z.string().uuid().nullable(),
   orderIndex: z.number().int().min(1),
   setsCompleted: z.number().int().min(1),
   groupName: z.string().optional(),

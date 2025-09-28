@@ -118,7 +118,7 @@ export function CircuitRoundPreview({ currentRound, repeatTimes = 1 }: CircuitRo
                   }}>
                     {Array.isArray(exercise.equipment) && exercise.equipment.length > 0
                       ? exercise.equipment.join(', ') 
-                      : 'bodyweight'}
+                      : ''}
                   </Text>
                 </MattePanel>
               </View>

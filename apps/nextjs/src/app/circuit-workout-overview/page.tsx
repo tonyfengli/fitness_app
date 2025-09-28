@@ -227,7 +227,9 @@ function CircuitWorkoutOverviewContent() {
   // Set up the swap mutation for circuits
   const swapExerciseMutation = useMutation({
     ...trpc.workoutSelections.swapCircuitExercise.mutationOptions(),
-    onSuccess: () => {
+    onSuccess: (data) => {
+      console.log("[swapExerciseMutation] Success! Response:", data);
+      
       // Close modal
       setShowExerciseSelection(false);
       setSelectedExercise(null);
@@ -239,8 +241,30 @@ function CircuitWorkoutOverviewContent() {
       setInlineSelectedId(null);
 
       // Invalidate queries to refresh data
-      queryClient.invalidateQueries({
-        queryKey: [["workoutSelections", "getSelections"]],
+      console.log("[swapExerciseMutation] Invalidating queries...");
+      // Log current queries to debug
+      const queryCache = queryClient.getQueryCache();
+      const queries = queryCache.getAll();
+      console.log("[swapExerciseMutation] Current query keys:", queries.map(q => q.queryKey));
+      
+      // Find the getSelections query
+      const getSelectionsQuery = queries.find(q => 
+        Array.isArray(q.queryKey[0]) && 
+        q.queryKey[0][0] === "workoutSelections" && 
+        q.queryKey[0][1] === "getSelections"
+      );
+      console.log("[swapExerciseMutation] getSelections query key:", getSelectionsQuery?.queryKey);
+      
+      const invalidatePromise = queryClient.invalidateQueries({
+        queryKey: trpc.workoutSelections.getSelections.queryOptions({ 
+          sessionId: sessionId || "" 
+        }).queryKey,
+      });
+      
+      invalidatePromise.then(() => {
+        console.log("[swapExerciseMutation] Query invalidation complete");
+      }).catch((err) => {
+        console.error("[swapExerciseMutation] Query invalidation failed:", err);
       });
     },
     onError: (error) => {
@@ -255,10 +279,16 @@ function CircuitWorkoutOverviewContent() {
     supabase,
     onSwapUpdate: (swap) => {
       console.log("[CircuitWorkoutOverview] Exercise swap detected:", swap);
+      console.log("[CircuitWorkoutOverview] Current dataUpdatedAt:", dataUpdatedAt);
       
       // Force refetch of exercise selections
+      console.log("[CircuitWorkoutOverview] Invalidating queries from real-time update...");
       queryClient.invalidateQueries({
-        queryKey: [["workoutSelections", "getSelections"]],
+        queryKey: trpc.workoutSelections.getSelections.queryOptions({ 
+          sessionId: sessionId || "" 
+        }).queryKey,
+      }).then(() => {
+        console.log("[CircuitWorkoutOverview] Real-time invalidation complete");
       });
     },
     onError: (error) => {
@@ -279,10 +309,15 @@ function CircuitWorkoutOverviewContent() {
   });
 
   // Fetch saved selections (for circuit, we don't filter by clientId)
-  const { data: savedSelections, isLoading: isLoadingSelections } = useQuery({
+  const { data: savedSelections, isLoading: isLoadingSelections, dataUpdatedAt } = useQuery({
     ...trpc.workoutSelections.getSelections.queryOptions({ sessionId: sessionId || "" }),
     enabled: !!sessionId,
     refetchInterval: !hasExercises ? 5000 : false, // Poll when no exercises
+    onSuccess: (data) => {
+      console.log("[getSelections query] Data fetched successfully at", new Date().toISOString());
+      console.log("[getSelections query] Number of selections:", data?.length);
+      console.log("[getSelections query] Sample data:", data?.slice(0, 2));
+    },
   });
 
   // Get any user from the saved selections to use for fetching exercises
@@ -341,9 +376,13 @@ function CircuitWorkoutOverviewContent() {
 
   // Process selections into rounds
   useEffect(() => {
+    console.log("[CircuitWorkoutOverview useEffect] savedSelections changed at:", new Date().toISOString());
+    console.log("[CircuitWorkoutOverview useEffect] savedSelections:", savedSelections?.length, "items");
+    
     if (savedSelections && savedSelections.length > 0) {
       console.log("[CircuitWorkoutOverview] Processing selections:", savedSelections.length);
       console.log("[CircuitWorkoutOverview] Raw selections:", savedSelections);
+      console.log("[CircuitWorkoutOverview] First selection details:", savedSelections[0]);
       
       // Group exercises by round (using groupName)
       const roundsMap = new Map<string, typeof savedSelections>();
@@ -379,6 +418,7 @@ function CircuitWorkoutOverviewContent() {
               exerciseId: ex.exerciseId,
               exerciseName: ex.exerciseName,
               orderIndex: ex.orderIndex,
+              custom_exercise: ex.custom_exercise,
             }))
         }))
         .sort((a, b) => {
@@ -1137,7 +1177,7 @@ function CircuitWorkoutOverviewContent() {
                     sessionId: sessionId!,
                     roundName: selectedRound,
                     exerciseIndex: selectedExerciseIndex,
-                    originalExerciseId: selectedExercise.exerciseId,
+                    originalExerciseId: selectedExercise.exerciseId || (selectedExercise.custom_exercise as any)?.originalExerciseId || null,
                     newExerciseId: selectedReplacement,
                     reason: "Circuit exercise swap",
                     swappedBy: dummyUserId || "unknown",
@@ -1247,7 +1287,7 @@ function CircuitWorkoutOverviewContent() {
                               sessionId: sessionId!,
                               roundName: editingRound.roundName,
                               exerciseIndex: editingExercise.orderIndex,
-                              originalExerciseId: editingExercise.exerciseId,
+                              originalExerciseId: editingExercise.exerciseId || (editingExercise.custom_exercise as any)?.originalExerciseId || null,
                               newExerciseId: inlineSelectedId || null, // null for custom exercises
                               customName: inlineSelectedId ? undefined : inlineSearchQuery.trim(), // custom name if no selection
                               reason: "Circuit exercise swap",
@@ -1657,7 +1697,7 @@ function CircuitWorkoutOverviewContent() {
                           sessionId: sessionId!,
                           roundName: pendingMirrorSwap.originalRound,
                           exerciseIndex: pendingMirrorSwap.selectedExerciseIndex,
-                          originalExerciseId: pendingMirrorSwap.selectedExercise.exerciseId,
+                          originalExerciseId: pendingMirrorSwap.selectedExercise.exerciseId || (pendingMirrorSwap.selectedExercise.custom_exercise as any)?.originalExerciseId || null,
                           newExerciseId: pendingMirrorSwap.selectedReplacement,
                           reason: "Circuit exercise swap",
                           swappedBy: dummyUserId || "unknown",
@@ -1681,7 +1721,7 @@ function CircuitWorkoutOverviewContent() {
                           sessionId: sessionId!,
                           roundName: pendingMirrorSwap.originalRound,
                           exerciseIndex: pendingMirrorSwap.selectedExerciseIndex,
-                          originalExerciseId: pendingMirrorSwap.selectedExercise.exerciseId,
+                          originalExerciseId: pendingMirrorSwap.selectedExercise.exerciseId || (pendingMirrorSwap.selectedExercise.custom_exercise as any)?.originalExerciseId || null,
                           newExerciseId: pendingMirrorSwap.selectedReplacement,
                           reason: "Circuit exercise swap (with mirror)",
                           swappedBy: dummyUserId || "unknown",
@@ -1692,7 +1732,7 @@ function CircuitWorkoutOverviewContent() {
                           sessionId: sessionId!,
                           roundName: pendingMirrorSwap.mirrorRound,
                           exerciseIndex: pendingMirrorSwap.mirrorExercise.orderIndex,
-                          originalExerciseId: pendingMirrorSwap.mirrorExercise.exerciseId,
+                          originalExerciseId: pendingMirrorSwap.mirrorExercise.exerciseId || (pendingMirrorSwap.mirrorExercise.custom_exercise as any)?.originalExerciseId || null,
                           newExerciseId: pendingMirrorSwap.selectedReplacement,
                           reason: "Circuit exercise swap (mirror round)",
                           swappedBy: dummyUserId || "unknown",

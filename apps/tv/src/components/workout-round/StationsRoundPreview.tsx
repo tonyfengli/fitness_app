@@ -98,7 +98,7 @@ export function StationsRoundPreview({ currentRound, repeatTimes = 1 }: Stations
                 }}>
                   {Array.isArray(exercise.equipment) && exercise.equipment.length > 0
                     ? exercise.equipment.join(', ') 
-                    : 'bodyweight'}
+                    : ''}
                 </Text>
                 
                 {/* Team Badge */}

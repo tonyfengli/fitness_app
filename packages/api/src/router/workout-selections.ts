@@ -2,7 +2,7 @@ import type { TRPCRouterRecord } from "@trpc/server";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod/v4";
 
-import { and, asc, eq, or, sql } from "@acme/db";
+import { and, asc, eq, or, sql, isNull } from "@acme/db";
 import { db } from "@acme/db/client";
 import {
   exercises,
@@ -75,7 +75,7 @@ export const workoutSelectionsRouter = {
           exercise: exercises,
         })
         .from(WorkoutExercise)
-        .innerJoin(exercises, eq(WorkoutExercise.exerciseId, exercises.id))
+        .leftJoin(exercises, eq(WorkoutExercise.exerciseId, exercises.id))
         .where(eq(WorkoutExercise.workoutId, firstWorkout.id))
         .orderBy(asc(WorkoutExercise.orderIndex));
 
@@ -85,8 +85,8 @@ export const workoutSelectionsRouter = {
         sessionId: input.sessionId,
         clientId: input.clientId,
         exerciseId: row.we.exerciseId,
-        exerciseName: (row.we.custom_exercise as any)?.customName || row.exercise.name,
-        equipment: row.exercise.equipment,
+        exerciseName: (row.we.custom_exercise as any)?.customName || row.exercise?.name || 'Unknown Exercise',
+        equipment: row.exercise?.equipment || [],
         isShared: row.we.isShared || false,
         sharedWithClients: row.we.sharedWithClients,
         selectionSource: row.we.selectionSource,
@@ -157,18 +157,20 @@ export const workoutSelectionsRouter = {
         return [];
       }
 
+      // For circuit workouts (no specific clientId), just use the first workout
+      // since exercises are shared across all clients
+      const workoutIds = input.clientId 
+        ? workouts.map((w) => w.id)  // Individual mode: get all workouts
+        : [workouts[0]!.id];          // Circuit mode: just one workout to avoid duplicates
+
       // Get workout exercises with exercise details
-      const workoutIds = workouts.map((w) => w.id);
       const workoutExercises = await ctx.db
         .select({
           we: WorkoutExercise,
           exercise: exercises,
-          workoutId: WorkoutExercise.workoutId,
-          userId: Workout.userId,
         })
         .from(WorkoutExercise)
-        .innerJoin(exercises, eq(WorkoutExercise.exerciseId, exercises.id))
-        .innerJoin(Workout, eq(WorkoutExercise.workoutId, Workout.id))
+        .leftJoin(exercises, eq(WorkoutExercise.exerciseId, exercises.id))
         .where(
           sql`${WorkoutExercise.workoutId} IN (${sql.join(
             workoutIds.map((id) => sql`${id}`),
@@ -178,13 +180,16 @@ export const workoutSelectionsRouter = {
         .orderBy(asc(WorkoutExercise.orderIndex));
 
       // Transform to match expected format
+      // For circuit workouts without clientId, we'll use the first workout's userId
+      const defaultClientId = input.clientId || workouts[0]!.userId;
+      
       return workoutExercises.map((row) => ({
         id: row.we.id,
         sessionId: input.sessionId,
-        clientId: row.userId,
+        clientId: defaultClientId,
         exerciseId: row.we.exerciseId,
-        exerciseName: (row.we.custom_exercise as any)?.customName || row.exercise.name,
-        equipment: row.exercise.equipment,
+        exerciseName: (row.we.custom_exercise as any)?.customName || row.exercise?.name || 'Unknown Exercise',
+        equipment: row.exercise?.equipment || [],
         isShared: row.we.isShared || false,
         sharedWithClients: row.we.sharedWithClients,
         selectionSource: row.we.selectionSource,
@@ -310,16 +315,20 @@ export const workoutSelectionsRouter = {
         });
       }
 
-      // Get the new exercise name for the selection
-      const newExercise = await ctx.db.query.exercises.findFirst({
-        where: eq(exercises.id, input.newExerciseId),
-      });
-
-      if (!newExercise) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "New exercise not found",
+      // Get the new exercise name for the selection (if not custom)
+      let newExerciseName: string | undefined;
+      if (input.newExerciseId) {
+        const newExercise = await ctx.db.query.exercises.findFirst({
+          where: eq(exercises.id, input.newExerciseId),
         });
+
+        if (!newExercise) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "New exercise not found",
+          });
+        }
+        newExerciseName = newExercise.name;
       }
 
       // Now perform the swap transaction
@@ -410,7 +419,7 @@ export const workoutSelectionsRouter = {
         sessionId: z.string(),
         roundName: z.string(), // e.g., "Round 1"
         exerciseIndex: z.number(), // orderIndex of the exercise
-        originalExerciseId: z.string(),
+        originalExerciseId: z.string().nullable(), // null for custom exercises being replaced
         newExerciseId: z.string().nullable(), // null for custom exercises
         customName: z.string().optional(), // custom exercise name
         reason: z.string().optional(),
@@ -475,44 +484,81 @@ export const workoutSelectionsRouter = {
           updateData.exerciseId = input.newExerciseId;
           updateData.custom_exercise = null; // Clear any custom data
         } else {
-          // Custom exercise - keep original exerciseId, set custom data
+          // Custom exercise - set exerciseId to NULL, store custom data
+          updateData.exerciseId = null;
           updateData.custom_exercise = {
             customName: input.customName,
             originalExerciseId: input.originalExerciseId,
           };
         }
         
+        // Build WHERE clause - for circuit workouts, match by position (round + index)
+        // Don't match by exerciseId since it might have been changed already
+        const whereConditions = [
+          sql`${WorkoutExercise.workoutId} IN (${sql.join(
+            workoutIds.map((id) => sql`${id}`),
+            sql`, `,
+          )})`,
+          eq(WorkoutExercise.groupName, input.roundName),
+          eq(WorkoutExercise.orderIndex, input.exerciseIndex),
+        ];
+        
+        // Debug: Let's check what exercises actually exist
+        const existingExercises = await tx
+          .select({
+            id: WorkoutExercise.id,
+            exerciseId: WorkoutExercise.exerciseId,
+            groupName: WorkoutExercise.groupName,
+            orderIndex: WorkoutExercise.orderIndex,
+            workoutId: WorkoutExercise.workoutId,
+          })
+          .from(WorkoutExercise)
+          .where(
+            sql`${WorkoutExercise.workoutId} IN (${sql.join(
+              workoutIds.map((id) => sql`${id}`),
+              sql`, `,
+            )})`
+          );
+        
+        console.log("[swapCircuitExercise] Existing exercises in these workouts:");
+        existingExercises.forEach(ex => {
+          console.log(`  - ID: ${ex.id}, exerciseId: ${ex.exerciseId}, round: ${ex.groupName}, index: ${ex.orderIndex}`);
+        });
+        
+        console.log("[swapCircuitExercise] Attempting update with conditions:");
+        console.log("  - Round name:", input.roundName);
+        console.log("  - Exercise index:", input.exerciseIndex);
+        console.log("  - Original exercise ID:", input.originalExerciseId);
+        console.log("  - New exercise ID:", input.newExerciseId);
+        console.log("  - Update data:", updateData);
+        console.log("  - Number of workouts:", workoutIds.length);
+        
         const updateResult = await tx
           .update(WorkoutExercise)
           .set(updateData)
-          .where(
-            and(
-              sql`${WorkoutExercise.workoutId} IN (${sql.join(
-                workoutIds.map((id) => sql`${id}`),
-                sql`, `,
-              )})`,
-              eq(WorkoutExercise.groupName, input.roundName),
-              eq(WorkoutExercise.orderIndex, input.exerciseIndex),
-              eq(WorkoutExercise.exerciseId, input.originalExerciseId),
-            ),
-          );
+          .where(and(...whereConditions))
+          .returning();
 
-        console.log("[swapCircuitExercise] Updated exercises across all workouts");
+        console.log("[swapCircuitExercise] Update result:", updateResult);
+        console.log("[swapCircuitExercise] Number of rows updated:", updateResult.length);
 
-        // 3. Log the swap for each affected client
-        // This ensures real-time updates trigger for everyone
-        for (const workout of workouts) {
-          await tx.insert(workoutExerciseSwaps).values({
-            trainingSessionId: input.sessionId,
-            clientId: workout.userId,
-            originalExerciseId: input.originalExerciseId,
-            newExerciseId: input.newExerciseId || input.originalExerciseId, // Use original ID for custom exercises
-            swapReason: input.reason || (input.customName ? `Circuit swap to custom: ${input.customName}` : `Circuit swap by participant`),
-            swappedBy: input.swappedBy,
-          });
+        // 3. Log the swap for each affected client (only if both IDs are valid)
+        // Skip logging for custom exercises since the swap table requires valid exercise IDs
+        if (input.originalExerciseId && input.newExerciseId) {
+          for (const workout of workouts) {
+            await tx.insert(workoutExerciseSwaps).values({
+              trainingSessionId: input.sessionId,
+              clientId: workout.userId,
+              originalExerciseId: input.originalExerciseId,
+              newExerciseId: input.newExerciseId,
+              swapReason: input.reason || `Circuit swap by participant`,
+              swappedBy: input.swappedBy,
+            });
+          }
+          console.log("[swapCircuitExercise] Logged swaps for all participants:", workouts.length);
+        } else {
+          console.log("[swapCircuitExercise] Skipped swap logging for custom exercise");
         }
-
-        console.log("[swapCircuitExercise] Logged swaps for all participants:", workouts.length);
 
         return { 
           success: true, 
@@ -720,7 +766,7 @@ export const workoutSelectionsRouter = {
           userId: Workout.userId,
         })
         .from(WorkoutExercise)
-        .innerJoin(exercises, eq(WorkoutExercise.exerciseId, exercises.id))
+        .leftJoin(exercises, eq(WorkoutExercise.exerciseId, exercises.id))
         .innerJoin(Workout, eq(WorkoutExercise.workoutId, Workout.id))
         .where(
           sql`${WorkoutExercise.workoutId} IN (${sql.join(

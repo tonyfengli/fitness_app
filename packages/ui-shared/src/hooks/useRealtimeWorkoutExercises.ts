@@ -84,7 +84,8 @@ export function useRealtimeWorkoutExercises({
                 .from('workout_exercise')
                 .select(`
                   *,
-                  exercise:exercises(name)
+                  exercise:exercises(name),
+                  custom_exercise
                 `)
                 .eq('workout_id', workoutId)
                 .order('order_index', { ascending: true });
@@ -99,10 +100,11 @@ export function useRealtimeWorkoutExercises({
               const transformedExercises = exercises.map(we => ({
                 workoutId: we.workout_id,
                 exerciseId: we.exercise_id,
-                exerciseName: we.exercise?.name,
+                exerciseName: we.custom_exercise?.customName || we.exercise?.name || 'Unknown Exercise',
                 orderIndex: we.order_index,
                 groupName: we.group_name,
-                isShared: we.is_shared || false
+                isShared: we.is_shared || false,
+                customExercise: we.custom_exercise
               }));
               
               onExercisesUpdateRef.current(transformedExercises);
