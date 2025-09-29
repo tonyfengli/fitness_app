@@ -9,8 +9,6 @@ import {
   Loader2Icon as Loader2,
   ChevronLeftIcon,
   ChevronRightIcon,
-  ChevronUpIcon,
-  ChevronDownIcon,
   useRealtimeExerciseSwaps,
   SearchIcon,
   SpinnerIcon,
@@ -140,6 +138,12 @@ interface RoundData {
     exerciseId: string;
     exerciseName: string;
     orderIndex: number;
+    // For stations rounds, we can have multiple exercises per station
+    stationExercises?: Array<{
+      id: string;
+      exerciseId: string;
+      exerciseName: string;
+    }>;
   }>;
   isRepeat?: boolean;
   roundType?: string;
@@ -200,6 +204,16 @@ function CircuitWorkoutOverviewContent() {
   const [inlineSelectedId, setInlineSelectedId] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<{ type: 'muscle' | 'movement' | 'equipment', value: string } | null>(null);
   const [categoryMode, setCategoryMode] = useState<'choice' | 'muscle' | 'movement' | 'equipment'>('choice');
+  
+  // Add exercise modal state (for stations rounds)
+  const [showAddExerciseModal, setShowAddExerciseModal] = useState(false);
+  const [addExerciseRoundName, setAddExerciseRoundName] = useState<string>("");
+  const [addExerciseSearchQuery, setAddExerciseSearchQuery] = useState("");
+  const [addExerciseSelectedId, setAddExerciseSelectedId] = useState<string | null>(null);
+  const [addExerciseCategory, setAddExerciseCategory] = useState<{ type: 'muscle' | 'movement' | 'equipment', value: string } | null>(null);
+  const [addExerciseCategoryMode, setAddExerciseCategoryMode] = useState<'choice' | 'muscle' | 'movement' | 'equipment'>('choice');
+  const [addExerciseTargetStation, setAddExerciseTargetStation] = useState<number>(0);
+  const [addExerciseRoundData, setAddExerciseRoundData] = useState<RoundData | null>(null);
   
   // Spotify section expansion state
   const [expandedSpotifyRounds, setExpandedSpotifyRounds] = useState<Set<string>>(new Set());
@@ -360,13 +374,13 @@ function CircuitWorkoutOverviewContent() {
     return "";
   }, [savedSelections]);
 
-  // Fetch available exercises when modal is open or inline editing
+  // Fetch available exercises when any modal is open or inline editing
   const { data: exercisesData, isLoading: isLoadingExercises } = useQuery({
     ...trpc.exercise.getAvailablePublic.queryOptions({
       sessionId: sessionId || "",
       userId: dummyUserId || "",
     }),
-    enabled: !!sessionId && !!dummyUserId && (showExerciseSelection || !!editingExerciseId),
+    enabled: !!sessionId && !!dummyUserId && (showExerciseSelection || !!editingExerciseId || showAddExerciseModal),
   });
 
   const availableExercises = exercisesData?.exercises || [];
@@ -789,28 +803,22 @@ function CircuitWorkoutOverviewContent() {
                     const isEditing = editingExerciseId === exercise.id;
                     return (
                       <div key={exercise.id} className="relative">
-                        <div className="p-6 rounded-xl transition-all focus-within:outline-none focus-within:ring-0 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-6 flex-1">
-                              <div className="flex items-center gap-2">
-                                <span className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-semibold flex-shrink-0 ${(() => {
-                                  const type = round.roundType || 'circuit_round';
-                                  if (round.isRepeat) return 'bg-purple-500/20 dark:bg-violet-300/20 text-purple-700 dark:text-violet-200 ring-2 ring-purple-400/50 dark:ring-violet-300/40';
-                                  switch (type) {
-                                    case 'amrap_round':
-                                      return 'bg-purple-500/20 dark:bg-violet-300/20 text-purple-700 dark:text-violet-200 ring-2 ring-purple-400/50 dark:ring-violet-300/40';
-                                    case 'stations_round':
-                                      return 'bg-green-500/20 dark:bg-emerald-300/20 text-green-700 dark:text-emerald-200 ring-2 ring-green-400/50 dark:ring-emerald-300/40';
-                                    case 'circuit_round':
-                                    default:
-                                      return 'bg-blue-500/20 dark:bg-sky-300/20 text-blue-700 dark:text-sky-200 ring-2 ring-blue-400/50 dark:ring-sky-300/40';
-                                  }
-                                })()}`}>
-                                  {idx + 1}
-                                </span>
-                                {/* Reorder buttons - subtle positioning */}
+                        {round.roundType === 'stations_round' ? (
+                          // Clean station layout for multiple exercises
+                          <div className="rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 overflow-hidden">
+                            {/* Station header */}
+                            <div className="px-6 py-3 bg-gray-50 dark:bg-gray-900/50 border-b border-gray-200 dark:border-gray-700">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                  <span className="w-8 h-8 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 flex items-center justify-center text-sm font-bold">
+                                    {idx + 1}
+                                  </span>
+                                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    Station {idx + 1}
+                                  </span>
+                                </div>
                                 {!isEditing && (
-                                  <div className="flex flex-col gap-1">
+                                  <div className="flex items-center gap-1 opacity-40 hover:opacity-100 transition-opacity">
                                     <button
                                       disabled={idx === 0 || reorderExerciseMutation.isPending}
                                       onClick={() => {
@@ -821,10 +829,10 @@ function CircuitWorkoutOverviewContent() {
                                           direction: "up",
                                         });
                                       }}
-                                      className="h-8 w-8 p-0 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-30 transition-colors focus:outline-none focus:ring-0"
+                                      className="h-7 w-7 p-0 rounded hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-30 transition-colors"
                                     >
-                                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" className="mx-auto text-gray-400 dark:text-gray-500">
-                                        <path d="M10.5 8.75L7 5.25L3.5 8.75" />
+                                      <svg className="h-4 w-4 text-gray-500 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
                                       </svg>
                                     </button>
                                     <button
@@ -837,61 +845,211 @@ function CircuitWorkoutOverviewContent() {
                                           direction: "down",
                                         });
                                       }}
-                                      className="h-8 w-8 p-0 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-30 transition-colors focus:outline-none focus:ring-0"
+                                      className="h-7 w-7 p-0 rounded hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-30 transition-colors"
                                     >
-                                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" className="mx-auto text-gray-400 dark:text-gray-500">
-                                        <path d="M3.5 5.25L7 8.75L10.5 5.25" />
+                                      <svg className="h-4 w-4 text-gray-500 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
                                       </svg>
                                     </button>
                                   </div>
                                 )}
                               </div>
-                              <span className="font-medium text-base leading-tight py-1 text-gray-900 dark:text-gray-100">{exercise.exerciseName}</span>
-                              {exercise.repsPlanned && (
-                                <span className="text-sm text-gray-500 dark:text-gray-400 ml-2">
-                                  {exercise.repsPlanned} {exercise.repsPlanned === 1 ? 'rep' : 'reps'}
-                                </span>
-                              )}
                             </div>
-                            <div className="flex items-center gap-2">
-                              {!isEditing ? (
-                                <>
-                                  <button
-                                    onClick={() => {
-                                      setSelectedExerciseForSets({
-                                        id: exercise.id,
-                                        exerciseName: exercise.exerciseName,
-                                        exerciseId: exercise.exerciseId,
-                                        roundName: round.roundName,
-                                      });
-                                      setRepsValue(exercise.repsPlanned || 0);
-                                      setShowSetsModal(true);
-                                    }}
-                                    className="h-8 w-10 flex items-center justify-center border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors focus:outline-none focus:ring-0"
-                                  >
-                                    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-gray-600 dark:text-gray-400">
-                                      <path d="M10 3.125V6.875M10 13.125V16.875M4.375 10H8.125M11.875 10H15.625M6.875 6.875L8.75 8.75M11.25 11.25L13.125 13.125M13.125 6.875L11.25 8.75M8.75 11.25L6.875 13.125" />
-                                    </svg>
-                                  </button>
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => {
-                                      setEditingExerciseId(exercise.id);
-                                      setInlineSearchQuery("");
-                                      setInlineSelectedId(null);
-                                      setSelectedCategory(null);
-                                      setCategoryMode('choice');
-                                    }}
-                                    className="h-8 px-3 font-medium dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:hover:bg-gray-600 focus:outline-none focus:ring-0"
-                                  >
-                                    Replace
-                                  </Button>
-                                </>
-                              ) : null}
+                            
+                            {/* Exercises list */}
+                            <div className="divide-y divide-gray-100 dark:divide-gray-700/50">
+                              {/* Primary exercise */}
+                              <div className="px-6 py-4 hover:bg-gray-50/50 dark:hover:bg-gray-700/20 transition-colors">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex-1">
+                                    <div className="font-medium text-gray-900 dark:text-gray-100">
+                                      {exercise.exerciseName}
+                                      {exercise.repsPlanned && (
+                                        <span className="ml-2 text-sm font-normal text-gray-500 dark:text-gray-400">
+                                          {exercise.repsPlanned} {exercise.repsPlanned === 1 ? 'rep' : 'reps'}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-2 ml-4">
+                                    <button
+                                      onClick={() => {
+                                        setSelectedExerciseForSets({
+                                          id: exercise.id,
+                                          exerciseName: exercise.exerciseName,
+                                          exerciseId: exercise.exerciseId,
+                                          roundName: round.roundName,
+                                        });
+                                        setRepsValue(exercise.repsPlanned || 0);
+                                        setShowSetsModal(true);
+                                      }}
+                                      className="p-2 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-all"
+                                    >
+                                      <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5">
+                                        <path d="M10 3.125V6.875M10 13.125V16.875M4.375 10H8.125M11.875 10H15.625M6.875 6.875L8.75 8.75M11.25 11.25L13.125 13.125M13.125 6.875L11.25 8.75M8.75 11.25L6.875 13.125" />
+                                      </svg>
+                                    </button>
+                                    <button
+                                      onClick={() => {
+                                        setEditingExerciseId(exercise.id);
+                                        setInlineSearchQuery("");
+                                        setInlineSelectedId(null);
+                                        setSelectedCategory(null);
+                                        setCategoryMode('choice');
+                                      }}
+                                      className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-all font-medium"
+                                    >
+                                      Replace
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                              
+                              {/* Additional exercises */}
+                              {exercise.stationExercises?.map((stationEx) => (
+                                <div key={stationEx.id} className="px-6 py-4 hover:bg-gray-50/50 dark:hover:bg-gray-700/20 transition-colors">
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex-1">
+                                      <div className="font-medium text-gray-900 dark:text-gray-100">
+                                        {stationEx.exerciseName}
+                                        <span className="ml-2 text-xs text-gray-400 dark:text-gray-500 italic font-normal">
+                                          pending
+                                        </span>
+                                      </div>
+                                    </div>
+                                    <div className="flex items-center gap-2 ml-4">
+                                      <button
+                                        onClick={() => {
+                                          console.log('Configure sets for additional exercise:', stationEx);
+                                        }}
+                                        className="p-2 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-all"
+                                      >
+                                        <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5">
+                                          <path d="M10 3.125V6.875M10 13.125V16.875M4.375 10H8.125M11.875 10H15.625M6.875 6.875L8.75 8.75M11.25 11.25L13.125 13.125M13.125 6.875L11.25 8.75M8.75 11.25L6.875 13.125" />
+                                        </svg>
+                                      </button>
+                                      <button
+                                        onClick={() => {
+                                          console.log('Replace additional exercise:', stationEx);
+                                        }}
+                                        className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-all font-medium"
+                                      >
+                                        Replace
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
                             </div>
                           </div>
-                        </div>
+                        ) : (
+                          // Original single exercise layout for circuit rounds
+                          <div className="p-6 rounded-xl transition-all focus-within:outline-none focus-within:ring-0 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-6 flex-1">
+                                <div className="flex items-center gap-2">
+                                  <span className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-semibold flex-shrink-0 ${(() => {
+                                    const type = round.roundType || 'circuit_round';
+                                    if (round.isRepeat) return 'bg-purple-500/20 dark:bg-violet-300/20 text-purple-700 dark:text-violet-200 ring-2 ring-purple-400/50 dark:ring-violet-300/40';
+                                    switch (type) {
+                                      case 'amrap_round':
+                                        return 'bg-purple-500/20 dark:bg-violet-300/20 text-purple-700 dark:text-violet-200 ring-2 ring-purple-400/50 dark:ring-violet-300/40';
+                                      case 'stations_round':
+                                        return 'bg-green-500/20 dark:bg-emerald-300/20 text-green-700 dark:text-emerald-200 ring-2 ring-green-400/50 dark:ring-emerald-300/40';
+                                      case 'circuit_round':
+                                      default:
+                                        return 'bg-blue-500/20 dark:bg-sky-300/20 text-blue-700 dark:text-sky-200 ring-2 ring-blue-400/50 dark:ring-sky-300/40';
+                                    }
+                                  })()}`}>
+                                    {idx + 1}
+                                  </span>
+                                  {/* Reorder buttons - subtle positioning */}
+                                  {!isEditing && (
+                                    <div className="flex flex-col gap-1">
+                                      <button
+                                        disabled={idx === 0 || reorderExerciseMutation.isPending}
+                                        onClick={() => {
+                                          reorderExerciseMutation.mutate({
+                                            sessionId: sessionId!,
+                                            roundName: round.roundName,
+                                            currentIndex: exercise.orderIndex,
+                                            direction: "up",
+                                          });
+                                        }}
+                                        className="h-8 w-8 p-0 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-30 transition-colors focus:outline-none focus:ring-0"
+                                      >
+                                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" className="mx-auto text-gray-400 dark:text-gray-500">
+                                          <path d="M10.5 8.75L7 5.25L3.5 8.75" />
+                                        </svg>
+                                      </button>
+                                      <button
+                                        disabled={idx === round.exercises.length - 1 || reorderExerciseMutation.isPending}
+                                        onClick={() => {
+                                          reorderExerciseMutation.mutate({
+                                            sessionId: sessionId!,
+                                            roundName: round.roundName,
+                                            currentIndex: exercise.orderIndex,
+                                            direction: "down",
+                                          });
+                                        }}
+                                        className="h-8 w-8 p-0 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-30 transition-colors focus:outline-none focus:ring-0"
+                                      >
+                                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" className="mx-auto text-gray-400 dark:text-gray-500">
+                                          <path d="M3.5 5.25L7 8.75L10.5 5.25" />
+                                        </svg>
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="flex-1">
+                                  <span className="font-medium text-base leading-tight py-1 text-gray-900 dark:text-gray-100">{exercise.exerciseName}</span>
+                                  {exercise.repsPlanned && (
+                                    <span className="text-sm text-gray-500 dark:text-gray-400 ml-2">
+                                      {exercise.repsPlanned} {exercise.repsPlanned === 1 ? 'rep' : 'reps'}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                {!isEditing ? (
+                                  <>
+                                    <button
+                                      onClick={() => {
+                                        setSelectedExerciseForSets({
+                                          id: exercise.id,
+                                          exerciseName: exercise.exerciseName,
+                                          exerciseId: exercise.exerciseId,
+                                          roundName: round.roundName,
+                                        });
+                                        setRepsValue(exercise.repsPlanned || 0);
+                                        setShowSetsModal(true);
+                                      }}
+                                      className="h-8 w-10 flex items-center justify-center border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors focus:outline-none focus:ring-0"
+                                    >
+                                      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-gray-600 dark:text-gray-400">
+                                        <path d="M10 3.125V6.875M10 13.125V16.875M4.375 10H8.125M11.875 10H15.625M6.875 6.875L8.75 8.75M11.25 11.25L13.125 13.125M13.125 6.875L11.25 8.75M8.75 11.25L6.875 13.125" />
+                                      </svg>
+                                    </button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => {
+                                        setEditingExerciseId(exercise.id);
+                                        setInlineSearchQuery("");
+                                        setInlineSelectedId(null);
+                                        setSelectedCategory(null);
+                                        setCategoryMode('choice');
+                                      }}
+                                      className="h-8 px-3 font-medium dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:hover:bg-gray-600 focus:outline-none focus:ring-0"
+                                    >
+                                      Replace
+                                    </Button>
+                                  </>
+                                ) : null}
+                              </div>
+                            </div>
+                          </div>
+                        )}
                         
                         {/* Moved to modal below */}
                       </div>
@@ -899,6 +1057,32 @@ function CircuitWorkoutOverviewContent() {
                   })}
                   
                 </div>
+                
+                {/* Add Exercise button for stations rounds only */}
+                {round.roundType === 'stations_round' && (
+                  <div className="mt-3">
+                    <button
+                      onClick={() => {
+                        setAddExerciseRoundName(round.roundName);
+                        setAddExerciseRoundData(round);
+                        setAddExerciseTargetStation(0); // Default to first station
+                        setShowAddExerciseModal(true);
+                        setAddExerciseSearchQuery("");
+                        setAddExerciseSelectedId(null);
+                        setAddExerciseCategory(null);
+                        setAddExerciseCategoryMode('choice');
+                      }}
+                      className="w-full p-4 rounded-xl border-2 border-dashed border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500 transition-colors bg-gray-50/50 dark:bg-gray-700/30 hover:bg-gray-100/50 dark:hover:bg-gray-600/30"
+                    >
+                      <div className="flex items-center justify-center gap-2 text-gray-600 dark:text-gray-400">
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                        </svg>
+                        <span className="font-medium">Add Exercise</span>
+                      </div>
+                    </button>
+                  </div>
+                )}
                 
                 {/* Spotify Music Section - Expandable */}
                 {roundMusic && (
@@ -1912,6 +2096,462 @@ function CircuitWorkoutOverviewContent() {
                 </div>
               </div>
             </Card>
+          </div>
+        </>
+      )}
+      
+      {/* Add Exercise Modal for Stations Rounds */}
+      {showAddExerciseModal && (
+        <>
+          {/* Background overlay */}
+          <div
+            className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm"
+            onClick={() => {
+              setShowAddExerciseModal(false);
+              setAddExerciseSearchQuery("");
+              setAddExerciseSelectedId(null);
+              setAddExerciseCategory(null);
+              setAddExerciseCategoryMode('choice');
+              setAddExerciseTargetStation(0);
+              setAddExerciseRoundData(null);
+            }}
+          />
+
+          {/* Modal */}
+          <div className="fixed inset-x-4 top-1/2 z-50 mx-auto flex h-[80vh] max-w-2xl -translate-y-1/2 flex-col rounded-2xl bg-gray-50 dark:bg-gray-900 shadow-2xl overflow-hidden">
+            {/* Content */}
+            <div className="flex-1 overflow-hidden p-6 flex flex-col">
+              <div className="flex-1">
+                <div className="space-y-4">
+                  {/* Search input row */}
+                  <div>
+                    <div className="flex items-center gap-4">
+                      <span className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center text-sm font-semibold text-green-700 dark:text-green-300 flex-shrink-0">
+                        +
+                      </span>
+                      <div className="relative flex-1">
+                        <svg className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-500 dark:text-gray-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                        </svg>
+                        <input
+                          type="text"
+                          placeholder="Type exercise name..."
+                          value={addExerciseSearchQuery}
+                          onChange={(e) => {
+                            setAddExerciseSearchQuery(e.target.value);
+                            if (addExerciseSelectedId) {
+                              setAddExerciseSelectedId(null);
+                            }
+                          }}
+                          className="w-full bg-white dark:bg-gray-800 border-2 border-gray-900 dark:border-gray-100 rounded-lg pl-12 pr-12 py-3 text-lg font-medium text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-4 focus:ring-gray-900/20 dark:focus:ring-gray-100/20 focus:border-gray-900 dark:focus:border-gray-100 shadow-sm"
+                        />
+                        {/* Clear button */}
+                        {addExerciseSearchQuery && (
+                          <button
+                            onClick={() => {
+                              setAddExerciseSearchQuery("");
+                              setAddExerciseSelectedId(null);
+                            }}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 rounded-md text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-200/50 dark:hover:bg-gray-700/50 transition-colors"
+                          >
+                            <XIcon className="h-5 w-5" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Add button - only show when exercise is selected */}
+                  {addExerciseSelectedId && (
+                    <div className="ml-14 mt-3">
+                      <button
+                        onClick={() => {
+                          const selectedExercise = availableExercisesRef.current.find((ex: any) => ex.id === addExerciseSelectedId);
+                          const targetStation = addExerciseRoundData?.exercises[addExerciseTargetStation];
+                          
+                          console.log('Add exercise:', {
+                            roundName: addExerciseRoundName,
+                            exerciseId: addExerciseSelectedId,
+                            exercise: selectedExercise,
+                            targetStation: addExerciseTargetStation,
+                            targetStationExercise: targetStation
+                          });
+                          
+                          // Update local state to show multiple exercises at the station
+                          if (selectedExercise && targetStation) {
+                            setRoundsData(prevRounds => 
+                              prevRounds.map(round => {
+                                if (round.roundName === addExerciseRoundName) {
+                                  return {
+                                    ...round,
+                                    exercises: round.exercises.map((ex, idx) => {
+                                      if (idx === addExerciseTargetStation) {
+                                        // Initialize stationExercises if it doesn't exist
+                                        const existingStationExercises = ex.stationExercises || [];
+                                        
+                                        // Add the new exercise to the station
+                                        return {
+                                          ...ex,
+                                          stationExercises: [
+                                            ...existingStationExercises,
+                                            {
+                                              id: `temp-${Date.now()}`, // Temporary ID
+                                              exerciseId: selectedExercise.id,
+                                              exerciseName: selectedExercise.name
+                                            }
+                                          ]
+                                        };
+                                      }
+                                      return ex;
+                                    })
+                                  };
+                                }
+                                return round;
+                              })
+                            );
+                          }
+                          
+                          setShowAddExerciseModal(false);
+                          setAddExerciseSearchQuery("");
+                          setAddExerciseSelectedId(null);
+                          setAddExerciseCategory(null);
+                          setAddExerciseCategoryMode('choice');
+                          setAddExerciseTargetStation(0);
+                          setAddExerciseRoundData(null);
+                        }}
+                        className="h-12 px-10 text-base font-semibold rounded-lg transition-all focus:outline-none focus:ring-0 bg-green-600 text-white hover:bg-green-700 shadow-md"
+                      >
+                        Add Exercise
+                      </button>
+                    </div>
+                  )}
+                </div>
+                
+                {/* Dynamic content area */}
+                <div className="mt-4 flex-1 overflow-hidden">
+                  {(() => {
+                    // Show loading state if exercises are being fetched
+                    if (isLoadingExercises) {
+                      return (
+                        <div className="flex items-center justify-center py-8">
+                          <SpinnerIcon className="h-6 w-6 animate-spin text-gray-400" />
+                        </div>
+                      );
+                    }
+                    
+                    // If exercise is selected, show station selector
+                    if (addExerciseSelectedId) {
+                      const selectedExercise = availableExercisesRef.current.find((ex: any) => ex.id === addExerciseSelectedId);
+                      return (
+                        <div className="space-y-4">
+                          <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
+                            <div className="flex items-center gap-2 mb-3">
+                              <div className="p-1 bg-green-100 dark:bg-green-900/30 rounded">
+                                <svg className="w-4 h-4 text-green-700 dark:text-green-400" fill="none" viewBox="0 0 20 20" stroke="currentColor" strokeWidth={2}>
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                </svg>
+                              </div>
+                              <span className="font-medium text-gray-900 dark:text-gray-100">
+                                {selectedExercise?.name || "Exercise Selected"}
+                              </span>
+                            </div>
+                            <p className="text-sm text-gray-600 dark:text-gray-400">
+                              Now select which station to add this exercise to:
+                            </p>
+                          </div>
+                          
+                          {/* Station selector */}
+                          {addExerciseRoundData && (
+                            <div>
+                              <div className="flex gap-2 overflow-x-auto pb-2">
+                                {addExerciseRoundData.exercises.map((exercise, idx) => (
+                                  <button
+                                    key={exercise.id}
+                                    onClick={() => setAddExerciseTargetStation(idx)}
+                                    className={`p-3 rounded-lg border-2 transition-all text-left flex-shrink-0 ${
+                                      addExerciseTargetStation === idx
+                                        ? 'border-green-500 bg-green-50 dark:bg-green-900/20'
+                                        : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 hover:border-gray-400 dark:hover:border-gray-500'
+                                    }`}
+                                    style={{ minWidth: '160px' }}
+                                  >
+                                    <div className="flex items-center gap-3">
+                                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 ${
+                                        addExerciseTargetStation === idx
+                                          ? 'bg-green-500 text-white'
+                                          : 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300'
+                                      }`}>
+                                        {idx + 1}
+                                      </div>
+                                      <div className="flex-1 min-w-0">
+                                        <div className="font-medium text-sm text-gray-900 dark:text-gray-100">
+                                          Station {idx + 1}
+                                        </div>
+                                        <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                                          {exercise.exerciseName}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    }
+                    // If there's search text or a category selected, show filtered results
+                    else if ((addExerciseSearchQuery || addExerciseCategory) && !addExerciseSelectedId) {
+                      let filtered = availableExercisesRef.current;
+                      
+                      // If there's a search query, it takes priority
+                      if (addExerciseSearchQuery) {
+                        filtered = filterExercisesBySearch(filtered, addExerciseSearchQuery);
+                      } else if (addExerciseCategory) {
+                        // Only apply category filter if there's no search query
+                        if (addExerciseCategory.type === 'muscle') {
+                          const unifiedMuscle = addExerciseCategory.value;
+                          filtered = filtered.filter((ex: any) => 
+                            getUnifiedMuscleGroup(ex.primaryMuscle) === unifiedMuscle
+                          );
+                        } else if (addExerciseCategory.type === 'movement') {
+                          filtered = filtered.filter((ex: any) => ex.movementPattern === addExerciseCategory.value);
+                        } else if (addExerciseCategory.type === 'equipment') {
+                          filtered = filtered.filter((ex: any) => {
+                            if (!ex.equipment) return false;
+                            
+                            if (Array.isArray(ex.equipment)) {
+                              return ex.equipment.some((eq: string) => 
+                                eq && eq.toLowerCase().trim() === addExerciseCategory.value.toLowerCase()
+                              );
+                            } else if (typeof ex.equipment === 'string') {
+                              const equipmentList = ex.equipment.split(',').map(e => e.trim().toLowerCase());
+                              return equipmentList.includes(addExerciseCategory.value.toLowerCase());
+                            }
+                            
+                            return false;
+                          });
+                        }
+                      }
+                      
+                      // Show results even if empty
+                      return (
+                        <div className="rounded-lg border border-gray-200 dark:border-gray-700">
+                          {filtered.length > 0 ? (
+                            <div className="max-h-[400px] overflow-y-auto">
+                              {addExerciseCategory && !addExerciseSearchQuery && (
+                                <div className="sticky top-0 flex items-center justify-between px-4 py-2 bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+                                  <span className="text-sm text-gray-600 dark:text-gray-400">
+                                    Showing {addExerciseCategory.type === 'muscle' 
+                                      ? addExerciseCategory.value 
+                                      : addExerciseCategory.value.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')
+                                    } exercises
+                                  </span>
+                                  <button
+                                    onClick={() => {
+                                      setAddExerciseCategory(null);
+                                      setAddExerciseSearchQuery('');
+                                    }}
+                                    className="text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                                  >
+                                    Clear
+                                  </button>
+                                </div>
+                              )}
+                              <div>
+                                {filtered.map((ex: any) => (
+                                  <button
+                                    key={ex.id}
+                                    onClick={() => {
+                                      setAddExerciseSearchQuery(ex.name);
+                                      setAddExerciseSelectedId(ex.id);
+                                    }}
+                                    className={`w-full px-4 py-2.5 text-left transition-all ${
+                                      addExerciseSelectedId === ex.id 
+                                        ? 'bg-gray-100 dark:bg-gray-800 border-l-4 border-green-500' 
+                                        : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'
+                                    }`}
+                                  >
+                                    <div className="text-sm font-medium text-gray-900 dark:text-gray-100">{ex.name}</div>
+                                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                                      {ex.primaryMuscle?.toLowerCase().replace(/_/g, ' ')}
+                                    </div>
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="p-8 text-center">
+                              <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">
+                                No exercises found
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    } else if (!addExerciseSelectedId && addExerciseCategoryMode === 'choice') {
+                      // Show category choice buttons
+                      return (
+                        <div className="space-y-3">
+                          <button
+                            onClick={() => setAddExerciseCategoryMode('movement')}
+                            className="w-full p-6 bg-white dark:bg-gray-800 rounded-lg border-2 border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 transition-all text-left group"
+                          >
+                            <div className="flex items-center justify-between">
+                              <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Browse by Movement Pattern</h3>
+                              <ChevronRightIcon className="h-5 w-5 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300" />
+                            </div>
+                          </button>
+                          
+                          <button
+                            onClick={() => setAddExerciseCategoryMode('muscle')}
+                            className="w-full p-6 bg-white dark:bg-gray-800 rounded-lg border-2 border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 transition-all text-left group"
+                          >
+                            <div className="flex items-center justify-between">
+                              <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Browse by Muscle Group</h3>
+                              <ChevronRightIcon className="h-5 w-5 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300" />
+                            </div>
+                          </button>
+                          
+                          <button
+                            onClick={() => setAddExerciseCategoryMode('equipment')}
+                            className="w-full p-6 bg-white dark:bg-gray-800 rounded-lg border-2 border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 transition-all text-left group"
+                          >
+                            <div className="flex items-center justify-between">
+                              <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Browse by Equipment</h3>
+                              <ChevronRightIcon className="h-5 w-5 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300" />
+                            </div>
+                          </button>
+                        </div>
+                      );
+                    } else if (!addExerciseSelectedId && addExerciseCategoryMode === 'muscle') {
+                      // Show muscle groups with back button
+                      return (
+                        <div>
+                          <button
+                            onClick={() => {
+                              setAddExerciseCategoryMode('choice');
+                              setAddExerciseCategory(null);
+                            }}
+                            className="mb-3 flex items-center gap-1 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100"
+                          >
+                            <ChevronLeftIcon className="h-4 w-4" />
+                            Back
+                          </button>
+                          <div className="p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                            <div>
+                              <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">Muscle Groups</h4>
+                              <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                                {['Chest', 'Back', 'Shoulders', 'Biceps', 'Triceps', 'Quads', 'Hamstrings', 'Glutes', 'Core', 'Calves'].map((muscle) => (
+                                  <button
+                                    key={muscle}
+                                    onClick={() => {
+                                      setAddExerciseCategory({ type: 'muscle', value: muscle });
+                                      setAddExerciseSearchQuery('');
+                                    }}
+                                    className="w-full px-4 py-3 text-sm font-medium rounded-md bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 transition-colors text-left"
+                                  >
+                                    {muscle}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    } else if (!addExerciseSelectedId && addExerciseCategoryMode === 'movement') {
+                      // Show movement patterns with back button
+                      return (
+                        <div>
+                          <button
+                            onClick={() => {
+                              setAddExerciseCategoryMode('choice');
+                              setAddExerciseCategory(null);
+                            }}
+                            className="mb-3 flex items-center gap-1 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100"
+                          >
+                            <ChevronLeftIcon className="h-4 w-4" />
+                            Back
+                          </button>
+                          <div className="p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                            <div>
+                              <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">Movement Patterns</h4>
+                              <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                                {[
+                                  { value: 'horizontal_push', label: 'Horizontal Push' },
+                                  { value: 'horizontal_pull', label: 'Horizontal Pull' },
+                                  { value: 'vertical_push', label: 'Vertical Push' },
+                                  { value: 'vertical_pull', label: 'Vertical Pull' },
+                                  { value: 'squat', label: 'Squat' },
+                                  { value: 'hinge', label: 'Hinge' },
+                                  { value: 'lunge', label: 'Lunge' },
+                                  { value: 'core', label: 'Core' },
+                                  { value: 'carry', label: 'Carry' },
+                                  { value: 'isolation', label: 'Isolation' }
+                                ].map(({ value, label }) => (
+                                  <button
+                                    key={value}
+                                    onClick={() => {
+                                      setAddExerciseCategory({ type: 'movement', value });
+                                      setAddExerciseSearchQuery('');
+                                    }}
+                                    className="w-full px-4 py-3 text-sm font-medium rounded-md bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 transition-colors text-left"
+                                  >
+                                    {label}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    } else if (!addExerciseSelectedId && addExerciseCategoryMode === 'equipment') {
+                      // Show equipment options with back button
+                      return (
+                        <div>
+                          <button
+                            onClick={() => {
+                              setAddExerciseCategoryMode('choice');
+                              setAddExerciseCategory(null);
+                            }}
+                            className="mb-3 flex items-center gap-1 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100"
+                          >
+                            <ChevronLeftIcon className="h-4 w-4" />
+                            Back
+                          </button>
+                          <div className="p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                            <div>
+                              <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">Equipment</h4>
+                              <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                                {[
+                                  { value: 'dumbbells', label: 'Dumbbells' },
+                                  { value: 'kettlebell', label: 'Kettlebell' },
+                                  { value: 'bodyweight', label: 'Bodyweight' },
+                                  { value: 'bands', label: 'Bands' },
+                                  { value: 'box', label: 'Box' },
+                                  { value: 'bench', label: 'Bench' }
+                                ].map(({ value, label }) => (
+                                  <button
+                                    key={value}
+                                    onClick={() => {
+                                      setAddExerciseCategory({ type: 'equipment', value });
+                                      setAddExerciseSearchQuery('');
+                                    }}
+                                    className="w-full px-4 py-3 text-sm font-medium rounded-md bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 transition-colors text-left"
+                                  >
+                                    {label}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    }
+                  })()}
+                </div>
+              </div>
+            </div>
           </div>
         </>
       )}
