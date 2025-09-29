@@ -183,6 +183,25 @@ function CircuitWorkoutOverviewContent() {
   const queryClient = useQueryClient();
   const trpc = api();
   
+  // Add exercise to station mutation
+  const addExerciseToStationMutation = useMutation({
+    ...trpc.workoutSelections.addExerciseToStation.mutationOptions(),
+    onSuccess: (data) => {
+      console.log("[addExerciseToStation] Success:", data);
+      
+      // Invalidate queries to refresh data
+      queryClient.invalidateQueries({
+        queryKey: trpc.workoutSelections.getSelections.queryOptions({ 
+          sessionId: sessionId || "" 
+        }).queryKey,
+      });
+    },
+    onError: (error) => {
+      console.error("Failed to add exercise to station:", error);
+      alert("Failed to add exercise to station. Please try again.");
+    },
+  });
+  
   const [roundsData, setRoundsData] = useState<RoundData[]>([]);
   const [hasExercises, setHasExercises] = useState(false);
   const [setlist, setSetlist] = useState<any>(null);
@@ -313,6 +332,35 @@ function CircuitWorkoutOverviewContent() {
     },
     onError: (error) => {
       console.error("Failed to swap exercise:", error);
+      alert("Failed to swap exercise. Please try again.");
+    },
+  });
+
+  // Set up the swap mutation for specific exercises (stations)
+  const swapSpecificExerciseMutation = useMutation({
+    ...trpc.workoutSelections.swapSpecificExercise.mutationOptions(),
+    onSuccess: (data) => {
+      console.log("[swapSpecificExerciseMutation] Success! Response:", data);
+      
+      // Close modal
+      setShowExerciseSelection(false);
+      setSelectedExercise(null);
+      setSelectedReplacement(null);
+      
+      // Reset inline editing state
+      setEditingExerciseId(null);
+      setInlineSearchQuery("");
+      setInlineSelectedId(null);
+
+      // Invalidate queries to refresh data
+      queryClient.invalidateQueries({
+        queryKey: trpc.workoutSelections.getSelections.queryOptions({ 
+          sessionId: sessionId || "" 
+        }).queryKey,
+      });
+    },
+    onError: (error) => {
+      console.error("Failed to swap specific exercise:", error);
       alert("Failed to swap exercise. Please try again.");
     },
   });
@@ -453,19 +501,78 @@ function CircuitWorkoutOverviewContent() {
       
       // Sort exercises within each round and create final structure
       let rounds: RoundData[] = Array.from(roundsMap.entries())
-        .map(([roundName, exercises]) => ({
-          roundName,
-          exercises: exercises
-            .sort((a: any, b: any) => a.orderIndex - b.orderIndex)
-            .map((ex: any) => ({
-              id: ex.id,
-              exerciseId: ex.exerciseId,
-              exerciseName: ex.exerciseName,
-              orderIndex: ex.orderIndex,
-              custom_exercise: ex.custom_exercise,
-              repsPlanned: ex.repsPlanned,
-            }))
-        }))
+        .map(([roundName, exercises]) => {
+          // First, sort all exercises by orderIndex
+          const sortedExercises = exercises.sort((a: any, b: any) => a.orderIndex - b.orderIndex);
+          
+          // For stations rounds, group exercises by orderIndex
+          const roundTemplate = circuitConfig?.config?.roundTemplates?.find(
+            rt => `Round ${rt.roundNumber}` === roundName
+          );
+          const isStationsRound = roundTemplate?.template?.type === 'stations_round';
+          
+          if (isStationsRound) {
+            // Group exercises by orderIndex for stations
+            const stationGroups = new Map<number, any[]>();
+            sortedExercises.forEach(ex => {
+              const orderIndex = ex.orderIndex;
+              if (!stationGroups.has(orderIndex)) {
+                stationGroups.set(orderIndex, []);
+              }
+              stationGroups.get(orderIndex)!.push(ex);
+            });
+            
+            // Create station exercises with primary and additional exercises
+            const stationExercises: any[] = [];
+            Array.from(stationGroups.entries())
+              .sort(([a], [b]) => a - b)
+              .forEach(([orderIndex, group]) => {
+                // Sort by stationIndex within the group (null first)
+                const sortedGroup = group.sort((a: any, b: any) => {
+                  if (a.stationIndex === null) return -1;
+                  if (b.stationIndex === null) return 1;
+                  return a.stationIndex - b.stationIndex;
+                });
+                
+                // First exercise (with null or 0 stationIndex) is the primary
+                const primaryExercise = sortedGroup[0];
+                const additionalExercises = sortedGroup.slice(1);
+                
+                stationExercises.push({
+                  id: primaryExercise.id,
+                  exerciseId: primaryExercise.exerciseId,
+                  exerciseName: primaryExercise.exerciseName,
+                  orderIndex: primaryExercise.orderIndex,
+                  custom_exercise: primaryExercise.custom_exercise,
+                  repsPlanned: primaryExercise.repsPlanned,
+                  // Add additional exercises as stationExercises
+                  stationExercises: additionalExercises.map((ex: any) => ({
+                    id: ex.id,
+                    exerciseId: ex.exerciseId,
+                    exerciseName: ex.exerciseName,
+                  }))
+                });
+              });
+            
+            return {
+              roundName,
+              exercises: stationExercises
+            };
+          } else {
+            // For non-stations rounds, keep original behavior
+            return {
+              roundName,
+              exercises: sortedExercises.map((ex: any) => ({
+                id: ex.id,
+                exerciseId: ex.exerciseId,
+                exerciseName: ex.exerciseName,
+                orderIndex: ex.orderIndex,
+                custom_exercise: ex.custom_exercise,
+                repsPlanned: ex.repsPlanned,
+              }))
+            };
+          }
+        })
         .sort((a, b) => {
           // Extract round numbers for sorting
           const aNum = parseInt(a.roundName.match(/\d+/)?.[0] || '0');
@@ -912,9 +1019,6 @@ function CircuitWorkoutOverviewContent() {
                                     <div className="flex-1">
                                       <div className="font-medium text-gray-900 dark:text-gray-100">
                                         {stationEx.exerciseName}
-                                        <span className="ml-2 text-xs text-gray-400 dark:text-gray-500 italic font-normal">
-                                          pending
-                                        </span>
                                       </div>
                                     </div>
                                     <div className="flex items-center gap-2 ml-4">
@@ -930,7 +1034,11 @@ function CircuitWorkoutOverviewContent() {
                                       </button>
                                       <button
                                         onClick={() => {
-                                          console.log('Replace additional exercise:', stationEx);
+                                          setEditingExerciseId(stationEx.id);
+                                          setInlineSearchQuery("");
+                                          setInlineSelectedId(null);
+                                          setSelectedCategory(null);
+                                          setCategoryMode('choice');
                                         }}
                                         className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-all font-medium"
                                       >
@@ -1447,9 +1555,27 @@ function CircuitWorkoutOverviewContent() {
 
       {/* Inline Exercise Replacement Modal */}
       {editingExerciseId && (() => {
-        const editingExercise = roundsData.flatMap(r => r.exercises).find(ex => ex.id === editingExerciseId);
-        const editingRound = roundsData.find(r => r.exercises.some(ex => ex.id === editingExerciseId));
-        const exerciseIndex = editingRound?.exercises.findIndex(ex => ex.id === editingExerciseId) ?? 0;
+        // First check if it's a main exercise
+        let editingExercise = roundsData.flatMap(r => r.exercises).find(ex => ex.id === editingExerciseId);
+        let editingRound = roundsData.find(r => r.exercises.some(ex => ex.id === editingExerciseId));
+        let exerciseIndex = editingRound?.exercises.findIndex(ex => ex.id === editingExerciseId) ?? 0;
+        
+        // If not found in main exercises, check in stationExercises
+        if (!editingExercise) {
+          for (const round of roundsData) {
+            for (let i = 0; i < round.exercises.length; i++) {
+              const exercise = round.exercises[i];
+              const stationEx = exercise.stationExercises?.find(se => se.id === editingExerciseId);
+              if (stationEx) {
+                editingExercise = stationEx;
+                editingRound = round;
+                exerciseIndex = i;
+                break;
+              }
+            }
+            if (editingExercise) break;
+          }
+        }
         
         return (
           <>
@@ -1522,26 +1648,40 @@ function CircuitWorkoutOverviewContent() {
                       <button
                         onClick={() => {
                           if ((inlineSelectedId || inlineSearchQuery.trim()) && editingExercise && editingRound) {
-                            swapExerciseMutation.mutate({
-                              sessionId: sessionId!,
-                              roundName: editingRound.roundName,
-                              exerciseIndex: editingExercise.orderIndex,
-                              originalExerciseId: editingExercise.exerciseId || (editingExercise.custom_exercise as any)?.originalExerciseId || null,
-                              newExerciseId: inlineSelectedId || null, // null for custom exercises
-                              customName: inlineSelectedId ? undefined : inlineSearchQuery.trim(), // custom name if no selection
-                              reason: "Circuit exercise swap",
-                              swappedBy: dummyUserId || "unknown",
-                            });
+                            // Check if this is a station exercise with multiple exercises
+                            if (editingExercise.stationIndex !== null && editingExercise.stationIndex !== undefined) {
+                              // Use specific exercise swap for stations
+                              swapSpecificExerciseMutation.mutate({
+                                sessionId: sessionId!,
+                                exerciseId: editingExercise.id, // Use the specific exercise ID
+                                newExerciseId: inlineSelectedId || null, // null for custom exercises
+                                customName: inlineSelectedId ? undefined : inlineSearchQuery.trim(), // custom name if no selection
+                                reason: "Station exercise swap",
+                                swappedBy: dummyUserId || "unknown",
+                              });
+                            } else {
+                              // Use regular circuit swap for non-station exercises
+                              swapExerciseMutation.mutate({
+                                sessionId: sessionId!,
+                                roundName: editingRound.roundName,
+                                exerciseIndex: editingExercise.orderIndex,
+                                originalExerciseId: editingExercise.exerciseId || (editingExercise.custom_exercise as any)?.originalExerciseId || null,
+                                newExerciseId: inlineSelectedId || null, // null for custom exercises
+                                customName: inlineSelectedId ? undefined : inlineSearchQuery.trim(), // custom name if no selection
+                                reason: "Circuit exercise swap",
+                                swappedBy: dummyUserId || "unknown",
+                              });
+                            }
                           }
                         }}
-                        disabled={(!inlineSelectedId && !inlineSearchQuery.trim()) || swapExerciseMutation.isPending}
+                        disabled={(!inlineSelectedId && !inlineSearchQuery.trim()) || swapExerciseMutation.isPending || swapSpecificExerciseMutation.isPending}
                         className={`h-12 px-10 text-base font-semibold rounded-lg transition-all focus:outline-none focus:ring-0 ${
-                          (inlineSelectedId || inlineSearchQuery.trim()) && !swapExerciseMutation.isPending
+                          (inlineSelectedId || inlineSearchQuery.trim()) && !swapExerciseMutation.isPending && !swapSpecificExerciseMutation.isPending
                             ? 'bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 hover:bg-gray-800 dark:hover:bg-gray-200 shadow-md' 
                             : 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
                         }`}
                       >
-                        {swapExerciseMutation.isPending ? (
+                        {(swapExerciseMutation.isPending || swapSpecificExerciseMutation.isPending) ? (
                           <SpinnerIcon className="h-4 w-4 animate-spin" />
                         ) : (
                           'Replace'
@@ -2167,48 +2307,24 @@ function CircuitWorkoutOverviewContent() {
                       <button
                         onClick={() => {
                           const selectedExercise = availableExercisesRef.current.find((ex: any) => ex.id === addExerciseSelectedId);
-                          const targetStation = addExerciseRoundData?.exercises[addExerciseTargetStation];
                           
-                          console.log('Add exercise:', {
+                          console.log('Add exercise to station:', {
+                            sessionId: sessionId,
                             roundName: addExerciseRoundName,
-                            exerciseId: addExerciseSelectedId,
-                            exercise: selectedExercise,
-                            targetStation: addExerciseTargetStation,
-                            targetStationExercise: targetStation
+                            targetStationIndex: addExerciseTargetStation,
+                            newExerciseId: addExerciseSelectedId,
+                            exercise: selectedExercise
                           });
                           
-                          // Update local state to show multiple exercises at the station
-                          if (selectedExercise && targetStation) {
-                            setRoundsData(prevRounds => 
-                              prevRounds.map(round => {
-                                if (round.roundName === addExerciseRoundName) {
-                                  return {
-                                    ...round,
-                                    exercises: round.exercises.map((ex, idx) => {
-                                      if (idx === addExerciseTargetStation) {
-                                        // Initialize stationExercises if it doesn't exist
-                                        const existingStationExercises = ex.stationExercises || [];
-                                        
-                                        // Add the new exercise to the station
-                                        return {
-                                          ...ex,
-                                          stationExercises: [
-                                            ...existingStationExercises,
-                                            {
-                                              id: `temp-${Date.now()}`, // Temporary ID
-                                              exerciseId: selectedExercise.id,
-                                              exerciseName: selectedExercise.name
-                                            }
-                                          ]
-                                        };
-                                      }
-                                      return ex;
-                                    })
-                                  };
-                                }
-                                return round;
-                              })
-                            );
+                          // Call the mutation
+                          if (sessionId && addExerciseRoundName) {
+                            addExerciseToStationMutation.mutate({
+                              sessionId: sessionId,
+                              roundName: addExerciseRoundName,
+                              targetStationIndex: addExerciseTargetStation,
+                              newExerciseId: addExerciseSelectedId,
+                              customName: undefined
+                            });
                           }
                           
                           setShowAddExerciseModal(false);

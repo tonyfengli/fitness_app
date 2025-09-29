@@ -180,6 +180,21 @@ export const workoutSelectionsRouter = {
         )
         .orderBy(asc(WorkoutExercise.orderIndex));
 
+      console.log("[getSelections] Raw workout exercises from DB:", {
+        count: workoutExercises.length,
+        exercises: workoutExercises.map(row => ({
+          id: row.we.id,
+          workoutId: row.we.workoutId,
+          exerciseId: row.we.exerciseId,
+          orderIndex: row.we.orderIndex,
+          stationIndex: row.we.stationIndex,
+          groupName: row.we.groupName,
+          isShared: row.we.isShared,
+          template: row.we.template,
+          custom_exercise: row.we.custom_exercise,
+        })),
+      });
+
       // Transform to match expected format
       // For circuit workouts without clientId, we'll use the first workout's userId
       const defaultClientId = input.clientId || workouts[0]!.userId;
@@ -196,6 +211,7 @@ export const workoutSelectionsRouter = {
         selectionSource: row.we.selectionSource,
         groupName: row.we.groupName,
         orderIndex: row.we.orderIndex,
+        stationIndex: row.we.stationIndex,
         custom_exercise: row.we.custom_exercise,
         repsPlanned: row.we.repsPlanned,
       }));
@@ -836,5 +852,321 @@ export const workoutSelectionsRouter = {
 
       console.log("[updateRepsPlanned] Updated:", result[0]);
       return result[0];
+    }),
+
+  // Add exercise to an existing station (circuit stations rounds only)
+  addExerciseToStation: protectedProcedure
+    .input(
+      z.object({
+        sessionId: z.string(),
+        roundName: z.string(),
+        targetStationIndex: z.number().min(0),
+        newExerciseId: z.string().uuid().nullable(), // null for custom exercises
+        customName: z.string().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const user = ctx.session.user;
+
+      console.log("[addExerciseToStation] Starting with input:", input);
+
+      // Import required schemas
+      const { TrainingSession, Workout } = await import("@acme/db/schema");
+
+      // Verify the session exists and belongs to the user's business
+      const session = await ctx.db.query.TrainingSession.findFirst({
+        where: and(
+          eq(TrainingSession.id, input.sessionId),
+          eq(TrainingSession.businessId, user.businessId),
+        ),
+      });
+
+      if (!session) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Training session not found",
+        });
+      }
+
+      // Use transaction for consistency
+      return await ctx.db.transaction(async (tx) => {
+        // Get all workouts for this session
+        const workouts = await tx
+          .select()
+          .from(Workout)
+          .where(
+            and(
+              eq(Workout.trainingSessionId, input.sessionId),
+              or(
+                eq(Workout.status, "draft"),
+                eq(Workout.status, "ready"),
+              ),
+            ),
+          );
+
+        if (workouts.length === 0) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "No workouts found for this session",
+          });
+        }
+
+        console.log("[addExerciseToStation] Found workouts:", {
+          count: workouts.length,
+          workouts: workouts.map(w => ({ 
+            id: w.id, 
+            status: w.status, 
+            userId: w.userId 
+          })),
+        });
+
+        const workoutIds = workouts.map((w) => w.id);
+        
+        console.log("[addExerciseToStation] Looking for exercises with:", {
+          workoutIds: workoutIds,
+          roundName: input.roundName,
+          targetStationIndex: input.targetStationIndex,
+        });
+
+        // Debug: First, let's see ALL exercises for this round
+        const allRoundExercises = await tx
+          .select()
+          .from(WorkoutExercise)
+          .where(
+            and(
+              sql`${WorkoutExercise.workoutId} IN (${sql.join(
+                workoutIds.map((id) => sql`${id}`),
+                sql`, `,
+              )})`,
+              eq(WorkoutExercise.groupName, input.roundName)
+            ),
+          );
+          
+        console.log("[addExerciseToStation] All exercises in round:", {
+          count: allRoundExercises.length,
+          exercises: allRoundExercises.map(ex => ({
+            id: ex.id,
+            workoutId: ex.workoutId,
+            groupName: ex.groupName,
+            orderIndex: ex.orderIndex,
+            stationIndex: ex.stationIndex,
+            exerciseId: ex.exerciseId,
+            isShared: ex.isShared,
+            custom_exercise: ex.custom_exercise,
+          })),
+        });
+
+        // Find exercises at the target station
+        // For stations rounds, we need to find the exercise that represents this station
+        // The frontend sends 0-based station index, but exercises might have gaps in orderIndex
+        
+        // First, get all exercises in the round sorted by orderIndex
+        const allRoundExercisesOrdered = allRoundExercises
+          .filter(ex => ex.stationIndex === null) // Only consider main station exercises
+          .sort((a, b) => a.orderIndex - b.orderIndex);
+        
+        // Find the exercise at the target station position
+        const targetStationExercise = allRoundExercisesOrdered[input.targetStationIndex];
+        
+        if (!targetStationExercise) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Target station not found",
+          });
+        }
+        
+        // Now find all exercises with the same orderIndex (including those with stationIndex)
+        const targetStationExercises = await tx
+          .select()
+          .from(WorkoutExercise)
+          .where(
+            and(
+              sql`${WorkoutExercise.workoutId} IN (${sql.join(
+                workoutIds.map((id) => sql`${id}`),
+                sql`, `,
+              )})`,
+              eq(WorkoutExercise.groupName, input.roundName),
+              eq(WorkoutExercise.orderIndex, targetStationExercise.orderIndex)
+            ),
+          )
+          .orderBy(asc(WorkoutExercise.stationIndex));
+          
+        console.log("[addExerciseToStation] Target station exercises found:", {
+          count: targetStationExercises.length,
+          exercises: targetStationExercises.map(ex => ({
+            id: ex.id,
+            orderIndex: ex.orderIndex,
+            stationIndex: ex.stationIndex,
+          })),
+        });
+
+        if (targetStationExercises.length === 0) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "No exercises found at the specified station",
+          });
+        }
+
+        // For stations rounds, exercises in the same station should have the same orderIndex
+        // but different stationIndex values
+        const stationOrderIndex = targetStationExercises[0]?.orderIndex || 0;
+        
+        // Get the next available stationIndex for this station
+        const maxStationIndex = Math.max(
+          ...targetStationExercises.map((ex) => ex.stationIndex || 0),
+          0
+        );
+        const nextStationIndex = maxStationIndex + 1;
+
+        // Get exercise details if not custom
+        let exerciseName = input.customName || "Custom Exercise";
+        if (input.newExerciseId) {
+          const exercise = await tx.query.exercises.findFirst({
+            where: eq(exercises.id, input.newExerciseId),
+          });
+
+          if (!exercise) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: "Exercise not found",
+            });
+          }
+          exerciseName = exercise.name;
+        }
+
+        // Get template info from the first exercise at this station
+        const templateExercise = targetStationExercises[0];
+        const template = templateExercise?.template || null;
+
+        // Insert the new exercise for all workouts
+        const insertPromises = workoutIds.map((workoutId) =>
+          tx.insert(WorkoutExercise).values({
+            workoutId: workoutId,
+            exerciseId: input.newExerciseId,
+            orderIndex: stationOrderIndex, // Use same orderIndex as the station
+            setsCompleted: 0,
+            groupName: input.roundName,
+            stationIndex: nextStationIndex, // Use incremented stationIndex for uniqueness
+            isShared: true, // Circuit exercises are shared
+            selectionSource: "manual_swap",
+            template: template,
+            custom_exercise: input.newExerciseId
+              ? null
+              : {
+                  customName: input.customName,
+                },
+          }),
+        );
+
+        await Promise.all(insertPromises);
+
+        console.log(
+          `[addExerciseToStation] Added exercise "${exerciseName}" to station ${input.targetStationIndex} for ${workoutIds.length} workouts`,
+        );
+
+        return {
+          success: true,
+          affectedWorkouts: workoutIds.length,
+          newExerciseName: exerciseName,
+          stationIndex: input.targetStationIndex,
+        };
+      });
+    }),
+
+  // Swap a specific exercise by ID (for stations with multiple exercises)
+  swapSpecificExercise: publicProcedure
+    .input(
+      z.object({
+        sessionId: z.string(),
+        exerciseId: z.string(), // ID of the specific exercise to replace
+        newExerciseId: z.string().nullable(), // null for custom exercises
+        customName: z.string().optional(), // custom exercise name
+        reason: z.string().optional(),
+        swappedBy: z.string(), // clientId of who initiated the swap
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      console.log("[swapSpecificExercise] Starting specific exercise swap with input:", input);
+
+      // Get the new exercise details if not custom
+      let newExerciseName = input.customName || "Custom Exercise";
+      if (input.newExerciseId) {
+        const newExercise = await ctx.db.query.exercises.findFirst({
+          where: eq(exercises.id, input.newExerciseId),
+        });
+
+        if (!newExercise) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "New exercise not found",
+          });
+        }
+        newExerciseName = newExercise.name;
+      }
+
+      return await ctx.db.transaction(async (tx) => {
+        // Find the exercise to be replaced
+        const targetExercise = await tx.query.WorkoutExercise.findFirst({
+          where: eq(WorkoutExercise.id, input.exerciseId),
+        });
+
+        if (!targetExercise) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Exercise to replace not found",
+          });
+        }
+
+        // Update the specific exercise
+        const updateData: any = {
+          selectionSource: "manual_swap",
+        };
+        
+        if (input.newExerciseId) {
+          // Regular exercise swap
+          updateData.exerciseId = input.newExerciseId;
+          updateData.custom_exercise = null;
+        } else {
+          // Custom exercise
+          updateData.exerciseId = null;
+          updateData.custom_exercise = {
+            customName: input.customName,
+            originalExerciseId: targetExercise.exerciseId,
+          };
+        }
+
+        const updateResult = await tx
+          .update(WorkoutExercise)
+          .set(updateData)
+          .where(eq(WorkoutExercise.id, input.exerciseId))
+          .returning();
+
+        console.log("[swapSpecificExercise] Update result:", updateResult);
+
+        // Log the swap if both IDs are valid
+        if (targetExercise.exerciseId && input.newExerciseId) {
+          const { Workout } = await import("@acme/db/schema");
+          
+          const workout = await tx.query.Workout.findFirst({
+            where: eq(Workout.id, targetExercise.workoutId),
+          });
+
+          if (workout) {
+            await tx.insert(workoutExerciseSwaps).values({
+              trainingSessionId: input.sessionId,
+              clientId: workout.userId,
+              originalExerciseId: targetExercise.exerciseId,
+              newExerciseId: input.newExerciseId,
+              swapReason: input.reason || "Specific exercise swap",
+              swappedBy: input.swappedBy,
+            });
+          }
+        }
+
+        return { 
+          success: true, 
+          newExerciseName: newExerciseName,
+        };
+      });
     }),
 } satisfies TRPCRouterRecord;

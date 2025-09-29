@@ -345,6 +345,7 @@ export const WorkoutExercise = pgTable("workout_exercise", (t) => ({
   setsCompleted: t.integer().notNull(),
   repsPlanned: t.integer(),
   groupName: t.text(), // "Block A", "Round 1", etc.
+  stationIndex: t.integer(), // For stations rounds - groups exercises within same station
   isShared: t.boolean().default(false),
   sharedWithClients: t.text("shared_with_clients").array(),
   selectionSource: t.varchar("selection_source", { length: 50 }), // 'llm_phase1', 'manual_swap', 'pre_assigned'
@@ -366,6 +367,7 @@ export const CreateWorkoutExerciseSchema = createInsertSchema(WorkoutExercise, {
   setsCompleted: z.number().int().min(1),
   repsPlanned: z.number().int().min(1).nullable().optional(),
   groupName: z.string().optional(),
+  stationIndex: z.number().int().min(0).nullable().optional(),
   isShared: z.boolean().optional().default(false),
   sharedWithClients: z.array(z.string()).optional(),
   selectionSource: z
