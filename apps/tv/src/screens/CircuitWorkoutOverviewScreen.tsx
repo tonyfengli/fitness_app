@@ -191,9 +191,9 @@ function RoundContent({ round, isCompact }: {
     
     switch (round.roundType) {
       case 'circuit_round':
-        return ` • ${round.workDuration || 45}/${round.restDuration || 15}s`;
+        return ` • ${round.workDuration ?? 45}/${round.restDuration ?? 15}s`;
       case 'stations_round':
-        return ` • Stations ${round.workDuration || 60}/${round.restDuration || 15}s`;
+        return ` • Stations ${round.workDuration ?? 60}/${round.restDuration ?? 15}s`;
       case 'amrap_round':
         const minutes = round.totalDuration ? Math.floor(round.totalDuration / 60) : 5;
         return ` • AMRAP ${minutes}min`;
@@ -373,8 +373,8 @@ export function CircuitWorkoutOverviewScreen() {
           if (roundTemplate?.template) {
             const template = roundTemplate.template as any;
             if (template.type === 'circuit_round' || template.type === 'stations_round') {
-              roundData.workDuration = template.workDuration || circuitConfig?.config?.workDuration;
-              roundData.restDuration = template.restDuration || circuitConfig?.config?.restDuration;
+              roundData.workDuration = template.workDuration ?? circuitConfig?.config?.workDuration;
+              roundData.restDuration = template.restDuration ?? circuitConfig?.config?.restDuration;
             } else if (template.type === 'amrap_round') {
               roundData.totalDuration = template.totalDuration;
             }

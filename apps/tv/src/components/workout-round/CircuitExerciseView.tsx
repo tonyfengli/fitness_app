@@ -8,6 +8,7 @@ interface CircuitExerciseViewProps {
   currentExerciseIndex: number;
   timeRemaining: number;
   isPaused: boolean;
+  restDuration?: number;
 }
 
 export function CircuitExerciseView({ 
@@ -15,13 +16,21 @@ export function CircuitExerciseView({
   currentExercise,
   currentExerciseIndex,
   timeRemaining,
-  isPaused 
+  isPaused,
+  restDuration 
 }: CircuitExerciseViewProps) {
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
+  
+  console.log('[CircuitExerciseView] Current exercise data:', {
+    exerciseName: currentExercise.exerciseName,
+    repsPlanned: currentExercise.repsPlanned,
+    hasReps: !!currentExercise.repsPlanned,
+    exerciseData: currentExercise
+  });
   
   return (
     <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingBottom: 60 }}>
@@ -41,20 +50,36 @@ export function CircuitExerciseView({
         fontSize: 48, 
         fontWeight: '700', 
         color: TOKENS.color.text, 
-        marginBottom: 12,
+        marginBottom: currentExercise.repsPlanned ? 4 : 12,
         textAlign: 'center'
       }} numberOfLines={1}>
         {currentExercise.exerciseName}
       </Text>
       
-      {/* Progress Indicator - Tertiary */}
+      {/* Reps if exists */}
+      {currentExercise.repsPlanned && (
+        <Text style={{ 
+          fontSize: 32, 
+          fontWeight: '600', 
+          color: TOKENS.color.accent2,
+          marginBottom: 12,
+          textAlign: 'center'
+        }}>
+          {currentExercise.repsPlanned} {currentExercise.repsPlanned === 1 ? 'rep' : 'reps'}
+        </Text>
+      )}
+      
+      {/* Progress Indicator or Next Up - Tertiary */}
       <Text style={{ 
         fontSize: 20, 
         fontWeight: '500',
         color: TOKENS.color.muted,
         opacity: 0.7
       }}>
-        Exercise {currentExerciseIndex + 1} of {currentRound?.exercises.length}
+        {restDuration === 0 && currentExerciseIndex < currentRound.exercises.length - 1
+          ? `Next Up: ${currentRound.exercises[currentExerciseIndex + 1]?.exerciseName}`
+          : `Exercise ${currentExerciseIndex + 1} of ${currentRound?.exercises.length}`
+        }
       </Text>
     </View>
   );

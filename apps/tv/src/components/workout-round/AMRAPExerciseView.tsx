@@ -76,21 +76,19 @@ export function AMRAPExerciseView({
                   fontSize: 18, 
                   fontWeight: '700',
                   color: TOKENS.color.text,
-                  marginBottom: 2,
                 }}>
                   {exercise.exerciseName}
                 </Text>
-                <Text style={{ 
-                  fontSize: 11, 
-                  fontWeight: '700',
-                  color: TOKENS.color.muted,
-                  textTransform: 'uppercase',
-                  letterSpacing: 1.2,
-                }}>
-                  {Array.isArray(exercise.equipment) && exercise.equipment.length > 0
-                    ? exercise.equipment.join(', ') 
-                    : ''}
-                </Text>
+                {exercise.repsPlanned && (
+                  <Text style={{
+                    fontSize: 14,
+                    fontWeight: '600',
+                    color: TOKENS.color.muted,
+                    marginTop: 2,
+                  }}>
+                    {exercise.repsPlanned} {exercise.repsPlanned === 1 ? 'rep' : 'reps'}
+                  </Text>
+                )}
               </View>
             </MattePanel>
           ))}

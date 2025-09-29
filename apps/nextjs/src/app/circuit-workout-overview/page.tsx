@@ -208,6 +208,16 @@ function CircuitWorkoutOverviewContent() {
   const [showMirrorConfirm, setShowMirrorConfirm] = useState(false);
   const [mirrorRoundName, setMirrorRoundName] = useState("");
   const [pendingMirrorSwap, setPendingMirrorSwap] = useState<any>(null);
+  
+  // Sets configuration modal state
+  const [showSetsModal, setShowSetsModal] = useState(false);
+  const [selectedExerciseForSets, setSelectedExerciseForSets] = useState<{
+    id: string;
+    exerciseName: string;
+    exerciseId: string;
+    roundName: string;
+  } | null>(null);
+  const [repsValue, setRepsValue] = useState(0);
 
   // Set up the reorder mutation for circuits
   const reorderExerciseMutation = useMutation({
@@ -221,6 +231,26 @@ function CircuitWorkoutOverviewContent() {
     onError: (error) => {
       console.error("Failed to reorder exercise:", error);
       alert("Failed to reorder exercise. Please try again.");
+    },
+  });
+
+  // Set up the update reps mutation
+  const updateRepsPlannedMutation = useMutation({
+    ...trpc.workoutSelections.updateRepsPlanned.mutationOptions(),
+    onSuccess: () => {
+      // Invalidate queries to refresh data
+      queryClient.invalidateQueries({
+        queryKey: trpc.workoutSelections.getSelections.queryOptions({ 
+          sessionId: sessionId || "" 
+        }).queryKey,
+      });
+      // Close modal
+      setShowSetsModal(false);
+      setSelectedExerciseForSets(null);
+    },
+    onError: (error) => {
+      console.error("Failed to update reps:", error);
+      alert("Failed to update reps. Please try again.");
     },
   });
 
@@ -419,6 +449,7 @@ function CircuitWorkoutOverviewContent() {
               exerciseName: ex.exerciseName,
               orderIndex: ex.orderIndex,
               custom_exercise: ex.custom_exercise,
+              repsPlanned: ex.repsPlanned,
             }))
         }))
         .sort((a, b) => {
@@ -816,23 +847,47 @@ function CircuitWorkoutOverviewContent() {
                                 )}
                               </div>
                               <span className="font-medium text-base leading-tight py-1 text-gray-900 dark:text-gray-100">{exercise.exerciseName}</span>
+                              {exercise.repsPlanned && (
+                                <span className="text-sm text-gray-500 dark:text-gray-400 ml-2">
+                                  {exercise.repsPlanned} {exercise.repsPlanned === 1 ? 'rep' : 'reps'}
+                                </span>
+                              )}
                             </div>
                             <div className="flex items-center gap-2">
                               {!isEditing ? (
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => {
-                                    setEditingExerciseId(exercise.id);
-                                    setInlineSearchQuery("");
-                                    setInlineSelectedId(null);
-                                    setSelectedCategory(null);
-                                    setCategoryMode('choice');
-                                  }}
-                                  className="h-8 px-3 font-medium dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:hover:bg-gray-600 focus:outline-none focus:ring-0"
-                                >
-                                  Replace
-                                </Button>
+                                <>
+                                  <button
+                                    onClick={() => {
+                                      setSelectedExerciseForSets({
+                                        id: exercise.id,
+                                        exerciseName: exercise.exerciseName,
+                                        exerciseId: exercise.exerciseId,
+                                        roundName: round.roundName,
+                                      });
+                                      setRepsValue(exercise.repsPlanned || 0);
+                                      setShowSetsModal(true);
+                                    }}
+                                    className="h-8 w-10 flex items-center justify-center border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors focus:outline-none focus:ring-0"
+                                  >
+                                    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-gray-600 dark:text-gray-400">
+                                      <path d="M10 3.125V6.875M10 13.125V16.875M4.375 10H8.125M11.875 10H15.625M6.875 6.875L8.75 8.75M11.25 11.25L13.125 13.125M13.125 6.875L11.25 8.75M8.75 11.25L6.875 13.125" />
+                                    </svg>
+                                  </button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => {
+                                      setEditingExerciseId(exercise.id);
+                                      setInlineSearchQuery("");
+                                      setInlineSelectedId(null);
+                                      setSelectedCategory(null);
+                                      setCategoryMode('choice');
+                                    }}
+                                    className="h-8 px-3 font-medium dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:hover:bg-gray-600 focus:outline-none focus:ring-0"
+                                  >
+                                    Replace
+                                  </Button>
+                                </>
                               ) : null}
                             </div>
                           </div>
@@ -1745,6 +1800,114 @@ function CircuitWorkoutOverviewContent() {
                     }}
                   >
                     Update Both Rounds
+                  </Button>
+                </div>
+              </div>
+            </Card>
+          </div>
+        </>
+      )}
+
+      {/* Sets Configuration Modal */}
+      {showSetsModal && selectedExerciseForSets && (
+        <>
+          {/* Background overlay */}
+          <div
+            className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm"
+            onClick={() => {
+              setShowSetsModal(false);
+              setSelectedExerciseForSets(null);
+            }}
+          />
+
+          {/* Modal */}
+          <div className="fixed inset-x-4 top-1/2 z-50 mx-auto max-w-lg -translate-y-1/2">
+            <Card className="p-6 shadow-2xl border-2 bg-white dark:bg-gray-800 dark:border-gray-700">
+              <div className="space-y-6">
+                {/* Header */}
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">
+                      Configure Exercise
+                    </h2>
+                    <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                      {selectedExerciseForSets.exerciseName}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setShowSetsModal(false);
+                      setSelectedExerciseForSets(null);
+                    }}
+                    className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors focus:outline-none focus:ring-0"
+                  >
+                    <XIcon className="w-5 h-5 text-gray-500 dark:text-gray-400" />
+                  </button>
+                </div>
+
+                {/* Sets Configuration */}
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Number of Reps
+                    </label>
+                    <div className="flex items-center gap-3">
+                      <button
+                        className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg border border-gray-300 dark:border-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        onClick={() => setRepsValue(Math.max(0, repsValue - 1))}
+                        disabled={repsValue <= 0}
+                      >
+                        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M13 10H7" />
+                        </svg>
+                      </button>
+                      <input
+                        type="number"
+                        value={repsValue}
+                        onChange={(e) => {
+                          const value = e.target.value === '' ? 0 : parseInt(e.target.value) || 0;
+                          setRepsValue(Math.max(0, Math.min(99, value))); // Limit between 0-99
+                        }}
+                        onFocus={(e) => e.target.select()} // Select all text on focus
+                        className="w-20 text-center text-lg font-medium border border-gray-300 dark:border-gray-600 rounded-lg py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      />
+                      <button
+                        className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg border border-gray-300 dark:border-gray-600 transition-colors"
+                        onClick={() => setRepsValue(Math.min(99, repsValue + 1))}
+                      >
+                        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M10 7v6M7 10h6" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Footer */}
+                <div className="flex gap-3 pt-4 border-t dark:border-gray-700">
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setShowSetsModal(false);
+                      setSelectedExerciseForSets(null);
+                    }}
+                    className="flex-1"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      if (selectedExerciseForSets) {
+                        updateRepsPlannedMutation.mutate({
+                          exerciseId: selectedExerciseForSets.id,
+                          repsPlanned: repsValue > 0 ? repsValue : null,
+                        });
+                      }
+                    }}
+                    className="flex-1 bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
+                    disabled={updateRepsPlannedMutation.isPending}
+                  >
+                    {updateRepsPlannedMutation.isPending ? 'Saving...' : 'Save Changes'}
                   </Button>
                 </div>
               </div>

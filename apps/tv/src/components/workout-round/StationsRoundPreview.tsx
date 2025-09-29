@@ -124,7 +124,7 @@ export function StationsRoundPreview({ currentRound, repeatTimes = 1, workDurati
                       color: team.color,
                       letterSpacing: 0.5,
                     }}>
-                      {workDuration} seconds
+                      {exercise.repsPlanned ? `${exercise.repsPlanned} ${exercise.repsPlanned === 1 ? 'rep' : 'reps'}` : `${workDuration} seconds`}
                     </Text>
                   </View>
                 </View>

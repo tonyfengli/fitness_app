@@ -110,16 +110,18 @@ export function CircuitRoundPreview({ currentRound, repeatTimes = 1 }: CircuitRo
                     {exercise.exerciseName}
                   </Text>
                   
-                  {/* Equipment or default text */}
-                  <Text style={{ 
-                    fontSize: needsScaling ? 15 : 16, 
-                    fontWeight: '600',
-                    color: '#9ca3af',
-                  }}>
-                    {Array.isArray(exercise.equipment) && exercise.equipment.length > 0
-                      ? exercise.equipment.join(', ') 
-                      : ''}
-                  </Text>
+                  {/* Reps if exists */}
+                  {exercise.repsPlanned && (
+                    <Text style={{
+                      fontSize: needsScaling ? 15 : 16,
+                      fontWeight: '600',
+                      color: TOKENS.color.muted,
+                      marginTop: 2,
+                    }}>
+                      {exercise.repsPlanned} {exercise.repsPlanned === 1 ? 'rep' : 'reps'}
+                    </Text>
+                  )}
+                  
                 </MattePanel>
               </View>
             );

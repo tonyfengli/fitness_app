@@ -8,6 +8,8 @@ interface StationsRestViewProps {
   timeRemaining: number;
   isPaused: boolean;
   isSetBreak?: boolean;
+  restDuration?: number;
+  workDuration?: number;
 }
 
 // Team configuration - matches the preview
@@ -25,23 +27,15 @@ export function StationsRestView({
   currentExerciseIndex,
   timeRemaining,
   isPaused,
-  isSetBreak = false
+  isSetBreak = false,
+  restDuration = 15,
+  workDuration = 45
 }: StationsRestViewProps) {
+  // Use actual number of exercises as stations
   const exerciseCount = currentRound.exercises.length;
   
   // Use only as many teams as there are stations
   const activeTeams = TEAMS.slice(0, exerciseCount);
-  
-  // Calculate grid columns based on number of stations
-  const getGridColumns = () => {
-    if (exerciseCount <= 3) return exerciseCount;
-    if (exerciseCount <= 6) return 3;
-    if (exerciseCount <= 8) return 4;
-    return 5;
-  };
-  
-  const columns = getGridColumns();
-  const cardWidth = columns <= 3 ? 380 : columns === 4 ? 300 : 260;
   
   // Next exercise index (what we're transitioning to)
   // For the last exercise, there's no "next" - we're going to round preview
@@ -51,177 +45,170 @@ export function StationsRestView({
   
   return (
     <View style={{ flex: 1, width: '100%' }}>
-      
-      {/* Stations Grid - Exact same layout as exercise view */}
+      {/* Horizontal Columns Layout - Same as preview/work */}
       <View style={{ 
         flex: 1, 
-        paddingHorizontal: 28,
-        paddingTop: 60,
+        paddingHorizontal: 48,
+        paddingTop: 40,
+        flexDirection: 'row',
+        gap: 2, // Minimal gap for connected feel
       }}>
-        <View style={{ 
-          flexDirection: 'row',
-          flexWrap: 'wrap',
-          justifyContent: 'center',
-          gap: 16,
-        }}>
-          {currentRound.exercises.map((exercise, idx) => {
-            const stationNumber = idx + 1;
-            
-            // Current team (what's leaving this station)
-            // Ensure currentExerciseIndex is within bounds
-            const safeCurrentIndex = Math.min(Math.max(0, currentExerciseIndex), exerciseCount - 1);
-            const currentTeamIndex = (idx - safeCurrentIndex + activeTeams.length) % activeTeams.length;
-            const currentTeam = activeTeams[currentTeamIndex];
-            
-            // Next team (what's coming to this station)
-            const nextTeamIndex = (idx - nextExerciseIndex + activeTeams.length) % activeTeams.length;
-            const nextTeam = activeTeams[nextTeamIndex];
-            
-            // Safety check - this should never happen but prevents crashes
-            if (!currentTeam || !nextTeam) {
-              console.error('[StationsRestView] Team calculation error:', {
-                currentExerciseIndex,
-                safeCurrentIndex,
-                exerciseCount,
-                activeTeams: activeTeams.length,
-                currentTeamIndex,
-                nextTeamIndex
-              });
-              return null;
-            }
-            
-            return (
-              <MattePanel 
-                key={exercise.id} 
-                style={{ 
-                  width: cardWidth,
-                  padding: 16,
-                  gap: 10,
-                }}
-              >
-                {/* Exercise Name */}
-                <Text style={{ 
-                  fontSize: 18, 
-                  fontWeight: '900',
-                  color: TOKENS.color.text,
-                  marginBottom: 4,
-                }}>
-                  {exercise.exerciseName}
-                </Text>
-                
-                {/* Station Number */}
-                <Text style={{ 
-                  fontSize: 12, 
-                  fontWeight: '700',
-                  color: TOKENS.color.muted,
-                  textTransform: 'uppercase',
-                  letterSpacing: 1.2,
-                }}>
-                  STATION {stationNumber}
-                </Text>
-                
-                {/* Team Transition */}
-                {isLastExercise ? (
-                  // For last exercise, show "Round Complete" instead of team transition
-                  <View style={{ 
-                    alignSelf: 'flex-start',
-                    paddingHorizontal: 12,
-                    paddingVertical: 7,
-                    borderRadius: 10,
-                    backgroundColor: TOKENS.color.accent + '15',
-                    borderWidth: 1,
-                    borderColor: TOKENS.color.accent,
-                  }}>
-                    <Text style={{ 
-                      color: TOKENS.color.accent, 
-                      fontWeight: '800',
-                      fontSize: 14,
-                      letterSpacing: 0.3,
-                    }}>
-                      Round Complete
-                    </Text>
-                  </View>
-                ) : (
-                  <View style={{ 
-                    flexDirection: 'row', 
-                    alignItems: 'center',
-                    gap: 10,
-                  }}>
-                    {/* Old Team - Crossed Out */}
-                    <View style={{ 
-                      paddingHorizontal: 12,
-                      paddingVertical: 7,
-                      borderRadius: 10,
-                      backgroundColor: `${currentTeam.color}08`,
-                      borderWidth: 1,
-                      borderColor: `${currentTeam.color}30`,
+        {currentRound.exercises.map((exercise, idx) => {
+          const stationNumber = idx + 1;
+          
+          // Current team (what's leaving this station)
+          const safeCurrentIndex = Math.min(Math.max(0, currentExerciseIndex), exerciseCount - 1);
+          const currentTeamIndex = (idx - safeCurrentIndex + activeTeams.length) % activeTeams.length;
+          const currentTeam = activeTeams[currentTeamIndex];
+          
+          // Next team (what's coming to this station)
+          const nextTeamIndex = (idx - nextExerciseIndex + activeTeams.length) % activeTeams.length;
+          const nextTeam = activeTeams[nextTeamIndex];
+          
+          // Safety check
+          if (!currentTeam || !nextTeam) {
+            console.error('[StationsRestView] Team calculation error:', {
+              currentExerciseIndex,
+              safeCurrentIndex,
+              exerciseCount,
+              activeTeams: activeTeams.length,
+              currentTeamIndex,
+              nextTeamIndex
+            });
+            return null;
+          }
+          
+          return (
+            <View 
+              key={`station-${idx}`} 
+              style={{ 
+                flex: 1,
+                backgroundColor: TOKENS.color.cardGlass,
+                borderRadius: 0,
+                borderTopLeftRadius: stationNumber === 1 ? 16 : 0,
+                borderBottomLeftRadius: stationNumber === 1 ? 16 : 0,
+                borderTopRightRadius: stationNumber === exerciseCount ? 16 : 0,
+                borderBottomRightRadius: stationNumber === exerciseCount ? 16 : 0,
+                overflow: 'hidden',
+              }}
+            >
+              {/* Team Color Bar - Shows NEXT team color */}
+              <View style={{
+                height: 6,
+                backgroundColor: nextTeam.color,
+              }} />
+              
+              {/* Content */}
+              <View style={{ 
+                flex: 1,
+                padding: 20,
+                paddingTop: 24,
+              }}>
+                {/* Team Transition Badge */}
+                <View style={{ marginBottom: 24 }}>
+                  {isLastExercise ? (
+                    // For last exercise, show "Round Complete"
+                    <View style={{
                       flexDirection: 'row',
                       alignItems: 'center',
                       gap: 8,
-                      opacity: 0.4,
                     }}>
                       <View style={{
                         width: 12,
                         height: 12,
-                        borderRadius: 999,
-                        backgroundColor: currentTeam.color,
-                        opacity: 0.3,
+                        borderRadius: 6,
+                        backgroundColor: TOKENS.color.accent,
                       }} />
+                      <Text style={{ 
+                        color: TOKENS.color.accent, 
+                        fontWeight: '800',
+                        fontSize: 14,
+                        letterSpacing: 0.3,
+                        textTransform: 'uppercase',
+                      }}>
+                        Round Complete
+                      </Text>
+                    </View>
+                  ) : (
+                    // Show team transition
+                    <View style={{ 
+                      flexDirection: 'row', 
+                      alignItems: 'center',
+                      gap: 8,
+                    }}>
+                      {/* Old Team - Faded */}
                       <Text style={{ 
                         color: currentTeam.color, 
-                        fontWeight: '800',
-                        fontSize: 14,
+                        fontWeight: '600',
+                        fontSize: 12,
                         letterSpacing: 0.3,
+                        textTransform: 'uppercase',
                         textDecorationLine: 'line-through',
+                        opacity: 0.4,
+                      }}>
+                        {currentTeam.name}
+                      </Text>
+                      
+                      {/* Arrow */}
+                      <Text style={{ 
+                        fontSize: 14, 
+                        color: TOKENS.color.muted,
                         opacity: 0.6,
                       }}>
-                        {currentTeam.name} Team
+                        →
                       </Text>
-                    </View>
-                    
-                    {/* Arrow */}
-                    <Text style={{ 
-                      fontSize: 16, 
-                      color: TOKENS.color.muted,
-                      opacity: 0.6,
-                    }}>
-                      →
-                    </Text>
-                    
-                    {/* New Team */}
-                    <View style={{ 
-                      paddingHorizontal: 12,
-                      paddingVertical: 7,
-                      borderRadius: 10,
-                      backgroundColor: `${nextTeam.color}15`,
-                      borderWidth: 1,
-                      borderColor: nextTeam.color,
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      gap: 8,
-                    }}>
+                      
+                      {/* New Team */}
                       <View style={{
-                        width: 12,
-                        height: 12,
-                        borderRadius: 999,
-                        backgroundColor: nextTeam.color,
-                      }} />
-                      <Text style={{ 
-                        color: nextTeam.color, 
-                        fontWeight: '800',
-                        fontSize: 14,
-                        letterSpacing: 0.3,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 8,
                       }}>
-                        {nextTeam.name} Team
-                      </Text>
+                        <View style={{
+                          width: 12,
+                          height: 12,
+                          borderRadius: 6,
+                          backgroundColor: nextTeam.color,
+                        }} />
+                        <Text style={{ 
+                          color: nextTeam.color, 
+                          fontWeight: '800',
+                          fontSize: 14,
+                          letterSpacing: 0.3,
+                          textTransform: 'uppercase',
+                        }}>
+                          {nextTeam.name}
+                        </Text>
+                      </View>
                     </View>
-                  </View>
-                )}
+                  )}
+                </View>
                 
-              </MattePanel>
-            );
-          })}
-        </View>
+                {/* Exercise Display */}
+                <View style={{ flex: 1 }}>
+                  <View>
+                    <Text style={{ 
+                      fontSize: exerciseCount === 1 ? 28 : 18, 
+                      fontWeight: exerciseCount === 1 ? '800' : '700',
+                      color: TOKENS.color.text,
+                      marginBottom: exerciseCount === 1 ? 12 : 6,
+                    }}>
+                      {exercise.exerciseName}
+                    </Text>
+                    <Text style={{ 
+                      fontSize: exerciseCount === 1 ? 16 : 14, 
+                      fontWeight: '600',
+                      color: nextTeam.color,
+                      letterSpacing: 0.5,
+                    }}>
+                      {exercise.repsPlanned ? `${exercise.repsPlanned} ${exercise.repsPlanned === 1 ? 'rep' : 'reps'}` : `${workDuration} seconds`}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            </View>
+          );
+        })}
       </View>
     </View>
   );

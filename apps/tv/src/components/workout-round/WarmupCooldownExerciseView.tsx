@@ -23,8 +23,8 @@ export function WarmupCooldownExerciseView({
   
   // Calculate which exercise is currently active based on time elapsed
   const { activeExerciseIndex, isResting, exerciseTimeRemaining } = useMemo(() => {
-    const workDuration = currentRound.template.exerciseWorkDuration || 45;
-    const restDuration = currentRound.template.exerciseRestDuration || 15;
+    const workDuration = currentRound.template.exerciseWorkDuration ?? 45;
+    const restDuration = currentRound.template.exerciseRestDuration ?? 15;
     const totalExercises = currentRound.exercises.length;
     
     // Calculate total duration

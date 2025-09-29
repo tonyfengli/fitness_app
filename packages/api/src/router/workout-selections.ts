@@ -93,6 +93,7 @@ export const workoutSelectionsRouter = {
         groupName: row.we.groupName,
         orderIndex: row.we.orderIndex,
         custom_exercise: row.we.custom_exercise,
+        repsPlanned: row.we.repsPlanned,
       }));
     }),
 
@@ -196,6 +197,7 @@ export const workoutSelectionsRouter = {
         groupName: row.we.groupName,
         orderIndex: row.we.orderIndex,
         custom_exercise: row.we.custom_exercise,
+        repsPlanned: row.we.repsPlanned,
       }));
     }),
 
@@ -805,5 +807,34 @@ export const workoutSelectionsRouter = {
       );
 
       return result;
+    }),
+
+  // Update reps planned for an exercise
+  updateRepsPlanned: protectedProcedure
+    .input(
+      z.object({
+        exerciseId: z.string(), // workout_exercise.id
+        repsPlanned: z.number().int().min(0).max(99).nullable(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      console.log("[updateRepsPlanned] Input:", input);
+
+      // Update the workout exercise
+      const result = await ctx.db
+        .update(WorkoutExercise)
+        .set({ repsPlanned: input.repsPlanned })
+        .where(eq(WorkoutExercise.id, input.exerciseId))
+        .returning();
+
+      if (result.length === 0) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Exercise not found",
+        });
+      }
+
+      console.log("[updateRepsPlanned] Updated:", result[0]);
+      return result[0];
     }),
 } satisfies TRPCRouterRecord;

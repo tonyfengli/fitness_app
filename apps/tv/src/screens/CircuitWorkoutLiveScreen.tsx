@@ -245,16 +245,16 @@ export function CircuitWorkoutLiveScreen() {
     const template = roundTemplate.template;
     if (template.type === 'circuit_round') {
       return {
-        workDuration: template.workDuration || workDuration,
-        restDuration: template.restDuration || restDuration,
+        workDuration: template.workDuration ?? workDuration,
+        restDuration: template.restDuration ?? restDuration,
         roundType: 'circuit_round' as const,
         repeatTimes: (template as any).repeatTimes || 1
       };
     } else if (template.type === 'stations_round') {
       // Stations now have their own timing
       return {
-        workDuration: (template as any).workDuration || workDuration,
-        restDuration: (template as any).restDuration || restDuration,
+        workDuration: (template as any).workDuration ?? workDuration,
+        restDuration: (template as any).restDuration ?? restDuration,
         roundType: 'stations_round' as const,
         repeatTimes: (template as any).repeatTimes || 1
       };
@@ -328,6 +328,7 @@ export function CircuitWorkoutLiveScreen() {
   const { data: selections, isLoading: selectionsLoading } = useQuery({
     ...selectionsQueryOptions,
     enabled: !!sessionId && !!selectionsQueryOptions,
+    refetchInterval: 3000, // Poll every 3 seconds for reps_planned updates
     onError: (error) => {
       console.error('[CircuitWorkoutLive] Failed to load selections:', error);
     }
@@ -375,6 +376,7 @@ export function CircuitWorkoutLiveScreen() {
           orderIndex: selection.orderIndex || 0,
           groupName: selection.groupName || 'Round 1',
           equipment: selection.equipment,
+          repsPlanned: selection.repsPlanned,
         };
         
         console.log(`[DEDUP-DEBUG] Adding exercise ${index}:`, {
@@ -1053,10 +1055,31 @@ export function CircuitWorkoutLiveScreen() {
             });
           }
         } else {
-          // Not the last exercise - go to rest
-          setCurrentScreen('rest');
+          // Not the last exercise - check if we should go to rest or next exercise
           const { restDuration } = getRoundTiming(roundIdx);
-          startTimer(restDuration);
+          
+          if (restDuration === 0) {
+            // Skip rest and go directly to next exercise
+            setCurrentExerciseIndex(exerciseIdx + 1);
+            setCurrentScreen('exercise');
+            const { workDuration } = getRoundTiming(roundIdx);
+            startTimer(workDuration);
+            
+            // Play BRIDGE track at start of exercise 2
+            if (exerciseIdx + 1 === 1) { // Exercise 2 (0-indexed)
+              const currentRoundMusic = currentSetlist?.rounds?.[roundIdx];
+              if (currentRoundMusic && playTrack) {
+                const bridgeTrack = currentRoundMusic.track2;
+                if (bridgeTrack) {
+                  playTrack(bridgeTrack.spotifyId, 0);
+                }
+              }
+            }
+          } else {
+            // Go to rest as normal
+            setCurrentScreen('rest');
+            startTimer(restDuration);
+          }
         }
       }
     } else if (screen === 'rest') {
@@ -1131,9 +1154,17 @@ export function CircuitWorkoutLiveScreen() {
           });
         }
         
-        setCurrentScreen('rest');
         const { restDuration } = prevRoundTiming;
-        startTimer(restDuration);
+        
+        if (restDuration === 0) {
+          // Skip rest and go directly to last exercise
+          setCurrentScreen('exercise');
+          const { workDuration } = prevRoundTiming;
+          startTimer(workDuration);
+        } else {
+          setCurrentScreen('rest');
+          startTimer(restDuration);
+        }
       }
     } else if (currentScreen === 'exercise') {
       if (currentExerciseIndex === 0) {
@@ -1155,8 +1186,14 @@ export function CircuitWorkoutLiveScreen() {
           setCurrentSetNumber(currentSetNumber - 1);
           const currentRound = roundsData[currentRoundIndex];
           setCurrentExerciseIndex(currentRound.exercises.length - 1);
-          setCurrentScreen('rest');
-          startTimer(roundTiming.restDuration);
+          if (roundTiming.restDuration === 0) {
+            // Skip rest and go directly to last exercise of previous set
+            setCurrentScreen('exercise');
+            startTimer(roundTiming.workDuration);
+          } else {
+            setCurrentScreen('rest');
+            startTimer(roundTiming.restDuration);
+          }
           return;
         }
         
@@ -1170,11 +1207,20 @@ export function CircuitWorkoutLiveScreen() {
           setTimeRemaining(0);
         }
       } else {
-        // Go to previous rest
-        setCurrentExerciseIndex(currentExerciseIndex - 1);
-        setCurrentScreen('rest');
-        const { restDuration } = getRoundTiming(currentRoundIndex);
-        startTimer(restDuration);
+        // Go to previous exercise or rest
+        const { restDuration, workDuration } = getRoundTiming(currentRoundIndex);
+        
+        if (restDuration === 0) {
+          // Skip rest and go directly to previous exercise
+          setCurrentExerciseIndex(currentExerciseIndex - 1);
+          setCurrentScreen('exercise');
+          startTimer(workDuration);
+        } else {
+          // Go to previous rest
+          setCurrentExerciseIndex(currentExerciseIndex - 1);
+          setCurrentScreen('rest');
+          startTimer(restDuration);
+        }
       }
     } else if (currentScreen === 'rest') {
       // Go back to current exercise
@@ -1306,6 +1352,19 @@ export function CircuitWorkoutLiveScreen() {
                 ? formatTime(timeRemaining)
                 : currentRound?.roundName || `Round ${currentRoundIndex + 1}`}
             </Text>
+            {currentScreen === 'round-preview' && currentRoundType === 'amrap_round' && (
+              <Text style={{ 
+                fontSize: 16, 
+                fontWeight: '700',
+                color: TOKENS.color.muted,
+                opacity: 0.8,
+                textTransform: 'uppercase',
+                letterSpacing: 1.2,
+                marginTop: 4,
+              }}>
+                Rest
+              </Text>
+            )}
             {currentRoundType === 'stations_round' && currentRound && (
               <View style={{ 
                 height: 24, 
@@ -1582,7 +1641,10 @@ export function CircuitWorkoutLiveScreen() {
                 workDuration={getRoundTiming(currentRoundIndex).workDuration}
               />
             : currentRoundType === 'amrap_round'
-            ? <AMRAPRoundPreview currentRound={currentRound} />
+            ? <AMRAPRoundPreview 
+                currentRound={currentRound} 
+                restDuration={circuitConfig?.config?.restBetweenRounds || 60}
+              />
             : <CircuitRoundPreview 
                 currentRound={currentRound} 
                 repeatTimes={getRoundTiming(currentRoundIndex).repeatTimes || 1}
@@ -1598,6 +1660,7 @@ export function CircuitWorkoutLiveScreen() {
                   currentExerciseIndex={currentExerciseIndex}
                   timeRemaining={timeRemaining}
                   isPaused={isPaused}
+                  workDuration={getRoundTiming(currentRoundIndex).workDuration}
                 />
             : currentRoundType === 'amrap_round'
             ? <AMRAPExerciseView 
@@ -1613,6 +1676,7 @@ export function CircuitWorkoutLiveScreen() {
                 currentExerciseIndex={currentExerciseIndex}
                 timeRemaining={timeRemaining}
                 isPaused={isPaused}
+                restDuration={getRoundTiming(currentRoundIndex).restDuration}
               />
             }
             
@@ -1684,6 +1748,8 @@ export function CircuitWorkoutLiveScreen() {
                   timeRemaining={timeRemaining}
                   isPaused={isPaused}
                   isSetBreak={currentExerciseIndex === currentRound.exercises.length - 1 && currentSetNumber < (getRoundTiming(currentRoundIndex).repeatTimes || 1)}
+                  restDuration={getRoundTiming(currentRoundIndex).restDuration}
+                  workDuration={getRoundTiming(currentRoundIndex).workDuration}
                 />
             : (
               <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingBottom: 60 }}>

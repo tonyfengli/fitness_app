@@ -343,6 +343,7 @@ export const WorkoutExercise = pgTable("workout_exercise", (t) => ({
     .references(() => exercises.id),
   orderIndex: t.integer().notNull(),
   setsCompleted: t.integer().notNull(),
+  repsPlanned: t.integer(),
   groupName: t.text(), // "Block A", "Round 1", etc.
   isShared: t.boolean().default(false),
   sharedWithClients: t.text("shared_with_clients").array(),
@@ -363,6 +364,7 @@ export const CreateWorkoutExerciseSchema = createInsertSchema(WorkoutExercise, {
   exerciseId: z.string().uuid().nullable(),
   orderIndex: z.number().int().min(1),
   setsCompleted: z.number().int().min(1),
+  repsPlanned: z.number().int().min(1).nullable().optional(),
   groupName: z.string().optional(),
   isShared: z.boolean().optional().default(false),
   sharedWithClients: z.array(z.string()).optional(),

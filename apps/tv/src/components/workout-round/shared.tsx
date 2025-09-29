@@ -73,6 +73,7 @@ export interface CircuitExercise {
   orderIndex: number;
   groupName: string;
   equipment?: string[] | null;
+  repsPlanned?: number | null;
 }
 
 export interface RoundData {

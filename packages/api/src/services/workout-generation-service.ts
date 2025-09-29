@@ -1500,6 +1500,7 @@ export class WorkoutGenerationService {
             exerciseId: r2Exercise.id,
             orderIndex: 2,
             setsCompleted: 99,
+            // repsPlanned defaults to null in database
             groupName: "Round 2",
             template: "full_body_bmf",
           });
@@ -1524,6 +1525,7 @@ export class WorkoutGenerationService {
               exerciseId: exercise.id,
               orderIndex: 3,
               setsCompleted: 99,
+              // repsPlanned defaults to null in database
               groupName: "Round 3",
               notes: `Pre-assigned: ${assignment.reason}`,
               template: "full_body_bmf",
@@ -1603,6 +1605,7 @@ export class WorkoutGenerationService {
               exerciseId: exercise.id,
               orderIndex: 4,
               setsCompleted: 99,
+              // repsPlanned defaults to null in database
               groupName: "Round 4",
               notes: `Pre-assigned: ${assignment.reason}`,
               template: "full_body_bmf",
@@ -2117,6 +2120,7 @@ export class WorkoutGenerationService {
                 exerciseId: exercise.id,
                 orderIndex: globalIndex++,
                 setsCompleted: 0,
+                // repsPlanned defaults to null in database
                 groupName: `Round ${displayRoundNumber}`,
                 // Circuit MVP: Only mark as shared if multiple clients
                 isShared: groupContext.clients.length > 1,
@@ -2161,6 +2165,7 @@ export class WorkoutGenerationService {
                   exerciseId: fallbackExercise.id,
                   orderIndex: globalIndex++,
                   setsCompleted: 0,
+                  // repsPlanned defaults to null in database
                   groupName: `Round ${displayRoundNumber}`,
                   isShared: groupContext.clients.length > 1,
                   sharedWithClients: groupContext.clients.length > 1 
