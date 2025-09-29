@@ -804,7 +804,7 @@ export const workoutSelectionsRouter = {
             sessionId: input.sessionId,
             clientId: row.userId,
             exerciseId: row.we.exerciseId,
-            exerciseName: row.exercise.name,
+            exerciseName: row.exercise?.name || 'Unknown Exercise',
             isShared: row.we.isShared || false,
             sharedWithClients: row.we.sharedWithClients,
             selectionSource: row.we.selectionSource,

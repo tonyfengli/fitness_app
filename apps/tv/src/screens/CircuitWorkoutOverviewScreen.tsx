@@ -82,7 +82,7 @@ interface CircuitExercise {
 interface RoundData {
   roundName: string;
   exercises: CircuitExercise[];
-  roundType?: 'circuit_round' | 'stations_round' | 'amrap_round';
+  roundType?: 'circuit_round' | 'stations_round' | 'amrap_round' | 'warmup_round';
   workDuration?: number;
   restDuration?: number;
   totalDuration?: number; // For AMRAP
@@ -205,6 +205,11 @@ function RoundContent({ round, isCompact }: {
         return {
           type: 'AMRAP',
           timing: `${minutes}min`
+        };
+      case 'warmup_round':
+        return {
+          type: 'Warmup',
+          timing: `${round.workDuration ?? 30}s`
         };
       default:
         return null;

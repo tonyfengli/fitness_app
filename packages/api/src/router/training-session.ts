@@ -3552,9 +3552,11 @@ Set your goals and preferences for today's session.`;
 
             const exercisesWithMetadata = await Promise.all(
               workoutExercises.map(async (we) => {
-                const exercise = await ctx.db.query.exercises.findFirst({
-                  where: eq(exercises.id, we.exerciseId),
-                });
+                const exercise = we.exerciseId 
+                  ? await ctx.db.query.exercises.findFirst({
+                      where: eq(exercises.id, we.exerciseId),
+                    })
+                  : null;
                 return {
                   ...we,
                   exercise: exercise,
@@ -3628,9 +3630,11 @@ Set your goals and preferences for today's session.`;
 
           const exercisesWithMetadata = await Promise.all(
             workoutExercises.map(async (we) => {
-              const exercise = await ctx.db.query.exercises.findFirst({
-                where: eq(exercises.id, we.exerciseId),
-              });
+              const exercise = we.exerciseId
+                ? await ctx.db.query.exercises.findFirst({
+                    where: eq(exercises.id, we.exerciseId),
+                  })
+                : null;
               return {
                 ...we,
                 exercise: exercise,
@@ -3937,9 +3941,11 @@ Set your goals and preferences for today's session.`;
         });
         
         for (const we of workoutExercises) {
-          const exercise = await ctx.db.query.exercises.findFirst({
-            where: eq(exercises.id, we.exerciseId),
-          });
+          const exercise = we.exerciseId
+            ? await ctx.db.query.exercises.findFirst({
+                where: eq(exercises.id, we.exerciseId),
+              })
+            : null;
           
           if (exercise?.name.toLowerCase() === exerciseName.toLowerCase()) {
             // Update this workout exercise
@@ -3991,9 +3997,11 @@ Set your goals and preferences for today's session.`;
             });
             
             for (const we of workoutExercises) {
-              const exercise = await ctx.db.query.exercises.findFirst({
-                where: eq(exercises.id, we.exerciseId),
-              });
+              const exercise = we.exerciseId
+                ? await ctx.db.query.exercises.findFirst({
+                    where: eq(exercises.id, we.exerciseId),
+                  })
+                : null;
               
               if (exercise?.name.toLowerCase() === exerciseName.toLowerCase()) {
                 // Update with other client IDs

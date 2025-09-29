@@ -159,7 +159,14 @@ export class PostWorkoutFeedbackService {
 
       // Include ALL exercises from the workout - no filtering
       // This gives users access to provide feedback on any exercise in the session
-      performedExercises = workoutExercises;
+      performedExercises = workoutExercises
+        .filter(e => e.exerciseId !== null)
+        .map(e => ({
+          exerciseId: e.exerciseId as string,
+          exerciseName: e.exerciseName,
+          primaryMuscle: e.primaryMuscle,
+          movementPattern: e.movementPattern,
+        }));
 
       console.log("[PostWorkoutFeedbackService] All workout exercises (no filtering):", {
         count: performedExercises.length,
