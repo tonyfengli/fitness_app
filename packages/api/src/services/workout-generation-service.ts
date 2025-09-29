@@ -178,7 +178,6 @@ export class WorkoutGenerationService {
             groupName: WorkoutExercise.groupName,
             selectionSource: WorkoutExercise.selectionSource,
             template: WorkoutExercise.template,
-            reasoning: WorkoutExercise.reasoning,
             exercise: exercises,
           })
           .from(WorkoutExercise)
@@ -2244,7 +2243,7 @@ export class WorkoutGenerationService {
           source: we.selectionSource || "existing",
           round: we.groupName || "Block A",
           template: we.template,
-          reasoning: we.reasoning || "Loaded from existing workout",
+          reasoning: "Loaded from existing workout",
           orderIndex: we.orderIndex,
         }));
 
