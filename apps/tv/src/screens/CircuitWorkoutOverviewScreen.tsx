@@ -185,30 +185,42 @@ function RoundContent({ round, isCompact }: {
     );
   };
   
-  // Format round type info - shortened for inline display
+  // Format round type info - returns object with type and timing
   const getRoundTypeInfo = () => {
-    if (!round.roundType) return '';
+    if (!round.roundType) return null;
     
     switch (round.roundType) {
       case 'circuit_round':
-        return ` • ${round.workDuration ?? 45}/${round.restDuration ?? 15}s`;
+        return {
+          type: 'Circuit',
+          timing: `${round.workDuration ?? 45}/${round.restDuration ?? 15}s`
+        };
       case 'stations_round':
-        return ` • Stations ${round.workDuration ?? 60}/${round.restDuration ?? 15}s`;
+        return {
+          type: 'Stations',
+          timing: `${round.workDuration ?? 60}/${round.restDuration ?? 15}s`
+        };
       case 'amrap_round':
         const minutes = round.totalDuration ? Math.floor(round.totalDuration / 60) : 5;
-        return ` • AMRAP ${minutes}min`;
+        return {
+          type: 'AMRAP',
+          timing: `${minutes}min`
+        };
       default:
-        return '';
+        return null;
     }
   };
+  
+  const roundInfo = getRoundTypeInfo();
   
   return (
     <View style={{ flex: 1 }}>
       <View style={{ 
         flexDirection: 'row', 
-        alignItems: 'baseline',
+        alignItems: 'center',
+        justifyContent: 'center',
         marginBottom: isCompact ? 16 : 24,
-        gap: 8
+        gap: 12
       }}>
         <Text style={{ 
           fontSize: getTitleSize(), 
@@ -217,13 +229,39 @@ function RoundContent({ round, isCompact }: {
         }}>
           {round.roundName}
         </Text>
-        <Text style={{ 
-          fontSize: isCompact ? 16 : 20, 
-          color: TOKENS.color.muted,
-          fontWeight: '400'
-        }}>
-          {getRoundTypeInfo()}
-        </Text>
+        {roundInfo && (
+          <View style={{ 
+            backgroundColor: TOKENS.color.accent + '08',
+            borderWidth: 1,
+            borderColor: TOKENS.color.accent + '20',
+            borderRadius: 8,
+            paddingHorizontal: 12,
+            paddingVertical: 6,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}>
+            <Text style={{ 
+              fontSize: isCompact ? 11 : 12, 
+              color: TOKENS.color.accent,
+              fontWeight: '700',
+              lineHeight: isCompact ? 13 : 14,
+              letterSpacing: 1,
+              textTransform: 'uppercase',
+              marginBottom: 1
+            }}>
+              {roundInfo.type}
+            </Text>
+            <Text style={{ 
+              fontSize: isCompact ? 13 : 14, 
+              color: TOKENS.color.accent,
+              fontWeight: '800',
+              lineHeight: isCompact ? 15 : 16,
+              letterSpacing: -0.5
+            }}>
+              {roundInfo.timing}
+            </Text>
+          </View>
+        )}
       </View>
       
       <View style={{ flex: 1, justifyContent: 'space-between' }}>
