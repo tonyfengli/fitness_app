@@ -16,6 +16,17 @@ import {
   filterExercisesBySearch,
   cn,
   MUSCLE_UNIFICATION,
+  // New utility imports
+  getStationInfo,
+  isStationsRound,
+  getRoundType,
+  replaceExercise,
+  findMirrorExercise,
+  nestStationExercises,
+  type RoundData,
+  type ProcessedExercise,
+  type WorkoutSelection,
+  type CircuitConfig,
 } from "@acme/ui-shared";
 import { supabase } from "~/lib/supabase";
 import { api, useTRPC } from "~/trpc/react";
@@ -56,20 +67,7 @@ function getEffectiveTrackDuration(trackDurationMs: number, hypeTimestamp?: numb
   return trackDurationMs - offsetMs;
 }
 
-interface RoundTiming {
-  roundNumber: number;
-  countdownStartMs: number;
-  workStartMs: number;
-  endTimeMs: number;
-  totalDurationMs: number;
-}
-
-interface CircuitTimingResult {
-  rounds: RoundTiming[];
-  totalWorkoutDurationMs: number;
-  totalWorkTimeMs: number;
-  totalRestTimeMs: number;
-}
+// Remove redundant interfaces - we're using the ones from ui-shared now
 
 function calculateCircuitTiming(
   config: any,
@@ -505,58 +503,16 @@ function CircuitWorkoutOverviewContent() {
           // First, sort all exercises by orderIndex
           const sortedExercises = exercises.sort((a: any, b: any) => a.orderIndex - b.orderIndex);
           
-          // For stations rounds, group exercises by orderIndex
-          const roundTemplate = circuitConfig?.config?.roundTemplates?.find(
-            rt => `Round ${rt.roundNumber}` === roundName
-          );
-          const isStationsRound = roundTemplate?.template?.type === 'stations_round';
+          // Use utility function to determine if this is a stations round
+          const isStationRound = isStationsRound(roundName, circuitConfig);
           
-          if (isStationsRound) {
-            // Group exercises by orderIndex for stations
-            const stationGroups = new Map<number, any[]>();
-            sortedExercises.forEach(ex => {
-              const orderIndex = ex.orderIndex;
-              if (!stationGroups.has(orderIndex)) {
-                stationGroups.set(orderIndex, []);
-              }
-              stationGroups.get(orderIndex)!.push(ex);
-            });
-            
-            // Create station exercises with primary and additional exercises
-            const stationExercises: any[] = [];
-            Array.from(stationGroups.entries())
-              .sort(([a], [b]) => a - b)
-              .forEach(([orderIndex, group]) => {
-                // Sort by stationIndex within the group (null first)
-                const sortedGroup = group.sort((a: any, b: any) => {
-                  if (a.stationIndex === null) return -1;
-                  if (b.stationIndex === null) return 1;
-                  return a.stationIndex - b.stationIndex;
-                });
-                
-                // First exercise (with null or 0 stationIndex) is the primary
-                const primaryExercise = sortedGroup[0];
-                const additionalExercises = sortedGroup.slice(1);
-                
-                stationExercises.push({
-                  id: primaryExercise.id,
-                  exerciseId: primaryExercise.exerciseId,
-                  exerciseName: primaryExercise.exerciseName,
-                  orderIndex: primaryExercise.orderIndex,
-                  custom_exercise: primaryExercise.custom_exercise,
-                  repsPlanned: primaryExercise.repsPlanned,
-                  // Add additional exercises as stationExercises
-                  stationExercises: additionalExercises.map((ex: any) => ({
-                    id: ex.id,
-                    exerciseId: ex.exerciseId,
-                    exerciseName: ex.exerciseName,
-                  }))
-                });
-              });
+          if (isStationRound) {
+            // Use the nestStationExercises utility to convert flat to nested structure
+            const nestedExercises = nestStationExercises(sortedExercises);
             
             return {
               roundName,
-              exercises: stationExercises
+              exercises: nestedExercises
             };
           } else {
             // For non-stations rounds, keep original behavior
@@ -1533,41 +1489,28 @@ function CircuitWorkoutOverviewContent() {
                     }
                   }
 
-                  // Check if this is a station exercise (multiple exercises at same orderIndex)
+                  // Use the new utility functions for cleaner logic
                   const currentRound = roundsData.find(r => r.roundName === selectedRound);
-                  const exercisesAtSameOrder = currentRound?.exercises.filter(
-                    ex => ex.orderIndex === selectedExerciseIndex
-                  ) || [];
-                  const isStationExercise = exercisesAtSameOrder.length > 1;
-                  
-                  console.log('[Modal Replace] Station detection:', {
-                    selectedExercise: selectedExercise.exerciseName,
-                    orderIndex: selectedExerciseIndex,
-                    exercisesAtSameOrder: exercisesAtSameOrder.length,
-                    isStationExercise
-                  });
-                  
-                  if (isStationExercise) {
-                    // Use specific exercise swap for stations
-                    swapSpecificExerciseMutation.mutate({
-                      sessionId: sessionId!,
-                      exerciseId: selectedExercise.id,
-                      newExerciseId: selectedReplacement,
-                      reason: "Station exercise swap",
-                      swappedBy: dummyUserId || "unknown",
-                    });
-                  } else {
-                    // Use regular circuit swap for non-station exercises
-                    swapExerciseMutation.mutate({
-                      sessionId: sessionId!,
-                      roundName: selectedRound,
-                      exerciseIndex: selectedExerciseIndex,
-                      originalExerciseId: selectedExercise.exerciseId || (selectedExercise.custom_exercise as any)?.originalExerciseId || null,
-                      newExerciseId: selectedReplacement,
-                      reason: "Circuit exercise swap",
-                      swappedBy: dummyUserId || "unknown",
-                    });
+                  if (!currentRound) {
+                    console.error('[Modal Replace] Round not found:', selectedRound);
+                    return;
                   }
+                  
+                  // Use replaceExercise utility
+                  replaceExercise({
+                    exercise: selectedExercise,
+                    newExerciseId: selectedReplacement,
+                    round: currentRound,
+                    sessionId: sessionId!,
+                    userId: dummyUserId || "unknown",
+                    circuitConfig,
+                    mutations: {
+                      swapSpecific: swapSpecificExerciseMutation,
+                      swapCircuit: swapExerciseMutation
+                    }
+                  }).catch((error) => {
+                    console.error('[Modal Replace] Error:', error);
+                  });
                 }}
                 disabled={
                   !selectedReplacement || swapExerciseMutation.isPending
@@ -1700,57 +1643,22 @@ function CircuitWorkoutOverviewContent() {
                               customName: inlineSelectedId ? undefined : inlineSearchQuery.trim(),
                             });
                             
-                            // Check if this is a station exercise
-                            console.log('[Replace] editingRound.exercises structure:', editingRound.exercises);
-                            
-                            // For stations rounds, check if the exercise has stationExercises or is part of one
-                            let isStationExercise = false;
-                            
-                            // Check if this exercise has stationExercises (it's the primary)
-                            if (editingExercise.stationExercises && editingExercise.stationExercises.length > 0) {
-                              isStationExercise = true;
-                            } else {
-                              // Check if this exercise is a secondary exercise in a station
-                              const parentExercise = editingRound.exercises.find(ex => 
-                                ex.stationExercises?.some(se => se.id === editingExerciseId)
-                              );
-                              if (parentExercise) {
-                                isStationExercise = true;
+                            // Use the utility function for cleaner logic
+                            replaceExercise({
+                              exercise: editingExercise,
+                              newExerciseId: inlineSelectedId || null,
+                              customName: inlineSelectedId ? undefined : inlineSearchQuery.trim(),
+                              round: editingRound,
+                              sessionId: sessionId!,
+                              userId: dummyUserId || "unknown",
+                              circuitConfig,
+                              mutations: {
+                                swapSpecific: swapSpecificExerciseMutation,
+                                swapCircuit: swapExerciseMutation
                               }
-                            }
-                            
-                            console.log('[Replace] Station detection:', {
-                              exerciseName: editingExercise.exerciseName,
-                              hasStationExercises: !!editingExercise.stationExercises,
-                              stationExercisesCount: editingExercise.stationExercises?.length || 0,
-                              isStationExercise
+                            }).catch((error) => {
+                              console.error('[Inline Replace] Error:', error);
                             });
-                            
-                            if (isStationExercise) {
-                              console.log('[Replace] Using swapSpecificExercise for station exercise');
-                              // Use specific exercise swap for stations
-                              swapSpecificExerciseMutation.mutate({
-                                sessionId: sessionId!,
-                                exerciseId: editingExercise.id, // Use the specific exercise ID
-                                newExerciseId: inlineSelectedId || null, // null for custom exercises
-                                customName: inlineSelectedId ? undefined : inlineSearchQuery.trim(), // custom name if no selection
-                                reason: "Station exercise swap",
-                                swappedBy: dummyUserId || "unknown",
-                              });
-                            } else {
-                              console.log('[Replace] Using swapCircuitExercise for non-station exercise');
-                              // Use regular circuit swap for non-station exercises
-                              swapExerciseMutation.mutate({
-                                sessionId: sessionId!,
-                                roundName: editingRound.roundName,
-                                exerciseIndex: editingExercise.orderIndex,
-                                originalExerciseId: editingExercise.exerciseId || (editingExercise.custom_exercise as any)?.originalExerciseId || null,
-                                newExerciseId: inlineSelectedId || null, // null for custom exercises
-                                customName: inlineSelectedId ? undefined : inlineSearchQuery.trim(), // custom name if no selection
-                                reason: "Circuit exercise swap",
-                                swappedBy: dummyUserId || "unknown",
-                              });
-                            }
                           }
                         }}
                         disabled={(!inlineSelectedId && !inlineSearchQuery.trim()) || swapExerciseMutation.isPending || swapSpecificExerciseMutation.isPending}
@@ -2150,15 +2058,21 @@ function CircuitWorkoutOverviewContent() {
                     variant="outline"
                     onClick={async () => {
                       // Update only the original
+                      const originalRound = roundsData.find(r => r.roundName === pendingMirrorSwap.originalRound);
+                      if (!originalRound) return;
+                      
                       try {
-                        await swapExerciseMutation.mutateAsync({
-                          sessionId: sessionId!,
-                          roundName: pendingMirrorSwap.originalRound,
-                          exerciseIndex: pendingMirrorSwap.selectedExerciseIndex,
-                          originalExerciseId: pendingMirrorSwap.selectedExercise.exerciseId || (pendingMirrorSwap.selectedExercise.custom_exercise as any)?.originalExerciseId || null,
+                        await replaceExercise({
+                          exercise: pendingMirrorSwap.selectedExercise,
                           newExerciseId: pendingMirrorSwap.selectedReplacement,
-                          reason: "Circuit exercise swap",
-                          swappedBy: dummyUserId || "unknown",
+                          round: originalRound,
+                          sessionId: sessionId!,
+                          userId: dummyUserId || "unknown",
+                          circuitConfig,
+                          mutations: {
+                            swapSpecific: swapSpecificExerciseMutation,
+                            swapCircuit: swapExerciseMutation
+                          }
                         });
                       } catch (error) {
                         console.error("Failed to swap exercise:", error);
@@ -2173,27 +2087,37 @@ function CircuitWorkoutOverviewContent() {
                     className="bg-purple-600 hover:bg-purple-700 text-white"
                     onClick={async () => {
                       // Update both rounds
+                      const originalRound = roundsData.find(r => r.roundName === pendingMirrorSwap.originalRound);
+                      const mirrorRound = roundsData.find(r => r.roundName === pendingMirrorSwap.mirrorRound);
+                      if (!originalRound || !mirrorRound) return;
+                      
                       try {
                         // Update original
-                        await swapExerciseMutation.mutateAsync({
-                          sessionId: sessionId!,
-                          roundName: pendingMirrorSwap.originalRound,
-                          exerciseIndex: pendingMirrorSwap.selectedExerciseIndex,
-                          originalExerciseId: pendingMirrorSwap.selectedExercise.exerciseId || (pendingMirrorSwap.selectedExercise.custom_exercise as any)?.originalExerciseId || null,
+                        await replaceExercise({
+                          exercise: pendingMirrorSwap.selectedExercise,
                           newExerciseId: pendingMirrorSwap.selectedReplacement,
-                          reason: "Circuit exercise swap (with mirror)",
-                          swappedBy: dummyUserId || "unknown",
+                          round: originalRound,
+                          sessionId: sessionId!,
+                          userId: dummyUserId || "unknown",
+                          circuitConfig,
+                          mutations: {
+                            swapSpecific: swapSpecificExerciseMutation,
+                            swapCircuit: swapExerciseMutation
+                          }
                         });
                         
                         // Update mirror
-                        await swapExerciseMutation.mutateAsync({
-                          sessionId: sessionId!,
-                          roundName: pendingMirrorSwap.mirrorRound,
-                          exerciseIndex: pendingMirrorSwap.mirrorExercise.orderIndex,
-                          originalExerciseId: pendingMirrorSwap.mirrorExercise.exerciseId || (pendingMirrorSwap.mirrorExercise.custom_exercise as any)?.originalExerciseId || null,
+                        await replaceExercise({
+                          exercise: pendingMirrorSwap.mirrorExercise,
                           newExerciseId: pendingMirrorSwap.selectedReplacement,
-                          reason: "Circuit exercise swap (mirror round)",
-                          swappedBy: dummyUserId || "unknown",
+                          round: mirrorRound,
+                          sessionId: sessionId!,
+                          userId: dummyUserId || "unknown",
+                          circuitConfig,
+                          mutations: {
+                            swapSpecific: swapSpecificExerciseMutation,
+                            swapCircuit: swapExerciseMutation
+                          }
                         });
                       } catch (error) {
                         console.error("Failed to swap exercises:", error);

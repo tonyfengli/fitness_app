@@ -25,6 +25,20 @@ export * from "./styles";
 // Utilities
 export { cn } from "./utils/cn";
 export * from "./utils/exercise-filters";
+export * from "./utils/round-helpers";
+export { 
+  // Export all except Exercise interface to avoid conflict with context
+  type StationExercise,
+  type StationPosition,
+  type StationInfo,
+  getStationInfo,
+  isStationExercise,
+  getExercisesAtStation,
+  getNextStationIndex,
+  flattenStationExercises,
+  nestStationExercises
+} from "./utils/station-helpers";
+export * from "./utils/workout-actions";
 
 // Constants
 export * from "./constants";
@@ -37,6 +51,7 @@ export * from "./components/ResponsiveView";
 
 // Types
 export * from "./types";
+export * from "./types/circuit.types";
 
 // Feature flags
 export * from "./utils/featureFlags";
