@@ -962,7 +962,7 @@ export const workoutSelectionsRouter = {
         
         // First, get all exercises in the round sorted by orderIndex
         const allRoundExercisesOrdered = allRoundExercises
-          .filter(ex => ex.stationIndex === null) // Only consider main station exercises
+          .filter(ex => ex.stationIndex === null || ex.stationIndex === 0) // Consider both null and 0 as main station exercises
           .sort((a, b) => a.orderIndex - b.orderIndex);
         
         // Find the exercise at the target station position

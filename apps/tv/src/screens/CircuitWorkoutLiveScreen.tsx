@@ -377,13 +377,15 @@ export function CircuitWorkoutLiveScreen() {
           groupName: selection.groupName || 'Round 1',
           equipment: selection.equipment,
           repsPlanned: selection.repsPlanned,
+          stationIndex: (selection as any).stationIndex ?? null,
         };
         
         console.log(`[DEDUP-DEBUG] Adding exercise ${index}:`, {
           selectionId: selection.id,
           exerciseId: selection.exerciseId,
           exerciseName: selection.exerciseName,
-          groupName: selection.groupName
+          groupName: selection.groupName,
+          stationIndex: exercise.stationIndex
         });
         
         allExercises.push(exercise);
@@ -409,10 +411,93 @@ export function CircuitWorkoutLiveScreen() {
       
       // Sort exercises within each round and create final structure
       let rounds: RoundData[] = Array.from(roundsMap.entries())
-        .map(([roundName, exercises]) => ({
-          roundName,
-          exercises: exercises.sort((a, b) => a.orderIndex - b.orderIndex)
-        }))
+        .map(([roundName, exercises]) => {
+          // First sort by orderIndex and stationIndex
+          const sortedExercises = exercises.sort((a, b) => {
+            if (a.orderIndex !== b.orderIndex) {
+              return a.orderIndex - b.orderIndex;
+            }
+            // For same orderIndex, sort by stationIndex
+            const aStation = a.stationIndex ?? 0;
+            const bStation = b.stationIndex ?? 0;
+            return aStation - bStation;
+          });
+          
+          // Check if this is a stations round by looking at round templates
+          const roundNum = parseInt(roundName.match(/\d+/)?.[0] || '0');
+          const roundTemplate = circuitConfig?.config?.roundTemplates?.find(
+            rt => rt.roundNumber === roundNum
+          );
+          const isStationsRound = roundTemplate?.template?.type === 'stations_round';
+          
+          console.log('[STATION-DEBUG] Processing round:', {
+            roundName,
+            roundNum,
+            isStationsRound,
+            exerciseCount: sortedExercises.length,
+            exercises: sortedExercises.map(e => ({
+              name: e.exerciseName,
+              orderIndex: e.orderIndex,
+              stationIndex: e.stationIndex
+            }))
+          });
+          
+          // If it's a stations round, group exercises by station
+          if (isStationsRound) {
+            const stationGroups = new Map<number, CircuitExercise[]>();
+            
+            // Group exercises by orderIndex (which represents the station)
+            sortedExercises.forEach(exercise => {
+              const stationKey = exercise.orderIndex;
+              if (!stationGroups.has(stationKey)) {
+                stationGroups.set(stationKey, []);
+              }
+              stationGroups.get(stationKey)!.push(exercise);
+            });
+            
+            // Convert to nested structure
+            const nestedExercises: CircuitExercise[] = [];
+            
+            Array.from(stationGroups.entries())
+              .sort(([a], [b]) => a - b) // Sort by station number
+              .forEach(([stationKey, stationExercises]) => {
+                // Sort exercises within station by stationIndex
+                const sorted = stationExercises.sort((a, b) => {
+                  const aIdx = a.stationIndex ?? 0;
+                  const bIdx = b.stationIndex ?? 0;
+                  return aIdx - bIdx;
+                });
+                
+                // Primary exercise (stationIndex null or 0)
+                const primary = sorted[0];
+                if (primary) {
+                  // Add secondary exercises as stationExercises array
+                  primary.stationExercises = sorted.slice(1);
+                  nestedExercises.push(primary);
+                }
+              });
+            
+            console.log('[STATION-DEBUG] Nested exercises:', {
+              roundName,
+              stationCount: nestedExercises.length,
+              stations: nestedExercises.map(e => ({
+                primary: e.exerciseName,
+                additionalCount: e.stationExercises?.length || 0
+              }))
+            });
+            
+            return {
+              roundName,
+              exercises: nestedExercises
+            };
+          }
+          
+          // For non-stations rounds, use regular sorting
+          return {
+            roundName,
+            exercises: sortedExercises
+          };
+        })
         .sort((a, b) => {
           const aNum = parseInt(a.roundName.match(/\d+/)?.[0] || '0');
           const bNum = parseInt(b.roundName.match(/\d+/)?.[0] || '0');

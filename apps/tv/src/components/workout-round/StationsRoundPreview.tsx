@@ -126,6 +126,32 @@ export function StationsRoundPreview({ currentRound, repeatTimes = 1, workDurati
                     }}>
                       {exercise.repsPlanned ? `${exercise.repsPlanned} ${exercise.repsPlanned === 1 ? 'rep' : 'reps'}` : `${workDuration} seconds`}
                     </Text>
+                    
+                    {/* Additional exercises at this station */}
+                    {exercise.stationExercises && exercise.stationExercises.length > 0 && (
+                      <View style={{ marginTop: 12 }}>
+                        {exercise.stationExercises.map((stationEx, idx) => (
+                          <View key={stationEx.id} style={{ marginTop: idx > 0 ? 8 : 0 }}>
+                            <Text style={{ 
+                              fontSize: exerciseCount === 1 ? 28 : 18, 
+                              fontWeight: exerciseCount === 1 ? '800' : '700',
+                              color: TOKENS.color.text,
+                              marginBottom: exerciseCount === 1 ? 12 : 6,
+                            }}>
+                              {stationEx.exerciseName}
+                            </Text>
+                            <Text style={{ 
+                              fontSize: exerciseCount === 1 ? 16 : 14, 
+                              fontWeight: '600',
+                              color: team.color,
+                              letterSpacing: 0.5,
+                            }}>
+                              {stationEx.repsPlanned ? `${stationEx.repsPlanned} ${stationEx.repsPlanned === 1 ? 'rep' : 'reps'}` : `${workDuration} seconds`}
+                            </Text>
+                          </View>
+                        ))}
+                      </View>
+                    )}
                   </View>
                 </View>
               </View>

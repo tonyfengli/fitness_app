@@ -17,6 +17,7 @@ export interface StationExercise {
   id: string;
   exerciseId: string;
   exerciseName: string;
+  repsPlanned?: number | null;
 }
 
 export type StationPosition = 'primary' | 'secondary' | 'standalone';
@@ -214,7 +215,8 @@ export function nestStationExercises(exercises: Exercise[]): Exercise[] {
         stationExercises: secondaries.map(ex => ({
           id: ex.id,
           exerciseId: ex.exerciseId!,
-          exerciseName: ex.exerciseName
+          exerciseName: ex.exerciseName,
+          repsPlanned: ex.repsPlanned
         }))
       });
     }

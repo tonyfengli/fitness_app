@@ -141,6 +141,7 @@ interface RoundData {
       id: string;
       exerciseId: string;
       exerciseName: string;
+      repsPlanned?: number | null;
     }>;
   }>;
   isRepeat?: boolean;
@@ -468,8 +469,12 @@ function CircuitWorkoutOverviewContent() {
   useEffect(() => {
     console.log("[CircuitWorkoutOverview useEffect] savedSelections changed at:", new Date().toISOString());
     console.log("[CircuitWorkoutOverview useEffect] savedSelections:", savedSelections?.length, "items");
+    console.log("[CircuitWorkoutOverview useEffect] circuitConfig loaded:", !!circuitConfig);
     
-    if (savedSelections && savedSelections.length > 0) {
+    // Wait for both savedSelections AND circuitConfig to be loaded
+    // This prevents the race condition where exercises render as regular rounds
+    // before being re-rendered as stations rounds
+    if (savedSelections && savedSelections.length > 0 && circuitConfig) {
       console.log("[CircuitWorkoutOverview] Processing selections:", savedSelections.length);
       console.log("[CircuitWorkoutOverview] Raw selections:", savedSelections);
       console.log("[CircuitWorkoutOverview] First selection details:", savedSelections[0]);
@@ -767,7 +772,11 @@ function CircuitWorkoutOverviewContent() {
         )}
 
         {/* Content */}
-        {roundsData.length > 0 ? (
+        {isLoadingSelections || !circuitConfig ? (
+          <div className="flex items-center justify-center py-16">
+            <Loader2 className="h-8 w-8 animate-spin text-gray-500 dark:text-gray-400" />
+          </div>
+        ) : roundsData.length > 0 ? (
           <div className="grid gap-6">
             {roundsData.map((round, roundIndex) => {
               // Get music for this round
@@ -982,12 +991,24 @@ function CircuitWorkoutOverviewContent() {
                                     <div className="flex-1">
                                       <div className="font-medium text-gray-900 dark:text-gray-100">
                                         {stationEx.exerciseName}
+                                        {stationEx.repsPlanned && (
+                                          <span className="ml-2 text-sm font-normal text-gray-500 dark:text-gray-400">
+                                            {stationEx.repsPlanned} {stationEx.repsPlanned === 1 ? 'rep' : 'reps'}
+                                          </span>
+                                        )}
                                       </div>
                                     </div>
                                     <div className="flex items-center gap-2 ml-4">
                                       <button
                                         onClick={() => {
-                                          console.log('Configure sets for additional exercise:', stationEx);
+                                          setSelectedExerciseForSets({
+                                            id: stationEx.id,
+                                            exerciseName: stationEx.exerciseName,
+                                            exerciseId: stationEx.exerciseId,
+                                            roundName: round.roundName,
+                                          });
+                                          setRepsValue(stationEx.repsPlanned || 0);
+                                          setShowSetsModal(true);
                                         }}
                                         className="p-2 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-all"
                                       >

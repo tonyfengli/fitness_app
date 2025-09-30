@@ -74,6 +74,8 @@ export interface CircuitExercise {
   groupName: string;
   equipment?: string[] | null;
   repsPlanned?: number | null;
+  stationIndex?: number | null;
+  stationExercises?: CircuitExercise[];
 }
 
 export interface RoundData {

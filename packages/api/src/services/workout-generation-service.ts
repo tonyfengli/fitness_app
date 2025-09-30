@@ -2088,6 +2088,8 @@ export class WorkoutGenerationService {
                   .map(c => c.user_id)
               : [],
             template: "circuit",
+            // Warmup is never a stations round
+            stationIndex: null,
             metadata: {
               phase: "warmup",
               movementPattern: exercise.movementPattern,
@@ -2106,6 +2108,17 @@ export class WorkoutGenerationService {
           const displayRoundNumber = repeatRounds && iteration === 1 
             ? roundNumber + circuitRounds.length 
             : roundNumber;
+          
+          // Check if this round is a stations round
+          const roundTemplates = metadata?.circuitConfig?.config?.roundTemplates;
+          let isStationsRound = false;
+          let roundTemplate = null;
+          
+          if (roundTemplates && Array.isArray(roundTemplates)) {
+            // Find template for current round (roundTemplates are 1-indexed)
+            roundTemplate = roundTemplates.find((rt: any) => rt.roundNumber === displayRoundNumber);
+            isStationsRound = roundTemplate?.template?.type === 'stations_round';
+          }
           
           // Process each exercise in the round
           round.exercises.forEach((circuitEx: any) => {
@@ -2129,6 +2142,8 @@ export class WorkoutGenerationService {
                       .map(c => c.user_id)
                   : [],
                 template: "circuit",
+                // Set stationIndex to 0 for stations rounds, null otherwise
+                stationIndex: isStationsRound ? 0 : null,
                 // Store additional circuit metadata
                 metadata: {
                   round: displayRoundNumber,
@@ -2173,6 +2188,8 @@ export class WorkoutGenerationService {
                         .map(c => c.user_id)
                     : [],
                   template: "circuit",
+                  // Set stationIndex to 0 for stations rounds, null otherwise
+                  stationIndex: isStationsRound ? 0 : null,
                   metadata: {
                     round: displayRoundNumber,
                     position: circuitEx.position,
