@@ -47,7 +47,6 @@ export function useRealtimeExerciseSwaps({
 
     // Small delay to avoid subscribing during rapid re-renders
     const timeoutId = setTimeout(() => {
-      console.log('[useRealtimeExerciseSwaps] Setting up realtime for session:', sessionId);
     
     // Create a channel for exercise swaps
     const channel = supabase
@@ -97,7 +96,6 @@ export function useRealtimeExerciseSwaps({
         }
       )
       .subscribe((status) => {
-        console.log('[useRealtimeExerciseSwaps] Subscription status changed:', status);
         
         if (status === 'SUBSCRIBED') {
           setIsConnected(true);
@@ -124,7 +122,6 @@ export function useRealtimeExerciseSwaps({
     // Cleanup function
     return () => {
       clearTimeout(timeoutId);
-      console.log('[useRealtimeExerciseSwaps] Cleaning up subscription');
       if (channelRef.current) {
         supabase.removeChannel(channelRef.current);
         channelRef.current = null;

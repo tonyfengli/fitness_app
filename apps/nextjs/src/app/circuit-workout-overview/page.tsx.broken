@@ -187,7 +187,6 @@ function CircuitWorkoutOverviewContent() {
   const addExerciseToStationMutation = useMutation({
     ...trpc.workoutSelections.addExerciseToStation.mutationOptions(),
     onSuccess: (data) => {
-      console.log("[addExerciseToStation] Success:", data);
       
       // Invalidate queries to refresh data
       queryClient.invalidateQueries({
@@ -197,7 +196,6 @@ function CircuitWorkoutOverviewContent() {
       });
     },
     onError: (error) => {
-      console.error("Failed to add exercise to station:", error);
       alert("Failed to add exercise to station. Please try again.");
     },
   });
@@ -262,7 +260,6 @@ function CircuitWorkoutOverviewContent() {
       });
     },
     onError: (error) => {
-      console.error("Failed to reorder exercise:", error);
       alert("Failed to reorder exercise. Please try again.");
     },
   });
@@ -282,7 +279,6 @@ function CircuitWorkoutOverviewContent() {
       setSelectedExerciseForSets(null);
     },
     onError: (error) => {
-      console.error("Failed to update reps:", error);
       alert("Failed to update reps. Please try again.");
     },
   });
@@ -291,7 +287,6 @@ function CircuitWorkoutOverviewContent() {
   const swapExerciseMutation = useMutation({
     ...trpc.workoutSelections.swapCircuitExercise.mutationOptions(),
     onSuccess: (data) => {
-      console.log("[swapExerciseMutation] Success! Response:", data);
       
       // Close modal
       setShowExerciseSelection(false);
@@ -304,11 +299,9 @@ function CircuitWorkoutOverviewContent() {
       setInlineSelectedId(null);
 
       // Invalidate queries to refresh data
-      console.log("[swapExerciseMutation] Invalidating queries...");
       // Log current queries to debug
       const queryCache = queryClient.getQueryCache();
       const queries = queryCache.getAll();
-      console.log("[swapExerciseMutation] Current query keys:", queries.map(q => q.queryKey));
       
       // Find the getSelections query
       const getSelectionsQuery = queries.find(q => 
@@ -316,7 +309,6 @@ function CircuitWorkoutOverviewContent() {
         q.queryKey[0][0] === "workoutSelections" && 
         q.queryKey[0][1] === "getSelections"
       );
-      console.log("[swapExerciseMutation] getSelections query key:", getSelectionsQuery?.queryKey);
       
       const invalidatePromise = queryClient.invalidateQueries({
         queryKey: trpc.workoutSelections.getSelections.queryOptions({ 
@@ -325,13 +317,10 @@ function CircuitWorkoutOverviewContent() {
       });
       
       invalidatePromise.then(() => {
-        console.log("[swapExerciseMutation] Query invalidation complete");
       }).catch((err) => {
-        console.error("[swapExerciseMutation] Query invalidation failed:", err);
       });
     },
     onError: (error) => {
-      console.error("Failed to swap exercise:", error);
       alert("Failed to swap exercise. Please try again.");
     },
   });
@@ -340,7 +329,6 @@ function CircuitWorkoutOverviewContent() {
   const swapSpecificExerciseMutation = useMutation({
     ...trpc.workoutSelections.swapSpecificExercise.mutationOptions(),
     onSuccess: (data) => {
-      console.log("[swapSpecificExerciseMutation] Success! Response:", data);
       
       // Close modal
       setShowExerciseSelection(false);
@@ -360,7 +348,6 @@ function CircuitWorkoutOverviewContent() {
       });
     },
     onError: (error) => {
-      console.error("Failed to swap specific exercise:", error);
       alert("Failed to swap exercise. Please try again.");
     },
   });
@@ -370,21 +357,16 @@ function CircuitWorkoutOverviewContent() {
     sessionId: sessionId || "",
     supabase,
     onSwapUpdate: (swap) => {
-      console.log("[CircuitWorkoutOverview] Exercise swap detected:", swap);
-      console.log("[CircuitWorkoutOverview] Current dataUpdatedAt:", dataUpdatedAt);
       
       // Force refetch of exercise selections
-      console.log("[CircuitWorkoutOverview] Invalidating queries from real-time update...");
       queryClient.invalidateQueries({
         queryKey: trpc.workoutSelections.getSelections.queryOptions({ 
           sessionId: sessionId || "" 
         }).queryKey,
       }).then(() => {
-        console.log("[CircuitWorkoutOverview] Real-time invalidation complete");
       });
     },
     onError: (error) => {
-      console.error("[CircuitWorkoutOverview] Real-time error:", error);
     },
   });
 
@@ -406,9 +388,6 @@ function CircuitWorkoutOverviewContent() {
     enabled: !!sessionId,
     refetchInterval: !hasExercises ? 5000 : false, // Poll when no exercises
     onSuccess: (data) => {
-      console.log("[getSelections query] Data fetched successfully at", new Date().toISOString());
-      console.log("[getSelections query] Number of selections:", data?.length);
-      console.log("[getSelections query] Sample data:", data?.slice(0, 2));
     },
   });
 
@@ -440,8 +419,6 @@ function CircuitWorkoutOverviewContent() {
 
   // Process setlist and timing from templateConfig
   useEffect(() => {
-    console.log('[DEBUG] Setlist processing - sessionData:', sessionData);
-    console.log('[DEBUG] Setlist processing - circuitConfig:', circuitConfig);
     
     if (sessionData?.templateConfig && circuitConfig?.config) {
       const templateConfig = sessionData.templateConfig as any;
@@ -450,8 +427,6 @@ function CircuitWorkoutOverviewContent() {
       const setlistData = templateConfig.setlist || 
                          templateConfig.visualizationData?.llmResult?.metadata?.setlist;
       
-      console.log('[DEBUG] Found setlist at:', setlistData ? 'Found' : 'Not found');
-      console.log('[DEBUG] Setlist data:', setlistData);
       
       if (setlistData) {
         setSetlist(setlistData);
@@ -468,20 +443,14 @@ function CircuitWorkoutOverviewContent() {
 
   // Process selections into rounds
   useEffect(() => {
-    console.log("[CircuitWorkoutOverview useEffect] savedSelections changed at:", new Date().toISOString());
-    console.log("[CircuitWorkoutOverview useEffect] savedSelections:", savedSelections?.length, "items");
     
     if (savedSelections && savedSelections.length > 0) {
-      console.log("[CircuitWorkoutOverview] Processing selections:", savedSelections.length);
-      console.log("[CircuitWorkoutOverview] Raw selections:", savedSelections);
-      console.log("[CircuitWorkoutOverview] First selection details:", savedSelections[0]);
       
       // Group exercises by round (using groupName)
       const roundsMap = new Map<string, typeof savedSelections>();
       
       // Use all exercises without deduplication to allow duplicates in the same round
       const allExercises = savedSelections;
-      console.log("[CircuitWorkoutOverview] All exercises (no deduplication):", allExercises.length);
       
       // Group by round, excluding warm-up exercises
       allExercises.forEach((selection) => {
@@ -489,7 +458,6 @@ function CircuitWorkoutOverviewContent() {
         
         // Skip warm-up exercises from regular rounds
         if (round === 'Warm-up') {
-          console.log("[CircuitWorkoutOverview] Excluding warm-up exercise from rounds:", selection.exerciseName);
           return;
         }
         
@@ -612,7 +580,6 @@ function CircuitWorkoutOverviewContent() {
       return [];
     }
 
-    console.log('[Exercise Modal] Starting exercise filtering', {
       totalAvailable: availableExercises.length,
       selectedRound,
       selectedExercise: selectedExercise?.exerciseName,
@@ -635,7 +602,6 @@ function CircuitWorkoutOverviewContent() {
       return exercise.templateType.includes('circuit');
     });
 
-    console.log('[Exercise Modal] After template filter:', {
       count: templateFiltered.length,
       filtered: templateFiltered.slice(0, 5).map(e => ({ name: e.name, templateType: e.templateType }))
     });
@@ -644,7 +610,6 @@ function CircuitWorkoutOverviewContent() {
     const isReplacingWarmup = selectedRound === 'Warm-up';
     
     if (isReplacingWarmup) {
-      console.log('[Exercise Modal] Filtering for WARM-UP exercises');
       // When replacing warm-up exercises, ONLY show exercises with warmup_friendly tag
       // or warmup_only function tag
       templateFiltered = templateFiltered.filter((exercise: any) => {
@@ -653,7 +618,6 @@ function CircuitWorkoutOverviewContent() {
         const include = hasWarmupFriendlyTag || hasWarmupOnlyFunction;
         
         if (include) {
-          console.log('[Exercise Modal] Including warm-up exercise:', {
             name: exercise.name,
             movementTags: exercise.movementTags,
             functionTags: exercise.functionTags
@@ -663,20 +627,16 @@ function CircuitWorkoutOverviewContent() {
         return include;
       });
     } else {
-      console.log('[Exercise Modal] Filtering for REGULAR round exercises');
       // When replacing regular round exercises, EXCLUDE warmup_only exercises
       const beforeCount = templateFiltered.length;
       templateFiltered = templateFiltered.filter((exercise: any) => {
         const hasWarmupOnlyFunction = exercise.functionTags?.includes('warmup_only');
         if (hasWarmupOnlyFunction) {
-          console.log('[Exercise Modal] Excluding warmup_only exercise:', exercise.name);
         }
         return !hasWarmupOnlyFunction;
       });
-      console.log(`[Exercise Modal] Excluded ${beforeCount - templateFiltered.length} warmup_only exercises`);
     }
 
-    console.log('[Exercise Modal] After warm-up filter:', {
       count: templateFiltered.length,
       isReplacingWarmup,
       sampleExercises: templateFiltered.slice(0, 5).map(e => e.name)
@@ -687,7 +647,6 @@ function CircuitWorkoutOverviewContent() {
       ? filterExercisesBySearch(templateFiltered, searchQuery)
       : templateFiltered;
 
-    console.log('[Exercise Modal] Final filtered exercises:', {
       count: searchFiltered.length,
       hasSearchQuery: !!searchQuery.trim()
     });
@@ -998,13 +957,6 @@ function CircuitWorkoutOverviewContent() {
                                     </button>
                                     <button
                                       onClick={() => {
-                                        console.log('[Replace Button] Setting up inline edit for:', {
-                                          exerciseId: exercise.id,
-                                          exerciseName: exercise.exerciseName,
-                                          orderIndex: exercise.orderIndex,
-                                          stationIndex: exercise.stationIndex,
-                                          roundName: round.roundName,
-                                        });
                                         setEditingExerciseId(exercise.id);
                                         setInlineSearchQuery("");
                                         setInlineSelectedId(null);
@@ -1031,7 +983,6 @@ function CircuitWorkoutOverviewContent() {
                                     <div className="flex items-center gap-2 ml-4">
                                       <button
                                         onClick={() => {
-                                          console.log('Configure sets for additional exercise:', stationEx);
                                         }}
                                         className="p-2 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-all"
                                       >
@@ -1533,41 +1484,16 @@ function CircuitWorkoutOverviewContent() {
                     }
                   }
 
-                  // Check if this is a station exercise (multiple exercises at same orderIndex)
-                  const currentRound = roundsData.find(r => r.roundName === selectedRound);
-                  const exercisesAtSameOrder = currentRound?.exercises.filter(
-                    ex => ex.orderIndex === selectedExerciseIndex
-                  ) || [];
-                  const isStationExercise = exercisesAtSameOrder.length > 1;
-                  
-                  console.log('[Modal Replace] Station detection:', {
-                    selectedExercise: selectedExercise.exerciseName,
-                    orderIndex: selectedExerciseIndex,
-                    exercisesAtSameOrder: exercisesAtSameOrder.length,
-                    isStationExercise
+                  // Single exercise replacement
+                  swapExerciseMutation.mutate({
+                    sessionId: sessionId!,
+                    roundName: selectedRound,
+                    exerciseIndex: selectedExerciseIndex,
+                    originalExerciseId: selectedExercise.exerciseId || (selectedExercise.custom_exercise as any)?.originalExerciseId || null,
+                    newExerciseId: selectedReplacement,
+                    reason: "Circuit exercise swap",
+                    swappedBy: dummyUserId || "unknown",
                   });
-                  
-                  if (isStationExercise) {
-                    // Use specific exercise swap for stations
-                    swapSpecificExerciseMutation.mutate({
-                      sessionId: sessionId!,
-                      exerciseId: selectedExercise.id,
-                      newExerciseId: selectedReplacement,
-                      reason: "Station exercise swap",
-                      swappedBy: dummyUserId || "unknown",
-                    });
-                  } else {
-                    // Use regular circuit swap for non-station exercises
-                    swapExerciseMutation.mutate({
-                      sessionId: sessionId!,
-                      roundName: selectedRound,
-                      exerciseIndex: selectedExerciseIndex,
-                      originalExerciseId: selectedExercise.exerciseId || (selectedExercise.custom_exercise as any)?.originalExerciseId || null,
-                      newExerciseId: selectedReplacement,
-                      reason: "Circuit exercise swap",
-                      swappedBy: dummyUserId || "unknown",
-                    });
-                  }
                 }}
                 disabled={
                   !selectedReplacement || swapExerciseMutation.isPending
@@ -1700,33 +1626,8 @@ function CircuitWorkoutOverviewContent() {
                               customName: inlineSelectedId ? undefined : inlineSearchQuery.trim(),
                             });
                             
-                            // Check if this is a station exercise
-                            console.log('[Replace] editingRound.exercises structure:', editingRound.exercises);
-                            
-                            // For stations rounds, check if the exercise has stationExercises or is part of one
-                            let isStationExercise = false;
-                            
-                            // Check if this exercise has stationExercises (it's the primary)
-                            if (editingExercise.stationExercises && editingExercise.stationExercises.length > 0) {
-                              isStationExercise = true;
-                            } else {
-                              // Check if this exercise is a secondary exercise in a station
-                              const parentExercise = editingRound.exercises.find(ex => 
-                                ex.stationExercises?.some(se => se.id === editingExerciseId)
-                              );
-                              if (parentExercise) {
-                                isStationExercise = true;
-                              }
-                            }
-                            
-                            console.log('[Replace] Station detection:', {
-                              exerciseName: editingExercise.exerciseName,
-                              hasStationExercises: !!editingExercise.stationExercises,
-                              stationExercisesCount: editingExercise.stationExercises?.length || 0,
-                              isStationExercise
-                            });
-                            
-                            if (isStationExercise) {
+                            // Check if this is a station exercise with multiple exercises
+                            if (editingExercise.stationIndex !== null && editingExercise.stationIndex !== undefined) {
                               console.log('[Replace] Using swapSpecificExercise for station exercise');
                               // Use specific exercise swap for stations
                               swapSpecificExerciseMutation.mutate({
@@ -1800,7 +1701,6 @@ function CircuitWorkoutOverviewContent() {
                       } else if (selectedCategory.type === 'movement') {
                         filtered = filtered.filter((ex: any) => ex.movementPattern === selectedCategory.value);
                       } else if (selectedCategory.type === 'equipment') {
-                        console.log('[DEBUG] Equipment filtering:', {
                           selectedEquipment: selectedCategory.value,
                           totalExercises: filtered.length,
                           sampleExercises: filtered.slice(0, 5).map(ex => ({
@@ -1814,7 +1714,6 @@ function CircuitWorkoutOverviewContent() {
                         
                         // Log exercises that have any equipment data
                         const exercisesWithEquipment = filtered.filter(ex => ex.equipment && (Array.isArray(ex.equipment) ? ex.equipment.length > 0 : true));
-                        console.log('[DEBUG] Exercises with equipment data:', {
                           count: exercisesWithEquipment.length,
                           sample: exercisesWithEquipment.slice(0, 3).map(ex => ({
                             name: ex.name,
@@ -1825,7 +1724,6 @@ function CircuitWorkoutOverviewContent() {
                         filtered = filtered.filter((ex: any) => {
                           // Log each exercise's equipment data
                           if (filtered.length <= 10) { // Only log first 10 to avoid spam
-                            console.log(`[DEBUG] Exercise "${ex.name}" equipment:`, {
                               equipment: ex.equipment,
                               type: typeof ex.equipment,
                               isArray: Array.isArray(ex.equipment)
@@ -1850,7 +1748,6 @@ function CircuitWorkoutOverviewContent() {
                           return false;
                         });
                         
-                        console.log('[DEBUG] Equipment filtering results:', {
                           selectedEquipment: selectedCategory.value,
                           filteredCount: filtered.length,
                           filteredExercises: filtered.slice(0, 5).map(ex => ex.name)
@@ -2161,7 +2058,6 @@ function CircuitWorkoutOverviewContent() {
                           swappedBy: dummyUserId || "unknown",
                         });
                       } catch (error) {
-                        console.error("Failed to swap exercise:", error);
                       }
                       setShowMirrorConfirm(false);
                       setPendingMirrorSwap(null);
@@ -2196,7 +2092,6 @@ function CircuitWorkoutOverviewContent() {
                           swappedBy: dummyUserId || "unknown",
                         });
                       } catch (error) {
-                        console.error("Failed to swap exercises:", error);
                       }
                       setShowMirrorConfirm(false);
                       setPendingMirrorSwap(null);
@@ -2387,7 +2282,6 @@ function CircuitWorkoutOverviewContent() {
                         onClick={() => {
                           const selectedExercise = availableExercisesRef.current.find((ex: any) => ex.id === addExerciseSelectedId);
                           
-                          console.log('Add exercise to station:', {
                             sessionId: sessionId,
                             roundName: addExerciseRoundName,
                             targetStationIndex: addExerciseTargetStation,
@@ -2780,7 +2674,6 @@ function WarmupExercisesList({
       .sort((a: any, b: any) => a.orderIndex - b.orderIndex);
   }, [savedSelections]);
   
-  console.log('[WarmupExercises] Component data:', { 
     savedSelectionsCount: savedSelections?.length,
     warmupExercisesCount: warmupExercises.length,
     warmupExercises: warmupExercises.map(ex => ({
