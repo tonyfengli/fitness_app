@@ -77,6 +77,7 @@ interface CircuitExercise {
   exerciseName: string;
   orderIndex: number;
   groupName: string; // "Round 1", "Round 2", etc.
+  stationIndex?: number; // For grouping exercises at same station
 }
 
 interface RoundData {
@@ -99,6 +100,26 @@ function formatTime12Hour(date: Date): string {
   return `${hours12}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')} ${ampm}`;
 }
 
+// Helper to group exercises by station for station rounds
+function groupExercisesByStation(exercises: CircuitExercise[]): Map<number, CircuitExercise[]> {
+  const stationMap = new Map<number, CircuitExercise[]>();
+  
+  exercises.forEach(exercise => {
+    const stationKey = exercise.orderIndex;
+    if (!stationMap.has(stationKey)) {
+      stationMap.set(stationKey, []);
+    }
+    stationMap.get(stationKey)!.push(exercise);
+  });
+  
+  // Sort exercises within each station by stationIndex
+  stationMap.forEach(stationExercises => {
+    stationExercises.sort((a, b) => (a.stationIndex || 0) - (b.stationIndex || 0));
+  });
+  
+  return stationMap;
+}
+
 // Component to render round content with exercise overflow handling
 function RoundContent({ round, isCompact }: { 
   round: RoundData; 
@@ -116,8 +137,54 @@ function RoundContent({ round, isCompact }: {
   const getTitleSize = () => isCompact ? 20 : 28;
   const getExerciseSize = () => isCompact ? 16 : 20;
   
+  // Special handling for station rounds
+  const isStationRound = round.roundType === 'stations_round';
+  const stationGroups = isStationRound ? groupExercisesByStation(round.exercises) : null;
+  
   // Render exercises in columns for compact mode with 4+ exercises
   const renderExercises = () => {
+    // For station rounds, show grouped display
+    if (isStationRound && stationGroups) {
+      const stations = Array.from(stationGroups.entries()).sort((a, b) => a[0] - b[0]);
+      const maxStations = 6;
+      const stationsToShow = stations.slice(0, maxStations);
+      const hasStationOverflow = stations.length > maxStations;
+      
+      return (
+        <View style={{ gap: isCompact ? 12 : 20 }}>
+          {stationsToShow.map(([stationIndex, stationExercises], idx) => {
+            const visibleExercises = stationExercises.slice(0, 2);
+            const hiddenCount = stationExercises.length - 2;
+            
+            return (
+              <Text
+                key={stationIndex}
+                style={{
+                  fontSize: isCompact ? 16 : 20,
+                  color: TOKENS.color.text,
+                  lineHeight: (isCompact ? 16 : 20) * 1.2,
+                }}
+                numberOfLines={1}
+                ellipsizeMode="tail"
+              >
+                {visibleExercises.map(e => e.exerciseName).join(', ')}
+                {hiddenCount > 0 && ` ... (+${hiddenCount} more)`}
+              </Text>
+            );
+          })}
+          {hasStationOverflow && (
+            <Text style={{
+              fontSize: isCompact ? 15 : 16,
+              color: TOKENS.color.muted,
+              fontStyle: 'italic',
+            }}>
+              ... and {stations.length - maxStations} more stations
+            </Text>
+          )}
+        </View>
+      );
+    }
+    
     if (shouldUseColumns) {
       const midPoint = Math.ceil(exercisesToShow.length / 2);
       const leftColumn = exercisesToShow.slice(0, midPoint);
@@ -272,7 +339,7 @@ function RoundContent({ round, isCompact }: {
       <View style={{ flex: 1, justifyContent: 'space-between' }}>
         {renderExercises()}
         
-        {hasOverflow && (
+        {hasOverflow && !isStationRound && (
           <View style={{ 
             marginTop: isCompact ? 12 : 16,
             paddingTop: isCompact ? 12 : 16,
@@ -377,6 +444,7 @@ export function CircuitWorkoutOverviewScreen() {
           exerciseName: selection.exerciseName,
           orderIndex: selection.orderIndex || 0,
           groupName: selection.groupName || 'Round 1',
+          stationIndex: selection.stationIndex,
         });
       });
       
