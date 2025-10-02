@@ -98,18 +98,6 @@ function selectCircuitExercises(
   // 6. Locomotion/conditioning (capacity): 2 exercises
   const capacityAdded = addExercises(capacityExercises, 2);
   
-  // Log what we've selected so far
-  console.log('[Circuit Bucketing] Initial selection:', {
-    squat: squatsAdded,
-    hinge: hingesAdded,
-    horizontalPush: horizontalPushAdded,
-    verticalPush: verticalPushAdded,
-    horizontalPull: horizontalPullAdded,
-    verticalPull: verticalPullAdded,
-    core: coreAdded,
-    capacity: capacityAdded,
-    totalSelected: selected.length
-  });
   
   // Fill remaining slots if any category was short
   const targetCount = 32;
@@ -131,13 +119,6 @@ function selectCircuitExercises(
     }
   }
   
-  console.log('[Circuit Bucketing] Final selection:', {
-    total: selected.length,
-    patterns: selected.reduce((acc, ex) => {
-      acc[ex.movementPattern] = (acc[ex.movementPattern] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>)
-  });
   
   return selected;
 }
@@ -218,10 +199,6 @@ export function generateCircuitGroupPrompt(config: CircuitPromptConfig): string 
     }
   });
   
-  console.log('[Circuit Template] Individual exercises by client:', {
-    clientCounts: clientExerciseCounts,
-    totalIndividualExercises: allIndividualExercises.length
-  });
   
   // Convert exercises to circuit format and deduplicate
   const exerciseMap = new Map<string, CircuitExercise>();
@@ -242,28 +219,10 @@ export function generateCircuitGroupPrompt(config: CircuitPromptConfig): string 
   // Convert to array - Circuit MVP: All exercises have score 5.0, so order is preserved from filtering
   const allExercises = Array.from(exerciseMap.values());
   
-  // Log all exercises before bucketing
-  console.log('[Circuit Template] All exercises before bucketing:', {
-    totalCount: allExercises.length,
-    exercisesByMovementPattern: allExercises.reduce((acc, ex) => {
-      const pattern = ex.movementPattern || 'unknown';
-      acc[pattern] = (acc[pattern] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>)
-  });
   
   // Circuit MVP: Deterministic bucketing for balanced exercise selection
   const availableExercises = selectCircuitExercises(allExercises, allIndividualExercises);
   
-  console.log('[Circuit Template] Bucketed exercises for circuit:', {
-    count: availableExercises.length,
-    exercises: availableExercises.map((ex, idx) => ({
-      rank: idx + 1,
-      name: ex.name,
-      pattern: ex.movementPattern,
-      muscle: ex.primaryMuscle
-    }))
-  });
   
   // Create exercise ID mapping
   const exerciseIdMap = new Map<string, CircuitExercise>();

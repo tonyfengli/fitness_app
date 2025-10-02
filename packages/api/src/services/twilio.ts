@@ -6,33 +6,16 @@ const apiKey = process.env.TWILIO_API_KEY;
 const apiSecret = process.env.TWILIO_API_SECRET;
 const twilioPhoneNumber = process.env.TWILIO_PHONE_NUMBER;
 
-// Debug logging for Twilio initialization
-console.log("[Twilio Service] Initializing with environment variables:");
-console.log("  - TWILIO_ACCOUNT_SID exists:", !!accountSid);
-console.log("  - TWILIO_ACCOUNT_SID length:", accountSid?.length);
-console.log("  - TWILIO_AUTH_TOKEN exists:", !!authToken);
-console.log("  - TWILIO_AUTH_TOKEN length:", authToken?.length);
-console.log("  - TWILIO_API_KEY exists:", !!apiKey);
-console.log("  - TWILIO_API_SECRET exists:", !!apiSecret);
-console.log("  - TWILIO_PHONE_NUMBER:", twilioPhoneNumber || "NOT SET");
+// Twilio initialization
 
 // Only initialize Twilio client if credentials are provided
 // Use API Key if available (more secure), otherwise fall back to Auth Token
 export const twilioClient =
   apiKey && apiSecret
-    ? (() => {
-        console.log("[Twilio Service] Using API Key authentication");
-        return new Twilio(apiKey, apiSecret, { accountSid });
-      })()
+    ? new Twilio(apiKey, apiSecret, { accountSid })
     : accountSid && authToken
-      ? (() => {
-          console.log("[Twilio Service] Using Account SID + Auth Token authentication");
-          return new Twilio(accountSid, authToken);
-        })()
-      : (() => {
-          console.log("[Twilio Service] ❌ NO CREDENTIALS - Twilio client is NULL");
-          return null;
-        })();
+      ? new Twilio(accountSid, authToken)
+      : null;
 
 export async function sendSMS(to: string, body: string) {
   if (!twilioClient) {
@@ -47,7 +30,7 @@ export async function sendSMS(to: string, body: string) {
       to,
     });
 
-    console.log(`SMS sent successfully: ${message.sid}`);
+    // SMS sent successfully
     return { success: true, messageId: message.sid };
   } catch (error) {
     console.error("Failed to send SMS:", error);

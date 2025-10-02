@@ -108,10 +108,6 @@ export const workoutSelectionsRouter = {
     .query(async ({ ctx, input }) => {
       const { Workout, TrainingSession } = await import("@acme/db/schema");
 
-      console.log("[getSelections] Query params:", {
-        sessionId: input.sessionId,
-        clientId: input.clientId,
-      });
       
       // First, get the session to determine template type
       const session = await ctx.db.query.TrainingSession.findFirst({
@@ -126,7 +122,6 @@ export const workoutSelectionsRouter = {
       }
       
       const templateType = session.templateType || "standard";
-      console.log("[getSelections] Session template type:", templateType);
 
       // Build where clause for workouts
       // When checking for existing workouts, look for draft OR ready status
@@ -153,21 +148,6 @@ export const workoutSelectionsRouter = {
       // Get workouts first
       const workouts = await ctx.db.select().from(Workout).where(workoutWhere);
 
-      console.log(
-        "[getSelections] Found workouts:",
-        workouts.length,
-        "workouts",
-      );
-      if (workouts.length > 0) {
-        console.log(
-          "[getSelections] Workout statuses:",
-          workouts.map((w) => ({
-            id: w.id,
-            status: w.status,
-            userId: w.userId,
-          })),
-        );
-      }
 
       if (workouts.length === 0) {
         return [];
@@ -198,20 +178,6 @@ export const workoutSelectionsRouter = {
         )
         .orderBy(asc(WorkoutExercise.orderIndex));
 
-      console.log("[getSelections] Raw workout exercises from DB:", {
-        count: workoutExercises.length,
-        exercises: workoutExercises.map(row => ({
-          id: row.we.id,
-          workoutId: row.we.workoutId,
-          exerciseId: row.we.exerciseId,
-          orderIndex: row.we.orderIndex,
-          stationIndex: row.we.stationIndex,
-          groupName: row.we.groupName,
-          isShared: row.we.isShared,
-          template: row.we.template,
-          custom_exercise: row.we.custom_exercise,
-        })),
-      });
 
       // Transform to match expected format
       // For circuit workouts without clientId, we'll use the first workout's userId
@@ -254,12 +220,6 @@ export const workoutSelectionsRouter = {
         return acc;
       }, {} as Record<string, number>);
       
-      console.log("[getSelections] Final exercise distribution:", {
-        totalExercises: results.length,
-        templateType: templateType,
-        exercisesByClient: exercisesByClient,
-        clientIds: Object.keys(exercisesByClient),
-      });
       
       return results;
     }),

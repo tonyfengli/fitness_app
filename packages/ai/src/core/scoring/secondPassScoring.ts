@@ -31,7 +31,6 @@ export function performSecondPassScoring(
     return firstPassResults;
   }
 
-  console.log("🎯 Second pass: Boosting included exercises");
 
   const finalScoredExercises = firstPassResults.map((exercise) => {
     // Check if this is an included exercise that needs boosting
@@ -48,15 +47,11 @@ export function performSecondPassScoring(
       // Re-score the exercise with the boost
       const boostedExercise = scoreExercise(exercise, criteria, includeBoost);
 
-      console.log(
-        `🔹 Boosted included exercise "${exercise.name}" to score ${boostedExercise.score}`,
-      );
       return boostedExercise;
     }
 
     return exercise;
   });
 
-  console.log("📊 Second pass complete");
   return finalScoredExercises;
 }

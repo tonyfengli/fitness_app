@@ -5,11 +5,9 @@ import { spotifyAuth } from "../services/spotify-auth";
 export const spotifyRouter = createTRPCRouter({
   // Get available Spotify Connect devices
   getDevices: protectedProcedure.query(async () => {
-    console.log('[Spotify API] getDevices called');
     try {
       const response = await spotifyAuth.makeSpotifyRequest('/me/player/devices');
       
-      console.log('[Spotify API] Devices response status:', response.status);
       
       if (!response.ok) {
         const errorText = await response.text();
@@ -22,10 +20,6 @@ export const spotifyRouter = createTRPCRouter({
       }
       
       const data = await response.json() as any;
-      console.log('[Spotify API] Devices data:', {
-        devices: data.devices || [],
-        deviceCount: data.devices?.length || 0
-      });
       
       return {
         devices: data.devices || [],
@@ -39,11 +33,9 @@ export const spotifyRouter = createTRPCRouter({
 
   // Public version of getDevices for circuit config
   getDevicesPublic: publicProcedure.query(async () => {
-    console.log('[Spotify API] getDevicesPublic called');
     try {
       const response = await spotifyAuth.makeSpotifyRequest('/me/player/devices');
       
-      console.log('[Spotify API] Devices response status:', response.status);
       
       if (!response.ok) {
         const errorText = await response.text();
@@ -56,10 +48,6 @@ export const spotifyRouter = createTRPCRouter({
       }
       
       const data = await response.json() as any;
-      console.log('[Spotify API] Devices data:', {
-        devices: data.devices || [],
-        deviceCount: data.devices?.length || 0
-      });
       
       return {
         devices: data.devices || [],

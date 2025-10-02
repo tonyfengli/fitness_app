@@ -69,10 +69,6 @@ export class WorkoutGenerationService {
     
     const user = this.ctx.session?.user;
 
-    logger.info("Starting blueprint generation with LLM", {
-      sessionId,
-      userId: user.id,
-    });
 
     // Get session details
     const session = await this.ctx.db.query.TrainingSession.findFirst({
@@ -148,24 +144,12 @@ export class WorkoutGenerationService {
     const isBMFBlueprint = "blocks" in blueprint;
     const isStandardBlueprint = "clientExercisePools" in blueprint;
 
-    logger.info("Blueprint generated successfully", {
-      sessionId,
-      blueprintType: isBMFBlueprint ? "bmf" : "standard",
-      blockCount: isBMFBlueprint ? (blueprint as any).blocks.length : 0,
-      warnings: blueprint.validationWarnings,
-    });
 
     // Check if workout exercises already exist for this session
-    console.log('[WorkoutGenerationService.generateBlueprint] 🔍 Checking for existing workouts...');
-    console.log('[WorkoutGenerationService.generateBlueprint] Session ID:', sessionId);
-    console.log('[WorkoutGenerationService.generateBlueprint] Options:', options);
-    
     const existingWorkoutsRaw = await this.ctx.db
       .select()
       .from(Workout)
       .where(eq(Workout.trainingSessionId, sessionId));
-    
-    console.log('[WorkoutGenerationService.generateBlueprint] Found existing workouts:', existingWorkoutsRaw.length);
 
     // For each workout, fetch its exercises with exercise details
     const existingWorkouts = await Promise.all(
@@ -197,15 +181,6 @@ export class WorkoutGenerationService {
     
     // If we're in phase1Only mode and exercises already exist, skip LLM call
     if (options?.phase1Only && existingWorkouts.length > 0) {
-      console.log('[WorkoutGenerationService.generateBlueprint] ⚠️ PHASE1 ONLY WITH EXISTING WORKOUTS');
-      console.log('[WorkoutGenerationService.generateBlueprint] Will create MOCK LLM result from existing data');
-      console.log('[WorkoutGenerationService.generateBlueprint] Existing workout IDs:', existingWorkoutsRaw.map(w => w.id));
-      console.log('[WorkoutGenerationService.generateBlueprint] Total exercises found:', existingWorkouts.reduce((sum, w) => sum + w.exercises.length, 0));
-      
-      logger.info("Skipping Phase 1 LLM call - workout exercises already exist", {
-        sessionId,
-        workoutCount: existingWorkouts.length,
-      });
 
       // Format existing exercises as LLM result
       llmResult = await this.formatExistingExercisesAsLLMResult(
@@ -215,34 +190,14 @@ export class WorkoutGenerationService {
         clientContexts,
       );
       
-      console.log('[WorkoutGenerationService.generateBlueprint] Created mock LLM result:', {
-        hasSystemPrompt: !!llmResult.systemPrompt,
-        hasLlmOutput: !!llmResult.llmOutput,
-        hasExerciseSelection: !!llmResult.exerciseSelection,
-        hasDebug: !!(llmResult as any).debug,
-        debugKeys: (llmResult as any).debug ? Object.keys((llmResult as any).debug) : []
-      });
     } else {
       try {
-        logger.info("Starting LLM generation");
 
       // Enable debug mode if diagnostics requested
       if (options?.includeDiagnostics) {
         this.debugMode = true;
-        logger.info("Debug mode enabled for workout generation", {
-          includeDiagnostics: options.includeDiagnostics,
-          phase1Only: options.phase1Only,
-        });
-      } else {
-        logger.info("Debug mode NOT enabled", {
-          optionsProvided: !!options,
-          includeDiagnostics: options?.includeDiagnostics,
-        });
       }
 
-      console.log('[WorkoutGenerationService.generateBlueprint] 🤖 Starting LLM generation...');
-      console.log('[WorkoutGenerationService.generateBlueprint] Phase1Only:', options?.phase1Only);
-      console.log('[WorkoutGenerationService.generateBlueprint] Include diagnostics:', options?.includeDiagnostics);
       
       const generationResult = await this.generateWithLLM(
         blueprint,
@@ -252,13 +207,6 @@ export class WorkoutGenerationService {
         { phase1Only: options?.phase1Only },
       );
       
-      console.log('[WorkoutGenerationService.generateBlueprint] ✅ LLM generation complete:', {
-        hasSystemPrompt: !!generationResult.systemPrompt,
-        hasLlmOutput: !!generationResult.llmOutput,
-        hasExerciseSelection: !!generationResult.exerciseSelection,
-        hasDebug: !!generationResult.debug,
-        debugKeys: generationResult.debug ? Object.keys(generationResult.debug) : []
-      });
 
       // Structure the result properly
       llmResult = {
@@ -285,7 +233,6 @@ export class WorkoutGenerationService {
         (llmResult as any).llmTimings = generationResult.exerciseSelection.llmTimings;
       }
 
-      logger.info("LLM generation completed successfully");
 
       // Save Phase 1 selections for standard templates
       if (isStandardBlueprint && generationResult.exerciseSelection) {
@@ -344,15 +291,10 @@ export class WorkoutGenerationService {
     sessionId: string,
     options?: { phase1Only?: boolean },
   ) {
-    logger.info("Starting LLM generation", {
-      templateType: groupContext.templateType,
-      clientCount: groupContext.clients.length,
-    });
 
     // Route based on blueprint type
     if (isStandardBlueprint(blueprint)) {
       // Standard template with two-phase LLM
-      logger.info("Using standard workout generator (two-phase)");
       return this.generateStandardWorkouts(
         blueprint,
         groupContext,
@@ -366,16 +308,11 @@ export class WorkoutGenerationService {
       groupContext.templateType === "full_body_bmf" &&
       isBMFBlueprint(blueprint)
     ) {
-      logger.info("Using BMF workout generator (single-phase)");
       return this.generateBMFWorkouts(blueprint, groupContext, sessionId);
     }
 
     // Circuit template with single-phase LLM
     if (groupContext.templateType === "circuit") {
-      logger.info("Using Circuit workout generator (single-phase)", {
-        phase1Only: options?.phase1Only,
-        willGenerateExercises: true, // Circuit always generates exercises
-      });
       return this.generateCircuitWorkouts(blueprint, groupContext, sessionId);
     }
 
@@ -511,10 +448,6 @@ export class WorkoutGenerationService {
     const systemPrompt = promptBuilder.build();
     const userMessage = "Generate the circuit workout with exercise assignments for all stations.";
     
-    logger.info("Circuit workout generation prompt", {
-      promptLength: systemPrompt.length,
-      fullPrompt: systemPrompt,
-    });
 
     // Call LLM
     const llm = createLLM({
@@ -530,18 +463,11 @@ export class WorkoutGenerationService {
 
     const llmOutput = response.content.toString();
     
-    logger.info("Circuit LLM raw response", {
-      llmOutputLength: llmOutput.length,
-      first1000Chars: llmOutput.substring(0, 1000),
-    });
 
     // Parse response - simple regex extraction
     const jsonMatch = llmOutput.match(/```json\s*([\s\S]*?)\s*```/);
     if (!jsonMatch?.[1]) {
-      logger.error("Failed to extract JSON from LLM response", {
-        llmOutputLength: llmOutput.length,
-        first500Chars: llmOutput.substring(0, 500),
-      });
+      logger.error("Failed to extract JSON from LLM response");
       throw new Error("No JSON block found in LLM response");
     }
 
@@ -549,10 +475,7 @@ export class WorkoutGenerationService {
     try {
       parsedResponse = JSON.parse(jsonMatch[1]);
     } catch (parseError) {
-      logger.error("Failed to parse JSON from LLM response", {
-        error: (parseError as Error).message,
-        extractedJson: jsonMatch[1].substring(0, 500),
-      });
+      logger.error("Failed to parse JSON from LLM response", (parseError as Error).message);
       throw new Error(`Failed to parse LLM JSON response: ${(parseError as Error).message}`);
     }
     
@@ -588,10 +511,6 @@ export class WorkoutGenerationService {
               );
               
               if (exerciseByName) {
-                logger.info("Found exercise by name instead of ID", {
-                  input: exerciseId,
-                  found: (exerciseByName as any).name
-                });
                 return {
                   position: idx + 1,
                   name: (exerciseByName as any).name,
@@ -617,30 +536,11 @@ export class WorkoutGenerationService {
       }
     };
 
-    logger.info("Circuit LLM response parsed", {
-      roundsCount: normalizedResponse.circuit.rounds.length,
-      firstRoundExercises: normalizedResponse.circuit.rounds[0]?.exercises.length || 0,
-      hasExerciseIdMap: Object.keys(exerciseIdMap).length > 0,
-      idMapSize: Object.keys(exerciseIdMap).length,
-      sampleMapping: Object.entries(exerciseIdMap).slice(0, 3).map(([id, ex]) => ({
-        id,
-        name: (ex as any).name
-      })),
-      firstRoundMappedExercises: normalizedResponse.circuit.rounds[0]?.exercises.map((ex: any) => ({
-        position: ex.position,
-        name: ex.name,
-        pattern: ex.movementPattern
-      }))
-    });
 
     // Generate setlist for circuit workout
     let setlist = null;
     if (circuitConfig && 'config' in circuitConfig && circuitConfig.config) {
       try {
-        logger.info("Generating circuit setlist", {
-          rounds: normalizedResponse.circuit.rounds.length,
-          circuitConfig: circuitConfig.config
-        });
 
         const { CircuitSetlistService } = await import("./circuit-setlist-service");
         const setlistService = new CircuitSetlistService(this.ctx.db);
@@ -649,11 +549,6 @@ export class WorkoutGenerationService {
         const baseRounds = normalizedResponse.circuit.rounds.length;
         const effectiveTotalRounds = (circuitConfig as any).config.repeatRounds ? baseRounds * 2 : baseRounds;
         
-        logger.info("Calculating effective rounds for setlist", {
-          baseRounds,
-          repeatRounds: (circuitConfig as any).config.repeatRounds,
-          effectiveTotalRounds
-        });
         
         // Generate the setlist
         setlist = await setlistService.generateSetlist(
@@ -661,11 +556,6 @@ export class WorkoutGenerationService {
           effectiveTotalRounds
         );
 
-        logger.info("Circuit setlist generated", {
-          totalTracks: setlist.totalTracks,
-          rounds: setlist.rounds.length,
-          summary: CircuitSetlistService.getSetlistSummary(setlist)
-        });
 
         // Update session with setlist in templateConfig
         const updatedTemplateConfig = {
@@ -680,7 +570,6 @@ export class WorkoutGenerationService {
           })
           .where(eq(TrainingSession.id, sessionId));
 
-        logger.info("Session updated with circuit setlist");
       } catch (error) {
         logger.error("Failed to generate circuit setlist", error);
         // Don't fail the whole workout generation if setlist fails
@@ -709,9 +598,6 @@ export class WorkoutGenerationService {
     sessionId: string,
     options?: { phase1Only?: boolean },
   ) {
-    logger.info("Generating standard workouts with two-phase LLM", {
-      phase1Only: options?.phase1Only || false,
-    });
 
     // Get template
     const template = getWorkoutTemplate(
@@ -740,7 +626,6 @@ export class WorkoutGenerationService {
     try {
       // If phase1Only, we need to manually run just Phase 1
       if (options?.phase1Only) {
-        logger.info("Running Phase 1 only (exercise selection)");
 
         // Access the private method through type casting
         const exerciseSelection = await (generator as any).selectExercises(
@@ -748,13 +633,6 @@ export class WorkoutGenerationService {
           groupContext,
         );
 
-        logger.info("Phase 1 exercise selection completed", {
-          hasExerciseSelection: !!exerciseSelection,
-          hasDebugData: !!(exerciseSelection as any).debugData,
-          debugDataClients: (exerciseSelection as any).debugData
-            ? Object.keys((exerciseSelection as any).debugData)
-            : [],
-        });
 
         // Return a partial result with only Phase 1 data
         const result: any = {
@@ -779,19 +657,6 @@ export class WorkoutGenerationService {
             llmResponsesByClient: {},
           };
 
-          logger.info("Phase 1 debug data available", {
-            hasDebugData: true,
-            clientIds: Object.keys(debugData),
-            debugDataSample: Object.entries(debugData).map(
-              ([clientId, data]: [string, any]) => ({
-                clientId,
-                hasSystemPrompt: !!data.systemPrompt,
-                hasLlmResponse: !!data.llmResponse,
-                systemPromptLength: data.systemPrompt?.length || 0,
-                llmResponseLength: data.llmResponse?.length || 0,
-              }),
-            ),
-          });
 
           for (const [clientId, data] of Object.entries(debugData)) {
             if ((data as any).systemPrompt) {
@@ -806,22 +671,8 @@ export class WorkoutGenerationService {
             }
           }
         } else {
-          logger.info("No Phase 1 debug data found", {
-            hasExerciseSelection: !!exerciseSelection,
-            exerciseSelectionKeys: Object.keys(exerciseSelection),
-          });
         }
 
-        logger.info("Returning Phase 1 result", {
-          hasDebug: !!result.debug,
-          debugKeys: result.debug ? Object.keys(result.debug) : [],
-          systemPromptsByClientCount: result.debug?.systemPromptsByClient
-            ? Object.keys(result.debug.systemPromptsByClient).length
-            : 0,
-          llmResponsesByClientCount: result.debug?.llmResponsesByClient
-            ? Object.keys(result.debug.llmResponsesByClient).length
-            : 0,
-        });
 
         return result;
       }
@@ -834,10 +685,6 @@ export class WorkoutGenerationService {
         sessionId,
       );
 
-      logger.info("Standard workout plan generated successfully", {
-        sharedExercises: workoutPlan.exerciseSelection.sharedExercises.length,
-        hasRoundOrganization: false, // Phase 2 removed
-      });
 
       // Return in format compatible with createWorkouts
       const result: any = {
@@ -872,19 +719,6 @@ export class WorkoutGenerationService {
     groupContext: GroupContext,
     exercisePool: Exercise[],
   ) {
-    console.log('[WorkoutGenerationService.savePhase1Selections] 🔍 Starting Phase 1 save...');
-    console.log('[WorkoutGenerationService.savePhase1Selections] Session ID:', sessionId);
-    console.log('[WorkoutGenerationService.savePhase1Selections] Client count:', groupContext.clients.length);
-    console.log('[WorkoutGenerationService.savePhase1Selections] Exercise selection structure:', {
-      hasClientSelections: !!exerciseSelection.clientSelections,
-      clientSelectionKeys: Object.keys(exerciseSelection.clientSelections || {}),
-      hasSharedExercises: !!exerciseSelection.sharedExercises,
-      sharedExerciseCount: exerciseSelection.sharedExercises?.length || 0
-    });
-    
-    logger.info("Saving Phase 1 selections - creating draft workouts", {
-      sessionId,
-    });
 
     const user = this.ctx.session?.user;
 
@@ -901,11 +735,6 @@ export class WorkoutGenerationService {
         );
 
       if (existingWorkouts.length > 0) {
-        console.log('[WorkoutGenerationService.savePhase1Selections] ⚠️ Draft workouts already exist, skipping creation');
-        console.log('[WorkoutGenerationService.savePhase1Selections] Existing workout count:', existingWorkouts.length);
-        logger.info(
-          `Draft workouts already exist for session ${sessionId}, skipping creation`,
-        );
         return;
       }
 
@@ -929,28 +758,12 @@ export class WorkoutGenerationService {
         });
       }
 
-      console.log('[WorkoutGenerationService.savePhase1Selections] 📦 Creating draft workouts...');
-      console.log('[WorkoutGenerationService.savePhase1Selections] Records to create:', workoutRecords.length);
       
       const createdWorkouts = await tx
         .insert(Workout)
         .values(workoutRecords)
         .returning({ id: Workout.id, userId: Workout.userId });
 
-      console.log('[WorkoutGenerationService.savePhase1Selections] ✅ Created draft workouts:', {
-        count: createdWorkouts.length,
-        workoutIds: createdWorkouts.map((w) => w.id),
-        userIds: createdWorkouts.map((w) => w.userId)
-      });
-      
-      logger.info(
-        `[savePhase1Selections] Created ${createdWorkouts.length} draft workouts`,
-        {
-          sessionId,
-          workoutIds: createdWorkouts.map((w) => w.id),
-          userIds: createdWorkouts.map((w) => w.userId),
-        },
-      );
 
       // Map client IDs to workout IDs
       const clientWorkoutMap = new Map<string, string>();
@@ -1058,27 +871,7 @@ export class WorkoutGenerationService {
 
       // Batch insert exercise records
       if (exerciseRecords.length > 0) {
-        console.log('[WorkoutGenerationService.savePhase1Selections] 🎯 PHASE 1: INSERTING WORKOUT EXERCISES', {
-          totalCount: exerciseRecords.length,
-          templateType: groupContext.templateType || "standard",
-          templateTypes: exerciseRecords.reduce((acc: Record<string, number>, ex) => {
-            const template = ex.template || 'NOT_SET';
-            acc[template] = (acc[template] || 0) + 1;
-            return acc;
-          }, {} as Record<string, number>),
-          sampleExercise: exerciseRecords[0] ? {
-            workoutId: exerciseRecords[0].workoutId,
-            exerciseId: exerciseRecords[0].exerciseId,
-            template: exerciseRecords[0].template,
-            selectionSource: exerciseRecords[0].selectionSource
-          } : null
-        });
-        
         await tx.insert(WorkoutExercise).values(exerciseRecords);
-        logger.info(
-          `Created ${exerciseRecords.length} workout exercises for ${createdWorkouts.length} draft workouts`,
-          { sessionId },
-        );
       }
 
       return {
@@ -1099,7 +892,6 @@ export class WorkoutGenerationService {
   ) {
     const user = this.ctx.session?.user;
 
-    logger.info("Creating workout records", { sessionId });
 
     return await this.ctx.db.transaction(async (tx) => {
       // Skip storing blueprint summary - not needed
@@ -1155,26 +947,9 @@ export class WorkoutGenerationService {
         exercisePool,
       );
 
-      logger.info("Exercise records created", {
-        count: allExercises.length,
-        hasExercises: allExercises.length > 0,
-      });
 
       // Only insert if we have exercises
       if (allExercises.length > 0) {
-        logger.info("🔴 INSERTING WORKOUT EXERCISES", {
-          totalCount: allExercises.length,
-          templateTypes: allExercises.reduce((acc: Record<string, number>, ex) => {
-            const template = ex.template || 'NOT_SET';
-            acc[template] = (acc[template] || 0) + 1;
-            return acc;
-          }, {} as Record<string, number>),
-          sampleExercise: allExercises[0] ? {
-            hasTemplate: 'template' in allExercises[0],
-            templateValue: allExercises[0].template,
-            fields: Object.keys(allExercises[0])
-          } : null
-        });
         await tx.insert(WorkoutExercise).values(allExercises);
       } else {
         logger.error("No exercises to insert!");
@@ -1192,7 +967,6 @@ export class WorkoutGenerationService {
     sessionId: string,
     options?: GenerateAndCreateOptions,
   ) {
-    logger.info("Starting full workout generation", { sessionId, options });
 
     // Set debug mode if diagnostics requested
     if (options?.includeDiagnostics) {
@@ -1220,7 +994,6 @@ export class WorkoutGenerationService {
       );
 
       if (options?.dryRun) {
-        logger.info("Dry run completed", { sessionId });
         return {
           success: true,
           blueprint,
@@ -1293,7 +1066,6 @@ export class WorkoutGenerationService {
    * Cleanup on error
    */
   async cleanup(sessionId: string) {
-    logger.info("Cleaning up failed generation", { sessionId });
     // TODO: Implement cleanup logic
   }
 
@@ -1395,22 +1167,12 @@ export class WorkoutGenerationService {
   ) {
     const allExercises: any[] = [];
     
-    // Log what we're working with
-    logger.info("createExerciseRecords called", {
-      hasExerciseSelection: !!generationResult.exerciseSelection,
-      hasRoundOrganization: !!generationResult.roundOrganization,
-      metadataTemplateType: generationResult.metadata?.templateType,
-      groupContextTemplateType: groupContext.templateType,
-      hasDeterministicAssignments: !!generationResult.deterministicAssignments,
-      hasLlmAssignments: !!generationResult.llmAssignments,
-    });
 
     // Check if this is standard template result
     if (
       generationResult.exerciseSelection &&
       generationResult.roundOrganization
     ) {
-      logger.info("🚀 ROUTING TO: createStandardExerciseRecords (has both selection and organization)");
       return this.createStandardExerciseRecords(
         tx,
         clientWorkouts,
@@ -1422,7 +1184,6 @@ export class WorkoutGenerationService {
     
     // Check if this is standard template with only Phase 1
     if (generationResult.exerciseSelection && !generationResult.roundOrganization) {
-      logger.info("🚀 ROUTING TO: createStandardExerciseRecords (Phase 1 only)");
       return this.createStandardExerciseRecords(
         tx,
         clientWorkouts,
@@ -1434,7 +1195,6 @@ export class WorkoutGenerationService {
 
     // Check if this is circuit template result
     if (generationResult.metadata?.templateType === "circuit" || groupContext.templateType === "circuit") {
-      logger.info("🚀 ROUTING TO: createCircuitExerciseRecords");
       return this.createCircuitExerciseRecords(
         tx,
         clientWorkouts,
@@ -1445,17 +1205,11 @@ export class WorkoutGenerationService {
     }
 
     // BMF template processing
-    logger.info("🚀 ROUTING TO: BMF template processing (default path)", {
-      hasDeterministicAssignments: !!generationResult.deterministicAssignments,
-      hasLlmAssignments: !!generationResult.llmAssignments,
-      templateType: groupContext.templateType,
-    });
     
     const { deterministicAssignments, llmAssignments } = generationResult;
     
     // If no deterministic assignments (shouldn't happen for BMF but let's be safe)
     if (!deterministicAssignments) {
-      logger.warn("No deterministic assignments found for BMF template");
       return allExercises;
     }
 
@@ -1712,16 +1466,9 @@ export class WorkoutGenerationService {
     const allExercises: any[] = [];
     const { exerciseSelection, roundOrganization } = generationResult;
     
-    logger.info("🎯 createStandardExerciseRecords called", {
-      hasExerciseSelection: !!exerciseSelection,
-      hasRoundOrganization: !!roundOrganization,
-      clientCount: groupContext.clients.length,
-      templateType: groupContext.templateType,
-    });
 
     // If no round organization (Phase 2 removed), create exercises from selection only
     if (!roundOrganization) {
-      logger.info("No round organization - creating exercises from Phase 1 selection only");
       
       // Process each client's selected exercises
       for (const [clientId, clientSelection] of Object.entries(exerciseSelection.clientSelections)) {
@@ -1732,9 +1479,6 @@ export class WorkoutGenerationService {
         let orderIndex = 0;
 
         // Add pre-assigned exercises first
-        logger.info(`🔵 Processing pre-assigned exercises for client ${clientId}`, {
-          preAssignedCount: (clientData.preAssigned || []).length,
-        });
         
         for (const exercise of clientData.preAssigned || []) {
           const dbExercise = exercisePool.find(
@@ -1753,18 +1497,11 @@ export class WorkoutGenerationService {
               selectionSource: exercise.source || "pre_assigned",
               template: "standard",
             };
-            logger.info(`  ➡️ Adding pre-assigned exercise`, {
-              exerciseName: dbExercise.name,
-              template: exerciseRecord.template,
-            });
             allExercises.push(exerciseRecord);
           }
         }
 
         // Add selected exercises
-        logger.info(`🟢 Processing selected exercises for client ${clientId}`, {
-          selectedCount: (clientData.selected || []).length,
-        });
         
         for (const exercise of clientData.selected || []) {
           const dbExercise = exercisePool.find(
@@ -1785,11 +1522,6 @@ export class WorkoutGenerationService {
               selectionSource: "llm_phase1",
               template: "standard",
             };
-            logger.info(`  ➡️ Adding selected exercise`, {
-              exerciseName: dbExercise.name,
-              template: exerciseRecord.template,
-              isShared: exerciseRecord.isShared,
-            });
             allExercises.push(exerciseRecord);
           }
         }
@@ -1799,16 +1531,9 @@ export class WorkoutGenerationService {
     }
 
     // Original logic for when round organization exists
-    logger.info("🟡 Processing round organization - Phase 2 present", {
-      roundCount: roundOrganization.rounds?.length || 0,
-    });
     
     // Process each round
     for (const round of roundOrganization.rounds) {
-      logger.info(`📍 Processing round: ${round.name}`, {
-        roundId: round.id,
-        clientCount: Object.keys(round.exercises || {}).length,
-      });
       
       // Process each client's exercises in this round
       for (const client of groupContext.clients) {
@@ -1816,9 +1541,6 @@ export class WorkoutGenerationService {
         if (!workoutId) continue;
 
         const clientExercisesInRound = round.exercises[client.user_id] || [];
-        logger.info(`  👤 Client ${client.user_id} exercises in ${round.name}`, {
-          exerciseCount: clientExercisesInRound.length,
-        });
 
         // Add each exercise in the round
         for (let i = 0; i < clientExercisesInRound.length; i++) {
@@ -1840,26 +1562,13 @@ export class WorkoutGenerationService {
               groupName: round.name,
               template: "standard",
             };
-            logger.info(`    ➡️ Adding round exercise`, {
-              exerciseName: dbExercise.name,
-              template: exerciseRecord.template,
-              round: round.name,
-            });
             allExercises.push(exerciseRecord);
           } else {
-            logger.warn(`Exercise not found in pool: ${exercise.exerciseName}`);
           }
         }
       }
     }
 
-    logger.info("✅ createStandardExerciseRecords completed", {
-      totalExercises: allExercises.length,
-      exercisesByTemplate: allExercises.reduce((acc, ex) => {
-        acc[ex.template || 'undefined'] = (acc[ex.template || 'undefined'] || 0) + 1;
-        return acc;
-      }, {}),
-    });
     
     return allExercises;
   }
@@ -1887,7 +1596,6 @@ export class WorkoutGenerationService {
     sessionId: string,
     selectionsByClient: Record<string, any[]>,
   ) {
-    logger.info("Starting Phase 2 sequencing", { sessionId });
 
     // Get session and blueprint data
     const user = this.ctx.session?.user;
@@ -1999,20 +1707,11 @@ export class WorkoutGenerationService {
                         metadata?.circuitConfig?.repeatRounds || 
                         false;
     
-    logger.info("createCircuitExerciseRecords - checking data structure", {
-      hasLlmAssignments: !!llmAssignments,
-      llmAssignmentsKeys: llmAssignments ? Object.keys(llmAssignments) : [],
-      hasCircuitKey: !!llmAssignments?.circuit,
-      hasRoundsKey: !!llmAssignments?.circuit?.rounds,
-      roundsCount: llmAssignments?.circuit?.rounds?.length || 0,
-      repeatRounds,
-    });
     
     // Circuit workouts have rounds with exercises
     const circuitRounds = llmAssignments?.circuit?.rounds || [];
     
     if (circuitRounds.length === 0) {
-      logger.warn("No circuit rounds found in LLM assignments");
     }
     
     // Check if warm-up is enabled
@@ -2020,11 +1719,6 @@ export class WorkoutGenerationService {
     const warmupEnabled = warmupConfig?.enabled || false;
     const warmupExerciseCount = warmupConfig?.exercisesCount || 6;
     
-    logger.info("createCircuitExerciseRecords - warmup check", {
-      warmupEnabled,
-      warmupExerciseCount,
-      warmupConfig,
-    });
     
     // Hard-coded warm-up exercise IDs
     const warmupExerciseIds = [
@@ -2052,11 +1746,6 @@ export class WorkoutGenerationService {
           .sort(() => Math.random() - 0.5)
           .slice(0, warmupExerciseCount);
         
-        logger.info("Adding warm-up exercises", {
-          clientId: client.user_id,
-          selectedWarmupIds,
-          warmupExerciseCount,
-        });
         
         // Fetch warm-up exercises directly from database
         const warmupExercises = await tx
@@ -2067,11 +1756,6 @@ export class WorkoutGenerationService {
             sql`, `
           )})`);
         
-        logger.info("Fetched warm-up exercises from database", {
-          requestedCount: selectedWarmupIds.length,
-          foundCount: warmupExercises.length,
-          foundExercises: warmupExercises.map((ex: any) => ({ id: ex.id, name: ex.name }))
-        });
         
         // Create WorkoutExercise entries for warm-up
         for (const exercise of warmupExercises) {
@@ -2168,11 +1852,6 @@ export class WorkoutGenerationService {
               );
               
               if (fallbackExercise) {
-                logger.info("Found exercise using normalized name matching", {
-                  original: circuitEx.name,
-                  normalized: normalizedInputName,
-                  found: fallbackExercise.name
-                });
                 
                 allExercises.push({
                   workoutId: workoutId,
@@ -2200,12 +1879,6 @@ export class WorkoutGenerationService {
                   }
                 });
               } else {
-                logger.warn("Exercise not found even with normalized matching", {
-                  name: circuitEx.name,
-                  normalized: normalizedInputName,
-                  round: displayRoundNumber,
-                  availableExercises: exercisePool.slice(0, 5).map(ex => ex.name)
-                });
               }
             }
           });
@@ -2225,13 +1898,6 @@ export class WorkoutGenerationService {
     groupContext: GroupContext,
     clientContexts: ClientContext[],
   ): Promise<any> {
-    console.log('[WorkoutGenerationService.formatExistingExercisesAsLLMResult] 🎭 Creating MOCK LLM result');
-    console.log('[WorkoutGenerationService.formatExistingExercisesAsLLMResult] Existing workouts:', existingWorkouts.length);
-    console.log('[WorkoutGenerationService.formatExistingExercisesAsLLMResult] Total exercises:', 
-      existingWorkouts.reduce((sum, w) => sum + (w.exercises?.length || 0), 0)
-    );
-    
-    logger.info("Formatting existing exercises as LLM result");
 
     // For standard blueprints, format the exercise selection
     if ("clientExercisePools" in blueprint) {
@@ -2290,14 +1956,6 @@ export class WorkoutGenerationService {
         }
       };
       
-      console.log('[WorkoutGenerationService.formatExistingExercisesAsLLMResult] ✅ Mock result created:', {
-        hasSystemPrompt: !!result.systemPrompt,
-        hasLlmOutput: !!result.llmOutput,
-        hasExerciseSelection: !!result.exerciseSelection,
-        hasDebug: !!result.debug,
-        debugKeys: Object.keys(result.debug),
-        selectedExerciseClients: Object.keys(exerciseSelection.selectedExercises)
-      });
       
       return result;
     }

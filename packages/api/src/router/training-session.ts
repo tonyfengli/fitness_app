@@ -1692,36 +1692,11 @@ export const trainingSessionRouter = {
         const showDeterministicSelections =
           template?.smsConfig?.showDeterministicSelections;
 
-        console.log("[sendSessionStartMessages] Template check:", {
-          sessionId: input.sessionId,
-          templateType: session.templateType,
-          hasTemplate: !!template,
-          showDeterministicSelections,
-          smsConfig: template?.smsConfig,
-          checkedInClientsCount: checkedInClients.length,
-        });
 
         // For BMF templates, auto-populate includeExercises with deterministic selections
-        console.log(
-          "[sendSessionStartMessages] Checking auto-population conditions:",
-          {
-            showDeterministicSelections,
-            templateType: session.templateType,
-            shouldAutoPopulate:
-              showDeterministicSelections && session.templateType,
-          },
-        );
 
         if (showDeterministicSelections && session.templateType) {
           try {
-            console.log(
-              "[sendSessionStartMessages] Starting auto-population for BMF template",
-              {
-                sessionId: session.id,
-                timestamp: new Date().toISOString(),
-                checkedInClientsCount: checkedInClients.length,
-              },
-            );
 
             // Generate blueprint using shared service
             const blueprintStart = Date.now();
@@ -1733,29 +1708,9 @@ export const trainingSessionRouter = {
               );
             const blueprintTime = Date.now() - blueprintStart;
 
-            console.log(
-              "[sendSessionStartMessages] Blueprint generation completed",
-              {
-                sessionId: session.id,
-                timeMs: blueprintTime,
-                hasBlueprint: !!blueprint,
-                blockCount: blueprint?.blocks?.length || 0,
-              },
-            );
-
             if (!blueprint) {
-              console.error(
-                "[sendSessionStartMessages] Blueprint generation failed",
-              );
               // Continue anyway - we'll still send messages even if blueprint generation fails
             } else {
-              console.log(
-                "[sendSessionStartMessages] Blueprint generated successfully:",
-                {
-                  blockCount: blueprint.blocks?.length || 0,
-                  blockIds: blueprint.blocks?.map((b: any) => b.blockId) || [],
-                },
-              );
 
               // Find Round1 and Round2 blocks
               const round1Block = blueprint.blocks.find(
@@ -1812,15 +1767,6 @@ export const trainingSessionRouter = {
                   if (exercisesToInclude.length > 0) {
                     // Save these exercises to includeExercises
                     try {
-                      console.log(
-                        `[sendSessionStartMessages] Attempting to save preferences for ${client.userId}`,
-                        {
-                          userId: client.userId,
-                          sessionId: input.sessionId,
-                          businessId: session.businessId,
-                          exercisesToInclude,
-                        },
-                      );
 
                       await WorkoutPreferenceService.savePreferences(
                         client.userId,
@@ -1832,15 +1778,7 @@ export const trainingSessionRouter = {
                         "preferences_active",
                       );
 
-                      console.log(
-                        `[sendSessionStartMessages] Successfully auto-populated includeExercises for ${client.userId}:`,
-                        exercisesToInclude,
-                      );
                     } catch (saveError) {
-                      console.error(
-                        `[sendSessionStartMessages] Failed to save preferences for ${client.userId}:`,
-                        saveError,
-                      );
                       throw saveError; // Re-throw to be caught by outer try-catch
                     }
 
@@ -1859,13 +1797,6 @@ export const trainingSessionRouter = {
                       )
                       .limit(1);
 
-                    console.log(
-                      `[sendSessionStartMessages] Verified saved preferences for ${client.userId}:`,
-                      {
-                        exists: !!savedPrefs,
-                        includeExercises: savedPrefs?.includeExercises,
-                      },
-                    );
                   } else {
                     console.warn(
                       `No exercises found to auto-populate for ${client.userId}`,
@@ -1889,9 +1820,6 @@ export const trainingSessionRouter = {
           try {
             // Skip sending messages for circuit sessions - they already got the config link at check-in
             if (session.templateType === "circuit") {
-              console.log(
-                `Skipping start message for circuit session - ${client.userName} already has config link from check-in`,
-              );
               return {
                 success: true,
                 userId: client.userId,
@@ -4096,8 +4024,6 @@ Set your goals and preferences for today's session.`;
     .mutation(async ({ ctx, input }) => {
       const { sessionId, blueprintData } = input;
       
-      console.log("[createWorkoutsFromBlueprint] Starting workout creation from blueprint");
-      console.log("[createWorkoutsFromBlueprint] Session ID:", sessionId);
       
       // Initialize the workout generation service
       const workoutGenerationService = new WorkoutGenerationService(ctx);
@@ -4125,7 +4051,6 @@ Set your goals and preferences for today's session.`;
         new Map(exercisePool.map(ex => [ex.id, ex])).values()
       );
       
-      console.log("[createWorkoutsFromBlueprint] Exercise pool size:", uniqueExercisePool.length);
       
       // Create workouts using the blueprint's LLM result
       const workoutIds = await workoutGenerationService.createWorkouts(
@@ -4135,7 +4060,6 @@ Set your goals and preferences for today's session.`;
         uniqueExercisePool
       );
       
-      console.log("[createWorkoutsFromBlueprint] Created workouts:", workoutIds);
       
       return {
         success: true,

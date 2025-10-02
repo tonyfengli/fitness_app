@@ -142,7 +142,6 @@ export function MainScreen() {
 
   // Debug selectedSessionId changes
   useEffect(() => {
-    console.log('[MainScreen] selectedSessionId changed to:', selectedSessionId);
   }, [selectedSessionId]);
 
   // Delete session mutation
@@ -152,7 +151,6 @@ export function MainScreen() {
       setActiveOperation('delete');
     },
     onSuccess: () => {
-      console.log('[MainScreen] ✅ Session deleted successfully');
       // Invalidate the training session list query to refresh the UI
       queryClient.invalidateQueries({ 
         queryKey: api.trainingSession.list.queryOptions({ limit: 3, offset: 0 }).queryKey 
@@ -348,7 +346,6 @@ export function MainScreen() {
           text: 'Yes, Delete Session', 
           style: 'destructive',
           onPress: () => {
-            console.log('[MainScreen] Deleting session:', sessionId);
             deleteSessionMutation.mutate({ sessionId } as any);
           }
         }
@@ -776,7 +773,6 @@ export function MainScreen() {
                 hasTVPreferredFocus={shouldRefocusCard && selectedSessionId === session.id}
                 style={styles.sessionCardWrapper}
                 onPress={() => {
-                  console.log('[MainScreen] Session card pressed. Current:', selectedSessionId, 'New:', session.id);
                   setSelectedSessionId(selectedSessionId === session.id ? null : session.id);
                   setShouldRefocusCard(false);
                 }}
@@ -850,7 +846,7 @@ export function MainScreen() {
                       focusable={!!selectedSessionId && !activeOperation}
                       hasTVPreferredFocus={!!selectedSessionId && !activeOperation}
                       disabled={!!activeOperation}
-                      onFocus={() => console.log('[MainScreen] Open button focused')}
+                      onFocus={() => {}}
                       onPress={async () => {
                         const session = recentSessions?.find(s => s.id === selectedSessionId);
                         if (session && !activeOperation) {

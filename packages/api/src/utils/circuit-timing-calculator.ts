@@ -39,10 +39,6 @@ export function getEffectiveTrackDuration(
   hypeTimestamp?: number | null
 ): number {
   if (!hypeTimestamp) {
-    console.log('[CircuitTimingCalculator] No hype timestamp, using full duration:', {
-      trackDurationMs,
-      trackDurationSec: trackDurationMs / 1000
-    });
     return trackDurationMs;
   }
   
@@ -50,15 +46,6 @@ export function getEffectiveTrackDuration(
   const offsetMs = Math.max(0, (hypeTimestamp - 5) * 1000);
   const effectiveDuration = trackDurationMs - offsetMs;
   
-  console.log('[CircuitTimingCalculator] Effective duration calculated:', {
-    trackDurationMs,
-    trackDurationSec: trackDurationMs / 1000,
-    hypeTimestamp,
-    offsetMs,
-    offsetSec: offsetMs / 1000,
-    effectiveDurationMs: effectiveDuration,
-    effectiveDurationSec: effectiveDuration / 1000
-  });
   
   return effectiveDuration;
 }
@@ -70,13 +57,6 @@ export function calculateCircuitTiming(
   config: CircuitConfig["config"],
   totalRounds: number
 ): CircuitTimingResult {
-  console.log('[CircuitTimingCalculator] Starting calculation:', {
-    rounds: config.rounds,
-    restBetweenRounds: config.restBetweenRounds,
-    repeatRounds: config.repeatRounds,
-    totalRounds,
-    roundTemplatesCount: config.roundTemplates?.length
-  });
 
   const rounds: RoundTiming[] = [];
   let currentTimeMs = 0;
@@ -176,17 +156,6 @@ export function calculateCircuitTiming(
       exerciseCount: template.exercisesPerRound,
     };
     
-    console.log(`[CircuitTimingCalculator] Round ${i + 1} timing:`, {
-      displayRoundNumber: roundInfo.roundNumber,
-      actualRoundIndex: i,
-      isRepeat,
-      templateType: template.type,
-      startTime: `${Math.floor(countdownStartMs / 1000)}s`,
-      workStartTime: `${Math.floor(workStartMs / 1000)}s`,
-      endTime: `${Math.floor(endTimeMs / 1000)}s`,
-      duration: `${Math.floor(totalRoundDurationMs / 1000)}s`,
-      exerciseTimeTotal: `${Math.floor(exerciseDurationMs / 1000)}s`
-    });
     
     rounds.push(roundInfo);
     
@@ -229,15 +198,6 @@ export function canTrackCoverRound(
     ),
   };
   
-  console.log('[CircuitTimingCalculator] Track coverage analysis:', {
-    roundNumber: roundTiming.roundNumber,
-    effectiveDurationSec: effectiveDurationMs / 1000,
-    roundDurationSec: roundDurationFromCountdown / 1000,
-    coversFullRound: coverage.coversFullRound,
-    shortfallSec: coverage.coversFullRound ? 0 : (roundDurationFromCountdown - effectiveDurationMs) / 1000,
-    coverageEndTime: `${Math.floor(coverage.coverageEndMs / 1000)}s`,
-    roundEndTime: `${Math.floor(roundTiming.endTimeMs / 1000)}s`
-  });
   
   return coverage;
 }
@@ -253,7 +213,6 @@ export function getSecondTrackTriggerPoint(
 ): { triggerTimeMs: number; triggerType: 'bridge' | 'rest' } {
   if (firstTrackCoverage.coversFullRound) {
     // First track covers full round, second track starts at rest between rounds
-    console.log('[CircuitTimingCalculator] Track covers full round, REST track at round end');
     return {
       triggerTimeMs: roundTiming.endTimeMs,
       triggerType: 'rest',
@@ -288,18 +247,6 @@ export function getSecondTrackTriggerPoint(
       ((template.exercisesPerRound - 1) * workDurationMs) +
       ((template.exercisesPerRound - 1) * restDurationMs);
     
-    console.log('[CircuitTimingCalculator] Track needs bridge, calculating trigger:', {
-      roundNumber: roundTiming.roundNumber,
-      workStartMs: roundTiming.workStartMs,
-      workStartSec: roundTiming.workStartMs / 1000,
-      exercisesPerRound: template.exercisesPerRound,
-      workDuration: workDurationMs / 1000,
-      restDuration: restDurationMs / 1000,
-      lastExerciseStartMs,
-      lastExerciseStartSec: lastExerciseStartMs / 1000,
-      trackEndsAtSec: firstTrackCoverage.coverageEndMs / 1000,
-      gapSec: (lastExerciseStartMs - firstTrackCoverage.coverageEndMs) / 1000
-    });
     
     return {
       triggerTimeMs: lastExerciseStartMs,

@@ -24,7 +24,6 @@ export function analyzeScoreDistribution(
   maxBeforeBoost: number,
 ): ScoreDistribution | null {
   if (scoredExercises.length === 0) {
-    console.log("📊 No exercises to analyze");
     return null;
   }
 
@@ -44,16 +43,11 @@ export function analyzeScoreDistribution(
     maxBeforeBoost: maxBeforeBoost,
   };
 
-  console.log("📊 Score distribution:", distribution);
 
   // Additional detailed logging for debugging
   if (includedCount > 0) {
     const includedExercises = scoredExercises.filter((ex) =>
       criteria.includeExercises?.includes(ex.name),
-    );
-    console.log(
-      `🔹 Included exercises (${includedCount}):`,
-      includedExercises.map((ex) => ({ name: ex.name, score: ex.score })),
     );
   }
 
@@ -70,8 +64,4 @@ export function logScoringPerformance(
   const totalTime = performance.now() - startTime;
   const timePerExercise = exerciseCount > 0 ? totalTime / exerciseCount : 0;
 
-  console.log(
-    `⏱️ TOTAL scoring time: ${totalTime.toFixed(2)}ms for ${exerciseCount} exercises`,
-  );
-  console.log(`⏱️ Average time per exercise: ${timePerExercise.toFixed(3)}ms`);
 }

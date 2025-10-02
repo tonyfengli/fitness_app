@@ -230,15 +230,6 @@ export function useSpotifySync(sessionId: string, preSelectedDeviceId?: string |
                    templateConfig?.visualizationData?.llmResult?.metadata?.setlist;
     const shouldAutoPlay = options?.autoPlay ?? true;
     
-    console.log('[Spotify] Auto-play check:', {
-      hasDevice: !!currentDevice,
-      deviceId: currentDevice?.id,
-      connectionState,
-      hasSetlist: !!setlist,
-      hasStartedPlayback: hasStartedPlaybackRef.current,
-      shouldAutoPlay,
-      timestamp: new Date().toISOString()
-    });
     
     if (currentDevice && sessionId && connectionState === 'connected' && setlist && !hasStartedPlaybackRef.current && shouldAutoPlay) {
       console.log('[Spotify] Starting auto-playback');
