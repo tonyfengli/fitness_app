@@ -87,6 +87,7 @@ interface RoundData {
   workDuration?: number;
   restDuration?: number;
   totalDuration?: number; // For AMRAP
+  repeatTimes?: number; // For circuit/stations rounds
 }
 
 // Helper function to format time in 12-hour format with AM/PM
@@ -133,9 +134,10 @@ function RoundContent({ round, isCompact }: {
   // For compact mode (4-6+ rounds), use columns if 4+ exercises
   const shouldUseColumns = isCompact && exercisesToShow.length >= 4;
   
+  
   // Adjust font sizes based on compact mode
-  const getTitleSize = () => isCompact ? 20 : 28;
-  const getExerciseSize = () => isCompact ? 16 : 20;
+  const getTitleSize = () => isCompact ? 20 : 24;
+  const getExerciseSize = () => isCompact ? 15 : 18;
   
   // Special handling for station rounds
   const isStationRound = round.roundType === 'stations_round';
@@ -146,49 +148,154 @@ function RoundContent({ round, isCompact }: {
     // For station rounds, show grouped display
     if (isStationRound && stationGroups) {
       const stations = Array.from(stationGroups.entries()).sort((a, b) => a[0] - b[0]);
-      const maxStations = 6;
+      const maxStations = 4;
       const stationsToShow = stations.slice(0, maxStations);
       const hasStationOverflow = stations.length > maxStations;
       
-      return (
-        <View style={{ gap: isCompact ? 12 : 20 }}>
-          {stationsToShow.map(([stationIndex, stationExercises], idx) => {
-            const visibleExercises = stationExercises.slice(0, 2);
-            const hiddenCount = stationExercises.length - 2;
+      // Always use single column for stations (max 4)
+      const shouldUseStationColumns = false;
+      
+      // Determine font size and spacing based on station count
+      const stationCount = stationsToShow.length;
+      const getStationFontSize = () => {
+        if (!isCompact) return 20;
+        if (stationCount <= 3) return 16;
+        return 14; // Slightly smaller for 4 stations
+      };
+      
+      const getStationGap = () => {
+        if (!isCompact) return 20;
+        if (stationCount <= 3) return 12;
+        return 8; // Tighter spacing for 4 stations
+      };
+      
+      // Helper function to truncate exercise name based on exercise count
+      const truncateExerciseName = (name: string, exerciseCount: number): string => {
+        let maxLength: number;
+        switch (exerciseCount) {
+          case 1:
+            maxLength = 35; // Generous space for single exercise
+            break;
+          case 2:
+            maxLength = 18; // Split space between two
+            break;
+          case 3:
+            maxLength = 12; // Tighter for three
+            break;
+          default:
+            maxLength = 10; // Very tight for 4+
+        }
+        
+        if (name.length <= maxLength) return name;
+        
+        // Find the last space before or at maxLength
+        const truncated = name.substring(0, maxLength);
+        const lastSpaceIndex = truncated.lastIndexOf(' ');
+        
+        // If we found a space, cut at the word boundary
+        if (lastSpaceIndex > 0) {
+          return name.substring(0, lastSpaceIndex);
+        }
+        
+        // If no space found (single long word), try to fit more by looking ahead
+        const nextSpaceIndex = name.indexOf(' ', maxLength);
+        if (nextSpaceIndex === -1 || nextSpaceIndex > maxLength + 3) {
+          // If next space is far away or doesn't exist, just return what we have
+          return truncated;
+        }
+        
+        // If the next word is short (≤3 chars), include it
+        const nextWord = name.substring(maxLength, nextSpaceIndex);
+        if (nextWord.length <= 3) {
+          return name.substring(0, nextSpaceIndex);
+        }
+        
+        return truncated;
+      };
+      
+      // Helper function to render a single station
+      const renderStation = ([stationIndex, stationExercises]: [number, CircuitExercise[]], idx: number) => {
+        const stationNumber = idx + 1; // Use the array index for sequential numbering
+        const exerciseCount = stationExercises.length;
+        
+        // Truncate each exercise name individually
+        const truncatedNames = stationExercises.map(e => 
+          truncateExerciseName(e.exerciseName, exerciseCount)
+        );
+        const exerciseNames = truncatedNames.join(', ');
+        
+        return (
+          <Text
+            key={stationIndex}
+            style={{
+              fontSize: getStationFontSize(),
+              color: TOKENS.color.text,
+              lineHeight: getStationFontSize() * 1.2,
+            }}
+            numberOfLines={1}
+            ellipsizeMode="tail"
+          >
+            {`S${stationNumber}: ${exerciseNames}`}
+          </Text>
+        );
+      };
+      
+      if (shouldUseStationColumns) {
+        // Split stations into two columns
+        const midPoint = Math.ceil(stationsToShow.length / 2);
+        const leftColumnStations = stationsToShow.slice(0, midPoint);
+        const rightColumnStations = stationsToShow.slice(midPoint);
+        
+        return (
+          <View>
+            <View style={{ flexDirection: 'row', gap: 16 }}>
+              {/* Left column */}
+              <View style={{ flex: 1, gap: 12 }}>
+                {leftColumnStations.map((station, idx) => renderStation(station, idx))}
+              </View>
+              
+              {/* Right column */}
+              <View style={{ flex: 1, gap: 12 }}>
+                {rightColumnStations.map((station, idx) => renderStation(station, leftColumnStations.length + idx))}
+              </View>
+            </View>
             
-            return (
-              <Text
-                key={stationIndex}
-                style={{
-                  fontSize: isCompact ? 16 : 20,
-                  color: TOKENS.color.text,
-                  lineHeight: (isCompact ? 16 : 20) * 1.2,
-                }}
-                numberOfLines={1}
-                ellipsizeMode="tail"
-              >
-                {visibleExercises.map(e => e.exerciseName).join(', ')}
-                {hiddenCount > 0 && ` ... (+${hiddenCount} more)`}
+            {hasStationOverflow && (
+              <Text style={{
+                fontSize: isCompact ? 15 : 16,
+                color: TOKENS.color.muted,
+                fontStyle: 'italic',
+                marginTop: isCompact ? 12 : 16,
+              }}>
+                ... and {stations.length - maxStations} more stations
               </Text>
-            );
-          })}
-          {hasStationOverflow && (
-            <Text style={{
-              fontSize: isCompact ? 15 : 16,
-              color: TOKENS.color.muted,
-              fontStyle: 'italic',
-            }}>
-              ... and {stations.length - maxStations} more stations
-            </Text>
-          )}
-        </View>
-      );
+            )}
+          </View>
+        );
+      } else {
+        // Always single column layout for stations
+        return (
+          <View style={{ gap: getStationGap() }}>
+            {stationsToShow.map((station, idx) => renderStation(station, idx))}
+            {hasStationOverflow && (
+              <Text style={{
+                fontSize: isCompact ? 15 : 16,
+                color: TOKENS.color.muted,
+                fontStyle: 'italic',
+              }}>
+                ... and {stations.length - maxStations} more stations
+              </Text>
+            )}
+          </View>
+        );
+      }
     }
     
     if (shouldUseColumns) {
       const midPoint = Math.ceil(exercisesToShow.length / 2);
       const leftColumn = exercisesToShow.slice(0, midPoint);
       const rightColumn = exercisesToShow.slice(midPoint);
+      
       
       return (
         <View style={{ flexDirection: 'row', gap: 16 }}>
@@ -233,7 +340,7 @@ function RoundContent({ round, isCompact }: {
     
     // Single column for 1-3 exercises or non-compact mode
     return (
-      <View style={{ gap: isCompact ? 12 : 20 }}>
+      <View style={{ gap: isCompact ? 12 : 20, alignItems: 'center' }}>
         {exercisesToShow.map((exercise) => (
           <Text 
             key={exercise.id} 
@@ -241,6 +348,7 @@ function RoundContent({ round, isCompact }: {
               fontSize: getExerciseSize(),
               color: TOKENS.color.text,
               lineHeight: getExerciseSize() * 1.2,
+              textAlign: 'center',
             }}
             numberOfLines={1}
             ellipsizeMode="tail"
@@ -287,13 +395,13 @@ function RoundContent({ round, isCompact }: {
   
   return (
     <View style={{ flex: 1 }}>
-      <View style={{ 
-        flexDirection: 'row', 
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: isCompact ? 16 : 24,
-        gap: 12
-      }}>
+        <View style={{ 
+          position: 'relative',
+          marginBottom: isCompact ? 16 : 16,
+          paddingTop: isCompact ? 0 : 28,
+          alignItems: isCompact && round.roundType !== 'warmup_round' && !round.roundName.toLowerCase().includes('warm') ? 'flex-start' : 'center',
+          paddingRight: isCompact && round.roundType !== 'warmup_round' && !round.roundName.toLowerCase().includes('warm') ? 50 : 0,
+        }}>
         <Text style={{ 
           fontSize: getTitleSize(), 
           fontWeight: '700', 
@@ -301,34 +409,34 @@ function RoundContent({ round, isCompact }: {
         }}>
           {round.roundName}
         </Text>
-        {roundInfo && (
+        {roundInfo && round.roundType !== 'warmup_round' && !round.roundName.toLowerCase().includes('warm') && (
           <View style={{ 
-            backgroundColor: TOKENS.color.accent + '08',
+            position: 'absolute',
+            right: -8,
+            top: -8,
+            backgroundColor: TOKENS.color.accent + '15',
             borderWidth: 1,
-            borderColor: TOKENS.color.accent + '20',
-            borderRadius: 8,
-            paddingHorizontal: 12,
-            paddingVertical: 6,
-            alignItems: 'center',
-            justifyContent: 'center',
+            borderColor: TOKENS.color.accent + '30',
+            borderRadius: 6,
+            paddingHorizontal: 10,
+            paddingVertical: 4,
+            flexDirection: 'row',
+            alignItems: 'baseline',
+            gap: 6,
           }}>
             <Text style={{ 
-              fontSize: isCompact ? 11 : 12, 
+              fontSize: isCompact ? 10 : 11, 
               color: TOKENS.color.accent,
-              fontWeight: '700',
-              lineHeight: isCompact ? 13 : 14,
-              letterSpacing: 1,
+              fontWeight: '600',
+              letterSpacing: 0.5,
               textTransform: 'uppercase',
-              marginBottom: 1
             }}>
               {roundInfo.type}
             </Text>
             <Text style={{ 
-              fontSize: isCompact ? 13 : 14, 
+              fontSize: isCompact ? 12 : 13, 
               color: TOKENS.color.accent,
-              fontWeight: '800',
-              lineHeight: isCompact ? 15 : 16,
-              letterSpacing: -0.5
+              fontWeight: '700',
             }}>
               {roundInfo.timing}
             </Text>
@@ -345,17 +453,44 @@ function RoundContent({ round, isCompact }: {
             paddingTop: isCompact ? 12 : 16,
             borderTopWidth: 1,
             borderTopColor: TOKENS.color.borderGlass,
+            alignItems: 'center',
           }}>
             <Text style={{ 
               fontSize: isCompact ? 15 : 16,
               color: TOKENS.color.muted,
-              fontStyle: 'italic'
+              fontStyle: 'italic',
+              textAlign: 'center',
             }}>
               ... and {overflowCount} more
             </Text>
           </View>
         )}
       </View>
+      
+      {/* Repeat indicator for circuit/stations rounds */}
+      {(round.roundType === 'circuit_round' || round.roundType === 'stations_round') && 
+       round.repeatTimes && round.repeatTimes > 1 && (
+        <View style={{
+          position: 'absolute',
+          right: isCompact ? -12 : 8,
+          bottom: isCompact ? -22 : 8,
+          backgroundColor: TOKENS.color.accent2 + '15',
+          borderWidth: 1,
+          borderColor: TOKENS.color.accent2 + '30',
+          borderRadius: 4,
+          paddingHorizontal: 8,
+          paddingVertical: 3,
+        }}>
+          <Text style={{
+            fontSize: isCompact ? 11 : 12,
+            color: TOKENS.color.accent2,
+            fontWeight: '700',
+            letterSpacing: 0.5,
+          }}>
+            {round.repeatTimes}×
+          </Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -482,6 +617,8 @@ export function CircuitWorkoutOverviewScreen() {
             if (template.type === 'circuit_round' || template.type === 'stations_round') {
               roundData.workDuration = template.workDuration ?? circuitConfig?.config?.workDuration;
               roundData.restDuration = template.restDuration ?? circuitConfig?.config?.restDuration;
+              roundData.repeatTimes = template.repeatTimes;
+              
             } else if (template.type === 'amrap_round') {
               roundData.totalDuration = template.totalDuration;
             }
@@ -505,6 +642,7 @@ export function CircuitWorkoutOverviewScreen() {
       }
       
       // Rounds organized successfully
+      
       
       setRoundsData(rounds);
       setConnectionState('connected');
@@ -610,7 +748,7 @@ export function CircuitWorkoutOverviewScreen() {
                 {/* First Row - Rounds 1-3 */}
                 <View style={{ flex: 1, flexDirection: 'row', gap: 24 }}>
                   {roundsData.slice(0, 3).map((round) => (
-                    <MattePanel key={round.roundName} style={{ flex: 1, padding: 20 }}>
+                    <MattePanel key={round.roundName} style={{ flex: 1, padding: 20, paddingBottom: 28 }}>
                       <RoundContent round={round} isCompact={true} />
                     </MattePanel>
                   ))}
@@ -619,7 +757,7 @@ export function CircuitWorkoutOverviewScreen() {
                 {/* Second Row - Rounds 4-6 */}
                 <View style={{ flex: 1, flexDirection: 'row', gap: 24 }}>
                   {roundsData.slice(3, 6).map((round) => (
-                    <MattePanel key={round.roundName} style={{ flex: 1, padding: 20 }}>
+                    <MattePanel key={round.roundName} style={{ flex: 1, padding: 20, paddingBottom: 28 }}>
                       <RoundContent round={round} isCompact={true} />
                     </MattePanel>
                   ))}
@@ -645,7 +783,7 @@ export function CircuitWorkoutOverviewScreen() {
                 {/* Top Row */}
                 <View style={{ flex: 1.05, flexDirection: 'row', gap: 24 }}>
                   {roundsData.slice(0, topRowCount).map((round) => (
-                    <MattePanel key={round.roundName} style={{ flex: 1, padding: 20 }}>
+                    <MattePanel key={round.roundName} style={{ flex: 1, padding: 20, paddingBottom: 28 }}>
                       <RoundContent round={round} isCompact={true} />
                     </MattePanel>
                   ))}
@@ -654,7 +792,7 @@ export function CircuitWorkoutOverviewScreen() {
                 {/* Bottom Row */}
                 <View style={{ flex: 1.05, flexDirection: 'row', gap: 24 }}>
                   {roundsData.slice(topRowCount, topRowCount + bottomRowCount).map((round) => (
-                    <MattePanel key={round.roundName} style={{ flex: 1, padding: 20 }}>
+                    <MattePanel key={round.roundName} style={{ flex: 1, padding: 20, paddingBottom: 28 }}>
                       <RoundContent round={round} isCompact={true} />
                     </MattePanel>
                   ))}

@@ -111,29 +111,11 @@ export function useSpotifySync(sessionId: string, preSelectedDeviceId?: string |
     }
   }, [devicesQuery.data, devicesQuery.isLoading, devicesQuery.error, preSelectedDeviceId]);
   
-  // Log connection state changes
-  useEffect(() => {
-    console.log('[Spotify] Connection state changed:', {
-      state: connectionState,
-      hasDevice: !!currentDevice,
-      deviceId: currentDevice?.id,
-      preSelectedDeviceId,
-      timestamp: new Date().toISOString()
-    });
-  }, [connectionState, currentDevice?.id]);
   
   // Manual device polling when connected to detect disconnections
   useEffect(() => {
-    console.log('[Spotify] Polling effect triggered', {
-      sessionId: !!sessionId,
-      preSelectedDeviceId: !!preSelectedDeviceId,
-      connectionState,
-      currentDevice: !!currentDevice,
-      timestamp: new Date().toISOString()
-    });
     
     if (!sessionId || !preSelectedDeviceId) {
-      console.log('[Spotify] Polling skipped - missing sessionId or deviceId');
       return;
     }
     
