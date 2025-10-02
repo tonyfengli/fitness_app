@@ -103,6 +103,15 @@ export function GlobalPreferencesScreen() {
   const navigation = useNavigation();
   const queryClient = useQueryClient();
   const sessionId = navigation.getParam('sessionId');
+  
+  // Add mount/unmount logging
+  useEffect(() => {
+    console.log('[TV GlobalPreferences] 🟢 MOUNTED with sessionId:', sessionId);
+    return () => {
+      console.log('[TV GlobalPreferences] 🔴 UNMOUNTING');
+    };
+  }, []);
+  
   const [clients, setClients] = useState<ClientPreference[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationError, setGenerationError] = useState<string | null>(null);
@@ -343,6 +352,7 @@ export function GlobalPreferencesScreen() {
           await new Promise(resolve => setTimeout(resolve, 500));
           
           // Navigate after selections are confirmed
+          console.log('[TV GlobalPreferences] 🚀 NAVIGATING to WorkoutOverview');
           navigation.navigate('WorkoutOverview', { sessionId });
         } catch (error: any) {
           if (isMounted) {

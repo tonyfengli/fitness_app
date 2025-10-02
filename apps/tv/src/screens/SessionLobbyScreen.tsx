@@ -117,6 +117,14 @@ export function SessionLobbyScreen() {
     timestamp: new Date().toISOString()
   });
   
+  // Add unmount logging
+  useEffect(() => {
+    console.log('[TV SessionLobby] 🟢 MOUNTED');
+    return () => {
+      console.log('[TV SessionLobby] 🔴 UNMOUNTING');
+    };
+  }, []);
+  
   const [clients, setClients] = useState<CheckedInClient[]>([]);
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected'>('disconnected');
   const [isStartingSession, setIsStartingSession] = useState(false);

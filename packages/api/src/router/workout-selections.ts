@@ -106,12 +106,27 @@ export const workoutSelectionsRouter = {
       }),
     )
     .query(async ({ ctx, input }) => {
-      const { Workout } = await import("@acme/db/schema");
+      const { Workout, TrainingSession } = await import("@acme/db/schema");
 
       console.log("[getSelections] Query params:", {
         sessionId: input.sessionId,
         clientId: input.clientId,
       });
+      
+      // First, get the session to determine template type
+      const session = await ctx.db.query.TrainingSession.findFirst({
+        where: eq(TrainingSession.id, input.sessionId),
+      });
+      
+      if (!session) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Training session not found",
+        });
+      }
+      
+      const templateType = session.templateType || "standard";
+      console.log("[getSelections] Session template type:", templateType);
 
       // Build where clause for workouts
       // When checking for existing workouts, look for draft OR ready status
@@ -160,9 +175,12 @@ export const workoutSelectionsRouter = {
 
       // For circuit workouts (no specific clientId), just use the first workout
       // since exercises are shared across all clients
+      // For standard workouts without clientId, get all workouts
       const workoutIds = input.clientId 
-        ? workouts.map((w) => w.id)  // Individual mode: get all workouts
-        : [workouts[0]!.id];          // Circuit mode: just one workout to avoid duplicates
+        ? workouts.map((w) => w.id)  // Individual mode: get all workouts for that client
+        : templateType === "circuit"
+          ? [workouts[0]!.id]         // Circuit mode: just one workout to avoid duplicates
+          : workouts.map((w) => w.id); // Standard mode: get all workouts
 
       // Get workout exercises with exercise details
       const workoutExercises = await ctx.db
@@ -197,24 +215,53 @@ export const workoutSelectionsRouter = {
 
       // Transform to match expected format
       // For circuit workouts without clientId, we'll use the first workout's userId
-      const defaultClientId = input.clientId || workouts[0]!.userId;
+      // For standard workouts, we need to map each exercise to its actual client
       
-      return workoutExercises.map((row) => ({
-        id: row.we.id,
-        sessionId: input.sessionId,
-        clientId: defaultClientId,
-        exerciseId: row.we.exerciseId,
-        exerciseName: (row.we.custom_exercise as any)?.customName || row.exercise?.name || 'Unknown Exercise',
-        equipment: row.exercise?.equipment || [],
-        isShared: row.we.isShared || false,
-        sharedWithClients: row.we.sharedWithClients,
-        selectionSource: row.we.selectionSource,
-        groupName: row.we.groupName,
-        orderIndex: row.we.orderIndex,
-        stationIndex: row.we.stationIndex,
-        custom_exercise: row.we.custom_exercise,
-        repsPlanned: row.we.repsPlanned,
-      }));
+      // Build a map of workoutId to userId for standard workouts
+      const workoutToUserMap = new Map(
+        workouts.map(w => [w.id, w.userId])
+      );
+      
+      const results = workoutExercises.map((row) => {
+        // For standard workouts, use the actual userId from the workout
+        // For circuit workouts without clientId, use the first workout's userId
+        const clientId = input.clientId || 
+          (templateType === "standard" 
+            ? workoutToUserMap.get(row.we.workoutId) || workouts[0]!.userId
+            : workouts[0]!.userId);
+            
+        return {
+          id: row.we.id,
+          sessionId: input.sessionId,
+          clientId: clientId,
+          exerciseId: row.we.exerciseId,
+          exerciseName: (row.we.custom_exercise as any)?.customName || row.exercise?.name || 'Unknown Exercise',
+          equipment: row.exercise?.equipment || [],
+          isShared: row.we.isShared || false,
+          sharedWithClients: row.we.sharedWithClients,
+          selectionSource: row.we.selectionSource,
+          groupName: row.we.groupName,
+          orderIndex: row.we.orderIndex,
+          stationIndex: row.we.stationIndex,
+          custom_exercise: row.we.custom_exercise,
+          repsPlanned: row.we.repsPlanned,
+        };
+      });
+      
+      // Log the distribution of exercises per client
+      const exercisesByClient = results.reduce((acc, ex) => {
+        acc[ex.clientId] = (acc[ex.clientId] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+      
+      console.log("[getSelections] Final exercise distribution:", {
+        totalExercises: results.length,
+        templateType: templateType,
+        exercisesByClient: exercisesByClient,
+        clientIds: Object.keys(exercisesByClient),
+      });
+      
+      return results;
     }),
 
   // Swap an exercise

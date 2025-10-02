@@ -70,7 +70,11 @@ function NavigationContainer({ children }: { children: React.ReactNode }) {
   const screenHistory = useRef<ScreenName[]>(['Main']);
 
   const navigate = (screen: ScreenName, params?: any) => {
-    console.log('[Navigation] Navigating to:', screen, 'with params:', params);
+    console.log(`[TV Navigation] 🚗 NAVIGATING: ${navigationState.currentScreen} -> ${screen}`, {
+      params,
+      currentHistory: [...screenHistory.current],
+      timestamp: new Date().toISOString()
+    });
     screenHistory.current.push(screen);
     setNavigationState(prev => ({ ...prev, currentScreen: screen }));
     if (params) {
@@ -86,8 +90,15 @@ function NavigationContainer({ children }: { children: React.ReactNode }) {
 
   const goBack = () => {
     if (screenHistory.current.length > 1) {
+      const currentScreen = screenHistory.current[screenHistory.current.length - 1];
       screenHistory.current.pop();
       const previousScreen = screenHistory.current[screenHistory.current.length - 1];
+      
+      console.log(`[TV Navigation] 🔙 GO BACK: ${currentScreen} -> ${previousScreen}`, {
+        remainingHistory: [...screenHistory.current],
+        timestamp: new Date().toISOString()
+      });
+      
       setNavigationState(prev => ({ ...prev, currentScreen: previousScreen }));
       
       // Apply App Start color when returning to Main screen
@@ -100,7 +111,10 @@ function NavigationContainer({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const getParam = (key: string) => navigationParams[key];
+  const getParam = (key: string) => {
+    console.log(`[TV Navigation] 📍 Getting param '${key}':`, navigationParams[key]);
+    return navigationParams[key];
+  };
 
   // TV Remote handling
   useEffect(() => {
@@ -150,13 +164,13 @@ function NavigationContainer({ children }: { children: React.ReactNode }) {
     <NavigationContext.Provider value={navigationValue}>
       <View style={{ flex: 1 }}>
         {navigationState.currentScreen === 'Main' && (
-          <MainScreen />
+          console.log('[TV Navigation] 🖥️ Rendering MainScreen') || <MainScreen />
         )}
         {navigationState.currentScreen === 'SessionLobby' && (
-          <SessionLobbyScreen />
+          console.log('[TV Navigation] 🖥️ Rendering SessionLobbyScreen') || <SessionLobbyScreen />
         )}
         {navigationState.currentScreen === 'GlobalPreferences' && (
-          <GlobalPreferencesScreen />
+          console.log('[TV Navigation] 🖥️ Rendering GlobalPreferencesScreen') || <GlobalPreferencesScreen />
         )}
         {navigationState.currentScreen === 'CircuitPreferences' && (
           <CircuitPreferencesScreen />
@@ -165,7 +179,7 @@ function NavigationContainer({ children }: { children: React.ReactNode }) {
           <CircuitWorkoutGenerationScreen />
         )}
         {navigationState.currentScreen === 'WorkoutOverview' && (
-          <WorkoutOverviewScreen />
+          console.log('[TV Navigation] 🖥️ Rendering WorkoutOverviewScreen') || <WorkoutOverviewScreen />
         )}
         {navigationState.currentScreen === 'CircuitWorkoutOverview' && (
           <CircuitWorkoutOverviewScreen />

@@ -11,13 +11,11 @@ import {
   stopHealthCheck,
   startDriftAnimation,
   startBreatheAnimation,
-  startCountdownPulse,
   setPauseState,
   stopAnimation
 } from '../lib/lighting';
 import { getColorForPreset, getHuePresetForColor } from '../lib/lighting/colorMappings';
 import { useSpotifySync } from '../hooks/useSpotifySync';
-import { playCountdownSound, setCountdownVolume } from '../lib/sound/countdown-sound';
 import type { CircuitConfig } from '@acme/db';
 import { 
   CircuitRoundPreview, 
@@ -157,20 +155,15 @@ export function CircuitWorkoutLiveScreen() {
   const [isPaused, setIsPaused] = useState(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   
-  // Countdown overlay state - only for Round 1
-  const [showCountdown, setShowCountdown] = useState(false);
-  const [countdownValue, setCountdownValue] = useState<number | string>(5);
-  const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
   
   // Cleanup and unmount logging
   useEffect(() => {
     return () => {
-      console.log('[COUNTDOWN-DEBUG] CircuitWorkoutLiveScreen unmounting', {
+      console.log('[CircuitWorkoutLive] Screen unmounting', {
         currentScreen,
         timestamp: new Date().toISOString()
       });
       if (intervalRef.current) clearInterval(intervalRef.current);
-      if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
     };
   }, []);
   
@@ -791,24 +784,25 @@ export function CircuitWorkoutLiveScreen() {
     handleNext(false);
   }, []);
 
-  // Start countdown for Round 1 only
-  const startCountdownRound1 = useCallback(() => {
-    console.log('[COUNTDOWN-DEBUG] Starting Round 1 countdown');
-    setShowCountdown(true);
-    setCountdownValue(5);
+  // Start Round 1 immediately
+  const startRound1Immediately = useCallback(() => {
+    console.log('[CircuitWorkoutLive] Starting Round 1 immediately');
+    setIsStarted(true); // Mark workout as started
+    setCurrentScreen('exercise');
+    const { workDuration } = getRoundTiming(0); // Round 1
+    startTimer(workDuration);
     
     // Get values from ref
     const { setlist: currentSetlist, playTrackAtPosition: playTrack } = timerStateRef.current;
     
-    // Sync music with countdown
+    // Start music immediately at hype timestamp
     if (currentSetlist && playTrack) {
       const currentRoundMusic = currentSetlist.rounds?.[0]; // Round 1
       const hypeTrack = currentRoundMusic?.track1;
       
       if (hypeTrack && hypeTrack.hypeTimestamp !== undefined) {
-        // Calculate seek position: hype moment - 5 seconds for countdown
-        const seekPositionMs = Math.max(0, (hypeTrack.hypeTimestamp - 5) * 1000);
-        console.log('[MUSIC-DEBUG] Playing Round 1 hype track for countdown', {
+        const seekPositionMs = hypeTrack.hypeTimestamp * 1000;
+        console.log('[MUSIC-DEBUG] Playing Round 1 hype track immediately', {
           track: hypeTrack.spotifyId,
           hypeTimestamp: hypeTrack.hypeTimestamp,
           seekPosition: seekPositionMs / 1000,
@@ -817,39 +811,7 @@ export function CircuitWorkoutLiveScreen() {
         playTrack(hypeTrack.spotifyId, seekPositionMs);
       }
     }
-    
-    countdownIntervalRef.current = setInterval(() => {
-      setCountdownValue((prev) => {
-        if (prev === 'GO!') {
-          // GO! complete - start exercise
-          if (countdownIntervalRef.current) {
-            clearInterval(countdownIntervalRef.current);
-          }
-          setShowCountdown(false);
-          setIsStarted(true); // Mark workout as started
-          setCurrentScreen('exercise');
-          const { workDuration } = getRoundTiming(0); // Round 1 countdown
-          startTimer(workDuration);
-          return 5; // Reset for next time
-        }
-        if (prev === 1) {
-          return 'GO!';
-        }
-        
-        // Play countdown sound when about to show 3
-        if (prev === 5) {
-          // Trigger at 4, play 50ms before 3 appears
-          setTimeout(() => {
-            playCountdownSound().catch(error => {
-              console.error('[CircuitWorkoutLive] Failed to play countdown sound:', error);
-            });
-          }, 950); // Play 50ms before the display changes to 3
-        }
-        
-        return typeof prev === 'number' ? prev - 1 : 5;
-      });
-    }, 1000);
-  }, [circuitConfig]);
+  }, [getRoundTiming, startTimer]);
 
   // Start the first exercise with music
   const startFirstExercise = useCallback(() => {
@@ -911,7 +873,7 @@ export function CircuitWorkoutLiveScreen() {
     // For Circuit/Stations rounds
     // For Round 1, use countdown instead
     if (roundIdx === 0) {
-      startCountdownRound1();
+      startRound1Immediately();
       return;
     }
     
@@ -920,7 +882,7 @@ export function CircuitWorkoutLiveScreen() {
     console.log('[MUSIC-DEBUG] Starting exercise (music already playing from 0:06)');
     setCurrentScreen('exercise');
     startTimer(workDuration);
-  }, [getRoundTiming, startCountdownRound1]);
+  }, [getRoundTiming, startRound1Immediately]);
 
   const startTimer = (duration: number) => {
     console.log('[TIMER-DEBUG] startTimer called', {
@@ -1328,7 +1290,7 @@ export function CircuitWorkoutLiveScreen() {
     // For stations/AMRAP, go directly to exercise
     if (currentRoundType === 'circuit_round') {
       console.log('[START-DEBUG] Starting circuit countdown');
-      startCountdownRound1();
+      startRound1Immediately();
     } else {
       console.log('[START-DEBUG] Starting stations/AMRAP directly');
       // For stations and AMRAP, skip countdown and start directly
@@ -1934,33 +1896,6 @@ export function CircuitWorkoutLiveScreen() {
         )}
       </View>
       
-      {/* Countdown Overlay - Round 1 only */}
-      {showCountdown && (
-        <View style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0, 0, 0, 0.8)',
-          justifyContent: 'center',
-          alignItems: 'center',
-          zIndex: 1000,
-        }}>
-          <Text style={{
-            fontSize: 280,
-            fontWeight: '900',
-            color: '#ffffff',
-            textAlign: 'center',
-            letterSpacing: -8,
-            textShadowColor: 'rgba(0, 0, 0, 0.3)',
-            textShadowOffset: { width: 0, height: 4 },
-            textShadowRadius: 10,
-          }}>
-            {countdownValue}
-          </Text>
-        </View>
-      )}
       
     </View>
   );

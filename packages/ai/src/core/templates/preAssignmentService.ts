@@ -616,6 +616,15 @@ export class PreAssignmentService {
     for (const [clientId, data] of clientsData) {
       const { context, exercises, favoriteIds } = data;
 
+      console.log(`[PreAssignment] Processing Exercise #1 for client ${clientId}:`, {
+        name: context.name,
+        workoutType: context.workoutType,
+        muscleTargets: context.muscle_target,
+        muscleLessens: context.muscle_lessen,
+        favoriteCount: favoriteIds.length,
+        totalExercises: exercises.length
+      });
+
       // Get client's workout type and muscle targets
       const clientWorkoutType = (context.workoutType || workoutType) as WorkoutType;
       const isTargeted = clientWorkoutType.includes("targeted");
@@ -627,17 +636,42 @@ export class PreAssignmentService {
       let favorites = exercises
         .filter((ex) => favoriteIds.includes(ex.id))
         .sort((a, b) => b.score - a.score);
+        
+      console.log(`[PreAssignment] Found ${favorites.length} favorites:`, 
+        favorites.map(f => ({
+          id: f.id,
+          name: f.name,
+          primaryMuscle: f.primaryMuscle,
+          score: f.score
+        }))
+      );
 
       // For targeted workouts, filter favorites to only include those with primary muscle in targets
       if (isTargeted && muscleTargets && muscleTargets.length > 0) {
+        const beforeFilter = favorites.length;
         favorites = favorites.filter((ex) => {
           if (!ex.primaryMuscle) return false;
           const exerciseMuscle = mapMuscleToConsolidated(ex.primaryMuscle);
           return muscleTargets.includes(exerciseMuscle);
         });
+        console.log(`[PreAssignment] Filtered favorites for targeted workout: ${beforeFilter} -> ${favorites.length}`, {
+          muscleTargets: muscleTargets,
+          remainingFavorites: favorites.map(f => ({ name: f.name, muscle: f.primaryMuscle }))
+        });
       }
 
       if (favorites.length > 0) {
+        // CRITICAL: Check if we should filter by muscle_lessen
+        const muscleLessens = context.muscle_lessen?.map(m => mapMuscleToConsolidated(m)) || [];
+        if (muscleLessens.length > 0) {
+          console.log(`[PreAssignment] WARNING: Client has muscle_lessen but NOT filtering favorites:`, {
+            clientId,
+            muscleLessens: context.muscle_lessen,
+            consolidatedLessens: muscleLessens,
+            favoritesPrimaryMuscles: favorites.map(f => f.primaryMuscle)
+          });
+        }
+        
         // Select highest with tie-breaking
         const tied = favorites.filter((ex) => ex.score === favorites[0]!.score);
         const selected = tied[Math.floor(Math.random() * tied.length)];
@@ -648,6 +682,12 @@ export class PreAssignmentService {
             ? mapMuscleToConsolidated(selected.primaryMuscle)
             : null;
 
+          console.log(`[PreAssignment] Storing Exercise #1 for ${clientId}:`, {
+            hasExercise: !!selected,
+            exerciseId: selected?.id,
+            exerciseName: selected?.name,
+            muscleGroup
+          });
           exercise1Selections.set(clientId, {
             exercise: selected,
             muscleGroup,
@@ -667,6 +707,7 @@ export class PreAssignmentService {
         // No favorites available (or none match muscle targets for targeted workouts)
         // Store the client info even without Exercise #1 for constraint calculation
         if (isTargeted && muscleTargets) {
+          console.log(`[PreAssignment] WARNING: Storing NULL Exercise #1 for ${clientId} (targeted workout)`);
           exercise1Selections.set(clientId, {
             exercise: null as any, // No exercise selected
             muscleGroup: null,
@@ -724,6 +765,31 @@ export class PreAssignmentService {
     const SCORE_DIFFERENCE_THRESHOLD = 1.0; // Larger groups win unless score difference exceeds this
 
     console.log("[PreAssignment] Starting shared Exercise #2 selection");
+    console.log("[PreAssignment] Exercise #1 selections:", 
+      Array.from(exercise1Selections.entries()).map(([clientId, data]) => ({
+        clientId,
+        hasExercise: !!data?.exercise,
+        exerciseId: data?.exercise?.id,
+        exerciseName: data?.exercise?.name,
+        muscleGroup: data?.muscleGroup
+      }))
+    );
+    
+    console.log(`[PreAssignment] Shared exercise pool size: ${sharedExercisePool.length}`);
+    if (sharedExercisePool.length > 0) {
+      console.log(`[PreAssignment] First shared exercise structure:`, Object.keys(sharedExercisePool[0]));
+      console.log(`[PreAssignment] Sample shared exercises:`, 
+        sharedExercisePool.slice(0, 3).map(ex => ({
+          hasExercise: !!ex.exercise,
+          exerciseKeys: ex.exercise ? Object.keys(ex.exercise).slice(0, 5) : 'NO EXERCISE',
+          id: ex.exercise?.id,
+          name: ex.exercise?.name,
+          primaryMuscle: ex.exercise?.primaryMuscle,
+          sharingClients: ex.clientsSharing?.length || 0,
+          groupScore: ex.groupScore
+        }))
+      );
+    }
     
     // Log constraints
     const constraintsSummary = Array.from(clientConstraints.entries()).map(([id, constraint]) => {
@@ -753,7 +819,14 @@ export class PreAssignmentService {
       // Check if this exercise is already Exercise #1 for any client in the subset
       for (const clientId of clientSubset) {
         const exercise1 = exercise1Selections.get(clientId);
-        if (exercise1 && exercise1.exercise.id === exercise.id) {
+        console.log(`[PreAssignment] Checking Exercise #1 for ${clientId}:`, {
+          hasExercise1: !!exercise1,
+          hasExercise: !!exercise1?.exercise,
+          exercise1Structure: exercise1 ? Object.keys(exercise1) : null,
+          exerciseId: exercise1?.exercise?.id,
+          candidateExerciseId: exercise.id
+        });
+        if (exercise1 && exercise1.exercise && exercise1.exercise.id === exercise.id) {
           return false; // Cannot select same exercise as Exercise #1
         }
       }
@@ -797,7 +870,11 @@ export class PreAssignmentService {
 
         for (const clientSubset of clientCombinations) {
           // Find exercises shared by this subset of clients
-          const candidatesForSubset = otherSharedExercises
+          console.log(`[PreAssignment] Filtering shared exercises for subset:`, {
+          totalSharedExercises: otherSharedExercises.length,
+          subsetClients: clientSubset
+        });
+        const candidatesForSubset = otherSharedExercises
             .filter((ex) => {
               // Exercise must be available for all clients in subset
               return clientSubset.every((clientId) =>
