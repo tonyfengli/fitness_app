@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { supabase } from '../lib/supabase';
+import { config } from '../config';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 
 interface CheckInData {
@@ -42,7 +43,14 @@ export function useRealtimeCheckIns({
     
       // Create a channel for this session (must match web app channel name)
       const channel = supabase
-        .channel(`session-${sessionId}`)
+        .channel(`session-${sessionId}`, {
+          config: {
+            // Add authorization header for Pro plan
+            params: {
+              apikey: config.supabaseAnonKey,
+            },
+          },
+        })
         .on(
           'postgres_changes',
           {

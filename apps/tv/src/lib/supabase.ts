@@ -21,14 +21,23 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   realtime: {
     params: {
       eventsPerSecond: 10, // Rate limiting to prevent overwhelming TV
+      apikey: supabaseAnonKey, // Explicitly pass the API key for Pro plan
     },
     log_level: 'debug', // Enable debug logging
     heartbeat_interval: 30000, // 30 seconds
     timeout: 20000, // 20 seconds connection timeout
+    // Add transport configuration for better reliability
+    transport: 'websocket',
+    // Enable auto reconnect
+    reconnect_after_ms: (attempts) => {
+      // Exponential backoff: 100ms, 200ms, 400ms, etc.
+      return Math.min(100 * Math.pow(2, attempts), 10000);
+    },
   },
   global: {
     headers: {
       'X-Client-Type': 'react-native-tv', // Identify TV clients for debugging
+      'apikey': supabaseAnonKey, // Ensure API key is in headers
     },
   },
   db: {

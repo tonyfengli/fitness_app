@@ -776,15 +776,15 @@ export class PreAssignmentService {
     );
     
     console.log(`[PreAssignment] Shared exercise pool size: ${sharedExercisePool.length}`);
-    if (sharedExercisePool.length > 0) {
+    if (sharedExercisePool.length > 0 && sharedExercisePool[0]) {
       console.log(`[PreAssignment] First shared exercise structure:`, Object.keys(sharedExercisePool[0]));
       console.log(`[PreAssignment] Sample shared exercises:`, 
         sharedExercisePool.slice(0, 3).map(ex => ({
-          hasExercise: !!ex.exercise,
-          exerciseKeys: ex.exercise ? Object.keys(ex.exercise).slice(0, 5) : 'NO EXERCISE',
-          id: ex.exercise?.id,
-          name: ex.exercise?.name,
-          primaryMuscle: ex.exercise?.primaryMuscle,
+          hasDirectProperties: true,
+          exerciseKeys: Object.keys(ex).slice(0, 5),
+          id: ex.id,
+          name: ex.name,
+          primaryMuscle: ex.primaryMuscle,
           sharingClients: ex.clientsSharing?.length || 0,
           groupScore: ex.groupScore
         }))
@@ -826,7 +826,7 @@ export class PreAssignmentService {
           exerciseId: exercise1?.exercise?.id,
           candidateExerciseId: exercise.id
         });
-        if (exercise1 && exercise1.exercise && exercise1.exercise.id === exercise.id) {
+        if (exercise1?.exercise && exercise1.exercise.id === exercise.id) {
           return false; // Cannot select same exercise as Exercise #1
         }
       }
