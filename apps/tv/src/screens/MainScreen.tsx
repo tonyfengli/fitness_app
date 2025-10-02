@@ -1,5 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, Pressable, TVFocusGuideView } from 'react-native';
+
+// TVEventHandler might be in a different location for react-native-tvos
+let TVEventHandler: any;
+try {
+  const RN = require('react-native');
+  TVEventHandler = RN.TVEventHandler;
+} catch (e) {
+  // TVEventHandler might not be available
+  console.log('[MainScreen] TVEventHandler not available');
+}
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { useBusiness } from '../providers/BusinessProvider';
 import { useAuth } from '../providers/AuthProvider';
@@ -123,6 +133,8 @@ export function MainScreen() {
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const [shouldRefocusCard, setShouldRefocusCard] = useState(false);
   const [activeOperation, setActiveOperation] = useState<'open' | 'complete' | 'delete' | null>(null);
+  const actionButtonsRef = useRef<View>(null);
+  const [hasActionButtonFocus, setHasActionButtonFocus] = useState(false);
 
   // Query to fetch recent sessions
   const { data: recentSessions, isLoading: isLoadingRecentSessions } = useQuery({
@@ -143,6 +155,54 @@ export function MainScreen() {
   // Debug selectedSessionId changes
   useEffect(() => {
   }, [selectedSessionId]);
+
+  // Clear selection when focus leaves action buttons
+  useEffect(() => {
+    if (!hasActionButtonFocus && selectedSessionId && !activeOperation) {
+      // Small delay to ensure focus has actually moved
+      const timeout = setTimeout(() => {
+        // Double-check that focus hasn't returned to action buttons
+        if (!hasActionButtonFocus) {
+          setSelectedSessionId(null);
+        }
+      }, 100);
+      
+      return () => clearTimeout(timeout);
+    }
+  }, [hasActionButtonFocus, selectedSessionId, activeOperation]);
+
+  // Set up TV event handler for detecting up navigation when action buttons are focused
+  useEffect(() => {
+    let tvEventHandler: any = null;
+    
+    if (selectedSessionId && hasActionButtonFocus && !activeOperation && TVEventHandler && typeof TVEventHandler === 'function') {
+      try {
+        tvEventHandler = new TVEventHandler();
+        
+        const handleTVEvent = (evt: any) => {
+          if (evt && evt.eventType === 'up') {
+            // User pressed up while action buttons have focus
+            // Since focus is trapped, this won't move focus but we can detect it
+            console.log('[MainScreen] Up navigation detected while action buttons focused - canceling selection');
+            setShouldRefocusCard(true);
+            setTimeout(() => {
+              setSelectedSessionId(null);
+            }, 50);
+          }
+        };
+        
+        tvEventHandler.enable(undefined, handleTVEvent);
+      } catch (error) {
+        console.log('[MainScreen] TV event handler setup failed:', error);
+      }
+    }
+    
+    return () => {
+      if (tvEventHandler && tvEventHandler.disable) {
+        tvEventHandler.disable();
+      }
+    };
+  }, [selectedSessionId, hasActionButtonFocus, activeOperation]);
 
   // Delete session mutation
   const deleteSessionMutation = useMutation({
@@ -835,7 +895,7 @@ export function MainScreen() {
             return (
               <TVFocusGuideView 
                 style={[styles.actionButtonsContainer, { opacity: selectedSessionId ? 1 : 0 }]}
-                trapFocusUp={!!selectedSessionId}
+                trapFocusUp={false}
                 trapFocusDown={!!selectedSessionId}
                 trapFocusLeft={!!selectedSessionId}
                 trapFocusRight={!!selectedSessionId}
@@ -846,7 +906,8 @@ export function MainScreen() {
                       focusable={!!selectedSessionId && !activeOperation}
                       hasTVPreferredFocus={!!selectedSessionId && !activeOperation}
                       disabled={!!activeOperation}
-                      onFocus={() => {}}
+                      onFocus={() => setHasActionButtonFocus(true)}
+                      onBlur={() => setHasActionButtonFocus(false)}
                       onPress={async () => {
                         const session = recentSessions?.find(s => s.id === selectedSessionId);
                         if (session && !activeOperation) {
@@ -870,6 +931,8 @@ export function MainScreen() {
                     <Pressable
                       focusable={!!selectedSessionId && !activeOperation}
                       disabled={!!activeOperation}
+                      onFocus={() => setHasActionButtonFocus(true)}
+                      onBlur={() => setHasActionButtonFocus(false)}
                       onPress={() => {
                         if (selectedSessionId && !activeOperation) {
                           Alert.alert(
@@ -908,6 +971,8 @@ export function MainScreen() {
                   focusable={!!selectedSessionId && !activeOperation}
                   hasTVPreferredFocus={!!selectedSessionId && isCompleted && !activeOperation}
                   disabled={!!activeOperation}
+                  onFocus={() => setHasActionButtonFocus(true)}
+                  onBlur={() => setHasActionButtonFocus(false)}
                 onPress={() => {
                   if (selectedSessionId && !activeOperation) {
                     handleCloseSession(selectedSessionId);
@@ -929,9 +994,11 @@ export function MainScreen() {
               
               <Pressable
                 focusable={!!selectedSessionId}
-                onFocus={() => console.log('[MainScreen] Cancel button focused')}
+                onFocus={() => {
+                  setHasActionButtonFocus(true);
+                }}
+                onBlur={() => setHasActionButtonFocus(false)}
                 onPress={() => {
-                  console.log('[MainScreen] Cancel pressed');
                   setShouldRefocusCard(true);
                   // Small delay to allow state to update before clearing selection
                   setTimeout(() => {
