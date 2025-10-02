@@ -53,11 +53,13 @@ export function RealtimeProvider({ children }: RealtimeProviderProps) {
     };
   }, [appState]);
 
-  // Monitor connection status
+  // Monitor connection status by checking active channels
   useEffect(() => {
     const checkConnection = () => {
-      const connected = supabase.realtime.isConnected();
-      setIsConnected(connected);
+      // In Supabase v2, check if we have any joined channels
+      const channels = supabase.getChannels();
+      const hasActiveChannels = channels.some(channel => channel.state === 'joined');
+      setIsConnected(hasActiveChannels);
     };
 
     // Check initial connection
@@ -115,7 +117,7 @@ export function RealtimeProvider({ children }: RealtimeProviderProps) {
   // Cleanup all channels on unmount
   useEffect(() => {
     return () => {
-      activeChannelsRef.current.forEach((channel, name) => {
+      activeChannelsRef.current.forEach((channel) => {
         // console.log(`[RealtimeProvider] Cleaning up channel: ${name}`);
         channel.unsubscribe();
       });
