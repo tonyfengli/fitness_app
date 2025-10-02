@@ -155,12 +155,12 @@ function RoundContent({ round, isCompact }: {
       // Always use single column for stations (max 4)
       const shouldUseStationColumns = false;
       
-      // Determine font size and spacing based on station count
+      // Base font size - will be adjusted per-station based on line usage
       const stationCount = stationsToShow.length;
       const getStationFontSize = () => {
         if (!isCompact) return 20;
         if (stationCount <= 3) return 16;
-        return 14; // Slightly smaller for 4 stations
+        return 14; // Base size for 4 stations
       };
       
       const getStationGap = () => {
@@ -172,18 +172,37 @@ function RoundContent({ round, isCompact }: {
       // Helper function to truncate exercise name based on exercise count
       const truncateExerciseName = (name: string, exerciseCount: number): string => {
         let maxLength: number;
-        switch (exerciseCount) {
-          case 1:
-            maxLength = 35; // Generous space for single exercise
-            break;
-          case 2:
-            maxLength = 18; // Split space between two
-            break;
-          case 3:
-            maxLength = 12; // Tighter for three
-            break;
-          default:
-            maxLength = 10; // Very tight for 4+
+        
+        // More generous limits for non-compact (one-row) layout
+        if (!isCompact) {
+          switch (exerciseCount) {
+            case 1:
+              maxLength = 50; // Very generous for single exercise
+              break;
+            case 2:
+              maxLength = 25; // Good space for two exercises
+              break;
+            case 3:
+              maxLength = 18; // Reasonable for three
+              break;
+            default:
+              maxLength = 14; // Still workable for 4+
+          }
+        } else {
+          // Original limits for compact mode
+          switch (exerciseCount) {
+            case 1:
+              maxLength = 35;
+              break;
+            case 2:
+              maxLength = 18;
+              break;
+            case 3:
+              maxLength = 12;
+              break;
+            default:
+              maxLength = 10;
+          }
         }
         
         if (name.length <= maxLength) return name;
@@ -223,19 +242,28 @@ function RoundContent({ round, isCompact }: {
           truncateExerciseName(e.exerciseName, exerciseCount)
         );
         const exerciseNames = truncatedNames.join(', ');
+        const fullText = `S${stationNumber}: ${exerciseNames}`;
+        
+        // Determine if text would wrap to 2 lines
+        // This is a heuristic based on character count and typical TV screen width
+        const estimatedCharsPerLine = isCompact ? 40 : 65; // More chars for one-row layout
+        const wouldWrap = fullText.length > estimatedCharsPerLine;
+        
+        // Use smaller font size only if text would actually use 2 lines
+        const fontSize = wouldWrap && !isCompact ? getStationFontSize() * 0.85 : getStationFontSize();
         
         return (
           <Text
             key={stationIndex}
             style={{
-              fontSize: getStationFontSize(),
+              fontSize,
               color: TOKENS.color.text,
-              lineHeight: getStationFontSize() * 1.2,
+              lineHeight: fontSize * 1.4, // Proportional line height
             }}
-            numberOfLines={1}
+            numberOfLines={isCompact ? 1 : 2} // Allow 2 lines in non-compact mode
             ellipsizeMode="tail"
           >
-            {`S${stationNumber}: ${exerciseNames}`}
+            {fullText}
           </Text>
         );
       };
@@ -472,17 +500,17 @@ function RoundContent({ round, isCompact }: {
        round.repeatTimes && round.repeatTimes > 1 && (
         <View style={{
           position: 'absolute',
-          right: isCompact ? -12 : 8,
-          bottom: isCompact ? -22 : 8,
+          right: isCompact ? -12 : 0,
+          bottom: isCompact ? -22 : 0,
           backgroundColor: TOKENS.color.accent2 + '15',
           borderWidth: 1,
           borderColor: TOKENS.color.accent2 + '30',
-          borderRadius: 4,
-          paddingHorizontal: 8,
-          paddingVertical: 3,
+          borderRadius: isCompact ? 4 : 6,
+          paddingHorizontal: isCompact ? 8 : 14,
+          paddingVertical: isCompact ? 3 : 6,
         }}>
           <Text style={{
-            fontSize: isCompact ? 11 : 12,
+            fontSize: isCompact ? 11 : 16,
             color: TOKENS.color.accent2,
             fontWeight: '700',
             letterSpacing: 0.5,
