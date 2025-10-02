@@ -102,11 +102,10 @@ export function CircuitPreferencesScreen() {
   const { isConnected } = useRealtimeCircuitConfig({
     sessionId: sessionId || '',
     onConfigUpdate: (event) => {
-      console.log('[TV CircuitPreferences] Realtime config update:', event);
+      // Realtime config update received
       setRealtimeConfig(event.config);
     },
     onError: (err) => {
-      console.error('[TV CircuitPreferences] Realtime error:', err);
     }
   });
 
@@ -126,25 +125,15 @@ export function CircuitPreferencesScreen() {
     circuitConfig?.config?.spotifyDeviceId
   );
   
-  // Log Spotify connection state changes
+  // Track Spotify connection state changes
   useEffect(() => {
-    console.log('[CircuitPreferences] Spotify connection state:', {
-      sessionId,
-      deviceId: circuitConfig?.config?.spotifyDeviceId,
-      deviceName: circuitConfig?.config?.spotifyDeviceName,
-      isConnected: isSpotifyConnected,
-      connectionState: spotifyConnectionState,
-      currentDevice: spotifyDevice,
-      error: spotifyError,
-      hasSetlist: !!setlist,
-      timestamp: new Date().toISOString()
-    });
+    // Spotify connection state updated
   }, [sessionId, circuitConfig?.config?.spotifyDeviceId, isSpotifyConnected, spotifyConnectionState, spotifyDevice, spotifyError, setlist]);
 
   // Prefetch tracks when Spotify is connected and setlist is available
   useEffect(() => {
     if (isSpotifyConnected && setlist && prefetchSetlistTracks) {
-      console.log('[CircuitPreferences] Prefetching setlist tracks...');
+      // Prefetching setlist tracks
       prefetchSetlistTracks();
     }
   }, [isSpotifyConnected, setlist, prefetchSetlistTracks]);
@@ -184,42 +173,15 @@ export function CircuitPreferencesScreen() {
   const saveVisualization = useMutation({
     ...api.trainingSession.saveVisualizationData.mutationOptions(),
     onError: (error) => {
-      console.error('[CircuitPreferences] Save visualization error:', error);
     }
   });
 
   // Create workouts from blueprint mutation
-  console.log('[CircuitPreferences] === MUTATION SETUP START ===');
-  console.log('[CircuitPreferences] api:', api);
-  console.log('[CircuitPreferences] api type:', typeof api);
-  console.log('[CircuitPreferences] api.trainingSession:', api.trainingSession);
-  console.log('[CircuitPreferences] api.trainingSession type:', typeof api.trainingSession);
-  console.log('[CircuitPreferences] api.trainingSession.createWorkoutsFromBlueprint:', api.trainingSession.createWorkoutsFromBlueprint);
-  console.log('[CircuitPreferences] api.trainingSession.createWorkoutsFromBlueprint type:', typeof api.trainingSession.createWorkoutsFromBlueprint);
-  
-  let mutationOptions;
-  try {
-    console.log('[CircuitPreferences] Attempting to get mutationOptions...');
-    if (api.trainingSession.createWorkoutsFromBlueprint.mutationOptions) {
-      mutationOptions = api.trainingSession.createWorkoutsFromBlueprint.mutationOptions();
-      console.log('[CircuitPreferences] mutationOptions retrieved successfully:', mutationOptions);
-    } else {
-      console.log('[CircuitPreferences] mutationOptions method does not exist');
-    }
-  } catch (error) {
-    console.error('[CircuitPreferences] ERROR getting mutationOptions:', error);
-    console.error('[CircuitPreferences] Error message:', (error as any).message);
-    console.error('[CircuitPreferences] Error stack:', (error as any).stack);
-  }
-  
   const createWorkoutsFromBlueprint = useMutation({
     ...api.trainingSession.createWorkoutsFromBlueprint.mutationOptions(),
     onError: (error) => {
-      console.error('[CircuitPreferences] Create workouts error:', error);
     }
   });
-  console.log('[CircuitPreferences] createWorkoutsFromBlueprint mutation created');
-  console.log('[CircuitPreferences] === MUTATION SETUP END ===');
 
   // Update connection state based on polling success
   useEffect(() => {
@@ -235,7 +197,7 @@ export function CircuitPreferencesScreen() {
   // Handle fetch errors
   useEffect(() => {
     if (fetchError && !isLoading) {
-      console.log('[TV CircuitPreferences] Fetch error detected:', fetchError);
+      // Connection error detected
       setConnectionState('error');
     }
   }, [fetchError, isLoading]);
@@ -252,15 +214,11 @@ export function CircuitPreferencesScreen() {
   }
 
   const handleContinue = async () => {
-    console.log('[CircuitPreferences] handleContinue called');
-    console.log('[CircuitPreferences] Session ID:', sessionId);
-    console.log('[CircuitPreferences] Circuit Config:', circuitConfig);
-    console.log('[CircuitPreferences] Existing Selections:', existingSelections);
-    console.log('[CircuitPreferences] Session Data:', sessionData);
+    // Handle continue button
     
     // Check if we already have workout exercises
     if (existingSelections && existingSelections.length > 0) {
-      console.log('[CircuitPreferences] Found existing selections, navigating to WorkoutOverview');
+      // Found existing selections, navigating to WorkoutOverview
       // Skip loading screen and navigate directly
       navigation.navigate('CircuitWorkoutOverview', { sessionId });
       return;
@@ -268,13 +226,13 @@ export function CircuitPreferencesScreen() {
     
     // If no selections but session has visualization data (Phase 1 completed), something is wrong - still go to overview
     if (sessionData?.templateConfig?.visualizationData?.llmResult?.exerciseSelection) {
-      console.log('[CircuitPreferences] Found visualization data, navigating to WorkoutOverview');
+      // Found visualization data, navigating to WorkoutOverview
       // Skip loading screen and navigate directly
       navigation.navigate('CircuitWorkoutOverview', { sessionId });
       return;
     }
     
-    console.log('[CircuitPreferences] No existing data, starting blueprint generation');
+    // No existing data, starting blueprint generation
     // No existing exercises, proceed with generation
     setIsGenerating(true);
     setGenerationError(null);
@@ -286,16 +244,10 @@ export function CircuitPreferencesScreen() {
     let isMounted = true;
     
     const processBlueprint = async () => {
-      console.log('[CircuitPreferences] processBlueprint effect triggered');
-      console.log('[CircuitPreferences] blueprintResult:', !!blueprintResult);
-      console.log('[CircuitPreferences] isGenerating:', isGenerating);
-      console.log('[CircuitPreferences] shouldGenerateBlueprint:', shouldGenerateBlueprint);
+      // Process blueprint effect triggered
       
       if (blueprintResult && isGenerating && shouldGenerateBlueprint && isMounted) {
-        console.log('[CircuitPreferences] Processing blueprint result');
-        console.log('[CircuitPreferences] Blueprint data:', blueprintResult);
-        console.log('[CircuitPreferences] Blueprint data type:', typeof blueprintResult);
-        console.log('[CircuitPreferences] Blueprint data keys:', blueprintResult ? Object.keys(blueprintResult) : 'null');
+        // Processing blueprint result
         
         try {
           // Immediately mark as processing to prevent re-runs
@@ -311,12 +263,7 @@ export function CircuitPreferencesScreen() {
             }
           };
           
-          console.log('[CircuitPreferences] === SAVE VISUALIZATION START ===');
-          console.log('[CircuitPreferences] saveVisualization mutation object:', saveVisualization);
-          console.log('[CircuitPreferences] saveVisualization mutation type:', typeof saveVisualization);
-          console.log('[CircuitPreferences] saveVisualization.mutateAsync type:', typeof saveVisualization.mutateAsync);
-          console.log('[CircuitPreferences] sessionId:', sessionId);
-          console.log('[CircuitPreferences] sessionId type:', typeof sessionId);
+          // Saving visualization data
           
           await saveVisualization.mutateAsync({
             sessionId: sessionId!,
@@ -329,41 +276,22 @@ export function CircuitPreferencesScreen() {
               sharedExerciseIds: blueprintResult.blueprint?.sharedExercisePool?.map((e: any) => e.id) || undefined
             }
           });
-          console.log('[CircuitPreferences] ✅ Visualization data saved successfully');
-          console.log('[CircuitPreferences] === SAVE VISUALIZATION END ===');
+          // Visualization data saved successfully
           
           // Now create the actual workouts
-          console.log('[CircuitPreferences] === CREATE WORKOUTS START ===');
-          console.log('[CircuitPreferences] createWorkoutsFromBlueprint mutation object:', createWorkoutsFromBlueprint);
-          console.log('[CircuitPreferences] createWorkoutsFromBlueprint mutation type:', typeof createWorkoutsFromBlueprint);
-          console.log('[CircuitPreferences] createWorkoutsFromBlueprint.mutateAsync type:', typeof createWorkoutsFromBlueprint.mutateAsync);
-          console.log('[CircuitPreferences] api object:', api);
-          console.log('[CircuitPreferences] api type:', typeof api);
-          console.log('[CircuitPreferences] api.trainingSession:', api.trainingSession);
-          console.log('[CircuitPreferences] api.trainingSession type:', typeof api.trainingSession);
-          console.log('[CircuitPreferences] api.trainingSession.createWorkoutsFromBlueprint:', api.trainingSession.createWorkoutsFromBlueprint);
-          console.log('[CircuitPreferences] api.trainingSession.createWorkoutsFromBlueprint type:', typeof api.trainingSession.createWorkoutsFromBlueprint);
           
           const createWorkoutResult = await createWorkoutsFromBlueprint.mutateAsync({
             sessionId: sessionId!,
             blueprintData: blueprintResult
           });
           
-          console.log('[CircuitPreferences] ✅ Workouts created:', createWorkoutResult);
+          // Workouts created successfully
           
           setIsGenerating(false);
           
           // Navigate to WorkoutOverview
           navigation.navigate('CircuitWorkoutOverview', { sessionId });
         } catch (error: any) {
-          console.error('[CircuitPreferences] === ERROR PROCESSING BLUEPRINT ===');
-          console.error('[CircuitPreferences] Error object:', error);
-          console.error('[CircuitPreferences] Error type:', typeof error);
-          console.error('[CircuitPreferences] Error message:', error.message);
-          console.error('[CircuitPreferences] Error stack:', error.stack);
-          console.error('[CircuitPreferences] Error name:', error.name);
-          console.error('[CircuitPreferences] Error constructor:', error.constructor?.name);
-          console.error('[CircuitPreferences] === END ERROR ===');
           
           if (isMounted) {
             setGenerationError(error.message || 'Failed to generate workout. Please try again.');

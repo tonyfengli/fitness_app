@@ -109,21 +109,6 @@ export function SessionLobbyScreen() {
   const prefetchedData = navigation.getParam('prefetchedData');
   const isNewSession = navigation.getParam('isNewSession');
   
-  // Initial mount logging
-  console.log('[TV SessionLobby] 🚀 Component mounting with params:', {
-    sessionId,
-    isNewSession,
-    hasPrefetchedData: !!prefetchedData,
-    timestamp: new Date().toISOString()
-  });
-  
-  // Add unmount logging
-  useEffect(() => {
-    console.log('[TV SessionLobby] 🟢 MOUNTED');
-    return () => {
-      console.log('[TV SessionLobby] 🔴 UNMOUNTING');
-    };
-  }, []);
   
   const [clients, setClients] = useState<CheckedInClient[]>([]);
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected'>('disconnected');
@@ -131,13 +116,11 @@ export function SessionLobbyScreen() {
   // Initialize hasLoadedInitialData based on whether this is a new session
   const [hasLoadedInitialData, setHasLoadedInitialData] = useState(() => {
     const initialValue = isNewSession === true;
-    console.log('[TV SessionLobby] 📊 Initial hasLoadedInitialData:', initialValue, 'isNewSession:', isNewSession);
     return initialValue;
   });
   const [lastSuccessfulFetch, setLastSuccessfulFetch] = useState<Date | null>(null);
   const [connectionState, setConnectionState] = useState<'connecting' | 'connected' | 'error'>(() => {
     const initialState = isNewSession ? 'connected' : 'connecting';
-    console.log('[TV SessionLobby] 🔌 Initial connectionState:', initialState);
     return initialState;
   });
 
@@ -168,39 +151,21 @@ export function SessionLobbyScreen() {
     refetchIntervalInBackground: true, // Keep polling even when tab is not focused
   });
 
-  // Debug logging
+  // Log critical errors only
   useEffect(() => {
-    console.log('[TV SessionLobby] 🔍 Component state:', {
-      sessionId,
-      isNewSession,
-      hasLoadedInitialData,
-      isLoading,
-      fetchError,
-      polledClients,
-      clientsCount: clients.length,
-      templateType,
-      shouldShowLoading: (isLoading || !hasLoadedInitialData) && !isNewSession,
-      timestamp: new Date().toISOString()
-    });
-    
     if (fetchError) {
-      console.error('[TV SessionLobby] ❌ Fetch error details:');
-      console.error('[TV SessionLobby] Error message:', fetchError.message);
-      console.error('[TV SessionLobby] Error stack:', fetchError.stack);
-      console.error('[TV SessionLobby] Full error:', fetchError);
+      console.error('[TV SessionLobby] Critical error fetching clients:', fetchError.message);
     }
-  }, [sessionId, isLoading, fetchError, polledClients, clients]);
+  }, [fetchError]);
 
   // Initialize with pre-fetched data if available
   useEffect(() => {
     if (prefetchedData?.checkedInClients && !hasLoadedInitialData) {
-      console.log('[TV SessionLobby] Using pre-fetched data:', prefetchedData.checkedInClients.length, 'clients');
       setClients(prefetchedData.checkedInClients);
       setHasLoadedInitialData(true);
       setConnectionState('connected');
       setLastSuccessfulFetch(new Date());
     } else if (isNewSession && !hasLoadedInitialData) {
-      console.log('[TV SessionLobby] New session created - skipping loading state');
       setClients([]);
       setHasLoadedInitialData(true);
       setConnectionState('connected');
@@ -209,7 +174,6 @@ export function SessionLobbyScreen() {
 
   // Clear clients when sessionId changes
   useEffect(() => {
-    console.log('[TV SessionLobby] Session changed, clearing clients. New sessionId:', sessionId);
     if (!prefetchedData?.checkedInClients) {
       setClients([]);
       setHasLoadedInitialData(false);
@@ -219,7 +183,6 @@ export function SessionLobbyScreen() {
   // Update clients from polling data
   useEffect(() => {
     if (!isLoading && polledClients !== undefined) {
-      console.log('[TV SessionLobby] Updating clients from polled data:', polledClients?.length || 0, 'clients');
       setHasLoadedInitialData(true);
       
       // Update last successful fetch timestamp on success
@@ -246,7 +209,6 @@ export function SessionLobbyScreen() {
   // Handle fetch errors
   useEffect(() => {
     if (fetchError && !isLoading) {
-      console.log('[TV SessionLobby] Fetch error detected:', fetchError);
       setConnectionState('error');
     }
   }, [fetchError, isLoading]);
@@ -284,7 +246,7 @@ export function SessionLobbyScreen() {
   const { isConnected, error: realtimeError } = useRealtimeCheckIns({
     sessionId: sessionId || '',
     onCheckIn: handleCheckIn,
-    onError: (err) => console.error('[TV SessionLobby] Realtime error:', err)
+    onError: (err) => console.error('[TV SessionLobby] Critical realtime subscription error:', err)
   });
 
   useEffect(() => {
@@ -295,7 +257,6 @@ export function SessionLobbyScreen() {
   const sendStartMessagesMutation = useMutation({
     ...api.trainingSession.sendSessionStartMessages.mutationOptions(),
     onSuccess: (data) => {
-      console.log('[TV SessionLobby] SMS send result:', data);
       // Navigate based on template type
       if (templateType === 'circuit') {
         // For circuit workouts, skip preferences and go directly to workout generation
@@ -305,7 +266,7 @@ export function SessionLobbyScreen() {
       }
     },
     onError: (error: any) => {
-      console.error('[TV SessionLobby] Failed to send start messages:', error);
+      console.error('[TV SessionLobby] Critical error: Failed to send start messages:', error);
       setIsStartingSession(false);
       Alert.alert(
         'Error',
@@ -343,30 +304,26 @@ export function SessionLobbyScreen() {
   const updateSessionStatusMutation = useMutation({
     ...api.trainingSession.updateSessionStatus.mutationOptions(),
     onSuccess: (data) => {
-      console.log('[SessionLobby] ✅ Session status updated:', data.status);
       // Invalidate queries to ensure MainScreen shows updated status
       queryClient.invalidateQueries({ 
         queryKey: api.trainingSession.list.queryOptions({ limit: 3, offset: 0 }).queryKey 
       });
     },
     onError: (error: any) => {
-      console.error('[SessionLobby] ❌ Failed to update session status:', error);
+      console.error('[SessionLobby] Critical error: Failed to update session status:', error);
     },
   });
 
   const handleBack = async () => {
-    console.log('[SessionLobby] Navigating back to MainScreen');
-    
     // Update session status back to open if it's not completed
     if (currentSession && currentSession.status !== 'completed' && currentSession.status !== 'cancelled') {
-      console.log('[SessionLobby] 🔄 Updating session status back to open');
       try {
         await updateSessionStatusMutation.mutateAsync({
           sessionId: sessionId || '',
           status: 'open' as const
         });
       } catch (error) {
-        console.warn('[SessionLobby] ⚠️ Failed to update status on back, continuing anyway:', error);
+        console.error('[SessionLobby] Critical error: Failed to update status on back:', error);
       }
     }
     
@@ -481,17 +438,10 @@ export function SessionLobbyScreen() {
             </View>
           ) : (isLoading || !hasLoadedInitialData) && !isNewSession ? (
             <View className="flex-1 items-center justify-center">
-              {console.log('[TV SessionLobby] 🔄 Showing loading state:', { 
-                isLoading, 
-                hasLoadedInitialData,
-                isNewSession,
-                reason: isLoading ? 'isLoading=true' : 'hasLoadedInitialData=false'
-              })}
               <Text style={{ color: TOKENS.color.muted }}>Loading clients...</Text>
             </View>
           ) : clients.length === 0 ? (
             <View className="flex-1 items-center justify-center p-12">
-              {console.log('[TV SessionLobby] 📭 Showing empty state for new session')}
               {/* Icon placeholder - smaller size */}
               <View className="bg-gray-800 rounded-full w-20 h-20 items-center justify-center mb-4">
                 <Icon name="group-off" size={40} color={TOKENS.color.muted} />
@@ -503,12 +453,6 @@ export function SessionLobbyScreen() {
             </View>
           ) : (
             <ScrollView className="flex-1">
-              {console.log('[TV SessionLobby] Rendering clients:', clients.length, 'total')}
-              {console.log('[TV SessionLobby] Client statuses:', clients.map(c => ({ 
-                userName: c.userName, 
-                status: (c as any).status,
-                hasStatus: 'status' in c
-              })))}
               {clients.map((client) => (
                 <View 
                   key={client.userId} 

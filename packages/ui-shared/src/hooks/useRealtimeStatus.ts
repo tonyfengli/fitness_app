@@ -41,9 +41,7 @@ export function useRealtimeStatus({
 
     // Small delay to avoid subscribing during rapid re-renders
     const timeoutId = setTimeout(() => {
-      console.log('[useRealtimeStatus] Setting up realtime for session:', sessionId);
-    
-    // Create a channel for this session's status updates
+      // Create a channel for this session's status updates
     const channel = supabase
       .channel(`status-${sessionId}`)
       .on(
@@ -55,11 +53,7 @@ export function useRealtimeStatus({
           filter: `training_session_id=eq.${sessionId}`,
         },
         async (payload) => {
-          console.log('[useRealtimeStatus] Status update received:', payload.eventType);
-          
           if (payload.eventType === 'UPDATE' && payload.new.user_id) {
-            console.log('[useRealtimeStatus] Processing status update for user:', payload.new.user_id);
-            
             onStatusUpdateRef.current({
               userId: payload.new.user_id,
               status: payload.new.status,
@@ -69,8 +63,6 @@ export function useRealtimeStatus({
         }
       )
       .subscribe((status) => {
-        console.log('[useRealtimeStatus] Subscription status changed:', status);
-        
         if (status === 'SUBSCRIBED') {
           setIsConnected(true);
           setError(null);
@@ -89,14 +81,13 @@ export function useRealtimeStatus({
         }
       });
     
-    channelRef.current = channel;
+      channelRef.current = channel;
 
     }, 100); // 100ms delay
 
     // Cleanup function
     return () => {
       clearTimeout(timeoutId);
-      console.log('[useRealtimeStatus] Cleaning up subscription');
       if (channelRef.current) {
         channelRef.current.unsubscribe();
         channelRef.current = null;

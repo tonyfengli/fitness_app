@@ -17,6 +17,7 @@ import {
 import { getColorForPreset, getHuePresetForColor } from '../lib/lighting/colorMappings';
 import { useSpotifySync } from '../hooks/useSpotifySync';
 import type { CircuitConfig } from '@acme/db';
+import { playCountdownSound } from '../lib/sound/countdown-sound';
 import { 
   CircuitRoundPreview, 
   StationsRoundPreview,
@@ -156,13 +157,9 @@ export function CircuitWorkoutLiveScreen() {
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   
   
-  // Cleanup and unmount logging
+  // Cleanup on unmount
   useEffect(() => {
     return () => {
-      console.log('[CircuitWorkoutLive] Screen unmounting', {
-        currentScreen,
-        timestamp: new Date().toISOString()
-      });
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
   }, []);
@@ -217,13 +214,6 @@ export function CircuitWorkoutLiveScreen() {
     // Find template for current round (roundTemplates are 1-indexed)
     const roundTemplate = roundTemplates.find(rt => rt.roundNumber === roundIndex + 1);
     
-    console.log('[TIMING-DEBUG] getRoundTiming:', {
-      roundIndex,
-      lookingForRoundNumber: roundIndex + 1,
-      foundTemplate: !!roundTemplate,
-      templateType: roundTemplate?.template?.type,
-      allTemplates: roundTemplates.map(rt => ({ round: rt.roundNumber, type: rt.template.type }))
-    });
     
     if (!roundTemplate) {
       // Fallback to legacy timing
@@ -284,17 +274,6 @@ export function CircuitWorkoutLiveScreen() {
   
   const currentRepeatNumber = getCurrentRepeatNumber();
   
-  // Log round type for debugging
-  useEffect(() => {
-    console.log('[ROUND-TYPE-DEBUG] Current round type:', {
-      currentRoundType,
-      currentRoundIndex,
-      currentScreen,
-      isStarted,
-      timeRemaining,
-      timestamp: new Date().toISOString()
-    });
-  }, [currentRoundType, currentRoundIndex, currentScreen, isStarted, timeRemaining]);
   
   // Spotify integration with pre-selected device (auto-play disabled since music already playing from preferences screen)
   const { playTrackAtPosition, prefetchSetlistTracks, setlist, isConnected: spotifyConnectionState, refetchDevices } = useSpotifySync(sessionId, circuitConfig?.config?.spotifyDeviceId, { autoPlay: false });
@@ -337,28 +316,14 @@ export function CircuitWorkoutLiveScreen() {
   // Process selections into rounds
   useEffect(() => {
     if (selections && selections.length > 0) {
-      console.log('[CircuitWorkout] Processing selections:', {
-        totalSelections: selections.length,
-        groupNames: [...new Set(selections.map(s => s.groupName))],
-        warmupEnabled: circuitConfig?.config?.warmup?.enabled,
-      });
       
       // Process all exercises without deduplication to allow duplicates
       const allExercises: CircuitExercise[] = [];
       
-      console.log('[DEDUP-DEBUG] Starting to process selections:', {
-        totalSelections: selections.length,
-        selectionsPreview: selections.slice(0, 5).map(s => ({
-          id: s.id,
-          exerciseName: s.exerciseName,
-          groupName: s.groupName
-        }))
-      });
       
       selections.forEach((selection, index) => {
         // Skip warm-up exercises from being added to regular rounds
         if (selection.groupName === 'Warm-up') {
-          console.log('[CircuitWorkout] Skipping warm-up exercise from rounds:', selection.exerciseName);
           return;
         }
         
@@ -373,24 +338,10 @@ export function CircuitWorkoutLiveScreen() {
           stationIndex: (selection as any).stationIndex ?? null,
         };
         
-        console.log(`[DEDUP-DEBUG] Adding exercise ${index}:`, {
-          selectionId: selection.id,
-          exerciseId: selection.exerciseId,
-          exerciseName: selection.exerciseName,
-          groupName: selection.groupName,
-          stationIndex: exercise.stationIndex
-        });
         
         allExercises.push(exercise);
       });
       
-      console.log('[DEDUP-DEBUG] After processing all selections:', {
-        totalExercises: allExercises.length,
-        exercisesByGroup: allExercises.reduce((acc, ex) => {
-          acc[ex.groupName] = (acc[ex.groupName] || 0) + 1;
-          return acc;
-        }, {} as Record<string, number>)
-      });
       
       // Group by round
       const roundsMap = new Map<string, CircuitExercise[]>();
@@ -423,17 +374,6 @@ export function CircuitWorkoutLiveScreen() {
           );
           const isStationsRound = roundTemplate?.template?.type === 'stations_round';
           
-          console.log('[STATION-DEBUG] Processing round:', {
-            roundName,
-            roundNum,
-            isStationsRound,
-            exerciseCount: sortedExercises.length,
-            exercises: sortedExercises.map(e => ({
-              name: e.exerciseName,
-              orderIndex: e.orderIndex,
-              stationIndex: e.stationIndex
-            }))
-          });
           
           // If it's a stations round, group exercises by station
           if (isStationsRound) {
@@ -470,14 +410,6 @@ export function CircuitWorkoutLiveScreen() {
                 }
               });
             
-            console.log('[STATION-DEBUG] Nested exercises:', {
-              roundName,
-              stationCount: nestedExercises.length,
-              stations: nestedExercises.map(e => ({
-                primary: e.exerciseName,
-                additionalCount: e.stationExercises?.length || 0
-              }))
-            });
             
             return {
               roundName,
@@ -497,30 +429,11 @@ export function CircuitWorkoutLiveScreen() {
           return aNum - bNum;
         });
       
-      console.log('[CircuitWorkout] Final rounds data:', {
-        roundCount: rounds.length,
-        rounds: rounds.map(r => ({
-          name: r.roundName,
-          exerciseCount: r.exercises.length
-        }))
-      });
       
       setRoundsData(rounds);
       
       // Check if warmup is configured and enabled
       if (circuitConfig?.config?.warmup?.enabled && !warmupData && !warmupCompleted) {
-        console.log('[WARMUP-DEBUG] Checking for warmup exercises:', {
-          warmupConfig: circuitConfig.config.warmup,
-          expectedExercises: circuitConfig.config.warmup.exercisesCount,
-          totalSelections: selections.length,
-          allGroupNames: [...new Set(selections.map(s => s.groupName))],
-          warmupSelections: selections.filter(s => s.groupName === 'Warm-up').map(s => ({
-            id: s.id,
-            exerciseName: s.exerciseName,
-            groupName: s.groupName,
-            orderIndex: s.orderIndex
-          }))
-        });
         
         // Only set up warmup if we haven't already done so and haven't completed it
         // Look for exercises with groupName "Warm-up"
@@ -534,11 +447,6 @@ export function CircuitWorkoutLiveScreen() {
             orderIndex: s.orderIndex
           }));
         
-        console.log('[WARMUP-DEBUG] Filtered warmup exercises:', {
-          count: warmupExercises.length,
-          exercises: warmupExercises,
-          expectedCount: circuitConfig.config.warmup.exercisesCount
-        });
         
         if (warmupExercises.length > 0) {
           const warmupRound: RoundData = {
@@ -549,19 +457,8 @@ export function CircuitWorkoutLiveScreen() {
           setCurrentScreen('warmup');
           // Start warmup timer - just use the total duration
           const warmupDuration = circuitConfig.config.warmup.duration; // Total warmup time
-          console.log('[WARMUP-INIT-DEBUG] Initializing warmup', {
-            warmupDuration,
-            currentScreen,
-            hasWarmupData: !!warmupData,
-            warmupExerciseCount: warmupExercises.length,
-            timestamp: new Date().toISOString()
-          });
           startTimer(warmupDuration);
         } else {
-          console.log('[WARMUP-INIT-DEBUG] No warm-up exercises found in selections', {
-            totalSelections: selections.length,
-            groupNames: [...new Set(selections.map(s => s.groupName))]
-          });
         }
       }
     }
@@ -666,11 +563,6 @@ export function CircuitWorkoutLiveScreen() {
           
           // Start music early for round previews at 0:06
           if (screen === 'round-preview' && roundIdx > 0 && prev === 7) {
-            console.log('[MUSIC-DEBUG] Starting music early at 0:06', {
-              screen,
-              roundIdx,
-              timestamp: new Date().toISOString()
-            });
             
             // Get values from ref
             const { setlist: currentSetlist, playTrackAtPosition: playTrack } = timerStateRef.current;
@@ -682,13 +574,6 @@ export function CircuitWorkoutLiveScreen() {
               if (hypeTrack && hypeTrack.hypeTimestamp !== undefined) {
                 // Calculate seek position: hype moment - 6 seconds
                 const seekPositionMs = Math.max(0, (hypeTrack.hypeTimestamp - 6) * 1000);
-                console.log('[MUSIC-DEBUG] Playing hype track early', {
-                  round: roundIdx + 1,
-                  track: hypeTrack.spotifyId,
-                  hypeTimestamp: hypeTrack.hypeTimestamp,
-                  seekPosition: seekPositionMs / 1000,
-                  timestamp: new Date().toISOString()
-                });
                 playTrack(hypeTrack.spotifyId, seekPositionMs);
               }
             }
@@ -761,13 +646,6 @@ export function CircuitWorkoutLiveScreen() {
               if (hypeTrack && hypeTrack.hypeTimestamp !== undefined) {
                 // Calculate seek position: hype moment - 6 seconds
                 const seekPositionMs = Math.max(0, (hypeTrack.hypeTimestamp - 6) * 1000);
-                console.log('[MUSIC-DEBUG] Playing hype track early', {
-                  round: roundIdx + 1,
-                  track: hypeTrack.spotifyId,
-                  hypeTimestamp: hypeTrack.hypeTimestamp,
-                  seekPosition: seekPositionMs / 1000,
-                  timestamp: new Date().toISOString()
-                });
                 playTrack(hypeTrack.spotifyId, seekPositionMs);
               }
             }
@@ -786,7 +664,6 @@ export function CircuitWorkoutLiveScreen() {
 
   // Start Round 1 immediately
   const startRound1Immediately = useCallback(() => {
-    console.log('[CircuitWorkoutLive] Starting Round 1 immediately');
     setIsStarted(true); // Mark workout as started
     setCurrentScreen('exercise');
     const { workDuration } = getRoundTiming(0); // Round 1
@@ -802,12 +679,6 @@ export function CircuitWorkoutLiveScreen() {
       
       if (hypeTrack && hypeTrack.hypeTimestamp !== undefined) {
         const seekPositionMs = hypeTrack.hypeTimestamp * 1000;
-        console.log('[MUSIC-DEBUG] Playing Round 1 hype track immediately', {
-          track: hypeTrack.spotifyId,
-          hypeTimestamp: hypeTrack.hypeTimestamp,
-          seekPosition: seekPositionMs / 1000,
-          timestamp: new Date().toISOString()
-        });
         playTrack(hypeTrack.spotifyId, seekPositionMs);
       }
     }
@@ -828,15 +699,6 @@ export function CircuitWorkoutLiveScreen() {
       const currentRoundMusic = currentSetlist.rounds?.[roundIdx];
       const hypeTrack = currentRoundMusic?.track1;
       
-      console.log('[MUSIC-DEBUG] Starting first exercise with music', {
-        round: roundIdx + 1,
-        hasSetlist: !!currentSetlist,
-        hasPlayFunction: !!playTrack,
-        hasRoundMusic: !!currentRoundMusic,
-        hasHypeTrack: !!hypeTrack,
-        hypeTimestamp: hypeTrack?.hypeTimestamp,
-        timestamp: new Date().toISOString()
-      });
       
       if (hypeTrack && hypeTrack.hypeTimestamp !== undefined) {
         // Start at the hype moment (music should already be playing from 0:06)
@@ -846,17 +708,8 @@ export function CircuitWorkoutLiveScreen() {
           playTrack(hypeTrack.spotifyId, seekPositionMs);
         }
       } else {
-        console.warn('[MUSIC-DEBUG] Cannot play hype track', {
-          round: roundIdx + 1,
-          reason: !hypeTrack ? 'No hype track' : 'No hype timestamp',
-          trackData: hypeTrack
-        });
       }
     } else {
-      console.warn('[MUSIC-DEBUG] Missing requirements for exercise music', {
-        hasSetlist: !!currentSetlist,
-        hasPlayFunction: !!playTrack
-      });
     }
     
     // Check round type
@@ -879,28 +732,12 @@ export function CircuitWorkoutLiveScreen() {
     
     // For Round 2+, music should already be playing from 0:06
     // Just start the exercise
-    console.log('[MUSIC-DEBUG] Starting exercise (music already playing from 0:06)');
     setCurrentScreen('exercise');
     startTimer(workDuration);
   }, [getRoundTiming, startRound1Immediately]);
 
   const startTimer = (duration: number) => {
-    console.log('[TIMER-DEBUG] startTimer called', {
-      newDuration: duration,
-      currentTimeRemaining: timeRemaining,
-      currentScreen,
-      caller: new Error().stack?.split('\n')[2]?.trim(),
-      timestamp: new Date().toISOString()
-    });
     
-    console.log('[TIMER-SET-DEBUG] setTimeRemaining called', {
-      duration,
-      oldTimeRemaining: timeRemaining,
-      currentScreen,
-      currentRoundIndex,
-      caller: new Error().stack?.split('\n')[3]?.trim(),
-      timestamp: new Date().toISOString()
-    });
     setTimeRemaining(duration);
     // Don't set isStarted here - it should only be set when actual workout rounds begin
   };
@@ -924,20 +761,9 @@ export function CircuitWorkoutLiveScreen() {
       playTrackAtPosition: playTrack
     } = timerStateRef.current;
     
-    console.log('[FLOW-DEBUG] handleNext called', {
-      currentScreen: screen,
-      roundIndex: roundIdx,
-      exerciseIndex: exerciseIdx,
-      timeRemaining,
-      timestamp: new Date().toISOString()
-    });
     
     const currentRound = rounds[roundIdx];
     if (!currentRound) {
-      console.error('[CircuitWorkoutLive] handleNext - No currentRound', {
-        roundIdx,
-        roundsDataLength: rounds.length
-      });
       return;
     }
 
@@ -945,18 +771,8 @@ export function CircuitWorkoutLiveScreen() {
     setLastLightingEvent('');
 
     if (screen === 'warmup') {
-      console.log('[FLOW-DEBUG] Warmup complete, moving to Round 1', {
-        isManualSkip,
-        timestamp: new Date().toISOString()
-      });
       
       // Warmup complete - go to Round 1 preview
-      console.log('[WARMUP-COMPLETE-DEBUG] Warmup finished, clearing timer and transitioning', {
-        oldScreen: screen,
-        newScreen: 'round-preview',
-        currentTimeRemaining: timeRemaining,
-        timestamp: new Date().toISOString()
-      });
       
       // Clear any running timer
       if (intervalRef.current) {
@@ -977,12 +793,6 @@ export function CircuitWorkoutLiveScreen() {
     }
     
     if (screen === 'round-preview') {
-      console.log('[FLOW-DEBUG] Round preview complete', {
-        isManualSkip,
-        roundIdx,
-        roundType: getRoundTiming(roundIdx).roundType,
-        timestamp: new Date().toISOString()
-      });
       
       const currentRoundType = getRoundTiming(roundIdx).roundType;
       
@@ -994,12 +804,6 @@ export function CircuitWorkoutLiveScreen() {
           const hypeTrack = currentRoundMusic.track1;
           if (hypeTrack && hypeTrack.hypeTimestamp !== undefined) {
             const seekPositionMs = hypeTrack.hypeTimestamp * 1000;
-            console.log('[MUSIC-DEBUG] Manual skip from Round preview - seeking to hype moment', {
-              round: roundIdx + 1,
-              track: hypeTrack.spotifyId,
-              hypeTimestamp: hypeTrack.hypeTimestamp,
-              timestamp: new Date().toISOString()
-            });
             playTrack(hypeTrack.spotifyId, seekPositionMs);
           }
         }
@@ -1047,12 +851,6 @@ export function CircuitWorkoutLiveScreen() {
           // Check if this is a stations or circuit round with more sets to do
           if ((isStationsRound || isCircuitRound) && currentSet < repeatTimes) {
             // More sets to do - go to rest screen for set break
-            console.log('[MULTI-SET] Starting set break before next set', {
-              currentSet,
-              nextSet: currentSet + 1,
-              totalSets: repeatTimes,
-              timestamp: new Date().toISOString()
-            });
             
             // Move to rest screen for set break
             setCurrentScreen('rest');
@@ -1072,15 +870,8 @@ export function CircuitWorkoutLiveScreen() {
           if (currentRoundMusic && playTrack) {
             const restTrack = currentRoundMusic.track3;
             if (restTrack) {
-              console.log('[UNMOUNT-DEBUG] Playing REST track at round end', {
-                round: roundIdx + 1,
-                track: restTrack.spotifyId,
-                trackName: restTrack.trackName,
-                timestamp: new Date().toISOString()
-              });
               playTrack(restTrack.spotifyId, 0);
             } else {
-              console.warn('[UNMOUNT-DEBUG] No REST track available for round', roundIdx + 1);
             }
           }
           
@@ -1140,11 +931,6 @@ export function CircuitWorkoutLiveScreen() {
       
       if ((isStationsRound || isCircuitRound) && isLastExercise && currentSet < repeatTimes) {
         // This is a set break - start next set from first exercise
-        console.log('[MULTI-SET] Set break complete, starting next set', {
-          currentSet,
-          nextSet: currentSet + 1,
-          timestamp: new Date().toISOString()
-        });
         
         setCurrentSetNumber(currentSet + 1);
         setCurrentExerciseIndex(0);
@@ -1193,12 +979,6 @@ export function CircuitWorkoutLiveScreen() {
         if (hasMultipleSets) {
           // Set to the last set of the previous round
           setCurrentSetNumber(prevRoundTiming.repeatTimes || 1);
-          console.log('[SKIP-BACK] From round preview to previous round last set', {
-            fromRound: currentRoundIndex,
-            toRound: currentRoundIndex - 1,
-            toSet: prevRoundTiming.repeatTimes,
-            roundType: prevRoundTiming.roundType
-          });
         }
         
         const { restDuration } = prevRoundTiming;
@@ -1223,12 +1003,6 @@ export function CircuitWorkoutLiveScreen() {
         
         if (hasMultipleSets && currentSetNumber > 1) {
           // Go back to previous set's last exercise (in rest)
-          console.log('[SKIP-BACK] Going to previous set', {
-            currentSet: currentSetNumber,
-            previousSet: currentSetNumber - 1,
-            roundType: roundTiming.roundType,
-            totalSets: roundTiming.repeatTimes
-          });
           
           setCurrentSetNumber(currentSetNumber - 1);
           const currentRound = roundsData[currentRoundIndex];
@@ -1278,26 +1052,16 @@ export function CircuitWorkoutLiveScreen() {
   }, [currentScreen, currentRoundIndex, currentExerciseIndex, currentSetNumber, roundsData, circuitConfig, getRoundTiming, startTimer]);
 
   const handleStartRound = () => {
-    console.log('[START-DEBUG] handleStartRound called:', {
-      currentRoundType,
-      currentScreen,
-      currentRoundIndex,
-      isStarted,
-      timestamp: new Date().toISOString()
-    });
     
     // For circuit rounds, start countdown with music
     // For stations/AMRAP, go directly to exercise
     if (currentRoundType === 'circuit_round') {
-      console.log('[START-DEBUG] Starting circuit countdown');
       startRound1Immediately();
     } else {
-      console.log('[START-DEBUG] Starting stations/AMRAP directly');
       // For stations and AMRAP, skip countdown and start directly
       setIsStarted(true);
       setCurrentScreen('exercise');
       const { workDuration } = getRoundTiming(0);
-      console.log('[START-DEBUG] Work duration:', workDuration);
       startTimer(workDuration);
       
       // Play music for Round 1 if available
@@ -1308,7 +1072,6 @@ export function CircuitWorkoutLiveScreen() {
         const hypeTrack = currentRoundMusic.track1;
         if (hypeTrack && hypeTrack.hypeTimestamp !== undefined) {
           const seekPositionMs = hypeTrack.hypeTimestamp * 1000;
-          console.log('[START-DEBUG] Playing music:', hypeTrack.spotifyId);
           playTrack(hypeTrack.spotifyId, seekPositionMs);
         }
       }
@@ -1555,14 +1318,6 @@ export function CircuitWorkoutLiveScreen() {
         
         {(() => {
           const shouldShowStartButton = currentScreen === 'round-preview' && currentRoundIndex === 0 && !isStarted;
-          console.log('[CONTROL-DEBUG] Button logic:', {
-            shouldShowStartButton,
-            currentScreen,
-            currentRoundIndex,
-            isStarted,
-            currentRoundType,
-            timestamp: new Date().toISOString()
-          });
           return shouldShowStartButton;
         })() ? (
           <Pressable

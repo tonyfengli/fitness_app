@@ -104,12 +104,9 @@ export function GlobalPreferencesScreen() {
   const queryClient = useQueryClient();
   const sessionId = navigation.getParam('sessionId');
   
-  // Add mount/unmount logging
+  // Mount/unmount tracking - logging removed for production
   useEffect(() => {
-    console.log('[TV GlobalPreferences] 🟢 MOUNTED with sessionId:', sessionId);
-    return () => {
-      console.log('[TV GlobalPreferences] 🔴 UNMOUNTING');
-    };
+    return () => {};
   }, []);
   
   const [clients, setClients] = useState<ClientPreference[]>([]);
@@ -149,43 +146,19 @@ export function GlobalPreferencesScreen() {
     }
   );
 
-  // Log query states when they change
-  useEffect(() => {
-    console.log('[TV GlobalPreferences] Selections query state:', {
-      loading: selectionsLoading,
-      error: selectionsError,
-      hasData: !!existingSelections,
-      dataLength: existingSelections?.length
-    });
-  }, [selectionsLoading, selectionsError, existingSelections]);
-
-  useEffect(() => {
-    console.log('[TV GlobalPreferences] Session query state:', {
-      loading: sessionLoading,
-      error: sessionError,
-      hasData: !!sessionData,
-      hasOrganization: !!sessionData?.workoutOrganization
-    });
-  }, [sessionLoading, sessionError, sessionData]);
+  // Query state tracking - logging removed for production
 
   // Set up real-time updates for preferences
   const { isConnected } = useRealtimePreferences({
     sessionId: sessionId || '',
     onPreferenceUpdate: (event) => {
-      console.log('[TV GlobalPreferences] Preference update received:', event);
-      console.log('[TV GlobalPreferences] Current clients:', clients);
-      console.log('[TV GlobalPreferences] Looking for user:', event.userId);
-      
       setClients(prev => {
-        console.log('[TV GlobalPreferences] Previous clients state:', prev);
         const updated = prev.map(client => {
           if (client.userId === event.userId) {
-            console.log('[TV GlobalPreferences] Found matching client, updating:', client.userId);
             return { ...client, preferences: event.preferences, isReady: event.isReady };
           }
           return client;
         });
-        console.log('[TV GlobalPreferences] Updated clients state:', updated);
         return updated;
       });
     },
@@ -197,12 +170,9 @@ export function GlobalPreferencesScreen() {
     sessionId: sessionId || '',
     supabase,
     onStatusUpdate: (update) => {
-      console.log('[TV GlobalPreferences] Status update received:', update);
-      
       setClients(prev => {
         const updated = prev.map(client => {
           if (client.userId === update.userId) {
-            console.log('[TV GlobalPreferences] Updating status for user:', update.userId, 'to:', update.status);
             // Mark as ready when status is 'ready' or 'workout_ready'
             return { ...client, isReady: update.status === 'ready' || update.status === 'workout_ready' };
           }
@@ -269,21 +239,7 @@ export function GlobalPreferencesScreen() {
           // Immediately mark as processing to prevent re-runs
           setShouldGenerateBlueprint(false);
           
-          // Deep log the actual debug data - they're at the top level of llmResult, not in a debug property
-          if (blueprintResult?.llmResult?.systemPromptsByClient || blueprintResult?.llmResult?.llmResponsesByClient) {
-            console.log('[TV GlobalPreferences] 🔍 DEBUG DATA CONTENT:');
-            console.log('[TV GlobalPreferences] systemPromptsByClient keys:', Object.keys(blueprintResult.llmResult.systemPromptsByClient || {}));
-            console.log('[TV GlobalPreferences] llmResponsesByClient keys:', Object.keys(blueprintResult.llmResult.llmResponsesByClient || {}));
-            
-            // Log sample of actual content
-            const firstClientId = Object.keys(blueprintResult.llmResult.systemPromptsByClient || {})[0];
-            if (firstClientId) {
-              console.log('[TV GlobalPreferences] Sample system prompt length:', blueprintResult.llmResult.systemPromptsByClient?.[firstClientId]?.length || 0);
-              console.log('[TV GlobalPreferences] Sample LLM response length:', blueprintResult.llmResult.llmResponsesByClient?.[firstClientId]?.length || 0);
-            }
-          } else {
-            console.log('[TV GlobalPreferences] ⚠️ NO DEBUG DATA IN LLM RESULT');
-          }
+          // Debug data processing - logging removed for production
           
           // Save visualization data
           
@@ -297,12 +253,7 @@ export function GlobalPreferencesScreen() {
             }
           };
           
-          console.log('[TV GlobalPreferences] 📦 LLM RESULT WITH DEBUG:', {
-            hasDebug: !!llmResultWithDebug.debug,
-            debugKeys: llmResultWithDebug.debug ? Object.keys(llmResultWithDebug.debug) : [],
-            systemPromptsByClientKeys: llmResultWithDebug.debug?.systemPromptsByClient ? Object.keys(llmResultWithDebug.debug.systemPromptsByClient) : [],
-            llmResponsesByClientKeys: llmResultWithDebug.debug?.llmResponsesByClient ? Object.keys(llmResultWithDebug.debug.llmResponsesByClient) : []
-          });
+          // LLM result prepared with debug data
           
           await saveVisualization.mutateAsync({
             sessionId: sessionId!,
@@ -315,10 +266,9 @@ export function GlobalPreferencesScreen() {
               sharedExerciseIds: blueprintResult.blueprint?.sharedExercisePool?.map((e: any) => e.id) || undefined
             }
           });
-          console.log('[TV GlobalPreferences] ✅ Visualization data saved successfully');
+          // Visualization data saved
           
           // Poll for exercise selections to be ready
-          console.log('[TV GlobalPreferences] Waiting for exercise selections to be saved...');
           let attempts = 0;
           let selectionsReady = false;
           const maxAttempts = 30; // 15 seconds max
@@ -331,14 +281,11 @@ export function GlobalPreferencesScreen() {
               
               if (selections && selections.length > 0) {
                 selectionsReady = true;
-                console.log('[TV GlobalPreferences] ✅ Exercise selections ready:', selections.length, 'exercises found');
               } else {
                 attempts++;
-                console.log('[TV GlobalPreferences] ⏳ Waiting for selections... attempt', attempts, 'of', maxAttempts);
                 await new Promise(resolve => setTimeout(resolve, 500));
               }
             } catch (error) {
-              console.log('[TV GlobalPreferences] Error fetching selections, will retry:', error);
               attempts++;
               await new Promise(resolve => setTimeout(resolve, 500));
             }
@@ -352,7 +299,6 @@ export function GlobalPreferencesScreen() {
           await new Promise(resolve => setTimeout(resolve, 500));
           
           // Navigate after selections are confirmed
-          console.log('[TV GlobalPreferences] 🚀 NAVIGATING to WorkoutOverview');
           navigation.navigate('WorkoutOverview', { sessionId });
         } catch (error: any) {
           if (isMounted) {
@@ -420,7 +366,7 @@ export function GlobalPreferencesScreen() {
   // Handle fetch errors
   useEffect(() => {
     if (fetchError && !isLoading) {
-      console.log('[TV GlobalPreferences] Fetch error detected:', fetchError);
+      console.error('[TV GlobalPreferences] Fetch error:', fetchError);
       setConnectionState('error');
     }
   }, [fetchError, isLoading]);

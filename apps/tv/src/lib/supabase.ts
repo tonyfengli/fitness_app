@@ -6,10 +6,6 @@ import { config } from '../config';
 const supabaseUrl = config.supabaseUrl;
 const supabaseAnonKey = config.supabaseAnonKey;
 
-console.log('[Supabase] Initializing with:', {
-  url: supabaseUrl,
-  keyPrefix: supabaseAnonKey.substring(0, 20) + '...',
-});
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
@@ -23,7 +19,6 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
       eventsPerSecond: 10, // Rate limiting to prevent overwhelming TV
       apikey: supabaseAnonKey, // Explicitly pass the API key for Pro plan
     },
-    log_level: 'debug', // Enable debug logging
     heartbeat: {
       interval: 30000, // 30 seconds
     },

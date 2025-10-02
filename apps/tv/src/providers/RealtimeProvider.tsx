@@ -35,13 +35,11 @@ export function RealtimeProvider({ children }: RealtimeProviderProps) {
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
       if (appState.match(/inactive|background/) && nextAppState === 'active') {
-        // console.log('[RealtimeProvider] App came to foreground, reconnecting channels');
         // Reconnect all channels when app comes to foreground
         activeChannelsRef.current.forEach((channel) => {
           channel.subscribe();
         });
       } else if (nextAppState.match(/inactive|background/)) {
-        // console.log('[RealtimeProvider] App went to background');
         // Optionally pause subscriptions when app goes to background
         // to save battery on TV devices
       }
@@ -83,7 +81,6 @@ export function RealtimeProvider({ children }: RealtimeProviderProps) {
     const channel = supabase.channel(channelName);
     activeChannelsRef.current.set(channelName, channel);
 
-    // console.log(`[RealtimeProvider] Subscribing to channel: ${channelName}`);
 
     return channel;
   };
@@ -91,18 +88,14 @@ export function RealtimeProvider({ children }: RealtimeProviderProps) {
   const unsubscribeFromChannel = (channelName: string) => {
     const channel = activeChannelsRef.current.get(channelName);
     if (channel) {
-      console.log(`[RealtimeProvider] 🔌 Unsubscribing from channel: ${channelName}`);
       channel.unsubscribe();
       activeChannelsRef.current.delete(channelName);
     }
   };
 
   const cleanupAllChannels = () => {
-    console.log('[RealtimeProvider] 🧹 Cleaning up all channels for account switch');
-    console.log('[RealtimeProvider] Active channels:', Array.from(activeChannelsRef.current.keys()));
     
     activeChannelsRef.current.forEach((channel, name) => {
-      console.log(`[RealtimeProvider] 🔌 Cleaning up channel: ${name}`);
       channel.unsubscribe();
     });
     
@@ -111,14 +104,12 @@ export function RealtimeProvider({ children }: RealtimeProviderProps) {
     // Force re-render to update the context
     forceUpdate({});
     
-    console.log('[RealtimeProvider] ✅ All channels cleaned up');
   };
 
   // Cleanup all channels on unmount
   useEffect(() => {
     return () => {
       activeChannelsRef.current.forEach((channel) => {
-        // console.log(`[RealtimeProvider] Cleaning up channel: ${name}`);
         channel.unsubscribe();
       });
       activeChannelsRef.current.clear();

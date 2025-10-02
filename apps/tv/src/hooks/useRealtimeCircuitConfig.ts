@@ -38,7 +38,6 @@ export function useRealtimeCircuitConfig({
 
     // Small delay to avoid subscribing during rapid re-renders
     const timeoutId = setTimeout(() => {
-      console.log('[TV] Setting up circuit config realtime subscription for session:', sessionId);
 
       const channel = supabase
       .channel(`circuit-config-${sessionId}`)
@@ -51,14 +50,9 @@ export function useRealtimeCircuitConfig({
           filter: `id=eq.${sessionId}`,
         },
         async (payload) => {
-          console.log('[TV useRealtimeCircuitConfig] Raw payload received:', payload);
-          console.log('[TV useRealtimeCircuitConfig] Event type:', payload.eventType);
-          console.log('[TV useRealtimeCircuitConfig] Table:', payload.table);
-          console.log('[TV useRealtimeCircuitConfig] New data:', payload.new);
           
           if (payload.eventType === 'UPDATE') {
             const session = payload.new as any;
-            console.log('[TV useRealtimeCircuitConfig] Processing session:', session);
             
             // Check if this is a circuit session with valid config
             if (
@@ -74,16 +68,12 @@ export function useRealtimeCircuitConfig({
                 updatedAt: session.updated_at || new Date().toISOString(),
               };
               
-              console.log('[TV useRealtimeCircuitConfig] Transformed update:', update);
               onConfigUpdateRef.current(update);
             }
           }
         }
       )
       .subscribe((status) => {
-        if (status !== 'CLOSED') {
-          console.log('[TV] Circuit config subscription status changed:', status);
-        }
         setIsConnected(status === 'SUBSCRIBED');
         if (status === 'CHANNEL_ERROR' && onErrorRef.current) {
           onErrorRef.current(new Error('Failed to connect to circuit config updates'));
@@ -95,7 +85,6 @@ export function useRealtimeCircuitConfig({
 
     return () => {
       clearTimeout(timeoutId);
-      console.log('[TV] Cleaning up circuit config realtime subscription');
       if (channelRef.current) {
         channelRef.current.unsubscribe();
         channelRef.current = null;

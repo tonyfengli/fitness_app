@@ -7,11 +7,7 @@ const HUE_BRIDGE_IP = EXPO_PUBLIC_HUE_BRIDGE_IP || '192.168.8.192';
 const HUE_APP_KEY = EXPO_PUBLIC_HUE_APP_KEY || '';
 const HUE_GROUP_ID = EXPO_PUBLIC_HUE_GROUP_ID || '0';
 
-console.log('[HUE-DIRECT] Environment config:', {
-  HUE_BRIDGE_IP,
-  HUE_APP_KEY: HUE_APP_KEY ? `${HUE_APP_KEY.substring(0, 10)}...` : 'EMPTY',
-  HUE_GROUP_ID,
-});
+// Environment config loaded
 
 // State tracking for recovery
 let lastAppliedPreset: any = null;
@@ -58,15 +54,12 @@ async function checkHueHealth(): Promise<boolean> {
     isHealthyCache = response.ok;
     lastHealthCheck = Date.now();
     
-    if (response.ok) {
-      console.log('[HUE-HEALTH] ✅ Bridge is healthy');
-    } else {
-      console.warn('[HUE-HEALTH] ❌ Bridge returned error:', response.status);
+    if (!response.ok) {
+      console.warn('[HUE-HEALTH] Bridge returned error:', response.status);
     }
     
     // Handle recovery - reapply last preset when bridge comes back
     if (!wasHealthy && isHealthyCache && lastAppliedPreset) {
-      console.log('[HUE-HEALTH] 🔄 Bridge recovered! Reapplying last preset:', lastAppliedPreset);
       setTimeout(() => {
         setHueLights(lastAppliedPreset, true); // skipCache flag
       }, 100);
@@ -98,28 +91,20 @@ export async function setHueLights(
   // Check if lighting is enabled
   const lightingEnabled = await AsyncStorage.getItem('lightingEnabled');
   if (lightingEnabled === 'false') {
-    console.log('[HUE-DIRECT] Lighting is disabled, skipping command');
+    // Lighting is disabled
     return true; // Return success to avoid breaking the flow
   }
   
   const startTime = Date.now();
   
-  console.log('[HUE-DIRECT] setHueLights called:', {
-    preset: { on: true, ...preset },
-    skipCache,
-    timestamp: new Date().toISOString()
-  });
+  // Setting Hue lights with preset
   
   // Simple deduplication (300ms window)
   if (!skipCache) {
     const presetKey = `${preset.bri}-${preset.hue}-${preset.sat}`;
     const lastTime = recentCommands.get(presetKey);
     if (lastTime && Date.now() - lastTime < 300) {
-      console.log('[HUE-DIRECT] Skipping duplicate command:', {
-        presetKey,
-        timeSinceLastCommand: Date.now() - lastTime
-      });
-      return true;
+      return true; // Skip duplicate command
     }
     recentCommands.set(presetKey, Date.now());
     
@@ -131,7 +116,7 @@ export async function setHueLights(
   }
   
   const url = `http://${HUE_BRIDGE_IP}/api/${HUE_APP_KEY}/groups/${HUE_GROUP_ID}/action`;
-  console.log('[HUE-DIRECT] Making request to:', url);
+  // Making request to Hue API
   
   try {
     const controller = new AbortController();
@@ -153,11 +138,6 @@ export async function setHueLights(
     
     if (response.ok) {
       const responseText = await response.text();
-      console.log('[HUE-DIRECT] Success response:', {
-        status: response.status,
-        latency,
-        response: responseText
-      });
       
       // Store for recovery
       lastAppliedPreset = preset;
@@ -166,7 +146,6 @@ export async function setHueLights(
       // Update status based on latency
       const status = latency <= 1500 ? 'success' : 'slow';
       updateStatus(status);
-      console.log(`[HUE-DIRECT] ✅ Hue lights updated in ${latency}ms (status: ${status})`);
       return true;
     } else {
       const errorText = await response.text();
@@ -194,16 +173,10 @@ let healthCheckInterval: NodeJS.Timeout;
 
 export function startHealthCheck() {
   if (healthCheckInterval) {
-    console.log('[HUE-HEALTH] Health check already running');
-    return;
+    return; // Health check already running
   }
   
-  console.log('[HUE-HEALTH] Starting health check monitor...');
-  console.log('[HUE-HEALTH] Config:', {
-    HUE_BRIDGE_IP,
-    HUE_APP_KEY: HUE_APP_KEY ? `${HUE_APP_KEY.substring(0, 10)}...` : 'NOT SET',
-    HUE_GROUP_ID
-  });
+  // Starting health check monitor
   
   // Check every 10 seconds
   healthCheckInterval = setInterval(() => {
@@ -218,19 +191,18 @@ export function startHealthCheck() {
     if (stored) {
       try {
         lastAppliedPreset = JSON.parse(stored);
-        console.log('[HUE-HEALTH] Loaded last preset from storage:', lastAppliedPreset);
+        // Loaded last preset from storage
       } catch (e) {
         console.error('[HUE-HEALTH] Failed to parse stored preset:', e);
       }
     } else {
-      console.log('[HUE-HEALTH] No stored preset found');
+      // No stored preset found
     }
   });
 }
 
 export function stopHealthCheck() {
   if (healthCheckInterval) {
-    console.log('[HUE-HEALTH] Stopping health check monitor');
     clearInterval(healthCheckInterval);
     healthCheckInterval = null;
   }

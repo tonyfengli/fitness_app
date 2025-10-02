@@ -47,9 +47,8 @@ export function useRealtimeExerciseSwaps({
 
     // Small delay to avoid subscribing during rapid re-renders
     const timeoutId = setTimeout(() => {
-    
-    // Create a channel for exercise swaps
-    const channel = supabase
+      // Create a channel for exercise swaps
+      const channel = supabase
       .channel(`exercise-swaps-${sessionId}`)
       .on(
         'postgres_changes',
@@ -60,15 +59,6 @@ export function useRealtimeExerciseSwaps({
           filter: `training_session_id=eq.${sessionId}`,
         },
         async (payload) => {
-          console.log('[useRealtimeExerciseSwaps] Event received:', {
-            eventType: payload.eventType,
-            table: payload.table,
-            schema: payload.schema,
-            old: payload.old,
-            new: payload.new,
-            sessionId
-          });
-          
           if (payload.eventType === 'INSERT' && payload.new) {
             const swap = payload.new;
             
@@ -96,7 +86,6 @@ export function useRealtimeExerciseSwaps({
         }
       )
       .subscribe((status) => {
-        
         if (status === 'SUBSCRIBED') {
           setIsConnected(true);
           setError(null);
@@ -115,7 +104,7 @@ export function useRealtimeExerciseSwaps({
         }
       });
     
-    channelRef.current = channel;
+      channelRef.current = channel;
 
     }, 100); // 100ms delay
 

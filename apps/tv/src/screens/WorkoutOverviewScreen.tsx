@@ -106,11 +106,11 @@ export function WorkoutOverviewScreen() {
   const navigation = useNavigation();
   const sessionId = navigation.getParam('sessionId');
   
-  // Add mount/unmount logging
+  // Mount/unmount tracking
   useEffect(() => {
-    console.log('[TV WorkoutOverview] 🟢 MOUNTED with sessionId:', sessionId);
+    // Component mounted
     return () => {
-      console.log('[TV WorkoutOverview] 🔴 UNMOUNTING');
+      // Component unmounting
     };
   }, []);
   
@@ -134,13 +134,10 @@ export function WorkoutOverviewScreen() {
     }
   );
   
-  // Log session data for debugging
+  // Check session data
   useEffect(() => {
     if (!sessionLoading && sessionData) {
-      console.log('[TV WorkoutOverview] Session data loaded:', {
-        hasWorkoutOrganization: !!sessionData?.workoutOrganization,
-        workoutOrganization: sessionData?.workoutOrganization
-      });
+      // Session data loaded
     }
   }, [sessionData, sessionLoading]);
 
@@ -149,7 +146,7 @@ export function WorkoutOverviewScreen() {
     sessionId: sessionId || '',
     supabase,
     onSwapUpdate: (swap) => {
-      console.log('[TV WorkoutOverview] Exercise swap detected:', swap);
+      // Exercise swap detected
       setLastSwapTime(new Date());
       
       // Update local state directly - we'll refetch the data and update via useEffect
@@ -173,43 +170,32 @@ export function WorkoutOverviewScreen() {
     sessionId: sessionId || '',
     supabase,
     onStatusUpdate: (update) => {
-      console.log('[TV WorkoutOverview] ========== STATUS UPDATE RECEIVED ==========');
-      console.log('[TV WorkoutOverview] Update details:', {
-        userId: update.userId,
-        status: update.status,
-        updatedAt: update.updatedAt,
-        sessionId: sessionId
-      });
-      console.log('[TV WorkoutOverview] Current local clients before update:', localClients);
+      // Status update received
       
       // Update local state directly instead of invalidating queries
       setLocalClients(prev => {
-        console.log('[TV WorkoutOverview] Previous clients state:', prev);
+        // Previous clients state
         const updated = prev.map(client => {
           if (client.userId === update.userId) {
-            console.log('[TV WorkoutOverview] Updating status for user:', update.userId, 'to:', update.status);
+            // Updating status for user
             return { ...client, status: update.status };
           }
           return client;
         });
-        console.log('[TV WorkoutOverview] Updated clients state:', updated);
+        // Updated clients state
         return updated;
       });
       
-      console.log('[TV WorkoutOverview] ========== END STATUS UPDATE ==========');
+      // End status update
     },
     onError: (error) => {
       console.error('[TV WorkoutOverview] Real-time status error:', error);
     }
   });
   
-  // Log connection status
+  // Monitor connection status
   useEffect(() => {
-    console.log('[TV WorkoutOverview] Real-time connections:', {
-      swapUpdatesConnected,
-      statusConnected,
-      sessionId
-    });
+    // Real-time connections status
   }, [swapUpdatesConnected, statusConnected, sessionId]);
 
   // Set up polling for exercise selections (10 second interval)
@@ -222,33 +208,15 @@ export function WorkoutOverviewScreen() {
     enabled: !!sessionId && !!selectionsQueryOptions,
     refetchInterval: 10000, // Poll every 10 seconds
     refetchIntervalInBackground: true, // Keep polling even when tab is not focused
+    onError: (error) => {
+      console.error('[TV WorkoutOverview] ❌ Selections query error:', error);
+    }
   });
   
-  // Log raw selections response
+  // Process selections response
   useEffect(() => {
     if (!selectionsLoading && selections !== undefined) {
-      console.log('[TV WorkoutOverview] 🔍 RAW SELECTIONS API RESPONSE:', {
-        totalSelections: selections?.length || 0,
-        rawData: selections,
-        byClient: selections?.reduce((acc, sel) => {
-          const clientId = sel.clientId;
-          if (!acc[clientId]) {
-            acc[clientId] = {
-              count: 0,
-              exercises: []
-            };
-          }
-          acc[clientId].count++;
-          acc[clientId].exercises.push({
-            id: sel.id,
-            exerciseName: sel.exerciseName,
-            isShared: sel.isShared,
-            selectionSource: sel.selectionSource
-          });
-          return acc;
-        }, {}),
-        uniqueClients: [...new Set(selections?.map(s => s.clientId) || [])]
-      });
+      // Selections loaded
     }
   }, [selections, selectionsLoading]);
 
@@ -262,14 +230,15 @@ export function WorkoutOverviewScreen() {
     enabled: !!sessionId && !!clientsQueryOptions,
     refetchInterval: 10000, // Poll every 10 seconds
     refetchIntervalInBackground: true, // Keep polling even when tab is not focused
+    onError: (error) => {
+      console.error('[TV WorkoutOverview] ❌ Clients query error:', error);
+    }
   });
   
   // Copy query data to local state - copying GlobalPreferencesScreen pattern
   useEffect(() => {
     if (selections !== undefined && !selectionsLoading) {
-      console.log('[TV WorkoutOverview] 📥 Updating local selections from polled data');
-      console.log('[TV WorkoutOverview] Selections count:', selections?.length || 0);
-      console.log('[TV WorkoutOverview] First 3 selections:', selections?.slice(0, 3));
+      // Updating local selections from polled data
       
       // Update last successful fetch timestamp on success
       if (!selectionsError && !clientsError) {
@@ -284,13 +253,7 @@ export function WorkoutOverviewScreen() {
   
   useEffect(() => {
     if (clients !== undefined && !clientsLoading) {
-      console.log('[TV WorkoutOverview] 👥 Updating local clients from polled data');
-      console.log('[TV WorkoutOverview] Clients count:', clients?.length || 0);
-      console.log('[TV WorkoutOverview] Client IDs and names:', clients?.map(c => ({ 
-        userId: c.userId, 
-        userName: c.userName,
-        status: c.status 
-      })));
+      // Updating local clients from polled data
       
       // Update last successful fetch timestamp on success
       if (!selectionsError && !clientsError) {
@@ -306,7 +269,7 @@ export function WorkoutOverviewScreen() {
   // Handle fetch errors
   useEffect(() => {
     if ((selectionsError || clientsError) && !selectionsLoading && !clientsLoading) {
-      console.log('[TV WorkoutOverview] Fetch error detected:', { selectionsError, clientsError });
+      // Fetch error detected
       setConnectionState('error');
     }
   }, [selectionsError, clientsError, selectionsLoading, clientsLoading]);
@@ -317,9 +280,7 @@ export function WorkoutOverviewScreen() {
 
   // Group selections by client - using local state instead of query data
   const groupedSelections = React.useMemo(() => {
-    console.log('[TV WorkoutOverview] Computing groupedSelections...');
-    console.log('[TV WorkoutOverview] Local clients data:', localClients);
-    console.log('[TV WorkoutOverview] Local selections data:', localSelections?.length || 0, 'items');
+    // Computing groupedSelections...
     
     if (!localSelections || !localClients || localClients.length === 0) return {};
 
@@ -327,11 +288,7 @@ export function WorkoutOverviewScreen() {
     
     // Initialize with all clients from local state
     localClients.forEach(client => {
-      console.log('[TV WorkoutOverview] Processing client:', {
-        userId: client.userId,
-        userName: client.userName,
-        status: client.status
-      });
+      // Processing client
       
       grouped[client.userId] = {
         clientName: client.userName || 'Unknown',
@@ -341,7 +298,6 @@ export function WorkoutOverviewScreen() {
     });
 
     // Add exercises to each client from local state
-    console.log('[TV WorkoutOverview] 🎯 Assigning exercises to clients...');
     const exercisesByClient = {};
     const unmatchedSelections = [];
     
@@ -366,25 +322,13 @@ export function WorkoutOverviewScreen() {
       }
     });
     
-    console.log('[TV WorkoutOverview] 📊 Exercise distribution summary:');
-    console.log('[TV WorkoutOverview] By client:', exercisesByClient);
-    console.log('[TV WorkoutOverview] Clients with 0 exercises:', 
-      Object.keys(grouped).filter(id => grouped[id].exercises.length === 0).map(id => ({
-        clientId: id,
-        clientName: grouped[id].clientName
-      }))
-    );
+    // Exercise distribution processed
     
     if (unmatchedSelections.length > 0) {
-      console.warn('[TV WorkoutOverview] ⚠️ UNMATCHED SELECTIONS:', {
-        count: unmatchedSelections.length,
-        selections: unmatchedSelections,
-        knownClientIds: Object.keys(grouped),
-        knownClientNames: Object.entries(grouped).map(([id, data]) => ({ id, name: data.clientName }))
-      });
+      console.warn('[TV WorkoutOverview] Unmatched selections found:', unmatchedSelections.length);
     }
     
-    console.log('[TV WorkoutOverview] Final grouped selections:', grouped);
+    // Grouped selections complete
 
     return grouped;
   }, [localSelections, localClients]);
@@ -500,8 +444,7 @@ export function WorkoutOverviewScreen() {
                     {/* Exercises List - Two Column Layout */}
                     <View className="flex-1">
                       {clientData.exercises.length > 0 ? (
-                        /* Log exercises for this client */
-                        console.log(`[TV WorkoutOverview] Client ${clientData.clientName} exercises:`, clientData.exercises.map(e => e.exerciseName)) ||
+                        /* Render exercises for this client */
                         <View className="flex-row flex-wrap">
                           {clientData.exercises.slice(0, 6).map((exercise, index) => {
                             // Show only first 6, or 5 if there are 7+ exercises
@@ -543,7 +486,6 @@ export function WorkoutOverviewScreen() {
                         </View>
                       ) : (
                         <View className="flex-1 items-center justify-center">
-                          {console.log(`[TV WorkoutOverview] ❌ No exercises for ${clientData.clientName} (${clientId})`)}
                           <Text style={{ fontSize: 14, color: TOKENS.color.muted }}>
                             No exercises yet
                           </Text>
@@ -675,8 +617,7 @@ export function WorkoutOverviewScreen() {
                     {/* Exercises List - Two Column Layout */}
                     <View className="flex-1">
                       {clientData.exercises.length > 0 ? (
-                        /* Log exercises for this client */
-                        console.log(`[TV WorkoutOverview] Client ${clientData.clientName} exercises:`, clientData.exercises.map(e => e.exerciseName)) ||
+                        /* Render exercises for this client */
                         <View className="flex-row flex-wrap">
                           {clientData.exercises.slice(0, 6).map((exercise, index) => {
                             // Show only first 6, or 5 if there are 7+ exercises
@@ -760,8 +701,7 @@ export function WorkoutOverviewScreen() {
                     {/* Exercises List - Two Column Layout */}
                     <View className="flex-1">
                       {clientData.exercises.length > 0 ? (
-                        /* Log exercises for this client */
-                        console.log(`[TV WorkoutOverview] Client ${clientData.clientName} exercises:`, clientData.exercises.map(e => e.exerciseName)) ||
+                        /* Render exercises for this client */
                         <View className="flex-row flex-wrap">
                           {clientData.exercises.slice(0, 6).map((exercise, index) => {
                             const showMax = clientData.exercises.length > 6 ? 5 : 6;
@@ -851,8 +791,7 @@ export function WorkoutOverviewScreen() {
                     {/* Exercises List - Two Column Layout */}
                     <View className="flex-1">
                       {clientData.exercises.length > 0 ? (
-                        /* Log exercises for this client */
-                        console.log(`[TV WorkoutOverview] Client ${clientData.clientName} exercises:`, clientData.exercises.map(e => e.exerciseName)) ||
+                        /* Render exercises for this client */
                         <View className="flex-row flex-wrap">
                           {clientData.exercises.slice(0, 6).map((exercise, index) => {
                             const showMax = clientData.exercises.length > 6 ? 5 : 6;

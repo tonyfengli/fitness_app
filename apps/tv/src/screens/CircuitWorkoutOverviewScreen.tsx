@@ -396,7 +396,7 @@ export function CircuitWorkoutOverviewScreen() {
     sessionId: sessionId || '',
     supabase,
     onSwapUpdate: (swap) => {
-      console.log('[TV CircuitWorkoutOverview] Exercise swap detected:', swap);
+      // Exercise swap detected
       setLastSwapTime(new Date());
       
       // Refetch exercise data
@@ -409,9 +409,6 @@ export function CircuitWorkoutOverviewScreen() {
                  queryKey[0][1] === 'getSelections';
         }
       });
-    },
-    onError: (error) => {
-      console.error('[TV CircuitWorkoutOverview] Real-time swap error:', error);
     }
   });
   
@@ -431,8 +428,7 @@ export function CircuitWorkoutOverviewScreen() {
   // Process selections into rounds
   useEffect(() => {
     if (selections && selections.length > 0) {
-      console.log('[CircuitWorkoutOverview] Processing selections:', selections.length);
-      console.log('[CircuitWorkoutOverview] Raw selections:', selections);
+      // Processing workout selections
       
       // Process all exercises without deduplication to allow duplicates
       const allExercises: CircuitExercise[] = [];
@@ -448,7 +444,7 @@ export function CircuitWorkoutOverviewScreen() {
         });
       });
       
-      console.log('[CircuitWorkoutOverview] Total exercises found:', allExercises.length);
+      // Processing exercises into rounds
       
       // Group by round
       const roundsMap = new Map<string, CircuitExercise[]>();
@@ -460,7 +456,7 @@ export function CircuitWorkoutOverviewScreen() {
         roundsMap.get(round)!.push(exercise);
       });
       
-      console.log('[CircuitWorkoutOverview] Rounds found:', Array.from(roundsMap.keys()));
+      // Organizing rounds
       
       // Sort exercises within each round and create final structure
       let rounds: RoundData[] = Array.from(roundsMap.entries())
@@ -505,10 +501,10 @@ export function CircuitWorkoutOverviewScreen() {
       if (circuitConfig?.config?.repeatRounds) {
         const baseRoundCount = Math.floor(rounds.length / 2);
         rounds = rounds.slice(0, baseRoundCount);
-        console.log('[CircuitWorkoutOverview] Repeat mode: showing only first', baseRoundCount, 'rounds');
+        // Repeat mode: showing only base rounds
       }
       
-      console.log('[CircuitWorkoutOverview] Final rounds structure:', rounds);
+      // Rounds organized successfully
       
       setRoundsData(rounds);
       setConnectionState('connected');
@@ -519,13 +515,13 @@ export function CircuitWorkoutOverviewScreen() {
   // Update connection state based on errors
   useEffect(() => {
     if (selectionsError && !selectionsLoading) {
-      console.log('[TV CircuitWorkoutOverview] Fetch error detected:', selectionsError);
+      // Connection error detected
       setConnectionState('error');
     }
   }, [selectionsError, selectionsLoading]);
   
   const handleStartCircuit = async () => {
-    console.log('[CircuitWorkoutOverview] Starting circuit workout');
+    // Starting circuit workout
     // For circuit workouts, we don't need the complex workout generation
     // Just navigate to the live workout screen
     navigation.navigate('CircuitWorkoutLive', { sessionId });

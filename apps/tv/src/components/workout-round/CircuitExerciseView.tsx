@@ -25,12 +25,6 @@ export function CircuitExerciseView({
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
   
-  console.log('[CircuitExerciseView] Current exercise data:', {
-    exerciseName: currentExercise.exerciseName,
-    repsPlanned: currentExercise.repsPlanned,
-    hasReps: !!currentExercise.repsPlanned,
-    exerciseData: currentExercise
-  });
   
   return (
     <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingBottom: 60 }}>

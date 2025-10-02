@@ -15,9 +15,4 @@ export const config = {
   apiUrl: API_URL,
 };
 
-// Log configuration on load
-console.log('[Config] Loaded configuration:', {
-  supabaseUrl: config.supabaseUrl,
-  supabaseAnonKey: config.supabaseAnonKey ? '***' : 'Not set',
-  apiUrl: config.apiUrl,
-});
+// Configuration loaded

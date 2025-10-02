@@ -70,11 +70,6 @@ function NavigationContainer({ children }: { children: React.ReactNode }) {
   const screenHistory = useRef<ScreenName[]>(['Main']);
 
   const navigate = (screen: ScreenName, params?: any) => {
-    console.log(`[TV Navigation] 🚗 NAVIGATING: ${navigationState.currentScreen} -> ${screen}`, {
-      params,
-      currentHistory: [...screenHistory.current],
-      timestamp: new Date().toISOString()
-    });
     screenHistory.current.push(screen);
     setNavigationState(prev => ({ ...prev, currentScreen: screen }));
     if (params) {
@@ -94,11 +89,6 @@ function NavigationContainer({ children }: { children: React.ReactNode }) {
       screenHistory.current.pop();
       const previousScreen = screenHistory.current[screenHistory.current.length - 1];
       
-      console.log(`[TV Navigation] 🔙 GO BACK: ${currentScreen} -> ${previousScreen}`, {
-        remainingHistory: [...screenHistory.current],
-        timestamp: new Date().toISOString()
-      });
-      
       setNavigationState(prev => ({ ...prev, currentScreen: previousScreen }));
       
       // Apply App Start color when returning to Main screen
@@ -112,7 +102,6 @@ function NavigationContainer({ children }: { children: React.ReactNode }) {
   };
 
   const getParam = (key: string) => {
-    console.log(`[TV Navigation] 📍 Getting param '${key}':`, navigationParams[key]);
     return navigationParams[key];
   };
 
@@ -163,45 +152,19 @@ function NavigationContainer({ children }: { children: React.ReactNode }) {
   return (
     <NavigationContext.Provider value={navigationValue}>
       <View style={{ flex: 1 }}>
-        {navigationState.currentScreen === 'Main' && (
-          console.log('[TV Navigation] 🖥️ Rendering MainScreen') || <MainScreen />
-        )}
-        {navigationState.currentScreen === 'SessionLobby' && (
-          console.log('[TV Navigation] 🖥️ Rendering SessionLobbyScreen') || <SessionLobbyScreen />
-        )}
-        {navigationState.currentScreen === 'GlobalPreferences' && (
-          console.log('[TV Navigation] 🖥️ Rendering GlobalPreferencesScreen') || <GlobalPreferencesScreen />
-        )}
-        {navigationState.currentScreen === 'CircuitPreferences' && (
-          <CircuitPreferencesScreen />
-        )}
-        {navigationState.currentScreen === 'CircuitWorkoutGeneration' && (
-          <CircuitWorkoutGenerationScreen />
-        )}
-        {navigationState.currentScreen === 'WorkoutOverview' && (
-          console.log('[TV Navigation] 🖥️ Rendering WorkoutOverviewScreen') || <WorkoutOverviewScreen />
-        )}
-        {navigationState.currentScreen === 'CircuitWorkoutOverview' && (
-          <CircuitWorkoutOverviewScreen />
-        )}
-        {navigationState.currentScreen === 'CircuitWorkoutLive' && (
-          <CircuitWorkoutLiveScreen />
-        )}
-        {navigationState.currentScreen === 'WorkoutLive' && (
-          <WorkoutLiveScreen />
-        )}
-        {navigationState.currentScreen === 'WorkoutComplete' && (
-          <WorkoutCompleteScreen />
-        )}
-        {navigationState.currentScreen === 'SessionMonitor' && (
-          <SessionMonitorScreen />
-        )}
-        {navigationState.currentScreen === 'TestTailwind' && (
-          <TestTailwindScreen />
-        )}
-        {navigationState.currentScreen === 'LightingTest' && (
-          <LightingTestScreen />
-        )}
+        {navigationState.currentScreen === 'Main' && <MainScreen />}
+        {navigationState.currentScreen === 'SessionLobby' && <SessionLobbyScreen />}
+        {navigationState.currentScreen === 'GlobalPreferences' && <GlobalPreferencesScreen />}
+        {navigationState.currentScreen === 'CircuitPreferences' && <CircuitPreferencesScreen />}
+        {navigationState.currentScreen === 'CircuitWorkoutGeneration' && <CircuitWorkoutGenerationScreen />}
+        {navigationState.currentScreen === 'WorkoutOverview' && <WorkoutOverviewScreen />}
+        {navigationState.currentScreen === 'CircuitWorkoutOverview' && <CircuitWorkoutOverviewScreen />}
+        {navigationState.currentScreen === 'CircuitWorkoutLive' && <CircuitWorkoutLiveScreen />}
+        {navigationState.currentScreen === 'WorkoutLive' && <WorkoutLiveScreen />}
+        {navigationState.currentScreen === 'WorkoutComplete' && <WorkoutCompleteScreen />}
+        {navigationState.currentScreen === 'SessionMonitor' && <SessionMonitorScreen />}
+        {navigationState.currentScreen === 'TestTailwind' && <TestTailwindScreen />}
+        {navigationState.currentScreen === 'LightingTest' && <LightingTestScreen />}
       </View>
     </NavigationContext.Provider>
   );
@@ -216,9 +179,7 @@ function AppWithCleanup() {
     <TRPCProvider>
       <BusinessProvider>
         <RealtimeProvider>
-          <NavigationContainer>
-            <View style={{ flex: 1 }} />
-          </NavigationContainer>
+          <NavigationContainer />
         </RealtimeProvider>
       </BusinessProvider>
     </TRPCProvider>

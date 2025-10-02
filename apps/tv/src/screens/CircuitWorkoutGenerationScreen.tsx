@@ -28,11 +28,8 @@ export function CircuitWorkoutGenerationScreen() {
   const { isConnected } = useRealtimeCircuitConfig({
     sessionId: sessionId || '',
     onConfigUpdate: (event) => {
-      console.log('[TV CircuitWorkoutGeneration] Realtime config update:', event);
+      // Realtime config update received
       setRealtimeConfig(event.config);
-    },
-    onError: (err) => {
-      console.error('[TV CircuitWorkoutGeneration] Realtime error:', err);
     }
   });
 
@@ -52,7 +49,6 @@ export function CircuitWorkoutGenerationScreen() {
   // Prefetch tracks when Spotify is connected
   useEffect(() => {
     if (isSpotifyConnected && setlist && prefetchSetlistTracks) {
-      console.log('[CircuitWorkoutGeneration] Prefetching setlist tracks...');
       prefetchSetlistTracks();
     }
   }, [isSpotifyConnected, setlist, prefetchSetlistTracks]);
@@ -91,27 +87,19 @@ export function CircuitWorkoutGenerationScreen() {
 
   // Save visualization mutation
   const saveVisualization = useMutation({
-    ...api.trainingSession.saveVisualizationData.mutationOptions(),
-    onError: (error) => {
-      console.error('[CircuitWorkoutGeneration] Save visualization error:', error);
-    }
+    ...api.trainingSession.saveVisualizationData.mutationOptions()
   });
 
   // Create workouts from blueprint mutation
   const createWorkoutsFromBlueprint = useMutation({
-    ...api.trainingSession.createWorkoutsFromBlueprint.mutationOptions(),
-    onError: (error) => {
-      console.error('[CircuitWorkoutGeneration] Create workouts error:', error);
-    }
+    ...api.trainingSession.createWorkoutsFromBlueprint.mutationOptions()
   });
 
   // Check for existing data on mount
   useEffect(() => {
     if (existingSelections && existingSelections.length > 0) {
-      console.log('[CircuitWorkoutGeneration] Found existing selections, navigating to overview');
       navigation.navigate('CircuitWorkoutOverview', { sessionId });
     } else if (sessionData?.templateConfig?.visualizationData?.llmResult?.exerciseSelection) {
-      console.log('[CircuitWorkoutGeneration] Found visualization data, navigating to overview');
       navigation.navigate('CircuitWorkoutOverview', { sessionId });
     }
   }, [existingSelections, sessionData, sessionId, navigation]);
@@ -122,8 +110,6 @@ export function CircuitWorkoutGenerationScreen() {
     
     const processBlueprint = async () => {
       if (blueprintResult && shouldGenerateBlueprint && isMounted) {
-        console.log('[CircuitWorkoutGeneration] Processing blueprint result');
-        
         try {
           setShouldGenerateBlueprint(false);
           
@@ -154,12 +140,8 @@ export function CircuitWorkoutGenerationScreen() {
             blueprintData: blueprintResult
           });
           
-          console.log('[CircuitWorkoutGeneration] Workouts created:', createWorkoutResult);
-          
-          // Navigate to overview
           navigation.navigate('CircuitWorkoutOverview', { sessionId });
         } catch (error: any) {
-          console.error('[CircuitWorkoutGeneration] Error processing blueprint:', error);
           
           if (isMounted) {
             setGenerationError(error.message || 'Failed to generate workout.');

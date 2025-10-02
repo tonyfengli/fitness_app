@@ -44,7 +44,6 @@ export function useRealtimePreferences({
 
     // Small delay to avoid subscribing during rapid re-renders
     const timeoutId = setTimeout(() => {
-      console.log('[TV] Setting up preferences realtime subscription for session:', sessionId);
 
       const channel = supabase
       .channel(`preferences-${sessionId}`)
@@ -57,14 +56,9 @@ export function useRealtimePreferences({
           filter: `training_session_id=eq.${sessionId}`,
         },
         async (payload) => {
-          console.log('[TV useRealtimePreferences] Raw payload received:', payload);
-          console.log('[TV useRealtimePreferences] Event type:', payload.eventType);
-          console.log('[TV useRealtimePreferences] Table:', payload.table);
-          console.log('[TV useRealtimePreferences] New data:', payload.new);
           
           if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
             const preference = payload.new as any;
-            console.log('[TV useRealtimePreferences] Processing preference:', preference);
             
             // Transform database format to our expected format
             const update: PreferenceUpdateEvent = {
@@ -80,15 +74,11 @@ export function useRealtimePreferences({
               isReady: false // This would need to come from user_training_session table
             };
             
-            console.log('[TV useRealtimePreferences] Transformed update:', update);
             onPreferenceUpdateRef.current(update);
           }
         }
       )
       .subscribe((status) => {
-        if (status !== 'CLOSED') {
-          console.log('[TV] Preferences subscription status changed:', status);
-        }
         setIsConnected(status === 'SUBSCRIBED');
         if (status === 'CHANNEL_ERROR' && onErrorRef.current) {
           onErrorRef.current(new Error('Failed to connect to preference updates'));
@@ -100,7 +90,6 @@ export function useRealtimePreferences({
 
     return () => {
       clearTimeout(timeoutId);
-      console.log('[TV] Cleaning up preferences realtime subscription');
       if (channelRef.current) {
         channelRef.current.unsubscribe();
         channelRef.current = null;

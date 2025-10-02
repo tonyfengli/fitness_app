@@ -39,7 +39,6 @@ export function useRealtimeCheckIns({
 
     // Small delay to avoid subscribing during rapid re-renders
     const timeoutId = setTimeout(() => {
-      console.log('[useRealtimeCheckIns] 🔄 Setting up realtime for session:', sessionId);
     
       // Create a channel for this session (must match web app channel name)
       const channel = supabase
@@ -60,7 +59,6 @@ export function useRealtimeCheckIns({
             filter: `training_session_id=eq.${sessionId}`,
           },
           async (payload) => {
-            console.log('[useRealtimeCheckIns] 📨 Realtime event received:', payload.eventType, 'for session:', sessionId);
             
             if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
               const checkIn = payload.new;
@@ -93,10 +91,7 @@ export function useRealtimeCheckIns({
           }
         )
         .subscribe((status) => {
-          console.log(`[useRealtimeCheckIns] 📡 Subscription status changed: ${status} for session-${sessionId}`);
-          
           if (status === 'SUBSCRIBED') {
-            console.log(`[useRealtimeCheckIns] ✅ Successfully subscribed to session-${sessionId}`);
             setIsConnected(true);
             setError(null);
           } else if (status === 'CHANNEL_ERROR') {
@@ -112,7 +107,6 @@ export function useRealtimeCheckIns({
             setError(errorMsg);
             onErrorRef.current?.(new Error(errorMsg));
           } else if (status === 'CLOSED') {
-            console.log(`[useRealtimeCheckIns] 🔒 Channel closed: session-${sessionId}`);
             setIsConnected(false);
           }
         });
@@ -123,13 +117,9 @@ export function useRealtimeCheckIns({
     // Cleanup function
     return () => {
       clearTimeout(timeoutId);
-      console.log('[useRealtimeCheckIns] 🧹 Cleanup triggered for session:', sessionId);
       if (channelRef.current) {
-        const channelName = channelRef.current.topic;
-        console.log(`[useRealtimeCheckIns] 🔌 Unsubscribing from channel: ${channelName}`);
         channelRef.current.unsubscribe();
         channelRef.current = null;
-        console.log(`[useRealtimeCheckIns] ✅ Channel ${channelName} cleaned up`);
       }
       setIsConnected(false);
     };
