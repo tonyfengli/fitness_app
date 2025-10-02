@@ -114,21 +114,12 @@ export function exerciseMatchesMusclePreference(
   userPreference: ConsolidatedMuscle,
 ): boolean {
   if (!exerciseMuscle) {
-    console.log(`[muscleMapping] No exercise muscle provided`);
     return false;
   }
 
   // Get all old muscles that map to this consolidated muscle
   const oldMuscles = getOldMusclesForConsolidated(userPreference);
   const result = oldMuscles.includes(exerciseMuscle.toLowerCase());
-
-  console.log(
-    `[muscleMapping] Checking: "${exerciseMuscle}" vs preference "${userPreference}"`,
-  );
-  console.log(
-    `[muscleMapping] Old muscles for "${userPreference}": [${oldMuscles.join(", ")}]`,
-  );
-  console.log(`[muscleMapping] Match result: ${result}`);
 
   return result;
 }

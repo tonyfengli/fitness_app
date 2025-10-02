@@ -84,14 +84,6 @@ function countFunctionalRequirements(
 
   // Count muscle targets (PRIMARY MUSCLE ONLY)
   if (client.muscle_target && client.muscle_target.length > 0) {
-    console.log(
-      `[constraintAnalyzer] Analyzing muscle targets for ${exercises.length} exercises`,
-    );
-    console.log(
-      `[constraintAnalyzer] Client muscle targets:`,
-      client.muscle_target,
-    );
-
     const muscleTargetCount = exercises.filter((ex) => {
       const targets = client.muscle_target || [];
       const matches = targets.some((muscle) => {
@@ -99,17 +91,11 @@ function countFunctionalRequirements(
           ex.primaryMuscle,
           muscle as any,
         );
-        console.log(
-          `[constraintAnalyzer] Checking ${ex.name} (${ex.primaryMuscle}) against target "${muscle}": ${result}`,
-        );
         return result;
       });
       return matches;
     }).length;
 
-    console.log(
-      `[constraintAnalyzer] Final muscle target count: ${muscleTargetCount}`,
-    );
     counts.set("muscle_target", muscleTargetCount);
   }
 
