@@ -129,12 +129,17 @@ export function CircuitRoundPreview({ currentRound, repeatTimes = 1 }: CircuitRo
         </View>
       </View>
       
-      {/* Repeat Indicator - Bottom Right */}
+      {/* Repeat Indicator - Conditional Position */}
       {repeatTimes > 1 && (
         <View style={{
           position: 'absolute',
-          bottom: 40,
-          right: 48,
+          ...(exerciseCount >= 4 ? {
+            top: -25,  // Moved down 5px (from -30 to -25)
+            right: -12,  // Moved right 30px more (from 18 to -12)
+          } : {
+            bottom: 40,  // Original position for <4 exercises
+            right: 48,
+          }),
         }}>
           <MattePanel style={{
             paddingHorizontal: 20,

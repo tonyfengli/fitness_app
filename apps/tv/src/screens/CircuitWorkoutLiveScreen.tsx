@@ -1486,16 +1486,16 @@ export function CircuitWorkoutLiveScreen() {
             {(currentRoundType === 'stations_round' || currentRoundType === 'circuit_round') && currentRepeatTimes > 1 && (
               <View style={{
                 position: 'absolute',
-                top: currentRoundType === 'circuit_round' ? -28 : 0,
+                top: currentRoundType === 'circuit_round' ? -48 : -8,
                 left: 0,
                 right: 0,
                 alignItems: 'center',
                 zIndex: 10,
               }}>
                 <View style={{
-                  paddingHorizontal: 16,
-                  paddingVertical: 8,
-                  gap: 6,
+                  paddingHorizontal: currentRoundType === 'circuit_round' ? 16 : 14,
+                  paddingVertical: currentRoundType === 'circuit_round' ? 8 : 7,
+                  gap: currentRoundType === 'circuit_round' ? 6 : 5,
                   flexDirection: 'row',
                   alignItems: 'center',
                   backgroundColor: TOKENS.color.accent + '15',
@@ -1504,7 +1504,7 @@ export function CircuitWorkoutLiveScreen() {
                   borderRadius: 999,
                 }}>
                   <Text style={{
-                    fontSize: 13,
+                    fontSize: currentRoundType === 'circuit_round' ? 13 : 12,
                     fontWeight: '700',
                     color: TOKENS.color.accent,
                     textTransform: 'uppercase',
@@ -1513,7 +1513,7 @@ export function CircuitWorkoutLiveScreen() {
                     Set
                   </Text>
                   <Text style={{
-                    fontSize: 16,
+                    fontSize: currentRoundType === 'circuit_round' ? 16 : 14,
                     fontWeight: '800',
                     color: TOKENS.color.accent,
                     marginLeft: 2,
@@ -1521,7 +1521,7 @@ export function CircuitWorkoutLiveScreen() {
                     {currentRepeatNumber}
                   </Text>
                   <Text style={{
-                    fontSize: 13,
+                    fontSize: currentRoundType === 'circuit_round' ? 13 : 12,
                     fontWeight: '500',
                     color: TOKENS.color.accent,
                     marginHorizontal: 3,
@@ -1529,7 +1529,7 @@ export function CircuitWorkoutLiveScreen() {
                     of
                   </Text>
                   <Text style={{
-                    fontSize: 16,
+                    fontSize: currentRoundType === 'circuit_round' ? 16 : 14,
                     fontWeight: '800',
                     color: TOKENS.color.accent,
                   }}>
@@ -1595,16 +1595,16 @@ export function CircuitWorkoutLiveScreen() {
             {(currentRoundType === 'stations_round' || currentRoundType === 'circuit_round') && currentRepeatTimes > 1 && (
               <View style={{
                 position: 'absolute',
-                top: currentRoundType === 'circuit_round' ? -28 : 0,
+                top: currentRoundType === 'circuit_round' ? -48 : -8,
                 left: 0,
                 right: 0,
                 alignItems: 'center',
                 zIndex: 10,
               }}>
                 <View style={{
-                  paddingHorizontal: 16,
-                  paddingVertical: 8,
-                  gap: 6,
+                  paddingHorizontal: currentRoundType === 'circuit_round' ? 16 : 14,
+                  paddingVertical: currentRoundType === 'circuit_round' ? 8 : 7,
+                  gap: currentRoundType === 'circuit_round' ? 6 : 5,
                   flexDirection: 'row',
                   alignItems: 'center',
                   backgroundColor: TOKENS.color.accent + '15',
@@ -1613,7 +1613,7 @@ export function CircuitWorkoutLiveScreen() {
                   borderRadius: 999,
                 }}>
                   <Text style={{
-                    fontSize: 13,
+                    fontSize: currentRoundType === 'circuit_round' ? 13 : 12,
                     fontWeight: '700',
                     color: TOKENS.color.accent,
                     textTransform: 'uppercase',
@@ -1622,7 +1622,7 @@ export function CircuitWorkoutLiveScreen() {
                     Set
                   </Text>
                   <Text style={{
-                    fontSize: 16,
+                    fontSize: currentRoundType === 'circuit_round' ? 16 : 14,
                     fontWeight: '800',
                     color: TOKENS.color.accent,
                     marginLeft: 2,
@@ -1630,7 +1630,7 @@ export function CircuitWorkoutLiveScreen() {
                     {currentRepeatNumber}
                   </Text>
                   <Text style={{
-                    fontSize: 13,
+                    fontSize: currentRoundType === 'circuit_round' ? 13 : 12,
                     fontWeight: '500',
                     color: TOKENS.color.accent,
                     marginHorizontal: 3,
@@ -1638,7 +1638,7 @@ export function CircuitWorkoutLiveScreen() {
                     of
                   </Text>
                   <Text style={{
-                    fontSize: 16,
+                    fontSize: currentRoundType === 'circuit_round' ? 16 : 14,
                     fontWeight: '800',
                     color: TOKENS.color.accent,
                   }}>
