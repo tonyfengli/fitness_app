@@ -19,10 +19,6 @@ export interface CircuitConfig {
   config?: {
     roundTemplates?: RoundTemplate[];
     repeatRounds?: boolean;
-    warmup?: {
-      enabled: boolean;
-      duration: number;
-    };
   };
 }
 

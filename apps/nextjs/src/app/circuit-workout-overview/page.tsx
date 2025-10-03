@@ -490,11 +490,6 @@ function CircuitWorkoutOverviewContent() {
       allExercises.forEach((selection) => {
         const round = selection.groupName || 'Round 1';
         
-        // Skip warm-up exercises from regular rounds
-        if (round === 'Warm-up') {
-          console.log("[CircuitWorkoutOverview] Excluding warm-up exercise from rounds:", selection.exerciseName);
-          return;
-        }
         
         if (!roundsMap.has(round)) {
           roundsMap.set(round, []);
@@ -601,41 +596,18 @@ function CircuitWorkoutOverviewContent() {
       filtered: templateFiltered.slice(0, 5).map(e => ({ name: e.name, templateType: e.templateType }))
     });
 
-    // Then filter based on whether we're replacing a warm-up or regular exercise
-    const isReplacingWarmup = selectedRound === 'Warm-up';
-    
-    if (isReplacingWarmup) {
-      console.log('[Exercise Modal] Filtering for WARM-UP exercises');
-      // When replacing warm-up exercises, ONLY show exercises with warmup_friendly tag
-      // or warmup_only function tag
-      templateFiltered = templateFiltered.filter((exercise: any) => {
-        const hasWarmupFriendlyTag = exercise.movementTags?.includes('warmup_friendly');
-        const hasWarmupOnlyFunction = exercise.functionTags?.includes('warmup_only');
-        const include = hasWarmupFriendlyTag || hasWarmupOnlyFunction;
-        
-        if (include) {
-          console.log('[Exercise Modal] Including warm-up exercise:', {
-            name: exercise.name,
-            movementTags: exercise.movementTags,
-            functionTags: exercise.functionTags
-          });
-        }
-        
-        return include;
-      });
-    } else {
-      console.log('[Exercise Modal] Filtering for REGULAR round exercises');
-      // When replacing regular round exercises, EXCLUDE warmup_only exercises
-      const beforeCount = templateFiltered.length;
-      templateFiltered = templateFiltered.filter((exercise: any) => {
-        const hasWarmupOnlyFunction = exercise.functionTags?.includes('warmup_only');
-        if (hasWarmupOnlyFunction) {
-          console.log('[Exercise Modal] Excluding warmup_only exercise:', exercise.name);
-        }
-        return !hasWarmupOnlyFunction;
-      });
-      console.log(`[Exercise Modal] Excluded ${beforeCount - templateFiltered.length} warmup_only exercises`);
-    }
+    // Filter based on regular round exercises
+    console.log('[Exercise Modal] Filtering for REGULAR round exercises');
+    // Exclude warmup_only exercises from regular rounds
+    const beforeCount = templateFiltered.length;
+    templateFiltered = templateFiltered.filter((exercise: any) => {
+      const hasWarmupOnlyFunction = exercise.functionTags?.includes('warmup_only');
+      if (hasWarmupOnlyFunction) {
+        console.log('[Exercise Modal] Excluding warmup_only exercise:', exercise.name);
+      }
+      return !hasWarmupOnlyFunction;
+    });
+    console.log(`[Exercise Modal] Excluded ${beforeCount - templateFiltered.length} warmup_only exercises`);
 
     console.log('[Exercise Modal] After warm-up filter:', {
       count: templateFiltered.length,

@@ -21,13 +21,6 @@ import type { LightingPreset, PresetConfig, PresetProvider, WorkoutTemplate } fr
  */
 export const DEFAULT_PRESETS: PresetConfig = {
   circuit: {
-    WARMUP: {
-      bri: 180,
-      hue: 8000,  // Warm orange
-      sat: 180,
-      transitiontime: 20,  // 2 second fade in
-      on: true,
-    },
     WORK: {
       bri: 254,  // Maximum brightness
       hue: 47000,  // Bright blue
@@ -58,13 +51,6 @@ export const DEFAULT_PRESETS: PresetConfig = {
     },
   },
   strength: {
-    WARMUP: {
-      bri: 180,
-      hue: 8000,  // Warm orange
-      sat: 180,
-      transitiontime: 20,  // 2 second fade in
-      on: true,
-    },
     ROUND_START: {
       bri: 254,  // Maximum brightness
       hue: 47000,  // Energizing blue
@@ -173,7 +159,7 @@ export function createPresetProvider(): PresetProvider {
 export function getPresetForEvent(event: string): string | null {
   const eventPresetMap: Record<string, string> = {
     // Circuit events
-    'circuit:round:start': 'WARMUP',
+    'circuit:round:start': 'DEFAULT',
     'circuit:interval:work:start': 'WORK',
     'circuit:interval:rest:start': 'REST',
     'circuit:round:end': 'DEFAULT',

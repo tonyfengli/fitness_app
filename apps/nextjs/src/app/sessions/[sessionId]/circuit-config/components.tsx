@@ -138,8 +138,6 @@ interface RoundTypesStepProps {
   rounds: number;
   roundTemplates: RoundConfig[];
   onRoundTemplatesChange: (roundTemplates: RoundConfig[]) => void;
-  warmupEnabled: boolean;
-  onWarmupToggle: (enabled: boolean) => void;
   isSaving: boolean;
 }
 
@@ -147,8 +145,6 @@ export function RoundTypesStep({
   rounds,
   roundTemplates,
   onRoundTemplatesChange,
-  warmupEnabled,
-  onWarmupToggle,
   isSaving,
 }: RoundTypesStepProps) {
   // Ensure we have the correct number of round templates
@@ -243,45 +239,6 @@ export function RoundTypesStep({
 
 
       <div className="space-y-3">
-        {/* Warmup */}
-        <div className="space-y-2">
-          <span className="text-base font-medium text-gray-900 dark:text-gray-100">
-            Warm-up
-          </span>
-          
-          <div className="grid grid-cols-2 gap-2">
-            <Button
-              variant={warmupEnabled ? "primary" : "outline"}
-              className={cn(
-                "relative h-12 min-w-0 touch-manipulation text-sm",
-                !warmupEnabled && "dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:hover:bg-gray-600"
-              )}
-              onClick={() => onWarmupToggle(true)}
-              disabled={isSaving}
-            >
-              {isSaving && warmupEnabled && (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              )}
-              Yes
-            </Button>
-            
-            <Button
-              variant={!warmupEnabled ? "primary" : "outline"}
-              className={cn(
-                "relative h-12 min-w-0 touch-manipulation text-sm",
-                warmupEnabled && "dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:hover:bg-gray-600"
-              )}
-              onClick={() => onWarmupToggle(false)}
-              disabled={isSaving}
-            >
-              {isSaving && !warmupEnabled && (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              )}
-              No
-            </Button>
-          </div>
-        </div>
-
         {/* Regular Rounds */}
         {ensuredRoundTemplates.map((roundConfig) => (
           <div 
@@ -349,13 +306,6 @@ interface PerRoundConfigStepProps {
   rounds?: number;
   roundTemplates: RoundConfig[];
   onRoundTemplatesChange: (roundTemplates: RoundConfig[]) => void;
-  warmupEnabled: boolean;
-  warmupConfig?: {
-    enabled: boolean;
-    exercisesCount: number;
-    duration: number;
-  };
-  onWarmupChange: (warmup: any) => void;
   isSaving: boolean;
 }
 
@@ -363,9 +313,6 @@ export function PerRoundConfigStep({
   rounds,
   roundTemplates,
   onRoundTemplatesChange,
-  warmupEnabled,
-  warmupConfig,
-  onWarmupChange,
   isSaving,
 }: PerRoundConfigStepProps) {
   // If rounds is provided, ensure we have templates for all rounds
@@ -467,99 +414,6 @@ export function PerRoundConfigStep({
         </p>
       </div>
 
-      {/* Warm-up Section */}
-      {warmupEnabled && (
-        <div className="space-y-4">
-          <div className={cn(
-            "space-y-3 p-4 rounded-lg border transition-all",
-            "bg-orange-50/30 border-orange-200/50 hover:border-orange-300 dark:bg-opacity-10"
-          )}>
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-base font-medium text-gray-900 dark:text-gray-100">Warm-up</span>
-              <span className={cn(
-                "text-xs font-bold px-2.5 py-1 rounded-full",
-                "bg-orange-500 text-white"
-              )}>
-                WARM-UP
-              </span>
-            </div>
-            
-            {/* Warm-up Description */}
-            <div className={cn(
-              "text-xs px-3 py-2 rounded-md -mx-1 mb-3",
-              "bg-orange-100/50 text-orange-700 dark:bg-orange-900/20 dark:text-orange-300"
-            )}>
-              🔥 Prepare your body with dynamic movements
-            </div>
-            
-            {/* Exercises */}
-            <div className="space-y-2">
-              <span className="text-xs font-medium text-gray-600 dark:text-white">EXERCISES</span>
-              <div className="grid grid-cols-4 gap-1">
-                {[3, 4, 5, 6].map((option) => {
-                  const isSelected = warmupConfig?.exercisesCount === option;
-                  return (
-                    <Button
-                      key={option}
-                      variant={isSelected ? "primary" : "outline"}
-                      className={cn(
-                        "relative h-10 min-w-0 text-xs transition-all",
-                        isSelected && "ring-2 ring-offset-1 ring-primary",
-                        !isSelected && "dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:hover:bg-gray-600"
-                      )}
-                      onClick={() => onWarmupChange({
-                        ...warmupConfig,
-                        enabled: true,
-                        exercisesCount: option,
-                        duration: warmupConfig?.duration || 300
-                      })}
-                      disabled={isSaving}
-                      size="sm"
-                    >
-                      <span className={cn(isSelected && "font-bold")}>
-                        {option}
-                      </span>
-                    </Button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Total Duration */}
-            <div className="space-y-2">
-              <span className="text-xs font-medium text-muted-foreground">TOTAL TIME</span>
-              <div className="grid grid-cols-5 gap-1">
-                {[180, 240, 300, 360, 420].map((option) => { // 3-7 minutes
-                  const isSelected = warmupConfig?.duration === option;
-                  return (
-                    <Button
-                      key={option}
-                      variant={isSelected ? "primary" : "outline"}
-                      className={cn(
-                        "relative h-9 min-w-0 text-xs transition-all",
-                        isSelected && "ring-2 ring-offset-1 ring-primary",
-                        !isSelected && "dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:hover:bg-gray-600"
-                      )}
-                      onClick={() => onWarmupChange({
-                        ...warmupConfig,
-                        enabled: true,
-                        exercisesCount: warmupConfig?.exercisesCount || 6,
-                        duration: option
-                      })}
-                      disabled={isSaving}
-                      size="sm"
-                    >
-                      <span className={cn(isSelected && "font-bold")}>
-                        {Math.floor(option / 60)}m
-                      </span>
-                    </Button>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       <div className="space-y-4">
         {sortedRounds.map((round) => {
@@ -944,12 +798,7 @@ export function ReviewStep({ config, repeatRounds }: ReviewStepProps) {
     (totalExercises - totalRounds) * config.config.restDuration + 
     (totalRounds - 1) * config.config.restBetweenRounds;
   
-  // Add warmup time if enabled
-  const warmupTime = config.config.warmup?.enabled
-    ? config.config.warmup.duration
-    : 0;
-  
-  const totalTime = totalWorkTime + totalRestTime + warmupTime;
+  const totalTime = totalWorkTime + totalRestTime;
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -975,27 +824,6 @@ export function ReviewStep({ config, repeatRounds }: ReviewStepProps) {
       <div className="space-y-4">
         <h4 className="text-sm font-semibold text-gray-600 dark:text-white">Round Types</h4>
         <div className="space-y-2">
-          {/* Warmup */}
-          {config.config.warmup?.enabled && (
-            <div className="rounded-lg bg-orange-50/20 dark:bg-orange-500/10 border border-orange-200/30 dark:border-orange-500/20 p-3 space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-gray-900 dark:text-white">Warm-up</span>
-                <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-orange-500/20 text-orange-700 dark:bg-orange-500/30 dark:text-orange-300">
-                  WARM-UP
-                </span>
-              </div>
-              <div className="space-y-2 text-xs">
-                <div className="flex justify-between text-gray-600 dark:text-gray-300">
-                  <span>Exercises</span>
-                  <span className="font-medium">{config.config.warmup.exercisesCount || 6}</span>
-                </div>
-                <div className="flex justify-between text-gray-600 dark:text-gray-300">
-                  <span>Duration</span>
-                  <span className="font-medium">{formatTime(config.config.warmup.duration || 300)}</span>
-                </div>
-              </div>
-            </div>
-          )}
           
           {/* Regular Rounds */}
           {config.config.roundTemplates && config.config.roundTemplates.map((rt) => {

@@ -56,14 +56,12 @@ export type WorkoutTemplate = 'circuit' | 'strength';
 
 export interface PresetConfig {
   circuit: {
-    WARMUP: LightingPreset;
     WORK: LightingPreset;
     REST: LightingPreset;
     COOLDOWN: LightingPreset;
     DEFAULT: LightingPreset;
   };
   strength: {
-    WARMUP: LightingPreset;
     ROUND_START: LightingPreset;
     ROUND_REST: LightingPreset;
     COOLDOWN: LightingPreset;

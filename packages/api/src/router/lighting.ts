@@ -40,7 +40,7 @@ export const lightingRouter = createTRPCRouter({
   applyPreset: protectedProcedure
     .input(
       z.object({
-        preset: z.enum(['WARMUP', 'WORK', 'REST', 'COOLDOWN', 'DEFAULT', 'ROUND_START', 'ROUND_REST']),
+        preset: z.enum(['WORK', 'REST', 'COOLDOWN', 'DEFAULT', 'ROUND_START', 'ROUND_REST']),
         template: z.enum(['circuit', 'strength']),
       })
     )

@@ -1714,23 +1714,6 @@ export class WorkoutGenerationService {
     if (circuitRounds.length === 0) {
     }
     
-    // Check if warm-up is enabled
-    const warmupConfig = metadata?.circuitConfig?.config?.warmup;
-    const warmupEnabled = warmupConfig?.enabled || false;
-    const warmupExerciseCount = warmupConfig?.exercisesCount || 6;
-    
-    
-    // Hard-coded warm-up exercise IDs
-    const warmupExerciseIds = [
-      "6a3f1ffb-07ef-4938-80b6-0efd3fe0eb68", // Jumping Jacks
-      "c0fb46fd-9b4e-4115-b830-279f81ddbc10", // Push-Ups (existing)
-      "0bf6ddc3-bbe3-47a7-87e6-53937c26b692", // High Knees
-      "48d80f90-38b3-4cd4-ba25-b12854c76c09", // Leg Swings
-      "c0f944b5-a750-476f-b030-ea026c9a24c4", // Hip Circles
-      "62b56e4c-c89e-4308-9949-d7ad61420b99", // Glute Bridge (existing)
-      "ccec7a78-7ddb-41da-9a50-875a53d5db79", // Arm Circles
-      "110b46e5-c3e3-46d8-8719-d0b60adbd209", // Jogging
-    ];
     
     // Create exercise records for each client
     for (const client of groupContext.clients) {
@@ -1739,48 +1722,6 @@ export class WorkoutGenerationService {
       
       let globalIndex = 1;
       
-      // Add warm-up exercises if enabled
-      if (warmupEnabled) {
-        // Randomly select the specified number of warm-up exercises
-        const selectedWarmupIds = [...warmupExerciseIds]
-          .sort(() => Math.random() - 0.5)
-          .slice(0, warmupExerciseCount);
-        
-        
-        // Fetch warm-up exercises directly from database
-        const warmupExercises = await tx
-          .select()
-          .from(exercises)
-          .where(sql`${exercises.id} IN (${sql.join(
-            selectedWarmupIds.map(id => sql`${id}`),
-            sql`, `
-          )})`);
-        
-        
-        // Create WorkoutExercise entries for warm-up
-        for (const exercise of warmupExercises) {
-          allExercises.push({
-            workoutId: workoutId,
-            exerciseId: exercise.id,
-            orderIndex: globalIndex++,
-            setsCompleted: 0,
-            groupName: "Warm-up",
-            isShared: groupContext.clients.length > 1,
-            sharedWithClients: groupContext.clients.length > 1 
-              ? groupContext.clients
-                  .filter(c => c.user_id !== client.user_id)
-                  .map(c => c.user_id)
-              : [],
-            template: "circuit",
-            // Warmup is never a stations round
-            stationIndex: null,
-            metadata: {
-              phase: "warmup",
-              movementPattern: exercise.movementPattern,
-            }
-          });
-        }
-      }
       
       // If repeat is enabled, we'll process rounds twice
       const iterations = repeatRounds ? 2 : 1;

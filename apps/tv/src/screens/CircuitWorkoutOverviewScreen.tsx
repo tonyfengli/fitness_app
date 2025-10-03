@@ -526,6 +526,7 @@ function RoundContent({ round, isCompact }: {
 export function CircuitWorkoutOverviewScreen() {
   const navigation = useNavigation();
   const sessionId = navigation.getParam('sessionId');
+  
   const queryClient = useQueryClient();
   const [lastSwapTime, setLastSwapTime] = useState<Date | null>(null);
   const { startWorkout, isGenerating, error: startWorkoutError, setError } = useStartWorkout();
@@ -687,7 +688,6 @@ export function CircuitWorkoutOverviewScreen() {
   }, [selectionsError, selectionsLoading]);
   
   const handleStartCircuit = async () => {
-    // Starting circuit workout
     // For circuit workouts, we don't need the complex workout generation
     // Just navigate to the live workout screen
     navigation.navigate('CircuitWorkoutLive', { sessionId });
@@ -714,7 +714,9 @@ export function CircuitWorkoutOverviewScreen() {
         paddingVertical: 16
       }}>
         <Pressable
-            onPress={() => navigation.navigate('SessionLobby', { sessionId })}
+            onPress={() => {
+              navigation.navigate('SessionLobby', { sessionId });
+            }}
             focusable
           >
             {({ focused }) => (

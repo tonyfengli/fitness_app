@@ -126,7 +126,6 @@ const CreateExerciseSchema = z.object({
         "cross_plane",
         "foundational",
         "rehab_friendly",
-        "warmup_friendly",
         "finisher_friendly",
         "mobility_focus",
       ]),

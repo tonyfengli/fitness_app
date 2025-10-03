@@ -22,7 +22,6 @@ import {
   CircuitRoundPreview, 
   StationsRoundPreview,
   AMRAPRoundPreview,
-  WarmupRoundPreview,
   CircuitExerciseView, 
   StationsExerciseView,
   AMRAPExerciseView,
@@ -125,7 +124,7 @@ interface RoundData {
   exercises: CircuitExercise[];
 }
 
-type ScreenType = 'warmup' | 'round-preview' | 'exercise' | 'rest';
+type ScreenType = 'round-preview' | 'exercise' | 'rest';
 
 export function CircuitWorkoutLiveScreen() {
   const navigation = useNavigation();
@@ -135,10 +134,9 @@ export function CircuitWorkoutLiveScreen() {
   const componentInstanceId = useRef(`cwl-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`);
   
   
+  
   // State for rounds and navigation
   const [roundsData, setRoundsDataInternal] = useState<RoundData[]>([]);
-  const [warmupData, setWarmupData] = useState<RoundData | null>(null);
-  const [warmupCompleted, setWarmupCompleted] = useState(false);
   
   const setRoundsData = setRoundsDataInternal;
   
@@ -160,6 +158,11 @@ export function CircuitWorkoutLiveScreen() {
   // Cleanup on unmount
   useEffect(() => {
     return () => {
+      console.log('[CircuitWorkoutLive] Component unmounting:', {
+        currentScreen,
+        currentRoundIndex,
+        instanceId: componentInstanceId.current
+      });
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
   }, []);
@@ -297,14 +300,19 @@ export function CircuitWorkoutLiveScreen() {
     ? api.workoutSelections.getSelections.queryOptions({ sessionId })
     : null;
 
-  const { data: selections, isLoading: selectionsLoading } = useQuery({
+  const { data: selections, isLoading: selectionsLoading, error: selectionsError } = useQuery({
     ...selectionsQueryOptions,
     enabled: !!sessionId && !!selectionsQueryOptions,
     refetchInterval: 3000, // Poll every 3 seconds for reps_planned updates
     onError: (error) => {
-      console.error('[CircuitWorkoutLive] Failed to load selections:', error);
+      console.error('[CircuitWorkoutLive] Failed to load selections:', {
+        error,
+        sessionId,
+        instanceId: componentInstanceId.current
+      });
     }
   });
+  
   
   // Prefetch tracks when setlist is available
   useEffect(() => {
@@ -322,8 +330,8 @@ export function CircuitWorkoutLiveScreen() {
       
       
       selections.forEach((selection, index) => {
-        // Skip warm-up exercises from being added to regular rounds
-        if (selection.groupName === 'Warm-up') {
+        // Skip if no valid group name
+        if (!selection.groupName || selection.groupName === 'Warm-up') {
           return;
         }
         
@@ -431,38 +439,8 @@ export function CircuitWorkoutLiveScreen() {
       
       
       setRoundsData(rounds);
-      
-      // Check if warmup is configured and enabled
-      if (circuitConfig?.config?.warmup?.enabled && !warmupData && !warmupCompleted) {
-        
-        // Only set up warmup if we haven't already done so and haven't completed it
-        // Look for exercises with groupName "Warm-up"
-        const warmupExercises = selections
-          .filter(s => s.groupName === 'Warm-up')
-          .sort((a, b) => a.orderIndex - b.orderIndex)
-          .map(s => ({
-            id: s.id,
-            exerciseId: s.exerciseId,
-            exerciseName: s.exerciseName,
-            orderIndex: s.orderIndex
-          }));
-        
-        
-        if (warmupExercises.length > 0) {
-          const warmupRound: RoundData = {
-            roundName: 'Warm-up',
-            exercises: warmupExercises
-          };
-          setWarmupData(warmupRound);
-          setCurrentScreen('warmup');
-          // Start warmup timer - just use the total duration
-          const warmupDuration = circuitConfig.config.warmup.duration; // Total warmup time
-          startTimer(warmupDuration);
-        } else {
-        }
-      }
     }
-  }, [selections, circuitConfig, getRoundTiming, warmupCompleted]);
+  }, [selections, circuitConfig, getRoundTiming]);
 
   // Start health check on mount and cleanup on unmount
   useEffect(() => {
@@ -487,7 +465,7 @@ export function CircuitWorkoutLiveScreen() {
     
     // Check for round preview (applies to all rounds)
     if (currentScreen === 'round-preview') {
-      lightingEvent = 'warmup';  // 'warmup' maps to Round Preview in our color mappings
+      lightingEvent = 'round_preview';  // Round Preview lighting
     } else if (currentScreen === 'exercise') {
       lightingEvent = 'work';
       
@@ -658,6 +636,11 @@ export function CircuitWorkoutLiveScreen() {
   }, [isPaused]);
 
   const handleTimerComplete = useCallback(() => {
+    console.log('[CircuitWorkoutLive] Timer complete:', {
+      currentScreen: timerStateRef.current.currentScreen,
+      timeRemaining,
+      instanceId: componentInstanceId.current
+    });
     // Auto-advance to next screen (not a manual skip)
     handleNext(false);
   }, []);
@@ -770,28 +753,6 @@ export function CircuitWorkoutLiveScreen() {
     // Reset lighting event to force re-application when navigating
     setLastLightingEvent('');
 
-    if (screen === 'warmup') {
-      
-      // Warmup complete - go to Round 1 preview
-      
-      // Clear any running timer
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      }
-      
-      // Reset all states for round preview
-      setCurrentRoundIndex(0);
-      setCurrentExerciseIndex(0);
-      setCurrentSetNumber(1); // Reset set number
-      setCurrentScreen('round-preview');
-      setTimeRemaining(0); // Set to 0 so Start button shows
-      setWarmupCompleted(true); // Mark warmup as done
-      
-      // Don't start timer - wait for user to click "Start"
-      return;
-    }
-    
     if (screen === 'round-preview') {
       
       const currentRoundType = getRoundTiming(roundIdx).roundType;
@@ -834,11 +795,14 @@ export function CircuitWorkoutLiveScreen() {
           getColorForPreset('app_start').then(color => {
             const preset = getHuePresetForColor(color);
             setHueLights(preset);
+            console.log('[CircuitWorkoutLive] AMRAP complete, navigating back:', {
+              instanceId: componentInstanceId.current  
+            });
             navigation.goBack();
           });
         }
       } else {
-        // Circuit, Stations, or Warmup/Cooldown round - normal exercise progression
+        // Circuit or Stations round - normal exercise progression
         // Check if this is the last exercise in the round
         if (exerciseIdx === currentRound.exercises.length - 1) {
           // Last exercise of the round
@@ -889,6 +853,9 @@ export function CircuitWorkoutLiveScreen() {
             getColorForPreset('app_start').then(color => {
               const preset = getHuePresetForColor(color);
               setHueLights(preset);
+              console.log('[CircuitWorkoutLive] All rounds complete, navigating back:', {
+                instanceId: componentInstanceId.current
+              });
               navigation.goBack();
             });
           }
@@ -1095,7 +1062,13 @@ export function CircuitWorkoutLiveScreen() {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  if (selectionsLoading || !circuitConfig) {
+  if ((selectionsLoading || !circuitConfig) /* && !isInitializingWarmup */) {
+    console.log('[CircuitWorkoutLive] Rendering loading state:', {
+      selectionsLoading,
+      circuitConfigLoaded: !!circuitConfig,
+      // isInitializingWarmup,
+      instanceId: componentInstanceId.current
+    });
     return (
       <View style={{ flex: 1, backgroundColor: TOKENS.color.bg, justifyContent: 'center', alignItems: 'center' }}>
         <ActivityIndicator size="large" color={TOKENS.color.accent} />
@@ -1119,37 +1092,7 @@ export function CircuitWorkoutLiveScreen() {
         paddingBottom: 20,
         position: 'relative'
       }}>
-        {currentScreen === 'warmup' && (
-          <View style={{
-            position: 'absolute',
-            left: 0,
-            right: 0,
-            alignItems: 'center',
-            zIndex: 0,
-            paddingTop: 20
-          }}>
-            <Text style={{ 
-              fontSize: 80, 
-              fontWeight: '900', 
-              color: TOKENS.color.text,
-              letterSpacing: 1,
-              textTransform: 'uppercase'
-            }}>
-              WARM-UP
-            </Text>
-            <Text style={{
-              fontSize: 24,
-              fontWeight: '700',
-              color: TOKENS.color.accent,
-              letterSpacing: 0.5,
-              marginTop: 8,
-            }}>
-              {formatTime(timeRemaining)}
-            </Text>
-          </View>
-        )}
-        
-        {!(currentScreen === 'round-preview' && currentRoundIndex === 0) && currentScreen !== 'warmup' ? (
+        {!(currentScreen === 'round-preview' && currentRoundIndex === 0) ? (
           <View style={{ alignItems: 'center' }}>
             <Text style={{ 
               fontSize: 40, 
@@ -1241,6 +1184,11 @@ export function CircuitWorkoutLiveScreen() {
               const appStartColor = await getColorForPreset('app_start');
               const preset = getHuePresetForColor(appStartColor);
               await setHueLights(preset);
+              console.log('[CircuitWorkoutLive] Back button pressed from round preview, navigating back:', {
+                currentScreen,
+                currentRoundIndex,
+                instanceId: componentInstanceId.current
+              });
               navigation.goBack();
             }}
             focusable
@@ -1345,7 +1293,7 @@ export function CircuitWorkoutLiveScreen() {
             <Pressable
               onPress={debouncedHandleBack}
               focusable
-              disabled={(currentRoundIndex === 0 && currentScreen === 'round-preview') || currentScreen === 'warmup'}
+              disabled={(currentRoundIndex === 0 && currentScreen === 'round-preview')}
             >
               {({ focused }) => (
                 <MattePanel 
@@ -1355,7 +1303,7 @@ export function CircuitWorkoutLiveScreen() {
                     height: 50,
                     alignItems: 'center',
                     justifyContent: 'center',
-                    opacity: ((currentRoundIndex === 0 && currentScreen === 'round-preview') || currentScreen === 'warmup') ? 0.5 : 1,
+                    opacity: ((currentRoundIndex === 0 && currentScreen === 'round-preview')) ? 0.5 : 1,
                     backgroundColor: focused ? 'rgba(255,255,255,0.16)' : TOKENS.color.card,
                     borderColor: focused ? 'rgba(255,255,255,0.45)' : TOKENS.color.borderGlass,
                     borderWidth: focused ? 1 : 1,
@@ -1431,9 +1379,6 @@ export function CircuitWorkoutLiveScreen() {
 
       {/* Main content */}
       <View style={{ flex: 1, paddingHorizontal: 48, paddingBottom: 48 }}>
-        {currentScreen === 'warmup' && warmupData && (
-          <WarmupRoundPreview currentRound={warmupData} />
-        )}
         
         {currentScreen === 'round-preview' && currentRound && (
           currentRoundType === 'stations_round' 

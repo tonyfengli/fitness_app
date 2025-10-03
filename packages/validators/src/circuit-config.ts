@@ -36,20 +36,12 @@ export const AMRAPRoundTemplateSchema = z.object({
   totalDuration: z.number().int().min(60).max(600), // 1-10 minutes
 });
 
-export const WarmupCooldownRoundTemplateSchema = z.object({
-  type: z.literal('warmup_cooldown_round'),
-  position: z.enum(['warmup', 'cooldown']),
-  exercisesPerRound: z.number().int().min(CIRCUIT_CONFIG_LIMITS.exercisesPerRound.min).max(CIRCUIT_CONFIG_LIMITS.exercisesPerRound.max),
-  workDuration: z.number().int().min(CIRCUIT_CONFIG_LIMITS.workDuration.min).max(CIRCUIT_CONFIG_LIMITS.workDuration.max),
-  restDuration: z.number().int().min(CIRCUIT_CONFIG_LIMITS.restDuration.min).max(CIRCUIT_CONFIG_LIMITS.restDuration.max),
-});
 
 // Union for future round types
 export const RoundTemplateSchema = z.discriminatedUnion('type', [
   CircuitRoundTemplateSchema,
   StationsRoundTemplateSchema,
   AMRAPRoundTemplateSchema,
-  WarmupCooldownRoundTemplateSchema,
   // Future: EMOMRoundTemplateSchema,
 ]);
 
@@ -89,12 +81,6 @@ export const CircuitRestBetweenRoundsSchema = z
   .min(CIRCUIT_CONFIG_LIMITS.restBetweenRounds.min)
   .max(CIRCUIT_CONFIG_LIMITS.restBetweenRounds.max);
 
-// Warmup configuration schema
-export const WarmupConfigSchema = z.object({
-  enabled: z.boolean(),
-  exercisesCount: z.number().int().min(2).max(8).default(6),
-  duration: z.number().int().min(60).max(600).default(300), // 1-10 minutes, default 5 minutes
-});
 
 // Complete circuit config schema with round templates
 export const CircuitConfigSchema = z.object({
@@ -104,8 +90,6 @@ export const CircuitConfigSchema = z.object({
     restBetweenRounds: CircuitRestBetweenRoundsSchema,
     repeatRounds: z.boolean().optional().default(false),
     roundTemplates: z.array(RoundConfigSchema),
-    // Warmup configuration (separate from rounds)
-    warmup: WarmupConfigSchema.optional(),
     // Spotify integration
     spotifyDeviceId: z.string().optional(),
     spotifyDeviceName: z.string().optional(),
@@ -144,8 +128,6 @@ export const UpdateCircuitConfigSchema = z.object({
   restBetweenRounds: CircuitRestBetweenRoundsSchema.optional(),
   repeatRounds: z.boolean().optional(),
   roundTemplates: z.array(RoundConfigSchema).optional(),
-  // Warmup configuration
-  warmup: WarmupConfigSchema.optional(),
   // Spotify integration
   spotifyDeviceId: z.string().optional(),
   spotifyDeviceName: z.string().optional(),
