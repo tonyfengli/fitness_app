@@ -133,8 +133,13 @@ export function MainScreen() {
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const [shouldRefocusCard, setShouldRefocusCard] = useState(false);
   const [activeOperation, setActiveOperation] = useState<'open' | 'complete' | 'delete' | null>(null);
+  const [closingSessionsMessage, setClosingSessionsMessage] = useState<string | null>(null);
   const actionButtonsRef = useRef<View>(null);
   const [hasActionButtonFocus, setHasActionButtonFocus] = useState(false);
+  
+  // Store the initial order of sessions to maintain stable sorting
+  const sessionOrderRef = useRef<string[]>([]);
+  const [hasStoredOrder, setHasStoredOrder] = useState(false);
 
   // Query to fetch recent sessions
   const { data: recentSessions, isLoading: isLoadingRecentSessions } = useQuery({
@@ -145,6 +150,42 @@ export function MainScreen() {
     enabled: !!businessId && !isAuthLoading,
     staleTime: 30000, // Cache for 30 seconds
   });
+  
+  // Store the initial session order when first loaded
+  useEffect(() => {
+    if (recentSessions && recentSessions.length > 0 && !hasStoredOrder) {
+      sessionOrderRef.current = recentSessions.map((s: any) => s.id);
+      setHasStoredOrder(true);
+      console.log('[MainScreen] Stored initial session order:', sessionOrderRef.current);
+    }
+  }, [recentSessions, hasStoredOrder]);
+  
+  // Sort sessions based on stored order to maintain stability
+  const sortedSessions = React.useMemo(() => {
+    if (!recentSessions || sessionOrderRef.current.length === 0) {
+      return recentSessions;
+    }
+    
+    // Create a copy and sort based on stored order
+    const sorted = [...recentSessions].sort((a: any, b: any) => {
+      const indexA = sessionOrderRef.current.indexOf(a.id);
+      const indexB = sessionOrderRef.current.indexOf(b.id);
+      
+      // If both are in the stored order, maintain that order
+      if (indexA !== -1 && indexB !== -1) {
+        return indexA - indexB;
+      }
+      
+      // If only one is in stored order, it comes first
+      if (indexA !== -1) return -1;
+      if (indexB !== -1) return 1;
+      
+      // If neither is in stored order (new sessions), sort by createdAt desc
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
+    
+    return sorted;
+  }, [recentSessions]);
 
   // Template options matching the webapp
   const templates = [
@@ -235,7 +276,10 @@ export function MainScreen() {
     ...api.trainingSession.updateSessionStatus.mutationOptions(),
     onSuccess: (data) => {
       console.log('[MainScreen] ✅ Session status updated:', data.status);
-      queryClient.invalidateQueries({ queryKey: ['trainingSession'] });
+      // Invalidate the specific query for the recent sessions list
+      queryClient.invalidateQueries({ 
+        queryKey: api.trainingSession.list.queryOptions({ limit: 3, offset: 0 }).queryKey 
+      });
     },
     onError: (error: any) => {
       console.error('[MainScreen] ❌ Failed to update session status:', error);
@@ -285,6 +329,59 @@ export function MainScreen() {
         queryKey: api.trainingSession.list.queryOptions({ limit: 3, offset: 0 }).queryKey 
       });
       
+      // Check if there's an in-progress session to close
+      const inProgressFromCurrent = sortedSessions?.find((s: any) => 
+        s.status === 'in_progress'
+      );
+      
+      let sessionToClose = inProgressFromCurrent;
+      
+      // Only fetch if we don't have sortedSessions loaded yet (edge case)
+      if (!sortedSessions && !sessionToClose) {
+        const recentSessionsData = await queryClient.fetchQuery(
+          api.trainingSession.list.queryOptions({ limit: 5, offset: 0 })
+        );
+        
+        const inProgressSession = recentSessionsData.find((s: any) => 
+          s.status === 'in_progress'
+        );
+        
+        if (inProgressSession) {
+          sessionToClose = inProgressSession;
+        }
+      }
+      
+      // Only close if there's actually a session to close
+      if (sessionToClose) {
+        console.log('[MainScreen] 🔄 Found in-progress session to close:', sessionToClose.id);
+        setClosingSessionsMessage('Setting up session...');
+        
+        try {
+          await updateSessionStatusMutation.mutateAsync({
+            sessionId: sessionToClose.id,
+            status: 'open' as const
+          });
+          console.log('[MainScreen] ✅ Closed session:', sessionToClose.id);
+          setClosingSessionsMessage(null);
+        } catch (closeError: any) {
+          console.error('[MainScreen] ❌ Failed to close session:', sessionToClose.id, closeError);
+          setClosingSessionsMessage(null);
+          Alert.alert(
+            'Failed to Close Previous Session',
+            closeError.message || 'Could not close the previous session. Please try again.',
+            [{ text: 'OK' }]
+          );
+          // Still navigate to the new session but it will remain in 'open' status
+          navigation.navigate('SessionLobby', { 
+            sessionId: newSession.id,
+            isNewSession: true 
+          });
+          return;
+        }
+      } else {
+        console.log('[MainScreen] No in-progress sessions found - proceeding normally');
+      }
+      
       // Update session status to in_progress
       console.log('[MainScreen] 🔄 Updating new session status to in_progress');
       try {
@@ -292,8 +389,14 @@ export function MainScreen() {
           sessionId: newSession.id,
           status: 'in_progress' as const
         });
-      } catch (statusError) {
-        console.warn('[MainScreen] ⚠️ Failed to update status for new session, continuing anyway:', statusError);
+        console.log('[MainScreen] ✅ New session status updated to in_progress');
+      } catch (statusError: any) {
+        console.error('[MainScreen] ❌ Failed to update status for new session:', statusError);
+        Alert.alert(
+          'Failed to Activate Session',
+          statusError.message || 'Could not set session as active. Please try again.',
+          [{ text: 'OK' }]
+        );
       }
       
       // Navigate to the new session with isNewSession flag
@@ -442,6 +545,10 @@ export function MainScreen() {
   const handleEnvironmentChange = async (newEnv: 'gym' | 'developer') => {
     if (isSwitching) return;
     
+    // Reset the stored session order when refreshing
+    sessionOrderRef.current = [];
+    setHasStoredOrder(false);
+    
     // If clicking the same environment button, force a re-login
     if (newEnv === currentEnvironment) {
       console.log('[MainScreen] 🔄 Re-logging into same environment:', newEnv);
@@ -486,7 +593,7 @@ export function MainScreen() {
     console.log('[MainScreen] 📱 Opening session:', session.id);
     console.log('[MainScreen] Session details:', {
       id: session.id,
-      business_id: session.business_id,
+      businessId: session.businessId,
       status: session.status,
       currentBusinessId: businessId,
       currentUser: user?.email,
@@ -514,6 +621,54 @@ export function MainScreen() {
     setActiveOperation('open');
     
     try {
+      // First check if there's an in-progress session to close
+      const inProgressFromCurrent = sortedSessions?.find((s: any) => 
+        s.status === 'in_progress' && s.id !== session.id
+      );
+      
+      let sessionToClose = inProgressFromCurrent;
+      
+      // Only fetch if we don't have sortedSessions loaded yet (edge case)
+      if (!sortedSessions && !sessionToClose) {
+        const recentSessionsData = await queryClient.fetchQuery(
+          api.trainingSession.list.queryOptions({ limit: 5, offset: 0 })
+        );
+        
+        const inProgressSession = recentSessionsData.find((s: any) => 
+          s.status === 'in_progress' && s.id !== session.id
+        );
+        
+        if (inProgressSession) {
+          sessionToClose = inProgressSession;
+        }
+      }
+      
+      // Only show message and close if there's actually a session to close
+      if (sessionToClose) {
+        console.log('[MainScreen] 🔄 Found in-progress session to close:', sessionToClose.id);
+        setClosingSessionsMessage('Closing previous session...');
+        
+        try {
+          await updateSessionStatusMutation.mutateAsync({
+            sessionId: sessionToClose.id,
+            status: 'open' as const
+          });
+          console.log('[MainScreen] ✅ Closed session:', sessionToClose.id);
+          setClosingSessionsMessage(null);
+        } catch (closeError: any) {
+          console.error('[MainScreen] ❌ Failed to close session:', sessionToClose.id, closeError);
+          setClosingSessionsMessage(null);
+          Alert.alert(
+            'Failed to Close Previous Session',
+            closeError.message || 'Could not close the previous session. Please try again.',
+            [{ text: 'OK' }]
+          );
+          throw closeError;
+        }
+      } else {
+        console.log('[MainScreen] No in-progress sessions found - proceeding normally');
+      }
+      
       // Create a timeout promise
       const timeoutPromise = new Promise((_, reject) => {
         setTimeout(() => reject(new Error('Request timed out. Please check your connection and try again.')), 30000);
@@ -544,9 +699,15 @@ export function MainScreen() {
           sessionId: session.id,
           status: 'in_progress' as const
         });
-      } catch (statusError) {
-        console.warn('[MainScreen] ⚠️ Failed to update status, continuing anyway:', statusError);
-        // Continue even if status update fails
+        console.log('[MainScreen] ✅ Session status updated to in_progress');
+      } catch (statusError: any) {
+        console.error('[MainScreen] ❌ Failed to update status:', statusError);
+        Alert.alert(
+          'Failed to Open Session',
+          statusError.message || 'Could not set session as active. Please try again.',
+          [{ text: 'OK' }]
+        );
+        throw statusError;
       }
       
       // Navigate with pre-fetched data
@@ -566,13 +727,6 @@ export function MainScreen() {
         id: session.id,
         message: error.message || 'Failed to open session. Please try again.'
       });
-      
-      // Show alert
-      Alert.alert(
-        'Unable to Open Session',
-        error.message || 'Failed to open session. Please try again.',
-        [{ text: 'OK' }]
-      );
     } finally {
       setLoadingSessionId(null);
       setActiveOperation(null);
@@ -820,13 +974,13 @@ export function MainScreen() {
                 <ActivityIndicator size="large" color={TOKENS.color.accent} />
                 <Text style={{ color: TOKENS.color.muted, marginTop: 16 }}>Loading sessions...</Text>
               </View>
-            ) : !recentSessions || recentSessions.length === 0 ? (
+            ) : !sortedSessions || sortedSessions.length === 0 ? (
               <View style={[styles.sessionCardWrapper, { justifyContent: 'center', alignItems: 'center', width: '100%' }]}>
                 <Icon name="inbox" size={48} color={TOKENS.color.muted} />
                 <Text style={{ color: TOKENS.color.muted, marginTop: 16, fontSize: 16 }}>No sessions available</Text>
                 <Text style={{ color: TOKENS.color.muted, marginTop: 8, fontSize: 14 }}>Create a session to get started</Text>
               </View>
-            ) : recentSessions.map((session) => (
+            ) : sortedSessions.map((session) => (
               <Pressable
                 key={session.id}
                 focusable={!selectedSessionId}
@@ -889,7 +1043,7 @@ export function MainScreen() {
           
           {/* Action Buttons */}
           {(() => {
-            const selectedSession = recentSessions?.find(s => s.id === selectedSessionId);
+            const selectedSession = sortedSessions?.find(s => s.id === selectedSessionId);
             const isCompleted = selectedSession?.status === 'completed';
             
             return (
@@ -900,7 +1054,7 @@ export function MainScreen() {
                 trapFocusLeft={!!selectedSessionId}
                 trapFocusRight={!!selectedSessionId}
               >
-                {!isCompleted && (
+                {!isCompleted ? (
                   <>
                     <Pressable
                       focusable={!!selectedSessionId && !activeOperation}
@@ -909,7 +1063,7 @@ export function MainScreen() {
                       onFocus={() => setHasActionButtonFocus(true)}
                       onBlur={() => setHasActionButtonFocus(false)}
                       onPress={async () => {
-                        const session = recentSessions?.find(s => s.id === selectedSessionId);
+                        const session = sortedSessions?.find(s => s.id === selectedSessionId);
                         if (session && !activeOperation) {
                           setSelectedSessionId(null);
                           await handleSessionClick(session);
@@ -965,11 +1119,60 @@ export function MainScreen() {
                       )}
                     </Pressable>
                   </>
+                ) : (
+                  <Pressable
+                    focusable={!!selectedSessionId && !activeOperation}
+                    hasTVPreferredFocus={!!selectedSessionId && !activeOperation}
+                    disabled={!!activeOperation}
+                    onFocus={() => setHasActionButtonFocus(true)}
+                    onBlur={() => setHasActionButtonFocus(false)}
+                    onPress={() => {
+                      if (selectedSessionId && !activeOperation) {
+                        Alert.alert(
+                          'Reopen Session',
+                          'Are you sure you want to reopen this completed session?',
+                          [
+                            { text: 'Cancel', style: 'cancel' },
+                            { 
+                              text: 'Reopen', 
+                              onPress: async () => {
+                                if (selectedSessionId) {
+                                  setActiveOperation('open');
+                                  try {
+                                    await updateSessionStatusMutation.mutateAsync({
+                                      sessionId: selectedSessionId,
+                                      status: 'open' as const
+                                    });
+                                    setSelectedSessionId(null);
+                                  } catch (error) {
+                                    console.error('[MainScreen] Failed to reopen session:', error);
+                                  } finally {
+                                    setActiveOperation(null);
+                                  }
+                                }
+                              }
+                            }
+                          ]
+                        );
+                      }
+                    }}
+                    style={[styles.actionButtonWrapper, { opacity: activeOperation ? 0.5 : 1 }]}
+                  >
+                    {({ focused }) => (
+                      <View style={[
+                        styles.actionButton,
+                        focused && styles.actionButtonFocused
+                      ]}>
+                        <Icon name="refresh" size={20} color={TOKENS.color.text} />
+                        <Text style={styles.actionButtonText}>Reopen</Text>
+                      </View>
+                    )}
+                  </Pressable>
                 )}
                 
                 <Pressable
                   focusable={!!selectedSessionId && !activeOperation}
-                  hasTVPreferredFocus={!!selectedSessionId && isCompleted && !activeOperation}
+                  hasTVPreferredFocus={false}
                   disabled={!!activeOperation}
                   onFocus={() => setHasActionButtonFocus(true)}
                   onBlur={() => setHasActionButtonFocus(false)}
@@ -1066,7 +1269,7 @@ export function MainScreen() {
       </View>
 
       {/* Subtle Loading Indicator */}
-      {activeOperation && (
+      {(activeOperation || closingSessionsMessage) && (
         <View style={{
           position: 'absolute',
           bottom: 120,
@@ -1091,9 +1294,13 @@ export function MainScreen() {
               color: TOKENS.color.muted, 
               fontSize: 14,
             }}>
-              {activeOperation === 'open' && 'Opening...'}
-              {activeOperation === 'complete' && 'Completing...'}
-              {activeOperation === 'delete' && 'Deleting...'}
+              {closingSessionsMessage || (
+                activeOperation === 'open' && 'Opening...'
+              ) || (
+                activeOperation === 'complete' && 'Completing...'
+              ) || (
+                activeOperation === 'delete' && 'Deleting...'
+              )}
             </Text>
           </View>
         </View>
