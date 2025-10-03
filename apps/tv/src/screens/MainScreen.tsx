@@ -136,10 +136,17 @@ export function MainScreen() {
   const [closingSessionsMessage, setClosingSessionsMessage] = useState<string | null>(null);
   const actionButtonsRef = useRef<View>(null);
   const [hasActionButtonFocus, setHasActionButtonFocus] = useState(false);
+  const [sessionOffset, setSessionOffset] = useState(0);
+  const [focusHint, setFocusHint] = useState<'left' | 'right' | null>(null);
   
   // Store the initial order of sessions to maintain stable sorting
   const sessionOrderRef = useRef<string[]>([]);
   const [hasStoredOrder, setHasStoredOrder] = useState(false);
+  
+  // Refs for session cards to handle arrow navigation focus
+  const sessionCardRefs = useRef<{ [key: string]: any }>({});
+  const leftArrowRef = useRef<any>(null);
+  const rightArrowRef = useRef<any>(null);
 
   // Query to fetch recent sessions
   const { data: recentSessions, isLoading: isLoadingRecentSessions } = useQuery({
@@ -968,6 +975,78 @@ export function MainScreen() {
       <View style={styles.mainContent}>
         <View style={styles.sessionsContainer}>
           <View style={styles.sessionsRowWrapper}>
+            {/* Left Arrow */}
+            {sortedSessions && sortedSessions.length > 3 && sessionOffset > 0 && (
+              <Pressable
+                ref={leftArrowRef}
+                focusable={!selectedSessionId}
+                onPress={() => {
+                  const newOffset = Math.max(0, sessionOffset - 1);
+                  setSessionOffset(newOffset);
+                  if (newOffset === 0) {
+                    // Arrow will disappear, hint to focus left card
+                    setFocusHint('left');
+                  }
+                }}
+                style={{ position: 'absolute', left: -20, top: '50%', transform: [{ translateY: -24 }] }}
+              >
+                {({ focused }) => (
+                  <MattePanel
+                    focused={focused}
+                    style={{
+                      width: 48,
+                      height: 48,
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                      backgroundColor: focused ? 'rgba(255,255,255,0.16)' : TOKENS.color.card,
+                      borderColor: focused ? 'rgba(255,255,255,0.45)' : TOKENS.color.borderGlass,
+                      borderWidth: 1,
+                      transform: focused ? [{ translateY: -1 }] : [],
+                    }}
+                    radius={24}
+                  >
+                    <Icon name="chevron-left" size={24} color={TOKENS.color.text} />
+                  </MattePanel>
+                )}
+              </Pressable>
+            )}
+            
+            {/* Right Arrow */}
+            {sortedSessions && sortedSessions.length > 3 && sessionOffset < sortedSessions.length - 3 && (
+              <Pressable
+                ref={rightArrowRef}
+                focusable={!selectedSessionId}
+                onPress={() => {
+                  const newOffset = Math.min(sortedSessions.length - 3, sessionOffset + 1);
+                  setSessionOffset(newOffset);
+                  if (newOffset === sortedSessions.length - 3) {
+                    // Arrow will disappear, hint to focus right card
+                    setFocusHint('right');
+                  }
+                }}
+                style={{ position: 'absolute', right: -20, top: '50%', transform: [{ translateY: -24 }] }}
+              >
+                {({ focused }) => (
+                  <MattePanel
+                    focused={focused}
+                    style={{
+                      width: 48,
+                      height: 48,
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                      backgroundColor: focused ? 'rgba(255,255,255,0.16)' : TOKENS.color.card,
+                      borderColor: focused ? 'rgba(255,255,255,0.45)' : TOKENS.color.borderGlass,
+                      borderWidth: 1,
+                      transform: focused ? [{ translateY: -1 }] : [],
+                    }}
+                    radius={24}
+                  >
+                    <Icon name="chevron-right" size={24} color={TOKENS.color.text} />
+                  </MattePanel>
+                )}
+              </Pressable>
+            )}
+            
             <View style={styles.sessionsRow}>
             {isLoadingRecentSessions && !recentSessions ? (
               <View style={[styles.sessionCardWrapper, { justifyContent: 'center', alignItems: 'center', width: '100%' }]}>
@@ -980,11 +1059,18 @@ export function MainScreen() {
                 <Text style={{ color: TOKENS.color.muted, marginTop: 16, fontSize: 16 }}>No sessions available</Text>
                 <Text style={{ color: TOKENS.color.muted, marginTop: 8, fontSize: 14 }}>Create a session to get started</Text>
               </View>
-            ) : sortedSessions.slice(0, 3).map((session) => (
+            ) : sortedSessions.slice(sessionOffset, sessionOffset + 3).map((session, index) => (
               <Pressable
                 key={session.id}
+                ref={(ref) => {
+                  if (ref) {
+                    sessionCardRefs.current[session.id] = ref;
+                  }
+                }}
                 focusable={!selectedSessionId}
-                hasTVPreferredFocus={shouldRefocusCard && selectedSessionId === session.id}
+                hasTVPreferredFocus={(shouldRefocusCard && selectedSessionId === session.id) || 
+                  (focusHint === 'left' && index === 0) || 
+                  (focusHint === 'right' && index === 2)}
                 style={styles.sessionCardWrapper}
                 onPress={() => {
                   setSelectedSessionId(selectedSessionId === session.id ? null : session.id);
@@ -993,6 +1079,10 @@ export function MainScreen() {
                 onFocus={() => {
                   if (shouldRefocusCard && selectedSessionId === session.id) {
                     setShouldRefocusCard(false);
+                  }
+                  // Clear focus hint once a card is focused
+                  if (focusHint) {
+                    setFocusHint(null);
                   }
                 }}
               >
@@ -1606,7 +1696,7 @@ const styles = StyleSheet.create({
   },
   sessionCardWrapper: {
     flex: 1,
-    maxWidth: 255, // Reduced by 15% from 300
+    maxWidth: 240, // Reduced by 20% from 300
   },
   simpleSessionCard: {
     backgroundColor: TOKENS.color.card,
