@@ -144,7 +144,7 @@ export function MainScreen() {
   // Query to fetch recent sessions
   const { data: recentSessions, isLoading: isLoadingRecentSessions } = useQuery({
     ...api.trainingSession.list.queryOptions({
-      limit: 3,
+      limit: 6,
       offset: 0
     }),
     enabled: !!businessId && !isAuthLoading,
@@ -254,7 +254,7 @@ export function MainScreen() {
     onSuccess: () => {
       // Invalidate the training session list query to refresh the UI
       queryClient.invalidateQueries({ 
-        queryKey: api.trainingSession.list.queryOptions({ limit: 3, offset: 0 }).queryKey 
+        queryKey: api.trainingSession.list.queryOptions({ limit: 6, offset: 0 }).queryKey 
       });
       setSelectedSessionId(null);
     },
@@ -278,7 +278,7 @@ export function MainScreen() {
       console.log('[MainScreen] ✅ Session status updated:', data.status);
       // Invalidate the specific query for the recent sessions list
       queryClient.invalidateQueries({ 
-        queryKey: api.trainingSession.list.queryOptions({ limit: 3, offset: 0 }).queryKey 
+        queryKey: api.trainingSession.list.queryOptions({ limit: 6, offset: 0 }).queryKey 
       });
     },
     onError: (error: any) => {
@@ -297,7 +297,7 @@ export function MainScreen() {
       console.log('[MainScreen] ✅ Session completed successfully');
       // Invalidate the training session list query to refresh the UI
       queryClient.invalidateQueries({ 
-        queryKey: api.trainingSession.list.queryOptions({ limit: 3, offset: 0 }).queryKey 
+        queryKey: api.trainingSession.list.queryOptions({ limit: 6, offset: 0 }).queryKey 
       });
       setSelectedSessionId(null);
     },
@@ -326,7 +326,7 @@ export function MainScreen() {
       
       // Invalidate the training session list query to show the new session
       queryClient.invalidateQueries({ 
-        queryKey: api.trainingSession.list.queryOptions({ limit: 3, offset: 0 }).queryKey 
+        queryKey: api.trainingSession.list.queryOptions({ limit: 6, offset: 0 }).queryKey 
       });
       
       // Check if there's an in-progress session to close
@@ -339,7 +339,7 @@ export function MainScreen() {
       // Only fetch if we don't have sortedSessions loaded yet (edge case)
       if (!sortedSessions && !sessionToClose) {
         const recentSessionsData = await queryClient.fetchQuery(
-          api.trainingSession.list.queryOptions({ limit: 5, offset: 0 })
+          api.trainingSession.list.queryOptions({ limit: 6, offset: 0 })
         );
         
         const inProgressSession = recentSessionsData.find((s: any) => 
@@ -631,7 +631,7 @@ export function MainScreen() {
       // Only fetch if we don't have sortedSessions loaded yet (edge case)
       if (!sortedSessions && !sessionToClose) {
         const recentSessionsData = await queryClient.fetchQuery(
-          api.trainingSession.list.queryOptions({ limit: 5, offset: 0 })
+          api.trainingSession.list.queryOptions({ limit: 6, offset: 0 })
         );
         
         const inProgressSession = recentSessionsData.find((s: any) => 
@@ -980,7 +980,7 @@ export function MainScreen() {
                 <Text style={{ color: TOKENS.color.muted, marginTop: 16, fontSize: 16 }}>No sessions available</Text>
                 <Text style={{ color: TOKENS.color.muted, marginTop: 8, fontSize: 14 }}>Create a session to get started</Text>
               </View>
-            ) : sortedSessions.map((session) => (
+            ) : sortedSessions.slice(0, 3).map((session) => (
               <Pressable
                 key={session.id}
                 focusable={!selectedSessionId}
