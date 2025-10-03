@@ -681,21 +681,17 @@ export function MainScreen() {
         setTimeout(() => reject(new Error('Request timed out. Please check your connection and try again.')), 30000);
       });
       
-      // Fetch session details and checked-in clients in parallel
-      const fetchPromise = Promise.all([
-        queryClient.fetchQuery(api.trainingSession.getById.queryOptions({ id: session.id })),
-        queryClient.fetchQuery(api.trainingSession.getCheckedInClients.queryOptions({ sessionId: session.id }))
-      ]);
+      // Fetch only checked-in clients (session data already available from list)
+      const fetchPromise = queryClient.fetchQuery(api.trainingSession.getCheckedInClients.queryOptions({ sessionId: session.id }));
       
       // Race between fetch and timeout
-      const [sessionData, checkedInClients] = await Promise.race([
+      const checkedInClients = await Promise.race([
         fetchPromise,
         timeoutPromise
-      ]) as [any, any];
+      ]) as any;
       
       console.log('[MainScreen] ✅ Data fetched successfully:', {
         sessionId: session.id,
-        hasSessionData: !!sessionData,
         clientCount: checkedInClients?.length || 0
       });
       
@@ -721,7 +717,7 @@ export function MainScreen() {
       navigation.navigate('SessionLobby', { 
         sessionId: session.id,
         prefetchedData: {
-          session: sessionData,
+          session: session, // Use the session object we already have
           checkedInClients: checkedInClients || []
         }
       });
