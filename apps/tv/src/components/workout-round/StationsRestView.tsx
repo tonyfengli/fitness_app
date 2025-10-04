@@ -195,14 +195,16 @@ export function StationsRestView({
                     }}>
                       {exercise.exerciseName}
                     </Text>
-                    <Text style={{ 
-                      fontSize: exerciseCount === 1 ? 16 : 14, 
-                      fontWeight: '600',
-                      color: nextTeam.color,
-                      letterSpacing: 0.5,
-                    }}>
-                      {exercise.repsPlanned ? `${exercise.repsPlanned} ${exercise.repsPlanned === 1 ? 'rep' : 'reps'}` : `${workDuration} seconds`}
-                    </Text>
+                    {exercise.repsPlanned && (
+                      <Text style={{ 
+                        fontSize: exerciseCount === 1 ? 16 : 14, 
+                        fontWeight: '600',
+                        color: nextTeam.color,
+                        letterSpacing: 0.5,
+                      }}>
+                        {exercise.repsPlanned} {exercise.repsPlanned === 1 ? 'rep' : 'reps'}
+                      </Text>
+                    )}
                     
                     {/* Additional exercises at this station */}
                     {exercise.stationExercises && exercise.stationExercises.length > 0 && (
@@ -217,14 +219,16 @@ export function StationsRestView({
                             }}>
                               {stationEx.exerciseName}
                             </Text>
-                            <Text style={{ 
-                              fontSize: exerciseCount === 1 ? 16 : 14, 
-                              fontWeight: '600',
-                              color: nextTeam.color,
-                              letterSpacing: 0.5,
-                            }}>
-                              {stationEx.repsPlanned ? `${stationEx.repsPlanned} ${stationEx.repsPlanned === 1 ? 'rep' : 'reps'}` : `${workDuration} seconds`}
-                            </Text>
+                            {stationEx.repsPlanned && (
+                              <Text style={{ 
+                                fontSize: exerciseCount === 1 ? 16 : 14, 
+                                fontWeight: '600',
+                                color: nextTeam.color,
+                                letterSpacing: 0.5,
+                              }}>
+                                {stationEx.repsPlanned} {stationEx.repsPlanned === 1 ? 'rep' : 'reps'}
+                              </Text>
+                            )}
                           </View>
                         ))}
                       </View>
