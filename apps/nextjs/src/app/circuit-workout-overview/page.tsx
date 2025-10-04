@@ -342,30 +342,10 @@ function CircuitWorkoutOverviewContent() {
       setInlineSelectedId(null);
 
       // Invalidate queries to refresh data
-      console.log("[swapExerciseMutation] Invalidating queries...");
-      // Log current queries to debug
-      const queryCache = queryClient.getQueryCache();
-      const queries = queryCache.getAll();
-      console.log("[swapExerciseMutation] Current query keys:", queries.map(q => q.queryKey));
-      
-      // Find the getSelections query
-      const getSelectionsQuery = queries.find(q => 
-        Array.isArray(q.queryKey[0]) && 
-        q.queryKey[0][0] === "workoutSelections" && 
-        q.queryKey[0][1] === "getSelections"
-      );
-      console.log("[swapExerciseMutation] getSelections query key:", getSelectionsQuery?.queryKey);
-      
-      const invalidatePromise = queryClient.invalidateQueries({
+      queryClient.invalidateQueries({
         queryKey: trpc.workoutSelections.getSelections.queryOptions({ 
           sessionId: sessionId || "" 
         }).queryKey,
-      });
-      
-      invalidatePromise.then(() => {
-        console.log("[swapExerciseMutation] Query invalidation complete");
-      }).catch((err) => {
-        console.error("[swapExerciseMutation] Query invalidation failed:", err);
       });
     },
     onError: (error) => {
@@ -432,17 +412,11 @@ function CircuitWorkoutOverviewContent() {
     sessionId: sessionId || "",
     supabase,
     onSwapUpdate: (swap) => {
-      console.log("[CircuitWorkoutOverview] Exercise swap detected:", swap);
-      console.log("[CircuitWorkoutOverview] Current dataUpdatedAt:", dataUpdatedAt);
-      
       // Force refetch of exercise selections
-      console.log("[CircuitWorkoutOverview] Invalidating queries from real-time update...");
       queryClient.invalidateQueries({
         queryKey: trpc.workoutSelections.getSelections.queryOptions({ 
           sessionId: sessionId || "" 
         }).queryKey,
-      }).then(() => {
-        console.log("[CircuitWorkoutOverview] Real-time invalidation complete");
       });
     },
     onError: (error) => {
@@ -467,11 +441,6 @@ function CircuitWorkoutOverviewContent() {
     ...trpc.workoutSelections.getSelections.queryOptions({ sessionId: sessionId || "" }),
     enabled: !!sessionId,
     refetchInterval: !hasExercises ? 5000 : false, // Poll when no exercises
-    onSuccess: (data) => {
-      console.log("[getSelections query] Data fetched successfully at", new Date().toISOString());
-      console.log("[getSelections query] Number of selections:", data?.length);
-      console.log("[getSelections query] Sample data:", data?.slice(0, 2));
-    },
   });
 
   // Get any user from the saved selections to use for fetching exercises
@@ -495,97 +464,21 @@ function CircuitWorkoutOverviewContent() {
 
   const availableExercises = exercisesData?.exercises || [];
 
-  // Log exercise data when fetched
-  useEffect(() => {
-    if (availableExercises.length > 0) {
-      const modalContext = showExerciseSelection ? "REPLACE_MODAL" : 
-                          showAddExerciseModal ? "ADD_EXERCISE_MODAL" : 
-                          editingExerciseId ? "INLINE_EDITING" : "UNKNOWN";
-      
-      console.log(`[${modalContext}] Raw exercises fetched:`, {
-        totalCount: availableExercises.length,
-        sampleExercises: availableExercises.slice(0, 3).map(ex => ({
-          id: ex.id,
-          name: ex.name,
-          templateType: ex.templateType,
-          movementPattern: ex.movementPattern,
-          primaryMuscle: ex.primaryMuscle
-        }))
-      });
-
-      // Analyze template types
-      const templateTypeAnalysis = availableExercises.reduce((acc, ex) => {
-        const types = ex.templateType || [];
-        types.forEach(type => {
-          acc[type] = (acc[type] || 0) + 1;
-        });
-        return acc;
-      }, {} as Record<string, number>);
-
-      console.log(`[${modalContext}] Template type breakdown:`, templateTypeAnalysis);
-
-      // Find circuit vs non-circuit exercises
-      const circuitSuitable = availableExercises.filter(ex => 
-        ex.templateType?.includes('circuit') || ex.templateType?.includes('standard')
-      );
-      const circuitOnly = availableExercises.filter(ex => 
-        ex.templateType?.includes('circuit') && !ex.templateType?.includes('standard')
-      );
-      const standardOnly = availableExercises.filter(ex => 
-        ex.templateType?.includes('standard') && !ex.templateType?.includes('circuit')
-      );
-
-      console.log(`[${modalContext}] Circuit suitability analysis:`, {
-        totalExercises: availableExercises.length,
-        circuitSuitable: circuitSuitable.length,
-        circuitOnly: circuitOnly.length,
-        standardOnly: standardOnly.length,
-        standardOnlyExamples: standardOnly.slice(0, 3).map(ex => ex.name)
-      });
-    }
-  }, [availableExercises, showExerciseSelection, showAddExerciseModal, editingExerciseId]);
 
   // Keep ref updated with available exercises
   useEffect(() => {
     availableExercisesRef.current = availableExercises;
   }, [availableExercises]);
 
-  // Log when modals open/close
-  useEffect(() => {
-    if (showExerciseSelection) {
-      console.log('[REPLACE_MODAL] Modal opened for replacing:', {
-        selectedExercise: selectedExercise?.exerciseName,
-        selectedRound,
-        availableExercisesCount: availableExercises.length
-      });
-    }
-  }, [showExerciseSelection, selectedExercise, selectedRound, availableExercises.length]);
-
-  useEffect(() => {
-    if (showAddExerciseModal) {
-      console.log('[ADD_EXERCISE_MODAL] Modal opened for adding exercise to:', {
-        roundName: addExerciseRoundName,
-        roundType: addExerciseRoundData?.roundType,
-        targetStation: addExerciseTargetStation,
-        availableExercisesCount: availableExercises.length
-      });
-    }
-  }, [showAddExerciseModal, addExerciseRoundName, addExerciseRoundData, addExerciseTargetStation, availableExercises.length]);
 
   // Process setlist and timing from templateConfig
   useEffect(() => {
-    console.log('[DEBUG] Setlist processing - sessionData:', sessionData);
-    console.log('[DEBUG] Setlist processing - circuitConfig:', circuitConfig);
-    
     if (sessionData?.templateConfig && circuitConfig?.config) {
       const templateConfig = sessionData.templateConfig as any;
       
       // Check for setlist in multiple possible locations
       const setlistData = templateConfig.setlist || 
                          templateConfig.visualizationData?.llmResult?.metadata?.setlist;
-      
-      console.log('[DEBUG] Found setlist at:', setlistData ? 'Found' : 'Not found');
-      console.log('[DEBUG] Setlist data:', setlistData);
       
       if (setlistData) {
         setSetlist(setlistData);
@@ -602,24 +495,15 @@ function CircuitWorkoutOverviewContent() {
 
   // Process selections into rounds
   useEffect(() => {
-    console.log("[CircuitWorkoutOverview useEffect] savedSelections changed at:", new Date().toISOString());
-    console.log("[CircuitWorkoutOverview useEffect] savedSelections:", savedSelections?.length, "items");
-    console.log("[CircuitWorkoutOverview useEffect] circuitConfig loaded:", !!circuitConfig);
-    
     // Wait for both savedSelections AND circuitConfig to be loaded
     // This prevents the race condition where exercises render as regular rounds
     // before being re-rendered as stations rounds
     if (savedSelections && savedSelections.length > 0 && circuitConfig) {
-      console.log("[CircuitWorkoutOverview] Processing selections:", savedSelections.length);
-      console.log("[CircuitWorkoutOverview] Raw selections:", savedSelections);
-      console.log("[CircuitWorkoutOverview] First selection details:", savedSelections[0]);
-      
       // Group exercises by round (using groupName)
       const roundsMap = new Map<string, typeof savedSelections>();
       
       // Use all exercises without deduplication to allow duplicates in the same round
       const allExercises = savedSelections;
-      console.log("[CircuitWorkoutOverview] All exercises (no deduplication):", allExercises.length);
       
       // Group by round, excluding warm-up exercises
       allExercises.forEach((selection) => {
@@ -703,18 +587,6 @@ function CircuitWorkoutOverviewContent() {
       return [];
     }
 
-    console.log('[REPLACE_MODAL] Starting exercise filtering', {
-      totalAvailable: availableExercises.length,
-      selectedRound,
-      selectedExercise: selectedExercise?.exerciseName,
-      searchQuery,
-      sampleExercises: availableExercises.slice(0, 3).map(ex => ({
-        name: ex.name,
-        equipment: ex.equipment,
-        equipmentType: typeof ex.equipment,
-        equipmentIsArray: Array.isArray(ex.equipment)
-      }))
-    });
 
     // First filter by template type - only show exercises suitable for circuit
     let templateFiltered = availableExercises.filter((exercise) => {
@@ -726,46 +598,20 @@ function CircuitWorkoutOverviewContent() {
       return exercise.templateType.includes('circuit');
     });
 
-    console.log('[REPLACE_MODAL] After template filter (circuit only):', {
-      count: templateFiltered.length,
-      filtered: templateFiltered.slice(0, 5).map(e => ({ name: e.name, templateType: e.templateType }))
-    });
 
     // Filter based on regular round exercises
-    console.log('[REPLACE_MODAL] Filtering for REGULAR round exercises');
     // Exclude warmup_only exercises from regular rounds
-    const beforeCount = templateFiltered.length;
     templateFiltered = templateFiltered.filter((exercise: any) => {
       const hasWarmupOnlyFunction = exercise.functionTags?.includes('warmup_only');
-      if (hasWarmupOnlyFunction) {
-        console.log('[REPLACE_MODAL] Excluding warmup_only exercise:', exercise.name);
-      }
       return !hasWarmupOnlyFunction;
     });
-    console.log(`[REPLACE_MODAL] Excluded ${beforeCount - templateFiltered.length} warmup_only exercises`);
 
-    console.log('[REPLACE_MODAL] After warm-up filter:', {
-      count: templateFiltered.length,
-      isReplacingWarmup,
-      sampleExercises: templateFiltered.slice(0, 5).map(e => e.name)
-    });
 
     // Then filter by search query
     const searchFiltered = searchQuery.trim()
       ? filterExercisesBySearch(templateFiltered, searchQuery)
       : templateFiltered;
 
-    console.log('[REPLACE_MODAL] Final filtered exercises:', {
-      count: searchFiltered.length,
-      hasSearchQuery: !!searchQuery.trim(),
-      finalTemplateTypes: searchFiltered.reduce((acc, ex) => {
-        const types = ex.templateType || [];
-        types.forEach(type => {
-          acc[type] = (acc[type] || 0) + 1;
-        });
-        return acc;
-      }, {} as Record<string, number>)
-    });
 
     // Return all filtered exercises (allowing duplicates)
     return searchFiltered;
@@ -1078,13 +924,6 @@ function CircuitWorkoutOverviewContent() {
                                     </button>
                                     <button
                                       onClick={() => {
-                                        console.log('[Replace Button] Setting up inline edit for:', {
-                                          exerciseId: exercise.id,
-                                          exerciseName: exercise.exerciseName,
-                                          orderIndex: exercise.orderIndex,
-                                          stationIndex: exercise.stationIndex,
-                                          roundName: round.roundName,
-                                        });
                                         setEditingExerciseId(exercise.id);
                                         setInlineSearchQuery("");
                                         setInlineSelectedId(null);
@@ -1266,13 +1105,6 @@ function CircuitWorkoutOverviewContent() {
                                       size="sm"
                                       variant="outline"
                                       onClick={() => {
-                                        console.log('[Replace Button] Setting up inline edit for:', {
-                                          exerciseId: exercise.id,
-                                          exerciseName: exercise.exerciseName,
-                                          orderIndex: exercise.orderIndex,
-                                          stationIndex: exercise.stationIndex,
-                                          roundName: round.roundName,
-                                        });
                                         setEditingExerciseId(exercise.id);
                                         setInlineSearchQuery("");
                                         setInlineSelectedId(null);
@@ -1791,18 +1623,6 @@ function CircuitWorkoutOverviewContent() {
                       <button
                         onClick={() => {
                           if ((inlineSelectedId || inlineSearchQuery.trim()) && editingExercise && editingRound) {
-                            console.log('[Replace] Starting replace with:', {
-                              editingExercise: {
-                                id: editingExercise.id,
-                                exerciseName: editingExercise.exerciseName,
-                                orderIndex: editingExercise.orderIndex,
-                                stationIndex: editingExercise.stationIndex,
-                                roundName: editingRound.roundName,
-                              },
-                              isStation: editingExercise.stationIndex !== null && editingExercise.stationIndex !== undefined,
-                              newExerciseId: inlineSelectedId,
-                              customName: inlineSelectedId ? undefined : inlineSearchQuery.trim(),
-                            });
                             
                             // Use the utility function for cleaner logic
                             replaceExercise({
@@ -1845,21 +1665,10 @@ function CircuitWorkoutOverviewContent() {
                       if ((inlineSearchQuery || selectedCategory) && !inlineSelectedId) {
                     const isReplacingWarmup = editingRound?.roundName === 'Warm-up';
                     
-                    console.log('[INLINE_EDITING] Starting filtering:', {
-                      totalExercises: availableExercises.length,
-                      searchQuery: inlineSearchQuery,
-                      selectedCategory: selectedCategory,
-                      isReplacingWarmup: isReplacingWarmup,
-                      editingRound: editingRound?.roundName
-                    });
                     
                     let filtered = availableExercises.filter((ex: any) => {
                       // Template type filtering
                       if (ex.templateType && ex.templateType.length > 0 && !ex.templateType.includes('circuit')) {
-                        console.log('[INLINE_EDITING] Excluding non-circuit exercise:', {
-                          name: ex.name,
-                          templateType: ex.templateType
-                        });
                         return false;
                       }
                       
@@ -1870,21 +1679,11 @@ function CircuitWorkoutOverviewContent() {
                       }
                     });
                     
-                    console.log('[INLINE_EDITING] After template/warmup filtering:', {
-                      originalCount: availableExercises.length,
-                      filteredCount: filtered.length,
-                      removedCount: availableExercises.length - filtered.length
-                    });
                     
                     // If there's a search query, it takes priority - search all exercises
                     if (inlineSearchQuery) {
                       const beforeSearch = filtered.length;
                       filtered = filterExercisesBySearch(filtered, inlineSearchQuery);
-                      console.log('[INLINE_EDITING] After search filtering:', {
-                        query: inlineSearchQuery,
-                        beforeCount: beforeSearch,
-                        afterCount: filtered.length
-                      });
                     } else if (selectedCategory) {
                       // Only apply category filter if there's no search query
                       const beforeCategory = filtered.length;
@@ -1896,37 +1695,9 @@ function CircuitWorkoutOverviewContent() {
                       } else if (selectedCategory.type === 'movement') {
                         filtered = filtered.filter((ex: any) => ex.movementPattern === selectedCategory.value);
                       } else if (selectedCategory.type === 'equipment') {
-                        console.log('[DEBUG] Equipment filtering:', {
-                          selectedEquipment: selectedCategory.value,
-                          totalExercises: filtered.length,
-                          sampleExercises: filtered.slice(0, 5).map(ex => ({
-                            name: ex.name,
-                            equipment: ex.equipment,
-                            equipmentType: typeof ex.equipment,
-                            equipmentIsArray: Array.isArray(ex.equipment),
-                            equipmentLength: Array.isArray(ex.equipment) ? ex.equipment.length : 'N/A'
-                          }))
-                        });
                         
-                        // Log exercises that have any equipment data
-                        const exercisesWithEquipment = filtered.filter(ex => ex.equipment && (Array.isArray(ex.equipment) ? ex.equipment.length > 0 : true));
-                        console.log('[DEBUG] Exercises with equipment data:', {
-                          count: exercisesWithEquipment.length,
-                          sample: exercisesWithEquipment.slice(0, 3).map(ex => ({
-                            name: ex.name,
-                            equipment: ex.equipment
-                          }))
-                        });
                         
                         filtered = filtered.filter((ex: any) => {
-                          // Log each exercise's equipment data
-                          if (filtered.length <= 10) { // Only log first 10 to avoid spam
-                            console.log(`[DEBUG] Exercise "${ex.name}" equipment:`, {
-                              equipment: ex.equipment,
-                              type: typeof ex.equipment,
-                              isArray: Array.isArray(ex.equipment)
-                            });
-                          }
                           
                           // More robust equipment checking
                           if (!ex.equipment) return false;
@@ -1946,37 +1717,10 @@ function CircuitWorkoutOverviewContent() {
                           return false;
                         });
                         
-                        console.log('[DEBUG] Equipment filtering results:', {
-                          selectedEquipment: selectedCategory.value,
-                          filteredCount: filtered.length,
-                          filteredExercises: filtered.slice(0, 5).map(ex => ex.name)
-                        });
                       }
                       
-                      console.log('[INLINE_EDITING] After category filtering:', {
-                        categoryType: selectedCategory?.type,
-                        categoryValue: selectedCategory?.value,
-                        beforeCount: beforeCategory,
-                        afterCount: filtered.length
-                      });
                     }
                     
-                    console.log('[INLINE_EDITING] Final filtered results:', {
-                      finalCount: filtered.length,
-                      hasSearch: !!inlineSearchQuery,
-                      hasCategory: !!selectedCategory,
-                      templateTypes: filtered.reduce((acc, ex) => {
-                        const types = ex.templateType || [];
-                        types.forEach(type => {
-                          acc[type] = (acc[type] || 0) + 1;
-                        });
-                        return acc;
-                      }, {} as Record<string, number>),
-                      sampleExercises: filtered.slice(0, 3).map(ex => ({
-                        name: ex.name,
-                        templateType: ex.templateType
-                      }))
-                    });
                     
                     // Show results even if empty
                     return (
@@ -2656,14 +2400,6 @@ function CircuitWorkoutOverviewContent() {
                                 // Determine if we're adding to a station or to a round
                                 const isStationsRound = addExerciseRoundData?.roundType === 'stations_round';
                                 
-                                console.log('Add exercise:', {
-                                  sessionId: sessionId,
-                                  roundName: addExerciseRoundName,
-                                  targetStationIndex: addExerciseTargetStation,
-                                  newExerciseId: addExerciseSelectedId,
-                                  exercise: selectedExercise,
-                                  isStationsRound: isStationsRound
-                                });
                                 
                                 // Call the appropriate mutation based on round type
                                 if (sessionId && addExerciseRoundName) {
@@ -2709,21 +2445,11 @@ function CircuitWorkoutOverviewContent() {
                     else if ((addExerciseSearchQuery || addExerciseCategory) && !addExerciseSelectedId) {
                       let filtered = availableExercisesRef.current;
                       
-                      console.log('[ADD_EXERCISE_MODAL] Starting filtering:', {
-                        initialCount: filtered.length,
-                        searchQuery: addExerciseSearchQuery,
-                        category: addExerciseCategory,
-                        roundType: addExerciseRoundData?.roundType
-                      });
                       
                       // Apply template type filtering (same as inline editing)
                       filtered = filtered.filter((ex: any) => {
                         // Template type filtering - only circuit exercises
                         if (ex.templateType && ex.templateType.length > 0 && !ex.templateType.includes('circuit')) {
-                          console.log('[ADD_EXERCISE_MODAL] Excluding non-circuit exercise:', {
-                            name: ex.name,
-                            templateType: ex.templateType
-                          });
                           return false;
                         }
                         
@@ -2731,21 +2457,11 @@ function CircuitWorkoutOverviewContent() {
                         return !ex.functionTags?.includes('warmup_only');
                       });
                       
-                      console.log('[ADD_EXERCISE_MODAL] After template/warmup filtering:', {
-                        originalCount: availableExercisesRef.current.length,
-                        filteredCount: filtered.length,
-                        removedCount: availableExercisesRef.current.length - filtered.length
-                      });
                       
                       // If there's a search query, it takes priority
                       if (addExerciseSearchQuery) {
                         const beforeSearch = filtered.length;
                         filtered = filterExercisesBySearch(filtered, addExerciseSearchQuery);
-                        console.log('[ADD_EXERCISE_MODAL] After search filter:', {
-                          query: addExerciseSearchQuery,
-                          beforeCount: beforeSearch,
-                          afterCount: filtered.length
-                        });
                       } else if (addExerciseCategory) {
                         // Only apply category filter if there's no search query
                         if (addExerciseCategory.type === 'muscle') {
@@ -2772,22 +2488,6 @@ function CircuitWorkoutOverviewContent() {
                           });
                         }
                       }
-                      
-                      console.log('[ADD_EXERCISE_MODAL] Final filtered results:', {
-                        finalCount: filtered.length,
-                        templateTypes: filtered.reduce((acc, ex) => {
-                          const types = ex.templateType || [];
-                          types.forEach(type => {
-                            acc[type] = (acc[type] || 0) + 1;
-                          });
-                          return acc;
-                        }, {} as Record<string, number>),
-                        sampleExercises: filtered.slice(0, 3).map(ex => ({
-                          name: ex.name,
-                          templateType: ex.templateType,
-                          movementPattern: ex.movementPattern
-                        }))
-                      });
                       
                       // Show results even if empty
                       return (
@@ -3039,17 +2739,6 @@ function WarmupExercisesList({
       .filter((selection: any) => selection.groupName === "Warm-up")
       .sort((a: any, b: any) => a.orderIndex - b.orderIndex);
   }, [savedSelections]);
-  
-  console.log('[WarmupExercises] Component data:', { 
-    savedSelectionsCount: savedSelections?.length,
-    warmupExercisesCount: warmupExercises.length,
-    warmupExercises: warmupExercises.map(ex => ({
-      name: ex.exerciseName,
-      orderIndex: ex.orderIndex,
-      id: ex.id,
-      exerciseId: ex.exerciseId
-    })),
-  });
   
   if (isLoading) {
     return (
