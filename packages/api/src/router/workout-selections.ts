@@ -1301,4 +1301,169 @@ export const workoutSelectionsRouter = {
         };
       });
     }),
+
+  // Add exercise to end of a round (for circuit workouts)
+  addExerciseToRound: protectedProcedure
+    .input(
+      z.object({
+        sessionId: z.string(),
+        roundName: z.string(),
+        newExerciseId: z.string().uuid().nullable(), // null for custom exercises
+        customName: z.string().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const user = ctx.session.user;
+
+      console.log("[addExerciseToRound] Starting with input:", input);
+
+      // Import required schemas
+      const { TrainingSession, Workout } = await import("@acme/db/schema");
+
+      // Verify the session exists and belongs to the user's business
+      const session = await ctx.db.query.TrainingSession.findFirst({
+        where: and(
+          eq(TrainingSession.id, input.sessionId),
+          eq(TrainingSession.businessId, user.businessId),
+        ),
+      });
+
+      if (!session) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Training session not found",
+        });
+      }
+
+      // Use transaction for consistency
+      return await ctx.db.transaction(async (tx) => {
+        // Get all workouts for this session
+        const workouts = await tx
+          .select()
+          .from(Workout)
+          .where(
+            and(
+              eq(Workout.trainingSessionId, input.sessionId),
+              or(
+                eq(Workout.status, "draft"),
+                eq(Workout.status, "ready"),
+              ),
+            ),
+          );
+
+        if (workouts.length === 0) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "No workouts found for this session",
+          });
+        }
+
+        console.log("[addExerciseToRound] Found workouts:", {
+          count: workouts.length,
+          workouts: workouts.map(w => ({ 
+            id: w.id, 
+            status: w.status, 
+            userId: w.userId 
+          })),
+        });
+
+        const workoutIds = workouts.map((w) => w.id);
+        
+        // Get all exercises in the target round to find the next orderIndex
+        const allRoundExercises = await tx
+          .select()
+          .from(WorkoutExercise)
+          .where(
+            and(
+              sql`${WorkoutExercise.workoutId} IN (${sql.join(
+                workoutIds.map((id) => sql`${id}`),
+                sql`, `,
+              )})`,
+              eq(WorkoutExercise.groupName, input.roundName)
+            ),
+          );
+          
+        console.log("[addExerciseToRound] All exercises in round:", {
+          count: allRoundExercises.length,
+          exercises: allRoundExercises.map(ex => ({
+            id: ex.id,
+            workoutId: ex.workoutId,
+            groupName: ex.groupName,
+            orderIndex: ex.orderIndex,
+            stationIndex: ex.stationIndex,
+            exerciseId: ex.exerciseId,
+          })),
+        });
+
+        // Find the highest orderIndex in this round
+        const maxOrderIndex = allRoundExercises.length > 0 
+          ? Math.max(...allRoundExercises.map((ex) => ex.orderIndex || 0))
+          : -1;
+        const nextOrderIndex = maxOrderIndex + 1;
+
+        console.log("[addExerciseToRound] Order index calculation:", {
+          maxOrderIndex,
+          nextOrderIndex,
+        });
+
+        // Get exercise details if not custom
+        let exerciseName = input.customName || "Custom Exercise";
+        if (input.newExerciseId) {
+          const exercise = await tx.query.exercises.findFirst({
+            where: eq(exercises.id, input.newExerciseId),
+          });
+
+          if (!exercise) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: "Exercise not found",
+            });
+          }
+          exerciseName = exercise.name;
+        }
+
+        // Get template info from an existing exercise in this round (if any)
+        const templateExercise = allRoundExercises[0];
+        const template = templateExercise?.template || null;
+
+        console.log("[addExerciseToRound] Template info:", {
+          hasTemplate: !!template,
+          templateExerciseId: templateExercise?.id,
+        });
+
+        // Insert the new exercise for all workouts
+        const insertPromises = workoutIds.map((workoutId) =>
+          tx.insert(WorkoutExercise).values({
+            workoutId: workoutId,
+            exerciseId: input.newExerciseId,
+            orderIndex: nextOrderIndex, // Add at end of round
+            setsCompleted: 0,
+            groupName: input.roundName,
+            stationIndex: null, // Always null for regular round exercises
+            isShared: true, // Circuit exercises are shared
+            selectionSource: "manual_swap",
+            template: template,
+            custom_exercise: input.newExerciseId
+              ? null
+              : {
+                  customName: input.customName,
+                },
+          }),
+        );
+
+        await Promise.all(insertPromises);
+
+        console.log(
+          `[addExerciseToRound] Added exercise "${exerciseName}" to end of round "${input.roundName}" for ${workoutIds.length} workouts`,
+        );
+
+        return {
+          success: true,
+          affectedWorkouts: workoutIds.length,
+          newExerciseName: exerciseName,
+          roundName: input.roundName,
+          orderIndex: nextOrderIndex,
+        };
+      });
+    }),
 } satisfies TRPCRouterRecord;

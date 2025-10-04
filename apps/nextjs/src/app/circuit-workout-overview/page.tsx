@@ -209,6 +209,33 @@ function CircuitWorkoutOverviewContent() {
       alert("Failed to add exercise to station. Please try again.");
     },
   });
+
+  // Add exercise to round mutation (for circuit/amrap rounds)
+  const addExerciseToRoundMutation = useMutation({
+    ...trpc.workoutSelections.addExerciseToRound.mutationOptions(),
+    onSuccess: (data) => {
+      console.log("[addExerciseToRound] Success:", data);
+      
+      // Close modal
+      setShowAddExerciseModal(false);
+      setAddExerciseSearchQuery("");
+      setAddExerciseSelectedId(null);
+      setAddExerciseCategory(null);
+      setAddExerciseCategoryMode('choice');
+      setAddExerciseRoundData(null);
+      
+      // Invalidate queries to refresh data
+      queryClient.invalidateQueries({
+        queryKey: trpc.workoutSelections.getSelections.queryOptions({ 
+          sessionId: sessionId || "" 
+        }).queryKey,
+      });
+    },
+    onError: (error) => {
+      console.error("Failed to add exercise to round:", error);
+      alert("Failed to add exercise to round. Please try again.");
+    },
+  });
   
   const [roundsData, setRoundsData] = useState<RoundData[]>([]);
   const [hasExercises, setHasExercises] = useState(false);
@@ -1279,6 +1306,31 @@ function CircuitWorkoutOverviewContent() {
                         )}
                       </div>
                     )}
+                  </div>
+                )}
+                
+                {/* Add Exercise button for circuit and amrap rounds */}
+                {(round.roundType === 'circuit_round' || round.roundType === 'amrap_round') && (
+                  <div className="mt-4">
+                    <button
+                      onClick={() => {
+                        setAddExerciseRoundName(round.roundName);
+                        setAddExerciseRoundData(round);
+                        setShowAddExerciseModal(true);
+                        setAddExerciseSearchQuery("");
+                        setAddExerciseSelectedId(null);
+                        setAddExerciseCategory(null);
+                        setAddExerciseCategoryMode('choice');
+                      }}
+                      className="w-full p-3 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500 transition-colors bg-gray-50/50 dark:bg-gray-700/30 hover:bg-gray-100/50 dark:hover:bg-gray-600/30"
+                    >
+                      <div className="flex items-center justify-center gap-2 text-gray-600 dark:text-gray-400">
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                        </svg>
+                        <span className="text-sm font-medium">Add Exercise</span>
+                      </div>
+                    </button>
                   </div>
                 )}
                 </div>
@@ -2368,13 +2420,19 @@ function CircuitWorkoutOverviewContent() {
             <div className="flex-1 overflow-hidden p-6 flex flex-col">
               <div className="flex-1">
                 <div className="space-y-4">
-                  {/* Header showing target station */}
+                  {/* Header showing target */}
                   <div className="mb-4">
                     <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                      Add Exercise to Station {addExerciseTargetStation + 1}
+                      {addExerciseRoundData?.roundType === 'stations_round' 
+                        ? `Add Exercise to Station ${addExerciseTargetStation + 1}`
+                        : `Add Exercise to ${addExerciseRoundName}`
+                      }
                     </h2>
                     <p className="text-sm text-gray-600 dark:text-gray-400">
-                      Search and select an exercise to add to this station
+                      {addExerciseRoundData?.roundType === 'stations_round'
+                        ? 'Search and select an exercise to add to this station'
+                        : 'Search and select an exercise to add to the end of this round'
+                      }
                     </p>
                   </div>
                   
@@ -2466,31 +2524,53 @@ function CircuitWorkoutOverviewContent() {
                               onClick={() => {
                                 const selectedExercise = availableExercisesRef.current.find((ex: any) => ex.id === addExerciseSelectedId);
                                 
-                                console.log('Add exercise to station:', {
+                                // Determine if we're adding to a station or to a round
+                                const isStationsRound = addExerciseRoundData?.roundType === 'stations_round';
+                                
+                                console.log('Add exercise:', {
                                   sessionId: sessionId,
                                   roundName: addExerciseRoundName,
                                   targetStationIndex: addExerciseTargetStation,
                                   newExerciseId: addExerciseSelectedId,
-                                  exercise: selectedExercise
+                                  exercise: selectedExercise,
+                                  isStationsRound: isStationsRound
                                 });
                                 
-                                // Call the mutation
+                                // Call the appropriate mutation based on round type
                                 if (sessionId && addExerciseRoundName) {
-                                  addExerciseToStationMutation.mutate({
-                                    sessionId: sessionId,
-                                    roundName: addExerciseRoundName,
-                                    targetStationIndex: addExerciseTargetStation,
-                                    newExerciseId: addExerciseSelectedId,
-                                    customName: undefined
-                                  });
+                                  if (isStationsRound) {
+                                    // Add to specific station
+                                    addExerciseToStationMutation.mutate({
+                                      sessionId: sessionId,
+                                      roundName: addExerciseRoundName,
+                                      targetStationIndex: addExerciseTargetStation,
+                                      newExerciseId: addExerciseSelectedId,
+                                      customName: undefined
+                                    });
+                                  } else {
+                                    // Add to end of round
+                                    addExerciseToRoundMutation.mutate({
+                                      sessionId: sessionId,
+                                      roundName: addExerciseRoundName,
+                                      newExerciseId: addExerciseSelectedId,
+                                      customName: undefined
+                                    });
+                                  }
                                   
                                   // Close modal on success - this will be handled by the mutation onSuccess
                                 }
                               }}
-                              disabled={addExerciseToStationMutation.isPending}
+                              disabled={addExerciseToStationMutation.isPending || addExerciseToRoundMutation.isPending}
                               className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors disabled:opacity-50 font-medium"
                             >
-                              {addExerciseToStationMutation.isPending ? 'Adding...' : `Add to Station ${addExerciseTargetStation + 1}`}
+                              {(() => {
+                                const isStationsRound = addExerciseRoundData?.roundType === 'stations_round';
+                                const isLoading = addExerciseToStationMutation.isPending || addExerciseToRoundMutation.isPending;
+                                
+                                if (isLoading) return 'Adding...';
+                                if (isStationsRound) return `Add to Station ${addExerciseTargetStation + 1}`;
+                                return 'Add to Round';
+                              })()}
                             </button>
                           </div>
                         </div>
