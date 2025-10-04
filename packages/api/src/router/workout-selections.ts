@@ -1246,9 +1246,15 @@ export const workoutSelectionsRouter = {
             workoutIds.map((id) => sql`${id}`),
             sql`, `,
           )})`,
-          eq(WorkoutExercise.groupName, exerciseToDelete.groupName),
           eq(WorkoutExercise.orderIndex, exerciseToDelete.orderIndex),
         ];
+
+        // Handle groupName matching (null vs specific value)
+        if (exerciseToDelete.groupName !== null) {
+          deleteConditions.push(eq(WorkoutExercise.groupName, exerciseToDelete.groupName));
+        } else {
+          deleteConditions.push(isNull(WorkoutExercise.groupName));
+        }
 
         // Handle stationIndex matching (null vs specific value)
         if (exerciseToDelete.stationIndex !== null) {
@@ -1270,20 +1276,26 @@ export const workoutSelectionsRouter = {
         // 4. Close gaps within station (stationIndex reordering)
         // Only if we deleted a secondary exercise (stationIndex !== null)
         if (exerciseToDelete.stationIndex !== null) {
+          const reorderConditions = [
+            sql`${WorkoutExercise.workoutId} IN (${sql.join(
+              workoutIds.map((id) => sql`${id}`),
+              sql`, `,
+            )})`,
+            eq(WorkoutExercise.orderIndex, exerciseToDelete.orderIndex),
+            sql`${WorkoutExercise.stationIndex} > ${exerciseToDelete.stationIndex}`,
+          ];
+
+          // Handle groupName matching (null vs specific value) for reordering
+          if (exerciseToDelete.groupName !== null) {
+            reorderConditions.push(eq(WorkoutExercise.groupName, exerciseToDelete.groupName));
+          } else {
+            reorderConditions.push(isNull(WorkoutExercise.groupName));
+          }
+
           const updateResult = await tx
             .update(WorkoutExercise)
             .set({ stationIndex: sql`${WorkoutExercise.stationIndex} - 1` })
-            .where(
-              and(
-                sql`${WorkoutExercise.workoutId} IN (${sql.join(
-                  workoutIds.map((id) => sql`${id}`),
-                  sql`, `,
-                )})`,
-                eq(WorkoutExercise.groupName, exerciseToDelete.groupName),
-                eq(WorkoutExercise.orderIndex, exerciseToDelete.orderIndex),
-                sql`${WorkoutExercise.stationIndex} > ${exerciseToDelete.stationIndex}`,
-              ),
-            )
+            .where(and(...reorderConditions))
             .returning();
 
           console.log("[deleteCircuitExercise] Reordered station exercises:", {
