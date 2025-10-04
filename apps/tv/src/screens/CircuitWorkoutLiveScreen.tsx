@@ -199,6 +199,7 @@ export function CircuitWorkoutLiveScreen() {
       return {
         workDuration: 45,
         restDuration: 15,
+        restBetweenSets: 30,
         roundType: 'circuit_round' as const
       };
     }
@@ -210,6 +211,7 @@ export function CircuitWorkoutLiveScreen() {
       return {
         workDuration,
         restDuration,
+        restBetweenSets: 30,
         roundType: 'circuit_round' as const
       };
     }
@@ -223,6 +225,7 @@ export function CircuitWorkoutLiveScreen() {
       return {
         workDuration,
         restDuration,
+        restBetweenSets: 30,
         roundType: 'circuit_round' as const
       };
     }
@@ -233,6 +236,7 @@ export function CircuitWorkoutLiveScreen() {
       return {
         workDuration: template.workDuration ?? workDuration,
         restDuration: template.restDuration ?? restDuration,
+        restBetweenSets: (template as any).restBetweenSets ?? 30, // Default 30s for set breaks
         roundType: 'circuit_round' as const,
         repeatTimes: (template as any).repeatTimes || 1
       };
@@ -818,8 +822,11 @@ export function CircuitWorkoutLiveScreen() {
             
             // Move to rest screen for set break
             setCurrentScreen('rest');
-            const { restDuration } = roundTiming;
-            startTimer(restDuration);
+            const { restDuration, restBetweenSets } = roundTiming;
+            
+            // Use restBetweenSets for circuit set breaks, restDuration for stations (for now)
+            const setBreakDuration = isCircuitRound && restBetweenSets ? restBetweenSets : restDuration;
+            startTimer(setBreakDuration);
             
             // Keep the same music playing for the next set
             return;
@@ -1522,15 +1529,27 @@ export function CircuitWorkoutLiveScreen() {
                   Rest
                 </Text>
                 
-                {/* Next Exercise - Tertiary */}
-                <Text style={{ 
-                  fontSize: 20, 
-                  fontWeight: '500',
-                  color: TOKENS.color.muted,
-                  opacity: 0.7
-                }}>
-                  Next up: {currentRound?.exercises[currentExerciseIndex + 1]?.exerciseName || 'Complete'}
-                </Text>
+                {/* Next Exercise - Tertiary (hide during set breaks) */}
+                {(() => {
+                  const isLastExercise = currentExerciseIndex === currentRound.exercises.length - 1;
+                  const isSetBreak = isLastExercise && currentSetNumber < (getRoundTiming(currentRoundIndex).repeatTimes || 1);
+                  
+                  // Don't show "Next up" during set breaks
+                  if (isSetBreak) {
+                    return null;
+                  }
+                  
+                  return (
+                    <Text style={{ 
+                      fontSize: 20, 
+                      fontWeight: '500',
+                      color: TOKENS.color.muted,
+                      opacity: 0.7
+                    }}>
+                      Next up: {currentRound?.exercises[currentExerciseIndex + 1]?.exerciseName || 'Complete'}
+                    </Text>
+                  );
+                })()}
                 
               </View>
             )
