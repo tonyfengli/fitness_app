@@ -188,6 +188,15 @@ function CircuitWorkoutOverviewContent() {
     onSuccess: (data) => {
       console.log("[addExerciseToStation] Success:", data);
       
+      // Close modal
+      setShowAddExerciseModal(false);
+      setAddExerciseSearchQuery("");
+      setAddExerciseSelectedId(null);
+      setAddExerciseCategory(null);
+      setAddExerciseCategoryMode('choice');
+      setAddExerciseTargetStation(0);
+      setAddExerciseRoundData(null);
+      
       // Invalidate queries to refresh data
       queryClient.invalidateQueries({
         queryKey: trpc.workoutSelections.getSelections.queryOptions({ 
@@ -1033,6 +1042,30 @@ function CircuitWorkoutOverviewContent() {
                                 </div>
                               ))}
                             </div>
+                            
+                            {/* Add Exercise button for this station */}
+                            <div className="px-6 py-3 border-t border-gray-100 dark:border-gray-700/50">
+                              <button
+                                onClick={() => {
+                                  setAddExerciseRoundName(round.roundName);
+                                  setAddExerciseRoundData(round);
+                                  setAddExerciseTargetStation(idx); // Set to this specific station
+                                  setShowAddExerciseModal(true);
+                                  setAddExerciseSearchQuery("");
+                                  setAddExerciseSelectedId(null);
+                                  setAddExerciseCategory(null);
+                                  setAddExerciseCategoryMode('choice');
+                                }}
+                                className="w-full p-3 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500 transition-colors bg-gray-50/50 dark:bg-gray-700/30 hover:bg-gray-100/50 dark:hover:bg-gray-600/30"
+                              >
+                                <div className="flex items-center justify-center gap-2 text-gray-600 dark:text-gray-400">
+                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                                  </svg>
+                                  <span className="text-sm font-medium">Add to Station {idx + 1}</span>
+                                </div>
+                              </button>
+                            </div>
                           </div>
                         ) : (
                           // Original single exercise layout for circuit rounds
@@ -1158,31 +1191,6 @@ function CircuitWorkoutOverviewContent() {
                   
                 </div>
                 
-                {/* Add Exercise button for stations rounds only */}
-                {round.roundType === 'stations_round' && (
-                  <div className="mt-3">
-                    <button
-                      onClick={() => {
-                        setAddExerciseRoundName(round.roundName);
-                        setAddExerciseRoundData(round);
-                        setAddExerciseTargetStation(0); // Default to first station
-                        setShowAddExerciseModal(true);
-                        setAddExerciseSearchQuery("");
-                        setAddExerciseSelectedId(null);
-                        setAddExerciseCategory(null);
-                        setAddExerciseCategoryMode('choice');
-                      }}
-                      className="w-full p-4 rounded-xl border-2 border-dashed border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500 transition-colors bg-gray-50/50 dark:bg-gray-700/30 hover:bg-gray-100/50 dark:hover:bg-gray-600/30"
-                    >
-                      <div className="flex items-center justify-center gap-2 text-gray-600 dark:text-gray-400">
-                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                        </svg>
-                        <span className="font-medium">Add Exercise</span>
-                      </div>
-                    </button>
-                  </div>
-                )}
                 
                 {/* Spotify Music Section - Expandable */}
                 {roundMusic && (
@@ -2360,6 +2368,16 @@ function CircuitWorkoutOverviewContent() {
             <div className="flex-1 overflow-hidden p-6 flex flex-col">
               <div className="flex-1">
                 <div className="space-y-4">
+                  {/* Header showing target station */}
+                  <div className="mb-4">
+                    <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                      Add Exercise to Station {addExerciseTargetStation + 1}
+                    </h2>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      Search and select an exercise to add to this station
+                    </p>
+                  </div>
+                  
                   {/* Search input row */}
                   <div>
                     <div className="flex items-center gap-4">
@@ -2398,46 +2416,6 @@ function CircuitWorkoutOverviewContent() {
                     </div>
                   </div>
                   
-                  {/* Add button - only show when exercise is selected */}
-                  {addExerciseSelectedId && (
-                    <div className="ml-14 mt-3">
-                      <button
-                        onClick={() => {
-                          const selectedExercise = availableExercisesRef.current.find((ex: any) => ex.id === addExerciseSelectedId);
-                          
-                          console.log('Add exercise to station:', {
-                            sessionId: sessionId,
-                            roundName: addExerciseRoundName,
-                            targetStationIndex: addExerciseTargetStation,
-                            newExerciseId: addExerciseSelectedId,
-                            exercise: selectedExercise
-                          });
-                          
-                          // Call the mutation
-                          if (sessionId && addExerciseRoundName) {
-                            addExerciseToStationMutation.mutate({
-                              sessionId: sessionId,
-                              roundName: addExerciseRoundName,
-                              targetStationIndex: addExerciseTargetStation,
-                              newExerciseId: addExerciseSelectedId,
-                              customName: undefined
-                            });
-                          }
-                          
-                          setShowAddExerciseModal(false);
-                          setAddExerciseSearchQuery("");
-                          setAddExerciseSelectedId(null);
-                          setAddExerciseCategory(null);
-                          setAddExerciseCategoryMode('choice');
-                          setAddExerciseTargetStation(0);
-                          setAddExerciseRoundData(null);
-                        }}
-                        className="h-12 px-10 text-base font-semibold rounded-lg transition-all focus:outline-none focus:ring-0 bg-green-600 text-white hover:bg-green-700 shadow-md"
-                      >
-                        Add Exercise
-                      </button>
-                    </div>
-                  )}
                 </div>
                 
                 {/* Dynamic content area */}
@@ -2452,7 +2430,7 @@ function CircuitWorkoutOverviewContent() {
                       );
                     }
                     
-                    // If exercise is selected, show station selector
+                    // If exercise is selected, show confirmation and add button
                     if (addExerciseSelectedId) {
                       const selectedExercise = availableExercisesRef.current.find((ex: any) => ex.id === addExerciseSelectedId);
                       return (
@@ -2469,47 +2447,52 @@ function CircuitWorkoutOverviewContent() {
                               </span>
                             </div>
                             <p className="text-sm text-gray-600 dark:text-gray-400">
-                              Now select which station to add this exercise to:
+                              Ready to add this exercise to Station {addExerciseTargetStation + 1}
                             </p>
                           </div>
                           
-                          {/* Station selector */}
-                          {addExerciseRoundData && (
-                            <div>
-                              <div className="flex gap-2 overflow-x-auto pb-2">
-                                {addExerciseRoundData.exercises.map((exercise, idx) => (
-                                  <button
-                                    key={exercise.id}
-                                    onClick={() => setAddExerciseTargetStation(idx)}
-                                    className={`p-3 rounded-lg border-2 transition-all text-left flex-shrink-0 ${
-                                      addExerciseTargetStation === idx
-                                        ? 'border-green-500 bg-green-50 dark:bg-green-900/20'
-                                        : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 hover:border-gray-400 dark:hover:border-gray-500'
-                                    }`}
-                                    style={{ minWidth: '160px' }}
-                                  >
-                                    <div className="flex items-center gap-3">
-                                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 ${
-                                        addExerciseTargetStation === idx
-                                          ? 'bg-green-500 text-white'
-                                          : 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300'
-                                      }`}>
-                                        {idx + 1}
-                                      </div>
-                                      <div className="flex-1 min-w-0">
-                                        <div className="font-medium text-sm text-gray-900 dark:text-gray-100">
-                                          Station {idx + 1}
-                                        </div>
-                                        <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                                          {exercise.exerciseName}
-                                        </div>
-                                      </div>
-                                    </div>
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
-                          )}
+                          {/* Add Exercise Button */}
+                          <div className="flex gap-3">
+                            <button
+                              onClick={() => {
+                                setAddExerciseSelectedId(null);
+                                setAddExerciseSearchQuery("");
+                              }}
+                              className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                            >
+                              Back
+                            </button>
+                            <button
+                              onClick={() => {
+                                const selectedExercise = availableExercisesRef.current.find((ex: any) => ex.id === addExerciseSelectedId);
+                                
+                                console.log('Add exercise to station:', {
+                                  sessionId: sessionId,
+                                  roundName: addExerciseRoundName,
+                                  targetStationIndex: addExerciseTargetStation,
+                                  newExerciseId: addExerciseSelectedId,
+                                  exercise: selectedExercise
+                                });
+                                
+                                // Call the mutation
+                                if (sessionId && addExerciseRoundName) {
+                                  addExerciseToStationMutation.mutate({
+                                    sessionId: sessionId,
+                                    roundName: addExerciseRoundName,
+                                    targetStationIndex: addExerciseTargetStation,
+                                    newExerciseId: addExerciseSelectedId,
+                                    customName: undefined
+                                  });
+                                  
+                                  // Close modal on success - this will be handled by the mutation onSuccess
+                                }
+                              }}
+                              disabled={addExerciseToStationMutation.isPending}
+                              className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors disabled:opacity-50 font-medium"
+                            >
+                              {addExerciseToStationMutation.isPending ? 'Adding...' : `Add to Station ${addExerciseTargetStation + 1}`}
+                            </button>
+                          </div>
                         </div>
                       );
                     }
