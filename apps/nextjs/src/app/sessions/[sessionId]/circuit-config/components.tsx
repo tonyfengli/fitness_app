@@ -375,7 +375,7 @@ export function PerRoundConfigStep({
     onRoundTemplatesChange(newRoundTemplates);
   };
 
-  const handleTimingChange = (roundNumber: number, field: 'workDuration' | 'restDuration' | 'totalDuration' | 'repeatTimes', value: number) => {
+  const handleTimingChange = (roundNumber: number, field: 'workDuration' | 'restDuration' | 'totalDuration' | 'repeatTimes' | 'restBetweenSets', value: number) => {
     const newRoundTemplates = normalizedTemplates.map(rt => {
       if (rt.roundNumber === roundNumber) {
         return {
@@ -394,9 +394,10 @@ export function PerRoundConfigStep({
   // Sort by round number
   const sortedRounds = [...normalizedTemplates].sort((a, b) => a.roundNumber - b.roundNumber);
 
-  const exerciseOptions = [2, 3, 4, 5, 6, 7];
+  const exerciseOptions = [2, 3, 4, 5, 6, 7, 8, 9, 10];
   const workOptions = [20, 30, 40, 45, 60, 90, 120, 150, 180, 210, 240];
   const restOptions = [0, 10, 15, 20, 30];
+  const setRestOptions = [15, 30, 45, 60, 90, 120]; // Rest between sets/repeats
   const amrapOptions = [120, 180, 240, 300, 360]; // 2-6 minutes
   
   // Recommended values based on fitness science
@@ -460,7 +461,7 @@ export function PerRoundConfigStep({
                 <span className="text-xs font-medium text-gray-600 dark:text-white">
                   {isStations ? 'STATIONS' : 'EXERCISES'}
                 </span>
-                <div className="grid grid-cols-6 gap-1">
+                <div className="grid grid-cols-5 gap-1">
                   {exerciseOptions.map((option) => {
                     const isSelected = round.template.exercisesPerRound === option;
                     const isRecommended = option === recommendedExercises;
@@ -578,6 +579,36 @@ export function PerRoundConfigStep({
                             >
                               <span className={cn(isSelected && "font-bold")}>
                                 {option}x
+                              </span>
+                            </Button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Rest Between Sets - Only show if repeatTimes > 1 */}
+                  {(isCircuit || isStations) && ((round.template as any).repeatTimes || 1) > 1 && (
+                    <div className="space-y-2">
+                      <span className="text-xs font-medium text-gray-600 dark:text-white">REST BETWEEN SETS</span>
+                      <div className="grid grid-cols-6 gap-1">
+                        {setRestOptions.map((option) => {
+                          const isSelected = (round.template as any).restBetweenSets === option || (!(round.template as any).restBetweenSets && option === 30);
+                          return (
+                            <Button
+                              key={option}
+                              variant={isSelected ? "primary" : "outline"}
+                              className={cn(
+                                "relative h-9 min-w-0 text-xs transition-all",
+                                isSelected && "ring-2 ring-offset-1 ring-primary",
+                                !isSelected && "dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:hover:bg-gray-600"
+                              )}
+                              onClick={() => handleTimingChange(round.roundNumber, 'restBetweenSets', option)}
+                              disabled={isSaving}
+                              size="sm"
+                            >
+                              <span className={cn(isSelected && "font-bold")}>
+                                {option}s
                               </span>
                             </Button>
                           );
@@ -869,10 +900,16 @@ export function ReviewStep({ config, repeatRounds }: ReviewStepProps) {
                         <span className="font-medium">{(rt.template as any).restDuration || 15}s</span>
                       </div>
                       {((rt.template as any).repeatTimes || 1) > 1 && (
-                        <div className="flex justify-between text-gray-600 dark:text-gray-300">
-                          <span>Sets</span>
-                          <span className="font-medium">{(rt.template as any).repeatTimes}x</span>
-                        </div>
+                        <>
+                          <div className="flex justify-between text-gray-600 dark:text-gray-300">
+                            <span>Sets</span>
+                            <span className="font-medium">{(rt.template as any).repeatTimes}x</span>
+                          </div>
+                          <div className="flex justify-between text-gray-600 dark:text-gray-300">
+                            <span>Rest between sets</span>
+                            <span className="font-medium">{(rt.template as any).restBetweenSets || 30}s</span>
+                          </div>
+                        </>
                       )}
                     </>
                   )}

@@ -3,7 +3,7 @@ import { z } from "zod/v4";
 // Define validation limits locally to avoid circular dependencies
 const CIRCUIT_CONFIG_LIMITS = {
   rounds: { min: 1, max: 10 },
-  exercisesPerRound: { min: 2, max: 7 },
+  exercisesPerRound: { min: 2, max: 10 },
   workDuration: { min: 10, max: 300 },      // 10 seconds to 5 minutes
   restDuration: { min: 5, max: 120 },       // 5 seconds to 2 minutes  
   restBetweenRounds: { min: 10, max: 300 }  // 10 seconds to 5 minutes
@@ -20,6 +20,7 @@ export const CircuitRoundTemplateSchema = z.object({
   workDuration: z.number().int().min(CIRCUIT_CONFIG_LIMITS.workDuration.min).max(CIRCUIT_CONFIG_LIMITS.workDuration.max),
   restDuration: z.number().int().min(0).max(CIRCUIT_CONFIG_LIMITS.restDuration.max),
   repeatTimes: z.number().int().min(1).max(5).default(1),
+  restBetweenSets: z.number().int().min(5).max(CIRCUIT_CONFIG_LIMITS.restBetweenRounds.max).optional(),
 });
 
 export const StationsRoundTemplateSchema = z.object({
@@ -28,6 +29,7 @@ export const StationsRoundTemplateSchema = z.object({
   workDuration: z.number().int().min(CIRCUIT_CONFIG_LIMITS.workDuration.min).max(CIRCUIT_CONFIG_LIMITS.workDuration.max),
   restDuration: z.number().int().min(CIRCUIT_CONFIG_LIMITS.restDuration.min).max(CIRCUIT_CONFIG_LIMITS.restDuration.max),
   repeatTimes: z.number().int().min(1).max(5).default(1),
+  restBetweenSets: z.number().int().min(5).max(CIRCUIT_CONFIG_LIMITS.restBetweenRounds.max).optional(),
 });
 
 export const AMRAPRoundTemplateSchema = z.object({

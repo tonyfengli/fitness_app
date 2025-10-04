@@ -15,6 +15,7 @@ export interface CircuitRoundTemplate extends BaseRoundTemplate {
   workDuration: number;        // Work duration in seconds
   restDuration: number;        // Rest duration between exercises in seconds
   repeatTimes?: number;        // Number of times to repeat the round (default: 1)
+  restBetweenSets?: number;    // Rest duration between sets/repeats (only when repeatTimes > 1)
 }
 
 // Stations round - work at each station for a set duration
@@ -23,6 +24,7 @@ export interface StationsRoundTemplate extends BaseRoundTemplate {
   workDuration: number;        // Work duration in seconds
   restDuration: number;        // Rest duration between exercises in seconds
   repeatTimes?: number;        // Number of times to repeat the round (default: 1)
+  restBetweenSets?: number;    // Rest duration between sets/repeats (only when repeatTimes > 1)
 }
 
 // AMRAP round - As Many Rounds As Possible
