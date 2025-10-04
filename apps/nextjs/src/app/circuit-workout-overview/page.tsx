@@ -240,7 +240,7 @@ function CircuitWorkoutOverviewContent() {
   const [showMirrorConfirm, setShowMirrorConfirm] = useState(false);
   const [mirrorRoundName, setMirrorRoundName] = useState("");
   const [pendingMirrorSwap, setPendingMirrorSwap] = useState<any>(null);
-  
+
   // Sets configuration modal state
   const [showSetsModal, setShowSetsModal] = useState(false);
   const [selectedExerciseForSets, setSelectedExerciseForSets] = useState<{
@@ -250,6 +250,9 @@ function CircuitWorkoutOverviewContent() {
     roundName: string;
   } | null>(null);
   const [repsValue, setRepsValue] = useState(0);
+  
+  // Modal view state - 'configure' or 'delete'
+  const [setsModalView, setSetsModalView] = useState<'configure' | 'delete'>('configure');
 
   // Set up the reorder mutation for circuits
   const reorderExerciseMutation = useMutation({
@@ -361,6 +364,30 @@ function CircuitWorkoutOverviewContent() {
     onError: (error) => {
       console.error("Failed to swap specific exercise:", error);
       alert("Failed to swap exercise. Please try again.");
+    },
+  });
+
+  // Set up the delete mutation for circuits
+  const deleteCircuitExerciseMutation = useMutation({
+    ...trpc.workoutSelections.deleteCircuitExercise.mutationOptions(),
+    onSuccess: (data) => {
+      console.log("[deleteCircuitExerciseMutation] Success! Response:", data);
+      
+      // Close modal
+      setShowSetsModal(false);
+      setSelectedExerciseForSets(null);
+      setSetsModalView('configure');
+
+      // Invalidate queries to refresh data
+      queryClient.invalidateQueries({
+        queryKey: trpc.workoutSelections.getSelections.queryOptions({ 
+          sessionId: sessionId || "" 
+        }).queryKey,
+      });
+    },
+    onError: (error) => {
+      console.error("Failed to delete exercise:", error);
+      alert("Failed to delete exercise. Please try again.");
     },
   });
 
@@ -925,6 +952,7 @@ function CircuitWorkoutOverviewContent() {
                                           roundName: round.roundName,
                                         });
                                         setRepsValue(exercise.repsPlanned || 0);
+                                        setSetsModalView('configure');
                                         setShowSetsModal(true);
                                       }}
                                       className="p-2 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-all"
@@ -1086,6 +1114,7 @@ function CircuitWorkoutOverviewContent() {
                                           roundName: round.roundName,
                                         });
                                         setRepsValue(exercise.repsPlanned || 0);
+                                        setSetsModalView('configure');
                                         setShowSetsModal(true);
                                       }}
                                       className="h-8 w-10 flex items-center justify-center border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors focus:outline-none focus:ring-0"
@@ -2137,99 +2166,171 @@ function CircuitWorkoutOverviewContent() {
             onClick={() => {
               setShowSetsModal(false);
               setSelectedExerciseForSets(null);
+              setSetsModalView('configure');
             }}
           />
 
           {/* Modal */}
           <div className="fixed inset-x-4 top-1/2 z-50 mx-auto max-w-lg -translate-y-1/2">
             <Card className="p-6 shadow-2xl border-2 bg-white dark:bg-gray-800 dark:border-gray-700">
-              <div className="space-y-6">
-                {/* Header */}
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">
-                      Configure Exercise
-                    </h2>
-                    <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                      {selectedExerciseForSets.exerciseName}
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => {
-                      setShowSetsModal(false);
-                      setSelectedExerciseForSets(null);
-                    }}
-                    className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors focus:outline-none focus:ring-0"
-                  >
-                    <XIcon className="w-5 h-5 text-gray-500 dark:text-gray-400" />
-                  </button>
-                </div>
-
-                {/* Sets Configuration */}
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Number of Reps
-                    </label>
-                    <div className="flex items-center gap-3">
-                      <button
-                        className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg border border-gray-300 dark:border-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                        onClick={() => setRepsValue(Math.max(0, repsValue - 1))}
-                        disabled={repsValue <= 0}
-                      >
-                        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2">
-                          <path d="M13 10H7" />
-                        </svg>
-                      </button>
-                      <input
-                        type="number"
-                        value={repsValue}
-                        onChange={(e) => {
-                          const value = e.target.value === '' ? 0 : parseInt(e.target.value) || 0;
-                          setRepsValue(Math.max(0, Math.min(99, value))); // Limit between 0-99
-                        }}
-                        onFocus={(e) => e.target.select()} // Select all text on focus
-                        className="w-20 text-center text-lg font-medium border border-gray-300 dark:border-gray-600 rounded-lg py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                      />
-                      <button
-                        className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg border border-gray-300 dark:border-gray-600 transition-colors"
-                        onClick={() => setRepsValue(Math.min(99, repsValue + 1))}
-                      >
-                        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2">
-                          <path d="M10 7v6M7 10h6" />
-                        </svg>
-                      </button>
+              <div className="space-y-6 transition-all duration-200 ease-in-out">
+                {setsModalView === 'configure' ? (
+                  <>
+                    {/* Configure Exercise Header */}
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">
+                          Configure Exercise
+                        </h2>
+                        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                          {selectedExerciseForSets.exerciseName}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        {/* Delete button */}
+                        <button
+                          onClick={() => setSetsModalView('delete')}
+                          disabled={deleteCircuitExerciseMutation.isPending}
+                          className="p-2 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors focus:outline-none focus:ring-0 disabled:opacity-50"
+                          title="Delete exercise"
+                        >
+                          <svg className="w-5 h-5 text-red-500 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                        {/* Close button */}
+                        <button
+                          onClick={() => {
+                            setShowSetsModal(false);
+                            setSelectedExerciseForSets(null);
+                            setSetsModalView('configure');
+                          }}
+                          className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors focus:outline-none focus:ring-0"
+                          title="Close"
+                        >
+                          <XIcon className="w-5 h-5 text-gray-500 dark:text-gray-400" />
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                </div>
 
-                {/* Footer */}
-                <div className="flex gap-3 pt-4 border-t dark:border-gray-700">
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setShowSetsModal(false);
-                      setSelectedExerciseForSets(null);
-                    }}
-                    className="flex-1"
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    onClick={() => {
-                      if (selectedExerciseForSets) {
-                        updateRepsPlannedMutation.mutate({
-                          exerciseId: selectedExerciseForSets.id,
-                          repsPlanned: repsValue > 0 ? repsValue : null,
-                        });
-                      }
-                    }}
-                    className="flex-1 bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
-                    disabled={updateRepsPlannedMutation.isPending}
-                  >
-                    {updateRepsPlannedMutation.isPending ? 'Saving...' : 'Save Changes'}
-                  </Button>
-                </div>
+                    {/* Sets Configuration */}
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          Number of Reps
+                        </label>
+                        <div className="flex items-center gap-3">
+                          <button
+                            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg border border-gray-300 dark:border-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            onClick={() => setRepsValue(Math.max(0, repsValue - 1))}
+                            disabled={repsValue <= 0}
+                          >
+                            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M13 10H7" />
+                            </svg>
+                          </button>
+                          <input
+                            type="number"
+                            value={repsValue}
+                            onChange={(e) => {
+                              const value = e.target.value === '' ? 0 : parseInt(e.target.value) || 0;
+                              setRepsValue(Math.max(0, Math.min(99, value))); // Limit between 0-99
+                            }}
+                            onFocus={(e) => e.target.select()} // Select all text on focus
+                            className="w-20 text-center text-lg font-medium border border-gray-300 dark:border-gray-600 rounded-lg py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                          />
+                          <button
+                            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg border border-gray-300 dark:border-gray-600 transition-colors"
+                            onClick={() => setRepsValue(Math.min(99, repsValue + 1))}
+                          >
+                            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M10 7v6M7 10h6" />
+                            </svg>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Footer */}
+                    <div className="flex gap-3 pt-4 border-t dark:border-gray-700">
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          setShowSetsModal(false);
+                          setSelectedExerciseForSets(null);
+                          setSetsModalView('configure');
+                        }}
+                        className="flex-1"
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        onClick={() => {
+                          if (selectedExerciseForSets) {
+                            updateRepsPlannedMutation.mutate({
+                              exerciseId: selectedExerciseForSets.id,
+                              repsPlanned: repsValue > 0 ? repsValue : null,
+                            });
+                          }
+                        }}
+                        className="flex-1 bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
+                        disabled={updateRepsPlannedMutation.isPending || deleteCircuitExerciseMutation.isPending}
+                      >
+                        {updateRepsPlannedMutation.isPending ? 'Saving...' : 'Save Changes'}
+                      </Button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    {/* Delete Confirmation View */}
+                    <div className="space-y-4">
+                      <div className="flex items-start gap-3">
+                        <div className="w-10 h-10 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center flex-shrink-0">
+                          <svg className="w-5 h-5 text-red-600 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </div>
+                        <div className="flex-1">
+                          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                            Delete Exercise
+                          </h3>
+                          <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">
+                            Are you sure you want to delete <span className="font-semibold text-red-600 dark:text-red-400">"{selectedExerciseForSets.exerciseName}"</span>?
+                          </p>
+                          <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">
+                            This will remove the exercise from all participants' workouts. This action cannot be undone.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex gap-3 justify-end mt-6">
+                        <Button
+                          variant="outline"
+                          onClick={() => setSetsModalView('configure')}
+                          disabled={deleteCircuitExerciseMutation.isPending}
+                          className="focus:outline-none focus:ring-0"
+                        >
+                          <ChevronLeftIcon className="w-4 h-4 mr-1" />
+                          Back
+                        </Button>
+                        <Button
+                          onClick={() => {
+                            if (selectedExerciseForSets) {
+                              deleteCircuitExerciseMutation.mutate({
+                                sessionId: sessionId || "",
+                                exerciseId: selectedExerciseForSets.id,
+                              });
+                            }
+                          }}
+                          disabled={deleteCircuitExerciseMutation.isPending}
+                          className="bg-red-600 hover:bg-red-700 text-white focus:outline-none focus:ring-0 disabled:opacity-50"
+                        >
+                          {deleteCircuitExerciseMutation.isPending ? 'Deleting...' : 'Delete Exercise'}
+                        </Button>
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
             </Card>
           </div>
@@ -2667,6 +2768,7 @@ function CircuitWorkoutOverviewContent() {
           </div>
         </>
       )}
+
     </div>
   );
 }

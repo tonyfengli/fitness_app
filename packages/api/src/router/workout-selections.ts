@@ -1176,4 +1176,129 @@ export const workoutSelectionsRouter = {
         };
       });
     }),
+
+  // Delete a specific exercise from all circuit workouts in a session
+  deleteCircuitExercise: publicProcedure
+    .input(
+      z.object({
+        sessionId: z.string(),
+        exerciseId: z.string().uuid(), // WorkoutExercise.id
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      console.log("[deleteCircuitExercise] Starting deletion with input:", input);
+
+      return await ctx.db.transaction(async (tx) => {
+        // 1. Find the specific exercise to delete
+        const exerciseToDelete = await tx.query.WorkoutExercise.findFirst({
+          where: eq(WorkoutExercise.id, input.exerciseId),
+        });
+
+        if (!exerciseToDelete) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Exercise not found",
+          });
+        }
+
+        console.log("[deleteCircuitExercise] Found exercise to delete:", {
+          id: exerciseToDelete.id,
+          groupName: exerciseToDelete.groupName,
+          orderIndex: exerciseToDelete.orderIndex,
+          stationIndex: exerciseToDelete.stationIndex,
+          exerciseId: exerciseToDelete.exerciseId,
+        });
+
+        // 2. Get all workouts for this session
+        const { Workout } = await import("@acme/db/schema");
+        
+        const workouts = await tx
+          .select()
+          .from(Workout)
+          .where(
+            and(
+              eq(Workout.trainingSessionId, input.sessionId),
+              or(
+                eq(Workout.status, "draft"),
+                eq(Workout.status, "ready"),
+              ),
+            ),
+          );
+
+        if (workouts.length === 0) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "No workouts found for this session",
+          });
+        }
+
+        const workoutIds = workouts.map((w) => w.id);
+
+        console.log("[deleteCircuitExercise] Found workouts:", {
+          count: workouts.length,
+          workoutIds: workoutIds,
+        });
+
+        // 3. Delete ALL matching exercises across ALL workouts
+        // (same round + orderIndex + stationIndex combination)
+        const deleteConditions = [
+          sql`${WorkoutExercise.workoutId} IN (${sql.join(
+            workoutIds.map((id) => sql`${id}`),
+            sql`, `,
+          )})`,
+          eq(WorkoutExercise.groupName, exerciseToDelete.groupName),
+          eq(WorkoutExercise.orderIndex, exerciseToDelete.orderIndex),
+        ];
+
+        // Handle stationIndex matching (null vs specific value)
+        if (exerciseToDelete.stationIndex !== null) {
+          deleteConditions.push(eq(WorkoutExercise.stationIndex, exerciseToDelete.stationIndex));
+        } else {
+          deleteConditions.push(isNull(WorkoutExercise.stationIndex));
+        }
+
+        const deletedExercises = await tx
+          .delete(WorkoutExercise)
+          .where(and(...deleteConditions))
+          .returning();
+
+        console.log("[deleteCircuitExercise] Deleted exercises:", {
+          count: deletedExercises.length,
+          exerciseIds: deletedExercises.map(ex => ex.id),
+        });
+
+        // 4. Close gaps within station (stationIndex reordering)
+        // Only if we deleted a secondary exercise (stationIndex !== null)
+        if (exerciseToDelete.stationIndex !== null) {
+          const updateResult = await tx
+            .update(WorkoutExercise)
+            .set({ stationIndex: sql`${WorkoutExercise.stationIndex} - 1` })
+            .where(
+              and(
+                sql`${WorkoutExercise.workoutId} IN (${sql.join(
+                  workoutIds.map((id) => sql`${id}`),
+                  sql`, `,
+                )})`,
+                eq(WorkoutExercise.groupName, exerciseToDelete.groupName),
+                eq(WorkoutExercise.orderIndex, exerciseToDelete.orderIndex),
+                sql`${WorkoutExercise.stationIndex} > ${exerciseToDelete.stationIndex}`,
+              ),
+            )
+            .returning();
+
+          console.log("[deleteCircuitExercise] Reordered station exercises:", {
+            count: updateResult.length,
+            reorderedIds: updateResult.map(ex => ex.id),
+          });
+        }
+
+        console.log("[deleteCircuitExercise] Deletion completed successfully");
+
+        return { 
+          success: true, 
+          affectedWorkouts: workoutIds.length,
+          deletedExerciseCount: deletedExercises.length,
+        };
+      });
+    }),
 } satisfies TRPCRouterRecord;
