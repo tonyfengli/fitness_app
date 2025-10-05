@@ -127,12 +127,18 @@ function RoundContent({ round, isCompact }: {
   isCompact: boolean;
 }) {
   const maxExercises = 6;
-  const hasOverflow = round.exercises.length > maxExercises;
+  
+  // For non-compact mode, show all exercises (no limit)
+  // For compact mode, limit to maxExercises
+  const hasOverflow = isCompact && round.exercises.length > maxExercises;
   const exercisesToShow = hasOverflow ? round.exercises.slice(0, maxExercises) : round.exercises;
   const overflowCount = round.exercises.length - maxExercises;
   
-  // For compact mode (4-6+ rounds), use columns if 4+ exercises
-  const shouldUseColumns = isCompact && exercisesToShow.length >= 4;
+  // Column logic:
+  // - Compact mode: use columns if 4+ exercises (existing logic)
+  // - Non-compact mode: use columns if >6 exercises (new edge case)
+  const shouldUseColumns = (isCompact && exercisesToShow.length >= 4) || 
+                          (!isCompact && exercisesToShow.length > 6);
   
   
   // Adjust font sizes based on compact mode
@@ -324,11 +330,14 @@ function RoundContent({ round, isCompact }: {
       const leftColumn = exercisesToShow.slice(0, midPoint);
       const rightColumn = exercisesToShow.slice(midPoint);
       
+      // Use different spacing for non-compact mode
+      const columnGap = isCompact ? 16 : 24;
+      const exerciseGap = isCompact ? 12 : 20;
       
       return (
-        <View style={{ flexDirection: 'row', gap: 16 }}>
+        <View style={{ flexDirection: 'row', gap: columnGap }}>
           {/* Left column */}
-          <View style={{ flex: 1, gap: 12 }}>
+          <View style={{ flex: 1, gap: exerciseGap }}>
             {leftColumn.map((exercise) => (
               <Text 
                 key={exercise.id} 
@@ -336,6 +345,7 @@ function RoundContent({ round, isCompact }: {
                   fontSize: getExerciseSize(),
                   color: TOKENS.color.text,
                   lineHeight: getExerciseSize() * 1.2,
+                  textAlign: isCompact ? 'left' : 'center',
                 }}
                 numberOfLines={1}
                 ellipsizeMode="tail"
@@ -346,7 +356,7 @@ function RoundContent({ round, isCompact }: {
           </View>
           
           {/* Right column */}
-          <View style={{ flex: 1, gap: 12 }}>
+          <View style={{ flex: 1, gap: exerciseGap }}>
             {rightColumn.map((exercise) => (
               <Text 
                 key={exercise.id} 
@@ -354,6 +364,7 @@ function RoundContent({ round, isCompact }: {
                   fontSize: getExerciseSize(),
                   color: TOKENS.color.text,
                   lineHeight: getExerciseSize() * 1.2,
+                  textAlign: isCompact ? 'left' : 'center',
                 }}
                 numberOfLines={1}
                 ellipsizeMode="tail"

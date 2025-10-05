@@ -29,6 +29,7 @@ export function CircuitRoundPreview({ currentRound, repeatTimes = 1 }: CircuitRo
   // Calculate rows to determine if we need to scale down
   const rows = Math.ceil(exerciseCount / columns);
   const needsScaling = rows > 1; // Scale for ANY multi-row layout
+  const needsHeavyScaling = exerciseCount > 6; // 50% reduction for >6 exercises
   
   return (
     <View style={{ flex: 1, width: '100%' }}>
@@ -63,12 +64,18 @@ export function CircuitRoundPreview({ currentRound, repeatTimes = 1 }: CircuitRo
           marginHorizontal: -10,
         }}>
           {currentRound.exercises.map((exercise, idx) => {
-            // Fixed width for cards - scale down by 5% if more than 1 row
+            // Fixed width for cards with scaling options
             const baseCardWidth = 380;
-            const cardWidth = needsScaling ? baseCardWidth * 0.95 : baseCardWidth;
+            let cardWidth = baseCardWidth;
+            
+            if (needsHeavyScaling) {
+              cardWidth = baseCardWidth * 0.6; // 40% reduction for >6 exercises
+            } else if (needsScaling) {
+              cardWidth = baseCardWidth * 0.95; // 5% reduction for multi-row
+            }
             
             // Adjust vertical padding when scaled
-            const verticalPadding = needsScaling ? 8 : 10;
+            const verticalPadding = needsHeavyScaling ? 6 : (needsScaling ? 8 : 10);
             
             return (
               <View key={exercise.id} style={{ 
@@ -80,12 +87,12 @@ export function CircuitRoundPreview({ currentRound, repeatTimes = 1 }: CircuitRo
               }}>
                 {/* Number outside the card */}
                 <Text style={{ 
-                  fontSize: needsScaling ? 46 : 48, 
+                  fontSize: needsHeavyScaling ? 33 : (needsScaling ? 46 : 48), 
                   fontWeight: '900',
                   color: TOKENS.color.muted,
-                  marginRight: needsScaling ? 14 : 16,
+                  marginRight: needsHeavyScaling ? 10 : (needsScaling ? 14 : 16),
                   opacity: 0.3,
-                  minWidth: needsScaling ? 57 : 60,
+                  minWidth: needsHeavyScaling ? 36 : (needsScaling ? 57 : 60),
                   textAlign: 'right'
                 }}>
                   {idx + 1}
@@ -93,19 +100,19 @@ export function CircuitRoundPreview({ currentRound, repeatTimes = 1 }: CircuitRo
                 
                 <MattePanel style={{ 
                   flex: 1,
-                  paddingHorizontal: needsScaling ? 22 : 24,
-                  paddingVertical: needsScaling ? 18 : 20,
-                  height: needsScaling ? 114 : 120,
+                  paddingHorizontal: needsHeavyScaling ? 14 : (needsScaling ? 22 : 24),
+                  paddingVertical: needsHeavyScaling ? 12 : (needsScaling ? 18 : 20),
+                  height: needsHeavyScaling ? 72 : (needsScaling ? 114 : 120),
                   justifyContent: 'center',
                 }}>
                   {/* Exercise Name */}
                   <Text style={{ 
-                    fontSize: needsScaling ? 22 : 24, 
+                    fontSize: needsHeavyScaling ? 17 : (needsScaling ? 22 : 24), 
                     fontWeight: '900',
                     color: TOKENS.color.text,
-                    lineHeight: needsScaling ? 26 : 28,
-                    marginBottom: 4,
-                    minHeight: needsScaling ? 26 : 28, // Ensures at least one line height
+                    lineHeight: needsHeavyScaling ? 20 : (needsScaling ? 26 : 28),
+                    marginBottom: needsHeavyScaling ? 2 : 4,
+                    minHeight: needsHeavyScaling ? 20 : (needsScaling ? 26 : 28), // Ensures at least one line height
                   }} numberOfLines={2}>
                     {exercise.exerciseName}
                   </Text>
@@ -113,10 +120,10 @@ export function CircuitRoundPreview({ currentRound, repeatTimes = 1 }: CircuitRo
                   {/* Reps if exists */}
                   {exercise.repsPlanned && (
                     <Text style={{
-                      fontSize: needsScaling ? 15 : 16,
+                      fontSize: needsHeavyScaling ? 12 : (needsScaling ? 15 : 16),
                       fontWeight: '600',
                       color: TOKENS.color.muted,
-                      marginTop: 2,
+                      marginTop: needsHeavyScaling ? 1 : 2,
                     }}>
                       {exercise.repsPlanned} {exercise.repsPlanned === 1 ? 'rep' : 'reps'}
                     </Text>

@@ -396,7 +396,7 @@ export function PerRoundConfigStep({
 
   const exerciseOptions = [2, 3, 4, 5, 6, 7, 8, 9, 10];
   const workOptions = [20, 30, 40, 45, 60, 90, 120, 150, 180, 210, 240];
-  const restOptions = [0, 10, 15, 20, 30];
+  const restOptions = [0, 10, 15, 20, 30, 45, 60];
   const setRestOptions = [15, 30, 45, 60, 90, 120]; // Rest between sets/repeats
   const amrapOptions = [120, 180, 240, 300, 360]; // 2-6 minutes
   
@@ -527,7 +527,7 @@ export function PerRoundConfigStep({
                   </div>
                   <div className="space-y-2">
                     <span className="text-xs font-medium text-gray-600 dark:text-white">REST TIME</span>
-                    <div className="grid grid-cols-5 gap-1">
+                    <div className="grid grid-cols-7 gap-1">
                       {restOptions.map((option) => {
                         const isSelected = (round.template as any).restDuration === option;
                         const isRecommended = option === recommendedRest;
@@ -549,7 +549,7 @@ export function PerRoundConfigStep({
                               isSelected && "font-bold",
                               !isSelected && isRecommended && "font-medium"
                             )}>
-                              {option === 0 ? 'None' : `${option}s`}
+                              {option === 0 ? 'None' : option >= 60 ? `${option / 60}m` : `${option}s`}
                             </span>
                           </Button>
                         );
