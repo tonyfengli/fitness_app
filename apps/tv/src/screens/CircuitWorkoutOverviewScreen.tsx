@@ -164,7 +164,7 @@ function RoundContent({ round, isCompact }: {
       // Base font size - will be adjusted per-station based on line usage
       const stationCount = stationsToShow.length;
       const getStationFontSize = () => {
-        if (!isCompact) return 20;
+        if (!isCompact) return 17; // Decreased by 3% from 18 (net 15% reduction from original 20)
         if (stationCount <= 3) return 16;
         return 14; // Base size for 4 stations
       };
@@ -511,8 +511,8 @@ function RoundContent({ round, isCompact }: {
        round.repeatTimes && round.repeatTimes > 1 && (
         <View style={{
           position: 'absolute',
-          right: isCompact ? -12 : 0,
-          bottom: isCompact ? -22 : 0,
+          right: isCompact ? -12 : -12, // Moved right by 5% (from 0 to -12)
+          bottom: isCompact ? -22 : -12, // Moved down by 5% (from 0 to -12)
           backgroundColor: TOKENS.color.accent2 + '15',
           borderWidth: 1,
           borderColor: TOKENS.color.accent2 + '30',

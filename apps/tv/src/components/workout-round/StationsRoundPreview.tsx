@@ -168,8 +168,8 @@ export function StationsRoundPreview({ currentRound, repeatTimes = 1, workDurati
       {repeatTimes > 1 && (
         <View style={{
           position: 'absolute',
-          bottom: 40,
-          right: 48,
+          bottom: -30, // Moved up by 10px (from -40 to -30)
+          right: 360,  // Shifted right by another 50px (from 410 to 360)
         }}>
           <MattePanel style={{
             paddingHorizontal: 20,
@@ -177,7 +177,7 @@ export function StationsRoundPreview({ currentRound, repeatTimes = 1, workDurati
             gap: 6,
             flexDirection: 'row',
             alignItems: 'center',
-            backgroundColor: `${TOKENS.color.cardGlass}`,
+            backgroundColor: TOKENS.color.card,
             borderColor: TOKENS.color.accent + '30',
             borderWidth: 1,
           }}>
