@@ -13,12 +13,12 @@ interface StationsExerciseViewProps {
 
 // Team configuration - matches the preview
 const TEAMS = [
-  { name: 'Red', color: '#ef4444' },
-  { name: 'Blue', color: '#3b82f6' },
-  { name: 'Green', color: '#22c55e' },
-  { name: 'Orange', color: '#f59e0b' },
-  { name: 'Purple', color: '#a855f7' },
-  { name: 'Teal', color: '#14b8a6' },
+  { name: 'Team 1', color: '#ef4444' },
+  { name: 'Team 2', color: '#3b82f6' },
+  { name: 'Team 3', color: '#22c55e' },
+  { name: 'Team 4', color: '#f59e0b' },
+  { name: 'Team 5', color: '#a855f7' },
+  { name: 'Team 6', color: '#14b8a6' },
 ];
 
 export function StationsExerciseView({ 
@@ -58,7 +58,9 @@ export function StationsExerciseView({
               key={`station-${idx}`} 
               style={{ 
                 flex: 1,
-                backgroundColor: TOKENS.color.cardGlass,
+                backgroundColor: 'rgba(15,8,3,0.55)', // Much more opaque dark brown overlay
+                borderColor: 'rgba(15,8,3,0.65)',     // Much more opaque dark brown border
+                borderWidth: 1,
                 borderRadius: 0,
                 borderTopLeftRadius: stationNumber === 1 ? 16 : 0,
                 borderBottomLeftRadius: stationNumber === 1 ? 16 : 0,
@@ -78,29 +80,58 @@ export function StationsExerciseView({
                 flex: 1,
                 padding: 20,
                 paddingTop: 24,
+                position: 'relative',
               }}>
-                {/* Team Badge */}
+                {/* Team Badge with Station Badge aligned */}
                 <View style={{ marginBottom: 24 }}>
                   <View style={{
                     flexDirection: 'row',
                     alignItems: 'center',
-                    gap: 8,
+                    justifyContent: 'space-between',
                   }}>
+                    {/* Team Badge - Left side */}
                     <View style={{
-                      width: 12,
-                      height: 12,
-                      borderRadius: 6,
-                      backgroundColor: team.color,
-                    }} />
-                    <Text style={{ 
-                      color: team.color, 
-                      fontWeight: '800',
-                      fontSize: 14,
-                      letterSpacing: 0.3,
-                      textTransform: 'uppercase',
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 8,
                     }}>
-                      {team.name}
-                    </Text>
+                      <View style={{
+                        width: 12,
+                        height: 12,
+                        borderRadius: 6,
+                        backgroundColor: team.color,
+                      }} />
+                      <Text style={{ 
+                        color: team.color, 
+                        fontWeight: '800',
+                        fontSize: 14,
+                        letterSpacing: 0.3,
+                        textTransform: 'uppercase',
+                      }}>
+                        {team.name}
+                      </Text>
+                    </View>
+                    
+                    {/* Station Badge - Right side, aligned with team */}
+                    <View style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: 18,
+                      backgroundColor: 'rgba(255,200,150,0.1)',
+                      borderColor: 'rgba(255,180,120,0.3)',
+                      borderWidth: 1,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}>
+                      <Text style={{
+                        fontSize: 14,
+                        fontWeight: '800',
+                        color: '#fff5e6',
+                        letterSpacing: 0.2,
+                      }}>
+                        S{stationNumber}
+                      </Text>
+                    </View>
                   </View>
                 </View>
                 
@@ -110,7 +141,7 @@ export function StationsExerciseView({
                     <Text style={{ 
                       fontSize: exerciseCount === 1 ? 28 : 18, 
                       fontWeight: exerciseCount === 1 ? '800' : '700',
-                      color: TOKENS.color.text,
+                      color: '#ffffff', // Clean white text
                       marginBottom: exerciseCount === 1 ? 12 : 6,
                     }}>
                       {exercise.exerciseName}
@@ -134,7 +165,7 @@ export function StationsExerciseView({
                             <Text style={{ 
                               fontSize: exerciseCount === 1 ? 28 : 18, 
                               fontWeight: exerciseCount === 1 ? '800' : '700',
-                              color: TOKENS.color.text,
+                              color: '#ffffff', // Warm off-white with cream tint
                               marginBottom: exerciseCount === 1 ? 12 : 6,
                             }}>
                               {stationEx.exerciseName}

@@ -9,12 +9,12 @@ interface StationsRoundPreviewProps {
 
 // Team configuration - supports up to 6 teams
 const TEAMS = [
-  { name: 'Red', color: '#ef4444' },
-  { name: 'Blue', color: '#3b82f6' },
-  { name: 'Green', color: '#22c55e' },
-  { name: 'Orange', color: '#f59e0b' },
-  { name: 'Purple', color: '#a855f7' },
-  { name: 'Teal', color: '#14b8a6' },
+  { name: 'Team 1', color: '#ef4444' },
+  { name: 'Team 2', color: '#3b82f6' },
+  { name: 'Team 3', color: '#22c55e' },
+  { name: 'Team 4', color: '#f59e0b' },
+  { name: 'Team 5', color: '#a855f7' },
+  { name: 'Team 6', color: '#14b8a6' },
 ];
 
 export function StationsRoundPreviewColumns({ currentRound, repeatTimes = 1 }: StationsRoundPreviewProps) {

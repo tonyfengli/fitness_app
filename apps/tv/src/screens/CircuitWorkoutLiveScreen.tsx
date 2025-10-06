@@ -1087,8 +1087,16 @@ export function CircuitWorkoutLiveScreen() {
   const currentRound = getCurrentRound();
   const currentExercise = getCurrentExercise();
 
+  // Dynamic background color for stations work periods
+  const getBackgroundColor = () => {
+    if (currentScreen === 'exercise' && currentRoundType === 'stations_round') {
+      return '#2d1508'; // Bright orange-brown background for stations work
+    }
+    return TOKENS.color.bg; // Default background for all other states
+  };
+
   return (
-    <View style={{ flex: 1, backgroundColor: TOKENS.color.bg, paddingTop: 40 }}>
+    <View style={{ flex: 1, backgroundColor: getBackgroundColor(), paddingTop: 40 }}>
       {/* Header with controls */}
       <View style={{ 
         flexDirection: 'row', 
@@ -1104,7 +1112,8 @@ export function CircuitWorkoutLiveScreen() {
             <Text style={{ 
               fontSize: 40, 
               fontWeight: '900', 
-              color: currentScreen === 'round-preview' && currentRoundIndex > 0 && timeRemaining > 0 ? TOKENS.color.muted : TOKENS.color.text,
+              color: currentScreen === 'round-preview' && currentRoundIndex > 0 && timeRemaining > 0 ? TOKENS.color.muted : 
+                     (currentRoundType === 'stations_round' && currentScreen === 'exercise' ? '#fff5e6' : TOKENS.color.text),
               letterSpacing: 0.5,
               textTransform: 'uppercase'
             }}>
@@ -1150,24 +1159,30 @@ export function CircuitWorkoutLiveScreen() {
                             height: index === currentExerciseIndex ? 8 : 6,
                             borderRadius: 4,
                             backgroundColor: index === currentExerciseIndex 
-                              ? TOKENS.color.accent
+                              ? (currentRoundType === 'stations_round' ? '#ffb366' : TOKENS.color.accent)
                               : index < currentExerciseIndex 
-                                ? 'rgba(156, 176, 255, 0.6)' // completed
-                                : 'rgba(156, 176, 255, 0.25)', // future
+                                ? (currentRoundType === 'stations_round' ? 'rgba(255, 179, 102, 0.6)' : 'rgba(156, 176, 255, 0.6)') // completed
+                                : (currentRoundType === 'stations_round' ? 'rgba(255, 179, 102, 0.25)' : 'rgba(156, 176, 255, 0.25)'), // future
                             transform: index === currentExerciseIndex ? [{ scale: 1.2 }] : [],
                           }}
                         />
                       ))}
                     </View>
-                    <Text style={{
-                      fontSize: 14,
-                      fontWeight: '600',
-                      color: TOKENS.color.accent,
-                      fontStyle: 'italic',
-                      letterSpacing: 0.5,
-                    }}>
-                      Let's Go!
-                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={{
+                        fontSize: currentRoundType === 'stations_round' ? 18 : 14, // Larger for stations
+                        fontWeight: '900', // Bolder
+                        color: currentRoundType === 'stations_round' ? '#fff5e6' : TOKENS.color.accent, // Warm white for stations
+                        fontStyle: 'normal', // Remove italic for more impact
+                        letterSpacing: currentRoundType === 'stations_round' ? 1.5 : 0.5, // More spacing for impact
+                        textTransform: 'uppercase', // All caps for power
+                        textShadowColor: currentRoundType === 'stations_round' ? 'rgba(255, 179, 102, 0.8)' : 'transparent',
+                        textShadowOffset: { width: 0, height: 0 },
+                        textShadowRadius: currentRoundType === 'stations_round' ? 6 : 0, // Glow effect for stations
+                      }}>
+                        Let's Go!
+                      </Text>
+                    </View>
                   </View>
                 ) : currentScreen === 'rest' ? (
                   <Text style={{
@@ -1224,7 +1239,7 @@ export function CircuitWorkoutLiveScreen() {
           <Text style={{ 
             fontSize: 120, 
             fontWeight: '900', 
-            color: TOKENS.color.accent,
+            color: currentScreen === 'exercise' ? '#fff5e6' : TOKENS.color.accent, // Warm off-white to match round header, cyan for rest
             letterSpacing: -2,
             position: 'absolute',
             left: 0,
@@ -1311,8 +1326,12 @@ export function CircuitWorkoutLiveScreen() {
                     alignItems: 'center',
                     justifyContent: 'center',
                     opacity: ((currentRoundIndex === 0 && currentScreen === 'round-preview')) ? 0.5 : 1,
-                    backgroundColor: focused ? 'rgba(255,255,255,0.16)' : TOKENS.color.card,
-                    borderColor: focused ? 'rgba(255,255,255,0.45)' : TOKENS.color.borderGlass,
+                    backgroundColor: focused ? 
+                      (currentRoundType === 'stations_round' && currentScreen === 'exercise' ? 'rgba(255,179,102,0.25)' : 'rgba(255,255,255,0.16)') : 
+                      (currentRoundType === 'stations_round' && currentScreen === 'exercise' ? 'rgba(255,200,150,0.1)' : TOKENS.color.card),
+                    borderColor: focused ? 
+                      (currentRoundType === 'stations_round' && currentScreen === 'exercise' ? '#ffb366' : 'rgba(255,255,255,0.45)') : 
+                      (currentRoundType === 'stations_round' && currentScreen === 'exercise' ? 'rgba(255,180,120,0.3)' : TOKENS.color.borderGlass),
                     borderWidth: focused ? 1 : 1,
                     transform: focused ? [{ translateY: -1 }] : [],
                   }}
@@ -1320,7 +1339,7 @@ export function CircuitWorkoutLiveScreen() {
                   <Icon 
                     name="skip-previous" 
                     size={24} 
-                    color={TOKENS.color.text} 
+                    color={(currentRoundType === 'stations_round' && currentScreen === 'exercise') ? '#fff5e6' : TOKENS.color.text} 
                   />
                 </MattePanel>
               )}
@@ -1338,8 +1357,12 @@ export function CircuitWorkoutLiveScreen() {
                     height: 50,
                     alignItems: 'center',
                     justifyContent: 'center',
-                    backgroundColor: focused ? 'rgba(255,255,255,0.16)' : TOKENS.color.card,
-                    borderColor: focused ? 'rgba(255,255,255,0.45)' : TOKENS.color.borderGlass,
+                    backgroundColor: focused ? 
+                      (currentRoundType === 'stations_round' && currentScreen === 'exercise' ? 'rgba(255,179,102,0.25)' : 'rgba(255,255,255,0.16)') : 
+                      (currentRoundType === 'stations_round' && currentScreen === 'exercise' ? 'rgba(255,200,150,0.1)' : TOKENS.color.card),
+                    borderColor: focused ? 
+                      (currentRoundType === 'stations_round' && currentScreen === 'exercise' ? '#ffb366' : 'rgba(255,255,255,0.45)') : 
+                      (currentRoundType === 'stations_round' && currentScreen === 'exercise' ? 'rgba(255,180,120,0.3)' : TOKENS.color.borderGlass),
                     borderWidth: focused ? 1 : 1,
                     transform: focused ? [{ translateY: -1 }] : [],
                   }}
@@ -1347,7 +1370,7 @@ export function CircuitWorkoutLiveScreen() {
                   <Icon 
                     name={isPaused ? "play-arrow" : "pause"} 
                     size={28} 
-                    color={TOKENS.color.text} 
+                    color={(currentRoundType === 'stations_round' && currentScreen === 'exercise') ? '#fff5e6' : TOKENS.color.text} 
                   />
                 </MattePanel>
               )}
@@ -1365,8 +1388,12 @@ export function CircuitWorkoutLiveScreen() {
                     height: 50,
                     alignItems: 'center',
                     justifyContent: 'center',
-                    backgroundColor: focused ? 'rgba(255,255,255,0.16)' : TOKENS.color.card,
-                    borderColor: focused ? 'rgba(255,255,255,0.45)' : TOKENS.color.borderGlass,
+                    backgroundColor: focused ? 
+                      (currentRoundType === 'stations_round' && currentScreen === 'exercise' ? 'rgba(255,179,102,0.25)' : 'rgba(255,255,255,0.16)') : 
+                      (currentRoundType === 'stations_round' && currentScreen === 'exercise' ? 'rgba(255,200,150,0.1)' : TOKENS.color.card),
+                    borderColor: focused ? 
+                      (currentRoundType === 'stations_round' && currentScreen === 'exercise' ? '#ffb366' : 'rgba(255,255,255,0.45)') : 
+                      (currentRoundType === 'stations_round' && currentScreen === 'exercise' ? 'rgba(255,180,120,0.3)' : TOKENS.color.borderGlass),
                     borderWidth: focused ? 1 : 1,
                     transform: focused ? [{ translateY: -1 }] : [],
                   }}
@@ -1374,7 +1401,7 @@ export function CircuitWorkoutLiveScreen() {
                   <Icon 
                     name="skip-next" 
                     size={24} 
-                    color={TOKENS.color.text} 
+                    color={(currentRoundType === 'stations_round' && currentScreen === 'exercise') ? '#fff5e6' : TOKENS.color.text} 
                   />
                 </MattePanel>
               )}
@@ -1450,15 +1477,15 @@ export function CircuitWorkoutLiveScreen() {
                   gap: currentRoundType === 'circuit_round' ? 6 : 5,
                   flexDirection: 'row',
                   alignItems: 'center',
-                  backgroundColor: TOKENS.color.accent + '15',
-                  borderColor: TOKENS.color.accent,
+                  backgroundColor: (currentRoundType === 'stations_round' && currentScreen === 'exercise') ? 'rgba(255, 179, 102, 0.15)' : TOKENS.color.accent + '15',
+                  borderColor: (currentRoundType === 'stations_round' && currentScreen === 'exercise') ? '#ffb366' : TOKENS.color.accent,
                   borderWidth: 1,
                   borderRadius: 999,
                 }}>
                   <Text style={{
                     fontSize: currentRoundType === 'circuit_round' ? 13 : 12,
                     fontWeight: '700',
-                    color: TOKENS.color.accent,
+                    color: (currentRoundType === 'stations_round' && currentScreen === 'exercise') ? '#ffb366' : TOKENS.color.accent,
                     textTransform: 'uppercase',
                     letterSpacing: 1.2,
                   }}>
@@ -1467,7 +1494,7 @@ export function CircuitWorkoutLiveScreen() {
                   <Text style={{
                     fontSize: currentRoundType === 'circuit_round' ? 16 : 14,
                     fontWeight: '800',
-                    color: TOKENS.color.accent,
+                    color: (currentRoundType === 'stations_round' && currentScreen === 'exercise') ? '#ffb366' : TOKENS.color.accent,
                     marginLeft: 2,
                   }}>
                     {currentRepeatNumber}
@@ -1475,7 +1502,7 @@ export function CircuitWorkoutLiveScreen() {
                   <Text style={{
                     fontSize: currentRoundType === 'circuit_round' ? 13 : 12,
                     fontWeight: '500',
-                    color: TOKENS.color.accent,
+                    color: (currentRoundType === 'stations_round' && currentScreen === 'exercise') ? '#ffb366' : TOKENS.color.accent,
                     marginHorizontal: 3,
                   }}>
                     of
@@ -1483,7 +1510,7 @@ export function CircuitWorkoutLiveScreen() {
                   <Text style={{
                     fontSize: currentRoundType === 'circuit_round' ? 16 : 14,
                     fontWeight: '800',
-                    color: TOKENS.color.accent,
+                    color: (currentRoundType === 'stations_round' && currentScreen === 'exercise') ? '#ffb366' : TOKENS.color.accent,
                   }}>
                     {currentRepeatTimes}
                   </Text>
@@ -1579,7 +1606,7 @@ export function CircuitWorkoutLiveScreen() {
                   <Text style={{
                     fontSize: currentRoundType === 'circuit_round' ? 13 : 12,
                     fontWeight: '700',
-                    color: TOKENS.color.accent,
+                    color: (currentRoundType === 'stations_round' && currentScreen === 'exercise') ? '#ffb366' : TOKENS.color.accent,
                     textTransform: 'uppercase',
                     letterSpacing: 1.2,
                   }}>
@@ -1588,7 +1615,7 @@ export function CircuitWorkoutLiveScreen() {
                   <Text style={{
                     fontSize: currentRoundType === 'circuit_round' ? 16 : 14,
                     fontWeight: '800',
-                    color: TOKENS.color.accent,
+                    color: (currentRoundType === 'stations_round' && currentScreen === 'exercise') ? '#ffb366' : TOKENS.color.accent,
                     marginLeft: 2,
                   }}>
                     {currentRepeatNumber}
@@ -1596,7 +1623,7 @@ export function CircuitWorkoutLiveScreen() {
                   <Text style={{
                     fontSize: currentRoundType === 'circuit_round' ? 13 : 12,
                     fontWeight: '500',
-                    color: TOKENS.color.accent,
+                    color: (currentRoundType === 'stations_round' && currentScreen === 'exercise') ? '#ffb366' : TOKENS.color.accent,
                     marginHorizontal: 3,
                   }}>
                     of
@@ -1604,7 +1631,7 @@ export function CircuitWorkoutLiveScreen() {
                   <Text style={{
                     fontSize: currentRoundType === 'circuit_round' ? 16 : 14,
                     fontWeight: '800',
-                    color: TOKENS.color.accent,
+                    color: (currentRoundType === 'stations_round' && currentScreen === 'exercise') ? '#ffb366' : TOKENS.color.accent,
                   }}>
                     {currentRepeatTimes}
                   </Text>
