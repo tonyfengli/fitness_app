@@ -290,6 +290,10 @@ function CircuitWorkoutOverviewContent() {
   // Modal view state - 'configure' or 'delete'
   const [setsModalView, setSetsModalView] = useState<'configure' | 'delete'>('configure');
 
+  // Round options modal state
+  const [showRoundOptionsModal, setShowRoundOptionsModal] = useState(false);
+  const [selectedRoundForOptions, setSelectedRoundForOptions] = useState<RoundData | null>(null);
+
   // Set up the reorder mutation for circuits
   const reorderExerciseMutation = useMutation({
     ...trpc.workoutSelections.reorderCircuitExercise.mutationOptions(),
@@ -646,6 +650,56 @@ function CircuitWorkoutOverviewContent() {
     }
   }, [editingExerciseId]);
 
+  // Prevent body scroll when replace modal is open
+  useEffect(() => {
+    if (showExerciseSelection) {
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = '';
+      };
+    }
+  }, [showExerciseSelection]);
+
+  // Prevent body scroll when sets modal is open
+  useEffect(() => {
+    if (showSetsModal) {
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = '';
+      };
+    }
+  }, [showSetsModal]);
+
+  // Prevent body scroll when add exercise modal is open
+  useEffect(() => {
+    if (showAddExerciseModal) {
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = '';
+      };
+    }
+  }, [showAddExerciseModal]);
+
+  // Prevent body scroll when mirror confirm modal is open
+  useEffect(() => {
+    if (showMirrorConfirm) {
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = '';
+      };
+    }
+  }, [showMirrorConfirm]);
+
+  // Prevent body scroll when round options modal is open
+  useEffect(() => {
+    if (showRoundOptionsModal) {
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = '';
+      };
+    }
+  }, [showRoundOptionsModal]);
+
   // Reset states when modal closes
   useEffect(() => {
     if (!showExerciseSelection) {
@@ -784,6 +838,10 @@ function CircuitWorkoutOverviewContent() {
                         )}
                       </span>
                       <button 
+                        onClick={() => {
+                          setSelectedRoundForOptions(round);
+                          setShowRoundOptionsModal(true);
+                        }}
                         className="ml-auto p-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                         title="Round options"
                       >
@@ -1308,8 +1366,8 @@ function CircuitWorkoutOverviewContent() {
             }}
           />
 
-          {/* Modal */}
-          <div className="fixed inset-x-4 top-1/2 z-50 mx-auto flex h-[80vh] max-w-lg -translate-y-1/2 flex-col rounded-2xl bg-white dark:bg-gray-800 shadow-2xl">
+          {/* Modal - Full Screen on Mobile */}
+          <div className="fixed inset-0 z-50 flex flex-col bg-white dark:bg-gray-800">
             {/* Header */}
             <div className="flex-shrink-0 border-b border-gray-200 dark:border-gray-700 px-6 py-4">
               <div className="flex items-center justify-between">
@@ -1587,8 +1645,34 @@ function CircuitWorkoutOverviewContent() {
               }}
             />
 
-            {/* Modal */}
-            <div className="fixed inset-x-4 top-1/2 z-50 mx-auto flex h-[80vh] max-w-2xl -translate-y-1/2 flex-col rounded-2xl bg-gray-50 dark:bg-gray-900 shadow-2xl overflow-hidden">
+            {/* Modal - Full Screen on Mobile */}
+            <div className="fixed inset-0 z-50 flex flex-col bg-gray-50 dark:bg-gray-900 overflow-hidden">
+              {/* Header */}
+              <div className="flex-shrink-0 border-b border-gray-200 dark:border-gray-700 px-6 py-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">
+                      Replace Exercise
+                    </h2>
+                    <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                      {editingExercise?.exerciseName}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setEditingExerciseId(null);
+                      setInlineSearchQuery("");
+                      setInlineSelectedId(null);
+                      setSelectedCategory(null);
+                      setCategoryMode('choice');
+                    }}
+                    className="rounded-lg p-2 text-gray-400 dark:text-gray-500 transition-colors hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-600 dark:hover:text-gray-300 focus:outline-none focus:ring-0"
+                  >
+                    <XIcon className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+
               {/* Content */}
               <div className="flex-1 overflow-hidden p-6 flex flex-col">
                 <div className="flex-1">
@@ -2006,9 +2090,9 @@ function CircuitWorkoutOverviewContent() {
             onClick={() => setShowMirrorConfirm(false)}
           />
 
-          {/* Modal */}
-          <div className="fixed inset-x-4 top-1/2 z-50 mx-auto max-w-md -translate-y-1/2">
-            <Card className="p-6 shadow-2xl border-2 bg-white dark:bg-gray-800 dark:border-gray-700">
+          {/* Modal - Full Screen on Mobile */}
+          <div className="fixed inset-0 z-50 flex flex-col">
+            <Card className="flex-1 m-0 rounded-none shadow-none border-0 bg-white dark:bg-gray-800 p-6">
               <div className="space-y-4">
                 <div className="flex items-start gap-3">
                   <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/30 rounded-full flex items-center justify-center flex-shrink-0">
@@ -2124,9 +2208,9 @@ function CircuitWorkoutOverviewContent() {
             }}
           />
 
-          {/* Modal */}
-          <div className="fixed inset-x-4 top-1/2 z-50 mx-auto max-w-lg -translate-y-1/2">
-            <Card className="p-6 shadow-2xl border-2 bg-white dark:bg-gray-800 dark:border-gray-700">
+          {/* Modal - Full Screen on Mobile */}
+          <div className="fixed inset-0 z-50 flex flex-col">
+            <Card className="flex-1 m-0 rounded-none shadow-none border-0 bg-white dark:bg-gray-800 p-6">
               <div className="space-y-6 transition-all duration-200 ease-in-out">
                 {setsModalView === 'configure' ? (
                   <>
@@ -2308,26 +2392,44 @@ function CircuitWorkoutOverviewContent() {
             }}
           />
 
-          {/* Modal */}
-          <div className="fixed inset-x-4 top-1/2 z-50 mx-auto flex h-[80vh] max-w-2xl -translate-y-1/2 flex-col rounded-2xl bg-gray-50 dark:bg-gray-900 shadow-2xl overflow-hidden">
+          {/* Modal - Full Screen on Mobile */}
+          <div className="fixed inset-0 z-50 flex flex-col bg-gray-50 dark:bg-gray-900 overflow-hidden">
             {/* Content */}
             <div className="flex-1 overflow-hidden p-6 flex flex-col">
               <div className="flex-1">
                 <div className="space-y-4">
                   {/* Header showing target */}
-                  <div className="mb-4">
-                    <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                      {addExerciseRoundData?.roundType === 'stations_round' 
-                        ? `Add Exercise to Station ${addExerciseTargetStation + 1}`
-                        : `Add Exercise to ${addExerciseRoundName}`
-                      }
-                    </h2>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">
-                      {addExerciseRoundData?.roundType === 'stations_round'
-                        ? 'Search and select an exercise to add to this station'
-                        : 'Search and select an exercise to add to the end of this round'
-                      }
-                    </p>
+                  <div className="mb-4 flex items-start justify-between">
+                    <div className="flex-1">
+                      <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                        {addExerciseRoundData?.roundType === 'stations_round' 
+                          ? `Add Exercise to Station ${addExerciseTargetStation + 1}`
+                          : `Add Exercise to ${addExerciseRoundName}`
+                        }
+                      </h2>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        {addExerciseRoundData?.roundType === 'stations_round'
+                          ? 'Search and select an exercise to add to this station'
+                          : 'Search and select an exercise to add to the end of this round'
+                        }
+                      </p>
+                    </div>
+                    {/* Close button */}
+                    <button
+                      onClick={() => {
+                        setShowAddExerciseModal(false);
+                        setAddExerciseSearchQuery("");
+                        setAddExerciseSelectedId(null);
+                        setAddExerciseCategory(null);
+                        setAddExerciseCategoryMode('choice');
+                        setAddExerciseTargetStation(0);
+                        setAddExerciseRoundData(null);
+                      }}
+                      className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors focus:outline-none focus:ring-0 ml-4 flex-shrink-0"
+                      title="Close"
+                    >
+                      <XIcon className="w-5 h-5 text-gray-500 dark:text-gray-400" />
+                    </button>
                   </div>
                   
                   {/* Search input row */}
@@ -2760,6 +2862,65 @@ function CircuitWorkoutOverviewContent() {
                       );
                     }
                   })()}
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Round Options Modal */}
+      {showRoundOptionsModal && selectedRoundForOptions && (
+        <>
+          {/* Background overlay */}
+          <div
+            className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm"
+            onClick={() => {
+              setShowRoundOptionsModal(false);
+              setSelectedRoundForOptions(null);
+            }}
+          />
+
+          {/* Modal - Full Screen */}
+          <div className="fixed inset-0 z-50 flex flex-col bg-white dark:bg-gray-800">
+            {/* Header */}
+            <div className="flex-shrink-0 border-b border-gray-200 dark:border-gray-700 px-6 py-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">
+                    {selectedRoundForOptions.roundName} Options
+                  </h2>
+                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                    Manage round settings and exercises
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowRoundOptionsModal(false);
+                    setSelectedRoundForOptions(null);
+                  }}
+                  className="rounded-lg p-2 text-gray-400 dark:text-gray-500 transition-colors hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-600 dark:hover:text-gray-300 focus:outline-none focus:ring-0"
+                >
+                  <XIcon className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Content - Placeholder */}
+            <div className="flex-1 overflow-y-auto p-6">
+              <div className="flex items-center justify-center h-full">
+                <div className="text-center">
+                  <div className="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <svg className="w-8 h-8 text-gray-400 dark:text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4" />
+                    </svg>
+                  </div>
+                  <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2">
+                    Round Options Coming Soon
+                  </h3>
+                  <p className="text-gray-500 dark:text-gray-400 max-w-sm">
+                    This placeholder modal will soon contain round management features like editing, deleting, and configuring round settings.
+                  </p>
                 </div>
               </div>
             </div>
