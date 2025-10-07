@@ -184,7 +184,7 @@ function CircuitWorkoutOverviewContent() {
   
   // Add exercise to station mutation
   const addExerciseToStationMutation = useMutation({
-    ...trpc.workoutSelections.addExerciseToStation.mutationOptions(),
+    ...trpc.workoutSelections.addExerciseToStationPublic.mutationOptions(),
     onSuccess: (data) => {
       console.log("[addExerciseToStation] Success:", data);
       
@@ -212,7 +212,7 @@ function CircuitWorkoutOverviewContent() {
 
   // Add exercise to round mutation (for circuit/amrap rounds)
   const addExerciseToRoundMutation = useMutation({
-    ...trpc.workoutSelections.addExerciseToRound.mutationOptions(),
+    ...trpc.workoutSelections.addExerciseToRoundPublic.mutationOptions(),
     onSuccess: (data) => {
       console.log("[addExerciseToRound] Success:", data);
       
@@ -311,14 +311,17 @@ function CircuitWorkoutOverviewContent() {
 
   // Set up the update reps mutation
   const updateRepsPlannedMutation = useMutation({
-    ...trpc.workoutSelections.updateRepsPlanned.mutationOptions(),
-    onSuccess: () => {
+    ...trpc.workoutSelections.updateRepsPlannedPublic.mutationOptions(),
+    onSuccess: (updatedExercise, variables) => {
+      console.log("[updateRepsPlannedMutation] Success:", updatedExercise);
+
       // Invalidate queries to refresh data
       queryClient.invalidateQueries({
         queryKey: trpc.workoutSelections.getSelections.queryOptions({ 
           sessionId: sessionId || "" 
         }).queryKey,
       });
+      
       // Close modal
       setShowSetsModal(false);
       setSelectedExerciseForSets(null);
@@ -2306,6 +2309,8 @@ function CircuitWorkoutOverviewContent() {
                         onClick={() => {
                           if (selectedExerciseForSets) {
                             updateRepsPlannedMutation.mutate({
+                              sessionId: sessionId || "",
+                              clientId: dummyUserId || "",
                               exerciseId: selectedExerciseForSets.id,
                               repsPlanned: repsValue > 0 ? repsValue : null,
                             });
@@ -2539,7 +2544,8 @@ function CircuitWorkoutOverviewContent() {
                                   if (isStationsRound) {
                                     // Add to specific station
                                     addExerciseToStationMutation.mutate({
-                                      sessionId: sessionId,
+                                      sessionId: sessionId || "",
+                                      clientId: dummyUserId || "",
                                       roundName: addExerciseRoundName,
                                       targetStationIndex: addExerciseTargetStation,
                                       newExerciseId: addExerciseSelectedId,
@@ -2548,7 +2554,8 @@ function CircuitWorkoutOverviewContent() {
                                   } else {
                                     // Add to end of round
                                     addExerciseToRoundMutation.mutate({
-                                      sessionId: sessionId,
+                                      sessionId: sessionId || "",
+                                      clientId: dummyUserId || "",
                                       roundName: addExerciseRoundName,
                                       newExerciseId: addExerciseSelectedId,
                                       customName: addExerciseSelectedId ? undefined : addExerciseSearchQuery.trim()

@@ -861,6 +861,83 @@ export const workoutSelectionsRouter = {
       return result[0];
     }),
 
+  // Public version of update reps planned (for circuit workouts)
+  updateRepsPlannedPublic: publicProcedure
+    .input(
+      z.object({
+        sessionId: z.string(),
+        clientId: z.string(),
+        exerciseId: z.string(), // workout_exercise.id
+        repsPlanned: z.number().int().min(0).max(99).nullable(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      console.log("[updateRepsPlannedPublic] Input:", input);
+
+      // First verify that the client is checked into the session
+      const { UserTrainingSession } = await import("@acme/db/schema");
+      const userSession = await ctx.db.query.UserTrainingSession.findFirst({
+        where: and(
+          eq(UserTrainingSession.userId, input.clientId),
+          eq(UserTrainingSession.trainingSessionId, input.sessionId),
+          or(
+            eq(UserTrainingSession.status, "checked_in"),
+            eq(UserTrainingSession.status, "ready"),
+            eq(UserTrainingSession.status, "workout_ready"),
+          ),
+        ),
+      });
+
+      if (!userSession) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "User is not checked into this session",
+        });
+      }
+
+      // Verify the exercise belongs to a workout in this session for this client
+      const { Workout } = await import("@acme/db/schema");
+      const workoutExercise = await ctx.db
+        .select({
+          we: WorkoutExercise,
+          workout: Workout,
+        })
+        .from(WorkoutExercise)
+        .innerJoin(Workout, eq(WorkoutExercise.workoutId, Workout.id))
+        .where(
+          and(
+            eq(WorkoutExercise.id, input.exerciseId),
+            eq(Workout.trainingSessionId, input.sessionId),
+            eq(Workout.userId, input.clientId),
+          ),
+        )
+        .limit(1);
+
+      if (!workoutExercise || workoutExercise.length === 0) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Exercise not found or not accessible",
+        });
+      }
+
+      // Update the workout exercise
+      const result = await ctx.db
+        .update(WorkoutExercise)
+        .set({ repsPlanned: input.repsPlanned })
+        .where(eq(WorkoutExercise.id, input.exerciseId))
+        .returning();
+
+      if (result.length === 0) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Exercise not found",
+        });
+      }
+
+      console.log("[updateRepsPlannedPublic] Updated:", result[0]);
+      return result[0];
+    }),
+
   // Add exercise to an existing station (circuit stations rounds only)
   addExerciseToStation: protectedProcedure
     .input(
@@ -1069,6 +1146,228 @@ export const workoutSelectionsRouter = {
 
         console.log(
           `[addExerciseToStation] Added exercise "${exerciseName}" to station ${input.targetStationIndex} for ${workoutIds.length} workouts`,
+        );
+
+        return {
+          success: true,
+          affectedWorkouts: workoutIds.length,
+          newExerciseName: exerciseName,
+          stationIndex: input.targetStationIndex,
+        };
+      });
+    }),
+
+  // Public version of add exercise to station (for circuit workouts)
+  addExerciseToStationPublic: publicProcedure
+    .input(
+      z.object({
+        sessionId: z.string(),
+        clientId: z.string(),
+        roundName: z.string(),
+        targetStationIndex: z.number().min(0),
+        newExerciseId: z.string().uuid().nullable(), // null for custom exercises
+        customName: z.string().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      console.log("[addExerciseToStationPublic] Starting with input:", input);
+
+      // First verify that the client is checked into the session
+      const { UserTrainingSession } = await import("@acme/db/schema");
+      const userSession = await ctx.db.query.UserTrainingSession.findFirst({
+        where: and(
+          eq(UserTrainingSession.userId, input.clientId),
+          eq(UserTrainingSession.trainingSessionId, input.sessionId),
+          or(
+            eq(UserTrainingSession.status, "checked_in"),
+            eq(UserTrainingSession.status, "ready"),
+            eq(UserTrainingSession.status, "workout_ready"),
+          ),
+        ),
+      });
+
+      if (!userSession) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "User is not checked into this session",
+        });
+      }
+
+      // Use transaction for consistency
+      return await ctx.db.transaction(async (tx) => {
+        // Get all workouts for this session
+        const { Workout } = await import("@acme/db/schema");
+        const workouts = await tx
+          .select()
+          .from(Workout)
+          .where(
+            and(
+              eq(Workout.trainingSessionId, input.sessionId),
+              or(
+                eq(Workout.status, "draft"),
+                eq(Workout.status, "ready"),
+              ),
+            ),
+          );
+
+        if (workouts.length === 0) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "No workouts found for this session",
+          });
+        }
+
+        console.log("[addExerciseToStationPublic] Found workouts:", {
+          count: workouts.length,
+          workouts: workouts.map(w => ({ 
+            id: w.id, 
+            status: w.status, 
+            userId: w.userId 
+          })),
+        });
+
+        const workoutIds = workouts.map((w) => w.id);
+        
+        console.log("[addExerciseToStationPublic] Looking for exercises with:", {
+          workoutIds: workoutIds,
+          roundName: input.roundName,
+          targetStationIndex: input.targetStationIndex,
+        });
+
+        // Debug: First, let's see ALL exercises for this round
+        const allRoundExercises = await tx
+          .select()
+          .from(WorkoutExercise)
+          .where(
+            and(
+              sql`${WorkoutExercise.workoutId} IN (${sql.join(
+                workoutIds.map((id) => sql`${id}`),
+                sql`, `,
+              )})`,
+              eq(WorkoutExercise.groupName, input.roundName)
+            ),
+          );
+          
+        console.log("[addExerciseToStationPublic] All exercises in round:", {
+          count: allRoundExercises.length,
+          exercises: allRoundExercises.map(ex => ({
+            id: ex.id,
+            workoutId: ex.workoutId,
+            groupName: ex.groupName,
+            orderIndex: ex.orderIndex,
+            stationIndex: ex.stationIndex,
+            exerciseId: ex.exerciseId,
+            isShared: ex.isShared,
+            custom_exercise: ex.custom_exercise,
+          })),
+        });
+
+        // Find exercises at the target station
+        // For stations rounds, we need to find the exercise that represents this station
+        // The frontend sends 0-based station index, but exercises might have gaps in orderIndex
+        
+        // First, get all exercises in the round sorted by orderIndex
+        const allRoundExercisesOrdered = allRoundExercises
+          .filter(ex => ex.stationIndex === null || ex.stationIndex === 0) // Consider both null and 0 as main station exercises
+          .sort((a, b) => a.orderIndex - b.orderIndex);
+        
+        // Find the exercise at the target station position
+        const targetStationExercise = allRoundExercisesOrdered[input.targetStationIndex];
+        
+        if (!targetStationExercise) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Target station not found",
+          });
+        }
+        
+        // Now find all exercises with the same orderIndex (including those with stationIndex)
+        const targetStationExercises = await tx
+          .select()
+          .from(WorkoutExercise)
+          .where(
+            and(
+              sql`${WorkoutExercise.workoutId} IN (${sql.join(
+                workoutIds.map((id) => sql`${id}`),
+                sql`, `,
+              )})`,
+              eq(WorkoutExercise.groupName, input.roundName),
+              eq(WorkoutExercise.orderIndex, targetStationExercise.orderIndex)
+            ),
+          )
+          .orderBy(asc(WorkoutExercise.stationIndex));
+          
+        console.log("[addExerciseToStationPublic] Target station exercises found:", {
+          count: targetStationExercises.length,
+          exercises: targetStationExercises.map(ex => ({
+            id: ex.id,
+            orderIndex: ex.orderIndex,
+            stationIndex: ex.stationIndex,
+          })),
+        });
+
+        if (targetStationExercises.length === 0) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "No exercises found at the specified station",
+          });
+        }
+
+        // For stations rounds, exercises in the same station should have the same orderIndex
+        // but different stationIndex values
+        const stationOrderIndex = targetStationExercises[0]?.orderIndex || 0;
+        
+        // Get the next available stationIndex for this station
+        const maxStationIndex = Math.max(
+          ...targetStationExercises.map((ex) => ex.stationIndex || 0),
+          0
+        );
+        const nextStationIndex = maxStationIndex + 1;
+
+        // Get exercise details if not custom
+        let exerciseName = input.customName || "Custom Exercise";
+        if (input.newExerciseId) {
+          const exercise = await tx.query.exercises.findFirst({
+            where: eq(exercises.id, input.newExerciseId),
+          });
+
+          if (!exercise) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: "Exercise not found",
+            });
+          }
+          exerciseName = exercise.name;
+        }
+
+        // Get template info from the first exercise at this station
+        const templateExercise = targetStationExercises[0];
+        const template = templateExercise?.template || null;
+
+        // Insert the new exercise for all workouts
+        const insertPromises = workoutIds.map((workoutId) =>
+          tx.insert(WorkoutExercise).values({
+            workoutId: workoutId,
+            exerciseId: input.newExerciseId,
+            orderIndex: stationOrderIndex, // Use same orderIndex as the station
+            setsCompleted: 0,
+            groupName: input.roundName,
+            stationIndex: nextStationIndex, // Use incremented stationIndex for uniqueness
+            isShared: true, // Circuit exercises are shared
+            selectionSource: "manual_swap",
+            template: template,
+            custom_exercise: input.newExerciseId
+              ? null
+              : {
+                  customName: input.customName,
+                },
+          }),
+        );
+
+        await Promise.all(insertPromises);
+
+        console.log(
+          `[addExerciseToStationPublic] Added exercise "${exerciseName}" to station ${input.targetStationIndex} for ${workoutIds.length} workouts`,
         );
 
         return {
@@ -1467,6 +1766,174 @@ export const workoutSelectionsRouter = {
 
         console.log(
           `[addExerciseToRound] Added exercise "${exerciseName}" to end of round "${input.roundName}" for ${workoutIds.length} workouts`,
+        );
+
+        return {
+          success: true,
+          affectedWorkouts: workoutIds.length,
+          newExerciseName: exerciseName,
+          roundName: input.roundName,
+          orderIndex: nextOrderIndex,
+        };
+      });
+    }),
+
+  // Public version of add exercise to round (for circuit workouts)
+  addExerciseToRoundPublic: publicProcedure
+    .input(
+      z.object({
+        sessionId: z.string(),
+        clientId: z.string(),
+        roundName: z.string(),
+        newExerciseId: z.string().uuid().nullable(), // null for custom exercises
+        customName: z.string().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      console.log("[addExerciseToRoundPublic] Starting with input:", input);
+
+      // First verify that the client is checked into the session
+      const { UserTrainingSession } = await import("@acme/db/schema");
+      const userSession = await ctx.db.query.UserTrainingSession.findFirst({
+        where: and(
+          eq(UserTrainingSession.userId, input.clientId),
+          eq(UserTrainingSession.trainingSessionId, input.sessionId),
+          or(
+            eq(UserTrainingSession.status, "checked_in"),
+            eq(UserTrainingSession.status, "ready"),
+            eq(UserTrainingSession.status, "workout_ready"),
+          ),
+        ),
+      });
+
+      if (!userSession) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "User is not checked into this session",
+        });
+      }
+
+      // Use transaction for consistency
+      return await ctx.db.transaction(async (tx) => {
+        // Get all workouts for this session
+        const { Workout } = await import("@acme/db/schema");
+        const workouts = await tx
+          .select()
+          .from(Workout)
+          .where(
+            and(
+              eq(Workout.trainingSessionId, input.sessionId),
+              or(
+                eq(Workout.status, "draft"),
+                eq(Workout.status, "ready"),
+              ),
+            ),
+          );
+
+        if (workouts.length === 0) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "No workouts found for this session",
+          });
+        }
+
+        console.log("[addExerciseToRoundPublic] Found workouts:", {
+          count: workouts.length,
+          workouts: workouts.map(w => ({ 
+            id: w.id, 
+            status: w.status, 
+            userId: w.userId 
+          })),
+        });
+
+        const workoutIds = workouts.map((w) => w.id);
+        
+        // Get all exercises in the target round to find the next orderIndex
+        const allRoundExercises = await tx
+          .select()
+          .from(WorkoutExercise)
+          .where(
+            and(
+              sql`${WorkoutExercise.workoutId} IN (${sql.join(
+                workoutIds.map((id) => sql`${id}`),
+                sql`, `,
+              )})`,
+              eq(WorkoutExercise.groupName, input.roundName)
+            ),
+          );
+          
+        console.log("[addExerciseToRoundPublic] All exercises in round:", {
+          count: allRoundExercises.length,
+          exercises: allRoundExercises.map(ex => ({
+            id: ex.id,
+            workoutId: ex.workoutId,
+            groupName: ex.groupName,
+            orderIndex: ex.orderIndex,
+            stationIndex: ex.stationIndex,
+            exerciseId: ex.exerciseId,
+          })),
+        });
+
+        // Find the highest orderIndex in this round
+        const maxOrderIndex = allRoundExercises.length > 0 
+          ? Math.max(...allRoundExercises.map((ex) => ex.orderIndex || 0))
+          : -1;
+        const nextOrderIndex = maxOrderIndex + 1;
+
+        console.log("[addExerciseToRoundPublic] Order index calculation:", {
+          maxOrderIndex,
+          nextOrderIndex,
+        });
+
+        // Get exercise details if not custom
+        let exerciseName = input.customName || "Custom Exercise";
+        if (input.newExerciseId) {
+          const exercise = await tx.query.exercises.findFirst({
+            where: eq(exercises.id, input.newExerciseId),
+          });
+
+          if (!exercise) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: "Exercise not found",
+            });
+          }
+          exerciseName = exercise.name;
+        }
+
+        // Get template info from an existing exercise in this round (if any)
+        const templateExercise = allRoundExercises[0];
+        const template = templateExercise?.template || null;
+
+        console.log("[addExerciseToRoundPublic] Template info:", {
+          hasTemplate: !!template,
+          templateExerciseId: templateExercise?.id,
+        });
+
+        // Insert the new exercise for all workouts
+        const insertPromises = workoutIds.map((workoutId) =>
+          tx.insert(WorkoutExercise).values({
+            workoutId: workoutId,
+            exerciseId: input.newExerciseId,
+            orderIndex: nextOrderIndex, // Add at end of round
+            setsCompleted: 0,
+            groupName: input.roundName,
+            stationIndex: null, // Always null for regular round exercises
+            isShared: true, // Circuit exercises are shared
+            selectionSource: "manual_swap",
+            template: template,
+            custom_exercise: input.newExerciseId
+              ? null
+              : {
+                  customName: input.customName,
+                },
+          }),
+        );
+
+        await Promise.all(insertPromises);
+
+        console.log(
+          `[addExerciseToRoundPublic] Added exercise "${exerciseName}" to end of round "${input.roundName}" for ${workoutIds.length} workouts`,
         );
 
         return {
