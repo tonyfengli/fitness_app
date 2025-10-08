@@ -6,6 +6,8 @@ interface StationsRoundPreviewProps {
   currentRound: RoundData;
   repeatTimes?: number;
   workDuration?: number;
+  timeRemaining?: number;
+  isTimerActive?: boolean;
 }
 
 // Team configuration - supports up to 6 teams
@@ -18,7 +20,7 @@ const TEAMS = [
   { name: 'Team 6', color: '#14b8a6' },
 ];
 
-export function StationsRoundPreview({ currentRound, repeatTimes = 1, workDuration = 45 }: StationsRoundPreviewProps) {
+export function StationsRoundPreview({ currentRound, repeatTimes = 1, workDuration = 45, timeRemaining = 0, isTimerActive = false }: StationsRoundPreviewProps) {
   // Use actual number of exercises as stations
   const exerciseCount = currentRound.exercises.length;
   
@@ -33,16 +35,30 @@ export function StationsRoundPreview({ currentRound, repeatTimes = 1, workDurati
         paddingBottom: 20,
         alignItems: 'center',
       }}>
-        <Text style={{
-          fontSize: 13,
-          fontWeight: '800',
-          color: TOKENS.color.muted,
-          textTransform: 'uppercase',
-          letterSpacing: 2,
-          marginBottom: 8,
-        }}>
-          ROTATE THROUGH {exerciseCount} STATIONS
-        </Text>
+        {/* Timer or Stations Text */}
+        {isTimerActive && timeRemaining > 0 ? (
+          <Text style={{
+            fontSize: 34, // Increased by 20% from 28
+            fontWeight: '900',
+            color: TOKENS.color.muted, // Back to original muted color
+            textAlign: 'center',
+            letterSpacing: 1,
+            marginBottom: 8,
+          }}>
+            {Math.floor(timeRemaining / 60)}:{(timeRemaining % 60).toString().padStart(2, '0')}
+          </Text>
+        ) : (
+          <Text style={{
+            fontSize: 13,
+            fontWeight: '800',
+            color: TOKENS.color.muted,
+            textTransform: 'uppercase',
+            letterSpacing: 2,
+            marginBottom: 8,
+          }}>
+            ROTATE THROUGH {exerciseCount} STATIONS
+          </Text>
+        )}
       </View>
 
       {/* Horizontal Columns Layout */}

@@ -1107,8 +1107,10 @@ export function CircuitWorkoutLiveScreen() {
         paddingBottom: 20,
         position: 'relative'
       }}>
-        {!(currentScreen === 'round-preview' && currentRoundIndex === 0) ? (
-          <View style={{ alignItems: 'center' }}>
+        {/* LEFT SIDE: Round Info + Navigation Controls */}
+        {!(currentScreen === 'round-preview' && currentRoundIndex === 0) && !(currentScreen === 'round-preview' && currentRoundType === 'stations_round') ? (
+          <View style={{ alignItems: 'center', position: 'relative' }}>
+            {/* Main Round Info */}
             <Text style={{ 
               fontSize: 40, 
               fontWeight: '900', 
@@ -1117,10 +1119,12 @@ export function CircuitWorkoutLiveScreen() {
               letterSpacing: 0.5,
               textTransform: 'uppercase'
             }}>
-              {currentScreen === 'round-preview' && currentRoundIndex > 0 && timeRemaining > 0 
+              {currentScreen === 'round-preview' && currentRoundIndex > 0 && timeRemaining > 0 && currentRoundType !== 'stations_round'
                 ? formatTime(timeRemaining)
                 : currentRound?.roundName || `Round ${currentRoundIndex + 1}`}
             </Text>
+            
+            {/* AMRAP Rest Label */}
             {currentScreen === 'round-preview' && currentRoundType === 'amrap_round' && (
               <Text style={{ 
                 fontSize: 16, 
@@ -1134,6 +1138,8 @@ export function CircuitWorkoutLiveScreen() {
                 Rest
               </Text>
             )}
+            
+            {/* Stations Round Progress */}
             {currentRoundType === 'stations_round' && currentRound && (
               <View style={{ 
                 height: 24, 
@@ -1198,6 +1204,105 @@ export function CircuitWorkoutLiveScreen() {
                 ) : null}
               </View>
             )}
+
+          </View>
+        ) : currentScreen === 'round-preview' && currentRoundType === 'stations_round' ? (
+          <View style={{ 
+            flexDirection: 'row',
+            backgroundColor: 'rgba(255,255,255,0.05)',
+            borderRadius: 32,
+            padding: 6,
+            gap: 4,
+            borderWidth: 1,
+            borderColor: 'rgba(255,255,255,0.1)',
+            // Subtle elevation shadow
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.15,
+            shadowRadius: 8,
+            elevation: 4,
+          }}>
+            {/* Back Round */}
+            <Pressable
+              onPress={() => {
+                console.log('[CircuitWorkoutLive] Back Round pressed:', { currentRoundIndex });
+              }}
+              focusable
+              disabled={currentRoundIndex === 0}
+            >
+              {({ focused }) => (
+                <MattePanel 
+                  focused={focused}
+                  radius={26}
+                  style={{ 
+                    width: 110,
+                    height: 44,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    opacity: currentRoundIndex === 0 ? 0.4 : 1,
+                    backgroundColor: focused ? 
+                      'rgba(255,255,255,0.15)' : 
+                      currentRoundIndex === 0 ? 'transparent' : 'rgba(255,255,255,0.08)',
+                    borderColor: focused ? 'rgba(255,255,255,0.3)' : 'transparent',
+                    borderWidth: focused ? 1.5 : 0,
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Icon name="navigate-before" size={18} color={TOKENS.color.text} />
+                    <Text style={{ 
+                      color: TOKENS.color.text, 
+                      fontSize: 13, 
+                      fontWeight: '700',
+                      letterSpacing: 0.3,
+                      textTransform: 'uppercase'
+                    }}>
+                      BACK
+                    </Text>
+                  </View>
+                </MattePanel>
+              )}
+            </Pressable>
+
+            {/* Skip Round */}
+            <Pressable
+              onPress={() => {
+                console.log('[CircuitWorkoutLive] Skip Round pressed:', { currentRoundIndex });
+              }}
+              focusable
+              disabled={currentRoundIndex >= roundsData.length - 1}
+            >
+              {({ focused }) => (
+                <MattePanel 
+                  focused={focused}
+                  radius={26}
+                  style={{ 
+                    width: 110,
+                    height: 44,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    opacity: currentRoundIndex >= roundsData.length - 1 ? 0.4 : 1,
+                    backgroundColor: focused ? 
+                      'rgba(255,255,255,0.15)' : 
+                      currentRoundIndex >= roundsData.length - 1 ? 'transparent' : 'rgba(255,255,255,0.08)',
+                    borderColor: focused ? 'rgba(255,255,255,0.3)' : 'transparent',
+                    borderWidth: focused ? 1.5 : 0,
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text style={{ 
+                      color: TOKENS.color.text, 
+                      fontSize: 13, 
+                      fontWeight: '700',
+                      letterSpacing: 0.3,
+                      textTransform: 'uppercase'
+                    }}>
+                      SKIP
+                    </Text>
+                    <Icon name="navigate-next" size={18} color={TOKENS.color.text} />
+                  </View>
+                </MattePanel>
+              )}
+            </Pressable>
           </View>
         ) : (
           <Pressable
@@ -1311,103 +1416,177 @@ export function CircuitWorkoutLiveScreen() {
             )}
           </Pressable>
         ) : (
-          <View style={{ flexDirection: 'row', gap: 16, zIndex: 1 }}>
-            <Pressable
-              onPress={debouncedHandleBack}
-              focusable
-              disabled={(currentRoundIndex === 0 && currentScreen === 'round-preview')}
-            >
-              {({ focused }) => (
-                <MattePanel 
-                  focused={focused}
-                  style={{ 
-                    width: 50,
-                    height: 50,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    opacity: ((currentRoundIndex === 0 && currentScreen === 'round-preview')) ? 0.5 : 1,
-                    backgroundColor: focused ? 
-                      (currentRoundType === 'stations_round' && currentScreen === 'exercise' ? 'rgba(255,179,102,0.25)' : 'rgba(255,255,255,0.16)') : 
-                      (currentRoundType === 'stations_round' && currentScreen === 'exercise' ? 'rgba(255,200,150,0.1)' : TOKENS.color.card),
-                    borderColor: focused ? 
-                      (currentRoundType === 'stations_round' && currentScreen === 'exercise' ? '#ffb366' : 'rgba(255,255,255,0.45)') : 
-                      (currentRoundType === 'stations_round' && currentScreen === 'exercise' ? 'rgba(255,180,120,0.3)' : TOKENS.color.borderGlass),
-                    borderWidth: focused ? 1 : 1,
-                    transform: focused ? [{ translateY: -1 }] : [],
-                  }}
-                >
-                  <Icon 
-                    name="skip-previous" 
-                    size={24} 
-                    color={(currentRoundType === 'stations_round' && currentScreen === 'exercise') ? '#fff5e6' : TOKENS.color.text} 
-                  />
-                </MattePanel>
-              )}
-            </Pressable>
-            
-            <Pressable
-              onPress={() => setIsPaused(!isPaused)}
-              focusable
-            >
-              {({ focused }) => (
-                <MattePanel 
-                  focused={focused}
-                  style={{ 
-                    width: 50,
-                    height: 50,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    backgroundColor: focused ? 
-                      (currentRoundType === 'stations_round' && currentScreen === 'exercise' ? 'rgba(255,179,102,0.25)' : 'rgba(255,255,255,0.16)') : 
-                      (currentRoundType === 'stations_round' && currentScreen === 'exercise' ? 'rgba(255,200,150,0.1)' : TOKENS.color.card),
-                    borderColor: focused ? 
-                      (currentRoundType === 'stations_round' && currentScreen === 'exercise' ? '#ffb366' : 'rgba(255,255,255,0.45)') : 
-                      (currentRoundType === 'stations_round' && currentScreen === 'exercise' ? 'rgba(255,180,120,0.3)' : TOKENS.color.borderGlass),
-                    borderWidth: focused ? 1 : 1,
-                    transform: focused ? [{ translateY: -1 }] : [],
-                  }}
-                >
-                  <Icon 
-                    name={isPaused ? "play-arrow" : "pause"} 
-                    size={28} 
-                    color={(currentRoundType === 'stations_round' && currentScreen === 'exercise') ? '#fff5e6' : TOKENS.color.text} 
-                  />
-                </MattePanel>
-              )}
-            </Pressable>
-            
-            <Pressable
-              onPress={debouncedHandleNext}
-              focusable
-            >
-              {({ focused }) => (
-                <MattePanel 
-                  focused={focused}
-                  style={{ 
-                    width: 50,
-                    height: 50,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    backgroundColor: focused ? 
-                      (currentRoundType === 'stations_round' && currentScreen === 'exercise' ? 'rgba(255,179,102,0.25)' : 'rgba(255,255,255,0.16)') : 
-                      (currentRoundType === 'stations_round' && currentScreen === 'exercise' ? 'rgba(255,200,150,0.1)' : TOKENS.color.card),
-                    borderColor: focused ? 
-                      (currentRoundType === 'stations_round' && currentScreen === 'exercise' ? '#ffb366' : 'rgba(255,255,255,0.45)') : 
-                      (currentRoundType === 'stations_round' && currentScreen === 'exercise' ? 'rgba(255,180,120,0.3)' : TOKENS.color.borderGlass),
-                    borderWidth: focused ? 1 : 1,
-                    transform: focused ? [{ translateY: -1 }] : [],
-                  }}
-                >
-                  <Icon 
-                    name="skip-next" 
-                    size={24} 
-                    color={(currentRoundType === 'stations_round' && currentScreen === 'exercise') ? '#fff5e6' : TOKENS.color.text} 
-                  />
-                </MattePanel>
-              )}
-            </Pressable>
-            
-          </View>
+          currentScreen === 'round-preview' && currentRoundType === 'stations_round' ? (
+            // RIGHT SIDE: Playback Controls Only (Round nav moved to left side)
+            <View style={{ 
+              flexDirection: 'row',
+              backgroundColor: 'rgba(255,255,255,0.05)',
+              borderRadius: 32,
+              padding: 6,
+              gap: 4,
+              borderWidth: 1,
+              borderColor: 'rgba(255,255,255,0.1)',
+              zIndex: 1
+            }}>
+              {/* Pause/Play */}
+              <Pressable
+                onPress={() => setIsPaused(!isPaused)}
+                focusable
+              >
+                {({ focused }) => (
+                  <MattePanel 
+                    focused={focused}
+                    radius={26}
+                    style={{ 
+                      width: 52,
+                      height: 44,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      backgroundColor: focused ? 
+                        'rgba(255,255,255,0.15)' : 
+                        'rgba(255,255,255,0.08)',
+                      borderColor: focused ? 'rgba(255,255,255,0.3)' : 'transparent',
+                      borderWidth: focused ? 1.5 : 0,
+                    }}
+                  >
+                    <Icon 
+                      name={isPaused ? "play-arrow" : "pause"} 
+                      size={24} 
+                      color={TOKENS.color.text}
+                    />
+                  </MattePanel>
+                )}
+              </Pressable>
+
+              {/* Skip Forward */}
+              <Pressable
+                onPress={debouncedHandleNext}
+                focusable
+              >
+                {({ focused }) => (
+                  <MattePanel 
+                    focused={focused}
+                    radius={26}
+                    style={{ 
+                      width: 52,
+                      height: 44,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      backgroundColor: focused ? 
+                        'rgba(255,255,255,0.15)' : 
+                        'rgba(255,255,255,0.08)',
+                      borderColor: focused ? 'rgba(255,255,255,0.3)' : 'transparent',
+                      borderWidth: focused ? 1.5 : 0,
+                    }}
+                  >
+                    <Icon 
+                      name="skip-next" 
+                      size={22} 
+                      color={TOKENS.color.text}
+                    />
+                  </MattePanel>
+                )}
+              </Pressable>
+            </View>
+          ) : (
+            // FALLBACK: Original 3-button layout for non-stations or non-round-preview
+            <View style={{ flexDirection: 'row', gap: 16, zIndex: 1 }}>
+              <Pressable
+                onPress={debouncedHandleBack}
+                focusable
+                disabled={(currentRoundIndex === 0 && currentScreen === 'round-preview')}
+              >
+                {({ focused }) => (
+                  <MattePanel 
+                    focused={focused}
+                    style={{ 
+                      width: 50,
+                      height: 50,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      opacity: ((currentRoundIndex === 0 && currentScreen === 'round-preview')) ? 0.5 : 1,
+                      backgroundColor: focused ? 
+                        (currentRoundType === 'stations_round' && currentScreen === 'exercise' ? 'rgba(255,179,102,0.25)' : 'rgba(255,255,255,0.16)') : 
+                        (currentRoundType === 'stations_round' && currentScreen === 'exercise' ? 'rgba(255,200,150,0.1)' : TOKENS.color.card),
+                      borderColor: focused ? 
+                        (currentRoundType === 'stations_round' && currentScreen === 'exercise' ? '#ffb366' : 'rgba(255,255,255,0.45)') : 
+                        (currentRoundType === 'stations_round' && currentScreen === 'exercise' ? 'rgba(255,180,120,0.3)' : TOKENS.color.borderGlass),
+                      borderWidth: focused ? 1 : 1,
+                      transform: focused ? [{ translateY: -1 }] : [],
+                    }}
+                  >
+                    <Icon 
+                      name="skip-previous" 
+                      size={24} 
+                      color={(currentRoundType === 'stations_round' && currentScreen === 'exercise') ? '#fff5e6' : TOKENS.color.text} 
+                    />
+                  </MattePanel>
+                )}
+              </Pressable>
+              
+              <Pressable
+                onPress={() => setIsPaused(!isPaused)}
+                focusable
+              >
+                {({ focused }) => (
+                  <MattePanel 
+                    focused={focused}
+                    style={{ 
+                      width: 50,
+                      height: 50,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      backgroundColor: focused ? 
+                        (currentRoundType === 'stations_round' && currentScreen === 'exercise' ? 'rgba(255,179,102,0.25)' : 'rgba(255,255,255,0.16)') : 
+                        (currentRoundType === 'stations_round' && currentScreen === 'exercise' ? 'rgba(255,200,150,0.1)' : TOKENS.color.card),
+                      borderColor: focused ? 
+                        (currentRoundType === 'stations_round' && currentScreen === 'exercise' ? '#ffb366' : 'rgba(255,255,255,0.45)') : 
+                        (currentRoundType === 'stations_round' && currentScreen === 'exercise' ? 'rgba(255,180,120,0.3)' : TOKENS.color.borderGlass),
+                      borderWidth: focused ? 1 : 1,
+                      transform: focused ? [{ translateY: -1 }] : [],
+                    }}
+                  >
+                    <Icon 
+                      name={isPaused ? "play-arrow" : "pause"} 
+                      size={28} 
+                      color={(currentRoundType === 'stations_round' && currentScreen === 'exercise') ? '#fff5e6' : TOKENS.color.text} 
+                    />
+                  </MattePanel>
+                )}
+              </Pressable>
+              
+              <Pressable
+                onPress={debouncedHandleNext}
+                focusable
+              >
+                {({ focused }) => (
+                  <MattePanel 
+                    focused={focused}
+                    style={{ 
+                      width: 50,
+                      height: 50,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      backgroundColor: focused ? 
+                        (currentRoundType === 'stations_round' && currentScreen === 'exercise' ? 'rgba(255,179,102,0.25)' : 'rgba(255,255,255,0.16)') : 
+                        (currentRoundType === 'stations_round' && currentScreen === 'exercise' ? 'rgba(255,200,150,0.1)' : TOKENS.color.card),
+                      borderColor: focused ? 
+                        (currentRoundType === 'stations_round' && currentScreen === 'exercise' ? '#ffb366' : 'rgba(255,255,255,0.45)') : 
+                        (currentRoundType === 'stations_round' && currentScreen === 'exercise' ? 'rgba(255,180,120,0.3)' : TOKENS.color.borderGlass),
+                      borderWidth: focused ? 1 : 1,
+                      transform: focused ? [{ translateY: -1 }] : [],
+                    }}
+                  >
+                    <Icon 
+                      name="skip-next" 
+                      size={24} 
+                      color={(currentRoundType === 'stations_round' && currentScreen === 'exercise') ? '#fff5e6' : TOKENS.color.text} 
+                    />
+                  </MattePanel>
+                )}
+              </Pressable>
+            </View>
+          )
         )}
       </View>
 
@@ -1420,6 +1599,8 @@ export function CircuitWorkoutLiveScreen() {
                 currentRound={currentRound} 
                 repeatTimes={getRoundTiming(currentRoundIndex).repeatTimes || 1}
                 workDuration={getRoundTiming(currentRoundIndex).workDuration}
+                timeRemaining={timeRemaining}
+                isTimerActive={currentRoundIndex > 0 && timeRemaining > 0}
               />
             : currentRoundType === 'amrap_round'
             ? <AMRAPRoundPreview 
