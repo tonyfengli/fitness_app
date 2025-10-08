@@ -1235,7 +1235,7 @@ export function CircuitWorkoutLiveScreen() {
                   focused={focused}
                   radius={26}
                   style={{ 
-                    width: 110,
+                    width: 94,
                     height: 44,
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -1276,7 +1276,7 @@ export function CircuitWorkoutLiveScreen() {
                   focused={focused}
                   radius={26}
                   style={{ 
-                    width: 110,
+                    width: 94,
                     height: 44,
                     alignItems: 'center',
                     justifyContent: 'center',
