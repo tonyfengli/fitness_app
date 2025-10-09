@@ -10,6 +10,7 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   useRealtimeExerciseSwaps,
+  useRealtimeCircuitConfig,
   SearchIcon,
   SpinnerIcon,
   XIcon,
@@ -30,6 +31,7 @@ import {
 } from "@acme/ui-shared";
 import { supabase } from "~/lib/supabase";
 import { api, useTRPC } from "~/trpc/react";
+import { toast } from "sonner";
 
 // Helper function to get unified muscle group
 const getUnifiedMuscleGroup = (muscle: string | undefined): string => {
@@ -882,12 +884,16 @@ function CircuitWorkoutOverviewContent() {
                             const stationsRoundTemplate = circuitConfig?.config?.roundTemplates?.find(rt => rt.roundNumber === parseInt(round.roundName.match(/\d+/)?.[0] || '1'));
                             const stationsWorkDuration = stationsRoundTemplate?.template?.workDuration || circuitConfig?.config?.workDuration || 60;
                             const stationsRestDuration = stationsRoundTemplate?.template?.restDuration || circuitConfig?.config?.restDuration || 15;
+                            const stationsRepeatTimes = stationsRoundTemplate?.template?.repeatTimes || 1;
+                            const stationsHelpText = stationsRepeatTimes > 1 
+                              ? `Stations • ${stationsWorkDuration}s work / ${stationsRestDuration}s transition • ${stationsRepeatTimes} sets`
+                              : `Stations • ${stationsWorkDuration}s work / ${stationsRestDuration}s transition`;
                             return (
                               <>
                                 <svg className="w-4 h-4 text-emerald-500 dark:text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                                   <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                                 </svg>
-                                <span>Stations • {stationsWorkDuration}s work / {stationsRestDuration}s transition</span>
+                                <span>{stationsHelpText}</span>
                               </>
                             );
                           case 'circuit_round':
@@ -895,12 +901,23 @@ function CircuitWorkoutOverviewContent() {
                             const circuitRoundTemplate = circuitConfig?.config?.roundTemplates?.find(rt => rt.roundNumber === parseInt(round.roundName.match(/\d+/)?.[0] || '1'));
                             const circuitWorkDuration = circuitRoundTemplate?.template?.workDuration || circuitConfig?.config?.workDuration || 45;
                             const circuitRestDuration = circuitRoundTemplate?.template?.restDuration || circuitConfig?.config?.restDuration || 15;
+                            const circuitRepeatTimes = circuitRoundTemplate?.template?.repeatTimes || 1;
+                            const circuitRestBetweenSets = circuitRoundTemplate?.template?.restBetweenSets;
+                            
+                            let circuitHelpText = `Circuit • ${circuitWorkDuration}s work / ${circuitRestDuration}s rest`;
+                            if (circuitRepeatTimes > 1) {
+                              circuitHelpText += ` • ${circuitRepeatTimes} sets`;
+                              if (circuitRestBetweenSets) {
+                                circuitHelpText += ` / ${circuitRestBetweenSets}s between sets`;
+                              }
+                            }
+                            
                             return (
                               <>
                                 <svg className="w-4 h-4 text-sky-500 dark:text-sky-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                                   <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                                 </svg>
-                                <span>Circuit • {circuitWorkDuration}s work / {circuitRestDuration}s rest</span>
+                                <span>{circuitHelpText}</span>
                               </>
                             );
                         }
@@ -2271,7 +2288,9 @@ function CircuitWorkoutOverviewContent() {
                             </svg>
                           </button>
                           <input
-                            type="number"
+                            type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
                             value={repsValue}
                             onChange={(e) => {
                               const value = e.target.value === '' ? 0 : parseInt(e.target.value) || 0;
@@ -2877,7 +2896,7 @@ function CircuitWorkoutOverviewContent() {
       )}
 
       {/* Round Options Modal */}
-      {showRoundOptionsModal && selectedRoundForOptions && (
+      {showRoundOptionsModal && selectedRoundForOptions && circuitConfig && (
         <>
           {/* Background overlay */}
           <div
@@ -2895,10 +2914,10 @@ function CircuitWorkoutOverviewContent() {
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">
-                    {selectedRoundForOptions.roundName} Options
+                    {selectedRoundForOptions.roundName} Settings
                   </h2>
                   <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                    Manage round settings and exercises
+                    Adjust timing and configuration for this round
                   </p>
                 </div>
                 <button
@@ -2913,28 +2932,443 @@ function CircuitWorkoutOverviewContent() {
               </div>
             </div>
 
-            {/* Content - Placeholder */}
-            <div className="flex-1 overflow-y-auto p-6">
-              <div className="flex items-center justify-center h-full">
-                <div className="text-center">
-                  <div className="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <svg className="w-8 h-8 text-gray-400 dark:text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4" />
-                    </svg>
-                  </div>
-                  <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2">
-                    Round Options Coming Soon
-                  </h3>
-                  <p className="text-gray-500 dark:text-gray-400 max-w-sm">
-                    This placeholder modal will soon contain round management features like editing, deleting, and configuring round settings.
-                  </p>
-                </div>
-              </div>
-            </div>
+            {/* Content */}
+            <RoundEditContent
+              round={selectedRoundForOptions}
+              circuitConfig={circuitConfig}
+              sessionId={sessionId!}
+              onClose={() => {
+                setShowRoundOptionsModal(false);
+                setSelectedRoundForOptions(null);
+              }}
+            />
           </div>
         </>
       )}
 
+    </div>
+  );
+}
+
+// Round Edit Content Component
+function RoundEditContent({
+  round,
+  circuitConfig,
+  sessionId,
+  onClose
+}: {
+  round: RoundData;
+  circuitConfig: CircuitConfig;
+  sessionId: string;
+  onClose: () => void;
+}) {
+  const trpc = useTRPC();
+  const queryClient = useQueryClient();
+  
+  // Extract round number from round name (e.g., "Round 1" -> 1)
+  const roundNumber = parseInt(round.roundName.match(/\d+/)?.[0] || '1');
+  
+  // Find the round template for this round
+  const roundTemplate = circuitConfig.config.roundTemplates?.find(
+    rt => rt.roundNumber === roundNumber
+  );
+  
+  if (!roundTemplate) {
+    return (
+      <div className="flex-1 p-6">
+        <div className="text-center text-gray-500 dark:text-gray-400">
+          Round configuration not found
+        </div>
+      </div>
+    );
+  }
+  
+  // Initialize state based on round type (using strings to avoid mobile input issues)
+  const [workDuration, setWorkDuration] = useState(
+    roundTemplate.template.type === 'amrap_round' 
+      ? "0" 
+      : String(roundTemplate.template.workDuration || 45)
+  );
+  const [restDuration, setRestDuration] = useState(
+    roundTemplate.template.type === 'amrap_round' 
+      ? "0" 
+      : String(roundTemplate.template.restDuration || 15)
+  );
+  const [repeatTimes, setRepeatTimes] = useState(
+    roundTemplate.template.type === 'amrap_round' 
+      ? "0" 
+      : String(roundTemplate.template.repeatTimes || 1)
+  );
+  const [restBetweenSets, setRestBetweenSets] = useState(
+    roundTemplate.template.type === 'circuit_round' 
+      ? String(roundTemplate.template.restBetweenSets || 60)
+      : "60"
+  );
+  const [totalDuration, setTotalDuration] = useState(
+    roundTemplate.template.type === 'amrap_round' 
+      ? String(roundTemplate.template.totalDuration || 300)
+      : "0"
+  );
+  
+  // Update mutation
+  const updateConfigMutation = useMutation({
+    ...trpc.circuitConfig.updatePublic.mutationOptions(),
+    onSuccess: () => {
+      toast.success("Round settings updated");
+      
+      // Invalidate circuit config query using TRPC query key format
+      queryClient.invalidateQueries({
+        queryKey: trpc.circuitConfig.getBySession.queryOptions({ 
+          sessionId: sessionId || "" 
+        }).queryKey,
+      });
+      
+      // Also invalidate workout selections to trigger full UI refresh
+      queryClient.invalidateQueries({
+        queryKey: trpc.workoutSelections.getSelections.queryOptions({ 
+          sessionId 
+        }).queryKey,
+      });
+      
+      // Invalidate session query as well since it contains templateConfig
+      queryClient.invalidateQueries({
+        queryKey: trpc.trainingSession.getSession.queryOptions({ 
+          id: sessionId 
+        }).queryKey,
+      });
+      
+      onClose();
+    },
+    onError: (error: any) => {
+      toast.error("Failed to update round settings");
+      console.error("Update error:", error);
+    },
+  });
+  
+  const handleSave = async () => {
+    // Convert strings to numbers and validate
+    const workDurationNum = parseInt(workDuration) || 0;
+    const restDurationNum = parseInt(restDuration) || 0;
+    const repeatTimesNum = parseInt(repeatTimes) || 1;
+    const restBetweenSetsNum = parseInt(restBetweenSets) || 0;
+    const totalDurationNum = parseInt(totalDuration) || 0;
+    
+    // Basic validation
+    if (roundTemplate.template.type !== 'amrap_round') {
+      if (workDurationNum < 10 || workDurationNum > 300) {
+        toast.error("Work duration must be between 10 and 300 seconds");
+        return;
+      }
+      if (roundTemplate.template.type === 'stations_round') {
+        if (restDurationNum < 5 || restDurationNum > 120) {
+          toast.error("Rest duration must be between 5 and 120 seconds");
+          return;
+        }
+      } else {
+        if (restDurationNum < 0 || restDurationNum > 120) {
+          toast.error("Rest duration must be between 0 and 120 seconds");
+          return;
+        }
+      }
+      if (repeatTimesNum < 1 || repeatTimesNum > 5) {
+        toast.error("Number of sets must be between 1 and 5");
+        return;
+      }
+      // Validate rest between sets for circuit rounds with multiple sets
+      if (roundTemplate.template.type === 'circuit_round' && repeatTimesNum > 1) {
+        if (restBetweenSetsNum < 5 || restBetweenSetsNum > 300) {
+          toast.error("Rest between sets must be between 5 and 300 seconds");
+          return;
+        }
+      }
+    } else {
+      if (totalDurationNum < 60 || totalDurationNum > 600) {
+        toast.error("Total duration must be between 60 and 600 seconds");
+        return;
+      }
+    }
+    
+    // Create updated round templates array
+    const updatedRoundTemplates = circuitConfig.config.roundTemplates.map(rt => {
+      if (rt.roundNumber === roundNumber) {
+        // Update this round based on its type
+        if (roundTemplate.template.type === 'stations_round') {
+          return {
+            ...rt,
+            template: {
+              ...rt.template,
+              workDuration: workDurationNum,
+              restDuration: restDurationNum,
+              repeatTimes: repeatTimesNum,
+            }
+          };
+        } else if (roundTemplate.template.type === 'circuit_round') {
+          return {
+            ...rt,
+            template: {
+              ...rt.template,
+              workDuration: workDurationNum,
+              restDuration: restDurationNum,
+              repeatTimes: repeatTimesNum,
+              restBetweenSets: repeatTimesNum > 1 ? Math.max(5, restBetweenSetsNum) : undefined,
+            }
+          };
+        } else if (roundTemplate.template.type === 'amrap_round') {
+          return {
+            ...rt,
+            template: {
+              ...rt.template,
+              totalDuration: totalDurationNum,
+            }
+          };
+        }
+      }
+      return rt;
+    });
+    
+    try {
+      await updateConfigMutation.mutateAsync({
+        sessionId,
+        config: {
+          roundTemplates: updatedRoundTemplates,
+        },
+      });
+    } catch (error) {
+      console.error('Failed to save round settings:', error);
+    }
+  };
+  
+  return (
+    <div className="flex-1 overflow-y-auto">
+      <div className="p-6 space-y-6">
+        {/* Round Type Badge */}
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Round Type:</span>
+          <span className="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full text-sm font-medium">
+            {roundTemplate.template.type === 'stations_round' && 'Stations'}
+            {roundTemplate.template.type === 'circuit_round' && 'Circuit'}
+            {roundTemplate.template.type === 'amrap_round' && 'AMRAP'}
+          </span>
+        </div>
+        
+        {/* Configuration Fields */}
+        <div className="space-y-4">
+          {/* Stations Round Config */}
+          {roundTemplate.template.type === 'stations_round' && (
+            <>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Work Duration (seconds)
+                </label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  min={10}
+                  max={300}
+                  value={workDuration}
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/[^0-9]/g, '');
+                    setWorkDuration(value);
+                  }}
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  Min: 10s, Max: 5 minutes
+                </p>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Rest Duration (seconds)
+                </label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  min={5}
+                  max={120}
+                  value={restDuration}
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/[^0-9]/g, '');
+                    setRestDuration(value);
+                  }}
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  Min: 5s, Max: 2 minutes
+                </p>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Number of Sets
+                </label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  min={1}
+                  max={5}
+                  value={repeatTimes}
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/[^0-9]/g, '');
+                    setRepeatTimes(value);
+                  }}
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  Min: 1, Max: 5
+                </p>
+              </div>
+            </>
+          )}
+          
+          {/* Circuit Round Config */}
+          {roundTemplate.template.type === 'circuit_round' && (
+            <>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Work Duration (seconds)
+                </label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  min={10}
+                  max={300}
+                  value={workDuration}
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/[^0-9]/g, '');
+                    setWorkDuration(value);
+                  }}
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  Min: 10s, Max: 5 minutes
+                </p>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Rest Duration (seconds)
+                </label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  min={0}
+                  max={120}
+                  value={restDuration}
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/[^0-9]/g, '');
+                    setRestDuration(value);
+                  }}
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  Min: 0s, Max: 2 minutes
+                </p>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Number of Sets
+                </label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  min={1}
+                  max={5}
+                  value={repeatTimes}
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/[^0-9]/g, '');
+                    setRepeatTimes(value);
+                  }}
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  Min: 1, Max: 5
+                </p>
+              </div>
+              
+              {parseInt(repeatTimes) > 1 && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Rest Between Sets (seconds)
+                  </label>
+                  <input
+                    type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                    min={5}
+                    max={300}
+                    value={restBetweenSets}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/[^0-9]/g, '');
+                      setRestBetweenSets(value);
+                    }}
+                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    Min: 5s, Max: 5 minutes
+                  </p>
+                </div>
+              )}
+            </>
+          )}
+          
+          {/* AMRAP Round Config */}
+          {roundTemplate.template.type === 'amrap_round' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Total Duration (seconds)
+              </label>
+              <input
+                type="number"
+                min={60}
+                max={600}
+                value={totalDuration}
+                onChange={(e) => {
+                  const value = e.target.value.replace(/[^0-9]/g, '');
+                  setTotalDuration(value);
+                }}
+                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                Min: 1 minute, Max: 10 minutes
+              </p>
+            </div>
+          )}
+        </div>
+        
+        {/* Action Buttons */}
+        <div className="flex gap-3 pt-4">
+          <Button
+            variant="outline"
+            onClick={onClose}
+            disabled={updateConfigMutation.isPending}
+            className="flex-1"
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleSave}
+            disabled={updateConfigMutation.isPending}
+            className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
+          >
+            {updateConfigMutation.isPending ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                Saving...
+              </>
+            ) : (
+              'Save Changes'
+            )}
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }
