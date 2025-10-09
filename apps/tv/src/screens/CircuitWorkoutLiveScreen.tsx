@@ -1126,10 +1126,30 @@ export function CircuitWorkoutLiveScreen() {
             {/* Back Round */}
             <Pressable
               onPress={() => {
-                console.log('[CircuitWorkoutLive] Back Round pressed:', { currentRoundIndex });
+                if (currentRoundIndex === 0) {
+                  // On Round 1, navigate back to circuit workout overview
+                  console.log('[CircuitWorkoutLive] Back to overview pressed from Round 1');
+                  navigation.goBack();
+                } else {
+                  // On other rounds, navigate to previous round
+                  const newRoundIndex = currentRoundIndex - 1;
+                  console.log('[CircuitWorkoutLive] Back Round pressed:', { 
+                    currentRoundIndex, 
+                    newRoundIndex 
+                  });
+                  
+                  // Reset all state for new round
+                  setCurrentRoundIndex(newRoundIndex);
+                  setCurrentExerciseIndex(0);
+                  setCurrentSetNumber(1);
+                  setCurrentScreen('round-preview');
+                  
+                  // Start rest timer for the new round
+                  const restBetweenRounds = circuitConfig?.config?.restBetweenRounds || 60;
+                  startTimer(restBetweenRounds);
+                }
               }}
               focusable
-              disabled={currentRoundIndex === 0}
             >
               {({ focused }) => (
                 <MattePanel 
@@ -1140,10 +1160,9 @@ export function CircuitWorkoutLiveScreen() {
                     height: 44,
                     alignItems: 'center',
                     justifyContent: 'center',
-                    opacity: currentRoundIndex === 0 ? 0.4 : 1,
                     backgroundColor: focused ? 
                       'rgba(255,255,255,0.15)' : 
-                      currentRoundIndex === 0 ? 'transparent' : 'rgba(255,255,255,0.08)',
+                      'rgba(255,255,255,0.08)',
                     borderColor: focused ? 'rgba(255,255,255,0.3)' : 'transparent',
                     borderWidth: focused ? 1.5 : 0,
                   }}
@@ -1167,7 +1186,21 @@ export function CircuitWorkoutLiveScreen() {
             {/* Skip Round */}
             <Pressable
               onPress={() => {
-                console.log('[CircuitWorkoutLive] Skip Round pressed:', { currentRoundIndex });
+                const newRoundIndex = currentRoundIndex + 1;
+                console.log('[CircuitWorkoutLive] Skip Round pressed:', { 
+                  currentRoundIndex, 
+                  newRoundIndex 
+                });
+                
+                // Reset all state for new round
+                setCurrentRoundIndex(newRoundIndex);
+                setCurrentExerciseIndex(0);
+                setCurrentSetNumber(1);
+                setCurrentScreen('round-preview');
+                
+                // Start rest timer for the new round
+                const restBetweenRounds = circuitConfig?.config?.restBetweenRounds || 60;
+                startTimer(restBetweenRounds);
               }}
               focusable
               disabled={currentRoundIndex >= roundsData.length - 1}
