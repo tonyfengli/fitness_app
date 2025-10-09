@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { View, Text, Pressable, ActivityIndicator } from 'react-native';
 import { useNavigation } from '../App';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../providers/TRPCProvider';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { 
@@ -18,6 +18,8 @@ import { getColorForPreset, getHuePresetForColor } from '../lib/lighting/colorMa
 import { useSpotifySync } from '../hooks/useSpotifySync';
 import type { CircuitConfig } from '@acme/db';
 import { playCountdownSound } from '../lib/sound/countdown-sound';
+import { useRealtimeCircuitConfig } from '@acme/ui-shared';
+import { supabase } from '../lib/supabase';
 import { 
   CircuitRoundPreview, 
   StationsRoundPreview,
@@ -185,6 +187,7 @@ export function CircuitWorkoutLiveScreen() {
   });
   
   // Get circuit config for timing and Spotify device
+  const queryClient = useQueryClient();
   const { data: circuitConfig } = useQuery(
     sessionId ? api.circuitConfig.getBySession.queryOptions({ sessionId }) : {
       enabled: false,
@@ -192,6 +195,22 @@ export function CircuitWorkoutLiveScreen() {
       queryFn: () => Promise.resolve(null)
     }
   );
+  
+  // Real-time circuit config updates
+  useRealtimeCircuitConfig({
+    sessionId: sessionId || '',
+    supabase,
+    onConfigUpdate: useCallback((update) => {
+      console.log('[CircuitWorkoutLiveScreen] Circuit config updated via real-time');
+      // Invalidate the circuit config query to refetch latest data
+      queryClient.invalidateQueries({
+        queryKey: api.circuitConfig.getBySession.queryOptions({ sessionId: sessionId! }).queryKey
+      });
+    }, [queryClient, sessionId]),
+    onError: (error) => {
+      console.error('[CircuitWorkoutLiveScreen] Real-time circuit config error:', error);
+    }
+  });
   
   // Helper function to get round-specific timing
   const getRoundTiming = useCallback((roundIndex: number) => {

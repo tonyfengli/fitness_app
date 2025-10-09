@@ -3,7 +3,7 @@ import { View, Text, ScrollView, ActivityIndicator, Pressable } from 'react-nati
 import { useNavigation } from '../App';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../providers/TRPCProvider';
-import { useRealtimeExerciseSwaps } from '@acme/ui-shared';
+import { useRealtimeExerciseSwaps, useRealtimeCircuitConfig } from '@acme/ui-shared';
 import { supabase } from '../lib/supabase';
 import { useStartWorkout } from '../hooks/useStartWorkout';
 
@@ -557,6 +557,7 @@ export function CircuitWorkoutOverviewScreen() {
     }
   );
   
+  
   // Get session data to check template type
   const { data: sessionData, isLoading: sessionLoading } = useQuery(
     sessionId ? api.trainingSession.getById.queryOptions({ id: sessionId }) : {
@@ -584,6 +585,23 @@ export function CircuitWorkoutOverviewScreen() {
                  queryKey[0][1] === 'getSelections';
         }
       });
+    }
+  });
+  
+  // Real-time circuit config updates
+  useRealtimeCircuitConfig({
+    sessionId: sessionId || '',
+    supabase,
+    onConfigUpdate: (update) => {
+      // Invalidate the circuit config query to refetch latest data
+      queryClient.invalidateQueries({
+        queryKey: api.circuitConfig.getBySession.queryOptions({ 
+          sessionId: sessionId || '' 
+        }).queryKey
+      });
+    },
+    onError: (error) => {
+      console.error('[CircuitWorkoutOverviewScreen] Real-time circuit config error:', error);
     }
   });
   

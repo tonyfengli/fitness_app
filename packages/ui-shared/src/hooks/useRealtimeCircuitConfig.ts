@@ -42,7 +42,6 @@ export function useRealtimeCircuitConfig({
 
     // Small delay to avoid subscribing during rapid re-renders
     const timeoutId = setTimeout(() => {
-      console.log('[useRealtimeCircuitConfig] Setting up realtime for session:', sessionId);
     
     // Create a channel for this session's circuit config
     const channel = supabase
@@ -56,8 +55,6 @@ export function useRealtimeCircuitConfig({
           filter: `id=eq.${sessionId}`,
         },
         async (payload) => {
-          console.log('[useRealtimeCircuitConfig] Event received:', payload.eventType);
-          
           if (payload.eventType === 'UPDATE') {
             const session = payload.new;
             
@@ -69,8 +66,6 @@ export function useRealtimeCircuitConfig({
               'type' in session.template_config &&
               session.template_config.type === 'circuit'
             ) {
-              console.log('[useRealtimeCircuitConfig] Processing config update');
-              
               onConfigUpdateRef.current({
                 sessionId: session.id,
                 config: session.template_config as CircuitConfig,
@@ -81,8 +76,6 @@ export function useRealtimeCircuitConfig({
         }
       )
       .subscribe((status) => {
-        console.log('[useRealtimeCircuitConfig] Subscription status changed:', status);
-        
         if (status === 'SUBSCRIBED') {
           setIsConnected(true);
           setError(null);
@@ -95,7 +88,6 @@ export function useRealtimeCircuitConfig({
           setIsConnected(false);
           const errorMsg = 'Connection timed out - This may be due to network issues or firewall blocking WebSocket connections';
           setError(errorMsg);
-          console.warn('[useRealtimeCircuitConfig] Connection timeout. Common causes: firewall, VPN, or Supabase Realtime not enabled');
           onErrorRef.current?.(new Error(errorMsg));
         } else if (status === 'CLOSED') {
           setIsConnected(false);
@@ -109,7 +101,6 @@ export function useRealtimeCircuitConfig({
     // Cleanup function
     return () => {
       clearTimeout(timeoutId);
-      console.log('[useRealtimeCircuitConfig] Cleaning up subscription');
       if (channelRef.current) {
         supabase.removeChannel(channelRef.current);
         channelRef.current = null;
