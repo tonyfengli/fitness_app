@@ -3,7 +3,7 @@ import { View, Text, ScrollView, ActivityIndicator, Pressable } from 'react-nati
 import { useNavigation } from '../App';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../providers/TRPCProvider';
-import { useRealtimeExerciseSwaps, useRealtimeCircuitConfig } from '@acme/ui-shared';
+import { useRealtimeExerciseSwaps, useRealtimeCircuitConfig, useRealtimeCircuitExercises } from '@acme/ui-shared';
 import { supabase } from '../lib/supabase';
 import { useStartWorkout } from '../hooks/useStartWorkout';
 
@@ -605,6 +605,44 @@ export function CircuitWorkoutOverviewScreen() {
     }
   });
   
+  // Real-time circuit exercise updates (including deletions)
+  const { isConnected: exerciseUpdatesConnected } = useRealtimeCircuitExercises({
+    sessionId: sessionId || '',
+    supabase,
+    onExerciseUpdate: (update) => {
+      console.log('[CircuitWorkoutOverviewScreen] Real-time exercise update:', update.eventType);
+      console.log('[CircuitWorkoutOverviewScreen] Exercise update details:', {
+        eventType: update.eventType,
+        exerciseId: update.id,
+        exerciseName: update.exerciseName,
+        groupName: update.groupName,
+        orderIndex: update.orderIndex
+      });
+      
+      // Invalidate the selections query to refetch latest data
+      queryClient.invalidateQueries({
+        queryKey: api.workoutSelections.getSelections.queryOptions({ 
+          sessionId: sessionId || '' 
+        }).queryKey
+      });
+      
+      // Update connection state to show activity
+      setLastSuccessfulFetch(new Date());
+    },
+    onError: (error) => {
+      console.error('[CircuitWorkoutOverviewScreen] Real-time exercise error:', error);
+    }
+  });
+  
+  // Log connection status for debugging
+  useEffect(() => {
+    console.log('[CircuitWorkoutOverviewScreen] Real-time connections:', {
+      exerciseSwaps: swapUpdatesConnected,
+      exerciseUpdates: exerciseUpdatesConnected,
+      sessionId
+    });
+  }, [swapUpdatesConnected, exerciseUpdatesConnected, sessionId]);
+  
   // Set up polling for exercise selections (10 second interval)
   // For circuits, we can query without clientId to get all, then deduplicate
   const selectionsQueryOptions = sessionId 
@@ -620,6 +658,12 @@ export function CircuitWorkoutOverviewScreen() {
   
   // Process selections into rounds
   useEffect(() => {
+    console.log('[CircuitWorkoutOverviewScreen] Processing selections:', {
+      selectionsCount: selections?.length || 0,
+      hasCircuitConfig: !!circuitConfig,
+      timestamp: new Date().toISOString()
+    });
+    
     if (selections && selections.length > 0) {
       // Processing workout selections
       
