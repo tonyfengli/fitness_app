@@ -5,9 +5,11 @@ import { TOKENS, MattePanel, CircuitExercise, RoundData } from './shared';
 interface CircuitRoundPreviewProps {
   currentRound: RoundData;
   repeatTimes?: number;
+  timeRemaining?: number;
+  isTimerActive?: boolean;
 }
 
-export function CircuitRoundPreview({ currentRound, repeatTimes = 1 }: CircuitRoundPreviewProps) {
+export function CircuitRoundPreview({ currentRound, repeatTimes = 1, timeRemaining = 0, isTimerActive = false }: CircuitRoundPreviewProps) {
   // Calculate grid layout based on number of exercises
   const exerciseCount = currentRound.exercises.length;
   let columns = 4; // Default to 4 columns
@@ -39,16 +41,30 @@ export function CircuitRoundPreview({ currentRound, repeatTimes = 1 }: CircuitRo
         paddingBottom: 30,
         alignItems: 'center',
       }}>
-        <Text style={{
-          fontSize: 13,
-          fontWeight: '800',
-          color: TOKENS.color.muted,
-          textTransform: 'uppercase',
-          letterSpacing: 2,
-          marginBottom: 8,
-        }}>
-          ALL TOGETHER
-        </Text>
+        {/* Timer or Text */}
+        {isTimerActive && timeRemaining > 0 ? (
+          <Text style={{
+            fontSize: 34, // Increased by 20% from 28 (matching StationsRoundPreview)
+            fontWeight: '900',
+            color: TOKENS.color.muted,
+            textAlign: 'center',
+            letterSpacing: 1,
+            marginBottom: 8,
+          }}>
+            {Math.floor(timeRemaining / 60)}:{(timeRemaining % 60).toString().padStart(2, '0')}
+          </Text>
+        ) : (
+          <Text style={{
+            fontSize: 13,
+            fontWeight: '800',
+            color: TOKENS.color.muted,
+            textTransform: 'uppercase',
+            letterSpacing: 2,
+            marginBottom: 8,
+          }}>
+            ALL TOGETHER
+          </Text>
+        )}
       </View>
 
       {/* Exercise Grid */}

@@ -1107,106 +1107,8 @@ export function CircuitWorkoutLiveScreen() {
         paddingBottom: 20,
         position: 'relative'
       }}>
-        {/* LEFT SIDE: Round Info + Navigation Controls */}
-        {!(currentScreen === 'round-preview' && currentRoundIndex === 0) && !(currentScreen === 'round-preview' && currentRoundType === 'stations_round') ? (
-          <View style={{ alignItems: 'center', position: 'relative' }}>
-            {/* Main Round Info */}
-            <Text style={{ 
-              fontSize: 40, 
-              fontWeight: '900', 
-              color: currentScreen === 'round-preview' && currentRoundIndex > 0 && timeRemaining > 0 ? TOKENS.color.muted : 
-                     (currentRoundType === 'stations_round' && currentScreen === 'exercise' ? '#fff5e6' : TOKENS.color.text),
-              letterSpacing: 0.5,
-              textTransform: 'uppercase'
-            }}>
-              {currentScreen === 'round-preview' && currentRoundIndex > 0 && timeRemaining > 0 && currentRoundType !== 'stations_round'
-                ? formatTime(timeRemaining)
-                : currentRound?.roundName || `Round ${currentRoundIndex + 1}`}
-            </Text>
-            
-            {/* AMRAP Rest Label */}
-            {currentScreen === 'round-preview' && currentRoundType === 'amrap_round' && (
-              <Text style={{ 
-                fontSize: 16, 
-                fontWeight: '700',
-                color: TOKENS.color.muted,
-                opacity: 0.8,
-                textTransform: 'uppercase',
-                letterSpacing: 1.2,
-                marginTop: 4,
-              }}>
-                Rest
-              </Text>
-            )}
-            
-            {/* Stations Round Progress */}
-            {currentRoundType === 'stations_round' && currentRound && (
-              <View style={{ 
-                height: 24, 
-                marginTop: 8,
-                justifyContent: 'center',
-              }}>
-                {currentScreen === 'exercise' ? (
-                  <View style={{ 
-                    flexDirection: 'row', 
-                    alignItems: 'center', 
-                    gap: 12, 
-                  }}>
-                    <View style={{ 
-                      flexDirection: 'row', 
-                      alignItems: 'center', 
-                      gap: 6, 
-                    }}>
-                      {currentRound.exercises.map((_, index) => (
-                        <View
-                          key={index}
-                          style={{
-                            width: index === currentExerciseIndex ? 8 : 6,
-                            height: index === currentExerciseIndex ? 8 : 6,
-                            borderRadius: 4,
-                            backgroundColor: index === currentExerciseIndex 
-                              ? (currentRoundType === 'stations_round' ? '#ffb366' : TOKENS.color.accent)
-                              : index < currentExerciseIndex 
-                                ? (currentRoundType === 'stations_round' ? 'rgba(255, 179, 102, 0.6)' : 'rgba(156, 176, 255, 0.6)') // completed
-                                : (currentRoundType === 'stations_round' ? 'rgba(255, 179, 102, 0.25)' : 'rgba(156, 176, 255, 0.25)'), // future
-                            transform: index === currentExerciseIndex ? [{ scale: 1.2 }] : [],
-                          }}
-                        />
-                      ))}
-                    </View>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <Text style={{
-                        fontSize: currentRoundType === 'stations_round' ? 18 : 14, // Larger for stations
-                        fontWeight: '900', // Bolder
-                        color: currentRoundType === 'stations_round' ? '#fff5e6' : TOKENS.color.accent, // Warm white for stations
-                        fontStyle: 'normal', // Remove italic for more impact
-                        letterSpacing: currentRoundType === 'stations_round' ? 1.5 : 0.5, // More spacing for impact
-                        textTransform: 'uppercase', // All caps for power
-                        textShadowColor: currentRoundType === 'stations_round' ? 'rgba(255, 179, 102, 0.8)' : 'transparent',
-                        textShadowOffset: { width: 0, height: 0 },
-                        textShadowRadius: currentRoundType === 'stations_round' ? 6 : 0, // Glow effect for stations
-                      }}>
-                        Let's Go!
-                      </Text>
-                    </View>
-                  </View>
-                ) : currentScreen === 'rest' ? (
-                  <Text style={{
-                    fontSize: 16,
-                    fontWeight: '700',
-                    color: TOKENS.color.muted,
-                    opacity: 0.8,
-                    textTransform: 'uppercase',
-                    letterSpacing: 1.2,
-                  }}>
-                    Switch Stations
-                  </Text>
-                ) : null}
-              </View>
-            )}
-
-          </View>
-        ) : currentScreen === 'round-preview' && currentRoundType === 'stations_round' ? (
+        {/* LEFT SIDE: Back/Skip Navigation for Round Previews OR Round Info for Exercise/Rest */}
+        {currentScreen === 'round-preview' ? (
           <View style={{ 
             flexDirection: 'row',
             backgroundColor: 'rgba(255,255,255,0.05)',
@@ -1215,7 +1117,6 @@ export function CircuitWorkoutLiveScreen() {
             gap: 4,
             borderWidth: 1,
             borderColor: 'rgba(255,255,255,0.1)',
-            // Subtle elevation shadow
             shadowColor: '#000',
             shadowOffset: { width: 0, height: 4 },
             shadowOpacity: 0.15,
@@ -1305,38 +1206,100 @@ export function CircuitWorkoutLiveScreen() {
             </Pressable>
           </View>
         ) : (
-          <Pressable
-            onPress={async () => {
-              // Apply App Start color when leaving workout
-              const appStartColor = await getColorForPreset('app_start');
-              const preset = getHuePresetForColor(appStartColor);
-              await setHueLights(preset);
-              console.log('[CircuitWorkoutLive] Back button pressed from round preview, navigating back:', {
-                currentScreen,
-                currentRoundIndex,
-                instanceId: componentInstanceId.current
-              });
-              navigation.goBack();
-            }}
-            focusable
-            style={{ zIndex: 10 }}
-          >
-            {({ focused }) => (
-              <MattePanel 
-                focused={focused}
-                style={{ 
-                  paddingHorizontal: 32,
-                  paddingVertical: 12,
-                  backgroundColor: focused ? 'rgba(255,255,255,0.16)' : TOKENS.color.card,
-                  borderColor: focused ? 'rgba(255,255,255,0.45)' : TOKENS.color.borderGlass,
-                  borderWidth: focused ? 1 : 1,
-                  transform: focused ? [{ translateY: -1 }] : [],
-                }}
-              >
-                <Text style={{ color: TOKENS.color.text, fontSize: 18, letterSpacing: 0.2 }}>Back</Text>
-              </MattePanel>
+          <View style={{ alignItems: 'center', position: 'relative' }}>
+            {/* Main Round Info */}
+            <Text style={{ 
+              fontSize: 40, 
+              fontWeight: '900', 
+              color: currentRoundType === 'stations_round' && currentScreen === 'exercise' ? '#fff5e6' : TOKENS.color.text,
+              letterSpacing: 0.5,
+              textTransform: 'uppercase'
+            }}>
+              {currentRound?.roundName || `Round ${currentRoundIndex + 1}`}
+            </Text>
+            
+            {/* AMRAP Rest Label */}
+            {currentScreen === 'round-preview' && currentRoundType === 'amrap_round' && (
+              <Text style={{ 
+                fontSize: 16, 
+                fontWeight: '700',
+                color: TOKENS.color.muted,
+                opacity: 0.8,
+                textTransform: 'uppercase',
+                letterSpacing: 1.2,
+                marginTop: 4,
+              }}>
+                Rest
+              </Text>
             )}
-          </Pressable>
+            
+            {/* Stations Round Progress */}
+            {currentRoundType === 'stations_round' && currentRound && (
+              <View style={{ 
+                height: 24, 
+                marginTop: 8,
+                justifyContent: 'center',
+              }}>
+                {currentScreen === 'exercise' ? (
+                  <View style={{ 
+                    flexDirection: 'row', 
+                    alignItems: 'center', 
+                    gap: 12, 
+                  }}>
+                    <View style={{ 
+                      flexDirection: 'row', 
+                      alignItems: 'center', 
+                      gap: 6, 
+                    }}>
+                      {currentRound.exercises.map((_, index) => (
+                        <View
+                          key={index}
+                          style={{
+                            width: index === currentExerciseIndex ? 8 : 6,
+                            height: index === currentExerciseIndex ? 8 : 6,
+                            borderRadius: 4,
+                            backgroundColor: index === currentExerciseIndex 
+                              ? (currentRoundType === 'stations_round' ? '#ffb366' : TOKENS.color.accent)
+                              : index < currentExerciseIndex 
+                                ? (currentRoundType === 'stations_round' ? 'rgba(255, 179, 102, 0.6)' : 'rgba(156, 176, 255, 0.6)') // completed
+                                : (currentRoundType === 'stations_round' ? 'rgba(255, 179, 102, 0.25)' : 'rgba(156, 176, 255, 0.25)'), // future
+                            transform: index === currentExerciseIndex ? [{ scale: 1.2 }] : [],
+                          }}
+                        />
+                      ))}
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={{
+                        fontSize: currentRoundType === 'stations_round' ? 18 : 14, // Larger for stations
+                        fontWeight: '900', // Bolder
+                        color: currentRoundType === 'stations_round' ? '#fff5e6' : TOKENS.color.accent, // Warm white for stations
+                        fontStyle: 'normal', // Remove italic for more impact
+                        letterSpacing: currentRoundType === 'stations_round' ? 1.5 : 0.5, // More spacing for impact
+                        textTransform: 'uppercase', // All caps for power
+                        textShadowColor: currentRoundType === 'stations_round' ? 'rgba(255, 179, 102, 0.8)' : 'transparent',
+                        textShadowOffset: { width: 0, height: 0 },
+                        textShadowRadius: currentRoundType === 'stations_round' ? 6 : 0, // Glow effect for stations
+                      }}>
+                        Let's Go!
+                      </Text>
+                    </View>
+                  </View>
+                ) : currentScreen === 'rest' ? (
+                  <Text style={{
+                    fontSize: 16,
+                    fontWeight: '700',
+                    color: TOKENS.color.muted,
+                    opacity: 0.8,
+                    textTransform: 'uppercase',
+                    letterSpacing: 1.2,
+                  }}>
+                    Switch Stations
+                  </Text>
+                ) : null}
+              </View>
+            )}
+
+          </View>
         )}
         
         {(currentScreen === 'exercise' || currentScreen === 'rest') && currentRoundType === 'stations_round' ? (
@@ -1374,6 +1337,7 @@ export function CircuitWorkoutLiveScreen() {
         ) : currentScreen === 'rest' ? (
           null  // No centered header text for rest screen
         ) : currentScreen === 'round-preview' ? (
+          // Round preview: Show round name header for all types
           <Text style={{ 
             fontSize: 80, 
             fontWeight: '900', 
@@ -1416,8 +1380,8 @@ export function CircuitWorkoutLiveScreen() {
             )}
           </Pressable>
         ) : (
-          currentScreen === 'round-preview' && currentRoundType === 'stations_round' ? (
-            // RIGHT SIDE: Playback Controls Only (Round nav moved to left side)
+          currentScreen === 'round-preview' ? (
+            // RIGHT SIDE: Playback Controls Only for ALL round types during preview
             <View style={{ 
               flexDirection: 'row',
               backgroundColor: 'rgba(255,255,255,0.05)',
@@ -1489,7 +1453,7 @@ export function CircuitWorkoutLiveScreen() {
               </Pressable>
             </View>
           ) : (
-            // FALLBACK: Original 3-button layout for non-stations or non-round-preview
+            // FALLBACK: Original 3-button layout for exercise/rest screens
             <View style={{ flexDirection: 'row', gap: 16, zIndex: 1 }}>
               <Pressable
                 onPress={debouncedHandleBack}
@@ -1606,10 +1570,14 @@ export function CircuitWorkoutLiveScreen() {
             ? <AMRAPRoundPreview 
                 currentRound={currentRound} 
                 restDuration={circuitConfig?.config?.restBetweenRounds || 60}
+                timeRemaining={timeRemaining}
+                isTimerActive={currentRoundIndex > 0 && timeRemaining > 0}
               />
             : <CircuitRoundPreview 
                 currentRound={currentRound} 
                 repeatTimes={getRoundTiming(currentRoundIndex).repeatTimes || 1}
+                timeRemaining={timeRemaining}
+                isTimerActive={currentRoundIndex > 0 && timeRemaining > 0}
               />
         )}
 
