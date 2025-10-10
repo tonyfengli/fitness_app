@@ -1343,6 +1343,36 @@ function CircuitWorkoutOverviewContent() {
                     </button>
                   </div>
                 )}
+                
+                {/* Add Station button for stations rounds */}
+                {round.roundType === 'stations_round' && (
+                  <div className="mt-4">
+                    <button
+                      onClick={() => {
+                        // Calculate the next station index (number of unique orderIndex values)
+                        const uniqueStations = new Set(round.exercises.map(ex => ex.orderIndex));
+                        const nextStationIndex = uniqueStations.size;
+                        
+                        setAddExerciseRoundName(round.roundName);
+                        setAddExerciseRoundData(round);
+                        setAddExerciseTargetStation(nextStationIndex); // This will be the new station
+                        setShowAddExerciseModal(true);
+                        setAddExerciseSearchQuery("");
+                        setAddExerciseSelectedId(null);
+                        setAddExerciseCategory(null);
+                        setAddExerciseCategoryMode('choice');
+                      }}
+                      className="w-full p-3 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500 transition-colors bg-gray-50/50 dark:bg-gray-700/30 hover:bg-gray-100/50 dark:hover:bg-gray-600/30"
+                    >
+                      <div className="flex items-center justify-center gap-2 text-gray-600 dark:text-gray-400">
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                        </svg>
+                        <span className="text-sm font-medium">Add Station</span>
+                      </div>
+                    </button>
+                  </div>
+                )}
                 </div>
               </Card>
             )})
@@ -2426,16 +2456,29 @@ function CircuitWorkoutOverviewContent() {
                   <div className="mb-4 flex items-start justify-between">
                     <div className="flex-1">
                       <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                        {addExerciseRoundData?.roundType === 'stations_round' 
-                          ? `Add Exercise to Station ${addExerciseTargetStation + 1}`
-                          : `Add Exercise to ${addExerciseRoundName}`
-                        }
+                        {(() => {
+                          if (addExerciseRoundData?.roundType === 'stations_round') {
+                            // Check if we're creating a new station
+                            const uniqueStations = new Set(addExerciseRoundData.exercises.map(ex => ex.orderIndex));
+                            const isNewStation = addExerciseTargetStation >= uniqueStations.size;
+                            return isNewStation 
+                              ? `Create Station ${addExerciseTargetStation + 1}`
+                              : `Add Exercise to Station ${addExerciseTargetStation + 1}`;
+                          }
+                          return `Add Exercise to ${addExerciseRoundName}`;
+                        })()}
                       </h2>
                       <p className="text-sm text-gray-600 dark:text-gray-400">
-                        {addExerciseRoundData?.roundType === 'stations_round'
-                          ? 'Search and select an exercise to add to this station'
-                          : 'Search and select an exercise to add to the end of this round'
-                        }
+                        {(() => {
+                          if (addExerciseRoundData?.roundType === 'stations_round') {
+                            const uniqueStations = new Set(addExerciseRoundData.exercises.map(ex => ex.orderIndex));
+                            const isNewStation = addExerciseTargetStation >= uniqueStations.size;
+                            return isNewStation
+                              ? 'Search and select an exercise for the new station'
+                              : 'Search and select an exercise to add to this station';
+                          }
+                          return 'Search and select an exercise to add to the end of this round';
+                        })()}
                       </p>
                     </div>
                     {/* Close button */}
@@ -2561,17 +2604,32 @@ function CircuitWorkoutOverviewContent() {
                                 // Call the appropriate mutation based on round type
                                 if (sessionId && addExerciseRoundName) {
                                   if (isStationsRound) {
-                                    // Add to specific station
-                                    addExerciseToStationMutation.mutate({
-                                      sessionId: sessionId || "",
-                                      clientId: dummyUserId || "",
-                                      roundName: addExerciseRoundName,
-                                      targetStationIndex: addExerciseTargetStation,
-                                      newExerciseId: addExerciseSelectedId,
-                                      customName: addExerciseSelectedId ? undefined : addExerciseSearchQuery.trim()
-                                    });
+                                    // Check if we're creating a new station or adding to existing
+                                    const uniqueStations = new Set(addExerciseRoundData.exercises.map(ex => ex.orderIndex));
+                                    const isNewStation = addExerciseTargetStation >= uniqueStations.size;
+                                    
+                                    if (isNewStation) {
+                                      // Creating a new station - use addToRound which will create a new orderIndex
+                                      addExerciseToRoundMutation.mutate({
+                                        sessionId: sessionId || "",
+                                        clientId: dummyUserId || "",
+                                        roundName: addExerciseRoundName,
+                                        newExerciseId: addExerciseSelectedId,
+                                        customName: addExerciseSelectedId ? undefined : addExerciseSearchQuery.trim()
+                                      });
+                                    } else {
+                                      // Adding to existing station
+                                      addExerciseToStationMutation.mutate({
+                                        sessionId: sessionId || "",
+                                        clientId: dummyUserId || "",
+                                        roundName: addExerciseRoundName,
+                                        targetStationIndex: addExerciseTargetStation,
+                                        newExerciseId: addExerciseSelectedId,
+                                        customName: addExerciseSelectedId ? undefined : addExerciseSearchQuery.trim()
+                                      });
+                                    }
                                   } else {
-                                    // Add to end of round
+                                    // Add to end of round (for circuit/amrap rounds)
                                     addExerciseToRoundMutation.mutate({
                                       sessionId: sessionId || "",
                                       clientId: dummyUserId || "",
@@ -2593,14 +2651,22 @@ function CircuitWorkoutOverviewContent() {
                                 const isCustom = !addExerciseSelectedId && addExerciseSearchQuery.trim();
                                 
                                 if (isLoading) return 'Adding...';
-                                if (isCustom) {
-                                  return isStationsRound 
-                                    ? `Add Custom to Station ${addExerciseTargetStation + 1}` 
-                                    : 'Add Custom to Round';
+                                
+                                if (isStationsRound) {
+                                  const uniqueStations = new Set(addExerciseRoundData.exercises.map(ex => ex.orderIndex));
+                                  const isNewStation = addExerciseTargetStation >= uniqueStations.size;
+                                  
+                                  if (isNewStation) {
+                                    return isCustom 
+                                      ? `Create Station ${addExerciseTargetStation + 1} with Custom` 
+                                      : `Create Station ${addExerciseTargetStation + 1}`;
+                                  } else {
+                                    return isCustom 
+                                      ? `Add Custom to Station ${addExerciseTargetStation + 1}` 
+                                      : `Add to Station ${addExerciseTargetStation + 1}`;
+                                  }
                                 } else {
-                                  return isStationsRound 
-                                    ? `Add to Station ${addExerciseTargetStation + 1}` 
-                                    : 'Add to Round';
+                                  return isCustom ? 'Add Custom to Round' : 'Add to Round';
                                 }
                               })()}
                             </button>
