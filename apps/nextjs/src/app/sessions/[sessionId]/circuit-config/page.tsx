@@ -10,9 +10,9 @@ import { supabase } from "~/lib/supabase/client";
 import { useRealtimeCircuitConfig } from "@acme/ui-shared";
 import type { CircuitConfig } from "@acme/db";
 import { cn } from "@acme/ui-shared";
-import { WorkoutTypeStep, RoundsStep, RoundTypesStep, PerRoundConfigStep, ExercisesStep, TimingStep, ReviewStep, SpotifyStep } from "./components";
+import { WorkoutTypeStep, CategorySelectionStep, TemplateSelectionStep, RoundsStep, RoundTypesStep, PerRoundConfigStep, ExercisesStep, TimingStep, ReviewStep, SpotifyStep } from "./components";
 
-const TOTAL_STEPS = 6;
+const TOTAL_STEPS = 7;
 
 export default function CircuitConfigPage() {
   const params = useParams();
@@ -28,6 +28,7 @@ export default function CircuitConfigPage() {
   const [spotifyDeviceId, setSpotifyDeviceId] = useState<string | null>(null);
   const [spotifyDeviceName, setSpotifyDeviceName] = useState<string | null>(null);
   const [workoutType, setWorkoutType] = useState<'custom' | 'template' | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
   // Get TRPC client
   const trpc = useTRPC();
@@ -105,8 +106,6 @@ export default function CircuitConfigPage() {
   const updateConfig = async (updates: Partial<CircuitConfig['config']>) => {
     if (!config) return;
 
-    console.log('[CircuitConfig] updateConfig called with:', updates);
-
     setIsSaving(true);
     const newConfig = { ...config, config: { ...config.config, ...updates } };
     
@@ -118,10 +117,8 @@ export default function CircuitConfigPage() {
         sessionId,
         config: updates,
       };
-      console.log('[CircuitConfig] Mutation payload:', mutationPayload);
       
       const result = await updateConfigMutation.mutateAsync(mutationPayload);
-      console.log('[CircuitConfig] Mutation result:', result);
       return result;
     } catch (error) {
       console.error('[CircuitConfig] Mutation error:', error);
@@ -133,15 +130,50 @@ export default function CircuitConfigPage() {
     }
   };
 
-  const handleNext = () => {
-    if (currentStep < TOTAL_STEPS) {
-      setCurrentStep(currentStep + 1);
+  const handleNext = (selectedWorkoutType?: 'custom' | 'template') => {
+    // Use the passed workout type or fall back to state
+    const currentWorkoutType = selectedWorkoutType || workoutType;
+    
+    // Handle template flow navigation differently
+    if (currentWorkoutType === 'template') {
+      if (currentStep === 1) {
+        setCurrentStep(2); // Go to category selection
+      } else if (currentStep === 2) {
+        setCurrentStep(3); // Go to template selection
+      } else if (currentStep === 3) {
+        setCurrentStep(5); // Skip to review after template selection
+      } else if (currentStep === 5) {
+        setCurrentStep(6); // Go to music
+      }
+    } else {
+      // Normal flow for custom workout - skip step 2 and 3
+      if (currentStep === 1) {
+        setCurrentStep(4); // Skip to rounds (skip category/template steps)
+      } else if (currentStep < TOTAL_STEPS) {
+        setCurrentStep(currentStep + 1);
+      }
     }
   };
 
   const handleBack = () => {
-    if (currentStep > 1) {
-      setCurrentStep(currentStep - 1);
+    // Handle template flow back navigation
+    if (workoutType === 'template') {
+      if (currentStep === 2) {
+        setCurrentStep(1); // Back to workout type selection
+      } else if (currentStep === 3) {
+        setCurrentStep(2); // Back to category selection
+      } else if (currentStep === 5) {
+        setCurrentStep(3); // Back to template selection
+      } else if (currentStep === 6) {
+        setCurrentStep(5); // Back to review
+      }
+    } else {
+      // Normal back navigation for custom
+      if (currentStep === 4) {
+        setCurrentStep(1); // Back to workout type from rounds
+      } else if (currentStep > 1) {
+        setCurrentStep(currentStep - 1);
+      }
     }
   };
 
@@ -187,14 +219,25 @@ export default function CircuitConfigPage() {
             )}
             
             <div className="text-center">
-              <p className="text-xs text-gray-500 dark:text-white">Step {currentStep} of {TOTAL_STEPS}</p>
+              <p className="text-xs text-gray-500 dark:text-white">
+                {workoutType === 'template' && currentStep === 2 && "Step 2 of 5"}
+                {workoutType === 'template' && currentStep === 3 && "Step 3 of 5"}
+                {workoutType === 'template' && currentStep === 5 && "Step 4 of 5"}
+                {workoutType === 'template' && currentStep === 6 && "Step 5 of 5"}
+                {workoutType === 'custom' && currentStep === 4 && "Step 2 of 4"}
+                {workoutType === 'custom' && currentStep === 5 && "Step 3 of 5"}
+                {workoutType === 'custom' && currentStep === 6 && "Step 4 of 5"}
+                {workoutType === 'custom' && currentStep === 7 && "Step 5 of 5"}
+                {currentStep === 1 && "Step 1"}
+              </p>
               <h1 className="text-sm font-medium text-gray-900 dark:text-gray-100">
                 {currentStep === 1 && "Workout Type"}
-                {currentStep === 2 && "Rounds"}
-                {currentStep === 3 && "Round Types"}
-                {currentStep === 4 && "Round Configuration"}
-                {currentStep === 5 && "Review"}
-                {currentStep === 6 && "Music"}
+                {currentStep === 2 && "Category"}
+                {currentStep === 3 && "Templates"}
+                {currentStep === 4 && "Rounds"}
+                {currentStep === 5 && (workoutType === 'custom' ? "Round Types" : "Review")}
+                {currentStep === 6 && (workoutType === 'custom' ? "Per-Round Config" : "Music")}
+                {currentStep === 7 && workoutType === 'custom' && "Music"}
               </h1>
             </div>
             
@@ -221,17 +264,38 @@ export default function CircuitConfigPage() {
           {/* Progress indicator */}
           <div className="px-4 pb-3">
             <div className="flex gap-1">
-              {[1, 2, 3, 4, 5, 6].map((step) => (
-                <div
-                  key={step}
-                  className={cn(
-                    "h-1 flex-1 rounded-full transition-all duration-300",
-                    step <= currentStep 
-                      ? "bg-primary" 
-                      : "bg-muted"
-                  )}
-                />
-              ))}
+              {(workoutType === 'custom' ? [1, 2, 3, 4, 5] : [1, 2, 3, 4, 5]).map((step) => {
+                let isActive = false;
+                
+                if (workoutType === 'template') {
+                  // Template flow: 1, 2, 3, 5, 6
+                  if (step === 1 && currentStep >= 1) isActive = true;
+                  if (step === 2 && currentStep >= 2) isActive = true;
+                  if (step === 3 && currentStep >= 3) isActive = true;
+                  if (step === 4 && currentStep >= 5) isActive = true;
+                  if (step === 5 && currentStep >= 6) isActive = true;
+                } else if (workoutType === 'custom') {
+                  // Custom flow: 1, 4, 5, 6, 7
+                  if (step === 1 && currentStep >= 1) isActive = true;
+                  if (step === 2 && currentStep >= 4) isActive = true;
+                  if (step === 3 && currentStep >= 5) isActive = true;
+                  if (step === 4 && currentStep >= 6) isActive = true;
+                  if (step === 5 && currentStep >= 7) isActive = true;
+                } else {
+                  // Default when no workout type selected
+                  if (step === 1 && currentStep >= 1) isActive = true;
+                }
+                
+                return (
+                  <div
+                    key={step}
+                    className={cn(
+                      "h-1 flex-1 rounded-full transition-all duration-300",
+                      isActive ? "bg-primary" : "bg-muted"
+                    )}
+                  />
+                );
+              })}
             </div>
           </div>
         </div>
@@ -249,15 +313,38 @@ export default function CircuitConfigPage() {
               <WorkoutTypeStep
                 onSelect={(type) => {
                   setWorkoutType(type);
-                  // For now, just proceed to next step
-                  // In future, we can load templates if 'template' is selected
+                  handleNext(type);
+                }}
+              />
+            )}
+
+            {/* Step 2: Category Selection (only for template) */}
+            {currentStep === 2 && workoutType === 'template' && (
+              <CategorySelectionStep
+                onSelectCategory={(category) => {
+                  setSelectedCategory(category);
                   handleNext();
                 }}
               />
             )}
 
-            {/* Step 2: Rounds */}
-            {currentStep === 2 && (
+            {/* Step 3: Template Selection (only for template) */}
+            {currentStep === 3 && workoutType === 'template' && selectedCategory && (
+              <TemplateSelectionStep
+                category={selectedCategory}
+                onSelectTemplate={(template) => {
+                  // Apply template configuration
+                  updateConfig({
+                    ...template.config,
+                    roundTemplates: template.config.roundTemplates
+                  });
+                  handleNext();
+                }}
+              />
+            )}
+
+            {/* Step 4: Rounds (only for custom) */}
+            {currentStep === 4 && workoutType === 'custom' && (
               <RoundsStep
                 rounds={config.config.rounds}
                 repeatRounds={repeatRounds}
@@ -272,8 +359,8 @@ export default function CircuitConfigPage() {
               />
             )}
 
-            {/* Step 3: Round Types */}
-            {currentStep === 3 && (
+            {/* Step 5: Round Types (only for custom) */}
+            {currentStep === 5 && workoutType === 'custom' && (
               <RoundTypesStep
                 rounds={config.config.rounds}
                 roundTemplates={config.config.roundTemplates || []}
@@ -282,8 +369,8 @@ export default function CircuitConfigPage() {
               />
             )}
 
-            {/* Step 4: Per-Round Configuration */}
-            {currentStep === 4 && (
+            {/* Step 6: Per-Round Configuration (only for custom) */}
+            {currentStep === 6 && workoutType === 'custom' && (
               <PerRoundConfigStep
                 rounds={config.config.rounds}
                 roundTemplates={config.config.roundTemplates || []}
@@ -292,34 +379,30 @@ export default function CircuitConfigPage() {
               />
             )}
 
-            {/* Step 5: Review */}
-            {currentStep === 5 && (
+            {/* Step 5: Review (for template workflow) */}
+            {currentStep === 5 && workoutType === 'template' && (
               <ReviewStep
                 config={config}
                 repeatRounds={repeatRounds}
               />
             )}
 
-            {/* Step 6: Music */}
-            {currentStep === 6 && (
-              <>
-                {console.log('[CircuitConfig] Step 6 - Current Spotify state:', { spotifyDeviceId, spotifyDeviceName })}
-                <SpotifyStep
-                  deviceId={spotifyDeviceId}
-                  deviceName={spotifyDeviceName}
-                  onDeviceSelect={async (id, name) => {
-                    console.log('[CircuitConfig] Spotify device selected:', { id, name });
-                    setSpotifyDeviceId(id);
-                    setSpotifyDeviceName(name);
-                    
-                    // Save immediately like other settings
-                    await updateConfig({
-                      spotifyDeviceId: id || undefined,
-                      spotifyDeviceName: name || undefined
-                    });
-                  }}
-                />
-              </>
+            {/* Step 6: Music (template) / Step 7: Music (custom) */}
+            {((currentStep === 6 && workoutType === 'template') || (currentStep === 7 && workoutType === 'custom')) && (
+              <SpotifyStep
+                deviceId={spotifyDeviceId}
+                deviceName={spotifyDeviceName}
+                onDeviceSelect={async (id, name) => {
+                  setSpotifyDeviceId(id);
+                  setSpotifyDeviceName(name);
+                  
+                  // Save immediately like other settings
+                  await updateConfig({
+                    spotifyDeviceId: id || undefined,
+                    spotifyDeviceName: name || undefined
+                  });
+                }}
+              />
             )}
           </div>
         </Card>

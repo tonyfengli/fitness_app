@@ -3,6 +3,7 @@ import { relations } from "drizzle-orm/relations";
 import {
   Business,
   exercises,
+  FavoriteSessions,
   TrainingSession,
   user,
   UserTrainingSession,
@@ -57,6 +58,7 @@ export const trainingSessionRelations = relations(
     }),
     workouts: many(Workout),
     userSessions: many(UserTrainingSession),
+    favoriteSessions: many(FavoriteSessions),
   }),
 );
 
@@ -70,6 +72,20 @@ export const userTrainingSessionRelations = relations(
     trainingSession: one(TrainingSession, {
       fields: [UserTrainingSession.trainingSessionId],
       references: [TrainingSession.id],
+    }),
+  }),
+);
+
+export const favoriteSessionsRelations = relations(
+  FavoriteSessions,
+  ({ one }) => ({
+    trainingSession: one(TrainingSession, {
+      fields: [FavoriteSessions.trainingSessionId],
+      references: [TrainingSession.id],
+    }),
+    business: one(Business, {
+      fields: [FavoriteSessions.businessId],
+      references: [Business.id],
     }),
   }),
 );

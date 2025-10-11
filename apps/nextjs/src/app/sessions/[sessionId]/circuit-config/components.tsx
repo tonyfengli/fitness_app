@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Button, Loader2Icon as Loader2, ChevronRightIcon as ChevronRight } from "@acme/ui-shared";
+import { Button, Loader2Icon as Loader2, ChevronRightIcon as ChevronRight, ChevronLeftIcon as ChevronLeft } from "@acme/ui-shared";
 import { cn } from "@acme/ui-shared";
 import type { CircuitConfig, RoundConfig } from "@acme/db";
 import { useTRPC } from "~/trpc/react";
@@ -11,55 +11,165 @@ interface WorkoutTypeStepProps {
   onSelect: (type: 'custom' | 'template') => void;
 }
 
+interface CategorySelectionStepProps {
+  onSelectCategory: (category: string) => void;
+}
+
+interface TemplateSelectionStepProps {
+  category: string;
+  onSelectTemplate: (template: any) => void;
+}
+
+// Hardcoded business ID for now
+const BUSINESS_ID = 'd33b41e2-f700-4a08-9489-cb6e3daa7f20';
+
+const CATEGORIES = [
+  { id: 'morning_sessions', label: 'Morning Sessions' },
+  { id: 'mens_fitness_connect', label: "Men's Fitness Connect" },
+  { id: 'other', label: 'Other' }
+];
+
+export function CategorySelectionStep({ onSelectCategory }: CategorySelectionStepProps) {
+  return (
+    <div className="space-y-6">
+      <div>
+        <h3 className="text-lg font-semibold mb-6 text-gray-900 dark:text-white">Choose a Template Category</h3>
+        
+        <div className="space-y-4">
+          {CATEGORIES.map((category) => (
+            <button
+              key={category.id}
+              onClick={() => onSelectCategory(category.id)}
+              className="w-full p-6 rounded-xl border-2 border-gray-200 dark:border-gray-700 text-left"
+            >
+              <div className="flex items-center justify-between">
+                <h4 className="text-base font-semibold text-gray-900 dark:text-white">
+                  {category.label}
+                </h4>
+                <ChevronRight className="w-5 h-5 text-gray-400" />
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function TemplateSelectionStep({ category, onSelectTemplate }: TemplateSelectionStepProps) {
+  const trpc = useTRPC();
+  
+  // Fetch favorites for selected category
+  const { data: favorites, isLoading } = useQuery({
+    ...trpc.trainingSession.getFavoritesByCategory.queryOptions({
+      businessId: BUSINESS_ID,
+      category: category,
+    }),
+  });
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', { 
+      month: 'short', 
+      day: 'numeric',
+      year: 'numeric'
+    });
+  };
+
+  const categoryLabel = CATEGORIES.find(c => c.id === category)?.label || '';
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h3 className="text-lg font-semibold mb-6 text-gray-900 dark:text-white">
+          {categoryLabel}
+        </h3>
+        
+        {isLoading ? (
+          <div className="flex justify-center py-12">
+            <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+          </div>
+        ) : favorites && favorites.length > 0 ? (
+          <div className="space-y-4">
+            {favorites.map((favorite) => (
+              <button
+                key={favorite.id}
+                onClick={() => {
+                  // Extract the circuit config from the template config
+                  const templateConfig = favorite.trainingSession.templateConfig as CircuitConfig;
+                  onSelectTemplate({
+                    id: favorite.trainingSession.id,
+                    name: favorite.trainingSession.name,
+                    config: templateConfig?.config || {}
+                  });
+                }}
+                className="w-full p-6 rounded-xl border-2 border-gray-200 dark:border-gray-700 text-left"
+              >
+                <div className="space-y-1">
+                  <h4 className="text-base font-semibold text-gray-900 dark:text-white">
+                    {favorite.trainingSession.name}
+                  </h4>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    Created {formatDate(favorite.trainingSession.createdAt)}
+                  </p>
+                </div>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-12">
+            <p className="text-gray-500 dark:text-gray-400">
+              No templates available in this category
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function WorkoutTypeStep({ onSelect }: WorkoutTypeStepProps) {
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-lg font-semibold mb-1 text-gray-900 dark:text-white">Choose Your Workout Type</h3>
-        <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">Select how you'd like to set up your circuit workout</p>
+        <h3 className="text-lg font-semibold mb-6 text-gray-900 dark:text-white">Choose Your Workout Type</h3>
         
         <div className="space-y-4">
           <button
             onClick={() => onSelect('custom')}
-            className="w-full p-6 rounded-xl border-2 border-gray-200 dark:border-gray-700 hover:border-primary dark:hover:border-primary transition-all duration-200 text-left group"
+            className="w-full p-6 rounded-xl border-2 border-gray-200 dark:border-gray-700 text-left"
           >
-            <div className="flex items-start space-x-4">
-              <div className="flex-shrink-0 w-12 h-12 bg-primary/10 dark:bg-primary/20 rounded-full flex items-center justify-center group-hover:bg-primary/20 dark:group-hover:bg-primary/30 transition-colors">
+            <div className="flex items-center space-x-4">
+              <div className="flex-shrink-0 w-12 h-12 bg-primary/10 dark:bg-primary/20 rounded-full flex items-center justify-center">
                 <svg className="w-6 h-6 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
                 </svg>
               </div>
               <div className="flex-1">
-                <h4 className="text-base font-semibold text-gray-900 dark:text-white group-hover:text-primary dark:group-hover:text-primary transition-colors">
+                <h4 className="text-base font-semibold text-gray-900 dark:text-white">
                   Build Custom Workout
                 </h4>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                  Create a personalized circuit by configuring rounds, timing, and exercises from scratch
-                </p>
               </div>
-              <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-primary transition-colors flex-shrink-0 mt-1" />
+              <ChevronRight className="w-5 h-5 text-gray-400 flex-shrink-0" />
             </div>
           </button>
           
           <button
             onClick={() => onSelect('template')}
-            className="w-full p-6 rounded-xl border-2 border-gray-200 dark:border-gray-700 hover:border-primary dark:hover:border-primary transition-all duration-200 text-left group"
+            className="w-full p-6 rounded-xl border-2 border-gray-200 dark:border-gray-700 text-left"
           >
-            <div className="flex items-start space-x-4">
-              <div className="flex-shrink-0 w-12 h-12 bg-primary/10 dark:bg-primary/20 rounded-full flex items-center justify-center group-hover:bg-primary/20 dark:group-hover:bg-primary/30 transition-colors">
+            <div className="flex items-center space-x-4">
+              <div className="flex-shrink-0 w-12 h-12 bg-primary/10 dark:bg-primary/20 rounded-full flex items-center justify-center">
                 <svg className="w-6 h-6 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
                 </svg>
               </div>
               <div className="flex-1">
-                <h4 className="text-base font-semibold text-gray-900 dark:text-white group-hover:text-primary dark:group-hover:text-primary transition-colors">
+                <h4 className="text-base font-semibold text-gray-900 dark:text-white">
                   Use Workout Template
                 </h4>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                  Start with a pre-built template and customize it to fit your needs
-                </p>
               </div>
-              <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-primary transition-colors flex-shrink-0 mt-1" />
+              <ChevronRight className="w-5 h-5 text-gray-400 flex-shrink-0" />
             </div>
           </button>
         </div>

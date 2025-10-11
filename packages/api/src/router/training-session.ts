@@ -15,6 +15,7 @@ import {
   CreateTrainingSessionSchema,
   CreateUserTrainingSessionSchema,
   exercises,
+  FavoriteSessions,
   TrainingSession,
   user,
   UserProfile,
@@ -4183,5 +4184,61 @@ Set your goals and preferences for today's session.`;
       console.log(`[updateSessionName] Session ${input.sessionId} name updated to: ${input.name}`);
 
       return updatedSession;
+    }),
+
+  /**
+   * Get favorite sessions by category for mobile circuit config page (public route)
+   */
+  getFavoritesByCategory: publicProcedure
+    .input(
+      z.object({
+        businessId: z.string().uuid(),
+        category: z.enum(["morning_sessions", "mens_fitness_connect", "other"]).optional(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      console.log(`[getFavoritesByCategory] Fetching favorites for business: ${input.businessId}, category: ${input.category || "all"}`);
+
+      // Build where conditions
+      const whereConditions = [
+        eq(FavoriteSessions.businessId, input.businessId),
+      ];
+      
+      if (input.category) {
+        whereConditions.push(eq(FavoriteSessions.category, input.category));
+      }
+
+      // Query favorite sessions with joined training session data
+      const favoriteSessions = await ctx.db
+        .select({
+          id: FavoriteSessions.id,
+          category: FavoriteSessions.category,
+          trainingSession: {
+            id: TrainingSession.id,
+            businessId: TrainingSession.businessId,
+            trainerId: TrainingSession.trainerId,
+            name: TrainingSession.name,
+            scheduledAt: TrainingSession.scheduledAt,
+            durationMinutes: TrainingSession.durationMinutes,
+            maxParticipants: TrainingSession.maxParticipants,
+            status: TrainingSession.status,
+            templateType: TrainingSession.templateType,
+            templateConfig: TrainingSession.templateConfig,
+            workoutOrganization: TrainingSession.workoutOrganization,
+            createdAt: TrainingSession.createdAt,
+            updatedAt: TrainingSession.updatedAt,
+          },
+        })
+        .from(FavoriteSessions)
+        .innerJoin(
+          TrainingSession,
+          eq(FavoriteSessions.trainingSessionId, TrainingSession.id),
+        )
+        .where(and(...whereConditions))
+        .orderBy(desc(TrainingSession.createdAt));
+
+      console.log(`[getFavoritesByCategory] Found ${favoriteSessions.length} favorite sessions`);
+
+      return favoriteSessions;
     }),
 } satisfies TRPCRouterRecord;
