@@ -4144,4 +4144,44 @@ Set your goals and preferences for today's session.`;
         newStatus: input.status,
       };
     }),
+
+  /**
+   * Update session name (public route)
+   */
+  updateSessionName: publicProcedure
+    .input(
+      z.object({
+        sessionId: z.string().uuid(),
+        name: z.string().min(1, "Session name is required").max(255, "Session name too long"),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      // Get the session to verify it exists
+      const [session] = await ctx.db
+        .select()
+        .from(TrainingSession)
+        .where(eq(TrainingSession.id, input.sessionId))
+        .limit(1);
+
+      if (!session) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Session not found",
+        });
+      }
+
+      // Update the session name
+      const [updatedSession] = await ctx.db
+        .update(TrainingSession)
+        .set({
+          name: input.name.trim(),
+          updatedAt: new Date(),
+        })
+        .where(eq(TrainingSession.id, input.sessionId))
+        .returning();
+
+      console.log(`[updateSessionName] Session ${input.sessionId} name updated to: ${input.name}`);
+
+      return updatedSession;
+    }),
 } satisfies TRPCRouterRecord;

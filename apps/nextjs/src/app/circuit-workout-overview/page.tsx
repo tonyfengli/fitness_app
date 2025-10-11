@@ -261,6 +261,10 @@ function CircuitWorkoutOverviewContent() {
   const [selectedCategory, setSelectedCategory] = useState<{ type: 'muscle' | 'movement' | 'equipment', value: string } | null>(null);
   const [categoryMode, setCategoryMode] = useState<'choice' | 'muscle' | 'movement' | 'equipment'>('choice');
   
+  // Session name editing state
+  const [isEditingSessionName, setIsEditingSessionName] = useState(false);
+  const [editingSessionName, setEditingSessionName] = useState("");
+  
   // Add exercise modal state (for stations rounds)
   const [showAddExerciseModal, setShowAddExerciseModal] = useState(false);
   const [addExerciseRoundName, setAddExerciseRoundName] = useState<string>("");
@@ -413,6 +417,31 @@ function CircuitWorkoutOverviewContent() {
     onError: (error) => {
       console.error("Failed to delete exercise:", error);
       alert("Failed to delete exercise. Please try again.");
+    },
+  });
+
+  // Session name update mutation
+  const updateSessionNameMutation = useMutation({
+    ...trpc.trainingSession.updateSessionName.mutationOptions(),
+    onSuccess: (data) => {
+      console.log("[updateSessionName] Success! Response:", data);
+      
+      // Exit editing mode
+      setIsEditingSessionName(false);
+      setEditingSessionName("");
+      
+      // Invalidate session data query to refresh the name
+      queryClient.invalidateQueries({
+        queryKey: trpc.trainingSession.getSession.queryOptions({ 
+          id: sessionId || "" 
+        }).queryKey,
+      });
+      
+      toast.success("Session name updated successfully");
+    },
+    onError: (error) => {
+      console.error("Failed to update session name:", error);
+      toast.error("Failed to update session name. Please try again.");
     },
   });
 
@@ -695,6 +724,19 @@ function CircuitWorkoutOverviewContent() {
     }
   }, [showMirrorConfirm]);
 
+  // Handle escape key to exit session name editing
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isEditingSessionName) {
+        setIsEditingSessionName(false);
+        setEditingSessionName("");
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [isEditingSessionName]);
+
   // Prevent body scroll when round options modal is open
   useEffect(() => {
     if (showRoundOptionsModal) {
@@ -758,6 +800,117 @@ function CircuitWorkoutOverviewContent() {
       <div className="pt-16 px-4 pb-8">
         <div className="mx-auto max-w-2xl">
 
+          {/* Session Name Header */}
+          {sessionData?.name && (
+            <div className="mt-6 mb-8 text-center">
+              {isEditingSessionName ? (
+                <div className="flex flex-col items-center gap-3">
+                  <div className="inline-flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 rounded-lg border-2 border-blue-500 dark:border-blue-400 shadow-lg">
+                    <input
+                      type="text"
+                      value={editingSessionName}
+                      onChange={(e) => setEditingSessionName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          if (editingSessionName.trim() && editingSessionName.trim() !== sessionData.name) {
+                            updateSessionNameMutation.mutate({
+                              sessionId: sessionId!,
+                              name: editingSessionName.trim(),
+                            });
+                          } else {
+                            setIsEditingSessionName(false);
+                            setEditingSessionName("");
+                          }
+                        } else if (e.key === 'Escape') {
+                          setIsEditingSessionName(false);
+                          setEditingSessionName("");
+                        }
+                      }}
+                      autoFocus
+                      className="text-lg font-semibold text-gray-900 dark:text-gray-100 bg-transparent border-none outline-none focus:ring-0 px-2 py-1 min-w-0"
+                      style={{ width: `${Math.max(editingSessionName.length, sessionData.name.length)}ch` }}
+                      disabled={updateSessionNameMutation.isPending}
+                      placeholder="Enter session name"
+                    />
+                  </div>
+                  
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        if (editingSessionName.trim() && editingSessionName.trim() !== sessionData.name) {
+                          updateSessionNameMutation.mutate({
+                            sessionId: sessionId!,
+                            name: editingSessionName.trim(),
+                          });
+                        } else {
+                          setIsEditingSessionName(false);
+                          setEditingSessionName("");
+                        }
+                      }}
+                      disabled={updateSessionNameMutation.isPending || !editingSessionName.trim()}
+                      className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 focus:outline-none focus:ring-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {updateSessionNameMutation.isPending ? (
+                        <>
+                          <svg className="animate-spin w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          Updating...
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                          </svg>
+                          Update
+                        </>
+                      )}
+                    </Button>
+                    
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setIsEditingSessionName(false);
+                        setEditingSessionName("");
+                      }}
+                      disabled={updateSessionNameMutation.isPending}
+                      className="px-4 py-2 focus:outline-none focus:ring-0"
+                    >
+                      <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div 
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors cursor-pointer group"
+                  onClick={() => {
+                    setIsEditingSessionName(true);
+                    setEditingSessionName(sessionData.name);
+                  }}
+                >
+                  <h1 className="text-lg font-semibold text-gray-900 dark:text-gray-100 group-hover:text-gray-700 dark:group-hover:text-gray-300 transition-colors">
+                    {sessionData.name}
+                  </h1>
+                  <svg 
+                    className="w-4 h-4 text-gray-400 dark:text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity" 
+                    fill="none" 
+                    viewBox="0 0 24 24" 
+                    stroke="currentColor" 
+                    strokeWidth="2"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                </div>
+              )}
+            </div>
+          )}
 
         {/* Warm-up Section */}
         {circuitConfig?.config?.warmup?.enabled && (
