@@ -7,6 +7,67 @@ import { cn } from "@acme/ui-shared";
 import type { CircuitConfig, RoundConfig } from "@acme/db";
 import { useTRPC } from "~/trpc/react";
 
+interface WorkoutTypeStepProps {
+  onSelect: (type: 'custom' | 'template') => void;
+}
+
+export function WorkoutTypeStep({ onSelect }: WorkoutTypeStepProps) {
+  return (
+    <div className="space-y-6">
+      <div>
+        <h3 className="text-lg font-semibold mb-1 text-gray-900 dark:text-white">Choose Your Workout Type</h3>
+        <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">Select how you'd like to set up your circuit workout</p>
+        
+        <div className="space-y-4">
+          <button
+            onClick={() => onSelect('custom')}
+            className="w-full p-6 rounded-xl border-2 border-gray-200 dark:border-gray-700 hover:border-primary dark:hover:border-primary transition-all duration-200 text-left group"
+          >
+            <div className="flex items-start space-x-4">
+              <div className="flex-shrink-0 w-12 h-12 bg-primary/10 dark:bg-primary/20 rounded-full flex items-center justify-center group-hover:bg-primary/20 dark:group-hover:bg-primary/30 transition-colors">
+                <svg className="w-6 h-6 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+                </svg>
+              </div>
+              <div className="flex-1">
+                <h4 className="text-base font-semibold text-gray-900 dark:text-white group-hover:text-primary dark:group-hover:text-primary transition-colors">
+                  Build Custom Workout
+                </h4>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                  Create a personalized circuit by configuring rounds, timing, and exercises from scratch
+                </p>
+              </div>
+              <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-primary transition-colors flex-shrink-0 mt-1" />
+            </div>
+          </button>
+          
+          <button
+            onClick={() => onSelect('template')}
+            className="w-full p-6 rounded-xl border-2 border-gray-200 dark:border-gray-700 hover:border-primary dark:hover:border-primary transition-all duration-200 text-left group"
+          >
+            <div className="flex items-start space-x-4">
+              <div className="flex-shrink-0 w-12 h-12 bg-primary/10 dark:bg-primary/20 rounded-full flex items-center justify-center group-hover:bg-primary/20 dark:group-hover:bg-primary/30 transition-colors">
+                <svg className="w-6 h-6 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                </svg>
+              </div>
+              <div className="flex-1">
+                <h4 className="text-base font-semibold text-gray-900 dark:text-white group-hover:text-primary dark:group-hover:text-primary transition-colors">
+                  Use Workout Template
+                </h4>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                  Start with a pre-built template and customize it to fit your needs
+                </p>
+              </div>
+              <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-primary transition-colors flex-shrink-0 mt-1" />
+            </div>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 interface RoundsStepProps {
   rounds: number;
   repeatRounds: boolean;

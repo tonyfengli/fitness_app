@@ -10,9 +10,9 @@ import { supabase } from "~/lib/supabase/client";
 import { useRealtimeCircuitConfig } from "@acme/ui-shared";
 import type { CircuitConfig } from "@acme/db";
 import { cn } from "@acme/ui-shared";
-import { RoundsStep, RoundTypesStep, PerRoundConfigStep, ExercisesStep, TimingStep, ReviewStep, SpotifyStep } from "./components";
+import { WorkoutTypeStep, RoundsStep, RoundTypesStep, PerRoundConfigStep, ExercisesStep, TimingStep, ReviewStep, SpotifyStep } from "./components";
 
-const TOTAL_STEPS = 5;
+const TOTAL_STEPS = 6;
 
 export default function CircuitConfigPage() {
   const params = useParams();
@@ -27,6 +27,7 @@ export default function CircuitConfigPage() {
   const [repeatRounds, setRepeatRounds] = useState(false);
   const [spotifyDeviceId, setSpotifyDeviceId] = useState<string | null>(null);
   const [spotifyDeviceName, setSpotifyDeviceName] = useState<string | null>(null);
+  const [workoutType, setWorkoutType] = useState<'custom' | 'template' | null>(null);
 
   // Get TRPC client
   const trpc = useTRPC();
@@ -188,11 +189,12 @@ export default function CircuitConfigPage() {
             <div className="text-center">
               <p className="text-xs text-gray-500 dark:text-white">Step {currentStep} of {TOTAL_STEPS}</p>
               <h1 className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                {currentStep === 1 && "Rounds"}
-                {currentStep === 2 && "Round Types"}
-                {currentStep === 3 && "Round Configuration"}
-                {currentStep === 4 && "Review"}
-                {currentStep === 5 && "Music"}
+                {currentStep === 1 && "Workout Type"}
+                {currentStep === 2 && "Rounds"}
+                {currentStep === 3 && "Round Types"}
+                {currentStep === 4 && "Round Configuration"}
+                {currentStep === 5 && "Review"}
+                {currentStep === 6 && "Music"}
               </h1>
             </div>
             
@@ -219,7 +221,7 @@ export default function CircuitConfigPage() {
           {/* Progress indicator */}
           <div className="px-4 pb-3">
             <div className="flex gap-1">
-              {[1, 2, 3, 4, 5].map((step) => (
+              {[1, 2, 3, 4, 5, 6].map((step) => (
                 <div
                   key={step}
                   className={cn(
@@ -242,8 +244,20 @@ export default function CircuitConfigPage() {
         {/* Step content */}
         <Card className="p-0 shadow-sm bg-white dark:bg-gray-800">
           <div className="p-6 space-y-6">
-            {/* Step 1: Rounds */}
+            {/* Step 1: Workout Type Selection */}
             {currentStep === 1 && (
+              <WorkoutTypeStep
+                onSelect={(type) => {
+                  setWorkoutType(type);
+                  // For now, just proceed to next step
+                  // In future, we can load templates if 'template' is selected
+                  handleNext();
+                }}
+              />
+            )}
+
+            {/* Step 2: Rounds */}
+            {currentStep === 2 && (
               <RoundsStep
                 rounds={config.config.rounds}
                 repeatRounds={repeatRounds}
@@ -258,8 +272,8 @@ export default function CircuitConfigPage() {
               />
             )}
 
-            {/* Step 2: Round Types */}
-            {currentStep === 2 && (
+            {/* Step 3: Round Types */}
+            {currentStep === 3 && (
               <RoundTypesStep
                 rounds={config.config.rounds}
                 roundTemplates={config.config.roundTemplates || []}
@@ -268,8 +282,8 @@ export default function CircuitConfigPage() {
               />
             )}
 
-            {/* Step 3: Per-Round Configuration */}
-            {currentStep === 3 && (
+            {/* Step 4: Per-Round Configuration */}
+            {currentStep === 4 && (
               <PerRoundConfigStep
                 rounds={config.config.rounds}
                 roundTemplates={config.config.roundTemplates || []}
@@ -278,16 +292,16 @@ export default function CircuitConfigPage() {
               />
             )}
 
-            {/* Step 4: Review */}
-            {currentStep === 4 && (
+            {/* Step 5: Review */}
+            {currentStep === 5 && (
               <ReviewStep
                 config={config}
                 repeatRounds={repeatRounds}
               />
             )}
 
-            {/* Step 5: Music */}
-            {currentStep === 5 && (
+            {/* Step 6: Music */}
+            {currentStep === 6 && (
               <>
                 {console.log('[CircuitConfig] Step 6 - Current Spotify state:', { spotifyDeviceId, spotifyDeviceName })}
                 <SpotifyStep
