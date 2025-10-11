@@ -394,14 +394,36 @@ export function PerRoundConfigStep({
   // Sort by round number
   const sortedRounds = [...normalizedTemplates].sort((a, b) => a.roundNumber - b.roundNumber);
 
-  const exerciseOptions = [2, 3, 4, 5, 6, 7, 8, 9, 10];
+  // Dynamic exercise options based on round type
+  const getExerciseOptions = (roundType: string) => {
+    switch (roundType) {
+      case 'circuit_round':
+      case 'amrap_round':
+        return [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]; // Allow 1 exercise for circuit and AMRAP rounds
+      case 'stations_round':
+        return [2, 3, 4, 5, 6, 7, 8, 9, 10]; // Stations require at least 2 exercises
+      default:
+        return [2, 3, 4, 5, 6, 7, 8, 9, 10];
+    }
+  };
   const workOptions = [20, 30, 40, 45, 60, 90, 120, 150, 180, 210, 240];
   const restOptions = [0, 10, 15, 20, 30, 45, 60];
   const setRestOptions = [15, 30, 45, 60, 90, 120]; // Rest between sets/repeats
   const amrapOptions = [120, 180, 240, 300, 360]; // 2-6 minutes
   
-  // Recommended values based on fitness science
-  const recommendedExercises = 6;
+  // Recommended values based on fitness science and round type
+  const getRecommendedExercises = (roundType: string) => {
+    switch (roundType) {
+      case 'circuit_round':
+        return 6; // Traditional circuit recommendation
+      case 'amrap_round':
+        return 3; // Fewer exercises for AMRAP to allow for more rounds
+      case 'stations_round':
+        return 6; // Multiple stations work well
+      default:
+        return 6;
+    }
+  };
   const recommendedWork = 45;
   const recommendedRest = 15;
   const recommendedAMRAP = 300; // 5 minutes
@@ -462,9 +484,9 @@ export function PerRoundConfigStep({
                   {isStations ? 'STATIONS' : 'EXERCISES'}
                 </span>
                 <div className="grid grid-cols-5 gap-1">
-                  {exerciseOptions.map((option) => {
+                  {getExerciseOptions(round.template.type).map((option) => {
                     const isSelected = round.template.exercisesPerRound === option;
-                    const isRecommended = option === recommendedExercises;
+                    const isRecommended = option === getRecommendedExercises(round.template.type);
                     return (
                       <Button
                         key={option}
