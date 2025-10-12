@@ -12,7 +12,7 @@ import type { CircuitConfig } from "@acme/db";
 import { cn } from "@acme/ui-shared";
 import { WorkoutTypeStep, CategorySelectionStep, TemplateSelectionStep, RoundsStep, RoundTypesStep, PerRoundConfigStep, ExercisesStep, TimingStep, ReviewStep, SpotifyStep } from "./components";
 
-const TOTAL_STEPS = 6;
+// TOTAL_STEPS is now dynamic based on workflow type
 
 export default function CircuitConfigPage() {
   const params = useParams();
@@ -150,7 +150,7 @@ export default function CircuitConfigPage() {
       // Normal flow for custom workout - skip step 2 and 3
       if (currentStep === 1) {
         setCurrentStep(4); // Skip to rounds (skip category/template steps)
-      } else if (currentStep < TOTAL_STEPS) {
+      } else if (currentStep < (workoutType === 'custom' ? 8 : 6)) {
         setCurrentStep(currentStep + 1);
       }
     }
@@ -225,10 +225,11 @@ export default function CircuitConfigPage() {
                 {workoutType === 'template' && currentStep === 3 && "Step 2 of 4"}
                 {workoutType === 'template' && currentStep === 5 && "Step 3 of 4"}
                 {workoutType === 'template' && currentStep === 6 && "Step 4 of 4"}
-                {workoutType === 'custom' && currentStep === 4 && "Step 1 of 4"}
-                {workoutType === 'custom' && currentStep === 5 && "Step 2 of 4"}
-                {workoutType === 'custom' && currentStep === 6 && "Step 3 of 4"}
-                {workoutType === 'custom' && currentStep === 7 && "Step 4 of 4"}
+                {workoutType === 'custom' && currentStep === 4 && "Step 1 of 5"}
+                {workoutType === 'custom' && currentStep === 5 && "Step 2 of 5"}
+                {workoutType === 'custom' && currentStep === 6 && "Step 3 of 5"}
+                {workoutType === 'custom' && currentStep === 7 && "Step 4 of 5"}
+                {workoutType === 'custom' && currentStep === 8 && "Step 5 of 5"}
                 {currentStep === 1 && ""}
               </p>
               <h1 className="text-sm font-medium text-gray-900 dark:text-gray-100">
@@ -238,13 +239,14 @@ export default function CircuitConfigPage() {
                 {currentStep === 4 && "Rounds"}
                 {currentStep === 5 && (workoutType === 'custom' ? "Round Types" : "Review")}
                 {currentStep === 6 && (workoutType === 'custom' ? "Per-Round Config" : "Music")}
-                {currentStep === 7 && workoutType === 'custom' && "Music"}
+                {currentStep === 7 && workoutType === 'custom' && "Review"}
+                {currentStep === 8 && workoutType === 'custom' && "Music"}
               </h1>
             </div>
             
             {currentStep === 1 ? (
               <div className="w-20" />
-            ) : currentStep < TOTAL_STEPS ? (
+            ) : currentStep < (workoutType === 'custom' ? 8 : 6) ? (
               <Button
                 size="sm"
                 onClick={handleNext}
@@ -268,21 +270,24 @@ export default function CircuitConfigPage() {
           {workoutType && (
             <div className="px-4 pb-3">
               <div className="flex gap-1">
-                {[1, 2, 3, 4].map((step) => {
+                {[1, 2, 3, 4, 5].map((step) => {
                   let isActive = false;
                   
                   if (workoutType === 'template') {
-                    // Template flow: 2, 3, 5, 6
+                    // Template flow: 2, 3, 5, 6 (4 steps total)
                     if (step === 1 && currentStep >= 2) isActive = true;
                     if (step === 2 && currentStep >= 3) isActive = true;
                     if (step === 3 && currentStep >= 5) isActive = true;
                     if (step === 4 && currentStep >= 6) isActive = true;
+                    // Hide step 5 for template workflow
+                    if (step === 5) return null;
                   } else if (workoutType === 'custom') {
-                    // Custom flow: 4, 5, 6, 7
+                    // Custom flow: 4, 5, 6, 7, 8 (5 steps total)
                     if (step === 1 && currentStep >= 4) isActive = true;
                     if (step === 2 && currentStep >= 5) isActive = true;
                     if (step === 3 && currentStep >= 6) isActive = true;
                     if (step === 4 && currentStep >= 7) isActive = true;
+                    if (step === 5 && currentStep >= 8) isActive = true;
                   }
                   
                   return (
@@ -393,8 +398,17 @@ export default function CircuitConfigPage() {
               />
             )}
 
-            {/* Step 6: Music (template) / Step 7: Music (custom) */}
-            {((currentStep === 6 && workoutType === 'template') || (currentStep === 7 && workoutType === 'custom')) && (
+            {/* Step 7: Review (for custom workflow) */}
+            {currentStep === 7 && workoutType === 'custom' && (
+              <ReviewStep
+                config={config}
+                repeatRounds={repeatRounds}
+                templateData={null}
+              />
+            )}
+
+            {/* Step 6: Music (template) / Step 8: Music (custom) */}
+            {((currentStep === 6 && workoutType === 'template') || (currentStep === 8 && workoutType === 'custom')) && (
               <SpotifyStep
                 deviceId={spotifyDeviceId}
                 deviceName={spotifyDeviceName}

@@ -1043,6 +1043,14 @@ interface ReviewStepProps {
 }
 
 export function ReviewStep({ config, repeatRounds, templateData }: ReviewStepProps) {
+  // Debug logging
+  console.log('[ReviewStep] Component mounted with:', {
+    config,
+    repeatRounds,
+    templateData,
+    roundTemplates: config.config.roundTemplates,
+  });
+  
   // Calculate total rounds including repeats/sets
   let totalRounds = 0;
   if (config.config.roundTemplates && config.config.roundTemplates.length > 0) {
@@ -1101,10 +1109,27 @@ export function ReviewStep({ config, repeatRounds, templateData }: ReviewStepPro
           {/* Round Cards */}
           <div className="space-y-4">
             {templateData.rounds.map((round, roundIndex) => {
+              // Debug logging
+              console.log('[ReviewStep] Processing round:', {
+                roundIndex,
+                roundName: round.roundName,
+                roundType: round.roundType,
+                roundTemplates: config.config.roundTemplates,
+              });
+              
               // Find the round template config for this round
+              // Round name is like "Round 1", so we extract the number
+              const roundNumber = parseInt(round.roundName.replace('Round ', ''), 10);
               const roundConfig = config.config.roundTemplates?.find(
-                (rt) => rt.roundKey === round.roundName.replace('Round ', '')
+                (rt) => rt.roundNumber === roundNumber
               );
+              
+              console.log('[ReviewStep] Found roundConfig:', {
+                roundNumber,
+                roundConfig,
+                template: roundConfig?.template,
+              });
+              
               const roundTemplate = roundConfig?.template;
               const isCircuit = round.roundType === 'circuit_round';
               const isStations = round.roundType === 'stations_round';
@@ -1160,7 +1185,17 @@ export function ReviewStep({ config, repeatRounds, templateData }: ReviewStepPro
                             {/* Timing details */}
                             <span className="text-xs text-gray-600 dark:text-gray-400">
                               {(isCircuit || isStations) && roundTemplate && (
-                                <>{(roundTemplate as any).workDuration}s work • {(roundTemplate as any).restDuration}s rest</>  
+                                <>
+                                  {(roundTemplate as any).workDuration}s work • {(roundTemplate as any).restDuration}s rest
+                                  {((roundTemplate as any).repeatTimes || 1) > 1 && (
+                                    <> • {(roundTemplate as any).restBetweenSets}s between sets</>
+                                  )}
+                                </>  
+                              )}
+                              {(isCircuit || isStations) && !roundTemplate && config.config.workDuration && (
+                                <>
+                                  {config.config.workDuration}s work • {config.config.restDuration}s rest
+                                </>
                               )}
                               {isAMRAP && roundTemplate && (
                                 <>{formatTime((roundTemplate as any).totalDuration || 300)} total</>  
@@ -1186,6 +1221,53 @@ export function ReviewStep({ config, repeatRounds, templateData }: ReviewStepPro
 
                   {/* Exercises Section */}
                   <div className="p-5 space-y-3">
+                    {/* Timing Summary Box */}
+                    {(roundTemplate || config.config.workDuration) && (
+                      <div className={cn(
+                        "rounded-lg p-3 mb-3 border",
+                        isCircuit && "bg-blue-50/50 dark:bg-blue-950/30 border-blue-200/50 dark:border-blue-800/50",
+                        isStations && "bg-green-50/50 dark:bg-green-950/30 border-green-200/50 dark:border-green-800/50",
+                        isAMRAP && "bg-purple-50/50 dark:bg-purple-950/30 border-purple-200/50 dark:border-purple-800/50"
+                      )}>
+                        <div className="flex items-center justify-between text-sm">
+                          <div className="flex items-center gap-4">
+                            {(isCircuit || isStations) && (
+                              <>
+                                <div className="flex items-center gap-1.5">
+                                  <svg className="w-4 h-4 text-gray-500 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                  </svg>
+                                  <span className="font-medium text-gray-700 dark:text-gray-300">
+                                    {roundTemplate ? (roundTemplate as any).workDuration : config.config.workDuration}s work
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-1.5">
+                                  <svg className="w-4 h-4 text-gray-500 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                  </svg>
+                                  <span className="font-medium text-gray-700 dark:text-gray-300">
+                                    {roundTemplate ? (roundTemplate as any).restDuration : config.config.restDuration}s rest
+                                  </span>
+                                </div>
+                              </>
+                            )}
+                            {isAMRAP && roundTemplate && (
+                              <div className="flex items-center gap-1.5">
+                                <svg className="w-4 h-4 text-gray-500 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                <span className="font-medium text-gray-700 dark:text-gray-300">
+                                  {formatTime((roundTemplate as any).totalDuration || 300)} total
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                          <div className="text-xs text-gray-500 dark:text-gray-400">
+                            {round.exercises.length} exercises
+                          </div>
+                        </div>
+                      </div>
+                    )}
                     {isStations ? (
                       // Station-based layout
                       <div className="space-y-3">
