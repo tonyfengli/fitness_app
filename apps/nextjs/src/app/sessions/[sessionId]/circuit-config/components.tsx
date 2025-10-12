@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button, Loader2Icon as Loader2, ChevronRightIcon as ChevronRight, ChevronLeftIcon as ChevronLeft } from "@acme/ui-shared";
 import { cn } from "@acme/ui-shared";
 import type { CircuitConfig, RoundConfig } from "@acme/db";
@@ -58,6 +58,7 @@ export function CategorySelectionStep({ onSelectCategory }: CategorySelectionSte
 
 export function TemplateSelectionStep({ category, onSelectTemplate }: TemplateSelectionStepProps) {
   const trpc = useTRPC();
+  const queryClient = useQueryClient();
   const [loadingTemplateId, setLoadingTemplateId] = useState<string | null>(null);
   
   // Fetch favorites for selected category - WITHOUT templateConfig for better performance
@@ -72,17 +73,31 @@ export function TemplateSelectionStep({ category, onSelectTemplate }: TemplateSe
   const handleTemplateSelect = async (favoriteId: string, sessionName: string) => {
     setLoadingTemplateId(favoriteId);
     try {
-      // Fetch the templateConfig only when the user selects a template
-      const { data } = await trpc.trainingSession.getFavoriteTemplateConfig.query({
-        favoriteId: favoriteId,
-      });
+      // Use fetchQuery to fetch data on-demand
+      const data = await queryClient.fetchQuery(
+        trpc.trainingSession.getFavoriteTemplateWithExercises.queryOptions({
+          favoriteId: favoriteId,
+        })
+      );
       
       if (data && data.templateConfig) {
         const templateConfig = data.templateConfig as CircuitConfig;
+        
+        console.log('[TemplateSelectionStep] Template data received:', {
+          sessionId: data.session.id,
+          sessionName: data.session.name,
+          templateConfig: templateConfig,
+          roundsCount: data.rounds.length,
+          rounds: data.rounds,
+          exercisesCount: data.exercises.length,
+        });
+        
         onSelectTemplate({
-          id: data.id,
-          name: data.name,
-          config: templateConfig?.config || {}
+          id: data.session.id,
+          name: data.session.name,
+          config: templateConfig?.config || {},
+          rounds: data.rounds, // Pass the rounds with exercises for preview
+          exercises: data.exercises,
         });
       }
     } catch (error) {
@@ -1021,9 +1036,13 @@ function TimingOption({
 interface ReviewStepProps {
   config: CircuitConfig;
   repeatRounds: boolean;
+  templateData?: {
+    rounds: any[];
+    exercises: any[];
+  } | null;
 }
 
-export function ReviewStep({ config, repeatRounds }: ReviewStepProps) {
+export function ReviewStep({ config, repeatRounds, templateData }: ReviewStepProps) {
   // Calculate total rounds including repeats/sets
   let totalRounds = 0;
   if (config.config.roundTemplates && config.config.roundTemplates.length > 0) {
@@ -1067,81 +1086,180 @@ export function ReviewStep({ config, repeatRounds }: ReviewStepProps) {
         </div>
       </div>
 
-      {/* Round Types Display */}
-      <div className="space-y-4">
-        <h4 className="text-sm font-semibold text-gray-600 dark:text-white">Round Types</h4>
-        <div className="space-y-2">
-          
-          {/* Regular Rounds */}
-          {config.config.roundTemplates && config.config.roundTemplates.map((rt) => {
-            const isCircuit = rt.template.type === 'circuit_round';
-            const isStations = rt.template.type === 'stations_round';
-            const isAMRAP = rt.template.type === 'amrap_round';
-            
-            return (
-              <div key={rt.roundNumber} className={cn(
-                "rounded-lg p-3 space-y-3 border",
-                isCircuit && "bg-blue-50/20 dark:bg-blue-500/10 border-blue-200/30 dark:border-blue-500/20",
-                isStations && "bg-green-50/20 dark:bg-green-500/10 border-green-200/30 dark:border-green-500/20",
-                isAMRAP && "bg-purple-50/20 dark:bg-purple-500/10 border-purple-200/30 dark:border-purple-500/20"
-              )}>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-gray-900 dark:text-white">Round {rt.roundNumber}</span>
-                  <span className={cn(
-                    "text-xs font-semibold px-2 py-0.5 rounded-full",
-                    isCircuit && "bg-blue-500/20 text-blue-700 dark:bg-blue-500/30 dark:text-blue-300",
-                    isStations && "bg-green-500/20 text-green-700 dark:bg-green-500/30 dark:text-green-300",
-                    isAMRAP && "bg-purple-500/20 text-purple-700 dark:bg-purple-500/30 dark:text-purple-300"
+
+      {/* Unified Template Preview - Card-based design */}
+      {templateData && templateData.rounds.length > 0 && (
+        <div className="space-y-4">
+          {/* Workout Overview Header */}
+          <div className="text-center space-y-1 pb-2">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Workout Overview</h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              {totalRounds} {totalRounds === 1 ? 'Round' : 'Rounds'} • {formatTime(totalTime)} Total
+            </p>
+          </div>
+
+          {/* Round Cards */}
+          <div className="space-y-4">
+            {templateData.rounds.map((round, roundIndex) => {
+              // Find the round template config for this round
+              const roundConfig = config.config.roundTemplates?.find(
+                (rt) => rt.roundKey === round.roundName.replace('Round ', '')
+              );
+              const roundTemplate = roundConfig?.template;
+              const isCircuit = round.roundType === 'circuit_round';
+              const isStations = round.roundType === 'stations_round';
+              const isAMRAP = round.roundType === 'amrap_round';
+              
+              return (
+                <div 
+                  key={roundIndex} 
+                  className={cn(
+                    "rounded-2xl border-2 overflow-hidden shadow-sm transition-all",
+                    isCircuit && "border-blue-200 dark:border-blue-800 bg-blue-50/30 dark:bg-blue-950/20",
+                    isStations && "border-green-200 dark:border-green-800 bg-green-50/30 dark:bg-green-950/20",
+                    isAMRAP && "border-purple-200 dark:border-purple-800 bg-purple-50/30 dark:bg-purple-950/20"
+                  )}
+                >
+                  {/* Card Header */}
+                  <div className={cn(
+                    "px-5 py-4 border-b",
+                    isCircuit && "bg-blue-100/50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-800",
+                    isStations && "bg-green-100/50 dark:bg-green-900/30 border-green-200 dark:border-green-800",
+                    isAMRAP && "bg-purple-100/50 dark:bg-purple-900/30 border-purple-200 dark:border-purple-800"
                   )}>
-                    {isCircuit && 'CIRCUIT'}
-                    {isStations && 'STATIONS'}
-                    {isAMRAP && 'AMRAP'}
-                  </span>
-                </div>
-                
-                <div className="space-y-2 text-xs">
-                  <div className="flex justify-between text-gray-600 dark:text-gray-300">
-                    <span>Exercises</span>
-                    <span className="font-medium">{rt.template.exercisesPerRound || 6}</span>
-                  </div>
-                  
-                  {(rt.template.type === 'circuit_round' || rt.template.type === 'stations_round') && (
-                    <>
-                      <div className="flex justify-between text-gray-600 dark:text-gray-300">
-                        <span>Work time</span>
-                        <span className="font-medium">{(rt.template as any).workDuration || 45}s</span>
-                      </div>
-                      <div className="flex justify-between text-gray-600 dark:text-gray-300">
-                        <span>Rest time</span>
-                        <span className="font-medium">{(rt.template as any).restDuration || 15}s</span>
-                      </div>
-                      {((rt.template as any).repeatTimes || 1) > 1 && (
-                        <>
-                          <div className="flex justify-between text-gray-600 dark:text-gray-300">
-                            <span>Sets</span>
-                            <span className="font-medium">{(rt.template as any).repeatTimes}x</span>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        {/* Round Number Badge */}
+                        <div className={cn(
+                          "w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg",
+                          isCircuit && "bg-blue-600 text-white",
+                          isStations && "bg-green-600 text-white",
+                          isAMRAP && "bg-purple-600 text-white"
+                        )}>
+                          {roundIndex + 1}
+                        </div>
+                        
+                        <div>
+                          <h4 className="font-semibold text-base text-gray-900 dark:text-white">
+                            {round.roundName}
+                          </h4>
+                          
+                          {/* Timing Info */}
+                          <div className="flex items-center gap-3 mt-0.5">
+                            <span className={cn(
+                              "text-xs font-medium px-2 py-0.5 rounded-full",
+                              isCircuit && "bg-blue-200 text-blue-800 dark:bg-blue-800/50 dark:text-blue-200",
+                              isStations && "bg-green-200 text-green-800 dark:bg-green-800/50 dark:text-green-200",
+                              isAMRAP && "bg-purple-200 text-purple-800 dark:bg-purple-800/50 dark:text-purple-200"
+                            )}>
+                              {isCircuit && 'Circuit'}
+                              {isStations && 'Stations'}
+                              {isAMRAP && 'AMRAP'}
+                            </span>
+                            
+                            {/* Timing details */}
+                            <span className="text-xs text-gray-600 dark:text-gray-400">
+                              {(isCircuit || isStations) && roundTemplate && (
+                                <>{(roundTemplate as any).workDuration}s work • {(roundTemplate as any).restDuration}s rest</>  
+                              )}
+                              {isAMRAP && roundTemplate && (
+                                <>{formatTime((roundTemplate as any).totalDuration || 300)} total</>  
+                              )}
+                            </span>
                           </div>
-                          <div className="flex justify-between text-gray-600 dark:text-gray-300">
-                            <span>Rest between sets</span>
-                            <span className="font-medium">{(rt.template as any).restBetweenSets || 30}s</span>
-                          </div>
-                        </>
+                        </div>
+                      </div>
+                      
+                      {/* Repeat Indicator */}
+                      {roundTemplate && ((roundTemplate as any).repeatTimes || 1) > 1 && (
+                        <div className={cn(
+                          "px-3 py-1.5 rounded-lg font-bold text-sm",
+                          isCircuit && "bg-blue-200 text-blue-800 dark:bg-blue-800/50 dark:text-blue-200",
+                          isStations && "bg-green-200 text-green-800 dark:bg-green-800/50 dark:text-green-200",
+                          isAMRAP && "bg-purple-200 text-purple-800 dark:bg-purple-800/50 dark:text-purple-200"
+                        )}>
+                          {(roundTemplate as any).repeatTimes}×
+                        </div>
                       )}
-                    </>
-                  )}
-                  
-                  {rt.template.type === 'amrap_round' && (
-                    <div className="flex justify-between text-gray-600 dark:text-gray-300">
-                      <span>Total time</span>
-                      <span className="font-medium">{formatTime((rt.template as any).totalDuration || 300)}</span>
                     </div>
-                  )}
+                  </div>
+
+                  {/* Exercises Section */}
+                  <div className="p-5 space-y-3">
+                    {isStations ? (
+                      // Station-based layout
+                      <div className="space-y-3">
+                        {round.exercises
+                          .filter((exercise: any, index: number) => {
+                            // Only show first exercise of each station
+                            return index === 0 || round.exercises[index - 1].orderIndex !== exercise.orderIndex;
+                          })
+                          .map((exercise: any, stationIndex: number) => {
+                            // Get all exercises at this station
+                            const stationExercises = round.exercises.filter(
+                              (ex: any) => ex.orderIndex === exercise.orderIndex
+                            );
+                            
+                            return (
+                              <div key={stationIndex} className="bg-white/60 dark:bg-gray-800/60 rounded-lg p-4 border border-gray-200/50 dark:border-gray-700/50">
+                                <div className="flex items-start gap-3">
+                                  <div className="flex-shrink-0 w-8 h-8 bg-green-500/20 dark:bg-green-500/30 rounded-full flex items-center justify-center">
+                                    <span className="text-sm font-bold text-green-700 dark:text-green-400">
+                                      S{stationIndex + 1}
+                                    </span>
+                                  </div>
+                                  <div className="flex-1">
+                                    <div className="space-y-1">
+                                      {stationExercises.map((ex: any, exIndex: number) => (
+                                        <p key={exIndex} className="text-sm font-medium text-gray-800 dark:text-gray-200">
+                                          {ex.exerciseName}
+                                        </p>
+                                      ))}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                      </div>
+                    ) : (
+                      // Regular exercise layout (Circuit/AMRAP)
+                      <div className="grid gap-2">
+                        {round.exercises.map((exercise: any, exIndex: number) => (
+                          <div 
+                            key={exIndex} 
+                            className="flex items-center gap-3 p-3 bg-white/60 dark:bg-gray-800/60 rounded-lg border border-gray-200/50 dark:border-gray-700/50"
+                          >
+                            <div className={cn(
+                              "flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold",
+                              isCircuit && "bg-blue-100 text-blue-700 dark:bg-blue-800/50 dark:text-blue-300",
+                              isAMRAP && "bg-purple-100 text-purple-700 dark:bg-purple-800/50 dark:text-purple-300"
+                            )}>
+                              {exIndex + 1}
+                            </div>
+                            <p className="flex-1 text-sm font-medium text-gray-800 dark:text-gray-200">
+                              {exercise.exerciseName}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    
+                    {/* Rest between rounds info */}
+                    {roundIndex < templateData.rounds.length - 1 && config.config.restBetweenRounds > 0 && (
+                      <div className="mt-4 pt-3 border-t border-gray-200/50 dark:border-gray-700/50">
+                        <p className="text-xs text-gray-500 dark:text-gray-400 text-center">
+                          Rest {config.config.restBetweenRounds}s before next round
+                        </p>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Ready Message */}
       <div className="rounded-xl bg-green-500/10 border border-green-500/20 p-4 text-center">

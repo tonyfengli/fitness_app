@@ -29,6 +29,7 @@ export default function CircuitConfigPage() {
   const [spotifyDeviceName, setSpotifyDeviceName] = useState<string | null>(null);
   const [workoutType, setWorkoutType] = useState<'custom' | 'template' | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [templateData, setTemplateData] = useState<{ rounds: any[], exercises: any[] } | null>(null);
 
   // Get TRPC client
   const trpc = useTRPC();
@@ -337,6 +338,11 @@ export default function CircuitConfigPage() {
                     ...template.config,
                     roundTemplates: template.config.roundTemplates
                   });
+                  // Store template data for review
+                  setTemplateData({
+                    rounds: template.rounds || [],
+                    exercises: template.exercises || [],
+                  });
                   handleNext();
                 }}
               />
@@ -383,6 +389,7 @@ export default function CircuitConfigPage() {
               <ReviewStep
                 config={config}
                 repeatRounds={repeatRounds}
+                templateData={templateData}
               />
             )}
 

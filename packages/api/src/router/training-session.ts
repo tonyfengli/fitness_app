@@ -4287,4 +4287,147 @@ Set your goals and preferences for today's session.`;
         templateConfig: favoriteSession.trainingSession.templateConfig,
       };
     }),
+
+  // Get complete template data including exercises for preview
+  getFavoriteTemplateWithExercises: publicProcedure
+    .input(
+      z.object({
+        favoriteId: z.string().uuid(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      console.log(`[getFavoriteTemplateWithExercises] Fetching complete template for favorite: ${input.favoriteId}`);
+
+      // Get the favorite with full training session data
+      const favorite = await ctx.db.query.FavoriteSessions.findFirst({
+        where: eq(FavoriteSessions.id, input.favoriteId),
+        with: {
+          trainingSession: true,
+        },
+      });
+
+      if (!favorite) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Favorite session not found",
+        });
+      }
+
+      const trainingSession = favorite.trainingSession;
+      const templateConfig = trainingSession.templateConfig as any;
+      const configData = templateConfig?.config || templateConfig; // Handle nested config structure
+      
+      // Find a workout for this session to get exercises
+      // For templates, we just need ANY workout - they all have the same exercises for circuits
+      const workout = await ctx.db.query.Workout.findFirst({
+        where: and(
+          eq(Workout.trainingSessionId, trainingSession.id),
+          // Accept any status for historical data
+          or(
+            eq(Workout.status, "draft"),
+            eq(Workout.status, "ready"),
+            eq(Workout.status, "completed"),
+          ),
+        ),
+      });
+
+      // If no workout found, return template without exercises
+      if (!workout) {
+        console.log(`[getFavoriteTemplateWithExercises] No workout found for session ${trainingSession.id}`);
+        return {
+          favorite: {
+            id: favorite.id,
+            category: favorite.category,
+          },
+          session: {
+            id: trainingSession.id,
+            name: trainingSession.name,
+            scheduledAt: trainingSession.scheduledAt,
+            durationMinutes: trainingSession.durationMinutes,
+          },
+          templateConfig,
+          exercises: [],
+          rounds: [],
+        };
+      }
+
+      // Get all exercises for this workout
+      const workoutExercises = await ctx.db
+        .select({
+          we: WorkoutExercise,
+          exercise: exercises,
+        })
+        .from(WorkoutExercise)
+        .leftJoin(exercises, eq(WorkoutExercise.exerciseId, exercises.id))
+        .where(eq(WorkoutExercise.workoutId, workout.id))
+        .orderBy(asc(WorkoutExercise.orderIndex));
+
+      // Transform exercises for template display
+      const exerciseList = workoutExercises.map((row) => ({
+        id: row.we.id,
+        exerciseId: row.we.exerciseId,
+        exerciseName: (row.we.custom_exercise as any)?.customName || row.exercise?.name || 'Unknown Exercise',
+        orderIndex: row.we.orderIndex,
+        groupName: row.we.groupName || 'Round 1',
+        stationIndex: row.we.stationIndex,
+        template: row.we.template,
+      }));
+
+      // Group exercises by round for easier display
+      const roundsMap = new Map<string, any[]>();
+      exerciseList.forEach((exercise) => {
+        const round = exercise.groupName;
+        if (!roundsMap.has(round)) {
+          roundsMap.set(round, []);
+        }
+        roundsMap.get(round)!.push(exercise);
+      });
+
+      // Convert to array and sort by round name
+      const rounds = Array.from(roundsMap.entries())
+        .map(([roundName, exercises]) => {
+          const roundNum = parseInt(roundName.replace('Round ', ''));
+          console.log(`[getFavoriteTemplateWithExercises] Processing ${roundName}:`, {
+            roundNum,
+            roundTemplates: configData?.roundTemplates,
+            matchingTemplate: configData?.roundTemplates?.find((rt: any) => rt.roundNumber === roundNum),
+          });
+          
+          const roundType = configData?.roundTemplates?.find((rt: any) => 
+            rt.roundNumber === roundNum
+          )?.template?.type || 'circuit_round';
+          
+          console.log(`[getFavoriteTemplateWithExercises] Round ${roundNum} type: ${roundType}`);
+          
+          return {
+            roundName,
+            exercises: exercises.sort((a, b) => a.orderIndex - b.orderIndex),
+            roundType,
+          };
+        })
+        .sort((a, b) => {
+          // Sort by round number
+          const aNum = parseInt(a.roundName.replace('Round ', ''));
+          const bNum = parseInt(b.roundName.replace('Round ', ''));
+          return aNum - bNum;
+        });
+
+      console.log(`[getFavoriteTemplateWithExercises] Found ${exerciseList.length} exercises in ${rounds.length} rounds`);
+
+      return {
+        favorite: {
+          id: favorite.id,
+          category: favorite.category,
+        },
+        session: {
+          id: trainingSession.id,
+          name: trainingSession.name,
+          scheduledAt: trainingSession.scheduledAt,
+          durationMinutes: trainingSession.durationMinutes,
+        },
+        templateConfig,
+        exercises: exerciseList,
+        rounds,
+      };
+    }),
 } satisfies TRPCRouterRecord;
