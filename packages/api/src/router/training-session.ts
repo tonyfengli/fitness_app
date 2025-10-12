@@ -4194,10 +4194,11 @@ Set your goals and preferences for today's session.`;
       z.object({
         businessId: z.string().uuid(),
         category: z.enum(["morning_sessions", "mens_fitness_connect", "other"]).optional(),
+        includeTemplateConfig: z.boolean().optional().default(false), // New optional parameter
       }),
     )
     .query(async ({ ctx, input }) => {
-      console.log(`[getFavoritesByCategory] Fetching favorites for business: ${input.businessId}, category: ${input.category || "all"}`);
+      console.log(`[getFavoritesByCategory] Fetching favorites for business: ${input.businessId}, category: ${input.category || "all"}, includeTemplateConfig: ${input.includeTemplateConfig}`);
 
       // Build where conditions
       const whereConditions = [
@@ -4209,6 +4210,7 @@ Set your goals and preferences for today's session.`;
       }
 
       // Query favorite sessions with joined training session data
+      // Conditionally include templateConfig based on the parameter
       const favoriteSessions = await ctx.db
         .select({
           id: FavoriteSessions.id,
@@ -4223,8 +4225,9 @@ Set your goals and preferences for today's session.`;
             maxParticipants: TrainingSession.maxParticipants,
             status: TrainingSession.status,
             templateType: TrainingSession.templateType,
-            templateConfig: TrainingSession.templateConfig,
-            workoutOrganization: TrainingSession.workoutOrganization,
+            // Only include templateConfig if explicitly requested
+            ...(input.includeTemplateConfig && { templateConfig: TrainingSession.templateConfig }),
+            // Never include workoutOrganization for listing - it's also a large JSON field
             createdAt: TrainingSession.createdAt,
             updatedAt: TrainingSession.updatedAt,
           },
@@ -4240,5 +4243,48 @@ Set your goals and preferences for today's session.`;
       console.log(`[getFavoritesByCategory] Found ${favoriteSessions.length} favorite sessions`);
 
       return favoriteSessions;
+    }),
+
+  // New endpoint specifically for getting a single favorite's template config
+  getFavoriteTemplateConfig: publicProcedure
+    .input(
+      z.object({
+        favoriteId: z.string().uuid(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      console.log(`[getFavoriteTemplateConfig] Fetching template config for favorite: ${input.favoriteId}`);
+
+      // Get the favorite session with its template config
+      const favoriteSession = await ctx.db
+        .select({
+          id: FavoriteSessions.id,
+          trainingSession: {
+            id: TrainingSession.id,
+            name: TrainingSession.name,
+            templateConfig: TrainingSession.templateConfig,
+          },
+        })
+        .from(FavoriteSessions)
+        .innerJoin(
+          TrainingSession,
+          eq(FavoriteSessions.trainingSessionId, TrainingSession.id),
+        )
+        .where(eq(FavoriteSessions.id, input.favoriteId))
+        .limit(1)
+        .then((res) => res[0]);
+
+      if (!favoriteSession) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Favorite session not found",
+        });
+      }
+
+      return {
+        id: favoriteSession.trainingSession.id,
+        name: favoriteSession.trainingSession.name,
+        templateConfig: favoriteSession.trainingSession.templateConfig,
+      };
     }),
 } satisfies TRPCRouterRecord;

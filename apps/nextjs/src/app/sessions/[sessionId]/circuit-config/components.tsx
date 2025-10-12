@@ -58,14 +58,39 @@ export function CategorySelectionStep({ onSelectCategory }: CategorySelectionSte
 
 export function TemplateSelectionStep({ category, onSelectTemplate }: TemplateSelectionStepProps) {
   const trpc = useTRPC();
+  const [loadingTemplateId, setLoadingTemplateId] = useState<string | null>(null);
   
-  // Fetch favorites for selected category
+  // Fetch favorites for selected category - WITHOUT templateConfig for better performance
   const { data: favorites, isLoading } = useQuery({
     ...trpc.trainingSession.getFavoritesByCategory.queryOptions({
       businessId: BUSINESS_ID,
       category: category,
+      includeTemplateConfig: false, // Don't fetch heavy templateConfig during listing
     }),
   });
+
+  const handleTemplateSelect = async (favoriteId: string, sessionName: string) => {
+    setLoadingTemplateId(favoriteId);
+    try {
+      // Fetch the templateConfig only when the user selects a template
+      const { data } = await trpc.trainingSession.getFavoriteTemplateConfig.query({
+        favoriteId: favoriteId,
+      });
+      
+      if (data && data.templateConfig) {
+        const templateConfig = data.templateConfig as CircuitConfig;
+        onSelectTemplate({
+          id: data.id,
+          name: data.name,
+          config: templateConfig?.config || {}
+        });
+      }
+    } catch (error) {
+      console.error('Failed to fetch template config:', error);
+    } finally {
+      setLoadingTemplateId(null);
+    }
+  };
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -94,24 +119,22 @@ export function TemplateSelectionStep({ category, onSelectTemplate }: TemplateSe
             {favorites.map((favorite) => (
               <button
                 key={favorite.id}
-                onClick={() => {
-                  // Extract the circuit config from the template config
-                  const templateConfig = favorite.trainingSession.templateConfig as CircuitConfig;
-                  onSelectTemplate({
-                    id: favorite.trainingSession.id,
-                    name: favorite.trainingSession.name,
-                    config: templateConfig?.config || {}
-                  });
-                }}
-                className="w-full p-6 rounded-xl border-2 border-gray-200 dark:border-gray-700 text-left"
+                onClick={() => handleTemplateSelect(favorite.id, favorite.trainingSession.name)}
+                disabled={loadingTemplateId !== null}
+                className="w-full p-6 rounded-xl border-2 border-gray-200 dark:border-gray-700 text-left disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <div className="space-y-1">
-                  <h4 className="text-base font-semibold text-gray-900 dark:text-white">
-                    {favorite.trainingSession.name}
-                  </h4>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
-                    Created {formatDate(favorite.trainingSession.createdAt)}
-                  </p>
+                <div className="flex items-center justify-between">
+                  <div className="space-y-1">
+                    <h4 className="text-base font-semibold text-gray-900 dark:text-white">
+                      {favorite.trainingSession.name}
+                    </h4>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      Created {formatDate(favorite.trainingSession.createdAt)}
+                    </p>
+                  </div>
+                  {loadingTemplateId === favorite.id && (
+                    <Loader2 className="h-5 w-5 animate-spin text-gray-400" />
+                  )}
                 </div>
               </button>
             ))}

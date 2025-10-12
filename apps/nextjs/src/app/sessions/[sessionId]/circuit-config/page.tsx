@@ -12,7 +12,7 @@ import type { CircuitConfig } from "@acme/db";
 import { cn } from "@acme/ui-shared";
 import { WorkoutTypeStep, CategorySelectionStep, TemplateSelectionStep, RoundsStep, RoundTypesStep, PerRoundConfigStep, ExercisesStep, TimingStep, ReviewStep, SpotifyStep } from "./components";
 
-const TOTAL_STEPS = 7;
+const TOTAL_STEPS = 6;
 
 export default function CircuitConfigPage() {
   const params = useParams();
@@ -220,18 +220,18 @@ export default function CircuitConfigPage() {
             
             <div className="text-center">
               <p className="text-xs text-gray-500 dark:text-white">
-                {workoutType === 'template' && currentStep === 2 && "Step 2 of 5"}
-                {workoutType === 'template' && currentStep === 3 && "Step 3 of 5"}
-                {workoutType === 'template' && currentStep === 5 && "Step 4 of 5"}
-                {workoutType === 'template' && currentStep === 6 && "Step 5 of 5"}
-                {workoutType === 'custom' && currentStep === 4 && "Step 2 of 4"}
-                {workoutType === 'custom' && currentStep === 5 && "Step 3 of 5"}
-                {workoutType === 'custom' && currentStep === 6 && "Step 4 of 5"}
-                {workoutType === 'custom' && currentStep === 7 && "Step 5 of 5"}
-                {currentStep === 1 && "Step 1"}
+                {workoutType === 'template' && currentStep === 2 && "Step 1 of 4"}
+                {workoutType === 'template' && currentStep === 3 && "Step 2 of 4"}
+                {workoutType === 'template' && currentStep === 5 && "Step 3 of 4"}
+                {workoutType === 'template' && currentStep === 6 && "Step 4 of 4"}
+                {workoutType === 'custom' && currentStep === 4 && "Step 1 of 4"}
+                {workoutType === 'custom' && currentStep === 5 && "Step 2 of 4"}
+                {workoutType === 'custom' && currentStep === 6 && "Step 3 of 4"}
+                {workoutType === 'custom' && currentStep === 7 && "Step 4 of 4"}
+                {currentStep === 1 && ""}
               </p>
               <h1 className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                {currentStep === 1 && "Workout Type"}
+                {currentStep === 1 && "Choose Your Workout Type"}
                 {currentStep === 2 && "Category"}
                 {currentStep === 3 && "Templates"}
                 {currentStep === 4 && "Rounds"}
@@ -241,7 +241,9 @@ export default function CircuitConfigPage() {
               </h1>
             </div>
             
-            {currentStep < TOTAL_STEPS ? (
+            {currentStep === 1 ? (
+              <div className="w-20" />
+            ) : currentStep < TOTAL_STEPS ? (
               <Button
                 size="sm"
                 onClick={handleNext}
@@ -261,43 +263,40 @@ export default function CircuitConfigPage() {
             )}
           </div>
 
-          {/* Progress indicator */}
-          <div className="px-4 pb-3">
-            <div className="flex gap-1">
-              {(workoutType === 'custom' ? [1, 2, 3, 4, 5] : [1, 2, 3, 4, 5]).map((step) => {
-                let isActive = false;
-                
-                if (workoutType === 'template') {
-                  // Template flow: 1, 2, 3, 5, 6
-                  if (step === 1 && currentStep >= 1) isActive = true;
-                  if (step === 2 && currentStep >= 2) isActive = true;
-                  if (step === 3 && currentStep >= 3) isActive = true;
-                  if (step === 4 && currentStep >= 5) isActive = true;
-                  if (step === 5 && currentStep >= 6) isActive = true;
-                } else if (workoutType === 'custom') {
-                  // Custom flow: 1, 4, 5, 6, 7
-                  if (step === 1 && currentStep >= 1) isActive = true;
-                  if (step === 2 && currentStep >= 4) isActive = true;
-                  if (step === 3 && currentStep >= 5) isActive = true;
-                  if (step === 4 && currentStep >= 6) isActive = true;
-                  if (step === 5 && currentStep >= 7) isActive = true;
-                } else {
-                  // Default when no workout type selected
-                  if (step === 1 && currentStep >= 1) isActive = true;
-                }
-                
-                return (
-                  <div
-                    key={step}
-                    className={cn(
-                      "h-1 flex-1 rounded-full transition-all duration-300",
-                      isActive ? "bg-primary" : "bg-muted"
-                    )}
-                  />
-                );
-              })}
+          {/* Progress indicator - only show after workout type is selected */}
+          {workoutType && (
+            <div className="px-4 pb-3">
+              <div className="flex gap-1">
+                {[1, 2, 3, 4].map((step) => {
+                  let isActive = false;
+                  
+                  if (workoutType === 'template') {
+                    // Template flow: 2, 3, 5, 6
+                    if (step === 1 && currentStep >= 2) isActive = true;
+                    if (step === 2 && currentStep >= 3) isActive = true;
+                    if (step === 3 && currentStep >= 5) isActive = true;
+                    if (step === 4 && currentStep >= 6) isActive = true;
+                  } else if (workoutType === 'custom') {
+                    // Custom flow: 4, 5, 6, 7
+                    if (step === 1 && currentStep >= 4) isActive = true;
+                    if (step === 2 && currentStep >= 5) isActive = true;
+                    if (step === 3 && currentStep >= 6) isActive = true;
+                    if (step === 4 && currentStep >= 7) isActive = true;
+                  }
+                  
+                  return (
+                    <div
+                      key={step}
+                      className={cn(
+                        "h-1 flex-1 rounded-full transition-all duration-300",
+                        isActive ? "bg-primary" : "bg-muted"
+                      )}
+                    />
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
 
