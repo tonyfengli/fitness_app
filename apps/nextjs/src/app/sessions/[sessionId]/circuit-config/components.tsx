@@ -1043,36 +1043,75 @@ interface ReviewStepProps {
 }
 
 export function ReviewStep({ config, repeatRounds, templateData }: ReviewStepProps) {
-  // Debug logging
-  console.log('[ReviewStep] Component mounted with:', {
-    config,
-    repeatRounds,
-    templateData,
-    roundTemplates: config.config.roundTemplates,
-  });
   
-  // Calculate total rounds including repeats/sets
+  // Calculate total workout time by summing all rounds + rest between rounds
+  let totalTime = 0;
   let totalRounds = 0;
+  
   if (config.config.roundTemplates && config.config.roundTemplates.length > 0) {
-    config.config.roundTemplates.forEach((rt) => {
-      if (rt.template.type === 'circuit_round' || rt.template.type === 'stations_round') {
-        totalRounds += (rt.template as any).repeatTimes || 1;
-      } else {
-        totalRounds += 1; // AMRAP rounds don't have repeats
+    // For custom workflows, generate preview data
+    const previewRounds = templateData?.rounds || config.config.roundTemplates?.map((rt) => ({
+      roundName: `Round ${rt.roundNumber}`,
+      roundType: rt.template.type,
+      exercises: Array.from({ length: rt.template.exercisesPerRound }, (_, i) => ({
+        exerciseName: `Exercise ${i + 1}`,
+        orderIndex: i + 1,
+      })),
+    })) || [];
+    
+    // Calculate time for each round
+    config.config.roundTemplates.forEach((rt, index) => {
+      const roundTemplate = rt.template;
+      const round = previewRounds[index];
+      
+      if (roundTemplate.type === 'amrap_round') {
+        // AMRAP rounds use fixed duration
+        totalTime += (roundTemplate as any).totalDuration || 300;
+        totalRounds += 1;
+      } else if (roundTemplate.type === 'circuit_round' || roundTemplate.type === 'stations_round') {
+        // Calculate units (exercises for circuit, unique stations for stations)
+        let unitsCount = roundTemplate.exercisesPerRound;
+        
+        if (roundTemplate.type === 'stations_round' && round && round.exercises) {
+          const uniqueStations = new Set(round.exercises.map((ex: any) => ex.stationIndex || ex.orderIndex));
+          unitsCount = uniqueStations.size || roundTemplate.exercisesPerRound;
+        }
+        
+        const workTime = (roundTemplate as any).workDuration || 0;
+        const restTime = (roundTemplate as any).restDuration || 0;
+        const sets = (roundTemplate as any).repeatTimes || 1;
+        const restBetweenSets = (roundTemplate as any).restBetweenSets || 0;
+        
+        // Time for one set: units * (work + rest) - last rest
+        const timePerSet = unitsCount * (workTime + restTime) - restTime;
+        // Total time for this round: (timePerSet * sets) + (restBetweenSets * (sets - 1))
+        const roundTime = (timePerSet * sets) + (restBetweenSets * (sets - 1));
+        
+        totalTime += roundTime;
+        totalRounds += sets;
+      }
+      
+      // Add rest between rounds (except after last round)
+      if (index < config.config.roundTemplates.length - 1 && config.config.restBetweenRounds > 0) {
+        totalTime += config.config.restBetweenRounds;
       }
     });
   } else {
     // Fallback for legacy configs
     totalRounds = repeatRounds ? config.config.rounds * 2 : config.config.rounds;
+    const totalExercises = totalRounds * config.config.exercisesPerRound;
+    const totalWorkTime = totalExercises * config.config.workDuration;
+    const totalRestTime = 
+      (totalExercises - totalRounds) * config.config.restDuration + 
+      (totalRounds - 1) * config.config.restBetweenRounds;
+    totalTime = totalWorkTime + totalRestTime;
   }
   
-  const totalExercises = totalRounds * config.config.exercisesPerRound;
-  const totalWorkTime = totalExercises * config.config.workDuration;
-  const totalRestTime = 
-    (totalExercises - totalRounds) * config.config.restDuration + 
-    (totalRounds - 1) * config.config.restBetweenRounds;
-  
-  const totalTime = totalWorkTime + totalRestTime;
+  console.log('[ReviewStep] Total time calculation:', {
+    totalTime,
+    totalRounds,
+    totalMinutes: Math.floor(totalTime / 60),
+  });
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -1096,7 +1135,22 @@ export function ReviewStep({ config, repeatRounds, templateData }: ReviewStepPro
 
 
       {/* Unified Template Preview - Card-based design */}
-      {templateData && templateData.rounds.length > 0 && (
+      {/* Generate preview data for custom workflows if no templateData */}
+      {(templateData || config.config.roundTemplates) && (() => {
+        // For custom workflows, generate rounds from config
+        const previewData = templateData || {
+          rounds: config.config.roundTemplates?.map((rt, index) => ({
+            roundName: `Round ${rt.roundNumber}`,
+            roundType: rt.template.type,
+            exercises: Array.from({ length: rt.template.exercisesPerRound }, (_, i) => ({
+              exerciseName: `Exercise ${i + 1}`,
+              orderIndex: i + 1,
+            })),
+          })) || [],
+          exercises: [],
+        };
+        
+        return previewData.rounds.length > 0 && (
         <div className="space-y-4">
           {/* Workout Overview Header */}
           <div className="text-center space-y-1 pb-2">
@@ -1108,14 +1162,7 @@ export function ReviewStep({ config, repeatRounds, templateData }: ReviewStepPro
 
           {/* Round Cards */}
           <div className="space-y-4">
-            {templateData.rounds.map((round, roundIndex) => {
-              // Debug logging
-              console.log('[ReviewStep] Processing round:', {
-                roundIndex,
-                roundName: round.roundName,
-                roundType: round.roundType,
-                roundTemplates: config.config.roundTemplates,
-              });
+            {previewData.rounds.map((round, roundIndex) => {
               
               // Find the round template config for this round
               // Round name is like "Round 1", so we extract the number
@@ -1124,11 +1171,6 @@ export function ReviewStep({ config, repeatRounds, templateData }: ReviewStepPro
                 (rt) => rt.roundNumber === roundNumber
               );
               
-              console.log('[ReviewStep] Found roundConfig:', {
-                roundNumber,
-                roundConfig,
-                template: roundConfig?.template,
-              });
               
               const roundTemplate = roundConfig?.template;
               const isCircuit = round.roundType === 'circuit_round';
@@ -1182,24 +1224,46 @@ export function ReviewStep({ config, repeatRounds, templateData }: ReviewStepPro
                               {isAMRAP && 'AMRAP'}
                             </span>
                             
-                            {/* Timing details */}
+                            {/* Round total time */}
                             <span className="text-xs text-gray-600 dark:text-gray-400">
-                              {(isCircuit || isStations) && roundTemplate && (
-                                <>
-                                  {(roundTemplate as any).workDuration}s work • {(roundTemplate as any).restDuration}s rest
-                                  {((roundTemplate as any).repeatTimes || 1) > 1 && (
-                                    <> • {(roundTemplate as any).restBetweenSets}s between sets</>
-                                  )}
-                                </>  
-                              )}
-                              {(isCircuit || isStations) && !roundTemplate && config.config.workDuration && (
-                                <>
-                                  {config.config.workDuration}s work • {config.config.restDuration}s rest
-                                </>
-                              )}
-                              {isAMRAP && roundTemplate && (
-                                <>{formatTime((roundTemplate as any).totalDuration || 300)} total</>  
-                              )}
+                              {(() => {
+                                if (isAMRAP && roundTemplate) {
+                                  return formatTime((roundTemplate as any).totalDuration || 300);
+                                } else if ((isCircuit || isStations) && roundTemplate) {
+                                  let unitsCount = round.exercises.length;
+                                  
+                                  // For stations, count unique stations instead of total exercises
+                                  if (isStations) {
+                                    const uniqueStations = new Set(round.exercises.map((ex: any) => ex.stationIndex || ex.orderIndex));
+                                    unitsCount = uniqueStations.size;
+                                  }
+                                  
+                                  const workTime = (roundTemplate as any).workDuration || 0;
+                                  const restTime = (roundTemplate as any).restDuration || 0;
+                                  const sets = (roundTemplate as any).repeatTimes || 1;
+                                  const restBetweenSets = (roundTemplate as any).restBetweenSets || 0;
+                                  
+                                  // Time for one set: units * (work + rest) - last rest
+                                  const timePerSet = unitsCount * (workTime + restTime) - restTime;
+                                  // Total time: (timePerSet * sets) + (restBetweenSets * (sets - 1))
+                                  const totalRoundTime = (timePerSet * sets) + (restBetweenSets * (sets - 1));
+                                  
+                                  console.log(`[Round ${roundIndex + 1}] Time calc:`, {
+                                    roundType: isStations ? 'stations' : 'circuit',
+                                    exercises: round.exercises.length,
+                                    unitsCount,
+                                    workTime,
+                                    restTime,
+                                    sets,
+                                    restBetweenSets,
+                                    timePerSet,
+                                    totalRoundTime,
+                                  });
+                                  
+                                  return formatTime(totalRoundTime);
+                                }
+                                return '';
+                              })()}
                             </span>
                           </div>
                         </div>
@@ -1262,9 +1326,6 @@ export function ReviewStep({ config, repeatRounds, templateData }: ReviewStepPro
                               </div>
                             )}
                           </div>
-                          <div className="text-xs text-gray-500 dark:text-gray-400">
-                            {round.exercises.length} exercises
-                          </div>
                         </div>
                       </div>
                     )}
@@ -1293,9 +1354,16 @@ export function ReviewStep({ config, repeatRounds, templateData }: ReviewStepPro
                                   <div className="flex-1">
                                     <div className="space-y-1">
                                       {stationExercises.map((ex: any, exIndex: number) => (
-                                        <p key={exIndex} className="text-sm font-medium text-gray-800 dark:text-gray-200">
-                                          {ex.exerciseName}
-                                        </p>
+                                        <div key={exIndex} className="flex items-center justify-between gap-2">
+                                          <p className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate flex-1">
+                                            {ex.exerciseName}
+                                          </p>
+                                          {ex.repsPlanned && (
+                                            <span className="flex-shrink-0 inline-flex items-center px-2 py-0.5 rounded-md bg-green-100 dark:bg-green-900/30 text-xs font-medium text-green-700 dark:text-green-400">
+                                              {ex.repsPlanned} {ex.repsPlanned === 1 ? 'rep' : 'reps'}
+                                            </span>
+                                          )}
+                                        </div>
                                       ))}
                                     </div>
                                   </div>
@@ -1319,17 +1387,36 @@ export function ReviewStep({ config, repeatRounds, templateData }: ReviewStepPro
                             )}>
                               {exIndex + 1}
                             </div>
-                            <p className="flex-1 text-sm font-medium text-gray-800 dark:text-gray-200">
-                              {exercise.exerciseName}
-                            </p>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">
+                                {exercise.exerciseName}
+                              </p>
+                            </div>
+                            {exercise.repsPlanned && (
+                              <div className="flex-shrink-0 ml-3">
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-gray-100 dark:bg-gray-700 text-xs font-medium text-gray-600 dark:text-gray-300">
+                                  {exercise.repsPlanned} {exercise.repsPlanned === 1 ? 'rep' : 'reps'}
+                                </span>
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>
                     )}
                     
-                    {/* Rest between rounds info */}
-                    {roundIndex < templateData.rounds.length - 1 && config.config.restBetweenRounds > 0 && (
+                    {/* Rest between sets/rounds info */}
+                    {roundTemplate && ((roundTemplate as any).repeatTimes || 1) > 1 && (
                       <div className="mt-4 pt-3 border-t border-gray-200/50 dark:border-gray-700/50">
+                        <p className="text-xs text-gray-500 dark:text-gray-400 text-center">
+                          Rest {(roundTemplate as any).restBetweenSets}s between sets
+                        </p>
+                      </div>
+                    )}
+                    {roundIndex < previewData.rounds.length - 1 && config.config.restBetweenRounds > 0 && (
+                      <div className={cn(
+                        "pt-3",
+                        roundTemplate && ((roundTemplate as any).repeatTimes || 1) > 1 ? "" : "mt-4 border-t border-gray-200/50 dark:border-gray-700/50"
+                      )}>
                         <p className="text-xs text-gray-500 dark:text-gray-400 text-center">
                           Rest {config.config.restBetweenRounds}s before next round
                         </p>
@@ -1341,7 +1428,8 @@ export function ReviewStep({ config, repeatRounds, templateData }: ReviewStepPro
             })}
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* Ready Message */}
       <div className="rounded-xl bg-green-500/10 border border-green-500/20 p-4 text-center">

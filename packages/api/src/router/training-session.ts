@@ -4371,6 +4371,7 @@ Set your goals and preferences for today's session.`;
         groupName: row.we.groupName || 'Round 1',
         stationIndex: row.we.stationIndex,
         template: row.we.template,
+        repsPlanned: row.we.repsPlanned,
       }));
 
       // Group exercises by round for easier display
