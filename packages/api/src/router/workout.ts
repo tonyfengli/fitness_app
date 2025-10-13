@@ -1402,6 +1402,17 @@ export const workoutRouter = {
           exercisesCopied: sourceExercises.length,
         });
 
+        // Create UserTrainingSession record for the trainer so they can modify the workout
+        const { UserTrainingSession } = await import("@acme/db/schema");
+        await tx.insert(UserTrainingSession).values({
+          userId: currentUser.id,
+          trainingSessionId: input.trainingSessionId,
+          status: "checked_in", // Set as checked in so they can edit
+          role: "trainer",
+        });
+
+        console.log('[createFromTemplate] Created UserTrainingSession for trainer:', currentUser.id);
+
         return newWorkout;
       });
 
