@@ -4348,6 +4348,7 @@ Set your goals and preferences for today's session.`;
           templateConfig,
           exercises: [],
           rounds: [],
+          workoutId: null, // No workout ID if no workout found
         };
       }
 
@@ -4414,6 +4415,7 @@ Set your goals and preferences for today's session.`;
         });
 
       console.log(`[getFavoriteTemplateWithExercises] Found ${exerciseList.length} exercises in ${rounds.length} rounds`);
+      console.log('[getFavoriteTemplateWithExercises] Returning workout ID:', workout.id);
 
       return {
         favorite: {
@@ -4429,6 +4431,7 @@ Set your goals and preferences for today's session.`;
         templateConfig,
         exercises: exerciseList,
         rounds,
+        workoutId: workout.id, // Include the workout ID for template creation
       };
     }),
 } satisfies TRPCRouterRecord;

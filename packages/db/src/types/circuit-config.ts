@@ -33,6 +33,8 @@ export interface CircuitConfig {
     // Spotify integration
     spotifyDeviceId?: string;
     spotifyDeviceName?: string;
+    // Template workout support
+    sourceWorkoutId?: string;    // ID of the workout to use as template
     // Legacy fields (optional for backward compatibility)
     exercisesPerRound?: number;
     workDuration?: number;

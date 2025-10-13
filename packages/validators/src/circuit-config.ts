@@ -95,6 +95,8 @@ export const CircuitConfigSchema = z.object({
     // Spotify integration
     spotifyDeviceId: z.string().optional(),
     spotifyDeviceName: z.string().optional(),
+    // Template workout source
+    sourceWorkoutId: z.string().uuid().optional(),
     // Legacy fields (optional for backward compatibility)
     exercisesPerRound: CircuitExercisesSchema.optional(),
     workDuration: CircuitWorkDurationSchema.optional(),
@@ -133,6 +135,8 @@ export const UpdateCircuitConfigSchema = z.object({
   // Spotify integration
   spotifyDeviceId: z.string().optional(),
   spotifyDeviceName: z.string().optional(),
+  // Template workout source
+  sourceWorkoutId: z.string().uuid().optional(),
 });
 
 // Input schema for TRPC endpoints

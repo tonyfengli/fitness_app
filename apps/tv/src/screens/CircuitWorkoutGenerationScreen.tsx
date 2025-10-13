@@ -15,6 +15,8 @@ export function CircuitWorkoutGenerationScreen() {
   const [generationError, setGenerationError] = useState<string | null>(null);
   const [realtimeConfig, setRealtimeConfig] = useState<any>(null);
   
+  console.log('[CircuitWorkoutGeneration] Screen mounted with sessionId:', sessionId);
+  
   // Get circuit config (needed for Spotify sync)
   const { data: circuitConfig } = useQuery(
     sessionId ? api.circuitConfig.getBySession.queryOptions({ sessionId: sessionId || '' }) : {
@@ -81,7 +83,8 @@ export function CircuitWorkoutGenerationScreen() {
       }
     }),
     enabled: shouldGenerateBlueprint && !!sessionId && 
-             existingSelections !== undefined && existingSelections.length === 0,
+             existingSelections !== undefined && existingSelections.length === 0 &&
+             !circuitConfig?.config?.sourceWorkoutId, // Don't generate if we have a template
     retry: false
   });
 
@@ -94,6 +97,17 @@ export function CircuitWorkoutGenerationScreen() {
   const createWorkoutsFromBlueprint = useMutation({
     ...api.trainingSession.createWorkoutsFromBlueprint.mutationOptions()
   });
+  
+  // Create workout from template mutation
+  const createFromTemplate = useMutation({
+    ...api.workout.createFromTemplate.mutationOptions(),
+    onSuccess: (data) => {
+      console.log('[CircuitWorkoutGeneration] Template creation success:', data);
+    },
+    onError: (error) => {
+      console.error('[CircuitWorkoutGeneration] Template creation error:', error);
+    }
+  });
 
   // Check for existing data on mount
   useEffect(() => {
@@ -103,6 +117,53 @@ export function CircuitWorkoutGenerationScreen() {
       navigation.navigate('CircuitWorkoutOverview', { sessionId });
     }
   }, [existingSelections, sessionData, sessionId, navigation]);
+  
+  // Log when circuit config changes
+  useEffect(() => {
+    if (circuitConfig) {
+      console.log('[CircuitWorkoutGeneration] Circuit config loaded:', {
+        hasSourceWorkoutId: !!circuitConfig.config?.sourceWorkoutId,
+        sourceWorkoutId: circuitConfig.config?.sourceWorkoutId,
+        config: circuitConfig.config
+      });
+    }
+  }, [circuitConfig]);
+  
+  // Check for template workout and create from it
+  useEffect(() => {
+    // Guard against multiple executions
+    if (!circuitConfig?.config?.sourceWorkoutId || !sessionId || existingSelections?.length > 0) {
+      return;
+    }
+    
+    // Prevent running if already in progress
+    if (createFromTemplate.isPending) {
+      return;
+    }
+    
+    console.log('[CircuitWorkoutGeneration] Template detected, creating from:', circuitConfig.config.sourceWorkoutId);
+    
+    setShouldGenerateBlueprint(false); // Don't generate blueprint
+    
+    createFromTemplate.mutate({
+      sourceWorkoutId: circuitConfig.config.sourceWorkoutId,
+      trainingSessionId: sessionId,
+    }, {
+      onSuccess: (data) => {
+        console.log('[CircuitWorkoutGeneration] Template workout created, navigating to overview');
+        navigation.navigate('CircuitWorkoutOverview', { sessionId });
+      },
+      onError: (error) => {
+        console.error('[CircuitWorkoutGeneration] Failed to create from template:', error);
+        setGenerationError('Failed to create workout from template');
+        Alert.alert(
+          'Template Error',
+          'Failed to create workout from template. Please try again.',
+          [{ text: 'OK', onPress: () => navigation.goBack() }]
+        );
+      }
+    });
+  }, [circuitConfig?.config?.sourceWorkoutId, sessionId, existingSelections?.length]);
 
   // Handle blueprint generation result
   useEffect(() => {

@@ -90,6 +90,7 @@ export function TemplateSelectionStep({ category, onSelectTemplate }: TemplateSe
           roundsCount: data.rounds.length,
           rounds: data.rounds,
           exercisesCount: data.exercises.length,
+          workoutId: data.workoutId,
         });
         
         onSelectTemplate({
@@ -98,6 +99,7 @@ export function TemplateSelectionStep({ category, onSelectTemplate }: TemplateSe
           config: templateConfig?.config || {},
           rounds: data.rounds, // Pass the rounds with exercises for preview
           exercises: data.exercises,
+          workoutId: data.workoutId, // Pass the workout ID for template creation
         });
       }
     } catch (error) {

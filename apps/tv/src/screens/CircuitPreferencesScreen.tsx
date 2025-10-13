@@ -183,6 +183,7 @@ export function CircuitPreferencesScreen() {
     }
   });
 
+
   // Update connection state based on polling success
   useEffect(() => {
     if (pollingData !== undefined && !isLoading) {
@@ -634,6 +635,21 @@ export function CircuitPreferencesScreen() {
           </View>
         </MattePanel>
       </View>
+
+      {/* Error Display */}
+      {generationError && (
+        <View style={{ paddingHorizontal: 48, paddingBottom: 16 }}>
+          <MattePanel style={{ 
+            backgroundColor: 'rgba(239, 68, 68, 0.1)', 
+            borderColor: 'rgba(239, 68, 68, 0.3)',
+            padding: 16 
+          }}>
+            <Text style={{ color: '#ef4444', fontSize: 16 }}>
+              {generationError}
+            </Text>
+          </MattePanel>
+        </View>
+      )}
 
       {/* Footer Bar */}
       <View style={{ 

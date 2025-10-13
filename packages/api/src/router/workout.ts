@@ -1278,4 +1278,136 @@ export const workoutRouter = {
         exercises: workoutExercises,
       };
     }),
+
+  // Create workout from template for circuit sessions
+  createFromTemplate: protectedProcedure
+    .input(
+      z.object({
+        sourceWorkoutId: z.string().uuid(), // Template workout to copy from
+        trainingSessionId: z.string().uuid(), // Circuit session ID
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      console.log('[createFromTemplate] Starting with input:', {
+        sourceWorkoutId: input.sourceWorkoutId,
+        trainingSessionId: input.trainingSessionId,
+      });
+      
+      const currentUser = await getSessionUserWithBusiness(ctx);
+      
+      // Get the source workout with all exercises
+      const sourceWorkout = await ctx.db.query.Workout.findFirst({
+        where: and(
+          eq(Workout.id, input.sourceWorkoutId),
+          eq(Workout.businessId, currentUser.businessId),
+        ),
+      });
+
+      if (!sourceWorkout) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Template workout not found",
+        });
+      }
+
+      // Get the target session
+      const targetSession = await ctx.db.query.TrainingSession.findFirst({
+        where: and(
+          eq(TrainingSession.id, input.trainingSessionId),
+          eq(TrainingSession.businessId, currentUser.businessId),
+        ),
+      });
+
+      if (!targetSession) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Training session not found",
+        });
+      }
+
+      if (targetSession.templateType !== "circuit") {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Target session must be a circuit session",
+        });
+      }
+
+      // Verify current user is a trainer
+      if (currentUser.role !== "trainer") {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Only trainers can create workouts from templates",
+        });
+      }
+
+      // Get all exercises from the source workout
+      const sourceExercises = await ctx.db.query.WorkoutExercise.findMany({
+        where: eq(WorkoutExercise.workoutId, input.sourceWorkoutId),
+        orderBy: [WorkoutExercise.orderIndex],
+      });
+      
+      console.log('[createFromTemplate] Found source exercises:', {
+        sourceWorkoutId: input.sourceWorkoutId,
+        exerciseCount: sourceExercises.length,
+        firstExercise: sourceExercises[0],
+      });
+
+      // Create the new workout with transaction
+      const result = await ctx.db.transaction(async (tx) => {
+        const [newWorkout] = await tx
+          .insert(Workout)
+          .values({
+            trainingSessionId: input.trainingSessionId,
+            userId: currentUser.id, // Use current trainer as the workout owner
+            businessId: currentUser.businessId,
+            createdByTrainerId: currentUser.id,
+            completedAt: null, // Circuit workouts start uncompleted
+            notes: `Created from template: ${sourceWorkout.notes || 'Circuit Workout'}`,
+            workoutType: "circuit", // Explicitly set as circuit
+            totalPlannedSets: sourceWorkout.totalPlannedSets,
+            llmOutput: sourceWorkout.llmOutput,
+            templateConfig: sourceWorkout.templateConfig,
+            context: "circuit", // Set context as circuit
+            status: "ready", // Set status as ready
+          })
+          .returning();
+
+        if (!newWorkout) {
+          throw new Error("Failed to create workout from template");
+        }
+
+        // Copy all exercises with their custom names
+        if (sourceExercises.length > 0) {
+          await tx.insert(WorkoutExercise).values(
+            sourceExercises.map((ex) => ({
+              workoutId: newWorkout.id,
+              exerciseId: ex.exerciseId,
+              orderIndex: ex.orderIndex,
+              setsCompleted: ex.setsCompleted,
+              groupName: ex.groupName,
+              repsPlanned: ex.repsPlanned,
+              stationIndex: ex.stationIndex,
+              isShared: ex.isShared,
+              sharedWithClients: ex.sharedWithClients,
+              selectionSource: ex.selectionSource,
+              custom_exercise: ex.custom_exercise, // IMPORTANT: Preserve custom exercise names!
+              phase: ex.phase,
+              template: ex.template,
+            })),
+          );
+        }
+        
+        console.log('[createFromTemplate] Created new workout:', {
+          workoutId: newWorkout.id,
+          exercisesCopied: sourceExercises.length,
+        });
+
+        return newWorkout;
+      });
+
+      return {
+        success: true,
+        workoutId: result.id,
+      };
+    }),
 } satisfies TRPCRouterRecord;

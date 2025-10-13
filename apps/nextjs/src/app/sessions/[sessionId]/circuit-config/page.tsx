@@ -338,10 +338,18 @@ export default function CircuitConfigPage() {
               <TemplateSelectionStep
                 category={selectedCategory}
                 onSelectTemplate={(template) => {
-                  // Apply template configuration
+                  console.log('[CircuitConfig] Template selected:', {
+                    templateId: template.id,
+                    workoutId: template.workoutId,
+                    hasWorkoutId: !!template.workoutId,
+                    sourceToStore: template.workoutId || template.id,
+                  });
+                  
+                  // Apply template configuration and store source workout ID
                   updateConfig({
                     ...template.config,
-                    roundTemplates: template.config.roundTemplates
+                    roundTemplates: template.config.roundTemplates,
+                    sourceWorkoutId: template.workoutId || template.id, // Store the source workout ID
                   });
                   // Store template data for review
                   setTemplateData({
