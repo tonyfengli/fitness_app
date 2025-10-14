@@ -1055,7 +1055,7 @@ function CircuitWorkoutOverviewContent() {
                           default:
                             const circuitRoundTemplate = circuitConfig?.config?.roundTemplates?.find(rt => rt.roundNumber === parseInt(round.roundName.match(/\d+/)?.[0] || '1'));
                             const circuitWorkDuration = circuitRoundTemplate?.template?.workDuration || circuitConfig?.config?.workDuration || 45;
-                            const circuitRestDuration = circuitRoundTemplate?.template?.restDuration || circuitConfig?.config?.restDuration || 15;
+                            const circuitRestDuration = circuitRoundTemplate?.template?.restDuration ?? circuitConfig?.config?.restDuration ?? 15;
                             const circuitRepeatTimes = circuitRoundTemplate?.template?.repeatTimes || 1;
                             const circuitRestBetweenSets = circuitRoundTemplate?.template?.restBetweenSets;
                             
