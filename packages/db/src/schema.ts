@@ -158,7 +158,7 @@ export const FavoriteSessions = pgTable("favorite_sessions", (t) => ({
     .uuid()
     .notNull()
     .references(() => Business.id, { onDelete: "cascade" }),
-  category: t.text().notNull(), // 'morning_sessions', 'mens_fitness_connect', 'other'
+  category: t.text().notNull(), // 'morning_sessions', 'evening_sessions', 'mens_fitness_connect', 'other'
   createdAt: t.timestamp().defaultNow().notNull(),
   updatedAt: t.timestamp({ mode: "date", withTimezone: true }).$onUpdateFn(() => sql`now()`),
 }));
@@ -166,7 +166,7 @@ export const FavoriteSessions = pgTable("favorite_sessions", (t) => ({
 export const CreateFavoriteSessionSchema = createInsertSchema(FavoriteSessions, {
   trainingSessionId: z.string().uuid(),
   businessId: z.string().uuid(),
-  category: z.enum(["morning_sessions", "mens_fitness_connect", "other"]),
+  category: z.enum(["morning_sessions", "evening_sessions", "mens_fitness_connect", "other"]),
 }).omit({
   id: true,
   createdAt: true,

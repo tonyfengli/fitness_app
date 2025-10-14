@@ -25,6 +25,7 @@ const BUSINESS_ID = 'd33b41e2-f700-4a08-9489-cb6e3daa7f20';
 
 const CATEGORIES = [
   { id: 'morning_sessions', label: 'Morning Sessions' },
+  { id: 'evening_sessions', label: 'Evening Sessions' },
   { id: 'mens_fitness_connect', label: "Men's Fitness Connect" },
   { id: 'other', label: 'Other' }
 ];

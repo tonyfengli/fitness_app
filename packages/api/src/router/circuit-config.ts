@@ -310,6 +310,7 @@ export const circuitConfigRouter = createTRPCRouter({
     .input(CircuitConfigInputSchema)
     .mutation(async ({ ctx, input }) => {
       console.log('[CircuitConfig API] updatePublic called with input:', JSON.stringify(input, null, 2));
+      console.log('[BUG TRACE] Circuit config update - sourceWorkoutId:', input.config.sourceWorkoutId);
       
       // Get the session to verify it exists and is a circuit session
       const session = await ctx.db
@@ -318,6 +319,12 @@ export const circuitConfigRouter = createTRPCRouter({
         .where(eq(TrainingSession.id, input.sessionId))
         .limit(1)
         .then((res) => res[0]);
+      
+      console.log('[BUG TRACE] Session before update:', {
+        sessionId: session?.id,
+        hasTemplateConfig: !!session?.templateConfig,
+        currentSourceWorkoutId: (session?.templateConfig as any)?.config?.sourceWorkoutId,
+      });
 
       if (!session) {
         throw new TRPCError({

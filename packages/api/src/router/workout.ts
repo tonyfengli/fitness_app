@@ -3,7 +3,7 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
 import { type LLMWorkoutOutput } from "@acme/ai";
-import { and, desc, eq, inArray, sql } from "@acme/db";
+import { and, desc, eq, inArray, or, sql } from "@acme/db";
 import {
   BusinessExercise,
   CreateWorkoutExerciseSchema,
@@ -1352,73 +1352,98 @@ export const workoutRouter = {
         firstExercise: sourceExercises[0],
       });
 
-      // Create the new workout with transaction
-      const result = await ctx.db.transaction(async (tx) => {
-        const [newWorkout] = await tx
-          .insert(Workout)
-          .values({
-            trainingSessionId: input.trainingSessionId,
-            userId: currentUser.id, // Use current trainer as the workout owner
-            businessId: currentUser.businessId,
-            createdByTrainerId: currentUser.id,
-            completedAt: null, // Circuit workouts start uncompleted
-            notes: `Created from template: ${sourceWorkout.notes || 'Circuit Workout'}`,
-            workoutType: "circuit", // Explicitly set as circuit
-            totalPlannedSets: sourceWorkout.totalPlannedSets,
-            llmOutput: sourceWorkout.llmOutput,
-            templateConfig: sourceWorkout.templateConfig,
-            context: "circuit", // Set context as circuit
-            status: "ready", // Set status as ready
-          })
-          .returning();
+      // Get all checked-in clients for the session
+      const { UserTrainingSession } = await import("@acme/db/schema");
+      const checkedInClients = await ctx.db
+        .select()
+        .from(UserTrainingSession)
+        .where(
+          and(
+            eq(UserTrainingSession.trainingSessionId, input.trainingSessionId),
+            or(
+              eq(UserTrainingSession.status, "checked_in"),
+              eq(UserTrainingSession.status, "ready"),
+              eq(UserTrainingSession.status, "workout_ready"),
+            ),
+          ),
+        );
 
-        if (!newWorkout) {
-          throw new Error("Failed to create workout from template");
-        }
+      console.log('[createFromTemplate] Found checked-in clients:', {
+        count: checkedInClients.length,
+        clients: checkedInClients.map(c => ({ userId: c.userId, status: c.status })),
+      });
 
-        // Copy all exercises with their custom names
-        if (sourceExercises.length > 0) {
-          await tx.insert(WorkoutExercise).values(
-            sourceExercises.map((ex) => ({
-              workoutId: newWorkout.id,
-              exerciseId: ex.exerciseId,
-              orderIndex: ex.orderIndex,
-              setsCompleted: ex.setsCompleted,
-              groupName: ex.groupName,
-              repsPlanned: ex.repsPlanned,
-              stationIndex: ex.stationIndex,
-              isShared: ex.isShared,
-              sharedWithClients: ex.sharedWithClients,
-              selectionSource: ex.selectionSource,
-              custom_exercise: ex.custom_exercise, // IMPORTANT: Preserve custom exercise names!
-              phase: ex.phase,
-              template: ex.template,
-            })),
-          );
+      if (checkedInClients.length === 0) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "No clients are checked into this session",
+        });
+      }
+
+      // Create workouts for all checked-in clients with transaction
+      const results = await ctx.db.transaction(async (tx) => {
+        const createdWorkouts = [];
+
+        // Create a workout for each checked-in client
+        for (const client of checkedInClients) {
+          const [newWorkout] = await tx
+            .insert(Workout)
+            .values({
+              trainingSessionId: input.trainingSessionId,
+              userId: client.userId, // Use the checked-in client's ID
+              businessId: currentUser.businessId,
+              createdByTrainerId: currentUser.id,
+              completedAt: null, // Circuit workouts start uncompleted
+              notes: `Created from template: ${sourceWorkout.notes || 'Circuit Workout'}`,
+              workoutType: "circuit", // Explicitly set as circuit
+              totalPlannedSets: sourceWorkout.totalPlannedSets,
+              llmOutput: sourceWorkout.llmOutput,
+              templateConfig: sourceWorkout.templateConfig,
+              context: "circuit", // Set context as circuit
+              status: "ready", // Set status as ready
+            })
+            .returning();
+
+          if (!newWorkout) {
+            throw new Error(`Failed to create workout for client ${client.userId}`);
+          }
+
+          // Copy all exercises for this client's workout
+          if (sourceExercises.length > 0) {
+            await tx.insert(WorkoutExercise).values(
+              sourceExercises.map((ex) => ({
+                workoutId: newWorkout.id,
+                exerciseId: ex.exerciseId,
+                orderIndex: ex.orderIndex,
+                setsCompleted: ex.setsCompleted,
+                groupName: ex.groupName,
+                repsPlanned: ex.repsPlanned,
+                stationIndex: ex.stationIndex,
+                isShared: ex.isShared,
+                sharedWithClients: ex.sharedWithClients,
+                selectionSource: ex.selectionSource,
+                custom_exercise: ex.custom_exercise, // IMPORTANT: Preserve custom exercise names!
+                phase: ex.phase,
+                template: ex.template,
+              })),
+            );
+          }
+
+          createdWorkouts.push(newWorkout);
         }
         
-        console.log('[createFromTemplate] Created new workout:', {
-          workoutId: newWorkout.id,
+        console.log('[createFromTemplate] Created workouts for all clients:', {
+          workoutCount: createdWorkouts.length,
           exercisesCopied: sourceExercises.length,
         });
 
-        // Create UserTrainingSession record for the trainer so they can modify the workout
-        const { UserTrainingSession } = await import("@acme/db/schema");
-        await tx.insert(UserTrainingSession).values({
-          userId: currentUser.id,
-          trainingSessionId: input.trainingSessionId,
-          status: "checked_in", // Set as checked in so they can edit
-          role: "trainer",
-        });
-
-        console.log('[createFromTemplate] Created UserTrainingSession for trainer:', currentUser.id);
-
-        return newWorkout;
+        return createdWorkouts;
       });
 
       return {
         success: true,
-        workoutId: result.id,
+        workoutIds: results.map(w => w.id),
+        workoutCount: results.length,
       };
     }),
 } satisfies TRPCRouterRecord;

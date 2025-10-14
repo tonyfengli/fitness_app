@@ -467,6 +467,8 @@ export const trainingSessionRouter = {
     .query(async ({ ctx, input }) => {
       const user = ctx.session?.user as SessionUser;
 
+      console.log(`[BUG TRACE] getCheckedInClients called for session: ${input.sessionId} by user: ${user.id}`);
+
       // Verify session belongs to user's business
 
       // First check if session exists at all
@@ -474,6 +476,13 @@ export const trainingSessionRouter = {
         where: eq(TrainingSession.id, input.sessionId),
       });
 
+      console.log(`[BUG TRACE] Session exists check:`, {
+        sessionId: input.sessionId,
+        exists: !!sessionExists,
+        templateType: sessionExists?.templateType,
+        templateConfig: sessionExists?.templateConfig ? 'has config' : 'no config',
+        sourceWorkoutId: (sessionExists?.templateConfig as any)?.config?.sourceWorkoutId,
+      });
 
       const session = await ctx.db.query.TrainingSession.findFirst({
         where: and(
@@ -492,6 +501,7 @@ export const trainingSessionRouter = {
       }
 
       // Get checked-in and ready users
+      console.log(`[BUG TRACE] Querying UserTrainingSession for sessionId: ${input.sessionId}`);
       
       const checkedInUsers = await ctx.db
         .select()
@@ -507,6 +517,15 @@ export const trainingSessionRouter = {
           ),
         )
         .orderBy(desc(UserTrainingSession.checkedInAt));
+      
+      console.log(`[BUG TRACE] Found ${checkedInUsers.length} checked-in users:`, 
+        checkedInUsers.map(u => ({
+          userId: u.userId,
+          status: u.status,
+          checkedInAt: u.checkedInAt,
+          createdAt: u.createdAt,
+        }))
+      );
 
       // Get user details and preferences for each checked-in user
       const usersWithDetails = await Promise.all(
@@ -4193,7 +4212,7 @@ Set your goals and preferences for today's session.`;
     .input(
       z.object({
         businessId: z.string().uuid(),
-        category: z.enum(["morning_sessions", "mens_fitness_connect", "other"]).optional(),
+        category: z.enum(["morning_sessions", "evening_sessions", "mens_fitness_connect", "other"]).optional(),
         includeTemplateConfig: z.boolean().optional().default(false), // New optional parameter
       }),
     )

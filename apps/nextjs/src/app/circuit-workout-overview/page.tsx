@@ -481,29 +481,6 @@ function CircuitWorkoutOverviewContent() {
     refetchInterval: !hasExercises ? 5000 : false, // Poll when no exercises
   });
 
-  // Debug log the saved selections data structure
-  useEffect(() => {
-    if (savedSelections && savedSelections.length > 0) {
-      console.log('[CircuitWorkoutOverview] Saved selections data:', {
-        totalCount: savedSelections.length,
-        firstFew: savedSelections.slice(0, 3).map((sel: any) => ({
-          id: sel.id,
-          exerciseId: sel.exerciseId,
-          exerciseName: sel.exerciseName,
-          custom_exercise: sel.custom_exercise,
-          groupName: sel.groupName,
-          orderIndex: sel.orderIndex,
-          stationIndex: sel.stationIndex,
-          repsPlanned: sel.repsPlanned,
-        })),
-        allCustomExercises: savedSelections.filter((sel: any) => sel.custom_exercise).map((sel: any) => ({
-          id: sel.id,
-          exerciseName: sel.exerciseName,
-          custom_exercise: sel.custom_exercise,
-        }))
-      });
-    }
-  }, [savedSelections]);
 
   // Get any user from the saved selections to use for fetching exercises
   // Since circuit exercises are shared, we just need any valid userId from the session
@@ -512,7 +489,8 @@ function CircuitWorkoutOverviewContent() {
       // Get the first clientId we find
       return savedSelections[0]?.clientId || "";
     }
-    return "";
+    // Fallback to hardcoded trainer ID when no selections exist yet
+    return "v4dxeCHAJ31kgL3To8NygjuNNZXZGf9W";
   }, [savedSelections]);
 
   // Fetch available exercises when any modal is open or inline editing
@@ -597,15 +575,6 @@ function CircuitWorkoutOverviewContent() {
             };
           } else {
             // For non-stations rounds, keep original behavior
-            // Debug log exercises in this round
-            console.log(`[CircuitWorkoutOverview] Processing ${roundName} exercises:`, 
-              sortedExercises.map((ex: any) => ({
-                exerciseName: ex.exerciseName,
-                exerciseId: ex.exerciseId,
-                custom_exercise: ex.custom_exercise,
-              }))
-            );
-            
             return {
               roundName,
               exercises: sortedExercises.map((ex: any) => ({
