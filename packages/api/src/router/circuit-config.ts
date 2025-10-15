@@ -26,8 +26,15 @@ function ensureRoundTemplates(config: any) {
               ...rt,
               template: {
                 ...rt.template,
-                workDuration: rt.template.workDuration ?? config.config.workDuration ?? 45,
-                restDuration: rt.template.restDuration ?? config.config.restDuration ?? 15,
+                // Ensure all values are explicitly set (including 0)
+                workDuration: rt.template.workDuration !== undefined 
+                  ? rt.template.workDuration 
+                  : (config.config.workDuration !== undefined ? config.config.workDuration : 45),
+                restDuration: rt.template.restDuration !== undefined 
+                  ? rt.template.restDuration 
+                  : (config.config.restDuration !== undefined ? config.config.restDuration : 0),
+                repeatTimes: rt.template.repeatTimes ?? 1,
+                restBetweenSets: rt.template.restBetweenSets ?? 60,
               }
             };
           } else if (rt.template.type === 'stations_round') {
@@ -35,8 +42,12 @@ function ensureRoundTemplates(config: any) {
               ...rt,
               template: {
                 ...rt.template,
-                workDuration: rt.template.workDuration ?? config.config.workDuration ?? 45,
-                restDuration: rt.template.restDuration ?? config.config.restDuration ?? 15,
+                workDuration: rt.template.workDuration !== undefined 
+                  ? rt.template.workDuration 
+                  : (config.config.workDuration !== undefined ? config.config.workDuration : 60),
+                restDuration: rt.template.restDuration !== undefined 
+                  ? rt.template.restDuration 
+                  : (config.config.restDuration !== undefined ? config.config.restDuration : 15),
                 repeatTimes: rt.template.repeatTimes ?? 1,
               }
             };
@@ -56,10 +67,11 @@ function ensureRoundTemplates(config: any) {
   }
   
   // Otherwise create round templates from legacy fields
-  const rounds = config.config?.rounds || 3;
-  const exercisesPerRound = config.config?.exercisesPerRound || 6;
-  const workDuration = config.config?.workDuration || 45;
-  const restDuration = config.config?.restDuration || 15;
+  const rounds = config.config?.rounds ?? 3;
+  const exercisesPerRound = config.config?.exercisesPerRound ?? 6;
+  // Use explicit checks for 0 values
+  const workDuration = config.config?.workDuration !== undefined ? config.config.workDuration : 45;
+  const restDuration = config.config?.restDuration !== undefined ? config.config.restDuration : 0;
   
   return {
     ...config,

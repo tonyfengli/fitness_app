@@ -1092,20 +1092,20 @@ function CircuitWorkoutOverviewContent() {
                         switch (roundType) {
                           case 'amrap_round':
                             const amrapRoundTemplate = circuitConfig?.config?.roundTemplates?.find(rt => rt.roundNumber === parseInt(round.roundName.match(/\d+/)?.[0] || '1'));
-                            const amrapDuration = amrapRoundTemplate?.template?.totalDuration ? Math.floor(amrapRoundTemplate.template.totalDuration / 60) : 5;
+                            const amrapDuration = Math.floor((amrapRoundTemplate?.template?.totalDuration || 0) / 60);
                             return (
                               <>
                                 <svg className="w-4 h-4 text-violet-500 dark:text-violet-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                                 </svg>
-                                <span>AMRAP • {amrapDuration} min rounds / {circuitConfig?.config?.restBetweenRounds || 60}s rest</span>
+                                <span>AMRAP • {amrapDuration} min rounds / {circuitConfig?.config?.restBetweenRounds}s rest</span>
                               </>
                             );
                           case 'stations_round':
                             const stationsRoundTemplate = circuitConfig?.config?.roundTemplates?.find(rt => rt.roundNumber === parseInt(round.roundName.match(/\d+/)?.[0] || '1'));
-                            const stationsWorkDuration = stationsRoundTemplate?.template?.workDuration || circuitConfig?.config?.workDuration || 60;
-                            const stationsRestDuration = stationsRoundTemplate?.template?.restDuration || circuitConfig?.config?.restDuration || 15;
-                            const stationsRepeatTimes = stationsRoundTemplate?.template?.repeatTimes || 1;
+                            const stationsWorkDuration = stationsRoundTemplate?.template?.workDuration;
+                            const stationsRestDuration = stationsRoundTemplate?.template?.restDuration;
+                            const stationsRepeatTimes = stationsRoundTemplate?.template?.repeatTimes;
                             const stationsHelpText = stationsRepeatTimes > 1 
                               ? `Stations • ${stationsWorkDuration}s work / ${stationsRestDuration}s transition • ${stationsRepeatTimes} sets`
                               : `Stations • ${stationsWorkDuration}s work / ${stationsRestDuration}s transition`;
@@ -1120,9 +1120,9 @@ function CircuitWorkoutOverviewContent() {
                           case 'circuit_round':
                           default:
                             const circuitRoundTemplate = circuitConfig?.config?.roundTemplates?.find(rt => rt.roundNumber === parseInt(round.roundName.match(/\d+/)?.[0] || '1'));
-                            const circuitWorkDuration = circuitRoundTemplate?.template?.workDuration || circuitConfig?.config?.workDuration || 45;
-                            const circuitRestDuration = circuitRoundTemplate?.template?.restDuration ?? circuitConfig?.config?.restDuration ?? 15;
-                            const circuitRepeatTimes = circuitRoundTemplate?.template?.repeatTimes || 1;
+                            const circuitWorkDuration = circuitRoundTemplate?.template?.workDuration;
+                            const circuitRestDuration = circuitRoundTemplate?.template?.restDuration;
+                            const circuitRepeatTimes = circuitRoundTemplate?.template?.repeatTimes;
                             const circuitRestBetweenSets = circuitRoundTemplate?.template?.restBetweenSets;
                             
                             let circuitHelpText = `Circuit • ${circuitWorkDuration}s work / ${circuitRestDuration}s rest`;
@@ -3274,26 +3274,26 @@ function RoundEditContent({
   const [workDuration, setWorkDuration] = useState(
     roundTemplate.template.type === 'amrap_round' 
       ? "0" 
-      : String(roundTemplate.template.workDuration || 45)
+      : String(roundTemplate.template.workDuration)
   );
   const [restDuration, setRestDuration] = useState(
     roundTemplate.template.type === 'amrap_round' 
       ? "0" 
-      : String(roundTemplate.template.restDuration || 15)
+      : String(roundTemplate.template.restDuration)
   );
   const [repeatTimes, setRepeatTimes] = useState(
     roundTemplate.template.type === 'amrap_round' 
       ? "0" 
-      : String(roundTemplate.template.repeatTimes || 1)
+      : String(roundTemplate.template.repeatTimes)
   );
   const [restBetweenSets, setRestBetweenSets] = useState(
     roundTemplate.template.type === 'circuit_round' 
-      ? String(roundTemplate.template.restBetweenSets || 60)
+      ? String(roundTemplate.template.restBetweenSets)
       : "60"
   );
   const [totalDuration, setTotalDuration] = useState(
     roundTemplate.template.type === 'amrap_round' 
-      ? String(roundTemplate.template.totalDuration || 300)
+      ? String(roundTemplate.template.totalDuration)
       : "0"
   );
   
