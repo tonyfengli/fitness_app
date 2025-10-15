@@ -445,6 +445,30 @@ function CircuitWorkoutOverviewContent() {
     },
   });
 
+  // Round reordering mutation
+  const reorderRoundsMutation = useMutation({
+    ...trpc.circuitConfig.reorderRounds.mutationOptions(),
+    onSuccess: () => {
+      // Invalidate both circuit config and selections to refresh data
+      queryClient.invalidateQueries({
+        queryKey: trpc.circuitConfig.getBySession.queryOptions({ 
+          sessionId: sessionId || "" 
+        }).queryKey,
+      });
+      queryClient.invalidateQueries({
+        queryKey: trpc.workoutSelections.getSelections.queryOptions({ 
+          sessionId: sessionId || "" 
+        }).queryKey,
+      });
+      
+      toast.success("Round order updated successfully");
+    },
+    onError: (error) => {
+      console.error("Failed to reorder rounds:", error);
+      toast.error("Failed to reorder rounds. Please try again.");
+    },
+  });
+
   // Use real-time exercise swap updates
   useRealtimeExerciseSwaps({
     sessionId: sessionId || "",
@@ -997,28 +1021,70 @@ function CircuitWorkoutOverviewContent() {
                           </span>
                         )}
                       </span>
-                      <button 
-                        onClick={() => {
-                          setSelectedRoundForOptions(round);
-                          setShowRoundOptionsModal(true);
-                        }}
-                        className="ml-auto p-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                        title="Round options"
-                      >
-                        <svg 
-                          width="16" 
-                          height="16" 
-                          viewBox="0 0 24 24" 
-                          fill="none" 
-                          stroke="currentColor" 
-                          strokeWidth="2"
-                          className="text-gray-500 dark:text-gray-400"
+                      {/* Round reorder buttons */}
+                      <div className="ml-auto flex items-center gap-1">
+                        <button
+                          onClick={() => {
+                            const roundNumber = parseInt(round.roundName.match(/\d+/)?.[0] || '0');
+                            if (roundNumber > 0) {
+                              reorderRoundsMutation.mutate({
+                                sessionId: sessionId!,
+                                currentRoundNumber: roundNumber,
+                                direction: "up",
+                              });
+                            }
+                          }}
+                          disabled={roundIndex === 0 || reorderRoundsMutation.isPending}
+                          className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                          title="Move round up"
                         >
-                          <circle cx="12" cy="12" r="1"/>
-                          <circle cx="19" cy="12" r="1"/>
-                          <circle cx="5" cy="12" r="1"/>
-                        </svg>
-                      </button>
+                          <svg className="h-4 w-4 text-gray-500 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
+                          </svg>
+                        </button>
+                        <button
+                          onClick={() => {
+                            const roundNumber = parseInt(round.roundName.match(/\d+/)?.[0] || '0');
+                            if (roundNumber > 0) {
+                              reorderRoundsMutation.mutate({
+                                sessionId: sessionId!,
+                                currentRoundNumber: roundNumber,
+                                direction: "down",
+                              });
+                            }
+                          }}
+                          disabled={roundIndex === roundsData.length - 1 || reorderRoundsMutation.isPending}
+                          className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                          title="Move round down"
+                        >
+                          <svg className="h-4 w-4 text-gray-500 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </button>
+                        <div className="w-px h-5 bg-gray-200 dark:bg-gray-700 mx-1" />
+                        <button 
+                          onClick={() => {
+                            setSelectedRoundForOptions(round);
+                            setShowRoundOptionsModal(true);
+                          }}
+                          className="p-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                          title="Round options"
+                        >
+                          <svg 
+                            width="16" 
+                            height="16" 
+                            viewBox="0 0 24 24" 
+                            fill="none" 
+                            stroke="currentColor" 
+                            strokeWidth="2"
+                            className="text-gray-500 dark:text-gray-400"
+                          >
+                            <circle cx="12" cy="12" r="1"/>
+                            <circle cx="19" cy="12" r="1"/>
+                            <circle cx="5" cy="12" r="1"/>
+                          </svg>
+                        </button>
+                      </div>
                     </h2>
                     <p className="mt-1 text-sm text-gray-600 dark:text-gray-400 flex items-center gap-2">
                       {(() => {

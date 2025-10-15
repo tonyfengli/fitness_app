@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { eq, and } from "@acme/db";
-import { TrainingSession } from "@acme/db/schema";
+import { TrainingSession, Workout, WorkoutExercise } from "@acme/db/schema";
 import { DEFAULT_CIRCUIT_CONFIG, createDefaultRoundTemplates, migrateToRoundTemplates } from "@acme/db";
 import {
   CircuitConfigInputSchema,
@@ -391,6 +391,156 @@ export const circuitConfigRouter = createTRPCRouter({
           updatedAt: new Date(),
         })
         .where(eq(TrainingSession.id, input.sessionId));
+
+      return validatedConfig;
+    }),
+
+  /**
+   * Reorder rounds in circuit configuration
+   */
+  reorderRounds: protectedProcedure
+    .input(z.object({
+      sessionId: z.string().uuid(),
+      currentRoundNumber: z.number().min(1),
+      direction: z.enum(["up", "down"]),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const user = await getSessionUserWithBusiness(ctx);
+
+      // Only trainers can reorder rounds
+      if (user.role !== "trainer") {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Only trainers can reorder rounds",
+        });
+      }
+
+      // Get the session
+      const session = await ctx.db
+        .select()
+        .from(TrainingSession)
+        .where(
+          and(
+            eq(TrainingSession.id, input.sessionId),
+            eq(TrainingSession.businessId, user.businessId),
+          ),
+        )
+        .limit(1)
+        .then((res) => res[0]);
+
+      if (!session) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Session not found",
+        });
+      }
+
+      if (session.templateType !== "circuit") {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Session is not a circuit training session",
+        });
+      }
+
+      // Get current config
+      const currentConfig = session.templateConfig as typeof DEFAULT_CIRCUIT_CONFIG;
+      if (!currentConfig?.config?.roundTemplates) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "No round templates found",
+        });
+      }
+
+      const roundTemplates = [...currentConfig.config.roundTemplates];
+      const currentIndex = input.currentRoundNumber - 1;
+      const targetIndex = input.direction === "up" ? currentIndex - 1 : currentIndex + 1;
+
+      // Validate bounds
+      if (targetIndex < 0 || targetIndex >= roundTemplates.length) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Cannot move round in that direction",
+        });
+      }
+
+      // Swap rounds in the array
+      [roundTemplates[currentIndex], roundTemplates[targetIndex]] = 
+      [roundTemplates[targetIndex], roundTemplates[currentIndex]];
+
+      // Update round numbers
+      roundTemplates.forEach((template, index) => {
+        template.roundNumber = index + 1;
+      });
+
+      // Update the config
+      const updatedConfig = {
+        ...currentConfig,
+        config: {
+          ...currentConfig.config,
+          roundTemplates,
+        },
+        lastUpdated: new Date().toISOString(),
+        updatedBy: user.id,
+      };
+
+      // Validate the updated config
+      const validatedConfig = CircuitConfigSchema.parse(updatedConfig);
+
+      // Start transaction to update both config and exercise round names
+      await ctx.db.transaction(async (tx) => {
+        // Update the session config
+        await tx
+          .update(TrainingSession)
+          .set({
+            templateConfig: validatedConfig,
+            updatedAt: new Date(),
+          })
+          .where(eq(TrainingSession.id, input.sessionId));
+
+        // Update exercise groupNames in WorkoutExercise table
+        // We need to rename the rounds to reflect new order
+        const currentRoundName = `Round ${input.currentRoundNumber}`;
+        const targetRoundName = `Round ${input.direction === "up" ? input.currentRoundNumber - 1 : input.currentRoundNumber + 1}`;
+        const tempRoundName = `Round_TEMP_${Date.now()}`;
+
+        // Get all workouts for this session
+        const workouts = await tx
+          .select({ id: Workout.id })
+          .from(Workout)
+          .where(eq(Workout.trainingSessionId, input.sessionId));
+
+        if (workouts.length > 0) {
+          // Update WorkoutExercise groupNames for each workout
+          for (const workout of workouts) {
+            // Step 1: Rename current round to temp
+            await tx
+              .update(WorkoutExercise)
+              .set({ groupName: tempRoundName })
+              .where(and(
+                eq(WorkoutExercise.workoutId, workout.id),
+                eq(WorkoutExercise.groupName, currentRoundName)
+              ));
+
+            // Step 2: Rename target round to current
+            await tx
+              .update(WorkoutExercise)
+              .set({ groupName: currentRoundName })
+              .where(and(
+                eq(WorkoutExercise.workoutId, workout.id),
+                eq(WorkoutExercise.groupName, targetRoundName)
+              ));
+
+            // Step 3: Rename temp to target
+            await tx
+              .update(WorkoutExercise)
+              .set({ groupName: targetRoundName })
+              .where(and(
+                eq(WorkoutExercise.workoutId, workout.id),
+                eq(WorkoutExercise.groupName, tempRoundName)
+              ));
+          }
+        }
+      });
 
       return validatedConfig;
     }),
