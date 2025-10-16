@@ -18,8 +18,7 @@ import { getColorForPreset, getHuePresetForColor } from '../lib/lighting/colorMa
 import { useSpotifySync } from '../hooks/useSpotifySync';
 import type { CircuitConfig } from '@acme/db';
 import { playCountdownSound } from '../lib/sound/countdown-sound';
-import { useRealtimeCircuitConfig } from '@acme/ui-shared';
-import { supabase } from '../lib/supabase';
+// Removed realtime imports - using polling instead
 import { 
   CircuitRoundPreview, 
   StationsRoundPreview,
@@ -135,6 +134,23 @@ export function CircuitWorkoutLiveScreen() {
   // Generate unique component instance ID
   const componentInstanceId = useRef(`cwl-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`);
   
+  // Log 1: Track component lifecycle and navigation timing
+  useEffect(() => {
+    console.log('[CircuitWorkoutLiveScreen] Component mounted:', {
+      instanceId: componentInstanceId.current,
+      sessionId,
+      timestamp: new Date().toISOString(),
+      navigationState: navigation.state
+    });
+    
+    return () => {
+      console.log('[CircuitWorkoutLiveScreen] Component will unmount:', {
+        instanceId: componentInstanceId.current,
+        timestamp: new Date().toISOString()
+      });
+    };
+  }, []);
+  
   
   
   // State for rounds and navigation
@@ -188,29 +204,58 @@ export function CircuitWorkoutLiveScreen() {
   
   // Get circuit config for timing and Spotify device
   const queryClient = useQueryClient();
-  const { data: circuitConfig } = useQuery(
-    sessionId ? api.circuitConfig.getBySession.queryOptions({ sessionId }) : {
+  const { data: circuitConfig, error: circuitConfigError, isLoading: circuitConfigLoading, dataUpdatedAt } = useQuery(
+    sessionId ? {
+      ...api.circuitConfig.getBySession.queryOptions({ sessionId }),
+      refetchInterval: 7000, // Poll every 7 seconds
+    } : {
       enabled: false,
       queryKey: ['disabled-circuit-config-live'],
       queryFn: () => Promise.resolve(null)
     }
   );
   
-  // Real-time circuit config updates
-  useRealtimeCircuitConfig({
-    sessionId: sessionId || '',
-    supabase,
-    onConfigUpdate: useCallback((update) => {
-      console.log('[CircuitWorkoutLiveScreen] Circuit config updated via real-time');
-      // Invalidate the circuit config query to refetch latest data
-      queryClient.invalidateQueries({
-        queryKey: api.circuitConfig.getBySession.queryOptions({ sessionId: sessionId! }).queryKey
+  // Log circuit config changes and polling
+  useEffect(() => {
+    console.log('[CircuitWorkoutLiveScreen] Circuit config state:', {
+      hasConfig: !!circuitConfig,
+      configType: circuitConfig?.type,
+      isLoading: circuitConfigLoading,
+      hasError: !!circuitConfigError,
+      errorMessage: circuitConfigError?.message,
+      dataUpdatedAt: dataUpdatedAt ? new Date(dataUpdatedAt).toISOString() : 'N/A',
+      sessionId,
+      instanceId: componentInstanceId.current,
+      timestamp: new Date().toISOString()
+    });
+    
+    // Log the actual structure of circuitConfig
+    if (circuitConfig) {
+      console.log('[CircuitWorkoutLiveScreen] Circuit config details:', {
+        type: circuitConfig.type,
+        hasConfigObject: !!circuitConfig.config,
+        rounds: circuitConfig.config?.rounds,
+        roundTemplates: circuitConfig.config?.roundTemplates?.length,
+        restBetweenRounds: circuitConfig.config?.restBetweenRounds,
+        workDuration: circuitConfig.config?.workDuration,
+        restDuration: circuitConfig.config?.restDuration
       });
-    }, [queryClient, sessionId]),
-    onError: (error) => {
-      console.error('[CircuitWorkoutLiveScreen] Real-time circuit config error:', error);
+      
+      // Log first round template details if it exists
+      if (circuitConfig.config?.roundTemplates?.[0]) {
+        const firstRound = circuitConfig.config.roundTemplates[0];
+        console.log('[CircuitWorkoutLiveScreen] First round template:', {
+          roundNumber: firstRound.roundNumber,
+          type: firstRound.template?.type,
+          workDuration: firstRound.template?.workDuration,
+          restDuration: firstRound.template?.restDuration,
+          repeatTimes: firstRound.template?.repeatTimes
+        });
+      }
     }
-  });
+  }, [circuitConfig, circuitConfigLoading, circuitConfigError, dataUpdatedAt, sessionId]);
+  
+  // Removed realtime subscription - using polling instead
   
   // Helper function to get round-specific timing
   const getRoundTiming = useCallback((roundIndex: number) => {
@@ -283,12 +328,44 @@ export function CircuitWorkoutLiveScreen() {
       restDuration,
       roundType: 'circuit_round' as const
     };
-  }, [circuitConfig]);
+  }, [circuitConfig?.config?.roundTemplates, circuitConfig?.config?.workDuration, circuitConfig?.config?.restDuration]);
+  
+  // Get current round timing
+  const currentRoundTiming = getRoundTiming(currentRoundIndex);
   
   // Get current round type and repeat times
-  const currentRoundTiming = getRoundTiming(currentRoundIndex);
   const currentRoundType = currentRoundTiming.roundType;
   const currentRepeatTimes = currentRoundTiming.repeatTimes || 1;
+  
+  // Log only significant changes
+  useEffect(() => {
+    console.log('[CircuitWorkoutLiveScreen] Round timing changed:', {
+      currentRoundIndex,
+      roundType: currentRoundTiming.roundType,
+      workDuration: currentRoundTiming.workDuration,
+      restDuration: currentRoundTiming.restDuration,
+      repeatTimes: currentRoundTiming.repeatTimes,
+      timestamp: new Date().toISOString()
+    });
+  }, [currentRoundIndex, currentRoundTiming.workDuration, currentRoundTiming.restDuration, currentRoundTiming.repeatTimes, currentRoundTiming.roundType]);
+  
+  // Log when circuit config changes from polling
+  useEffect(() => {
+    if (circuitConfig) {
+      console.log('[CircuitWorkoutLiveScreen] Circuit config updated from polling:', {
+        workDuration: circuitConfig.config?.workDuration,
+        restDuration: circuitConfig.config?.restDuration,
+        roundTemplates: circuitConfig.config?.roundTemplates?.map(rt => ({
+          roundNumber: rt.roundNumber,
+          type: rt.template.type,
+          workDuration: rt.template.workDuration,
+          restDuration: rt.template.restDuration,
+          repeatTimes: rt.template.repeatTimes
+        })),
+        timestamp: new Date().toISOString()
+      });
+    }
+  }, [circuitConfig]);
   
   // Calculate which repeat we're currently on for circuit/stations rounds
   const getCurrentRepeatNumber = useCallback(() => {
@@ -658,15 +735,16 @@ export function CircuitWorkoutLiveScreen() {
     }
   }, [isPaused]);
 
-  const handleTimerComplete = useCallback(() => {
+  // This function needs to be stable and always get fresh values
+  const handleTimerCompleteRef = useRef<() => void>();
+  handleTimerCompleteRef.current = () => {
     console.log('[CircuitWorkoutLive] Timer complete:', {
       currentScreen: timerStateRef.current.currentScreen,
-      timeRemaining,
       instanceId: componentInstanceId.current
     });
     // Auto-advance to next screen (not a manual skip)
     handleNext(false);
-  }, []);
+  };
 
   // Start Round 1 immediately
   const startRound1Immediately = useCallback(() => {
@@ -743,7 +821,13 @@ export function CircuitWorkoutLiveScreen() {
   }, [getRoundTiming, startRound1Immediately]);
 
   const startTimer = (duration: number) => {
-    
+    console.log('[CircuitWorkoutLiveScreen] Starting timer:', {
+      duration,
+      currentScreen: timerStateRef.current.currentScreen,
+      currentRoundIndex: timerStateRef.current.currentRoundIndex,
+      currentExerciseIndex: timerStateRef.current.currentExerciseIndex,
+      timestamp: new Date().toISOString()
+    });
     setTimeRemaining(duration);
     // Don't set isStarted here - it should only be set when actual workout rounds begin
   };
@@ -794,8 +878,8 @@ export function CircuitWorkoutLiveScreen() {
         
         // Start the exercise
         setCurrentScreen('exercise');
-        const { workDuration } = getRoundTiming(roundIdx);
-        startTimer(workDuration);
+        const freshRoundTiming = getRoundTiming(roundIdx);
+        startTimer(freshRoundTiming.workDuration);
       } else {
         // Round 1 or natural timer progression - use the normal flow
         startFirstExercise();
@@ -829,10 +913,11 @@ export function CircuitWorkoutLiveScreen() {
         // Check if this is the last exercise in the round
         if (exerciseIdx === currentRound.exercises.length - 1) {
           // Last exercise of the round
-          const roundTiming = getRoundTiming(roundIdx);
-          const isStationsRound = roundTiming.roundType === 'stations_round';
-          const isCircuitRound = roundTiming.roundType === 'circuit_round';
-          const repeatTimes = roundTiming.repeatTimes || 1;
+          // Get fresh timing values to ensure we use updated config
+          const freshRoundTiming = getRoundTiming(roundIdx);
+          const isStationsRound = freshRoundTiming.roundType === 'stations_round';
+          const isCircuitRound = freshRoundTiming.roundType === 'circuit_round';
+          const repeatTimes = freshRoundTiming.repeatTimes || 1;
           const currentSet = timerStateRef.current.currentSetNumber;
           
           // Check if this is a stations or circuit round with more sets to do
@@ -841,7 +926,7 @@ export function CircuitWorkoutLiveScreen() {
             
             // Move to rest screen for set break
             setCurrentScreen('rest');
-            const { restDuration, restBetweenSets } = roundTiming;
+            const { restDuration, restBetweenSets } = freshRoundTiming;
             
             // Use restBetweenSets for circuit set breaks, restDuration for stations (for now)
             const setBreakDuration = isCircuitRound && restBetweenSets ? restBetweenSets : restDuration;
@@ -887,14 +972,14 @@ export function CircuitWorkoutLiveScreen() {
           }
         } else {
           // Not the last exercise - check if we should go to rest or next exercise
-          const { restDuration } = getRoundTiming(roundIdx);
+          // Get fresh timing values to ensure we use updated config
+          const freshRoundTiming = getRoundTiming(roundIdx);
           
-          if (restDuration === 0) {
+          if (freshRoundTiming.restDuration === 0) {
             // Skip rest and go directly to next exercise
             setCurrentExerciseIndex(exerciseIdx + 1);
             setCurrentScreen('exercise');
-            const { workDuration } = getRoundTiming(roundIdx);
-            startTimer(workDuration);
+            startTimer(freshRoundTiming.workDuration);
             
             // Play BRIDGE track at start of exercise 2
             if (exerciseIdx + 1 === 1) { // Exercise 2 (0-indexed)
@@ -909,16 +994,17 @@ export function CircuitWorkoutLiveScreen() {
           } else {
             // Go to rest as normal
             setCurrentScreen('rest');
-            startTimer(restDuration);
+            startTimer(freshRoundTiming.restDuration);
           }
         }
       }
     } else if (screen === 'rest') {
       // Check if this is a set break (last exercise of a stations or circuit round with more sets to do)
-      const roundTiming = getRoundTiming(roundIdx);
-      const isStationsRound = roundTiming.roundType === 'stations_round';
-      const isCircuitRound = roundTiming.roundType === 'circuit_round';
-      const repeatTimes = roundTiming.repeatTimes || 1;
+      // Get fresh timing values to ensure we use updated config
+      const freshRoundTiming = getRoundTiming(roundIdx);
+      const isStationsRound = freshRoundTiming.roundType === 'stations_round';
+      const isCircuitRound = freshRoundTiming.roundType === 'circuit_round';
+      const repeatTimes = freshRoundTiming.repeatTimes || 1;
       const currentSet = timerStateRef.current.currentSetNumber;
       const isLastExercise = exerciseIdx === currentRound.exercises.length - 1;
       
@@ -928,15 +1014,17 @@ export function CircuitWorkoutLiveScreen() {
         setCurrentSetNumber(currentSet + 1);
         setCurrentExerciseIndex(0);
         setCurrentScreen('exercise');
-        const { workDuration } = roundTiming;
-        startTimer(workDuration);
+        // Get fresh timing values for work duration
+        const freshRoundTiming = getRoundTiming(roundIdx);
+        startTimer(freshRoundTiming.workDuration);
       } else {
         // Normal rest between exercises
         const nextExerciseIndex = exerciseIdx + 1;
         setCurrentExerciseIndex(nextExerciseIndex);
         setCurrentScreen('exercise');
-        const { workDuration } = getRoundTiming(roundIdx);
-        startTimer(workDuration);
+        // Get fresh timing values for work duration
+        const freshRoundTiming = getRoundTiming(roundIdx);
+        startTimer(freshRoundTiming.workDuration);
         
         // Play BRIDGE track at start of exercise 2
         if (nextExerciseIndex === 1) { // Exercise 2 (0-indexed)
@@ -950,7 +1038,7 @@ export function CircuitWorkoutLiveScreen() {
         }
       }
     }
-  }, []); // No dependencies - function is stable and uses ref values
+  }, [getRoundTiming, circuitConfig, startTimer, startFirstExercise]); // Include functions that depend on config
 
   const handleBack = useCallback(() => {
     // Reset lighting event to force re-application when navigating
@@ -1786,7 +1874,17 @@ export function CircuitWorkoutLiveScreen() {
                   marginBottom: 40,
                   letterSpacing: -2
                 }}>
-                  {formatTime(timeRemaining)}
+                  {(() => {
+                    const formattedTime = formatTime(timeRemaining);
+                    console.log('[CircuitWorkoutLiveScreen] Rest Timer Display:', {
+                      timeRemaining,
+                      formattedTime,
+                      currentScreen,
+                      expectedRestDuration: getRoundTiming(currentRoundIndex).restDuration,
+                      timestamp: new Date().toISOString()
+                    });
+                    return formattedTime;
+                  })()}
                 </Text>
                 
                 {/* Rest Label - Secondary Focus */}
