@@ -8,6 +8,7 @@ export interface WorkoutContext {
   
   // Timing
   timeRemaining: number;
+  isPaused: boolean;
   
   // Navigation state
   currentRoundIndex: number;
@@ -17,6 +18,9 @@ export interface WorkoutContext {
   // Data
   rounds: any[]; // Will type this properly later
   selections: any[]; // Will type this properly later
+  
+  // UI state
+  isStarted: boolean;
 }
 
 export type WorkoutEvent = 
@@ -40,11 +44,13 @@ export const workoutMachine = createMachine({
   context: {
     circuitConfig: null,
     timeRemaining: 0,
+    isPaused: false,
     currentRoundIndex: 0,
     currentExerciseIndex: 0,
     currentSetNumber: 1,
     rounds: [],
-    selections: []
+    selections: [],
+    isStarted: false
   },
   states: {
     roundPreview: {
@@ -53,14 +59,15 @@ export const workoutMachine = createMachine({
           // First round has no timer, others use restBetweenRounds
           if (context.currentRoundIndex === 0) return 0;
           return context.circuitConfig?.config?.restBetweenRounds || 60;
-        }
+        },
+        isPaused: false
       }),
       on: {
         START_WORKOUT: 'exercise',
         SKIP: 'exercise',
         TIMER_COMPLETE: 'exercise',
         TIMER_TICK: {
-          guard: ({ context }) => context.timeRemaining > 0,
+          guard: ({ context }) => context.timeRemaining > 0 && !context.isPaused,
           actions: assign({
             timeRemaining: ({ context }) => context.timeRemaining - 1
           })
@@ -72,6 +79,33 @@ export const workoutMachine = createMachine({
                 return event.config;
               }
               return null;
+            }
+          })
+        },
+        PAUSE: {
+          actions: assign({ isPaused: true })
+        },
+        RESUME: {
+          actions: assign({ isPaused: false })
+        },
+        BACK: [
+          {
+            target: 'roundPreview',
+            guard: ({ context }) => context.currentRoundIndex > 0,
+            actions: assign({
+              currentRoundIndex: ({ context }) => context.currentRoundIndex - 1,
+              currentExerciseIndex: 0,
+              currentSetNumber: 1
+            })
+          }
+        ],
+        SELECTIONS_UPDATED: {
+          actions: assign({
+            rounds: ({ event }) => {
+              if (event.type === 'SELECTIONS_UPDATED') {
+                return event.selections;
+              }
+              return [];
             }
           })
         }
@@ -129,10 +163,12 @@ export const workoutMachine = createMachine({
           },
           {
             target: 'exercise',
-            guard: 'hasMoreExercisesInRound',
+            guard: 'hasMoreExercisesInRound', 
             actions: assign({
               currentExerciseIndex: ({ context }) => context.currentExerciseIndex + 1
-            })
+            }),
+            // Force re-entry to reset timer for stations
+            reenter: true
           },
           {
             target: 'roundComplete',
@@ -150,9 +186,52 @@ export const workoutMachine = createMachine({
           })
         },
         TIMER_TICK: {
-          guard: ({ context }) => context.timeRemaining > 0,
+          guard: ({ context }) => context.timeRemaining > 0 && !context.isPaused,
           actions: assign({
             timeRemaining: ({ context }) => context.timeRemaining - 1
+          })
+        },
+        PAUSE: {
+          actions: assign({ isPaused: true })
+        },
+        RESUME: {
+          actions: assign({ isPaused: false })
+        },
+        BACK: [
+          {
+            target: 'exercise',
+            guard: ({ context }) => context.currentExerciseIndex > 0,
+            actions: assign({
+              currentExerciseIndex: ({ context }) => context.currentExerciseIndex - 1
+            })
+          },
+          {
+            target: 'roundPreview',
+            guard: ({ context }) => context.currentExerciseIndex === 0 && context.currentSetNumber === 1,
+            actions: assign({
+              currentSetNumber: 1
+            })
+          },
+          {
+            target: 'setBreak',
+            guard: ({ context }) => context.currentExerciseIndex === 0 && context.currentSetNumber > 1,
+            actions: assign({
+              currentSetNumber: ({ context }) => context.currentSetNumber - 1,
+              currentExerciseIndex: ({ context }) => {
+                const currentRound = context.rounds[context.currentRoundIndex];
+                return currentRound ? currentRound.exercises.length - 1 : 0;
+              }
+            })
+          }
+        ],
+        SELECTIONS_UPDATED: {
+          actions: assign({
+            rounds: ({ event }) => {
+              if (event.type === 'SELECTIONS_UPDATED') {
+                return event.selections;
+              }
+              return [];
+            }
           })
         }
       }
@@ -182,20 +261,23 @@ export const workoutMachine = createMachine({
           }
           
           return config.restDuration || 0;
-        }
+        },
+        isPaused: false
       }),
       on: {
         TIMER_COMPLETE: {
           target: 'exercise',
           actions: assign({
             currentExerciseIndex: ({ context }) => context.currentExerciseIndex + 1
-          })
+          }),
+          reenter: true
         },
         SKIP: {
           target: 'exercise',
           actions: assign({
             currentExerciseIndex: ({ context }) => context.currentExerciseIndex + 1
-          })
+          }),
+          reenter: true
         },
         CONFIG_UPDATED: {
           actions: assign({
@@ -207,10 +289,32 @@ export const workoutMachine = createMachine({
             }
           })
         },
+        SELECTIONS_UPDATED: {
+          actions: assign({
+            rounds: ({ event }) => {
+              if (event.type === 'SELECTIONS_UPDATED') {
+                return event.selections;
+              }
+              return [];
+            }
+          })
+        },
         TIMER_TICK: {
-          guard: ({ context }) => context.timeRemaining > 0,
+          guard: ({ context }) => context.timeRemaining > 0 && !context.isPaused,
           actions: assign({
             timeRemaining: ({ context }) => context.timeRemaining - 1
+          })
+        },
+        PAUSE: {
+          actions: assign({ isPaused: true })
+        },
+        RESUME: {
+          actions: assign({ isPaused: false })
+        },
+        BACK: {
+          target: 'exercise',
+          actions: assign({
+            currentExerciseIndex: ({ context }) => Math.max(0, context.currentExerciseIndex - 1)
           })
         }
       }
@@ -254,15 +358,38 @@ export const workoutMachine = createMachine({
           return 30;
         },
         currentSetNumber: ({ context }) => context.currentSetNumber + 1,
-        currentExerciseIndex: () => 0 // Reset to first exercise
+        currentExerciseIndex: () => 0, // Reset to first exercise
+        isPaused: false
       }),
       on: {
-        TIMER_COMPLETE: 'exercise',
-        SKIP: 'exercise',
+        TIMER_COMPLETE: {
+          target: 'exercise',
+          reenter: true
+        },
+        SKIP: {
+          target: 'exercise',
+          reenter: true
+        },
         TIMER_TICK: {
-          guard: ({ context }) => context.timeRemaining > 0,
+          guard: ({ context }) => context.timeRemaining > 0 && !context.isPaused,
           actions: assign({
             timeRemaining: ({ context }) => context.timeRemaining - 1
+          })
+        },
+        PAUSE: {
+          actions: assign({ isPaused: true })
+        },
+        RESUME: {
+          actions: assign({ isPaused: false })
+        },
+        BACK: {
+          target: 'roundComplete',
+          actions: assign({
+            currentSetNumber: ({ context }) => context.currentSetNumber - 1,
+            currentExerciseIndex: ({ context }) => {
+              const currentRound = context.rounds[context.currentRoundIndex];
+              return currentRound ? currentRound.exercises.length - 1 : 0;
+            }
           })
         }
       }
@@ -283,15 +410,20 @@ export const workoutMachine = createMachine({
       if (isLastExercise) return false;
       
       // Check if rest duration > 0
-      const roundTemplates = context.circuitConfig?.config?.roundTemplates;
-      if (!roundTemplates) return false;
+      const config = context.circuitConfig?.config;
+      const roundTemplates = config?.roundTemplates;
+      if (!roundTemplates || !config) return false;
       
       const currentTemplate = roundTemplates.find(
         rt => rt.roundNumber === context.currentRoundIndex + 1
       );
       
       if (currentTemplate?.template.type === 'circuit_round') {
-        return (currentTemplate.template.restDuration || 0) > 0;
+        return (currentTemplate.template.restDuration ?? 0) > 0;
+      } else if (currentTemplate?.template.type === 'stations_round') {
+        // Stations can have rest between stations
+        const restDuration = (currentTemplate.template as any).restDuration ?? config.restDuration ?? 0;
+        return restDuration > 0;
       }
       
       return false;

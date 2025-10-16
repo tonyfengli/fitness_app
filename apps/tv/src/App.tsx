@@ -33,7 +33,8 @@ import { CircuitPreferencesScreen } from './screens/CircuitPreferencesScreen';
 import { CircuitWorkoutGenerationScreen } from './screens/CircuitWorkoutGenerationScreen';
 import { CircuitWorkoutOverviewScreen } from './screens/CircuitWorkoutOverviewScreen';
 // import { CircuitWorkoutLiveScreen } from './screens/CircuitWorkoutLiveScreen';
-import { CircuitWorkoutLiveScreen } from './screens/CircuitWorkoutLiveScreen_NEW';
+// import { CircuitWorkoutLiveScreen } from './screens/CircuitWorkoutLiveScreen_NEW';
+import { CircuitWorkoutLiveScreen } from './screens/CircuitWorkoutLiveScreen_COMPLETE';
 import { LightingTestScreen } from './screens/LightingTestScreen';
 
 
