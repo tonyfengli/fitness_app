@@ -35,6 +35,7 @@
     "@tanstack/react-query": "catalog:default",
     "@trpc/client": "catalog:default",
     "@trpc/tanstack-react-query": "catalog:default",
+    "@xstate/react": "6.0.0",
     "nativewind": "2.0.11",
     "react": "catalog:react19",
     "react-dom": "catalog:react19",
@@ -49,7 +50,8 @@
     "react-native-url-polyfill": "^2.0.0",
     "react-native-vector-icons": "10.3.0",
     "react-native-web": "^0.20.0",
-    "superjson": "2.2.2"
+    "superjson": "2.2.2",
+    "xstate": "5.23.0"
   },
   "devDependencies": {
     "@babel/core": "^7.27.4",

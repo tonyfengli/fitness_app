@@ -344,6 +344,9 @@ importers:
       '@trpc/tanstack-react-query':
         specifier: catalog:default
         version: 11.4.4(@tanstack/react-query@5.85.3(react@19.0.0))(@trpc/client@11.4.4(@trpc/server@11.4.4(typescript@5.9.2))(typescript@5.9.2))(@trpc/server@11.4.4(typescript@5.9.2))(react-dom@19.0.0(react@19.0.0))(react@19.0.0)(typescript@5.9.2)
+      '@xstate/react':
+        specifier: 6.0.0
+        version: 6.0.0(@types/react@19.1.10)(react@19.0.0)(xstate@5.23.0)
       nativewind:
         specifier: 2.0.11
         version: 2.0.11(react@19.0.0)(tailwindcss@3.2.7(postcss@8.5.6)(ts-node@10.9.2(@types/node@22.17.1)(typescript@5.9.2)))
@@ -389,6 +392,9 @@ importers:
       superjson:
         specifier: 2.2.2
         version: 2.2.2
+      xstate:
+        specifier: 5.23.0
+        version: 5.23.0
     devDependencies:
       '@babel/core':
         specifier: ^7.27.4
@@ -410,7 +416,7 @@ importers:
         version: 0.79.2(eslint@9.33.0(jiti@2.5.1))(prettier@3.6.2)(typescript@5.9.2)
       '@react-native/metro-config':
         specifier: 0.79.2
-        version: 0.79.2(@babel/core@7.28.3)(bufferutil@4.0.9)
+        version: 0.79.2(@babel/core@7.28.3)
       '@react-native/typescript-config':
         specifier: 0.79.2
         version: 0.79.2
@@ -4150,6 +4156,15 @@ packages:
   '@xmldom/xmldom@0.8.10':
     resolution: {integrity: sha512-2WALfTl4xo2SkGCYRt6rDTFfk9R1czmBvUQy12gK2KuRKIpWEhcbbzy8EZXtz/jkRqHX8bFEc6FC1HjX4TUWYw==}
     engines: {node: '>=10.0.0'}
+
+  '@xstate/react@6.0.0':
+    resolution: {integrity: sha512-xXlLpFJxqLhhmecAXclBECgk+B4zYSrDTl8hTfPZBogkn82OHKbm9zJxox3Z/YXoOhAQhKFTRLMYGdlbhc6T9A==}
+    peerDependencies:
+      react: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
+      xstate: ^5.20.0
+    peerDependenciesMeta:
+      xstate:
+        optional: true
 
   abort-controller@3.0.0:
     resolution: {integrity: sha512-h8lQ8tacZYnR3vNQTgibj+tODHI5/+l06Au2Pcriv/Gmet0eaj4TwWH41sO9wnHDiQsEj19q0drzdWdeAHtweg==}
@@ -8865,6 +8880,15 @@ packages:
       '@types/react':
         optional: true
 
+  use-isomorphic-layout-effect@1.2.1:
+    resolution: {integrity: sha512-tpZZ+EX0gaghDAiFR37hj5MgY6ZN55kLiPkJsKxBMZ6GZdOSPJXiOzPM984oPYZ5AnehYx5WQp1+ME8I/P/pRA==}
+    peerDependencies:
+      '@types/react': '*'
+      react: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
+    peerDependenciesMeta:
+      '@types/react':
+        optional: true
+
   use-latest-callback@0.2.4:
     resolution: {integrity: sha512-LS2s2n1usUUnDq4oVh1ca6JFX9uSqUncTfAm44WMg0v6TxL7POUTk1B044NH8TeLkFbNajIsgDHcgNpNzZucdg==}
     peerDependencies:
@@ -9173,6 +9197,9 @@ packages:
 
   xmlchars@2.2.0:
     resolution: {integrity: sha512-JZnDKK8B0RCDw84FNdDAIpZK+JuJw+s7Lz8nksI7SIuU3UXJJslUthsi+uWBUYOwPFwW7W7PRLRfUKpxjtjFCw==}
+
+  xstate@5.23.0:
+    resolution: {integrity: sha512-jo126xWXkU6ySQ91n51+H2xcgnMuZcCQpQoD3FQ79d32a6RQvryRh8rrDHnH4WDdN/yg5xNjlIRol9ispMvzeg==}
 
   xtend@4.0.2:
     resolution: {integrity: sha512-LKYU1iAXJXUgAXn9URjiu+MWhyUXHsvfp7mcuYm9dSUKK0/CjtrUwFAxD82/mCWbtLsGjFIad0wIsod4zrTAEQ==}
@@ -12255,7 +12282,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@react-native/metro-config@0.79.2(@babel/core@7.28.3)(bufferutil@4.0.9)':
+  '@react-native/metro-config@0.79.2(@babel/core@7.28.3)':
     dependencies:
       '@react-native/js-polyfills': 0.79.2
       '@react-native/metro-babel-transformer': 0.79.2(@babel/core@7.28.3)
@@ -12263,9 +12290,7 @@ snapshots:
       metro-runtime: 0.82.5
     transitivePeerDependencies:
       - '@babel/core'
-      - bufferutil
       - supports-color
-      - utf-8-validate
 
   '@react-native/normalize-colors@0.74.89': {}
 
@@ -13098,6 +13123,16 @@ snapshots:
   '@vscode/sudo-prompt@9.3.1': {}
 
   '@xmldom/xmldom@0.8.10': {}
+
+  '@xstate/react@6.0.0(@types/react@19.1.10)(react@19.0.0)(xstate@5.23.0)':
+    dependencies:
+      react: 19.0.0
+      use-isomorphic-layout-effect: 1.2.1(@types/react@19.1.10)(react@19.0.0)
+      use-sync-external-store: 1.5.0(react@19.0.0)
+    optionalDependencies:
+      xstate: 5.23.0
+    transitivePeerDependencies:
+      - '@types/react'
 
   abort-controller@3.0.0:
     dependencies:
@@ -18530,6 +18565,12 @@ snapshots:
     optionalDependencies:
       '@types/react': 19.1.10
 
+  use-isomorphic-layout-effect@1.2.1(@types/react@19.1.10)(react@19.0.0):
+    dependencies:
+      react: 19.0.0
+    optionalDependencies:
+      '@types/react': 19.1.10
+
   use-latest-callback@0.2.4(react@19.0.0):
     dependencies:
       react: 19.0.0
@@ -18819,6 +18860,8 @@ snapshots:
   xmlbuilder@15.1.1: {}
 
   xmlchars@2.2.0: {}
+
+  xstate@5.23.0: {}
 
   xtend@4.0.2: {}
 
