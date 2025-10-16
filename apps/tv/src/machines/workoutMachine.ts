@@ -141,6 +141,21 @@ export const workoutMachine = createMachine({
       on: {
         TIMER_COMPLETE: [
           {
+            // For AMRAP, timer complete means round complete
+            target: 'roundComplete',
+            guard: ({ context }) => {
+              const config = context.circuitConfig?.config;
+              const roundTemplates = config?.roundTemplates;
+              if (!roundTemplates) return false;
+              
+              const currentTemplate = roundTemplates.find(
+                rt => rt.roundNumber === context.currentRoundIndex + 1
+              );
+              
+              return currentTemplate?.template.type === 'amrap_round';
+            }
+          },
+          {
             target: 'rest',
             guard: 'shouldGoToRest'
           },
@@ -149,7 +164,8 @@ export const workoutMachine = createMachine({
             guard: 'hasMoreExercisesInRound',
             actions: assign({
               currentExerciseIndex: ({ context }) => context.currentExerciseIndex + 1
-            })
+            }),
+            reenter: true
           },
           {
             target: 'roundComplete',
@@ -158,12 +174,27 @@ export const workoutMachine = createMachine({
         ],
         SKIP: [
           {
+            // For AMRAP, skip the entire round
+            target: 'roundComplete',
+            guard: ({ context }) => {
+              const config = context.circuitConfig?.config;
+              const roundTemplates = config?.roundTemplates;
+              if (!roundTemplates) return false;
+              
+              const currentTemplate = roundTemplates.find(
+                rt => rt.roundNumber === context.currentRoundIndex + 1
+              );
+              
+              return currentTemplate?.template.type === 'amrap_round';
+            }
+          },
+          {
             target: 'rest',
             guard: 'shouldGoToRest'
           },
           {
             target: 'exercise',
-            guard: 'hasMoreExercisesInRound', 
+            guard: 'hasMoreExercisesInRound',
             actions: assign({
               currentExerciseIndex: ({ context }) => context.currentExerciseIndex + 1
             }),

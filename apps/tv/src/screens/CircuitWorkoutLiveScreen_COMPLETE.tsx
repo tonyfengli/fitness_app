@@ -306,13 +306,30 @@ export function CircuitWorkoutLiveScreen() {
 
   // Timer complete handling
   useEffect(() => {
-    if (state.context.timeRemaining === 0 && (state.value === 'exercise' || state.value === 'rest' || state.value === 'setBreak')) {
+    if (state.context.timeRemaining === 0 && (state.value === 'exercise' || state.value === 'rest' || state.value === 'setBreak' || (state.value === 'roundPreview' && state.context.currentRoundIndex > 0))) {
+      console.log('[Timer Complete] Sending TIMER_COMPLETE event', {
+        state: state.value,
+        roundIndex: state.context.currentRoundIndex,
+        exerciseIndex: state.context.currentExerciseIndex,
+        roundType: getRoundTiming(state.context.currentRoundIndex).roundType
+      });
       const timeoutId = setTimeout(() => {
         send({ type: 'TIMER_COMPLETE' });
       }, 100);
       return () => clearTimeout(timeoutId);
     }
-  }, [state.context.timeRemaining, state.value, send]);
+  }, [state.context.timeRemaining, state.value, send, getRoundTiming, state.context.currentRoundIndex, state.context.currentExerciseIndex]);
+
+  // Navigate back to overview when workout completes
+  useEffect(() => {
+    if (state.value === 'workoutComplete') {
+      // Small delay to allow any animations or final state updates
+      const timeoutId = setTimeout(() => {
+        navigation.goBack();
+      }, 500);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [state.value, navigation]);
 
   // Helper functions
   const formatTime = (seconds: number): string => {
@@ -498,7 +515,7 @@ export function CircuitWorkoutLiveScreen() {
             <Pressable
               onPress={() => send({ type: 'SKIP' })}
               focusable
-              disabled={state.context.currentRoundIndex >= state.context.rounds.length - 1}
+              disabled={false}
             >
               {({ focused }) => (
                 <MattePanel 
@@ -509,7 +526,7 @@ export function CircuitWorkoutLiveScreen() {
                     height: 44,
                     alignItems: 'center',
                     justifyContent: 'center',
-                    opacity: state.context.currentRoundIndex >= state.context.rounds.length - 1 ? 0.4 : 1,
+                    opacity: 1,
                     backgroundColor: focused ? 
                       'rgba(255,255,255,0.15)' : 
                       'rgba(255,255,255,0.08)',
@@ -732,15 +749,16 @@ export function CircuitWorkoutLiveScreen() {
           </>
         )}
 
-        {state.value === 'exercise' && currentRound && (
+        {state.value === 'exercise' && currentRound && currentExercise && (
           <>
             {currentRoundType === 'circuit_round' && (
               <CircuitExerciseView 
                 currentRound={currentRound}
+                currentExercise={currentExercise}
                 currentExerciseIndex={state.context.currentExerciseIndex}
                 timeRemaining={state.context.timeRemaining}
                 isPaused={state.context.isPaused}
-                workDuration={currentRoundTiming.workDuration}
+                restDuration={currentRoundTiming.restDuration}
               />
             )}
             {currentRoundType === 'stations_round' && (
