@@ -64,7 +64,24 @@ export const workoutMachine = createMachine({
       }),
       on: {
         START_WORKOUT: 'exercise',
-        SKIP: 'exercise',
+        SKIP: [
+          {
+            // If there are more rounds, skip to the next round preview
+            target: 'roundPreview',
+            guard: ({ context }) => context.currentRoundIndex < context.rounds.length - 1,
+            actions: assign({
+              currentRoundIndex: ({ context }) => context.currentRoundIndex + 1,
+              currentExerciseIndex: 0,
+              currentSetNumber: 1
+            }),
+            reenter: true
+          },
+          {
+            // If this is the last round, go to workout complete
+            target: 'workoutComplete',
+            guard: ({ context }) => context.currentRoundIndex >= context.rounds.length - 1
+          }
+        ],
         TIMER_COMPLETE: 'exercise',
         TIMER_TICK: {
           guard: ({ context }) => context.timeRemaining > 0 && !context.isPaused,
@@ -230,7 +247,32 @@ export const workoutMachine = createMachine({
         },
         BACK: [
           {
-            // For stations and circuit rounds, go back to previous rest (not previous exercise)
+            // For circuit rounds with no rest, go directly to previous exercise
+            target: 'exercise',
+            guard: ({ context }) => {
+              const config = context.circuitConfig?.config;
+              const roundTemplates = config?.roundTemplates;
+              if (!roundTemplates) return false;
+              
+              const currentTemplate = roundTemplates.find(
+                rt => rt.roundNumber === context.currentRoundIndex + 1
+              );
+              
+              // Check if it's a circuit round with 0 rest duration
+              if (currentTemplate?.template.type === 'circuit_round' && context.currentExerciseIndex > 0) {
+                const restDuration = currentTemplate.template.restDuration ?? config?.restDuration ?? 0;
+                return restDuration === 0;
+              }
+              
+              return false;
+            },
+            actions: assign({
+              currentExerciseIndex: ({ context }) => context.currentExerciseIndex - 1
+            }),
+            reenter: true // Reset timer
+          },
+          {
+            // For stations and circuit rounds with rest, go back to previous rest
             target: 'rest',
             guard: ({ context }) => {
               const config = context.circuitConfig?.config;

@@ -7,6 +7,7 @@ interface SetBreakViewProps {
   currentSetNumber: number;
   totalSets: number;
   currentRound: RoundData;
+  roundType: string;
 }
 
 // Team configuration - matches the preview/rest views
@@ -19,7 +20,53 @@ const TEAMS = [
   { name: 'Team 6', color: '#14b8a6' },
 ];
 
-export function SetBreakView({ timeRemaining, currentSetNumber, totalSets, currentRound }: SetBreakViewProps) {
+export function SetBreakView({ timeRemaining, currentSetNumber, totalSets, currentRound, roundType }: SetBreakViewProps) {
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  // Circuit Round Set Break - Similar to CircuitRestView
+  if (roundType === 'circuit_round') {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingBottom: 80 }}>
+        {/* Main Timer */}
+        <Text style={{ 
+          fontSize: 180, 
+          fontWeight: '900', 
+          color: TOKENS.color.accent,
+          marginBottom: 40,
+          letterSpacing: -2
+        }}>
+          {formatTime(timeRemaining)}
+        </Text>
+        
+        {/* Set Break Label */}
+        <Text style={{ 
+          fontSize: 48, 
+          fontWeight: '700', 
+          color: TOKENS.color.text, 
+          marginBottom: 12,
+          textAlign: 'center'
+        }}>
+          Set Break
+        </Text>
+        
+        {/* Set Progress */}
+        <Text style={{ 
+          fontSize: 20, 
+          fontWeight: '500',
+          color: TOKENS.color.muted,
+          opacity: 0.7
+        }}>
+          Set {currentSetNumber} of {totalSets} complete
+        </Text>
+      </View>
+    );
+  }
+
+  // Stations Round Set Break - Original implementation
   // Use actual number of exercises as stations
   const exerciseCount = currentRound.exercises.length;
   

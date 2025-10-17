@@ -339,7 +339,7 @@ export function CircuitWorkoutLiveScreen() {
               {currentRound?.roundName || `Round ${state.context.currentRoundIndex + 1}`}
             </Text>
 
-            {/* RIGHT SIDE: Start Button or Spacer */}
+            {/* RIGHT SIDE: Start Button, Triple Controls for AMRAP/Circuit, or Spacer */}
             {state.context.currentRoundIndex === 0 && !state.context.isStarted ? (
               <Pressable
                 onPress={handleStartWorkout}
@@ -361,6 +361,73 @@ export function CircuitWorkoutLiveScreen() {
                   </MattePanel>
                 )}
               </Pressable>
+            ) : (currentRoundType === 'amrap_round' || currentRoundType === 'circuit_round') ? (
+              // Triple button controls for AMRAP and Circuit round preview
+              <View style={{ 
+                flexDirection: 'row',
+                backgroundColor: 'rgba(255,255,255,0.05)',
+                borderRadius: 32,
+                padding: 6,
+                gap: 4,
+                borderWidth: 1,
+                borderColor: 'rgba(255,255,255,0.1)',
+                zIndex: 1,
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.08,
+                shadowRadius: 4,
+                elevation: 2,
+              }}>
+                {/* Pause/Play */}
+                <Pressable onPress={() => send(state.context.isPaused ? { type: 'RESUME' } : { type: 'PAUSE' })} focusable>
+                  {({ focused }) => (
+                    <MattePanel 
+                      focused={focused}
+                      radius={26}
+                      style={{ 
+                        width: 56,
+                        height: 44,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        backgroundColor: focused ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.08)',
+                        borderColor: focused ? 'rgba(255,255,255,0.3)' : 'transparent',
+                        borderWidth: focused ? 1.5 : 0,
+                      }}
+                    >
+                      <Icon 
+                        name={state.context.isPaused ? "play-arrow" : "pause"} 
+                        size={26}
+                        color={TOKENS.color.text}
+                      />
+                    </MattePanel>
+                  )}
+                </Pressable>
+                
+                {/* Start Round (was Skip Forward) */}
+                <Pressable onPress={() => send({ type: 'START_WORKOUT' })} focusable>
+                  {({ focused }) => (
+                    <MattePanel 
+                      focused={focused}
+                      radius={26}
+                      style={{ 
+                        width: 52,
+                        height: 44,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        backgroundColor: focused ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.08)',
+                        borderColor: focused ? 'rgba(255,255,255,0.3)' : 'transparent',
+                        borderWidth: focused ? 1.5 : 0,
+                      }}
+                    >
+                      <Icon 
+                        name="skip-next" 
+                        size={22} 
+                        color={TOKENS.color.text}
+                      />
+                    </MattePanel>
+                  )}
+                </Pressable>
+              </View>
             ) : (
               <View style={{ width: 60 }} />
             )}
@@ -396,11 +463,11 @@ export function CircuitWorkoutLiveScreen() {
             />
 
             {/* CENTER: Timer (absolute positioned) */}
-            {(state.value === 'exercise' || state.value === 'rest' || state.value === 'setBreak') && currentRoundType === 'stations_round' ? (
+            {(state.value === 'exercise' || state.value === 'rest' || state.value === 'setBreak') && (currentRoundType === 'stations_round' || currentRoundType === 'amrap_round') ? (
               <Text style={{ 
                 fontSize: 120, 
                 fontWeight: '900', 
-                color: state.value === 'exercise' ? '#fff5e6' : TOKENS.color.accent, // Cyan for rest and setBreak
+                color: state.value === 'exercise' ? (currentRoundType === 'stations_round' ? '#fff5e6' : TOKENS.color.text) : TOKENS.color.accent, // Different colors for different round types
                 letterSpacing: -2,
                 position: 'absolute',
                 left: 0,

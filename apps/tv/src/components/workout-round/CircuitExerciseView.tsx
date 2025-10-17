@@ -27,7 +27,7 @@ export function CircuitExerciseView({
   
   
   return (
-    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingBottom: 60 }}>
+    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingBottom: 80 }}>
       {/* Main Timer - Primary Focus */}
       <Text style={{ 
         fontSize: 180, 

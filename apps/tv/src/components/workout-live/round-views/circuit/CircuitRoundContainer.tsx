@@ -57,7 +57,7 @@ export function CircuitRoundContainer({
         {repeatTimes > 1 && (
           <View style={{
             position: 'absolute',
-            top: -8,
+            top: -53,
             left: 0,
             right: 0,
             alignItems: 'center',
@@ -115,7 +115,7 @@ export function CircuitRoundContainer({
 
   if (state.value === 'rest') {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingBottom: 60 }}>
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingBottom: 80 }}>
         {/* Main Timer */}
         <TimerDisplay 
           timeRemaining={state.context.timeRemaining}
@@ -159,7 +159,7 @@ export function CircuitRoundContainer({
         {repeatTimes > 1 && (
           <View style={{
             position: 'absolute',
-            top: -48,
+            top: -53,
             left: 0,
             right: 0,
             alignItems: 'center',
