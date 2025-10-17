@@ -230,11 +230,45 @@ export const workoutMachine = createMachine({
         },
         BACK: [
           {
-            target: 'exercise',
-            guard: ({ context }) => context.currentExerciseIndex > 0,
+            // For stations and circuit rounds, go back to previous rest (not previous exercise)
+            target: 'rest',
+            guard: ({ context }) => {
+              const config = context.circuitConfig?.config;
+              const roundTemplates = config?.roundTemplates;
+              if (!roundTemplates) return false;
+              
+              const currentTemplate = roundTemplates.find(
+                rt => rt.roundNumber === context.currentRoundIndex + 1
+              );
+              
+              return (currentTemplate?.template.type === 'stations_round' || 
+                      currentTemplate?.template.type === 'circuit_round') && 
+                     context.currentExerciseIndex > 0;
+            },
             actions: assign({
               currentExerciseIndex: ({ context }) => context.currentExerciseIndex - 1
-            })
+            }),
+            reenter: true // Reset timer
+          },
+          {
+            // For AMRAP rounds, go back to previous exercise
+            target: 'exercise',
+            guard: ({ context }) => {
+              const config = context.circuitConfig?.config;
+              const roundTemplates = config?.roundTemplates;
+              if (!roundTemplates) return false;
+              
+              const currentTemplate = roundTemplates.find(
+                rt => rt.roundNumber === context.currentRoundIndex + 1
+              );
+              
+              return currentTemplate?.template.type === 'amrap_round' && 
+                     context.currentExerciseIndex > 0;
+            },
+            actions: assign({
+              currentExerciseIndex: ({ context }) => context.currentExerciseIndex - 1
+            }),
+            reenter: true // Reset timer
           },
           {
             target: 'roundPreview',
@@ -252,7 +286,8 @@ export const workoutMachine = createMachine({
                 const currentRound = context.rounds[context.currentRoundIndex];
                 return currentRound ? currentRound.exercises.length - 1 : 0;
               }
-            })
+            }),
+            reenter: true // Reset timer
           }
         ],
         SELECTIONS_UPDATED: {
@@ -342,12 +377,34 @@ export const workoutMachine = createMachine({
         RESUME: {
           actions: assign({ isPaused: false })
         },
-        BACK: {
-          target: 'exercise',
-          actions: assign({
-            currentExerciseIndex: ({ context }) => Math.max(0, context.currentExerciseIndex - 1)
-          })
-        }
+        BACK: [
+          {
+            // For stations and circuit rounds during rest, go back to current exercise (not previous)
+            target: 'exercise',
+            guard: ({ context }) => {
+              const config = context.circuitConfig?.config;
+              const roundTemplates = config?.roundTemplates;
+              if (!roundTemplates) return false;
+              
+              const currentTemplate = roundTemplates.find(
+                rt => rt.roundNumber === context.currentRoundIndex + 1
+              );
+              
+              return currentTemplate?.template.type === 'stations_round' ||
+                     currentTemplate?.template.type === 'circuit_round';
+            },
+            // Don't change the exercise index for stations/circuit
+            reenter: true // Reset timer
+          },
+          {
+            // For AMRAP rounds, go back to previous exercise
+            target: 'exercise',
+            actions: assign({
+              currentExerciseIndex: ({ context }) => Math.max(0, context.currentExerciseIndex - 1)
+            }),
+            reenter: true // Reset timer
+          }
+        ]
       }
     },
     
@@ -413,16 +470,43 @@ export const workoutMachine = createMachine({
         RESUME: {
           actions: assign({ isPaused: false })
         },
-        BACK: {
-          target: 'roundComplete',
-          actions: assign({
-            currentSetNumber: ({ context }) => context.currentSetNumber - 1,
-            currentExerciseIndex: ({ context }) => {
-              const currentRound = context.rounds[context.currentRoundIndex];
-              return currentRound ? currentRound.exercises.length - 1 : 0;
-            }
-          })
-        }
+        BACK: [
+          {
+            // For stations and circuit rounds, go back to the last exercise of the previous set
+            target: 'exercise',
+            guard: ({ context }) => {
+              const config = context.circuitConfig?.config;
+              const roundTemplates = config?.roundTemplates;
+              if (!roundTemplates) return false;
+              
+              const currentTemplate = roundTemplates.find(
+                rt => rt.roundNumber === context.currentRoundIndex + 1
+              );
+              
+              return currentTemplate?.template.type === 'stations_round' ||
+                     currentTemplate?.template.type === 'circuit_round';
+            },
+            actions: assign({
+              currentSetNumber: ({ context }) => context.currentSetNumber - 1,
+              currentExerciseIndex: ({ context }) => {
+                const currentRound = context.rounds[context.currentRoundIndex];
+                return currentRound ? currentRound.exercises.length - 1 : 0;
+              }
+            }),
+            reenter: true // Reset timer
+          },
+          {
+            // For AMRAP rounds, maintain existing behavior
+            target: 'roundComplete',
+            actions: assign({
+              currentSetNumber: ({ context }) => context.currentSetNumber - 1,
+              currentExerciseIndex: ({ context }) => {
+                const currentRound = context.rounds[context.currentRoundIndex];
+                return currentRound ? currentRound.exercises.length - 1 : 0;
+              }
+            })
+          }
+        ]
       }
     },
     
