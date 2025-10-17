@@ -24,9 +24,8 @@ export function AMRAPRoundContainer({
     return (
       <AMRAPRoundPreview 
         currentRound={currentRound}
-        currentRoundIndex={currentRoundIndex}
-        totalRounds={totalRounds}
-        totalDuration={totalDuration}
+        timeRemaining={state.context.timeRemaining}
+        isTimerActive={state.context.currentRoundIndex > 0}
       />
     );
   }

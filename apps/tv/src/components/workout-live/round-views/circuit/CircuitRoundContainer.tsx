@@ -37,6 +37,8 @@ export function CircuitRoundContainer({
         currentRoundIndex={currentRoundIndex}
         totalRounds={totalRounds}
         roundDuration={roundDuration}
+        timeRemaining={state.context.timeRemaining}
+        isTimerActive={state.context.currentRoundIndex > 0}
       />
     );
   }

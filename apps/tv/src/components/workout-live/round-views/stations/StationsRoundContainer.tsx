@@ -38,6 +38,8 @@ export function StationsRoundContainer({
         totalRounds={totalRounds}
         roundDuration={roundDuration}
         repeatTimes={repeatTimes}
+        timeRemaining={state.context.timeRemaining}
+        isTimerActive={state.context.currentRoundIndex > 0}
       />
     );
   }
