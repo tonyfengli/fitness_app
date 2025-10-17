@@ -203,151 +203,191 @@ export function CircuitWorkoutLiveScreen() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: TOKENS.color.bg }}>
-      {/* Header Controls */}
-      <View style={{ 
-        position: 'absolute', 
-        top: 60, 
-        left: 60, 
-        right: 60, 
-        zIndex: 10,
-        alignItems: 'center' 
-      }}>
-        {state.value === 'roundPreview' && state.context.currentRoundIndex > 0 ? (
-          <View style={{
-            flexDirection: 'row',
+    <View style={{ flex: 1, backgroundColor: TOKENS.color.bg, paddingTop: 40 }}>
+      {state.value === 'roundPreview' ? (
+        /* ROUND PREVIEW LAYOUT - Matches old implementation exactly */
+        <>
+          {/* Header with controls */}
+          <View style={{ 
+            flexDirection: 'row', 
+            justifyContent: 'space-between',
             alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: 'rgba(0,0,0,0.6)',
-            borderRadius: 999,
-            paddingHorizontal: 8,
-            paddingVertical: 8,
-            gap: 8,
+            paddingHorizontal: 48,
+            paddingTop: 20,
+            paddingBottom: 20,
+            position: 'relative'
           }}>
-            {/* Back Round */}
-            <Pressable
-              onPress={() => {
-                if (state.context.currentRoundIndex === 0) {
-                  navigation.goBack();
-                } else {
-                  send({ type: 'BACK' });
-                }
-              }}
-              focusable
-            >
-              {({ focused }) => (
-                <MattePanel 
-                  focused={focused}
-                  radius={26}
-                  style={{ 
-                    width: 94,
-                    height: 44,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    backgroundColor: focused ? 
-                      'rgba(255,255,255,0.15)' : 
-                      'rgba(255,255,255,0.08)',
-                    borderColor: focused ? 'rgba(255,255,255,0.3)' : 'transparent',
-                    borderWidth: focused ? 1.5 : 0,
-                  }}
-                >
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <Icon name="navigate-before" size={18} color={TOKENS.color.text} />
-                    <Text style={{ 
-                      color: TOKENS.color.text, 
-                      fontSize: 13, 
-                      fontWeight: '700',
-                      letterSpacing: 0.3,
-                      textTransform: 'uppercase'
-                    }}>
-                      BACK
-                    </Text>
-                  </View>
-                </MattePanel>
-              )}
-            </Pressable>
+            {/* LEFT SIDE: Back/Skip Navigation */}
+            <View style={{ 
+              flexDirection: 'row',
+              backgroundColor: 'rgba(255,255,255,0.05)',
+              borderRadius: 32,
+              padding: 6,
+              gap: 4,
+              borderWidth: 1,
+              borderColor: 'rgba(255,255,255,0.1)',
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.15,
+              shadowRadius: 8,
+              elevation: 4,
+            }}>
+              {/* Back Round */}
+              <Pressable
+                onPress={() => {
+                  if (state.context.currentRoundIndex === 0) {
+                    navigation.goBack();
+                  } else {
+                    send({ type: 'BACK' });
+                  }
+                }}
+                focusable
+              >
+                {({ focused }) => (
+                  <MattePanel 
+                    focused={focused}
+                    radius={26}
+                    style={{ 
+                      width: 94,
+                      height: 44,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      backgroundColor: focused ? 
+                        'rgba(255,255,255,0.15)' : 
+                        'rgba(255,255,255,0.08)',
+                      borderColor: focused ? 'rgba(255,255,255,0.3)' : 'transparent',
+                      borderWidth: focused ? 1.5 : 0,
+                    }}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Icon name="navigate-before" size={18} color={TOKENS.color.text} />
+                      <Text style={{ 
+                        color: TOKENS.color.text, 
+                        fontSize: 13, 
+                        fontWeight: '700',
+                        letterSpacing: 0.3,
+                        textTransform: 'uppercase'
+                      }}>
+                        BACK
+                      </Text>
+                    </View>
+                  </MattePanel>
+                )}
+              </Pressable>
 
-            {/* Skip Round */}
-            <Pressable
-              onPress={() => send({ type: 'SKIP' })}
-              focusable
-              disabled={false}
-            >
-              {({ focused }) => (
-                <MattePanel 
-                  focused={focused}
-                  radius={26}
-                  style={{ 
-                    width: 94,
-                    height: 44,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    opacity: 1,
-                    backgroundColor: focused ? 
-                      'rgba(255,255,255,0.15)' : 
-                      'rgba(255,255,255,0.08)',
-                    borderColor: focused ? 'rgba(255,255,255,0.3)' : 'transparent',
-                    borderWidth: focused ? 1.5 : 0,
-                  }}
-                >
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <Text style={{ 
-                      color: TOKENS.color.text, 
-                      fontSize: 13, 
-                      fontWeight: '700',
-                      letterSpacing: 0.3,
-                      textTransform: 'uppercase'
-                    }}>
-                      SKIP
-                    </Text>
-                    <Icon name="navigate-next" size={18} color={TOKENS.color.text} />
-                  </View>
-                </MattePanel>
-              )}
-            </Pressable>
+              {/* Skip Round */}
+              <Pressable
+                onPress={() => send({ type: 'SKIP' })}
+                focusable
+                disabled={state.context.currentRoundIndex >= roundsData.length - 1}
+              >
+                {({ focused }) => (
+                  <MattePanel 
+                    focused={focused}
+                    radius={26}
+                    style={{ 
+                      width: 94,
+                      height: 44,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      opacity: state.context.currentRoundIndex >= roundsData.length - 1 ? 0.4 : 1,
+                      backgroundColor: focused ? 
+                        'rgba(255,255,255,0.15)' : 
+                        state.context.currentRoundIndex >= roundsData.length - 1 ? 'transparent' : 'rgba(255,255,255,0.08)',
+                      borderColor: focused ? 'rgba(255,255,255,0.3)' : 'transparent',
+                      borderWidth: focused ? 1.5 : 0,
+                    }}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={{ 
+                        color: TOKENS.color.text, 
+                        fontSize: 13, 
+                        fontWeight: '700',
+                        letterSpacing: 0.3,
+                        textTransform: 'uppercase'
+                      }}>
+                        SKIP
+                      </Text>
+                      <Icon name="navigate-next" size={18} color={TOKENS.color.text} />
+                    </View>
+                  </MattePanel>
+                )}
+              </Pressable>
+            </View>
+
+            {/* CENTER: Round Header */}
+            <Text style={{ 
+              fontSize: 80, 
+              fontWeight: '900', 
+              color: TOKENS.color.text,
+              letterSpacing: 1,
+              textTransform: 'uppercase',
+              position: 'absolute',
+              left: 0,
+              right: 0,
+              textAlign: 'center',
+              pointerEvents: 'none'
+            }}>
+              {currentRound?.roundName || `Round ${state.context.currentRoundIndex + 1}`}
+            </Text>
+
+            {/* RIGHT SIDE: Start Button or Spacer */}
+            {state.context.currentRoundIndex === 0 && !state.context.isStarted ? (
+              <Pressable
+                onPress={handleStartWorkout}
+                focusable
+              >
+                {({ focused }) => (
+                  <MattePanel 
+                    focused={focused}
+                    style={{ 
+                      paddingHorizontal: 32,
+                      paddingVertical: 12,
+                      backgroundColor: focused ? 'rgba(255,255,255,0.16)' : TOKENS.color.card,
+                      borderColor: focused ? 'rgba(255,255,255,0.45)' : TOKENS.color.borderGlass,
+                      borderWidth: focused ? 1 : 1,
+                      transform: focused ? [{ translateY: -1 }] : [],
+                    }}
+                  >
+                    <Text style={{ color: TOKENS.color.text, fontSize: 18, letterSpacing: 0.2 }}>Start</Text>
+                  </MattePanel>
+                )}
+              </Pressable>
+            ) : (
+              <View style={{ width: 60 }} />
+            )}
           </View>
-        ) : (
-          <WorkoutHeader
-            state={state}
+
+          {/* Main Content Area */}
+          <View style={{ flex: 1, paddingHorizontal: 48, paddingBottom: 48 }}>
+            <WorkoutContent 
+              state={state}
+              circuitConfig={circuitConfig}
+              getRoundTiming={getRoundTiming}
+            />
+          </View>
+        </>
+      ) : (
+        /* EXERCISE/REST LAYOUT - Use modular components */
+        <>
+          <WorkoutHeader 
+            state={state} 
             currentRound={currentRound}
             currentRoundType={currentRoundType}
           />
-        )}
-        
-        {/* Start Button */}
-        {state.value === 'roundPreview' && state.context.currentRoundIndex === 0 && !state.context.isStarted && (
-          <Pressable
-            onPress={handleStartWorkout}
-            focusable
-          >
-            {({ focused }) => (
-              <MattePanel 
-                focused={focused}
-                style={{ 
-                  paddingHorizontal: 32,
-                  paddingVertical: 12,
-                  backgroundColor: focused ? 'rgba(255,255,255,0.16)' : TOKENS.color.card,
-                  borderColor: focused ? 'rgba(255,255,255,0.45)' : TOKENS.color.borderGlass,
-                  borderWidth: focused ? 1 : 1,
-                  transform: focused ? [{ translateY: -1 }] : [],
-                }}
-              >
-                <Text style={{ color: TOKENS.color.text, fontSize: 18, letterSpacing: 0.2 }}>Start</Text>
-              </MattePanel>
-            )}
-          </Pressable>
-        )}
-      </View>
-
-      {/* Main Content Area */}
-      <WorkoutContent 
-        state={state}
-        circuitConfig={circuitConfig}
-        getRoundTiming={getRoundTiming}
-      />
-
-      {/* Bottom Controls */}
-      <WorkoutControls state={state} send={send} />
+          
+          <WorkoutContent 
+            state={state}
+            circuitConfig={circuitConfig}
+            getRoundTiming={getRoundTiming}
+          />
+          
+          <WorkoutControls 
+            state={state}
+            send={send}
+          />
+        </>
+      )}
     </View>
   );
 }

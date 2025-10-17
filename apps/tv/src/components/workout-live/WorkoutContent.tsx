@@ -38,7 +38,7 @@ export function WorkoutContent({ state, circuitConfig, getRoundTiming }: Workout
 
   // Route to appropriate round container
   return (
-    <View style={{ flex: 1, justifyContent: 'center', paddingHorizontal: 60, paddingTop: 120 }}>
+    <View style={{ flex: 1 }}>
       {currentRound && (
         <>
           {currentRoundType === 'circuit_round' && (
