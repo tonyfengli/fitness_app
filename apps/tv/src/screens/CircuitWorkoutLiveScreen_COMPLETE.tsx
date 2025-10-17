@@ -202,8 +202,16 @@ export function CircuitWorkoutLiveScreen() {
     );
   }
 
+  // Dynamic background color function
+  const getBackgroundColor = () => {
+    if (state.value === 'exercise' && currentRoundType === 'stations_round') {
+      return '#2d1508'; // Reddish-brown background for stations work
+    }
+    return TOKENS.color.bg; // Default background for all other states
+  };
+
   return (
-    <View style={{ flex: 1, backgroundColor: TOKENS.color.bg, paddingTop: 40 }}>
+    <View style={{ flex: 1, backgroundColor: getBackgroundColor(), paddingTop: 40 }}>
       {state.value === 'roundPreview' ? (
         /* ROUND PREVIEW LAYOUT - Matches old implementation exactly */
         <>
@@ -368,24 +376,127 @@ export function CircuitWorkoutLiveScreen() {
           </View>
         </>
       ) : (
-        /* EXERCISE/REST LAYOUT - Use modular components */
+        /* EXERCISE/REST LAYOUT - Match old implementation structure */
         <>
-          <WorkoutHeader 
-            state={state} 
-            currentRound={currentRound}
-            currentRoundType={currentRoundType}
-          />
-          
-          <WorkoutContent 
-            state={state}
-            circuitConfig={circuitConfig}
-            getRoundTiming={getRoundTiming}
-          />
-          
-          <WorkoutControls 
-            state={state}
-            send={send}
-          />
+          {/* Header with controls - matches old layout */}
+          <View style={{ 
+            flexDirection: 'row', 
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            paddingHorizontal: 48,
+            paddingTop: 20,
+            paddingBottom: 20,
+            position: 'relative'
+          }}>
+            {/* LEFT SIDE: Round Info */}
+            <WorkoutHeader 
+              state={state} 
+              currentRound={currentRound}
+              currentRoundType={currentRoundType}
+            />
+
+            {/* CENTER: Timer (absolute positioned) */}
+            {(state.value === 'exercise' || state.value === 'rest' || state.value === 'setBreak') && currentRoundType === 'stations_round' ? (
+              <Text style={{ 
+                fontSize: 120, 
+                fontWeight: '900', 
+                color: state.value === 'exercise' ? '#fff5e6' : TOKENS.color.accent, // Cyan for rest and setBreak
+                letterSpacing: -2,
+                position: 'absolute',
+                left: 0,
+                right: 0,
+                textAlign: 'center',
+                pointerEvents: 'none'
+              }}>
+                {Math.floor(state.context.timeRemaining / 60)}:{(state.context.timeRemaining % 60).toString().padStart(2, '0')}
+              </Text>
+            ) : null}
+
+            {/* RIGHT SIDE: Control Buttons */}
+            <WorkoutControls 
+              state={state}
+              send={send}
+              currentRoundType={currentRoundType}
+            />
+          </View>
+
+          {/* Sets Badge for Stations (positioned above timer) */}
+          {currentRoundType === 'stations_round' && currentRoundTiming.repeatTimes > 1 && (state.value === 'exercise' || state.value === 'rest') && (
+            <View style={{
+              position: 'absolute',
+              top: 167,
+              left: 0,
+              right: 0,
+              alignItems: 'center',
+              zIndex: 10,
+            }}>
+              <View style={{
+                paddingHorizontal: 14,
+                paddingVertical: 7,
+                gap: 5,
+                flexDirection: 'row',
+                alignItems: 'center',
+                backgroundColor: state.value === 'exercise' 
+                  ? 'rgba(255,179,102,0.15)'  // Orange for exercise
+                  : TOKENS.color.accent + '15', // Cyan for rest and setBreak (#5de1ff15)
+                borderColor: state.value === 'exercise' 
+                  ? '#ffb366'  // Orange for exercise
+                  : TOKENS.color.accent, // Cyan for rest and setBreak (#5de1ff)
+                borderWidth: 1,
+                borderRadius: 999,
+              }}>
+                <Text style={{
+                  fontSize: 12,
+                  fontWeight: '700',
+                  color: state.value === 'exercise' 
+                    ? '#ffb366'  // Orange for exercise
+                    : TOKENS.color.accent, // Cyan for rest and setBreak (#5de1ff)
+                  textTransform: 'uppercase',
+                  letterSpacing: 1.2,
+                }}>
+                  Set
+                </Text>
+                <Text style={{
+                  fontSize: 14,
+                  fontWeight: '800',
+                  color: state.value === 'exercise' 
+                    ? '#ffb366'  // Orange for exercise
+                    : TOKENS.color.accent, // Cyan for rest and setBreak (#5de1ff)
+                  marginLeft: 2,
+                }}>
+                  {state.value === 'setBreak' ? state.context.currentSetNumber : state.context.currentSetNumber}
+                </Text>
+                <Text style={{
+                  fontSize: 12,
+                  fontWeight: '500',
+                  color: state.value === 'exercise' 
+                    ? '#ffb366'  // Orange for exercise
+                    : TOKENS.color.accent, // Cyan for rest and setBreak (#5de1ff)
+                  marginHorizontal: 3,
+                }}>
+                  of
+                </Text>
+                <Text style={{
+                  fontSize: 14,
+                  fontWeight: '800',
+                  color: state.value === 'exercise' 
+                    ? '#ffb366'  // Orange for exercise
+                    : TOKENS.color.accent, // Cyan for rest and setBreak (#5de1ff)
+                }}>
+                  {currentRoundTiming.repeatTimes}
+                </Text>
+              </View>
+            </View>
+          )}
+
+          {/* Main Content Area */}
+          <View style={{ flex: 1, paddingHorizontal: 48, paddingBottom: 48 }}>
+            <WorkoutContent 
+              state={state}
+              circuitConfig={circuitConfig}
+              getRoundTiming={getRoundTiming}
+            />
+          </View>
         </>
       )}
     </View>

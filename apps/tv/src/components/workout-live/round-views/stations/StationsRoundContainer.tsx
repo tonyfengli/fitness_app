@@ -54,63 +54,6 @@ export function StationsRoundContainer({
           currentSetNumber={state.context.currentSetNumber}
           totalSets={repeatTimes}
         />
-        
-        {/* Repeat Progress Indicator */}
-        {repeatTimes > 1 && (
-          <View style={{
-            position: 'absolute',
-            top: -8,
-            left: 0,
-            right: 0,
-            alignItems: 'center',
-            zIndex: 10,
-          }}>
-            <View style={{
-              paddingHorizontal: 14,
-              paddingVertical: 7,
-              gap: 5,
-              flexDirection: 'row',
-              alignItems: 'center',
-              backgroundColor: 'rgba(255,179,102,0.15)',
-              borderColor: '#ffb366',
-              borderWidth: 1,
-              borderRadius: 999,
-            }}>
-              <Text style={{
-                fontSize: 12,
-                fontWeight: '700',
-                color: '#ffb366',
-                textTransform: 'uppercase',
-                letterSpacing: 1.2,
-              }}>
-                Set
-              </Text>
-              <Text style={{
-                fontSize: 14,
-                fontWeight: '800',
-                color: '#ffb366',
-                marginLeft: 2,
-              }}>
-                {state.context.currentSetNumber}
-              </Text>
-              <Text style={{
-                fontSize: 12,
-                fontWeight: '500',
-                color: '#ffb366',
-                marginHorizontal: 3,
-              }}>
-                of
-              </Text>
-              <Text style={{
-                fontSize: 14,
-                fontWeight: '800',
-                color: '#ffb366',
-              }}>
-                {repeatTimes}
-              </Text>
-            </View>
-          </View>
-        )}
       </>
     );
   }

@@ -41,7 +41,7 @@ export function StationsExerciseView({
       <View style={{ 
         flex: 1, 
         paddingHorizontal: 48,
-        paddingTop: 40,
+        paddingTop: 44,
         flexDirection: 'row',
         gap: 2, // Minimal gap for connected feel
       }}>

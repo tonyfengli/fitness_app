@@ -49,7 +49,7 @@ export function StationsRestView({
       <View style={{ 
         flex: 1, 
         paddingHorizontal: 48,
-        paddingTop: 40,
+        paddingTop: 45,
         flexDirection: 'row',
         gap: 2, // Minimal gap for connected feel
       }}>

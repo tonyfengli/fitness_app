@@ -32,6 +32,7 @@ export function WorkoutContent({ state, circuitConfig, getRoundTiming }: Workout
         timeRemaining={state.context.timeRemaining}
         currentSetNumber={state.context.currentSetNumber}
         totalSets={currentRepeatTimes}
+        currentRound={currentRound}
       />
     );
   }
