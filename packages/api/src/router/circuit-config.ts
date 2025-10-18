@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { eq, and } from "@acme/db";
+import { eq, and, sql } from "@acme/db";
 import { TrainingSession, Workout, WorkoutExercise } from "@acme/db/schema";
 import { DEFAULT_CIRCUIT_CONFIG, createDefaultRoundTemplates, migrateToRoundTemplates } from "@acme/db";
 import {
@@ -576,6 +576,12 @@ export const circuitConfigRouter = createTRPCRouter({
         .limit(1)
         .then((res) => res[0]);
 
+      console.log('[CircuitConfig API - deleteRound] Session data:', {
+        sessionId: session?.id,
+        templateType: session?.templateType,
+        hasTemplateConfig: !!session?.templateConfig,
+      });
+
       if (!session) {
         throw new TRPCError({
           code: "NOT_FOUND",
@@ -598,6 +604,13 @@ export const circuitConfigRouter = createTRPCRouter({
           message: "No round templates found",
         });
       }
+
+      console.log('[CircuitConfig API - deleteRound] Current config before deletion:', {
+        rounds: currentConfig.config.rounds,
+        roundTemplateCount: currentConfig.config.roundTemplates.length,
+        roundNumbers: currentConfig.config.roundTemplates.map(rt => rt.roundNumber),
+        deletingRoundNumber: input.roundNumber,
+      });
 
       // Prevent deletion if only one round remains
       if (currentConfig.config.roundTemplates.length <= 1) {
@@ -676,16 +689,218 @@ export const circuitConfigRouter = createTRPCRouter({
           }
         }
 
-        console.log('[CircuitConfig API] Round deleted successfully:', {
+        console.log('[CircuitConfig API - deleteRound] Round deleted successfully:', {
           deletedRound: input.roundNumber,
           remainingRounds: updatedRoundTemplates.length,
+          newRoundNumbers: updatedRoundTemplates.map(rt => rt.roundNumber),
           deletedExerciseCount: totalDeletedExercises,
           affectedWorkouts: workouts.length,
+          updatedConfig: {
+            rounds: validatedConfig.config.rounds,
+            roundTemplateCount: validatedConfig.config.roundTemplates.length,
+          },
         });
 
         return {
           config: validatedConfig,
           deletedExerciseCount: totalDeletedExercises,
+          affectedWorkouts: workouts.length,
+        };
+      });
+
+      return result.config;
+    }),
+
+  /**
+   * Add a new round to circuit configuration
+   */
+  addRound: publicProcedure
+    .input(z.object({
+      sessionId: z.string().uuid(),
+      roundConfig: z.object({
+        type: z.enum(['circuit_round', 'stations_round', 'amrap_round']),
+        exercisesPerRound: z.number().optional(),
+        workDuration: z.number().optional(),
+        restDuration: z.number().optional(),
+        repeatTimes: z.number().optional(),
+        restBetweenSets: z.number().optional(),
+        totalDuration: z.number().optional(),
+      }),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      console.log('[CircuitConfig API] addRound called with input:', JSON.stringify(input, null, 2));
+
+      // Get the session
+      const session = await ctx.db
+        .select()
+        .from(TrainingSession)
+        .where(eq(TrainingSession.id, input.sessionId))
+        .limit(1)
+        .then((res) => res[0]);
+
+      console.log('[CircuitConfig API - addRound] Session data:', {
+        sessionId: session?.id,
+        templateType: session?.templateType,
+        hasTemplateConfig: !!session?.templateConfig,
+      });
+
+      if (!session) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Session not found",
+        });
+      }
+
+      if (session.templateType !== "circuit") {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Session is not a circuit type",
+        });
+      }
+
+      // Get current config
+      const currentConfig = session.templateConfig as typeof DEFAULT_CIRCUIT_CONFIG;
+      if (!currentConfig?.config?.roundTemplates) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "No round templates found",
+        });
+      }
+
+      console.log('[CircuitConfig API - addRound] Current config before adding round:', {
+        rounds: currentConfig.config.rounds,
+        roundTemplateCount: currentConfig.config.roundTemplates.length,
+        roundNumbers: currentConfig.config.roundTemplates.map(rt => rt.roundNumber),
+        lastRoundNumber: currentConfig.config.roundTemplates[currentConfig.config.roundTemplates.length - 1]?.roundNumber,
+      });
+
+      // Start transaction to update both config and exercises
+      const result = await ctx.db.transaction(async (tx) => {
+        // 1. Create the new round template
+        const newRoundNumber = currentConfig.config.roundTemplates.length + 1;
+        
+        console.log('[CircuitConfig API - addRound] Calculated new round number:', {
+          calculation: `${currentConfig.config.roundTemplates.length} + 1`,
+          newRoundNumber,
+        });
+        
+        // Build the round template based on type
+        let template: any = { type: input.roundConfig.type };
+        
+        if (input.roundConfig.type === 'circuit_round') {
+          template = {
+            ...template,
+            exercisesPerRound: input.roundConfig.exercisesPerRound || 6,
+            workDuration: input.roundConfig.workDuration || 45,
+            restDuration: input.roundConfig.restDuration || 15,
+            repeatTimes: input.roundConfig.repeatTimes || 1,
+            restBetweenSets: input.roundConfig.restBetweenSets || 60,
+          };
+        } else if (input.roundConfig.type === 'stations_round') {
+          template = {
+            ...template,
+            exercisesPerRound: input.roundConfig.exercisesPerRound || 4,
+            workDuration: input.roundConfig.workDuration || 60,
+            restDuration: input.roundConfig.restDuration || 15,
+            repeatTimes: input.roundConfig.repeatTimes || 1,
+          };
+        } else if (input.roundConfig.type === 'amrap_round') {
+          template = {
+            ...template,
+            exercisesPerRound: input.roundConfig.exercisesPerRound || 5,
+            totalDuration: input.roundConfig.totalDuration || 300,
+          };
+        }
+
+        const newRoundTemplate = {
+          roundNumber: newRoundNumber,
+          template,
+        };
+
+        // 2. Update circuit config
+        const updatedConfig = {
+          ...currentConfig,
+          config: {
+            ...currentConfig.config,
+            rounds: currentConfig.config.rounds + 1,
+            roundTemplates: [...currentConfig.config.roundTemplates, newRoundTemplate],
+          },
+          lastUpdated: new Date().toISOString(),
+          updatedBy: "anonymous", // Public endpoint
+        };
+
+        // Validate the updated config
+        const validatedConfig = CircuitConfigSchema.parse(updatedConfig);
+
+        // 3. Update session config
+        await tx
+          .update(TrainingSession)
+          .set({
+            templateConfig: validatedConfig,
+            updatedAt: new Date(),
+          })
+          .where(eq(TrainingSession.id, input.sessionId));
+
+        // 4. Create placeholder exercises for all workouts
+        const newRoundName = `Round ${newRoundNumber}`;
+        const workouts = await tx
+          .select({ id: Workout.id, userId: Workout.userId })
+          .from(Workout)
+          .where(eq(Workout.trainingSessionId, input.sessionId));
+
+        let totalCreatedExercises = 0;
+        const exercisesPerRound = template.exercisesPerRound || 5;
+
+        if (workouts.length > 0) {
+          for (const workout of workouts) {
+            // Get the max order index for this workout
+            const maxOrderResult = await tx
+              .select({ maxOrder: sql<number>`MAX(${WorkoutExercise.orderIndex})` })
+              .from(WorkoutExercise)
+              .where(eq(WorkoutExercise.workoutId, workout.id));
+            
+            const startOrderIndex = (maxOrderResult[0]?.maxOrder || 0) + 1;
+
+            // Create placeholder exercises
+            const exercisesToCreate = [];
+            for (let i = 0; i < exercisesPerRound; i++) {
+              exercisesToCreate.push({
+                workoutId: workout.id,
+                exerciseId: null, // Custom exercise
+                orderIndex: startOrderIndex + i,
+                groupName: newRoundName,
+                isShared: false,
+                selectionSource: 'trainer' as const,
+                setsCompleted: 0, // Default to 0 sets
+                custom_exercise: {
+                  customName: `Exercise ${i + 1}`,
+                  customDescription: '',
+                  userId: workout.userId,
+                },
+              });
+            }
+
+            await tx.insert(WorkoutExercise).values(exercisesToCreate);
+            totalCreatedExercises += exercisesToCreate.length;
+          }
+        }
+
+        console.log('[CircuitConfig API - addRound] Round added successfully:', {
+          newRoundNumber,
+          roundType: input.roundConfig.type,
+          exercisesPerRound,
+          createdExerciseCount: totalCreatedExercises,
+          affectedWorkouts: workouts.length,
+          updatedConfig: {
+            rounds: validatedConfig.config.rounds,
+            roundTemplateCount: validatedConfig.config.roundTemplates.length,
+            allRoundNumbers: validatedConfig.config.roundTemplates.map(rt => rt.roundNumber),
+          },
+        });
+
+        return {
+          config: validatedConfig,
+          createdExerciseCount: totalCreatedExercises,
           affectedWorkouts: workouts.length,
         };
       });

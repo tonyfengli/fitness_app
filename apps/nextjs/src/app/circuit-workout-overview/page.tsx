@@ -504,6 +504,52 @@ function CircuitWorkoutOverviewContent() {
     },
   });
 
+  // Add round mutation
+  const addRoundMutation = useMutation({
+    ...trpc.circuitConfig.addRound.mutationOptions(),
+    onSuccess: () => {
+      console.log("[addRoundMutation] Success!");
+      
+      // Close modal and reset state
+      setShowAddRoundModal(false);
+      setAddRoundStep(1);
+      setNewRoundConfig({
+        type: 'circuit_round',
+        exercisesPerRound: 6,
+        workDuration: 45,
+        restDuration: 15,
+      });
+      
+      // Show success toast
+      toast.success("Round added successfully");
+      
+      // Invalidate queries to refresh data
+      queryClient.invalidateQueries({
+        queryKey: trpc.circuitConfig.getBySession.queryOptions({ 
+          sessionId: sessionId || "" 
+        }).queryKey,
+      });
+      
+      // Also invalidate workout selections to trigger full UI refresh
+      queryClient.invalidateQueries({
+        queryKey: trpc.workoutSelections.getSelections.queryOptions({ 
+          sessionId: sessionId || "" 
+        }).queryKey,
+      });
+      
+      // Invalidate session query as well since it contains templateConfig
+      queryClient.invalidateQueries({
+        queryKey: trpc.trainingSession.getSession.queryOptions({ 
+          id: sessionId || "" 
+        }).queryKey,
+      });
+    },
+    onError: (error) => {
+      console.error("Failed to add round:", error);
+      toast.error("Failed to add round. Please try again.");
+    },
+  });
+
   // Round reordering mutation
   const reorderRoundsMutation = useMutation({
     ...trpc.circuitConfig.reorderRounds.mutationOptions(),
@@ -3481,10 +3527,10 @@ function CircuitWorkoutOverviewContent() {
                   <AddRoundReviewStep
                     config={newRoundConfig}
                     onConfirm={() => {
-                      // TODO: Add round mutation
-                      console.log('Adding round with config:', newRoundConfig);
-                      setShowAddRoundModal(false);
-                      setAddRoundStep(1);
+                      addRoundMutation.mutate({
+                        sessionId: sessionId!,
+                        roundConfig: newRoundConfig,
+                      });
                     }}
                     onBack={() => setAddRoundStep(2)}
                   />
