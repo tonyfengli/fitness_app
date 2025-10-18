@@ -445,6 +445,46 @@ function CircuitWorkoutOverviewContent() {
     },
   });
 
+  // Delete round mutation
+  const deleteRoundMutation = useMutation({
+    ...trpc.circuitConfig.deleteRound.mutationOptions(),
+    onSuccess: () => {
+      console.log("[deleteRoundMutation] Success!");
+      
+      // Close modal - following the same pattern as round settings save
+      setShowRoundOptionsModal(false);
+      setSelectedRoundForOptions(null);
+      
+      // Show success toast
+      toast.success("Round deleted successfully");
+      
+      // Invalidate queries to refresh data
+      queryClient.invalidateQueries({
+        queryKey: trpc.circuitConfig.getBySession.queryOptions({ 
+          sessionId: sessionId || "" 
+        }).queryKey,
+      });
+      
+      // Also invalidate workout selections to trigger full UI refresh
+      queryClient.invalidateQueries({
+        queryKey: trpc.workoutSelections.getSelections.queryOptions({ 
+          sessionId: sessionId || "" 
+        }).queryKey,
+      });
+      
+      // Invalidate session query as well since it contains templateConfig
+      queryClient.invalidateQueries({
+        queryKey: trpc.trainingSession.getSession.queryOptions({ 
+          id: sessionId || "" 
+        }).queryKey,
+      });
+    },
+    onError: (error) => {
+      console.error("Failed to delete round:", error);
+      toast.error("Failed to delete round. Please try again.");
+    },
+  });
+
   // Round reordering mutation
   const reorderRoundsMutation = useMutation({
     ...trpc.circuitConfig.reorderRounds.mutationOptions(),
@@ -3228,6 +3268,7 @@ function CircuitWorkoutOverviewContent() {
                 setShowRoundOptionsModal(false);
                 setSelectedRoundForOptions(null);
               }}
+              deleteRoundMutation={deleteRoundMutation}
             />
           </div>
         </>
@@ -3242,15 +3283,18 @@ function RoundEditContent({
   round,
   circuitConfig,
   sessionId,
-  onClose
+  onClose,
+  deleteRoundMutation
 }: {
   round: RoundData;
   circuitConfig: CircuitConfig;
   sessionId: string;
   onClose: () => void;
+  deleteRoundMutation: any;
 }) {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
+  const [modalView, setModalView] = useState<'configure' | 'delete'>('configure');
   
   // Extract round number from round name (e.g., "Round 1" -> 1)
   const roundNumber = parseInt(round.roundName.match(/\d+/)?.[0] || '1');
@@ -3427,9 +3471,10 @@ function RoundEditContent({
   
   return (
     <div className="flex-1 overflow-y-auto">
-      <div className="p-6 space-y-6">
-        {/* Round Type Badge */}
-        <div className="flex items-center gap-2">
+      {modalView === 'configure' ? (
+        <div className="p-6 space-y-6">
+          {/* Round Type Badge */}
+          <div className="flex items-center gap-2">
           <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Round Type:</span>
           <span className="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full text-sm font-medium">
             {roundTemplate.template.type === 'stations_round' && 'Stations'}
@@ -3631,31 +3676,128 @@ function RoundEditContent({
         </div>
         
         {/* Action Buttons */}
-        <div className="flex gap-3 pt-4">
-          <Button
-            variant="outline"
-            onClick={onClose}
-            disabled={updateConfigMutation.isPending}
-            className="flex-1"
-          >
-            Cancel
-          </Button>
-          <Button
-            onClick={handleSave}
-            disabled={updateConfigMutation.isPending}
-            className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
-          >
-            {updateConfigMutation.isPending ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                Saving...
-              </>
-            ) : (
-              'Save Changes'
-            )}
-          </Button>
+        <div className="pt-6 border-t border-gray-200 dark:border-gray-700">
+          {circuitConfig.config.roundTemplates && circuitConfig.config.roundTemplates.length > 1 ? (
+            /* 3-Button Layout: Delete gets smaller space, primary actions dominant */
+            <div className="flex gap-3">
+              {/* Delete - Compact button with icon only on mobile */}
+              <Button
+                variant="outline"
+                onClick={() => setModalView('delete')}
+                disabled={updateConfigMutation.isPending}
+                className="h-12 px-3 min-w-[48px] border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 hover:text-red-700 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950/20 dark:hover:border-red-700 dark:hover:text-red-300"
+                title="Delete Round"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+                <span className="sr-only">Delete Round</span>
+              </Button>
+              
+              {/* Cancel - Medium space */}
+              <Button
+                variant="outline"
+                onClick={onClose}
+                disabled={updateConfigMutation.isPending}
+                className="flex-1 h-12"
+              >
+                Cancel
+              </Button>
+              
+              {/* Save - Primary action, takes most space */}
+              <Button
+                onClick={handleSave}
+                disabled={updateConfigMutation.isPending}
+                className="flex-[2] h-12 bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                {updateConfigMutation.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    Saving...
+                  </>
+                ) : (
+                  'Save Changes'
+                )}
+              </Button>
+            </div>
+          ) : (
+            /* 2-Button Layout: When delete not available */
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                onClick={onClose}
+                disabled={updateConfigMutation.isPending}
+                className="flex-1 h-12"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleSave}
+                disabled={updateConfigMutation.isPending}
+                className="flex-1 h-12 bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                {updateConfigMutation.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    Saving...
+                  </>
+                ) : (
+                  'Save Changes'
+                )}
+              </Button>
+            </div>
+          )}
         </div>
       </div>
+      ) : (
+        /* Delete View */
+        <div className="p-6">
+          <div className="space-y-6">
+            {/* Warning Icon */}
+            <div className="flex justify-center">
+              <div className="w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center">
+                <svg className="w-8 h-8 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+            </div>
+            
+            {/* Confirmation Message */}
+            <div className="text-center space-y-2">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                Delete {round.roundName}?
+              </h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                This will permanently delete this round and all its exercises. This action cannot be undone.
+              </p>
+            </div>
+            
+            {/* Action Buttons */}
+            <div className="flex gap-3 pt-2">
+              <Button
+                variant="outline"
+                onClick={() => setModalView('configure')}
+                disabled={deleteRoundMutation.isPending}
+                className="flex-1 h-12"
+              >
+                Back
+              </Button>
+              <Button
+                onClick={() => {
+                  deleteRoundMutation.mutate({
+                    sessionId,
+                    roundNumber,
+                  });
+                }}
+                disabled={deleteRoundMutation.isPending}
+                className="flex-1 h-12 bg-red-600 hover:bg-red-700 text-white focus:outline-none focus:ring-0"
+              >
+                {deleteRoundMutation.isPending ? 'Deleting...' : 'Delete Round'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -556,4 +556,140 @@ export const circuitConfigRouter = createTRPCRouter({
 
       return validatedConfig;
     }),
+
+  /**
+   * Delete a round from circuit configuration
+   */
+  deleteRound: publicProcedure
+    .input(z.object({
+      sessionId: z.string().uuid(),
+      roundNumber: z.number().min(1),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      console.log('[CircuitConfig API] deleteRound called with input:', JSON.stringify(input, null, 2));
+
+      // Get the session
+      const session = await ctx.db
+        .select()
+        .from(TrainingSession)
+        .where(eq(TrainingSession.id, input.sessionId))
+        .limit(1)
+        .then((res) => res[0]);
+
+      if (!session) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Session not found",
+        });
+      }
+
+      if (session.templateType !== "circuit") {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Session is not a circuit type",
+        });
+      }
+
+      // Get current config
+      const currentConfig = session.templateConfig as typeof DEFAULT_CIRCUIT_CONFIG;
+      if (!currentConfig?.config?.roundTemplates) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "No round templates found",
+        });
+      }
+
+      // Prevent deletion if only one round remains
+      if (currentConfig.config.roundTemplates.length <= 1) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Cannot delete the last remaining round",
+        });
+      }
+
+      // Start transaction to update both config and exercises
+      const result = await ctx.db.transaction(async (tx) => {
+        // 1. Remove the round from roundTemplates
+        const updatedRoundTemplates = currentConfig.config.roundTemplates
+          .filter(rt => rt.roundNumber !== input.roundNumber)
+          .map((rt, index) => ({
+            ...rt,
+            roundNumber: index + 1, // Renumber sequentially
+          }));
+
+        // 2. Update circuit config
+        const updatedConfig = {
+          ...currentConfig,
+          config: {
+            ...currentConfig.config,
+            rounds: updatedRoundTemplates.length,
+            roundTemplates: updatedRoundTemplates,
+          },
+          lastUpdated: new Date().toISOString(),
+          updatedBy: "anonymous", // Public endpoint
+        };
+
+        // Validate the updated config
+        const validatedConfig = CircuitConfigSchema.parse(updatedConfig);
+
+        // 3. Update session config
+        await tx
+          .update(TrainingSession)
+          .set({
+            templateConfig: validatedConfig,
+            updatedAt: new Date(),
+          })
+          .where(eq(TrainingSession.id, input.sessionId));
+
+        // 4. Handle WorkoutExercise cleanup
+        const deletedRoundName = `Round ${input.roundNumber}`;
+        const workouts = await tx
+          .select({ id: Workout.id })
+          .from(Workout)
+          .where(eq(Workout.trainingSessionId, input.sessionId));
+
+        let totalDeletedExercises = 0;
+
+        if (workouts.length > 0) {
+          for (const workout of workouts) {
+            // Delete exercises in the deleted round
+            const deleted = await tx
+              .delete(WorkoutExercise)
+              .where(and(
+                eq(WorkoutExercise.workoutId, workout.id),
+                eq(WorkoutExercise.groupName, deletedRoundName)
+              ))
+              .returning();
+            
+            totalDeletedExercises += deleted.length;
+
+            // Rename subsequent rounds
+            for (let i = input.roundNumber + 1; i <= currentConfig.config.rounds; i++) {
+              await tx
+                .update(WorkoutExercise)
+                .set({ groupName: `Round ${i - 1}` })
+                .where(and(
+                  eq(WorkoutExercise.workoutId, workout.id),
+                  eq(WorkoutExercise.groupName, `Round ${i}`)
+                ));
+            }
+          }
+        }
+
+        console.log('[CircuitConfig API] Round deleted successfully:', {
+          deletedRound: input.roundNumber,
+          remainingRounds: updatedRoundTemplates.length,
+          deletedExerciseCount: totalDeletedExercises,
+          affectedWorkouts: workouts.length,
+        });
+
+        return {
+          config: validatedConfig,
+          deletedExerciseCount: totalDeletedExercises,
+          affectedWorkouts: workouts.length,
+        };
+      });
+
+      return result.config;
+    }),
 });
