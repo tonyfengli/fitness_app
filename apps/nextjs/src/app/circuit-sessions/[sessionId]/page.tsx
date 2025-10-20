@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, use } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronLeftIcon, SearchIcon, CheckIcon } from "@acme/ui-shared";
@@ -28,9 +28,9 @@ const FeedbackIcon = ({ className = "w-6 h-6" }: { className?: string }) => (
 
 
 interface SessionDetailPageProps {
-  params: {
+  params: Promise<{
     sessionId: string;
-  };
+  }>;
 }
 
 // Hard-coded client data
@@ -54,18 +54,31 @@ export default function SessionDetailPage({ params }: SessionDetailPageProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   
+  // Unwrap params Promise (Next.js 15 pattern)
+  const resolvedParams = use(params);
+  const sessionId = resolvedParams.sessionId;
+  
   const trpc = api();
   
   // Load session data from API
-  const { data: session, isLoading, error } = useQuery({
-    ...trpc.trainingSession.getSession.queryOptions({ id: params.sessionId }),
-    enabled: !!params.sessionId
+  const { data: session, isLoading: sessionLoading, error: sessionError } = useQuery({
+    ...trpc.trainingSession.getSession.queryOptions({ id: sessionId }),
+    enabled: !!sessionId
+  });
+
+  // Check if workout exists for this session
+  const { data: hasWorkout, isLoading: workoutCheckLoading } = useQuery({
+    ...trpc.trainingSession.hasWorkoutForSession.queryOptions({ sessionId }),
+    enabled: !!sessionId
   });
 
   // For now, we'll use a placeholder participant count since we don't have the count in the basic session data
   // In a real implementation, you'd get this from the UserTrainingSession table
   const participantCount = 0; // TODO: Implement actual participant count query
 
+  // Combined loading state
+  const isLoading = sessionLoading || workoutCheckLoading;
+  
   // Loading state
   if (isLoading) {
     return (
@@ -79,7 +92,7 @@ export default function SessionDetailPage({ params }: SessionDetailPageProps) {
   }
 
   // Error state
-  if (error) {
+  if (sessionError) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
         <div className="text-center">
@@ -307,7 +320,7 @@ export default function SessionDetailPage({ params }: SessionDetailPageProps) {
         <div className="px-4 py-4">
           <div className="flex items-center gap-4">
             <button
-              onClick={() => router.back()}
+              onClick={() => router.push('/circuit-sessions')}
               className="p-2 -ml-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
             >
               <ChevronLeftIcon className="w-5 h-5 text-gray-600 dark:text-gray-400" />
@@ -360,10 +373,24 @@ export default function SessionDetailPage({ params }: SessionDetailPageProps) {
           {/* Configure Session Card */}
           <button
             onClick={() => {
-              // TODO: Navigate to configuration page
-              console.log('Navigate to configuration');
+              // Only navigate if we've finished checking for workout
+              if (hasWorkout === undefined) {
+                // Still loading workout check - could show a loading state
+                return;
+              }
+              
+              // Navigate based on whether a workout already exists
+              const destination = hasWorkout 
+                ? `/circuit-workout-overview?sessionId=${sessionId}`
+                : `/circuit-sessions/${sessionId}/circuit-config`;
+              router.push(destination);
             }}
-            className="w-full bg-white dark:bg-gray-800 rounded-xl border-2 border-gray-200 dark:border-gray-700 hover:border-purple-300 dark:hover:border-purple-600 transition-all p-6 text-left group active:scale-98 transform"
+            disabled={hasWorkout === undefined}
+            className={`w-full bg-white dark:bg-gray-800 rounded-xl border-2 border-gray-200 dark:border-gray-700 transition-all p-6 text-left group active:scale-98 transform ${
+              hasWorkout === undefined 
+                ? 'opacity-75 cursor-wait' 
+                : 'hover:border-purple-300 dark:hover:border-purple-600 cursor-pointer'
+            }`}
           >
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 bg-purple-100 dark:bg-purple-900/30 rounded-full flex items-center justify-center group-hover:bg-purple-200 dark:group-hover:bg-purple-800/50 transition-colors">
@@ -374,34 +401,45 @@ export default function SessionDetailPage({ params }: SessionDetailPageProps) {
                   Configure Session
                 </h3>
                 <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                  Set up exercises, timing, and session parameters
+                  {hasWorkout === undefined 
+                    ? "Checking configuration status..." 
+                    : hasWorkout 
+                    ? "View and modify workout configuration" 
+                    : "Set up exercises, timing, and session parameters"}
                 </p>
               </div>
               <div className="w-5 h-5 text-gray-400 dark:text-gray-500 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
-                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
+                {hasWorkout === undefined ? (
+                  <div className="animate-spin">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                  </div>
+                ) : (
+                  <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                )}
               </div>
             </div>
           </button>
 
           {/* View Feedback Card */}
           <button
-            onClick={() => {
-              router.push(`/circuit-sessions/${params.sessionId}/feedback`);
-            }}
-            className="w-full bg-white dark:bg-gray-800 rounded-xl border-2 border-gray-200 dark:border-gray-700 hover:border-green-300 dark:hover:border-green-600 transition-all p-6 text-left group active:scale-98 transform"
+            disabled
+            className="w-full bg-gray-50 dark:bg-gray-800/50 rounded-xl border-2 border-gray-200 dark:border-gray-700 transition-all p-6 text-left cursor-not-allowed opacity-60"
           >
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center group-hover:bg-green-200 dark:group-hover:bg-green-800/50 transition-colors">
                 <FeedbackIcon className="w-6 h-6 text-green-600 dark:text-green-400" />
               </div>
               <div className="flex-1 min-w-0">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                <h3 className="text-lg font-semibold text-gray-500 dark:text-gray-500">
                   View Feedback
                 </h3>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                  Review participant feedback and session insights
+                <p className="text-sm text-gray-500 dark:text-gray-500 mt-1">
+                  Coming soon - Review participant feedback and session insights
                 </p>
               </div>
               <div className="w-5 h-5 text-gray-400 dark:text-gray-500 group-hover:text-green-600 dark:group-hover:text-green-400 transition-colors">

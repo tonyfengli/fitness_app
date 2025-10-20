@@ -4029,6 +4029,29 @@ Set your goals and preferences for today's session.`;
       return session;
     }),
 
+  // Check if workout exists for session (public - no auth required)
+  hasWorkoutForSession: publicProcedure
+    .input(z.object({ 
+      sessionId: z.string().uuid() 
+    }))
+    .query(async ({ ctx, input }) => {
+      const result = await ctx.db
+        .select({ count: sql<number>`count(*)` })
+        .from(Workout)
+        .where(
+          and(
+            eq(Workout.trainingSessionId, input.sessionId),
+            or(
+              eq(Workout.status, "draft"),
+              eq(Workout.status, "ready"),
+              eq(Workout.status, "completed")
+            )
+          )
+        );
+      
+      return (result[0]?.count ?? 0) > 0;
+    }),
+
   // List circuit sessions (public - no auth required)
   listCircuitSessions: publicProcedure
     .input(
@@ -4040,6 +4063,7 @@ Set your goals and preferences for today's session.`;
         trainerId: z.string().optional(),
         startDate: z.date().optional(),
         endDate: z.date().optional(),
+        status: z.enum(['completed', 'active']).optional(), // 'active' means not completed
       }),
     )
     .query(async ({ ctx, input }) => {
@@ -4060,6 +4084,14 @@ Set your goals and preferences for today's session.`;
 
       if (input.endDate) {
         conditions.push(lte(TrainingSession.scheduledAt, input.endDate));
+      }
+
+      // Filter by status
+      if (input.status === 'completed') {
+        conditions.push(eq(TrainingSession.status, 'completed'));
+      } else if (input.status === 'active') {
+        // Active means any status except completed
+        conditions.push(sql`${TrainingSession.status} != 'completed'`);
       }
 
       // Get sessions with participant counts

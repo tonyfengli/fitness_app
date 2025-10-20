@@ -216,7 +216,13 @@ export default function CircuitConfigPage() {
                 <span className="text-sm">Back</span>
               </button>
             ) : (
-              <div className="w-20" />
+              <button
+                onClick={() => router.push(`/circuit-sessions/${sessionId}`)}
+                className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 transition-colors rounded-md"
+              >
+                <ChevronLeft className="h-4 w-4" />
+                <span className="text-sm">Back</span>
+              </button>
             )}
             
             <div className="text-center">

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronRightIcon, CheckIcon } from "@acme/ui-shared";
+import { ChevronRightIcon, CheckIcon, ChevronDownIcon } from "@acme/ui-shared";
 import { api } from "~/trpc/react";
 
 // Custom icons
@@ -31,14 +31,30 @@ const CheckCircleIcon = ({ className = "w-6 h-6" }: { className?: string }) => (
   </svg>
 );
 
-// Load circuit sessions from API
-const useCircuitSessions = () => {
+// Load active circuit sessions from API (excludes completed sessions)
+const useActiveCircuitSessions = () => {
   const trpc = api();
   return useQuery({
     ...trpc.trainingSession.listCircuitSessions.queryOptions({
       limit: 20,
       offset: 0,
+      businessId: "d33b41e2-f700-4a08-9489-cb6e3daa7f20", // Hardcoded business ID
+      status: "active", // Only fetch active (non-completed) sessions
     }),
+  });
+};
+
+// Load completed circuit sessions from API (only when needed)
+const useCompletedCircuitSessions = (enabled: boolean) => {
+  const trpc = api();
+  return useQuery({
+    ...trpc.trainingSession.listCircuitSessions.queryOptions({
+      limit: 50, // Higher limit for completed sessions
+      offset: 0,
+      businessId: "d33b41e2-f700-4a08-9489-cb6e3daa7f20",
+      status: "completed", // Only fetch completed sessions
+    }),
+    enabled,
   });
 };
 
@@ -66,20 +82,25 @@ const getStatusBadge = (status: string) => {
         label: "Open",
         className: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300"
       };
-    case "in progress":
+    case "in_progress":
       return {
         label: "In Progress",
         className: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300"
       };
-    case "complete":
+    case "completed":
       return {
         label: "Complete",
         className: "bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-300"
       };
+    case "cancelled":
+      return {
+        label: "Cancelled",
+        className: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300"
+      };
     default:
       return {
         label: "Unknown",
-        className: "bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-300"
+        className: "bg-gray-100 text-gray-700 dark:bg-gray-300"
       };
   }
 };
@@ -118,9 +139,17 @@ const formatCreatedDate = (dateString: string) => {
 export default function SessionsPage() {
   const router = useRouter();
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
+  const [showCompletedSessions, setShowCompletedSessions] = useState(false);
   
-  // Load circuit sessions from API
-  const { data: sessions, isLoading, error } = useCircuitSessions();
+  // Load active circuit sessions immediately
+  const { data: activeSessions, isLoading: activeLoading, error: activeError } = useActiveCircuitSessions();
+  
+  // Load completed circuit sessions only when expanded
+  const { data: completedSessions, isLoading: completedLoading, error: completedError } = useCompletedCircuitSessions(showCompletedSessions);
+  
+  // Combine loading states
+  const isLoading = activeLoading;
+  const error = activeError || completedError;
 
   const handleSessionSelect = (sessionId: string) => {
     // Navigate to session detail page
@@ -159,65 +188,147 @@ export default function SessionsPage() {
       )}
 
       {/* Sessions List */}
-      {sessions && (
-        <div className="px-4 py-6 space-y-3">
-          {sessions.length === 0 ? (
+      {(activeSessions || (showCompletedSessions && completedSessions)) && (
+        <div className="px-4 py-6 space-y-6">
+          {(!activeSessions || activeSessions.length === 0) && (!completedSessions || completedSessions.length === 0) ? (
             <div className="text-center py-8">
               <p className="text-gray-500 dark:text-gray-400">No circuit sessions found</p>
             </div>
           ) : (
-            sessions.map((session) => {
-              const isCompleted = session.status === "completed";
-              const statusBadge = getStatusBadge(session.status);
-              
-              return (
-                <div
-                  key={session.id}
-                  onClick={() => handleSessionSelect(session.id)}
-                  className={`
-                    relative bg-white dark:bg-gray-800 rounded-xl border-2 transition-all duration-200 cursor-pointer
-                    border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-600 hover:shadow-md
-                    ${isCompleted ? "opacity-75" : ""}
-                    active:scale-98 transform
-                  `}
-                >
-                  <div className="p-4">
-                    {/* Header Row */}
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex-1 min-w-0">
-                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white truncate">
-                          {session.name}
-                        </h3>
-                      </div>
-                      <ChevronRightIcon className="w-5 h-5 text-gray-400 dark:text-gray-500" />
-                    </div>
+            <>
+              {/* Active Sessions Section */}
+              {activeSessions && activeSessions.length > 0 && (
+                <div className="space-y-3">
+                  {activeSessions.map((session) => {
+                    const statusBadge = getStatusBadge(session.status);
+                    
+                    return (
+                      <div
+                        key={session.id}
+                        onClick={() => handleSessionSelect(session.id)}
+                        className="relative bg-white dark:bg-gray-800 rounded-xl border-2 transition-all duration-200 cursor-pointer border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-600 hover:shadow-md active:scale-98 transform"
+                      >
+                        <div className="p-4">
+                          {/* Header Row */}
+                          <div className="flex items-start justify-between mb-3">
+                            <div className="flex-1 min-w-0">
+                              <h3 className="text-lg font-semibold text-gray-900 dark:text-white truncate">
+                                {session.name}
+                              </h3>
+                            </div>
+                            <ChevronRightIcon className="w-5 h-5 text-gray-400 dark:text-gray-500" />
+                          </div>
 
-                    {/* Details Row */}
-                    <div className="flex items-center justify-between">
-                      {/* Participants Count */}
-                      <div className="flex items-center gap-2">
-                        <UsersIcon className="w-4 h-4 text-gray-400 dark:text-gray-500 flex-shrink-0" />
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium text-gray-900 dark:text-white">
-                            {session.participantCount}
-                          </p>
-                          <p className="text-xs text-gray-500 dark:text-gray-400">
-                            Participants
-                          </p>
+                          {/* Details Row */}
+                          <div className="flex items-center justify-between">
+                            {/* Participants Count */}
+                            <div className="flex items-center gap-2">
+                              <UsersIcon className="w-4 h-4 text-gray-400 dark:text-gray-500 flex-shrink-0" />
+                              <div className="min-w-0">
+                                <p className="text-sm font-medium text-gray-900 dark:text-white">
+                                  {session.participantCount}
+                                </p>
+                                <p className="text-xs text-gray-500 dark:text-gray-400">
+                                  Participants
+                                </p>
+                              </div>
+                            </div>
+
+                            {/* Status Badge */}
+                            <div className="flex items-center">
+                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusBadge.className}`}>
+                                {statusBadge.label}
+                              </span>
+                            </div>
+                          </div>
                         </div>
                       </div>
+                    );
+                  })}
+                </div>
+              )}
 
-                      {/* Status Badge */}
-                      <div className="flex items-center">
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusBadge.className}`}>
-                          {statusBadge.label}
-                        </span>
-                      </div>
+              {/* Completed Sessions Section - Always show expandable header */}
+              <div className="space-y-3">
+                {/* Collapsible Header */}
+                <button
+                  onClick={() => setShowCompletedSessions(!showCompletedSessions)}
+                  className="w-full flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-all duration-200"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center">
+                      <CheckIcon className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+                    </div>
+                    <div className="text-left">
+                      <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
+                        Completed Sessions
+                      </h3>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        {completedLoading && showCompletedSessions ? "Loading..." : 
+                         completedSessions ? `${completedSessions.length} session${completedSessions.length !== 1 ? 's' : ''}` : 
+                         showCompletedSessions ? "Loading..." : "Tap to view"}
+                      </p>
                     </div>
                   </div>
+                  <div className={`transition-transform duration-200 ${showCompletedSessions ? 'rotate-180' : ''}`}>
+                    <ChevronDownIcon className="w-5 h-5 text-gray-400 dark:text-gray-500" />
+                  </div>
+                </button>
+
+                {/* Completed Sessions List */}
+                <div className={`space-y-2 transition-all duration-300 ease-in-out ${
+                  showCompletedSessions 
+                    ? 'opacity-100 max-h-[2000px]' 
+                    : 'opacity-0 max-h-0 overflow-hidden'
+                }`}>
+                  {completedLoading && showCompletedSessions ? (
+                    <div className="text-center py-4">
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto"></div>
+                      <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">Loading completed sessions...</p>
+                    </div>
+                  ) : completedSessions && completedSessions.length > 0 ? (
+                    completedSessions.map((session) => {
+                      const statusBadge = getStatusBadge(session.status);
+                      
+                      return (
+                        <div
+                          key={session.id}
+                          onClick={() => handleSessionSelect(session.id)}
+                          className="relative bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 hover:shadow-sm transition-all duration-200 cursor-pointer opacity-75 hover:opacity-100 active:scale-98 transform"
+                        >
+                          <div className="p-3">
+                            {/* Compact Header Row */}
+                            <div className="flex items-center justify-between">
+                              <div className="flex-1 min-w-0">
+                                <h3 className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                                  {session.name}
+                                </h3>
+                                <div className="flex items-center gap-3 mt-1">
+                                  <div className="flex items-center gap-1">
+                                    <UsersIcon className="w-3 h-3 text-gray-400 dark:text-gray-500" />
+                                    <span className="text-xs text-gray-500 dark:text-gray-400">
+                                      {session.participantCount}
+                                    </span>
+                                  </div>
+                                  <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${statusBadge.className}`}>
+                                    {statusBadge.label}
+                                  </span>
+                                </div>
+                              </div>
+                              <ChevronRightIcon className="w-4 h-4 text-gray-400 dark:text-gray-500 ml-2" />
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
+                  ) : showCompletedSessions && completedSessions && completedSessions.length === 0 ? (
+                    <div className="text-center py-4">
+                      <p className="text-xs text-gray-500 dark:text-gray-400">No completed sessions found</p>
+                    </div>
+                  ) : null}
                 </div>
-              );
-            })
+              </div>
+            </>
           )}
         </div>
       )}
