@@ -118,6 +118,17 @@ export function Navigation() {
                   Sessions
                 </Link>
                 <Link
+                  href="/circuit-sessions"
+                  className={cn(
+                    "text-sm font-medium transition-colors",
+                    pathname?.startsWith("/circuit-sessions")
+                      ? "text-primary"
+                      : "text-muted-foreground hover:text-primary",
+                  )}
+                >
+                  Circuit Sessions
+                </Link>
+                <Link
                   href="/signup"
                   className={cn(
                     "text-sm font-medium transition-colors",

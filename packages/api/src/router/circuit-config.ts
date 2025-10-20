@@ -566,8 +566,6 @@ export const circuitConfigRouter = createTRPCRouter({
       roundNumber: z.number().min(1),
     }))
     .mutation(async ({ ctx, input }) => {
-      console.log('[CircuitConfig API] deleteRound called with input:', JSON.stringify(input, null, 2));
-
       // Get the session
       const session = await ctx.db
         .select()
@@ -575,12 +573,6 @@ export const circuitConfigRouter = createTRPCRouter({
         .where(eq(TrainingSession.id, input.sessionId))
         .limit(1)
         .then((res) => res[0]);
-
-      console.log('[CircuitConfig API - deleteRound] Session data:', {
-        sessionId: session?.id,
-        templateType: session?.templateType,
-        hasTemplateConfig: !!session?.templateConfig,
-      });
 
       if (!session) {
         throw new TRPCError({
@@ -604,13 +596,6 @@ export const circuitConfigRouter = createTRPCRouter({
           message: "No round templates found",
         });
       }
-
-      console.log('[CircuitConfig API - deleteRound] Current config before deletion:', {
-        rounds: currentConfig.config.rounds,
-        roundTemplateCount: currentConfig.config.roundTemplates.length,
-        roundNumbers: currentConfig.config.roundTemplates.map(rt => rt.roundNumber),
-        deletingRoundNumber: input.roundNumber,
-      });
 
       // Prevent deletion if only one round remains
       if (currentConfig.config.roundTemplates.length <= 1) {
@@ -689,17 +674,6 @@ export const circuitConfigRouter = createTRPCRouter({
           }
         }
 
-        console.log('[CircuitConfig API - deleteRound] Round deleted successfully:', {
-          deletedRound: input.roundNumber,
-          remainingRounds: updatedRoundTemplates.length,
-          newRoundNumbers: updatedRoundTemplates.map(rt => rt.roundNumber),
-          deletedExerciseCount: totalDeletedExercises,
-          affectedWorkouts: workouts.length,
-          updatedConfig: {
-            rounds: validatedConfig.config.rounds,
-            roundTemplateCount: validatedConfig.config.roundTemplates.length,
-          },
-        });
 
         return {
           config: validatedConfig,
@@ -728,8 +702,6 @@ export const circuitConfigRouter = createTRPCRouter({
       }),
     }))
     .mutation(async ({ ctx, input }) => {
-      console.log('[CircuitConfig API] addRound called with input:', JSON.stringify(input, null, 2));
-
       // Get the session
       const session = await ctx.db
         .select()
@@ -737,12 +709,6 @@ export const circuitConfigRouter = createTRPCRouter({
         .where(eq(TrainingSession.id, input.sessionId))
         .limit(1)
         .then((res) => res[0]);
-
-      console.log('[CircuitConfig API - addRound] Session data:', {
-        sessionId: session?.id,
-        templateType: session?.templateType,
-        hasTemplateConfig: !!session?.templateConfig,
-      });
 
       if (!session) {
         throw new TRPCError({
@@ -767,22 +733,10 @@ export const circuitConfigRouter = createTRPCRouter({
         });
       }
 
-      console.log('[CircuitConfig API - addRound] Current config before adding round:', {
-        rounds: currentConfig.config.rounds,
-        roundTemplateCount: currentConfig.config.roundTemplates.length,
-        roundNumbers: currentConfig.config.roundTemplates.map(rt => rt.roundNumber),
-        lastRoundNumber: currentConfig.config.roundTemplates[currentConfig.config.roundTemplates.length - 1]?.roundNumber,
-      });
-
       // Start transaction to update both config and exercises
       const result = await ctx.db.transaction(async (tx) => {
         // 1. Create the new round template
         const newRoundNumber = currentConfig.config.roundTemplates.length + 1;
-        
-        console.log('[CircuitConfig API - addRound] Calculated new round number:', {
-          calculation: `${currentConfig.config.roundTemplates.length} + 1`,
-          newRoundNumber,
-        });
         
         // Build the round template based on type
         let template: any = { type: input.roundConfig.type };
@@ -885,18 +839,6 @@ export const circuitConfigRouter = createTRPCRouter({
           }
         }
 
-        console.log('[CircuitConfig API - addRound] Round added successfully:', {
-          newRoundNumber,
-          roundType: input.roundConfig.type,
-          exercisesPerRound,
-          createdExerciseCount: totalCreatedExercises,
-          affectedWorkouts: workouts.length,
-          updatedConfig: {
-            rounds: validatedConfig.config.rounds,
-            roundTemplateCount: validatedConfig.config.roundTemplates.length,
-            allRoundNumbers: validatedConfig.config.roundTemplates.map(rt => rt.roundNumber),
-          },
-        });
 
         return {
           config: validatedConfig,

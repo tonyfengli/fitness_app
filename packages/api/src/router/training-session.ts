@@ -4029,6 +4029,78 @@ Set your goals and preferences for today's session.`;
       return session;
     }),
 
+  // List circuit sessions (public - no auth required)
+  listCircuitSessions: publicProcedure
+    .input(
+      z.object({
+        limit: z.number().min(1).max(100).default(20),
+        offset: z.number().min(0).default(0),
+        // Optional filters
+        businessId: z.string().uuid().optional(),
+        trainerId: z.string().optional(),
+        startDate: z.date().optional(),
+        endDate: z.date().optional(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const conditions = [eq(TrainingSession.templateType, "circuit")];
+
+      // Only filter by businessId if provided
+      if (input.businessId) {
+        conditions.push(eq(TrainingSession.businessId, input.businessId));
+      }
+
+      if (input.trainerId) {
+        conditions.push(eq(TrainingSession.trainerId, input.trainerId));
+      }
+
+      if (input.startDate) {
+        conditions.push(gte(TrainingSession.scheduledAt, input.startDate));
+      }
+
+      if (input.endDate) {
+        conditions.push(lte(TrainingSession.scheduledAt, input.endDate));
+      }
+
+      // Get sessions with participant counts
+      const sessions = await ctx.db
+        .select({
+          id: TrainingSession.id,
+          businessId: TrainingSession.businessId,
+          trainerId: TrainingSession.trainerId,
+          name: TrainingSession.name,
+          scheduledAt: TrainingSession.scheduledAt,
+          durationMinutes: TrainingSession.durationMinutes,
+          maxParticipants: TrainingSession.maxParticipants,
+          status: TrainingSession.status,
+          templateType: TrainingSession.templateType,
+          templateConfig: TrainingSession.templateConfig,
+          workoutOrganization: TrainingSession.workoutOrganization,
+          createdAt: TrainingSession.createdAt,
+          updatedAt: TrainingSession.updatedAt,
+          participantCount: sql<number>`COUNT(${UserTrainingSession.userId})`.as('participantCount'),
+        })
+        .from(TrainingSession)
+        .leftJoin(UserTrainingSession, eq(UserTrainingSession.trainingSessionId, TrainingSession.id))
+        .where(and(...conditions))
+        .groupBy(TrainingSession.id)
+        .orderBy(
+          // Order by status priority: in_progress (1), open (2), completed (3), others (4)
+          sql`CASE 
+            WHEN ${TrainingSession.status} = 'in_progress' THEN 1
+            WHEN ${TrainingSession.status} = 'open' THEN 2
+            WHEN ${TrainingSession.status} = 'completed' THEN 3
+            ELSE 4 
+          END`,
+          // Then by scheduledAt descending (most recent first)
+          desc(TrainingSession.scheduledAt)
+        )
+        .limit(input.limit)
+        .offset(input.offset);
+
+      return sessions;
+    }),
+
   createWorkoutsFromBlueprint: protectedProcedure
     .input(
       z.object({

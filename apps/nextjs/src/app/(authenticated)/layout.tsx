@@ -10,10 +10,11 @@ export default function AuthenticatedLayout({
 }) {
   const pathname = usePathname();
   const isCircuitConfigPage = pathname?.includes("/circuit-config");
+  const isCircuitSessionsPage = pathname?.startsWith("/circuit-sessions");
 
   return (
     <div className="flex h-screen flex-col">
-      {!isCircuitConfigPage && <Navigation />}
+      {!isCircuitConfigPage && !isCircuitSessionsPage && <Navigation />}
       <div className="flex-1 overflow-auto">{children}</div>
     </div>
   );
