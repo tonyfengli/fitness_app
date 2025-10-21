@@ -4557,4 +4557,332 @@ Set your goals and preferences for today's session.`;
         workoutId: workout.id, // Include the workout ID for template creation
       };
     }),
+
+  // Generate circuit workout without checked-in users
+  generateCircuitWorkout: protectedProcedure
+    .input(z.object({ 
+      sessionId: z.string().uuid() 
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const user = ctx.session?.user as SessionUser;
+      
+      // Only trainers can generate circuit workouts
+      if (user.role !== "trainer") {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Only trainers can generate circuit workouts",
+        });
+      }
+
+      // Get session with circuit config
+      const session = await ctx.db.query.TrainingSession.findFirst({
+        where: and(
+          eq(TrainingSession.id, input.sessionId),
+          eq(TrainingSession.businessId, user.businessId),
+        ),
+      });
+
+      if (!session) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Session not found",
+        });
+      }
+
+      if (session.templateType !== "circuit") {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Session is not a circuit training session",
+        });
+      }
+
+      // Check if workout already exists
+      const existingWorkout = await ctx.db.query.Workout.findFirst({
+        where: eq(Workout.trainingSessionId, input.sessionId),
+      });
+
+      if (existingWorkout) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Workout already exists for this session",
+        });
+      }
+
+      // Get circuit configuration
+      const circuitConfig = session.templateConfig as any;
+      if (!circuitConfig?.config?.roundTemplates) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Circuit configuration not found. Please configure the circuit first.",
+        });
+      }
+
+      // Hardcoded trainer ID for master workout
+      const MASTER_TRAINER_ID = 'v4dxeCHAJ31kgL3To8NygjuNNZXZGf9W';
+
+      // Check if this is from a template (has sourceWorkoutId)
+      const sourceWorkoutId = circuitConfig.config.sourceWorkoutId;
+      let templateExercises: any[] = [];
+
+      console.log(`[generateCircuitWorkout] Circuit config:`, {
+        hasSourceWorkoutId: !!sourceWorkoutId,
+        sourceWorkoutId,
+        roundTemplates: circuitConfig.config.roundTemplates?.length,
+      });
+
+      if (sourceWorkoutId) {
+        console.log(`[generateCircuitWorkout] Using template workout: ${sourceWorkoutId}`);
+        
+        // Get exercises from the source workout
+        const sourceExercises = await ctx.db
+          .select({
+            we: WorkoutExercise,
+            exercise: exercises,
+          })
+          .from(WorkoutExercise)
+          .leftJoin(exercises, eq(WorkoutExercise.exerciseId, exercises.id))
+          .where(eq(WorkoutExercise.workoutId, sourceWorkoutId))
+          .orderBy(asc(WorkoutExercise.orderIndex));
+
+        templateExercises = sourceExercises.map((row) => ({
+          exerciseId: row.we.exerciseId,
+          exerciseName: (row.we.custom_exercise as any)?.customName || row.exercise?.name,
+          customExercise: row.we.custom_exercise,
+          groupName: row.we.groupName,
+          orderIndex: row.we.orderIndex,
+          stationIndex: row.we.stationIndex,
+          template: row.we.template,
+          repsPlanned: row.we.repsPlanned,
+        }));
+
+        console.log(`[generateCircuitWorkout] Found ${templateExercises.length} exercises from template`);
+      }
+
+      // Get a pool of exercises for circuit training (fallback for when no template)
+      const exercisePool = await ctx.db
+        .select()
+        .from(exercises)
+        .limit(100);
+
+      // Start transaction to create workout and exercises
+      const result = await ctx.db.transaction(async (tx) => {
+        // Create the master workout
+        const [workout] = await tx
+          .insert(Workout)
+          .values({
+            trainingSessionId: input.sessionId,
+            userId: MASTER_TRAINER_ID,
+            businessId: user.businessId,
+            createdByTrainerId: user.id,
+            notes: "Circuit Training Master Workout",
+            workoutType: "circuit",
+            totalPlannedSets: 0,
+            llmOutput: {
+              circuitConfig: circuitConfig.config,
+              generatedAt: new Date().toISOString(),
+              isTemplate: true,
+            },
+            context: "group",
+            status: "ready",
+          })
+          .returning();
+
+        // Generate workout exercises based on circuit configuration
+        const workoutExercises = [];
+        let orderIndex = 0;
+
+        // If we have template exercises, organize them by round
+        const exercisesByRound = new Map<string, any[]>();
+        if (templateExercises.length > 0) {
+          for (const exercise of templateExercises) {
+            const round = exercise.groupName || 'Round 1';
+            if (!exercisesByRound.has(round)) {
+              exercisesByRound.set(round, []);
+            }
+            exercisesByRound.get(round)!.push(exercise);
+          }
+        }
+
+        for (const roundTemplate of circuitConfig.config.roundTemplates) {
+          const roundNumber = roundTemplate.roundNumber;
+          const template = roundTemplate.template;
+          const exercisesPerRound = template.exercisesPerRound || 6;
+          const roundName = `Round ${roundNumber}`;
+
+          // Get template exercises for this round (if available)
+          const roundTemplateExercises = exercisesByRound.get(roundName) || [];
+
+          // For stations rounds, we need to create stations with multiple exercises each
+          if (template.type === 'stations_round') {
+            // Assuming 4 stations by default (can be made configurable)
+            const stationsCount = 4;
+            const exercisesPerStation = Math.ceil(exercisesPerRound / stationsCount);
+
+            for (let stationIndex = 0; stationIndex < stationsCount; stationIndex++) {
+              // Add exercises for this station
+              for (let exerciseInStation = 0; exerciseInStation < exercisesPerStation; exerciseInStation++) {
+                const exerciseIndex = stationIndex * exercisesPerStation + exerciseInStation;
+                
+                // Use template exercise if available, otherwise use random
+                let exerciseData;
+                if (exerciseIndex < roundTemplateExercises.length) {
+                  const templateEx = roundTemplateExercises[exerciseIndex];
+                  console.log(`[generateCircuitWorkout] Using template exercise for Station ${stationIndex + 1}, Exercise ${exerciseInStation + 1}:`, {
+                    exerciseId: templateEx.exerciseId,
+                    exerciseName: templateEx.exerciseName,
+                  });
+                  exerciseData = {
+                    exerciseId: templateEx.exerciseId,
+                    custom_exercise: templateEx.customExercise,
+                    repsPlanned: templateEx.repsPlanned,
+                  };
+                } else {
+                  const randomExercise = exercisePool[Math.floor(Math.random() * exercisePool.length)];
+                  exerciseData = {
+                    exerciseId: randomExercise?.id ?? null,
+                    custom_exercise: !randomExercise ? {
+                      customName: `Station ${stationIndex + 1} Exercise ${exerciseInStation + 1}`,
+                      originalExerciseId: undefined,
+                    } : null,
+                    repsPlanned: null,
+                  };
+                }
+                
+                workoutExercises.push({
+                  workoutId: workout.id,
+                  ...exerciseData,
+                  orderIndex: stationIndex, // Same orderIndex for all exercises in a station
+                  groupName: roundName,
+                  isShared: true, // Stations are shared
+                  selectionSource: 'trainer' as const,
+                  setsCompleted: 0,
+                });
+              }
+            }
+            orderIndex += stationsCount;
+          } else {
+            // Circuit rounds and AMRAP rounds - one exercise per slot
+            for (let i = 0; i < exercisesPerRound; i++) {
+              // Use template exercise if available, otherwise use random
+              let exerciseData;
+              if (i < roundTemplateExercises.length) {
+                const templateEx = roundTemplateExercises[i];
+                console.log(`[generateCircuitWorkout] Using template exercise for Round ${roundNumber}, Exercise ${i + 1}:`, {
+                  exerciseId: templateEx.exerciseId,
+                  exerciseName: templateEx.exerciseName,
+                });
+                exerciseData = {
+                  exerciseId: templateEx.exerciseId,
+                  custom_exercise: templateEx.customExercise,
+                  repsPlanned: templateEx.repsPlanned,
+                };
+              } else {
+                const randomExercise = exercisePool[Math.floor(Math.random() * exercisePool.length)];
+                exerciseData = {
+                  exerciseId: randomExercise?.id ?? null,
+                  custom_exercise: !randomExercise ? {
+                    customName: `Exercise ${i + 1}`,
+                    originalExerciseId: undefined,
+                  } : null,
+                  repsPlanned: null,
+                };
+              }
+              
+              workoutExercises.push({
+                workoutId: workout.id,
+                ...exerciseData,
+                orderIndex: orderIndex++,
+                groupName: roundName,
+                isShared: false, // Circuit exercises are not shared
+                selectionSource: 'trainer' as const,
+                setsCompleted: 0,
+              });
+            }
+          }
+        }
+
+        // Insert all workout exercises
+        await tx.insert(WorkoutExercise).values(workoutExercises);
+
+        return {
+          workoutId: workout.id,
+          exerciseCount: workoutExercises.length,
+          rounds: circuitConfig.config.rounds,
+        };
+      });
+
+      return result;
+    }),
+
+  /**
+   * Public endpoint to create a new circuit session
+   * Used by the circuit-config page for new session creation flow
+   * Creates a session with hardcoded business and trainer IDs
+   */
+  createCircuitSessionPublic: publicProcedure
+    .input(
+      z.object({
+        workoutType: z.enum(['custom', 'template']).optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      // Hardcoded values for public circuit session creation
+      const HARDCODED_BUSINESS_ID = "d33b41e2-f700-4a08-9489-cb6e3daa7f20"; // Same as used in circuit-sessions page
+      const HARDCODED_TRAINER_ID = "v4dxeCHAJ31kgL3To8NygjuNNZXZGf9W"; // Tony Li trainer ID
+      
+      const now = new Date();
+      const sessionName = `Circuit Session - ${now.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+      })}`;
+
+      // Import DEFAULT_CIRCUIT_CONFIG
+      const { DEFAULT_CIRCUIT_CONFIG } = await import("@acme/db");
+
+      // Create the session data
+      const sessionData = {
+        businessId: HARDCODED_BUSINESS_ID,
+        trainerId: HARDCODED_TRAINER_ID,
+        name: sessionName,
+        scheduledAt: now,
+        durationMinutes: 60, // Default 60 minutes
+        maxParticipants: 20, // Default 20 participants
+        status: "open" as const,
+        templateType: "circuit" as const,
+        templateConfig: {
+          ...DEFAULT_CIRCUIT_CONFIG,
+          lastUpdated: new Date(),
+          updatedBy: HARDCODED_TRAINER_ID,
+        }
+      };
+
+      try {
+        const result = await ctx.db
+          .insert(TrainingSession)
+          .values(sessionData)
+          .returning();
+
+        if (!result[0]) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Failed to create session - no data returned",
+          });
+        }
+
+        return {
+          success: true,
+          sessionId: result[0].id,
+          workoutType: input.workoutType ?? 'custom'
+        };
+      } catch (error) {
+        console.error('[CreateCircuitSessionPublic] Error creating session:', error);
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to create circuit session",
+        });
+      }
+    }),
 } satisfies TRPCRouterRecord;

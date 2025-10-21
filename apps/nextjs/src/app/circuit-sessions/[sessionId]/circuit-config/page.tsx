@@ -1,6 +1,6 @@
 "use client";
 
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useState, useCallback, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, Button, Loader2Icon as Loader2, ChevronLeftIcon as ChevronLeft, ChevronRightIcon as ChevronRight } from "@acme/ui-shared";
@@ -17,8 +17,22 @@ import { WorkoutTypeStep, CategorySelectionStep, TemplateSelectionStep, RoundsSt
 export default function CircuitConfigPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const sessionId = params?.sessionId as string;
-  const [currentStep, setCurrentStep] = useState(1);
+  
+  // Check if we're coming from the new session flow
+  const fromNew = searchParams.get('fromNew') === 'true';
+  const initialWorkoutType = searchParams.get('workoutType') as 'custom' | 'template' | null;
+  
+  // If coming from new flow with workout type, start at appropriate step
+  const getInitialStep = () => {
+    if (fromNew && initialWorkoutType) {
+      return initialWorkoutType === 'template' ? 2 : 4; // Skip workout type selection
+    }
+    return 1;
+  };
+  
+  const [currentStep, setCurrentStep] = useState(getInitialStep());
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   
@@ -27,12 +41,18 @@ export default function CircuitConfigPage() {
   const [repeatRounds, setRepeatRounds] = useState(false);
   const [spotifyDeviceId, setSpotifyDeviceId] = useState<string | null>(null);
   const [spotifyDeviceName, setSpotifyDeviceName] = useState<string | null>(null);
-  const [workoutType, setWorkoutType] = useState<'custom' | 'template' | null>(null);
+  const [workoutType, setWorkoutType] = useState<'custom' | 'template' | null>(initialWorkoutType);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [templateData, setTemplateData] = useState<{ rounds: any[], exercises: any[] } | null>(null);
 
   // Get TRPC client
   const trpc = useTRPC();
+  
+  // Check if workout already exists
+  const { data: hasWorkout } = useQuery({
+    ...trpc.trainingSession.hasWorkoutForSession.queryOptions({ sessionId }),
+    enabled: !!sessionId,
+  });
 
   // Fetch initial circuit configuration using public endpoint
   const { data: initialConfig, isLoading: isLoadingConfig } = useQuery({
@@ -178,10 +198,36 @@ export default function CircuitConfigPage() {
     }
   };
 
-  const handleComplete = () => {
-    toast.success("Circuit configuration saved!");
-    // Navigate to circuit workout overview
-    router.push(`/circuit-workout-overview?sessionId=${sessionId}`);
+  // Add mutation for generating circuit workout
+  const generateWorkoutMutation = useMutation(
+    trpc.trainingSession.generateCircuitWorkout.mutationOptions({
+      onSuccess: (data) => {
+        toast.success("Circuit workout generated successfully!");
+        // Navigate to circuit workout overview
+        router.push(`/circuit-workout-overview?sessionId=${sessionId}`);
+      },
+      onError: (error: any) => {
+        toast.error(error.message || "Failed to generate workout");
+      },
+    })
+  );
+
+  const handleComplete = async () => {
+    if (!sessionId) return;
+    
+    // Save any pending configuration changes
+    if (isSaving) {
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+    
+    // If workout already exists, just navigate
+    if (hasWorkout) {
+      router.push(`/circuit-workout-overview?sessionId=${sessionId}`);
+      return;
+    }
+    
+    // Generate the circuit workout
+    generateWorkoutMutation.mutate({ sessionId });
   };
 
   if (isLoading || isLoadingConfig) {
@@ -265,9 +311,14 @@ export default function CircuitConfigPage() {
               <Button
                 size="sm"
                 onClick={handleComplete}
-                className="bg-green-600 hover:bg-green-700"
+                disabled={generateWorkoutMutation.isPending}
+                className="bg-green-600 hover:bg-green-700 disabled:opacity-50"
               >
-                Confirm
+                {generateWorkoutMutation.isPending 
+                  ? "Generating..." 
+                  : hasWorkout 
+                    ? "View Workout" 
+                    : "Generate Workout"}
               </Button>
             )}
           </div>

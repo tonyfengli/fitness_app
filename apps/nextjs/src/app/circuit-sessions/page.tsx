@@ -19,6 +19,12 @@ const UsersIcon = ({ className = "w-4 h-4" }: { className?: string }) => (
   </svg>
 );
 
+const PlusIcon = ({ className = "w-5 h-5" }: { className?: string }) => (
+  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+  </svg>
+);
+
 const CalendarIcon = ({ className = "w-4 h-4" }: { className?: string }) => (
   <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -151,6 +157,18 @@ export default function SessionsPage() {
   const isLoading = activeLoading;
   const error = activeError || completedError;
 
+  // Debug logging
+  console.log('[CircuitSessions] State:', {
+    isLoading,
+    error: !!error,
+    activeSessions: activeSessions?.length || 0,
+    completedSessions: completedSessions?.length || 0,
+    showCompletedSessions,
+    completedLoading,
+    hasActiveData: !!activeSessions,
+    hasCompletedData: !!completedSessions,
+  });
+
   const handleSessionSelect = (sessionId: string) => {
     // Navigate to session detail page
     router.push(`/circuit-sessions/${sessionId}`);
@@ -161,10 +179,29 @@ export default function SessionsPage() {
       {/* Header */}
       <div className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
         <div className="px-4 py-6">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Training Sessions</h1>
-          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            Select a session to view details
-          </p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Training Sessions</h1>
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                Select a session to view details
+              </p>
+            </div>
+            
+            {/* Create Session Button */}
+            <button
+              onClick={() => router.push('/circuit-config')}
+              className="group relative w-12 h-12 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white rounded-2xl transition-all duration-300 ease-out shadow-lg hover:shadow-xl active:shadow-md active:scale-90 transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-emerald-200 dark:focus:ring-emerald-800"
+              aria-label="Create new training session"
+            >
+              <PlusIcon className="w-6 h-6 absolute inset-0 m-auto group-active:scale-75 transition-transform duration-200 ease-out" />
+              
+              {/* Subtle background glow effect */}
+              <div className="absolute inset-0 rounded-2xl bg-emerald-400 opacity-0 group-hover:opacity-20 transition-opacity duration-300 ease-out" />
+              
+              {/* Ripple effect on click */}
+              <div className="absolute inset-0 rounded-2xl bg-white opacity-0 group-active:opacity-30 group-active:animate-ping transition-opacity duration-150" />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -188,147 +225,146 @@ export default function SessionsPage() {
       )}
 
       {/* Sessions List */}
-      {(activeSessions || (showCompletedSessions && completedSessions)) && (
+      {!isLoading && !error && (
         <div className="px-4 py-6 space-y-6">
-          {(!activeSessions || activeSessions.length === 0) && (!completedSessions || completedSessions.length === 0) ? (
-            <div className="text-center py-8">
-              <p className="text-gray-500 dark:text-gray-400">No circuit sessions found</p>
-            </div>
-          ) : (
-            <>
-              {/* Active Sessions Section */}
-              {activeSessions && activeSessions.length > 0 && (
-                <div className="space-y-3">
-                  {activeSessions.map((session) => {
-                    const statusBadge = getStatusBadge(session.status);
-                    
-                    return (
-                      <div
-                        key={session.id}
-                        onClick={() => handleSessionSelect(session.id)}
-                        className="relative bg-white dark:bg-gray-800 rounded-xl border-2 transition-all duration-200 cursor-pointer border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-600 hover:shadow-md active:scale-98 transform"
-                      >
-                        <div className="p-4">
-                          {/* Header Row */}
-                          <div className="flex items-start justify-between mb-3">
-                            <div className="flex-1 min-w-0">
-                              <h3 className="text-lg font-semibold text-gray-900 dark:text-white truncate">
-                                {session.name}
-                              </h3>
-                            </div>
-                            <ChevronRightIcon className="w-5 h-5 text-gray-400 dark:text-gray-500" />
+          {/* Active Sessions Section */}
+          {activeSessions && activeSessions.length > 0 && (
+            <div className="space-y-3">
+              {activeSessions.map((session) => {
+                const statusBadge = getStatusBadge(session.status);
+                
+                return (
+                  <div
+                    key={session.id}
+                    onClick={() => handleSessionSelect(session.id)}
+                    className="relative bg-white dark:bg-gray-800 rounded-xl border-2 transition-all duration-200 cursor-pointer border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-600 hover:shadow-md active:scale-98 transform"
+                  >
+                    <div className="p-4">
+                      {/* Header Row */}
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex-1 min-w-0">
+                          <h3 className="text-lg font-semibold text-gray-900 dark:text-white truncate">
+                            {session.name}
+                          </h3>
+                        </div>
+                        <ChevronRightIcon className="w-5 h-5 text-gray-400 dark:text-gray-500" />
+                      </div>
+
+                      {/* Details Row */}
+                      <div className="flex items-center justify-between">
+                        {/* Participants Count */}
+                        <div className="flex items-center gap-2">
+                          <UsersIcon className="w-4 h-4 text-gray-400 dark:text-gray-500 flex-shrink-0" />
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-gray-900 dark:text-white">
+                              {session.participantCount}
+                            </p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                              Participants
+                            </p>
                           </div>
+                        </div>
 
-                          {/* Details Row */}
-                          <div className="flex items-center justify-between">
-                            {/* Participants Count */}
-                            <div className="flex items-center gap-2">
-                              <UsersIcon className="w-4 h-4 text-gray-400 dark:text-gray-500 flex-shrink-0" />
-                              <div className="min-w-0">
-                                <p className="text-sm font-medium text-gray-900 dark:text-white">
+                        {/* Status Badge */}
+                        <div className="flex items-center">
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusBadge.className}`}>
+                            {statusBadge.label}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Completed Sessions Section - Always show expandable header */}
+          <div className="space-y-3">
+            {/* Collapsible Header */}
+            <button
+              onClick={() => setShowCompletedSessions(!showCompletedSessions)}
+              className="w-full flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-all duration-200"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center">
+                  <CheckIcon className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+                </div>
+                <div className="text-left">
+                  <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
+                    Completed Sessions
+                  </h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    {completedLoading && showCompletedSessions ? "Loading..." : 
+                     completedSessions ? `${completedSessions.length} session${completedSessions.length !== 1 ? 's' : ''}` : 
+                     showCompletedSessions ? "Loading..." : "Tap to view"}
+                  </p>
+                </div>
+              </div>
+              <div className={`transition-transform duration-200 ${showCompletedSessions ? 'rotate-180' : ''}`}>
+                <ChevronDownIcon className="w-5 h-5 text-gray-400 dark:text-gray-500" />
+              </div>
+            </button>
+
+            {/* Completed Sessions List */}
+            <div className={`space-y-2 transition-all duration-300 ease-in-out ${
+              showCompletedSessions 
+                ? 'opacity-100 max-h-[2000px]' 
+                : 'opacity-0 max-h-0 overflow-hidden'
+            }`}>
+              {completedLoading && showCompletedSessions ? (
+                <div className="text-center py-4">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto"></div>
+                  <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">Loading completed sessions...</p>
+                </div>
+              ) : completedSessions && completedSessions.length > 0 ? (
+                completedSessions.map((session) => {
+                  const statusBadge = getStatusBadge(session.status);
+                  
+                  return (
+                    <div
+                      key={session.id}
+                      onClick={() => handleSessionSelect(session.id)}
+                      className="relative bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 hover:shadow-sm transition-all duration-200 cursor-pointer opacity-75 hover:opacity-100 active:scale-98 transform"
+                    >
+                      <div className="p-3">
+                        {/* Compact Header Row */}
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1 min-w-0">
+                            <h3 className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                              {session.name}
+                            </h3>
+                            <div className="flex items-center gap-3 mt-1">
+                              <div className="flex items-center gap-1">
+                                <UsersIcon className="w-3 h-3 text-gray-400 dark:text-gray-500" />
+                                <span className="text-xs text-gray-500 dark:text-gray-400">
                                   {session.participantCount}
-                                </p>
-                                <p className="text-xs text-gray-500 dark:text-gray-400">
-                                  Participants
-                                </p>
+                                </span>
                               </div>
-                            </div>
-
-                            {/* Status Badge */}
-                            <div className="flex items-center">
-                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusBadge.className}`}>
+                              <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${statusBadge.className}`}>
                                 {statusBadge.label}
                               </span>
                             </div>
                           </div>
+                          <ChevronRightIcon className="w-4 h-4 text-gray-400 dark:text-gray-500 ml-2" />
                         </div>
                       </div>
-                    );
-                  })}
+                    </div>
+                  );
+                })
+              ) : showCompletedSessions && completedSessions && completedSessions.length === 0 ? (
+                <div className="text-center py-4">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">No completed sessions found</p>
                 </div>
-              )}
+              ) : null}
+            </div>
+          </div>
 
-              {/* Completed Sessions Section - Always show expandable header */}
-              <div className="space-y-3">
-                {/* Collapsible Header */}
-                <button
-                  onClick={() => setShowCompletedSessions(!showCompletedSessions)}
-                  className="w-full flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-all duration-200"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center">
-                      <CheckIcon className="w-5 h-5 text-gray-600 dark:text-gray-400" />
-                    </div>
-                    <div className="text-left">
-                      <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
-                        Completed Sessions
-                      </h3>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">
-                        {completedLoading && showCompletedSessions ? "Loading..." : 
-                         completedSessions ? `${completedSessions.length} session${completedSessions.length !== 1 ? 's' : ''}` : 
-                         showCompletedSessions ? "Loading..." : "Tap to view"}
-                      </p>
-                    </div>
-                  </div>
-                  <div className={`transition-transform duration-200 ${showCompletedSessions ? 'rotate-180' : ''}`}>
-                    <ChevronDownIcon className="w-5 h-5 text-gray-400 dark:text-gray-500" />
-                  </div>
-                </button>
-
-                {/* Completed Sessions List */}
-                <div className={`space-y-2 transition-all duration-300 ease-in-out ${
-                  showCompletedSessions 
-                    ? 'opacity-100 max-h-[2000px]' 
-                    : 'opacity-0 max-h-0 overflow-hidden'
-                }`}>
-                  {completedLoading && showCompletedSessions ? (
-                    <div className="text-center py-4">
-                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto"></div>
-                      <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">Loading completed sessions...</p>
-                    </div>
-                  ) : completedSessions && completedSessions.length > 0 ? (
-                    completedSessions.map((session) => {
-                      const statusBadge = getStatusBadge(session.status);
-                      
-                      return (
-                        <div
-                          key={session.id}
-                          onClick={() => handleSessionSelect(session.id)}
-                          className="relative bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 hover:shadow-sm transition-all duration-200 cursor-pointer opacity-75 hover:opacity-100 active:scale-98 transform"
-                        >
-                          <div className="p-3">
-                            {/* Compact Header Row */}
-                            <div className="flex items-center justify-between">
-                              <div className="flex-1 min-w-0">
-                                <h3 className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                                  {session.name}
-                                </h3>
-                                <div className="flex items-center gap-3 mt-1">
-                                  <div className="flex items-center gap-1">
-                                    <UsersIcon className="w-3 h-3 text-gray-400 dark:text-gray-500" />
-                                    <span className="text-xs text-gray-500 dark:text-gray-400">
-                                      {session.participantCount}
-                                    </span>
-                                  </div>
-                                  <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${statusBadge.className}`}>
-                                    {statusBadge.label}
-                                  </span>
-                                </div>
-                              </div>
-                              <ChevronRightIcon className="w-4 h-4 text-gray-400 dark:text-gray-500 ml-2" />
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })
-                  ) : showCompletedSessions && completedSessions && completedSessions.length === 0 ? (
-                    <div className="text-center py-4">
-                      <p className="text-xs text-gray-500 dark:text-gray-400">No completed sessions found</p>
-                    </div>
-                  ) : null}
-                </div>
-              </div>
-            </>
+          {/* Show empty state only if no active sessions and user hasn't checked completed sessions yet */}
+          {(!activeSessions || activeSessions.length === 0) && !showCompletedSessions && (
+            <div className="text-center py-8">
+              <p className="text-gray-500 dark:text-gray-400">No active sessions found. Check completed sessions above.</p>
+            </div>
           )}
         </div>
       )}
