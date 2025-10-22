@@ -2,7 +2,7 @@
 
 import { useState, use } from "react";
 import { useRouter } from "next/navigation";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { ChevronLeftIcon, SearchIcon, CheckIcon } from "@acme/ui-shared";
 import { api } from "~/trpc/react";
 import { toast } from "sonner";
@@ -68,12 +68,14 @@ export default function SessionDetailPage({ params }: SessionDetailPageProps) {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showStatusModal, setShowStatusModal] = useState(false);
+  const [navigatingToConfig, setNavigatingToConfig] = useState(false);
   
   // Unwrap params Promise (Next.js 15 pattern)
   const resolvedParams = use(params);
   const sessionId = resolvedParams.sessionId;
   
   const trpc = api();
+  const queryClient = useQueryClient();
   
   // Load session data from API
   const { data: session, isLoading: sessionLoading, error: sessionError } = useQuery({
@@ -423,11 +425,22 @@ export default function SessionDetailPage({ params }: SessionDetailPageProps) {
                 return;
               }
               
+              // Show loading state immediately
+              setNavigatingToConfig(true);
+              
               // Navigate based on whether a workout already exists
               const destination = hasWorkout 
                 ? `/circuit-workout-overview?sessionId=${sessionId}`
                 : `/circuit-sessions/${sessionId}/circuit-config`;
               router.push(destination);
+            }}
+            onMouseEnter={async () => {
+              // Prefetch circuit config data on hover
+              if (hasWorkout === false) {
+                await queryClient.prefetchQuery(
+                  trpc.circuitConfig.getPublic.queryOptions({ sessionId })
+                );
+              }
             }}
             disabled={hasWorkout === undefined}
             className={`w-full bg-white dark:bg-gray-800 rounded-xl border-2 border-gray-200 dark:border-gray-700 transition-all p-6 text-left group active:scale-98 transform ${
@@ -453,7 +466,7 @@ export default function SessionDetailPage({ params }: SessionDetailPageProps) {
                 </p>
               </div>
               <div className="w-5 h-5 text-gray-400 dark:text-gray-500 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
-                {hasWorkout === undefined ? (
+                {hasWorkout === undefined || navigatingToConfig ? (
                   <div className="animate-spin">
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" strokeWidth="4"></circle>

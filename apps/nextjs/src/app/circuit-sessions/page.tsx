@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronRightIcon, CheckIcon, ChevronDownIcon } from "@acme/ui-shared";
 import { api } from "~/trpc/react";
 
@@ -146,12 +146,17 @@ export default function SessionsPage() {
   const router = useRouter();
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const [showCompletedSessions, setShowCompletedSessions] = useState(false);
+  const [navigatingToSession, setNavigatingToSession] = useState<string | null>(null);
   
   // Load active circuit sessions immediately
   const { data: activeSessions, isLoading: activeLoading, error: activeError } = useActiveCircuitSessions();
   
   // Load completed circuit sessions only when expanded
   const { data: completedSessions, isLoading: completedLoading, error: completedError } = useCompletedCircuitSessions(showCompletedSessions);
+  
+  // Get query client for prefetching
+  const queryClient = useQueryClient();
+  const trpc = api();
   
   // Combine loading states
   const isLoading = activeLoading;
@@ -170,8 +175,21 @@ export default function SessionsPage() {
   });
 
   const handleSessionSelect = (sessionId: string) => {
+    // Show loading state immediately
+    setNavigatingToSession(sessionId);
     // Navigate to session detail page
     router.push(`/circuit-sessions/${sessionId}`);
+  };
+
+  const handleSessionHover = async (sessionId: string) => {
+    // Prefetch session data on hover for instant navigation
+    // Using queryClient.prefetchQuery with TRPC query options
+    await queryClient.prefetchQuery(
+      trpc.trainingSession.getSession.queryOptions({ id: sessionId })
+    );
+    await queryClient.prefetchQuery(
+      trpc.trainingSession.hasWorkoutForSession.queryOptions({ sessionId })
+    );
   };
 
   return (
@@ -237,6 +255,7 @@ export default function SessionsPage() {
                   <div
                     key={session.id}
                     onClick={() => handleSessionSelect(session.id)}
+                    onMouseEnter={() => handleSessionHover(session.id)}
                     className="relative bg-white dark:bg-gray-800 rounded-xl border-2 transition-all duration-200 cursor-pointer border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-600 hover:shadow-md active:scale-98 transform"
                   >
                     <div className="p-4">
@@ -265,11 +284,15 @@ export default function SessionsPage() {
                           </div>
                         </div>
 
-                        {/* Status Badge */}
+                        {/* Status Badge or Loading */}
                         <div className="flex items-center">
-                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusBadge.className}`}>
-                            {statusBadge.label}
-                          </span>
+                          {navigatingToSession === session.id ? (
+                            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+                          ) : (
+                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusBadge.className}`}>
+                              {statusBadge.label}
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -325,6 +348,7 @@ export default function SessionsPage() {
                     <div
                       key={session.id}
                       onClick={() => handleSessionSelect(session.id)}
+                      onMouseEnter={() => handleSessionHover(session.id)}
                       className="relative bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 hover:shadow-sm transition-all duration-200 cursor-pointer opacity-75 hover:opacity-100 active:scale-98 transform"
                     >
                       <div className="p-3">
