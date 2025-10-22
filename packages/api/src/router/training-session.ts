@@ -4885,4 +4885,141 @@ Set your goals and preferences for today's session.`;
         });
       }
     }),
+
+  /**
+   * Delete a training session (public route)
+   * Uses hardcoded business and trainer IDs for authorization
+   */
+  deleteSessionPublic: publicProcedure
+    .input(
+      z.object({
+        sessionId: z.string().uuid(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      // Hardcoded values for public circuit session operations
+      const HARDCODED_BUSINESS_ID = "d33b41e2-f700-4a08-9489-cb6e3daa7f20";
+      const HARDCODED_TRAINER_ID = "v4dxeCHAJ31kgL3To8NygjuNNZXZGf9W";
+
+      // Get the session to verify it exists and belongs to the hardcoded business
+      const session = await ctx.db.query.TrainingSession.findFirst({
+        where: and(
+          eq(TrainingSession.id, input.sessionId),
+          eq(TrainingSession.businessId, HARDCODED_BUSINESS_ID),
+        ),
+      });
+
+      if (!session) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Session not found",
+        });
+      }
+
+      // Delete in the correct order to respect foreign key constraints
+      // 1. First get all workouts for this session
+      const workouts = await ctx.db.query.Workout.findMany({
+        where: eq(Workout.trainingSessionId, input.sessionId),
+      });
+
+      // 2. Delete workout exercises for all workouts
+      if (workouts.length > 0) {
+        const workoutIds = workouts.map((w) => w.id);
+        await ctx.db
+          .delete(WorkoutExercise)
+          .where(inArray(WorkoutExercise.workoutId, workoutIds));
+      }
+
+      // 3. Delete workouts
+      await ctx.db
+        .delete(Workout)
+        .where(eq(Workout.trainingSessionId, input.sessionId));
+
+      // 4. Delete workout preferences
+      await ctx.db
+        .delete(WorkoutPreferences)
+        .where(eq(WorkoutPreferences.trainingSessionId, input.sessionId));
+
+      // 5. Delete user training sessions (registrations/check-ins)
+      await ctx.db
+        .delete(UserTrainingSession)
+        .where(eq(UserTrainingSession.trainingSessionId, input.sessionId));
+
+      // 6. Delete workout exercise swaps
+      try {
+        await ctx.db
+          .delete(workoutExerciseSwaps)
+          .where(eq(workoutExerciseSwaps.trainingSessionId, input.sessionId));
+      } catch (error) {
+        console.error(
+          "[deleteSessionPublic] Error deleting workout exercise swaps:",
+          error,
+        );
+        // Continue with deletion even if this fails since the table might be empty
+      }
+
+      // 7. Finally delete the training session
+      await ctx.db
+        .delete(TrainingSession)
+        .where(eq(TrainingSession.id, input.sessionId));
+
+      console.log(`[deleteSessionPublic] Session ${input.sessionId} deleted successfully`);
+
+      return { success: true, deletedSessionId: input.sessionId };
+    }),
+
+  /**
+   * Update session status (public route)
+   * Uses hardcoded business and trainer IDs for authorization
+   */
+  updateSessionStatusPublic: publicProcedure
+    .input(
+      z.object({
+        sessionId: z.string().uuid(),
+        status: z.enum(["open", "in_progress", "completed", "cancelled"]),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      // Hardcoded values for public circuit session operations
+      const HARDCODED_BUSINESS_ID = "d33b41e2-f700-4a08-9489-cb6e3daa7f20";
+      const HARDCODED_TRAINER_ID = "v4dxeCHAJ31kgL3To8NygjuNNZXZGf9W";
+
+      // Get the session to verify it exists and belongs to the hardcoded business
+      const [session] = await ctx.db
+        .select()
+        .from(TrainingSession)
+        .where(
+          and(
+            eq(TrainingSession.id, input.sessionId),
+            eq(TrainingSession.businessId, HARDCODED_BUSINESS_ID),
+          ),
+        )
+        .limit(1);
+
+      if (!session) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Session not found",
+        });
+      }
+
+      // Update the session status
+      const [updatedSession] = await ctx.db
+        .update(TrainingSession)
+        .set({
+          status: input.status,
+          updatedAt: new Date(),
+        })
+        .where(eq(TrainingSession.id, input.sessionId))
+        .returning();
+
+      console.log(`[updateSessionStatusPublic] Session ${input.sessionId} status updated to: ${input.status}`);
+
+      return {
+        success: true,
+        sessionId: updatedSession.id,
+        newStatus: updatedSession.status,
+        session: updatedSession,
+      };
+    }),
 } satisfies TRPCRouterRecord;

@@ -2,9 +2,10 @@
 
 import { useState, use } from "react";
 import { useRouter } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { ChevronLeftIcon, SearchIcon, CheckIcon } from "@acme/ui-shared";
 import { api } from "~/trpc/react";
+import { toast } from "sonner";
 
 // Custom icons
 const UsersIcon = ({ className = "w-6 h-6" }: { className?: string }) => (
@@ -23,6 +24,18 @@ const SettingsIcon = ({ className = "w-6 h-6" }: { className?: string }) => (
 const FeedbackIcon = ({ className = "w-6 h-6" }: { className?: string }) => (
   <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+  </svg>
+);
+
+const TrashIcon = ({ className = "w-6 h-6" }: { className?: string }) => (
+  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+  </svg>
+);
+
+const PlayPauseIcon = ({ className = "w-6 h-6" }: { className?: string }) => (
+  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
   </svg>
 );
 
@@ -53,6 +66,8 @@ export default function SessionDetailPage({ params }: SessionDetailPageProps) {
   const [selectedClients, setSelectedClients] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showStatusModal, setShowStatusModal] = useState(false);
   
   // Unwrap params Promise (Next.js 15 pattern)
   const resolvedParams = use(params);
@@ -71,6 +86,35 @@ export default function SessionDetailPage({ params }: SessionDetailPageProps) {
     ...trpc.trainingSession.hasWorkoutForSession.queryOptions({ sessionId }),
     enabled: !!sessionId
   });
+
+  // Mutations for delete and status update
+  const deleteSessionMutation = useMutation(
+    trpc.trainingSession.deleteSessionPublic.mutationOptions({
+      onSuccess: () => {
+        toast.success("Session deleted successfully");
+        router.push("/circuit-sessions");
+      },
+      onError: (error: any) => {
+        toast.error("Failed to delete session");
+        console.error("Delete error:", error);
+      },
+    })
+  );
+
+  const updateStatusMutation = useMutation(
+    trpc.trainingSession.updateSessionStatusPublic.mutationOptions({
+      onSuccess: (data) => {
+        toast.success(`Session status updated to ${data.newStatus}`);
+        setShowStatusModal(false);
+        // Refresh the page data
+        window.location.reload();
+      },
+      onError: (error: any) => {
+        toast.error("Failed to update session status");
+        console.error("Update status error:", error);
+      },
+    })
+  );
 
   // For now, we'll use a placeholder participant count since we don't have the count in the basic session data
   // In a real implementation, you'd get this from the UserTrainingSession table
@@ -449,9 +493,99 @@ export default function SessionDetailPage({ params }: SessionDetailPageProps) {
               </div>
             </div>
           </button>
+
+          {/* Action Buttons */}
+          <div className="flex gap-3 mt-6">
+            <button
+              onClick={() => setShowStatusModal(true)}
+              className="flex-1 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 transition-all py-3 px-4 group"
+            >
+              <div className="flex items-center justify-center gap-2">
+                <PlayPauseIcon className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Update Status</span>
+              </div>
+            </button>
+
+            <button
+              onClick={() => setShowDeleteModal(true)}
+              className="flex-1 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-red-300 dark:hover:border-red-600 transition-all py-3 px-4 group"
+            >
+              <div className="flex items-center justify-center gap-2">
+                <TrashIcon className="w-4 h-4 text-red-600 dark:text-red-400" />
+                <span className="text-sm font-medium text-red-600 dark:text-red-400">Delete</span>
+              </div>
+            </button>
+          </div>
         </div>
 
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setShowDeleteModal(false)}>
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-sm w-full p-6" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+              Delete "{session.name}"?
+            </h3>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
+              This action cannot be undone.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowDeleteModal(false)}
+                className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => deleteSessionMutation.mutate({ sessionId })}
+                disabled={deleteSessionMutation.isPending}
+                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
+              >
+                {deleteSessionMutation.isPending ? "Deleting..." : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Status Update Modal */}
+      {showStatusModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setShowStatusModal(false)}>
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-sm w-full p-6" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+              Update Status
+            </h3>
+            <div className="space-y-2 mb-6">
+              {["open", "in_progress", "completed", "cancelled"].map((status) => (
+                <button
+                  key={status}
+                  onClick={() => updateStatusMutation.mutate({ sessionId, status: status as "open" | "in_progress" | "completed" | "cancelled" })}
+                  disabled={status === session.status || updateStatusMutation.isPending}
+                  className={`w-full px-4 py-2.5 rounded-lg border transition-all ${
+                    status === session.status
+                      ? "border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 text-gray-400"
+                      : "border-gray-300 dark:border-gray-600 hover:border-blue-500 dark:hover:border-blue-400 hover:bg-gray-50 dark:hover:bg-gray-700"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="capitalize">{status.replace("_", " ")}</span>
+                    {status === session.status && (
+                      <span className="text-xs">Current</span>
+                    )}
+                  </div>
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => setShowStatusModal(false)}
+              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Bottom Safe Area */}
       <div className="h-6" />
