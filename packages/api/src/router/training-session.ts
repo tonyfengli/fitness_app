@@ -4656,6 +4656,12 @@ Set your goals and preferences for today's session.`;
         }));
 
         console.log(`[generateCircuitWorkout] Found ${templateExercises.length} exercises from template`);
+        console.log(`[generateCircuitWorkout] Template exercises detail:`, templateExercises.map(ex => ({
+          name: ex.exerciseName,
+          round: ex.groupName,
+          orderIndex: ex.orderIndex,
+          stationIndex: ex.stationIndex,
+        })));
       }
 
       // Get a pool of exercises for circuit training (fallback for when no template)
@@ -4701,6 +4707,18 @@ Set your goals and preferences for today's session.`;
             }
             exercisesByRound.get(round)!.push(exercise);
           }
+          
+          console.log(`[generateCircuitWorkout] Exercises organized by round:`, 
+            Array.from(exercisesByRound.entries()).map(([round, exercises]) => ({
+              round,
+              exerciseCount: exercises.length,
+              exercises: exercises.map(ex => ({
+                name: ex.exerciseName,
+                stationIndex: ex.stationIndex,
+                orderIndex: ex.orderIndex
+              }))
+            }))
+          );
         }
 
         for (const roundTemplate of circuitConfig.config.roundTemplates) {
@@ -4714,31 +4732,89 @@ Set your goals and preferences for today's session.`;
 
           // For stations rounds, we need to create stations with multiple exercises each
           if (template.type === 'stations_round') {
-            // Assuming 4 stations by default (can be made configurable)
-            const stationsCount = 4;
-            const exercisesPerStation = Math.ceil(exercisesPerRound / stationsCount);
-
-            for (let stationIndex = 0; stationIndex < stationsCount; stationIndex++) {
-              // Add exercises for this station
-              for (let exerciseInStation = 0; exerciseInStation < exercisesPerStation; exerciseInStation++) {
-                const exerciseIndex = stationIndex * exercisesPerStation + exerciseInStation;
+            // When using a template, preserve the station structure
+            if (roundTemplateExercises.length > 0 && sourceWorkoutId) {
+              // For station rounds from templates, group by orderIndex to determine stations
+              const exercisesByOrderIndex = new Map<number, any[]>();
+              const orderIndexes = new Set<number>();
+              
+              for (const exercise of roundTemplateExercises) {
+                const orderIdx = exercise.orderIndex;
+                orderIndexes.add(orderIdx);
                 
-                // Use template exercise if available, otherwise use random
-                let exerciseData;
-                if (exerciseIndex < roundTemplateExercises.length) {
-                  const templateEx = roundTemplateExercises[exerciseIndex];
-                  console.log(`[generateCircuitWorkout] Using template exercise for Station ${stationIndex + 1}, Exercise ${exerciseInStation + 1}:`, {
-                    exerciseId: templateEx.exerciseId,
-                    exerciseName: templateEx.exerciseName,
-                  });
-                  exerciseData = {
+                if (!exercisesByOrderIndex.has(orderIdx)) {
+                  exercisesByOrderIndex.set(orderIdx, []);
+                }
+                exercisesByOrderIndex.get(orderIdx)!.push(exercise);
+              }
+              
+              // Sort order indexes to get stations in sequence
+              const sortedOrderIndexes = Array.from(orderIndexes).sort((a, b) => a - b);
+              
+              console.log(`[generateCircuitWorkout] Template stations for ${roundName}:`, {
+                uniqueOrderIndexes: sortedOrderIndexes,
+                stationCount: sortedOrderIndexes.length,
+                exercisesByOrderIndex: Array.from(exercisesByOrderIndex.entries()).map(([idx, exs]) => ({
+                  orderIndex: idx,
+                  exerciseCount: exs.length,
+                  exercises: exs.map(e => ({
+                    name: e.exerciseName,
+                    stationIndex: e.stationIndex
+                  }))
+                }))
+              });
+              
+              // Create exercises preserving the station structure based on orderIndex grouping
+              sortedOrderIndexes.forEach((origOrderIndex, stationNum) => {
+                const stationExercises = exercisesByOrderIndex.get(origOrderIndex) || [];
+                console.log(`[generateCircuitWorkout] Processing Station ${stationNum} (from orderIndex ${origOrderIndex}) with ${stationExercises.length} exercises`);
+                
+                // Sort exercises within station by stationIndex for consistent ordering
+                stationExercises.sort((a, b) => (a.stationIndex ?? 0) - (b.stationIndex ?? 0));
+                
+                for (const templateEx of stationExercises) {
+                  const exerciseToInsert = {
+                    workoutId: workout.id,
                     exerciseId: templateEx.exerciseId,
                     custom_exercise: templateEx.customExercise,
                     repsPlanned: templateEx.repsPlanned,
+                    orderIndex: orderIndex + stationNum, // Use station number for consistent orderIndex
+                    stationIndex: stationNum, // Use sequential station numbering
+                    groupName: roundName,
+                    isShared: true, // Stations are shared
+                    selectionSource: 'trainer' as const,
+                    setsCompleted: 0,
                   };
-                } else {
+                  
+                  console.log(`[generateCircuitWorkout] Adding exercise to Station ${stationNum}:`, {
+                    exerciseName: templateEx.exerciseName,
+                    exerciseId: templateEx.exerciseId,
+                    originalOrderIndex: origOrderIndex,
+                    originalStationIndex: templateEx.stationIndex,
+                    newStationIndex: stationNum,
+                    newOrderIndex: exerciseToInsert.orderIndex,
+                    groupName: roundName,
+                  });
+                  
+                  workoutExercises.push(exerciseToInsert);
+                }
+              });
+              
+              orderIndex += sortedOrderIndexes.length;
+              
+              console.log(`[generateCircuitWorkout] Finished ${roundName} - orderIndex now at ${orderIndex}`);
+            } else {
+              // No template - use default 4 stations
+              const stationsCount = 4;
+              const exercisesPerStation = Math.ceil(exercisesPerRound / stationsCount);
+
+              for (let stationIndex = 0; stationIndex < stationsCount; stationIndex++) {
+                // Add exercises for this station
+                for (let exerciseInStation = 0; exerciseInStation < exercisesPerStation; exerciseInStation++) {
+                  const exerciseIndex = stationIndex * exercisesPerStation + exerciseInStation;
+                  
                   const randomExercise = exercisePool[Math.floor(Math.random() * exercisePool.length)];
-                  exerciseData = {
+                  const exerciseData = {
                     exerciseId: randomExercise?.id ?? null,
                     custom_exercise: !randomExercise ? {
                       customName: `Station ${stationIndex + 1} Exercise ${exerciseInStation + 1}`,
@@ -4746,36 +4822,41 @@ Set your goals and preferences for today's session.`;
                     } : null,
                     repsPlanned: null,
                   };
+                  
+                  workoutExercises.push({
+                    workoutId: workout.id,
+                    ...exerciseData,
+                    orderIndex: orderIndex + stationIndex,
+                    stationIndex: stationIndex, // SET STATION INDEX!
+                    groupName: roundName,
+                    isShared: true, // Stations are shared
+                    selectionSource: 'trainer' as const,
+                    setsCompleted: 0,
+                  });
                 }
-                
-                workoutExercises.push({
-                  workoutId: workout.id,
-                  ...exerciseData,
-                  orderIndex: stationIndex, // Same orderIndex for all exercises in a station
-                  groupName: roundName,
-                  isShared: true, // Stations are shared
-                  selectionSource: 'trainer' as const,
-                  setsCompleted: 0,
-                });
               }
+              orderIndex += stationsCount;
             }
-            orderIndex += stationsCount;
           } else {
             // Circuit rounds and AMRAP rounds - one exercise per slot
             for (let i = 0; i < exercisesPerRound; i++) {
               // Use template exercise if available, otherwise use random
               let exerciseData;
+              let templateStationIndex = null;
+              
               if (i < roundTemplateExercises.length) {
                 const templateEx = roundTemplateExercises[i];
                 console.log(`[generateCircuitWorkout] Using template exercise for Round ${roundNumber}, Exercise ${i + 1}:`, {
                   exerciseId: templateEx.exerciseId,
                   exerciseName: templateEx.exerciseName,
+                  stationIndex: templateEx.stationIndex,
                 });
                 exerciseData = {
                   exerciseId: templateEx.exerciseId,
                   custom_exercise: templateEx.customExercise,
                   repsPlanned: templateEx.repsPlanned,
                 };
+                templateStationIndex = templateEx.stationIndex;
               } else {
                 const randomExercise = exercisePool[Math.floor(Math.random() * exercisePool.length)];
                 exerciseData = {
@@ -4792,6 +4873,7 @@ Set your goals and preferences for today's session.`;
                 workoutId: workout.id,
                 ...exerciseData,
                 orderIndex: orderIndex++,
+                stationIndex: templateStationIndex, // PRESERVE STATION INDEX IF FROM TEMPLATE!
                 groupName: roundName,
                 isShared: false, // Circuit exercises are not shared
                 selectionSource: 'trainer' as const,
@@ -4801,6 +4883,18 @@ Set your goals and preferences for today's session.`;
           }
         }
 
+        // Log final workout exercises before insertion
+        console.log(`[generateCircuitWorkout] Final workout exercises to insert:`, 
+          workoutExercises.map(ex => ({
+            exerciseId: ex.exerciseId,
+            groupName: ex.groupName,
+            orderIndex: ex.orderIndex,
+            stationIndex: ex.stationIndex,
+            isShared: ex.isShared,
+            customName: ex.custom_exercise?.customName,
+          }))
+        );
+        
         // Insert all workout exercises
         await tx.insert(WorkoutExercise).values(workoutExercises);
 

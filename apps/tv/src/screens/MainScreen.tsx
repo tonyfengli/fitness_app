@@ -381,7 +381,11 @@ export function MainScreen() {
           // Still navigate to the new session but it will remain in 'open' status
           navigation.navigate('SessionLobby', { 
             sessionId: newSession.id,
-            isNewSession: true 
+            isNewSession: true,
+            prefetchedData: {
+              session: newSession, // Pass the complete session object immediately
+              checkedInClients: [] // New sessions start with no checked-in clients
+            }
           });
           return;
         }
@@ -406,10 +410,14 @@ export function MainScreen() {
         );
       }
       
-      // Navigate to the new session with isNewSession flag
+      // Navigate to the new session with prefetched data to avoid template type delay
       navigation.navigate('SessionLobby', { 
         sessionId: newSession.id,
-        isNewSession: true 
+        isNewSession: true,
+        prefetchedData: {
+          session: newSession, // Pass the complete session object immediately
+          checkedInClients: [] // New sessions start with no checked-in clients
+        }
       });
     },
     onError: (error: any) => {

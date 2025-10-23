@@ -395,11 +395,34 @@ export default function CircuitConfigPage() {
               <TemplateSelectionStep
                 category={selectedCategory}
                 onSelectTemplate={(template) => {
-                  console.log('[CircuitConfig] Template selected:', {
+                  console.log('[CircuitConfig] Template selected - FULL DETAILS:', {
                     templateId: template.id,
                     workoutId: template.workoutId,
                     hasWorkoutId: !!template.workoutId,
                     sourceToStore: template.workoutId || template.id,
+                    config: template.config,
+                    roundTemplates: template.config.roundTemplates,
+                    rounds: template.rounds?.map((round: any, idx: number) => ({
+                      index: idx,
+                      roundName: round.roundName,
+                      roundType: round.roundType,
+                      exerciseCount: round.exercises?.length || 0,
+                      exercises: round.exercises?.map((ex: any) => ({
+                        name: ex.exerciseName,
+                        orderIndex: ex.orderIndex,
+                        stationIndex: ex.stationIndex,
+                        exerciseId: ex.exerciseId,
+                      }))
+                    })),
+                    allExercises: template.exercises?.map((ex: any) => ({
+                      id: ex.id,
+                      name: ex.exerciseName,
+                      orderIndex: ex.orderIndex,
+                      stationIndex: ex.stationIndex,
+                      roundName: ex.roundName || ex.groupName,
+                      selectionId: ex.selectionId,
+                    })),
+                    exerciseCount: template.exercises?.length || 0,
                   });
                   
                   // Apply template configuration and store source workout ID

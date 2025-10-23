@@ -106,19 +106,25 @@ function groupExercisesByStation(exercises: CircuitExercise[]): Map<number, Circ
   const stationMap = new Map<number, CircuitExercise[]>();
   
   exercises.forEach(exercise => {
-    const stationKey = exercise.orderIndex;
+    // Use stationIndex if available, otherwise fall back to orderIndex
+    const stationKey = exercise.stationIndex ?? exercise.orderIndex;
     if (!stationMap.has(stationKey)) {
       stationMap.set(stationKey, []);
     }
     stationMap.get(stationKey)!.push(exercise);
   });
   
-  // Sort exercises within each station by stationIndex
-  stationMap.forEach(stationExercises => {
-    stationExercises.sort((a, b) => (a.stationIndex || 0) - (b.stationIndex || 0));
-  });
+  // Sort stations by their key and exercises within each station by orderIndex
+  const sortedStationMap = new Map(
+    Array.from(stationMap.entries())
+      .sort(([a], [b]) => a - b)
+      .map(([key, exercises]) => [
+        key,
+        exercises.sort((a, b) => a.orderIndex - b.orderIndex)
+      ])
+  );
   
-  return stationMap;
+  return sortedStationMap;
 }
 
 // Component to render round content with exercise overflow handling
@@ -843,6 +849,17 @@ export function CircuitWorkoutOverviewScreen() {
       <View style={{ flex: 1, paddingHorizontal: 48, paddingVertical: 24 }}>
         {(() => {
           const totalRounds = roundsData.length;
+          
+          // Handle empty state - no workout selections yet
+          if (totalRounds === 0) {
+            return (
+              <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ fontSize: 32, color: TOKENS.color.muted, textAlign: 'center' }}>
+                  No workout created yet
+                </Text>
+              </View>
+            );
+          }
           
           // Handle more than 6 rounds
           if (totalRounds > 6) {

@@ -1047,6 +1047,42 @@ interface ReviewStepProps {
 
 export function ReviewStep({ config, repeatRounds, templateData }: ReviewStepProps) {
   
+  // Add comprehensive logging for template data
+  console.log('[ReviewStep] Component rendered with data:', {
+    config: config.config,
+    repeatRounds,
+    templateData,
+    sourceWorkoutId: config.config.sourceWorkoutId,
+    roundTemplates: config.config.roundTemplates,
+  });
+
+  // Log detailed template data if available
+  if (templateData) {
+    console.log('[ReviewStep] Template Data Details:', {
+      roundsCount: templateData.rounds?.length || 0,
+      exercisesCount: templateData.exercises?.length || 0,
+      rounds: templateData.rounds?.map((round, idx) => ({
+        index: idx,
+        roundName: round.roundName,
+        roundType: round.roundType,
+        exercisesInRound: round.exercises?.length || 0,
+        exercises: round.exercises?.map((ex: any) => ({
+          name: ex.exerciseName,
+          orderIndex: ex.orderIndex,
+          stationIndex: ex.stationIndex,
+          exerciseId: ex.exerciseId,
+        }))
+      })),
+      allExercises: templateData.exercises?.map((ex: any) => ({
+        id: ex.id,
+        name: ex.exerciseName,
+        orderIndex: ex.orderIndex,
+        stationIndex: ex.stationIndex,
+        roundName: ex.roundName || ex.groupName,
+      }))
+    });
+  }
+  
   // Calculate total workout time by summing all rounds + rest between rounds
   let totalTime = 0;
   let totalRounds = 0;
