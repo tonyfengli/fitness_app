@@ -1,17 +1,60 @@
 'use client';
 
-import { useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useState, useEffect } from 'react';
+import { useMutation } from '@tanstack/react-query';
 import { api } from '~/trpc/react';
 
 export default function CheckInPage() {
-  const searchParams = useSearchParams();
-  const sessionId = searchParams.get('sessionId');
-  
   const [phoneNumber, setPhoneNumber] = useState('');
   const [isCheckedIn, setIsCheckedIn] = useState(false);
   const [userName, setUserName] = useState<string>('');
+  const [sessionName, setSessionName] = useState<string>('');
   const [errorMessage, setErrorMessage] = useState<string>('');
+  const [savedPhoneNumber, setSavedPhoneNumber] = useState<string | null>(null);
+  const [savedUserName, setSavedUserName] = useState<string | null>(null);
+  const [isReturningUser, setIsReturningUser] = useState(false);
+
+  // Use the correct pattern - api() returns the trpc client
+  const trpc = api();
+
+  // Load saved user data on page load
+  useEffect(() => {
+    const savedPhone = localStorage.getItem('checkin_phone');
+    const savedName = localStorage.getItem('checkin_name');
+    
+    if (savedPhone && savedName) {
+      setSavedPhoneNumber(savedPhone);
+      setSavedUserName(savedName);
+      setIsReturningUser(true);
+    }
+  }, []);
+
+  // Add TRPC mutation hook - using the pattern from circuit-sessions
+  
+  const checkInMutation = useMutation(
+    trpc.trainingSession.checkInPublic.mutationOptions({
+      onSuccess: (data) => {
+        if (data.success) {
+          const name = data.userName || 'User';
+          setUserName(name);
+          setSessionName(data.sessionName || '');
+          setIsCheckedIn(true);
+          
+          // Save to localStorage for future visits
+          if (data.phoneNumber) {
+            localStorage.setItem('checkin_phone', data.phoneNumber);
+            localStorage.setItem('checkin_name', name);
+          }
+        } else {
+          // Handle backend errors (like no in-progress session)
+          setErrorMessage(data.message || 'Check-in failed');
+        }
+      },
+      onError: (error: any) => {
+        setErrorMessage(error.message || 'Something went wrong');
+      },
+    })
+  );
 
 
   // Format phone number as user types
@@ -49,14 +92,34 @@ export default function CheckInPage() {
       return;
     }
 
-    if (!sessionId) {
-      setErrorMessage('Invalid session. Please scan the QR code again.');
-      return;
-    }
+    // Call the TRPC endpoint
+    checkInMutation.mutate({
+      phoneNumber: phoneNumber,
+      // businessId will use the default from the backend
+    });
+  };
 
-    // Temporary: just show success for testing
-    setUserName('Test User');
-    setIsCheckedIn(true);
+  const handleQuickCheckIn = () => {
+    setErrorMessage('');
+    if (savedPhoneNumber) {
+      checkInMutation.mutate({
+        phoneNumber: savedPhoneNumber,
+        // businessId will use the default from the backend
+      });
+    }
+  };
+
+  const handleClearSavedInfo = () => {
+    // Clear localStorage
+    localStorage.removeItem('checkin_phone');
+    localStorage.removeItem('checkin_name');
+    
+    // Reset state
+    setIsReturningUser(false);
+    setSavedPhoneNumber(null);
+    setSavedUserName(null);
+    setPhoneNumber('');
+    setErrorMessage('');
   };
 
   if (isCheckedIn) {
@@ -74,20 +137,74 @@ export default function CheckInPage() {
             You're Checked In{userName && `, ${userName}`}!
           </h1>
           
+          {sessionName && (
+            <div className="bg-blue-50 dark:bg-blue-900/20 rounded-2xl p-4 mb-6">
+              <p className="font-semibold text-blue-800 dark:text-blue-300">
+                {sessionName}
+              </p>
+            </div>
+          )}
+          
           <p className="text-gray-600 dark:text-gray-300 mb-8">
             Get ready for an amazing workout session
           </p>
-          
-          <div className="bg-gray-50 dark:bg-gray-700/50 rounded-2xl p-4 mb-6">
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Session ID</p>
-            <p className="font-mono text-sm font-medium text-gray-700 dark:text-gray-200">
-              {sessionId?.slice(0, 8)}
+        </div>
+      </div>
+    );
+  }
+
+  // Returning user flow - show welcome back with one-click check-in
+  if (isReturningUser && savedUserName) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-purple-50 dark:from-gray-900 dark:to-purple-900/20 flex items-center justify-center p-4">
+        <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-xl dark:shadow-2xl dark:shadow-purple-900/20 p-8 max-w-md w-full">
+          <div className="text-center mb-8">
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+              Welcome Back, {savedUserName}!
+            </h1>
+            <p className="text-gray-600 dark:text-gray-300">
+              Ready to check in to today's session?
             </p>
           </div>
-          
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            You can close this page now
-          </p>
+
+          {errorMessage && (
+            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-4 mb-6">
+              <p className="text-sm text-red-600 dark:text-red-400 text-center">
+                {errorMessage}
+              </p>
+            </div>
+          )}
+
+          <div className="space-y-4">
+            <button
+              onClick={handleQuickCheckIn}
+              disabled={checkInMutation.isPending}
+              className={`w-full py-4 px-6 rounded-2xl font-semibold text-lg transition-all transform ${
+                checkInMutation.isPending
+                  ? 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'
+                  : 'bg-gradient-to-r from-blue-600 to-purple-600 dark:from-purple-600 dark:to-pink-600 text-white hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] dark:shadow-purple-900/50'
+              }`}
+            >
+              {checkInMutation.isPending ? (
+                <span className="flex items-center justify-center">
+                  <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Checking in...
+                </span>
+              ) : (
+                'Check In Now'
+              )}
+            </button>
+
+            <button
+              onClick={handleClearSavedInfo}
+              className="w-full py-3 px-6 rounded-2xl font-medium text-gray-600 dark:text-gray-300 border-2 border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500 transition-colors"
+            >
+              Clear Saved Info
+            </button>
+          </div>
         </div>
       </div>
     );

@@ -5022,4 +5022,26 @@ Set your goals and preferences for today's session.`;
         session: updatedSession,
       };
     }),
+
+  /**
+   * Check in a client - PUBLIC endpoint for clients
+   * Uses the same logic as SMS check-in but with hardcoded business ID
+   */
+  checkInPublic: publicProcedure
+    .input(
+      z.object({
+        phoneNumber: z.string().min(10, "Phone number must be at least 10 digits"),
+        businessId: z.string().uuid().default("d33b41e2-f700-4a08-9489-cb6e3daa7f20"), // Tony Gym
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      // Import the existing check-in service logic
+      const { processCheckIn } = await import("../services/checkInService");
+      
+      // Call the same logic as SMS check-in
+      const result = await processCheckIn(input.phoneNumber);
+      
+      // The result already has the proper structure from checkInService
+      return result;
+    }),
 } satisfies TRPCRouterRecord;

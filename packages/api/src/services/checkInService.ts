@@ -16,6 +16,7 @@ export interface CheckInResult {
   userId?: string;
   businessId?: string;
   sessionId?: string;
+  sessionName?: string;
   checkInId?: string;
   phoneNumber?: string;
   shouldStartPreferences?: boolean;
@@ -167,10 +168,12 @@ export async function processCheckIn(
         userId: clientUser.id,
         businessId: clientUser.businessId,
         sessionId: session.id,
+        sessionName: session.name,
         checkInId: existingCheckIn[0].id,
         phoneNumber: normalizedPhone,
         shouldStartPreferences:
           existingCheckIn[0].preferenceCollectionStep === "not_started",
+        userName: clientUser.name,
       };
     }
 
@@ -214,9 +217,11 @@ export async function processCheckIn(
         userId: clientUser.id,
         businessId: clientUser.businessId,
         sessionId: session.id,
+        sessionName: session.name,
         checkInId: existingCheckIn[0].id,
         phoneNumber: normalizedPhone,
         shouldStartPreferences: true, // Always show preference prompt
+        userName: clientUser.name,
       };
     } else {
       // Create new check-in record
@@ -265,9 +270,11 @@ export async function processCheckIn(
         userId: clientUser.id,
         businessId: clientUser.businessId,
         sessionId: session.id,
+        sessionName: session.name,
         checkInId: newCheckIn.id,
         phoneNumber: normalizedPhone,
         shouldStartPreferences: true, // Always show preference prompt
+        userName: clientUser.name,
       };
     }
   } catch (error) {
