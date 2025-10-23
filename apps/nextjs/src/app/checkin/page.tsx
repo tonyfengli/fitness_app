@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { api } from '~/trpc/react';
 
 export default function CheckInPage() {
   const searchParams = useSearchParams();
@@ -9,7 +10,9 @@ export default function CheckInPage() {
   
   const [phoneNumber, setPhoneNumber] = useState('');
   const [isCheckedIn, setIsCheckedIn] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+  const [userName, setUserName] = useState<string>('');
+  const [errorMessage, setErrorMessage] = useState<string>('');
+
 
   // Format phone number as user types
   const formatPhoneNumber = (value: string) => {
@@ -33,22 +36,26 @@ export default function CheckInPage() {
     setPhoneNumber(formatted);
   };
 
+  // Temporarily removed - will implement new approach
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErrorMessage('');
     
     // Validate phone number (must have 10 digits)
     const digits = phoneNumber.replace(/\D/g, '');
     if (digits.length !== 10) {
-      alert('Please enter a valid 10-digit phone number');
+      setErrorMessage('Please enter a valid 10-digit phone number');
       return;
     }
 
-    setIsLoading(true);
-    
-    // Simulate check-in (frontend only for now)
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    setIsLoading(false);
+    if (!sessionId) {
+      setErrorMessage('Invalid session. Please scan the QR code again.');
+      return;
+    }
+
+    // Temporary: just show success for testing
+    setUserName('Test User');
     setIsCheckedIn(true);
   };
 
@@ -64,7 +71,7 @@ export default function CheckInPage() {
           </div>
           
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-3">
-            You're Checked In!
+            You're Checked In{userName && `, ${userName}`}!
           </h1>
           
           <p className="text-gray-600 dark:text-gray-300 mb-8">
@@ -119,23 +126,30 @@ export default function CheckInPage() {
                 required
                 autoComplete="tel"
                 inputMode="numeric"
-                pattern="[0-9]*"
                 maxLength={14}
                 autoFocus
               />
             </div>
           </div>
 
+          {errorMessage && (
+            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-4 mb-4">
+              <p className="text-sm text-red-600 dark:text-red-400 text-center">
+                {errorMessage}
+              </p>
+            </div>
+          )}
+
           <button
             type="submit"
-            disabled={isLoading || phoneNumber.replace(/\D/g, '').length !== 10}
+            disabled={phoneNumber.replace(/\D/g, '').length !== 10}
             className={`w-full py-4 px-6 rounded-2xl font-semibold text-lg transition-all transform ${
-              isLoading || phoneNumber.replace(/\D/g, '').length !== 10
+              phoneNumber.replace(/\D/g, '').length !== 10
                 ? 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'
                 : 'bg-gradient-to-r from-blue-600 to-purple-600 dark:from-purple-600 dark:to-pink-600 text-white hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] dark:shadow-purple-900/50'
             }`}
           >
-            {isLoading ? (
+            {false ? (
               <span className="flex items-center justify-center">
                 <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
