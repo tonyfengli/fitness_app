@@ -144,8 +144,6 @@ export function CircuitLobbyComponent({
   const sendStartMessagesMutation = useMutation({
     ...api.trainingSession.sendSessionStartMessages.mutationOptions(),
     onSuccess: (data) => {
-      console.log('[CircuitLobby] sendStartMessagesMutation onSuccess');
-      console.log('[CircuitLobby] Navigating directly to CircuitWorkoutOverview with sessionId:', sessionId);
       // Navigate directly to circuit workout overview screen
       navigation.navigate('CircuitWorkoutOverview', { sessionId });
     },
@@ -161,7 +159,6 @@ export function CircuitLobbyComponent({
           {
             text: 'Continue',
             onPress: () => {
-              console.log('[CircuitLobby] User chose to continue anyway');
               navigation.navigate('CircuitWorkoutOverview', { sessionId });
             }
           }
@@ -169,26 +166,19 @@ export function CircuitLobbyComponent({
       );
     },
     onSettled: () => {
-      console.log('[CircuitLobby] sendStartMessagesMutation onSettled');
       setIsStartingSession(false);
     }
   });
 
   const handleStartSession = async () => {
-    console.log('[CircuitLobby] handleStartSession called');
-    console.log('[CircuitLobby] sessionId:', sessionId);
-    console.log('[CircuitLobby] clients.length:', clients.length);
-    
     if (!sessionId) {
       console.error('[CircuitLobby] No sessionId, returning');
       return;
     }
     
-    console.log('[CircuitLobby] Setting isStartingSession to true');
     setIsStartingSession(true);
     
     // Send start messages (SMS) to checked-in clients
-    console.log('[CircuitLobby] Calling sendStartMessagesMutation');
     sendStartMessagesMutation.mutate({ sessionId });
   };
   

@@ -4656,12 +4656,6 @@ Set your goals and preferences for today's session.`;
         }));
 
         console.log(`[generateCircuitWorkout] Found ${templateExercises.length} exercises from template`);
-        console.log(`[generateCircuitWorkout] Template exercises detail:`, templateExercises.map(ex => ({
-          name: ex.exerciseName,
-          round: ex.groupName,
-          orderIndex: ex.orderIndex,
-          stationIndex: ex.stationIndex,
-        })));
       }
 
       // Get a pool of exercises for circuit training (fallback for when no template)
@@ -4707,18 +4701,6 @@ Set your goals and preferences for today's session.`;
             }
             exercisesByRound.get(round)!.push(exercise);
           }
-          
-          console.log(`[generateCircuitWorkout] Exercises organized by round:`, 
-            Array.from(exercisesByRound.entries()).map(([round, exercises]) => ({
-              round,
-              exerciseCount: exercises.length,
-              exercises: exercises.map(ex => ({
-                name: ex.exerciseName,
-                stationIndex: ex.stationIndex,
-                orderIndex: ex.orderIndex
-              }))
-            }))
-          );
         }
 
         for (const roundTemplate of circuitConfig.config.roundTemplates) {
@@ -4751,58 +4733,34 @@ Set your goals and preferences for today's session.`;
               // Sort order indexes to get stations in sequence
               const sortedOrderIndexes = Array.from(orderIndexes).sort((a, b) => a - b);
               
-              console.log(`[generateCircuitWorkout] Template stations for ${roundName}:`, {
-                uniqueOrderIndexes: sortedOrderIndexes,
-                stationCount: sortedOrderIndexes.length,
-                exercisesByOrderIndex: Array.from(exercisesByOrderIndex.entries()).map(([idx, exs]) => ({
-                  orderIndex: idx,
-                  exerciseCount: exs.length,
-                  exercises: exs.map(e => ({
-                    name: e.exerciseName,
-                    stationIndex: e.stationIndex
-                  }))
-                }))
-              });
               
               // Create exercises preserving the station structure based on orderIndex grouping
               sortedOrderIndexes.forEach((origOrderIndex, stationNum) => {
                 const stationExercises = exercisesByOrderIndex.get(origOrderIndex) || [];
-                console.log(`[generateCircuitWorkout] Processing Station ${stationNum} (from orderIndex ${origOrderIndex}) with ${stationExercises.length} exercises`);
                 
                 // Sort exercises within station by stationIndex for consistent ordering
                 stationExercises.sort((a, b) => (a.stationIndex ?? 0) - (b.stationIndex ?? 0));
                 
-                for (const templateEx of stationExercises) {
+                for (let i = 0; i < stationExercises.length; i++) {
+                  const templateEx = stationExercises[i];
                   const exerciseToInsert = {
                     workoutId: workout.id,
                     exerciseId: templateEx.exerciseId,
                     custom_exercise: templateEx.customExercise,
                     repsPlanned: templateEx.repsPlanned,
-                    orderIndex: orderIndex + stationNum, // Use station number for consistent orderIndex
-                    stationIndex: templateEx.stationIndex, // PRESERVE THE ORIGINAL STATION INDEX FOR UNIQUENESS!
+                    orderIndex: orderIndex + i, // Sequential orderIndex across all exercises
+                    stationIndex: stationNum, // Use station number as the station identifier
                     groupName: roundName,
                     isShared: true, // Stations are shared
                     selectionSource: 'trainer' as const,
                     setsCompleted: 0,
                   };
                   
-                  console.log(`[generateCircuitWorkout] Adding exercise to Station ${stationNum}:`, {
-                    exerciseName: templateEx.exerciseName,
-                    exerciseId: templateEx.exerciseId,
-                    originalOrderIndex: origOrderIndex,
-                    originalStationIndex: templateEx.stationIndex,
-                    newStationIndex: stationNum,
-                    newOrderIndex: exerciseToInsert.orderIndex,
-                    groupName: roundName,
-                  });
-                  
                   workoutExercises.push(exerciseToInsert);
                 }
               });
               
-              orderIndex += sortedOrderIndexes.length;
-              
-              console.log(`[generateCircuitWorkout] Finished ${roundName} - orderIndex now at ${orderIndex}`);
+              orderIndex += roundTemplateExercises.length;
             } else {
               // No template - use default 4 stations
               const stationsCount = 4;
@@ -4846,11 +4804,6 @@ Set your goals and preferences for today's session.`;
               
               if (i < roundTemplateExercises.length) {
                 const templateEx = roundTemplateExercises[i];
-                console.log(`[generateCircuitWorkout] Using template exercise for Round ${roundNumber}, Exercise ${i + 1}:`, {
-                  exerciseId: templateEx.exerciseId,
-                  exerciseName: templateEx.exerciseName,
-                  stationIndex: templateEx.stationIndex,
-                });
                 exerciseData = {
                   exerciseId: templateEx.exerciseId,
                   custom_exercise: templateEx.customExercise,
@@ -4883,18 +4836,6 @@ Set your goals and preferences for today's session.`;
           }
         }
 
-        // Log final workout exercises before insertion
-        console.log(`[generateCircuitWorkout] Final workout exercises to insert:`, 
-          workoutExercises.map(ex => ({
-            exerciseId: ex.exerciseId,
-            groupName: ex.groupName,
-            orderIndex: ex.orderIndex,
-            stationIndex: ex.stationIndex,
-            isShared: ex.isShared,
-            customName: ex.custom_exercise?.customName,
-          }))
-        );
-        
         // Insert all workout exercises
         await tx.insert(WorkoutExercise).values(workoutExercises);
 

@@ -485,11 +485,11 @@ export function CircuitWorkoutLiveScreen() {
           
           // If it's a stations round, group exercises by station
           if (isStationsRound) {
-            const stationGroups = new Map<number, CircuitExercise[]>();
+            const stationGroups = new Map<number | null, CircuitExercise[]>();
             
-            // Group exercises by orderIndex (which represents the station)
+            // Group exercises by stationIndex (which represents the station)
             sortedExercises.forEach(exercise => {
-              const stationKey = exercise.orderIndex;
+              const stationKey = exercise.stationIndex ?? null;
               if (!stationGroups.has(stationKey)) {
                 stationGroups.set(stationKey, []);
               }
@@ -499,25 +499,41 @@ export function CircuitWorkoutLiveScreen() {
             // Convert to nested structure
             const nestedExercises: CircuitExercise[] = [];
             
-            Array.from(stationGroups.entries())
-              .sort(([a], [b]) => a - b) // Sort by station number
-              .forEach(([stationKey, stationExercises]) => {
-                // Sort exercises within station by stationIndex
-                const sorted = stationExercises.sort((a, b) => {
-                  const aIdx = a.stationIndex ?? 0;
-                  const bIdx = b.stationIndex ?? 0;
-                  return aIdx - bIdx;
-                });
+            // Process station groups, filtering out null stationIndex (non-station exercises)
+            const stationEntries = Array.from(stationGroups.entries())
+              .filter(([key]) => key !== null)
+              .sort(([a], [b]) => (a ?? 0) - (b ?? 0)); // Sort by station number
+            
+            stationEntries.forEach(([stationKey, stationExercises]) => {
+                // Sort exercises within station by orderIndex
+                const sorted = stationExercises.sort((a, b) => a.orderIndex - b.orderIndex);
                 
-                // Primary exercise (stationIndex null or 0)
+                // The first exercise becomes the primary
                 const primary = sorted[0];
                 if (primary) {
-                  // Add secondary exercises as stationExercises array
+                  // Add remaining exercises as stationExercises array
                   primary.stationExercises = sorted.slice(1);
                   nestedExercises.push(primary);
                 }
               });
             
+            // Debug logging to trace the issue
+            console.log(`[STATIONS-DEBUG] ${roundName} input exercises:`, 
+              sortedExercises.map(ex => `${ex.exerciseName}(ord:${ex.orderIndex},sta:${ex.stationIndex})`).join(', ')
+            );
+            
+            console.log(`[STATIONS-DEBUG] Station groups:`,
+              Array.from(stationGroups.entries()).map(([key, exercises]) => 
+                `sta${key}: [${exercises.map(ex => ex.exerciseName).join(', ')}]`
+              ).join(' | ')
+            );
+            
+            // Clean logging for stations round
+            console.log(`[STATIONS] ${roundName} -> ${nestedExercises.length} stations:`, 
+              nestedExercises.map((station, idx) => 
+                `S${idx + 1}: ${station.exerciseName}${station.stationExercises?.length ? ` + ${station.stationExercises.length} more` : ''}`
+              ).join(' | ')
+            );
             
             return {
               roundName,

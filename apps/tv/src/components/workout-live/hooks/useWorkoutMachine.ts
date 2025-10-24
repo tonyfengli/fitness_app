@@ -35,33 +35,15 @@ export function useWorkoutMachine({
   // Update machine context when data changes
   useEffect(() => {
     if (circuitConfig) {
-      console.log('[XState] Config updated:', circuitConfig);
       send({ type: 'CONFIG_UPDATED', config: circuitConfig });
     }
   }, [circuitConfig, send]);
 
   useEffect(() => {
     if (roundsData.length > 0) {
-      console.log('[XState] Rounds updated:', roundsData);
       send({ type: 'SELECTIONS_UPDATED', selections: roundsData });
     }
   }, [roundsData, send]);
-
-  // Log state changes
-  useEffect(() => {
-    console.log('[XState] State changed:', {
-      state: state.value,
-      context: {
-        timeRemaining: state.context.timeRemaining,
-        isPaused: state.context.isPaused,
-        currentRoundIndex: state.context.currentRoundIndex,
-        currentExerciseIndex: state.context.currentExerciseIndex,
-        currentSetNumber: state.context.currentSetNumber,
-        hasConfig: !!state.context.circuitConfig,
-        roundsCount: state.context.rounds.length
-      }
-    });
-  }, [state]);
 
   // Timer management
   useEffect(() => {

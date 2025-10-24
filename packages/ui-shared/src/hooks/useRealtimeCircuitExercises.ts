@@ -46,8 +46,6 @@ export function useRealtimeCircuitExercises({
 
     // Small delay to avoid subscribing during rapid re-renders
     const timeoutId = setTimeout(async () => {
-      console.log('[useRealtimeCircuitExercises] Setting up realtime for session:', sessionId);
-      
       // First, get all workout IDs for this session
       const { data: workoutsData, error: workoutsError } = await supabase
         .from('workout')
@@ -56,17 +54,14 @@ export function useRealtimeCircuitExercises({
         .in('status', ['draft', 'ready']);
         
       if (workoutsError || !workoutsData || workoutsData.length === 0) {
-        console.log('[useRealtimeCircuitExercises] No workouts found for session');
         return;
       }
       
       const workoutIds = workoutsData.map(w => w.id);
-      console.log('[useRealtimeCircuitExercises] Found workouts:', workoutIds);
       
       // For circuit workouts, we only need to listen to one workout since they're all shared
       // Use the first workout ID
       const targetWorkoutId = workoutIds[0];
-      console.log('[useRealtimeCircuitExercises] Listening to workout:', targetWorkoutId);
       
       // Create a channel for this session's circuit exercises
       const channel = supabase
@@ -80,8 +75,6 @@ export function useRealtimeCircuitExercises({
             filter: `workout_id=eq.${targetWorkoutId}`,
           },
           async (payload) => {
-            console.log('[useRealtimeCircuitExercises] Received event:', payload.eventType);
-            console.log('[useRealtimeCircuitExercises] Event payload:', JSON.stringify(payload, null, 2));
             
             if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
               const exercise = payload.new;
@@ -140,7 +133,6 @@ export function useRealtimeCircuitExercises({
           }
         )
         .subscribe((status) => {
-          console.log('[useRealtimeCircuitExercises] Subscription status:', status);
           
           if (status === 'SUBSCRIBED') {
             setIsConnected(true);
@@ -167,7 +159,6 @@ export function useRealtimeCircuitExercises({
     // Cleanup function
     return () => {
       clearTimeout(timeoutId);
-      console.log('[useRealtimeCircuitExercises] Cleaning up subscription');
       if (channelRef.current) {
         supabase.removeChannel(channelRef.current);
         channelRef.current = null;

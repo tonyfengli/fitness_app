@@ -25,24 +25,18 @@ export const workoutSelectionsRouter = {
       }),
     )
     .query(async ({ ctx, input }) => {
-      // First verify that the client is checked into the session
-      const { UserTrainingSession, Workout } = await import("@acme/db/schema");
-      const userSession = await ctx.db.query.UserTrainingSession.findFirst({
-        where: and(
-          eq(UserTrainingSession.userId, input.clientId),
-          eq(UserTrainingSession.trainingSessionId, input.sessionId),
-          or(
-            eq(UserTrainingSession.status, "checked_in"),
-            eq(UserTrainingSession.status, "ready"),
-            eq(UserTrainingSession.status, "workout_ready"),
-          ),
-        ),
+      // For circuit sessions, we allow access without check-in
+      // Just verify the session exists
+      const { TrainingSession, Workout } = await import("@acme/db/schema");
+      
+      const session = await ctx.db.query.TrainingSession.findFirst({
+        where: eq(TrainingSession.id, input.sessionId),
       });
-
-      if (!userSession) {
+      
+      if (!session) {
         throw new TRPCError({
           code: "NOT_FOUND",
-          message: "User is not checked into this session",
+          message: "Training session not found",
         });
       }
 
@@ -319,24 +313,18 @@ export const workoutSelectionsRouter = {
     .mutation(async ({ ctx, input }) => {
       console.log("[swapExercisePublic] Starting swap with input:", input);
 
-      // First verify that the client is checked into the session
-      const { UserTrainingSession } = await import("@acme/db/schema");
-      const userSession = await ctx.db.query.UserTrainingSession.findFirst({
-        where: and(
-          eq(UserTrainingSession.userId, input.clientId),
-          eq(UserTrainingSession.trainingSessionId, input.sessionId),
-          or(
-            eq(UserTrainingSession.status, "checked_in"),
-            eq(UserTrainingSession.status, "ready"),
-            eq(UserTrainingSession.status, "workout_ready"),
-          ),
-        ),
+      // For circuit sessions, we allow modifications without check-in
+      // Just verify the session exists
+      const { TrainingSession } = await import("@acme/db/schema");
+      
+      const session = await ctx.db.query.TrainingSession.findFirst({
+        where: eq(TrainingSession.id, input.sessionId),
       });
-
-      if (!userSession) {
+      
+      if (!session) {
         throw new TRPCError({
           code: "NOT_FOUND",
-          message: "User is not checked into this session",
+          message: "Training session not found",
         });
       }
 
@@ -874,24 +862,18 @@ export const workoutSelectionsRouter = {
     .mutation(async ({ ctx, input }) => {
       console.log("[updateRepsPlannedPublic] Input:", input);
 
-      // First verify that the client is checked into the session
-      const { UserTrainingSession } = await import("@acme/db/schema");
-      const userSession = await ctx.db.query.UserTrainingSession.findFirst({
-        where: and(
-          eq(UserTrainingSession.userId, input.clientId),
-          eq(UserTrainingSession.trainingSessionId, input.sessionId),
-          or(
-            eq(UserTrainingSession.status, "checked_in"),
-            eq(UserTrainingSession.status, "ready"),
-            eq(UserTrainingSession.status, "workout_ready"),
-          ),
-        ),
+      // For circuit sessions, we allow modifications without check-in
+      // Just verify the session exists
+      const { TrainingSession } = await import("@acme/db/schema");
+      
+      const session = await ctx.db.query.TrainingSession.findFirst({
+        where: eq(TrainingSession.id, input.sessionId),
       });
-
-      if (!userSession) {
+      
+      if (!session) {
         throw new TRPCError({
-          code: "UNAUTHORIZED",
-          message: "User is not checked into this session",
+          code: "NOT_FOUND",
+          message: "Training session not found",
         });
       }
 
@@ -1172,24 +1154,18 @@ export const workoutSelectionsRouter = {
     .mutation(async ({ ctx, input }) => {
       console.log("[addExerciseToStationPublic] Starting with input:", input);
 
-      // First verify that the client is checked into the session
-      const { UserTrainingSession } = await import("@acme/db/schema");
-      const userSession = await ctx.db.query.UserTrainingSession.findFirst({
-        where: and(
-          eq(UserTrainingSession.userId, input.clientId),
-          eq(UserTrainingSession.trainingSessionId, input.sessionId),
-          or(
-            eq(UserTrainingSession.status, "checked_in"),
-            eq(UserTrainingSession.status, "ready"),
-            eq(UserTrainingSession.status, "workout_ready"),
-          ),
-        ),
+      // For circuit sessions, we allow modifications without check-in
+      // Just verify the session exists
+      const { TrainingSession } = await import("@acme/db/schema");
+      
+      const session = await ctx.db.query.TrainingSession.findFirst({
+        where: eq(TrainingSession.id, input.sessionId),
       });
-
-      if (!userSession) {
+      
+      if (!session) {
         throw new TRPCError({
-          code: "UNAUTHORIZED",
-          message: "User is not checked into this session",
+          code: "NOT_FOUND",
+          message: "Training session not found",
         });
       }
 
@@ -1506,7 +1482,6 @@ export const workoutSelectionsRouter = {
           orderIndex: exerciseToDelete.orderIndex,
           stationIndex: exerciseToDelete.stationIndex,
           exerciseId: exerciseToDelete.exerciseId,
-          customExerciseName: exerciseToDelete.custom_exercise?.customName,
         });
 
         // 2. Get all workouts for this session
@@ -1539,46 +1514,8 @@ export const workoutSelectionsRouter = {
           workoutIds: workoutIds,
         });
 
-        // Debug: Check all exercises in the same station before deletion
-        const sameStationExercises = await tx
-          .select({
-            id: WorkoutExercise.id,
-            customExercise: WorkoutExercise.custom_exercise,
-            orderIndex: WorkoutExercise.orderIndex,
-            stationIndex: WorkoutExercise.stationIndex,
-            groupName: WorkoutExercise.groupName,
-          })
-          .from(WorkoutExercise)
-          .where(
-            and(
-              eq(WorkoutExercise.workoutId, exerciseToDelete.workoutId),
-              eq(WorkoutExercise.orderIndex, exerciseToDelete.orderIndex),
-              exerciseToDelete.groupName !== null 
-                ? eq(WorkoutExercise.groupName, exerciseToDelete.groupName)
-                : isNull(WorkoutExercise.groupName)
-            )
-          );
-
-        console.log("[deleteCircuitExercise] All exercises in the same station (before deletion):", {
-          stationOrderIndex: exerciseToDelete.orderIndex,
-          roundName: exerciseToDelete.groupName,
-          exerciseCount: sameStationExercises.length,
-          exercises: sameStationExercises.map(ex => ({
-            id: ex.id,
-            customName: ex.customExercise?.customName,
-            stationIndex: ex.stationIndex,
-          })),
-        });
-
         // 3. Delete ALL matching exercises across ALL workouts
         // (same round + orderIndex + stationIndex combination)
-        console.log("[deleteCircuitExercise] Building delete conditions for:", {
-          orderIndex: exerciseToDelete.orderIndex,
-          groupName: exerciseToDelete.groupName,
-          stationIndex: exerciseToDelete.stationIndex,
-          stationIndexIsNull: exerciseToDelete.stationIndex === null,
-        });
-        
         const deleteConditions = [
           sql`${WorkoutExercise.workoutId} IN (${sql.join(
             workoutIds.map((id) => sql`${id}`),
@@ -1590,60 +1527,25 @@ export const workoutSelectionsRouter = {
         // Handle groupName matching (null vs specific value)
         if (exerciseToDelete.groupName !== null) {
           deleteConditions.push(eq(WorkoutExercise.groupName, exerciseToDelete.groupName));
-          console.log("[deleteCircuitExercise] Added groupName condition:", exerciseToDelete.groupName);
         } else {
           deleteConditions.push(isNull(WorkoutExercise.groupName));
-          console.log("[deleteCircuitExercise] Added groupName IS NULL condition");
         }
 
         // Handle stationIndex matching (null vs specific value)
         if (exerciseToDelete.stationIndex !== null) {
           deleteConditions.push(eq(WorkoutExercise.stationIndex, exerciseToDelete.stationIndex));
-          console.log("[deleteCircuitExercise] Added stationIndex condition:", exerciseToDelete.stationIndex);
         } else {
           deleteConditions.push(isNull(WorkoutExercise.stationIndex));
-          console.log("[deleteCircuitExercise] Added stationIndex IS NULL condition");
         }
-
-        // First, let's see what we're about to delete
-        const exercisesToDelete = await tx
-          .select({
-            id: WorkoutExercise.id,
-            exerciseId: WorkoutExercise.exerciseId,
-            customExercise: WorkoutExercise.custom_exercise,
-            orderIndex: WorkoutExercise.orderIndex,
-            stationIndex: WorkoutExercise.stationIndex,
-            groupName: WorkoutExercise.groupName,
-            workoutId: WorkoutExercise.workoutId,
-          })
-          .from(WorkoutExercise)
-          .where(and(...deleteConditions));
-
-        console.log("[deleteCircuitExercise] BEFORE DELETION - Found exercises matching conditions:", {
-          count: exercisesToDelete.length,
-          exercises: exercisesToDelete.map(ex => ({
-            id: ex.id,
-            customName: ex.customExercise?.customName,
-            orderIndex: ex.orderIndex,
-            stationIndex: ex.stationIndex,
-            groupName: ex.groupName,
-          })),
-        });
 
         const deletedExercises = await tx
           .delete(WorkoutExercise)
           .where(and(...deleteConditions))
           .returning();
 
-        console.log("[deleteCircuitExercise] AFTER DELETION - Deleted exercises:", {
+        console.log("[deleteCircuitExercise] Deleted exercises:", {
           count: deletedExercises.length,
           exerciseIds: deletedExercises.map(ex => ex.id),
-          deletedDetails: deletedExercises.map(ex => ({
-            id: ex.id,
-            customName: ex.custom_exercise?.customName,
-            orderIndex: ex.orderIndex,
-            stationIndex: ex.stationIndex,
-          })),
         });
 
         // 4. Close gaps within station (stationIndex reordering)
@@ -1665,16 +1567,10 @@ export const workoutSelectionsRouter = {
             reorderConditions.push(isNull(WorkoutExercise.groupName));
           }
 
-          const updateResult = await tx
+          await tx
             .update(WorkoutExercise)
             .set({ stationIndex: sql`${WorkoutExercise.stationIndex} - 1` })
-            .where(and(...reorderConditions))
-            .returning();
-
-          console.log("[deleteCircuitExercise] Reordered station exercises:", {
-            count: updateResult.length,
-            reorderedIds: updateResult.map(ex => ex.id),
-          });
+            .where(and(...reorderConditions));
         }
 
         console.log("[deleteCircuitExercise] Deletion completed successfully");
@@ -1866,24 +1762,17 @@ export const workoutSelectionsRouter = {
     .mutation(async ({ ctx, input }) => {
       console.log("[addExerciseToRoundPublic] Starting with input:", input);
 
-      // First verify that the client is checked into the session
-      const { UserTrainingSession } = await import("@acme/db/schema");
-      const userSession = await ctx.db.query.UserTrainingSession.findFirst({
-        where: and(
-          eq(UserTrainingSession.userId, input.clientId),
-          eq(UserTrainingSession.trainingSessionId, input.sessionId),
-          or(
-            eq(UserTrainingSession.status, "checked_in"),
-            eq(UserTrainingSession.status, "ready"),
-            eq(UserTrainingSession.status, "workout_ready"),
-          ),
-        ),
+      // For circuit sessions, we allow modifications without check-in
+      // Just verify the session exists
+      const { TrainingSession } = await import("@acme/db/schema");
+      const session = await ctx.db.query.TrainingSession.findFirst({
+        where: eq(TrainingSession.id, input.sessionId),
       });
 
-      if (!userSession) {
+      if (!session) {
         throw new TRPCError({
-          code: "UNAUTHORIZED",
-          message: "User is not checked into this session",
+          code: "NOT_FOUND",
+          message: "Training session not found",
         });
       }
 

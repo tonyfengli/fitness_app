@@ -155,6 +155,7 @@ function RoundContent({ round, isCompact }: {
   const isStationRound = round.roundType === 'stations_round';
   const stationGroups = isStationRound ? groupExercisesByStation(round.exercises) : null;
   
+  
   // Render exercises in columns for compact mode with 4+ exercises
   const renderExercises = () => {
     // For station rounds, show grouped display
@@ -616,15 +617,6 @@ export function CircuitWorkoutOverviewScreen() {
     sessionId: sessionId || '',
     supabase,
     onExerciseUpdate: (update) => {
-      console.log('[CircuitWorkoutOverviewScreen] Real-time exercise update:', update.eventType);
-      console.log('[CircuitWorkoutOverviewScreen] Exercise update details:', {
-        eventType: update.eventType,
-        exerciseId: update.id,
-        exerciseName: update.exerciseName,
-        groupName: update.groupName,
-        orderIndex: update.orderIndex
-      });
-      
       // Invalidate the selections query to refetch latest data
       queryClient.invalidateQueries({
         queryKey: api.workoutSelections.getSelections.queryOptions({ 
@@ -639,15 +631,6 @@ export function CircuitWorkoutOverviewScreen() {
       console.error('[CircuitWorkoutOverviewScreen] Real-time exercise error:', error);
     }
   });
-  
-  // Log connection status for debugging
-  useEffect(() => {
-    console.log('[CircuitWorkoutOverviewScreen] Real-time connections:', {
-      exerciseSwaps: swapUpdatesConnected,
-      exerciseUpdates: exerciseUpdatesConnected,
-      sessionId
-    });
-  }, [swapUpdatesConnected, exerciseUpdatesConnected, sessionId]);
   
   // Set up polling for exercise selections (10 second interval)
   // For circuits, we can query without clientId to get all, then deduplicate
@@ -664,12 +647,6 @@ export function CircuitWorkoutOverviewScreen() {
   
   // Process selections into rounds
   useEffect(() => {
-    console.log('[CircuitWorkoutOverviewScreen] Processing selections:', {
-      selectionsCount: selections?.length || 0,
-      hasCircuitConfig: !!circuitConfig,
-      timestamp: new Date().toISOString()
-    });
-    
     if (selections && selections.length > 0) {
       // Processing workout selections
       

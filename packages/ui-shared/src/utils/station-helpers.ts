@@ -177,50 +177,61 @@ export function flattenStationExercises(exercises: Exercise[]): Exercise[] {
  * Convert from flat structure to nested structure (with stationExercises)
  */
 export function nestStationExercises(exercises: Exercise[]): Exercise[] {
-  // Group by orderIndex
-  const groups = new Map<number, Exercise[]>();
+  // Group by stationIndex to find exercises that belong together in a station
+  const stationGroups = new Map<number | null, Exercise[]>();
   
   exercises.forEach(ex => {
-    const orderIndex = ex.orderIndex;
-    if (!groups.has(orderIndex)) {
-      groups.set(orderIndex, []);
+    const stationKey = ex.stationIndex ?? null;
+    if (!stationGroups.has(stationKey)) {
+      stationGroups.set(stationKey, []);
     }
-    groups.get(orderIndex)!.push(ex);
+    stationGroups.get(stationKey)!.push(ex);
   });
   
-  // Convert each group
-  const nested: Exercise[] = [];
+  // Process each station group and collect stations
+  const stations: Array<{ stationIndex: number; exercise: Exercise }> = [];
+  const individualExercises: Exercise[] = [];
   
-  groups.forEach(group => {
-    if (group.length === 1) {
-      // Single exercise, not a station
-      nested.push({
-        ...group[0],
-        stationIndex: null
+  stationGroups.forEach((group, stationKey) => {
+    if (stationKey === null) {
+      // Exercises without stationIndex are individual exercises (not part of a station)
+      group.forEach(ex => {
+        individualExercises.push({
+          ...ex,
+          stationIndex: null
+        });
       });
     } else {
-      // Station with multiple exercises
-      const sorted = group.sort((a, b) => {
-        if (a.stationIndex === null || a.stationIndex === 0) return -1;
-        if (b.stationIndex === null || b.stationIndex === 0) return 1;
-        return (a.stationIndex || 0) - (b.stationIndex || 0);
-      });
+      // This is a station with multiple exercises
+      // Sort by orderIndex to maintain the sequence within the station
+      const sorted = group.sort((a, b) => a.orderIndex - b.orderIndex);
       
+      // The first exercise becomes the primary
       const primary = sorted[0];
       const secondaries = sorted.slice(1);
       
-      nested.push({
-        ...primary,
-        stationIndex: null,
-        stationExercises: secondaries.map(ex => ({
-          id: ex.id,
-          exerciseId: ex.exerciseId!,
-          exerciseName: ex.exerciseName,
-          repsPlanned: ex.repsPlanned
-        }))
+      stations.push({
+        stationIndex: stationKey,
+        exercise: {
+          ...primary,
+          stationIndex: null,
+          stationExercises: secondaries.map(ex => ({
+            id: ex.id,
+            exerciseId: ex.exerciseId!,
+            exerciseName: ex.exerciseName,
+            repsPlanned: ex.repsPlanned
+          }))
+        }
       });
     }
   });
   
-  return nested.sort((a, b) => a.orderIndex - b.orderIndex);
+  // Sort stations by their stationIndex to maintain correct order
+  const sortedStations = stations
+    .sort((a, b) => a.stationIndex - b.stationIndex)
+    .map(s => s.exercise);
+  
+  // Combine individual exercises and stations, sorted by orderIndex
+  const allExercises = [...individualExercises, ...sortedStations];
+  return allExercises.sort((a, b) => a.orderIndex - b.orderIndex);
 }
