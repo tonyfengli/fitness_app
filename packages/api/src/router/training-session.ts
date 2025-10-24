@@ -4779,7 +4779,7 @@ Set your goals and preferences for today's session.`;
                     custom_exercise: templateEx.customExercise,
                     repsPlanned: templateEx.repsPlanned,
                     orderIndex: orderIndex + stationNum, // Use station number for consistent orderIndex
-                    stationIndex: stationNum, // Use sequential station numbering
+                    stationIndex: templateEx.stationIndex, // PRESERVE THE ORIGINAL STATION INDEX FOR UNIQUENESS!
                     groupName: roundName,
                     isShared: true, // Stations are shared
                     selectionSource: 'trainer' as const,
