@@ -188,7 +188,6 @@ function CircuitWorkoutOverviewContent() {
   const addExerciseToStationMutation = useMutation({
     ...trpc.workoutSelections.addExerciseToStationPublic.mutationOptions(),
     onSuccess: (data) => {
-      console.log("[addExerciseToStation] Success:", data);
       
       // Close modal
       setShowAddExerciseModal(false);
@@ -216,7 +215,6 @@ function CircuitWorkoutOverviewContent() {
   const addExerciseToRoundMutation = useMutation({
     ...trpc.workoutSelections.addExerciseToRoundPublic.mutationOptions(),
     onSuccess: (data) => {
-      console.log("[addExerciseToRound] Success:", data);
       
       // Close modal
       setShowAddExerciseModal(false);
@@ -419,7 +417,6 @@ function CircuitWorkoutOverviewContent() {
   const deleteCircuitExerciseMutation = useMutation({
     ...trpc.workoutSelections.deleteCircuitExercise.mutationOptions(),
     onSuccess: (data) => {
-      console.log("[deleteCircuitExerciseMutation] Success! Response:", data);
       
       // Close modal
       setShowSetsModal(false);
@@ -1416,6 +1413,11 @@ function CircuitWorkoutOverviewContent() {
                             <div className="px-6 py-3 border-t border-gray-100 dark:border-gray-700/50">
                               <button
                                 onClick={() => {
+                                  console.log('[AddToStation] Button clicked:', {
+                                    roundName: round.roundName,
+                                    targetStationIndex: idx,
+                                    currentStationExercises: exercise.stationExercises?.length || 0
+                                  });
                                   setAddExerciseRoundName(round.roundName);
                                   setAddExerciseRoundData(round);
                                   setAddExerciseTargetStation(idx); // Set to this specific station
@@ -1678,6 +1680,13 @@ function CircuitWorkoutOverviewContent() {
                         // Calculate the next station index (number of unique orderIndex values)
                         const uniqueStations = new Set(round.exercises.map(ex => ex.orderIndex));
                         const nextStationIndex = uniqueStations.size;
+                        
+                        console.log('[AddStation] Button clicked:', {
+                          roundName: round.roundName,
+                          currentStations: uniqueStations.size,
+                          nextStationIndex,
+                          uniqueOrderIndexes: Array.from(uniqueStations).sort((a, b) => a - b)
+                        });
                         
                         setAddExerciseRoundName(round.roundName);
                         setAddExerciseRoundData(round);
@@ -2963,6 +2972,12 @@ function CircuitWorkoutOverviewContent() {
                                     
                                     if (isNewStation) {
                                       // Creating a new station - use addToRound which will create a new orderIndex
+                                      console.log('[AddExercise] Creating new station:', {
+                                        currentStations: uniqueStations.size,
+                                        targetStationIndex: addExerciseTargetStation,
+                                        uniqueOrderIndexes: Array.from(uniqueStations).sort((a, b) => a - b),
+                                        exerciseName: addExerciseSelectedId ? 'Selected from list' : addExerciseSearchQuery.trim()
+                                      });
                                       addExerciseToRoundMutation.mutate({
                                         sessionId: sessionId || "",
                                         clientId: dummyUserId || "",
@@ -2972,6 +2987,12 @@ function CircuitWorkoutOverviewContent() {
                                       });
                                     } else {
                                       // Adding to existing station
+                                      console.log('[AddExercise] Adding to existing station:', {
+                                        targetStationIndex: addExerciseTargetStation,
+                                        currentStations: uniqueStations.size,
+                                        uniqueOrderIndexes: Array.from(uniqueStations).sort((a, b) => a - b),
+                                        exerciseName: addExerciseSelectedId ? 'Selected from list' : addExerciseSearchQuery.trim()
+                                      });
                                       addExerciseToStationMutation.mutate({
                                         sessionId: sessionId || "",
                                         clientId: dummyUserId || "",

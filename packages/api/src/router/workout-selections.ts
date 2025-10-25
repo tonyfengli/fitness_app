@@ -1289,14 +1289,14 @@ export const workoutSelectionsRouter = {
           });
         }
 
-        // For stations rounds, exercises in the same station should have the same orderIndex
-        // but different stationIndex values
+        // For stations rounds, exercises in the same station share the same orderIndex
+        // The stationIndex determines their position within the station (0, 1, 2, etc.)
         const stationOrderIndex = targetStationExercises[0]?.orderIndex || 0;
         
         // Get the next available stationIndex for this station
         const maxStationIndex = Math.max(
-          ...targetStationExercises.map((ex) => ex.stationIndex || 0),
-          0
+          ...targetStationExercises.map((ex) => ex.stationIndex ?? -1),
+          -1
         );
         const nextStationIndex = maxStationIndex + 1;
 
@@ -1328,7 +1328,7 @@ export const workoutSelectionsRouter = {
             orderIndex: stationOrderIndex, // Use same orderIndex as the station
             setsCompleted: 0,
             groupName: input.roundName,
-            stationIndex: nextStationIndex, // Use incremented stationIndex for uniqueness
+            stationIndex: nextStationIndex, // Use incremented stationIndex for position in station
             isShared: true, // Circuit exercises are shared
             selectionSource: "manual_swap",
             template: template,
@@ -1873,6 +1873,68 @@ export const workoutSelectionsRouter = {
           templateExerciseId: templateExercise?.id,
         });
 
+        // Check if this is a stations round by looking at the circuit config
+        const { TrainingSession } = await import("@acme/db/schema");
+        
+        const sessionWithConfig = await tx
+          .select()
+          .from(TrainingSession)
+          .where(eq(TrainingSession.id, input.sessionId))
+          .limit(1);
+        
+        let stationIndex = null;
+        
+        if (sessionWithConfig?.[0]?.templateConfig && 
+            sessionWithConfig[0].templateType === 'circuit' &&
+            sessionWithConfig[0].templateConfig.type === 'circuit') {
+          const config = sessionWithConfig[0].templateConfig.config as any;
+          const roundNumber = parseInt(input.roundName.match(/\d+/)?.[0] || '0');
+          const roundTemplate = config.roundTemplates?.find((rt: any) => rt.roundNumber === roundNumber);
+          
+          if (roundTemplate?.template?.type === 'stations_round') {
+            // For stations rounds, assign the station index based on how many unique stations exist
+            // Group exercises by orderIndex to count stations
+            const stationMap = new Map<number, number>();
+            allRoundExercises.forEach(ex => {
+              if (!stationMap.has(ex.orderIndex)) {
+                stationMap.set(ex.orderIndex, 0);
+              }
+            });
+            
+            // The new exercise will be at a new station, so stationIndex should be 0 (first exercise in the new station)
+            stationIndex = 0;
+            
+            console.log("[addExerciseToRoundPublic] NEW STATION - Stations round detected:", {
+              roundName: input.roundName,
+              roundNumber: roundNumber,
+              roundType: roundTemplate.template.type,
+              allExercisesInRound: allRoundExercises.length,
+              existingStations: stationMap.size,
+              existingOrderIndexes: Array.from(stationMap.keys()).sort((a, b) => a - b),
+              newOrderIndex: nextOrderIndex,
+              newStationIndex: stationIndex, // Should be 0 for first exercise in new station
+              exerciseToAdd: input.newExerciseId ? 'Selected exercise' : `Custom: ${input.customName}`,
+            });
+            
+            // Log detailed station structure
+            console.log("[addExerciseToRoundPublic] NEW STATION - Current station structure:", {
+              stationBreakdown: Array.from(stationMap.keys()).sort((a, b) => a - b).map(orderIdx => {
+                const exercisesAtStation = allRoundExercises.filter(ex => ex.orderIndex === orderIdx);
+                return {
+                  orderIndex: orderIdx,
+                  exerciseCount: exercisesAtStation.length,
+                  stationIndexes: exercisesAtStation.map(ex => ex.stationIndex).sort((a, b) => (a || 0) - (b || 0)),
+                  exercises: exercisesAtStation.map(ex => ({
+                    id: ex.id.slice(-8),
+                    stationIndex: ex.stationIndex,
+                    exerciseId: ex.exerciseId?.slice(-8) || 'custom',
+                  }))
+                };
+              })
+            });
+          }
+        }
+
         // Insert the new exercise for all workouts
         const insertPromises = workoutIds.map((workoutId) =>
           tx.insert(WorkoutExercise).values({
@@ -1881,7 +1943,7 @@ export const workoutSelectionsRouter = {
             orderIndex: nextOrderIndex, // Add at end of round
             setsCompleted: 0,
             groupName: input.roundName,
-            stationIndex: null, // Always null for regular round exercises
+            stationIndex: stationIndex, // Proper station index for stations rounds
             isShared: true, // Circuit exercises are shared
             selectionSource: "manual_swap",
             template: template,
@@ -1894,6 +1956,18 @@ export const workoutSelectionsRouter = {
         );
 
         await Promise.all(insertPromises);
+
+        // Log the final result for stations rounds
+        if (stationIndex !== null) {
+          console.log("[addExerciseToRoundPublic] NEW STATION - Exercise inserted:", {
+            exerciseName: exerciseName,
+            roundName: input.roundName,
+            finalOrderIndex: nextOrderIndex,
+            finalStationIndex: stationIndex,
+            workoutsAffected: workoutIds.length,
+            isCustomExercise: !input.newExerciseId,
+          });
+        }
 
         console.log(
           `[addExerciseToRoundPublic] Added exercise "${exerciseName}" to end of round "${input.roundName}" for ${workoutIds.length} workouts`,

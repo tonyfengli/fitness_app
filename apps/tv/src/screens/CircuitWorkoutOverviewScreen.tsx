@@ -106,23 +106,41 @@ function groupExercisesByStation(exercises: CircuitExercise[]): Map<number, Circ
   const stationMap = new Map<number, CircuitExercise[]>();
   
   exercises.forEach(exercise => {
-    // Use stationIndex if available, otherwise fall back to orderIndex
-    const stationKey = exercise.stationIndex ?? exercise.orderIndex;
+    // Group by orderIndex - exercises with same orderIndex belong to same station
+    const stationKey = exercise.orderIndex;
     if (!stationMap.has(stationKey)) {
       stationMap.set(stationKey, []);
     }
     stationMap.get(stationKey)!.push(exercise);
   });
   
-  // Sort stations by their key and exercises within each station by orderIndex
+  // Sort stations by their key and exercises within each station by stationIndex
   const sortedStationMap = new Map(
     Array.from(stationMap.entries())
       .sort(([a], [b]) => a - b)
       .map(([key, exercises]) => [
         key,
-        exercises.sort((a, b) => a.orderIndex - b.orderIndex)
+        exercises.sort((a, b) => {
+          // Sort by stationIndex within each station
+          const aIndex = a.stationIndex ?? 0;
+          const bIndex = b.stationIndex ?? 0;
+          return aIndex - bIndex;
+        })
       ])
   );
+  
+  console.log('[TV-CircuitOverview] Station groups after grouping:', {
+    stationCount: sortedStationMap.size,
+    stations: Array.from(sortedStationMap.entries()).map(([orderIndex, exercises]) => ({
+      orderIndex,
+      exerciseCount: exercises.length,
+      exercises: exercises.map(ex => ({
+        name: ex.exerciseName,
+        stationIndex: ex.stationIndex,
+        orderIndex: ex.orderIndex
+      }))
+    }))
+  });
   
   return sortedStationMap;
 }
@@ -161,6 +179,21 @@ function RoundContent({ round, isCompact }: {
     // For station rounds, show grouped display
     if (isStationRound && stationGroups) {
       const stations = Array.from(stationGroups.entries()).sort((a, b) => a[0] - b[0]);
+      
+      console.log(`[TV-CircuitOverview] Rendering stations for ${round.roundName}:`, {
+        totalStations: stations.length,
+        stations: stations.map(([orderIndex, exercises], idx) => ({
+          stationNumber: idx + 1,
+          orderIndex,
+          exerciseCount: exercises.length,
+          exercises: exercises.map(ex => ({
+            name: ex.exerciseName,
+            orderIndex: ex.orderIndex,
+            stationIndex: ex.stationIndex
+          }))
+        }))
+      });
+      
       const maxStations = 4;
       const stationsToShow = stations.slice(0, maxStations);
       const hasStationOverflow = stations.length > maxStations;
@@ -638,17 +671,35 @@ export function CircuitWorkoutOverviewScreen() {
     ? api.workoutSelections.getSelections.queryOptions({ sessionId })
     : null;
 
-  const { data: selections, isLoading: selectionsLoading, error: selectionsError } = useQuery({
+  const { data: selections, isLoading: selectionsLoading, error: selectionsError, dataUpdatedAt } = useQuery({
     ...selectionsQueryOptions,
     enabled: !!sessionId && !!selectionsQueryOptions,
     refetchInterval: 10000, // Poll every 10 seconds
     refetchIntervalInBackground: true, // Keep polling even when tab is not focused
+    onSuccess: (data) => {
+      console.log('[TV-CircuitOverview] Selections query success:', {
+        timestamp: new Date().toISOString(),
+        dataUpdatedAt: new Date(dataUpdatedAt).toISOString(),
+        selectionsCount: data?.length || 0
+      });
+    }
   });
   
   // Process selections into rounds
   useEffect(() => {
     if (selections && selections.length > 0) {
       // Processing workout selections
+      console.log('[TV-CircuitOverview] Raw selections from backend:', {
+        totalCount: selections.length,
+        selections: selections.map(sel => ({
+          id: sel.id.slice(-8),
+          exerciseName: sel.exerciseName,
+          orderIndex: sel.orderIndex,
+          stationIndex: sel.stationIndex,
+          groupName: sel.groupName,
+          clientId: sel.clientId ? sel.clientId.slice(-8) : null
+        }))
+      });
       
       // Process all exercises without deduplication to allow duplicates
       const allExercises: CircuitExercise[] = [];
@@ -688,6 +739,21 @@ export function CircuitWorkoutOverviewScreen() {
           const roundTemplate = circuitConfig?.config?.roundTemplates?.find(
             rt => rt.roundNumber === roundNum
           );
+          
+          const isStationsRound = roundTemplate?.template?.type === 'stations_round';
+          
+          console.log(`[TV-CircuitOverview] Processing ${roundName}:`, {
+            roundNum,
+            roundType: roundTemplate?.template?.type,
+            isStationsRound,
+            exerciseCount: exercises.length,
+            exercises: exercises.map(ex => ({
+              name: ex.exerciseName,
+              orderIndex: ex.orderIndex,
+              stationIndex: ex.stationIndex,
+              id: ex.id.slice(-8)
+            }))
+          });
           
           // Extract timing information based on round type
           let roundData: RoundData = {

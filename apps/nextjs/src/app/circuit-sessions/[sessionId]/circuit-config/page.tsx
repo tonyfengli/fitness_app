@@ -202,11 +202,13 @@ export default function CircuitConfigPage() {
   const generateWorkoutMutation = useMutation(
     trpc.trainingSession.generateCircuitWorkout.mutationOptions({
       onSuccess: (data) => {
+        console.log('[CircuitConfig] generateWorkoutMutation success:', data);
         toast.success("Circuit workout generated successfully!");
         // Navigate to circuit workout overview
         router.push(`/circuit-workout-overview?sessionId=${sessionId}`);
       },
       onError: (error: any) => {
+        console.error('[CircuitConfig] generateWorkoutMutation error:', error);
         toast.error(error.message || "Failed to generate workout");
       },
     })
@@ -215,6 +217,13 @@ export default function CircuitConfigPage() {
   const handleComplete = async () => {
     if (!sessionId) return;
     
+    console.log('[CircuitConfig] handleComplete called', {
+      hasWorkout,
+      workoutType,
+      currentStep,
+      sessionId
+    });
+    
     // Save any pending configuration changes
     if (isSaving) {
       await new Promise(resolve => setTimeout(resolve, 1000));
@@ -222,11 +231,13 @@ export default function CircuitConfigPage() {
     
     // If workout already exists, just navigate
     if (hasWorkout) {
+      console.log('[CircuitConfig] Workout already exists, navigating to overview');
       router.push(`/circuit-workout-overview?sessionId=${sessionId}`);
       return;
     }
     
     // Generate the circuit workout
+    console.log('[CircuitConfig] Calling generateWorkoutMutation with sessionId:', sessionId);
     generateWorkoutMutation.mutate({ sessionId });
   };
 

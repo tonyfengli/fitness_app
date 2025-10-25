@@ -4735,11 +4735,14 @@ Set your goals and preferences for today's session.`;
               
               
               // Create exercises preserving the station structure based on orderIndex grouping
-              sortedOrderIndexes.forEach((origOrderIndex, stationNum) => {
+              sortedOrderIndexes.forEach((origOrderIndex, stationIdx) => {
                 const stationExercises = exercisesByOrderIndex.get(origOrderIndex) || [];
                 
                 // Sort exercises within station by stationIndex for consistent ordering
                 stationExercises.sort((a, b) => (a.stationIndex ?? 0) - (b.stationIndex ?? 0));
+                
+                // All exercises in this station share the same orderIndex
+                const stationOrderIndex = orderIndex + stationIdx;
                 
                 for (let i = 0; i < stationExercises.length; i++) {
                   const templateEx = stationExercises[i];
@@ -4748,8 +4751,8 @@ Set your goals and preferences for today's session.`;
                     exerciseId: templateEx.exerciseId,
                     custom_exercise: templateEx.customExercise,
                     repsPlanned: templateEx.repsPlanned,
-                    orderIndex: orderIndex + i, // Sequential orderIndex across all exercises
-                    stationIndex: stationNum, // Use station number as the station identifier
+                    orderIndex: stationOrderIndex, // Same orderIndex for all exercises in this station
+                    stationIndex: i, // Sequential stationIndex within the station (0, 1, 2...)
                     groupName: roundName,
                     isShared: true, // Stations are shared
                     selectionSource: 'trainer' as const,
@@ -4760,7 +4763,8 @@ Set your goals and preferences for today's session.`;
                 }
               });
               
-              orderIndex += roundTemplateExercises.length;
+              // Update orderIndex to account for all stations created
+              orderIndex += sortedOrderIndexes.length;
             } else {
               // No template - use default 4 stations
               const stationsCount = 4;

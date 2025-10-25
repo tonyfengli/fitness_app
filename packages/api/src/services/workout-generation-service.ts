@@ -1745,17 +1745,54 @@ export class WorkoutGenerationService {
             isStationsRound = roundTemplate?.template?.type === 'stations_round';
           }
           
+          // For stations rounds, we need to group exercises into stations
+          let stationOrderIndex = globalIndex;
+          let exercisesInCurrentStation = 0;
+          
+          // Calculate exercises per station based on total exercises and typical station count
+          let exercisesPerStation = 3; // Default
+          if (isStationsRound) {
+            const totalExercises = round.exercises.length;
+            const numStations = Math.min(4, Math.ceil(totalExercises / 3)); // Typically 3-4 stations
+            exercisesPerStation = Math.ceil(totalExercises / numStations);
+          }
+          
           // Process each exercise in the round
-          round.exercises.forEach((circuitEx: any) => {
+          round.exercises.forEach((circuitEx: any, exerciseIndex: number) => {
             const exercise = exercisePool.find(
               (ex: Exercise) => ex.name === circuitEx.name,
             );
             
             if (exercise) {
+              // Calculate stationIndex for stations rounds
+              let calculatedStationIndex = null;
+              let calculatedOrderIndex = globalIndex;
+              
+              if (isStationsRound) {
+                // For stations rounds, exercises in the same station share the same orderIndex
+                // Start a new station when we've filled the current one
+                if (exercisesInCurrentStation >= exercisesPerStation) {
+                  stationOrderIndex = globalIndex;
+                  exercisesInCurrentStation = 0;
+                }
+                
+                calculatedOrderIndex = stationOrderIndex;
+                calculatedStationIndex = exercisesInCurrentStation;
+                exercisesInCurrentStation++;
+                
+                // Only increment globalIndex when moving to a new station
+                if (exercisesInCurrentStation >= exercisesPerStation) {
+                  globalIndex++;
+                }
+              } else {
+                // For non-stations rounds, increment globalIndex for each exercise
+                globalIndex++;
+              }
+              
               allExercises.push({
                 workoutId: workoutId,
                 exerciseId: exercise.id,
-                orderIndex: globalIndex++,
+                orderIndex: calculatedOrderIndex,
                 setsCompleted: 0,
                 // repsPlanned defaults to null in database
                 groupName: `Round ${displayRoundNumber}`,
@@ -1767,8 +1804,7 @@ export class WorkoutGenerationService {
                       .map(c => c.user_id)
                   : [],
                 template: "circuit",
-                // Set stationIndex to 0 for stations rounds, null otherwise
-                stationIndex: isStationsRound ? 0 : null,
+                stationIndex: calculatedStationIndex,
                 // Store additional circuit metadata
                 metadata: {
                   round: displayRoundNumber,
@@ -1793,11 +1829,32 @@ export class WorkoutGenerationService {
               );
               
               if (fallbackExercise) {
+                // Calculate stationIndex for stations rounds (same logic as above)
+                let calculatedStationIndex = null;
+                let calculatedOrderIndex = globalIndex;
+                
+                if (isStationsRound) {
+                  // For stations rounds, exercises in the same station share the same orderIndex
+                  if (exercisesInCurrentStation >= exercisesPerStation) {
+                    stationOrderIndex = globalIndex;
+                    exercisesInCurrentStation = 0;
+                  }
+                  
+                  calculatedOrderIndex = stationOrderIndex;
+                  calculatedStationIndex = exercisesInCurrentStation;
+                  exercisesInCurrentStation++;
+                  
+                  if (exercisesInCurrentStation >= exercisesPerStation) {
+                    globalIndex++;
+                  }
+                } else {
+                  globalIndex++;
+                }
                 
                 allExercises.push({
                   workoutId: workoutId,
                   exerciseId: fallbackExercise.id,
-                  orderIndex: globalIndex++,
+                  orderIndex: calculatedOrderIndex,
                   setsCompleted: 0,
                   // repsPlanned defaults to null in database
                   groupName: `Round ${displayRoundNumber}`,
@@ -1808,8 +1865,7 @@ export class WorkoutGenerationService {
                         .map(c => c.user_id)
                     : [],
                   template: "circuit",
-                  // Set stationIndex to 0 for stations rounds, null otherwise
-                  stationIndex: isStationsRound ? 0 : null,
+                  stationIndex: calculatedStationIndex,
                   metadata: {
                     round: displayRoundNumber,
                     position: circuitEx.position,
@@ -1823,6 +1879,11 @@ export class WorkoutGenerationService {
               }
             }
           });
+          
+          // After processing all exercises in a stations round, ensure globalIndex is updated
+          if (isStationsRound && exercisesInCurrentStation > 0) {
+            globalIndex++;
+          }
         });
       }
     }
