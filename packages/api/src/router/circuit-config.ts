@@ -474,8 +474,9 @@ export const circuitConfigRouter = createTRPCRouter({
       }
 
       // Swap rounds in the array
-      [roundTemplates[currentIndex], roundTemplates[targetIndex]] = 
-      [roundTemplates[targetIndex], roundTemplates[currentIndex]];
+      const temp = roundTemplates[currentIndex]!;
+      roundTemplates[currentIndex] = roundTemplates[targetIndex]!;
+      roundTemplates[targetIndex] = temp;
 
       // Update round numbers
       roundTemplates.forEach((template, index) => {

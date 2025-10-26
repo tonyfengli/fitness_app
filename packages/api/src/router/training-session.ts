@@ -4748,7 +4748,7 @@ Set your goals and preferences for today's session.`;
                 for (let i = 0; i < stationExercises.length; i++) {
                   const templateEx = stationExercises[i];
                   const exerciseToInsert = {
-                    workoutId: workout.id,
+                    workoutId: workout!.id,
                     exerciseId: templateEx.exerciseId,
                     custom_exercise: templateEx.customExercise,
                     repsPlanned: templateEx.repsPlanned,
@@ -4787,7 +4787,7 @@ Set your goals and preferences for today's session.`;
                   };
                   
                   workoutExercises.push({
-                    workoutId: workout.id,
+                    workoutId: workout!.id,
                     ...exerciseData,
                     orderIndex: orderIndex + stationIndex,
                     stationIndex: exerciseInStation, // Position within the station (0, 1, 2...)
@@ -4828,7 +4828,7 @@ Set your goals and preferences for today's session.`;
               }
               
               workoutExercises.push({
-                workoutId: workout.id,
+                workoutId: workout!.id,
                 ...exerciseData,
                 orderIndex: orderIndex++,
                 stationIndex: templateStationIndex, // PRESERVE STATION INDEX IF FROM TEMPLATE!
@@ -4845,7 +4845,7 @@ Set your goals and preferences for today's session.`;
         await tx.insert(WorkoutExercise).values(workoutExercises);
 
         return {
-          workoutId: workout.id,
+          workoutId: workout!.id,
           exerciseCount: workoutExercises.length,
           rounds: circuitConfig.config.rounds,
         };
@@ -5057,8 +5057,8 @@ Set your goals and preferences for today's session.`;
 
       return {
         success: true,
-        sessionId: updatedSession.id,
-        newStatus: updatedSession.status,
+        sessionId: updatedSession!.id,
+        newStatus: updatedSession!.status,
         session: updatedSession,
       };
     }),

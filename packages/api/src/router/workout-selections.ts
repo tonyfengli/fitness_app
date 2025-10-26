@@ -1243,7 +1243,7 @@ export const workoutSelectionsRouter = {
               if (!grouped[ex.orderIndex]) {
                 grouped[ex.orderIndex] = [];
               }
-              grouped[ex.orderIndex].push({
+              grouped[ex.orderIndex]!.push({
                 id: ex.id,
                 stationIndex: ex.stationIndex,
                 exerciseId: ex.exerciseId,
@@ -1960,8 +1960,8 @@ export const workoutSelectionsRouter = {
         
         if (sessionWithConfig?.[0]?.templateConfig && 
             sessionWithConfig[0].templateType === 'circuit' &&
-            sessionWithConfig[0].templateConfig.type === 'circuit') {
-          const config = sessionWithConfig[0].templateConfig.config as any;
+            (sessionWithConfig[0].templateConfig as any).type === 'circuit') {
+          const config = (sessionWithConfig[0].templateConfig as any).config;
           const roundNumber = parseInt(input.roundName.match(/\d+/)?.[0] || '0');
           const roundTemplate = config.roundTemplates?.find((rt: any) => rt.roundNumber === roundNumber);
           
