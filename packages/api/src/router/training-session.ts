@@ -4709,6 +4709,7 @@ Set your goals and preferences for today's session.`;
           const exercisesPerRound = template.exercisesPerRound || 6;
           const roundName = `Round ${roundNumber}`;
 
+
           // Get template exercises for this round (if available)
           const roundTemplateExercises = exercisesByRound.get(roundName) || [];
 
@@ -4766,8 +4767,8 @@ Set your goals and preferences for today's session.`;
               // Update orderIndex to account for all stations created
               orderIndex += sortedOrderIndexes.length;
             } else {
-              // No template - use default 4 stations
-              const stationsCount = 4;
+              // No template - use user's selected station count
+              const stationsCount = exercisesPerRound;
               const exercisesPerStation = Math.ceil(exercisesPerRound / stationsCount);
 
               for (let stationIndex = 0; stationIndex < stationsCount; stationIndex++) {
@@ -4789,7 +4790,7 @@ Set your goals and preferences for today's session.`;
                     workoutId: workout.id,
                     ...exerciseData,
                     orderIndex: orderIndex + stationIndex,
-                    stationIndex: stationIndex, // SET STATION INDEX!
+                    stationIndex: exerciseInStation, // Position within the station (0, 1, 2...)
                     groupName: roundName,
                     isShared: true, // Stations are shared
                     selectionSource: 'trainer' as const,

@@ -17,6 +17,7 @@ import { supabase } from '../lib/supabase';
 import { useNavigation } from '../App';
 import { api } from '../providers/TRPCProvider';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useRealtimeTrainingSessions } from '../hooks/useRealtimeTrainingSessions';
 
 // Design tokens - matching TV app theme
 const TOKENS = {
@@ -156,6 +157,88 @@ export function MainScreen() {
     }),
     enabled: !!businessId && !isAuthLoading,
     staleTime: 30000, // Cache for 30 seconds
+  });
+
+  // Real-time training sessions subscription
+  const { isConnected: realtimeConnected, error: realtimeError } = useRealtimeTrainingSessions({
+    businessId: businessId || '',
+    supabase,
+    onUpdate: (session, event) => {
+      console.log('[MainScreen] 🔥 REAL-TIME:', event, session.name);
+      
+      const queryKey = api.trainingSession.list.queryOptions({ 
+        limit: 6, 
+        offset: 0 
+      }).queryKey;
+      
+      // Log current cache state before update
+      const currentCacheData = queryClient.getQueryData(queryKey);
+      console.log('[MainScreen] Cache BEFORE:', currentCacheData ? (currentCacheData as any[]).length : 'null', 'items');
+
+      if (event === 'INSERT') {
+        console.log('[MainScreen] 🆕 INSERT:', session.id);
+        
+        // Add new item to cache immediately
+        queryClient.setQueryData(queryKey, (oldData: any) => {
+          if (!oldData) return [session];
+          const newData = [session, ...oldData];
+          return newData.slice(0, 6);
+        });
+
+        // Add to stored order
+        sessionOrderRef.current = [session.id, ...sessionOrderRef.current];
+        
+        // Verify cache was updated
+        const verifyCache = queryClient.getQueryData(queryKey);
+        console.log('[MainScreen] 🆕 Cache AFTER:', verifyCache ? (verifyCache as any[]).length : 'null', 'items');
+        
+      } else if (event === 'DELETE') {
+        console.log('[MainScreen] 🗑️ DELETE:', session.id);
+        
+        // Remove item from cache immediately
+        queryClient.setQueryData(queryKey, (oldData: any) => {
+          if (!oldData) return [];
+          return oldData.filter((s: any) => s.id !== session.id);
+        });
+
+        // Remove from stored order
+        sessionOrderRef.current = sessionOrderRef.current.filter(id => id !== session.id);
+        
+        // Verify cache was updated
+        const verifyCache = queryClient.getQueryData(queryKey);
+        console.log('[MainScreen] 🗑️ Cache AFTER:', verifyCache ? (verifyCache as any[]).length : 'null', 'items');
+
+        // Fetch one more item to backfill if we're below the limit
+        queryClient.fetchQuery({
+          ...api.trainingSession.list.queryOptions({
+            limit: 1,
+            offset: 6 // Fetch the 7th item
+          }),
+          staleTime: 0
+        }).then((newItems: any) => {
+          if (newItems?.length > 0) {
+            console.log('[MainScreen] 🗑️ Backfilling with:', newItems[0].name);
+            queryClient.setQueryData(queryKey, (oldData: any) => {
+              return [...(oldData || []), ...newItems];
+            });
+          }
+        }).catch(() => {
+          // No additional sessions available
+        });
+        
+      } else if (event === 'UPDATE') {
+        console.log('[MainScreen] 🔄 UPDATE:', session.id, session.status);
+        
+        // Update existing item in cache
+        queryClient.setQueryData(queryKey, (oldData: any) => {
+          if (!oldData) return [session];
+          return oldData.map((s: any) => s.id === session.id ? session : s);
+        });
+      }
+    },
+    onError: (error) => {
+      console.error('[MainScreen] Real-time training sessions error:', error);
+    }
   });
   
   // Store the initial session order when first loaded
@@ -507,11 +590,12 @@ export function MainScreen() {
     },
   });
 
-  // Log businessId when component mounts or businessId changes
+  // Log key state changes
   React.useEffect(() => {
-    console.log('[MainScreen] 🏢 BusinessId in component:', businessId);
-    console.log('[MainScreen] 👤 Current user:', user?.email, 'BusinessId from user:', user?.businessId);
-  }, [businessId, user]);
+    if (businessId && realtimeConnected) {
+      console.log('[MainScreen] ✅ Ready for real-time updates');
+    }
+  }, [businessId, realtimeConnected]);
 
   // Handle close session
   const handleCloseSession = (sessionId: string) => {

@@ -378,7 +378,6 @@ export const circuitConfigRouter = createTRPCRouter({
         updatedBy: "anonymous", // Since it's public
       };
       
-      console.log('[CircuitConfig API] Updated config before validation:', JSON.stringify(updatedConfig, null, 2));
 
       // Ensure round templates exist
       const configWithRoundTemplates = ensureRoundTemplates(updatedConfig);
@@ -389,7 +388,6 @@ export const circuitConfigRouter = createTRPCRouter({
       let validatedConfig;
       try {
         validatedConfig = CircuitConfigSchema.parse(configWithRoundTemplates);
-        console.log('[CircuitConfig API] Validated config:', JSON.stringify(validatedConfig, null, 2));
       } catch (error) {
         console.error('[CircuitConfig API] Validation error:', error);
         throw error;
@@ -806,6 +804,8 @@ export const circuitConfigRouter = createTRPCRouter({
         const exercisesPerRound = template.exercisesPerRound || 5;
 
         if (workouts.length > 0) {
+          console.log(`[addRound] Creating ${input.roundConfig.type} with ${exercisesPerRound} exercises/stations`);
+          
           for (const workout of workouts) {
             // Get the max order index for this workout
             const maxOrderResult = await tx
@@ -826,6 +826,9 @@ export const circuitConfigRouter = createTRPCRouter({
                 isShared: false,
                 selectionSource: 'trainer' as const,
                 setsCompleted: 0, // Default to 0 sets
+                // For stations rounds, each exercise is a station with stationIndex 0
+                // For other rounds, stationIndex is null
+                stationIndex: input.roundConfig.type === 'stations_round' ? 0 : null,
                 custom_exercise: {
                   customName: `Exercise ${i + 1}`,
                   customDescription: '',
@@ -836,6 +839,14 @@ export const circuitConfigRouter = createTRPCRouter({
 
             await tx.insert(WorkoutExercise).values(exercisesToCreate);
             totalCreatedExercises += exercisesToCreate.length;
+            
+            console.log(`[addRound] Created exercises for workout ${workout.id}:`, {
+              roundType: input.roundConfig.type,
+              exerciseCount: exercisesToCreate.length,
+              orderIndexRange: `${startOrderIndex}-${startOrderIndex + exercisesPerRound - 1}`,
+              stationIndexPattern: input.roundConfig.type === 'stations_round' ? 
+                'All stationIndex: 0' : 'All stationIndex: null'
+            });
           }
         }
 

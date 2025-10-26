@@ -1416,7 +1416,23 @@ function CircuitWorkoutOverviewContent() {
                                   console.log('[AddToStation] Button clicked:', {
                                     roundName: round.roundName,
                                     targetStationIndex: idx,
-                                    currentStationExercises: exercise.stationExercises?.length || 0
+                                    currentStationExercises: exercise.stationExercises?.length || 0,
+                                    // Enhanced debugging info
+                                    stationData: {
+                                      stationNumber: idx + 1, // Human readable (1-based)
+                                      arrayIndex: idx, // Zero-based array index
+                                      exerciseOrderIndex: exercise.orderIndex,
+                                      stationExercises: exercise.stationExercises?.map(ex => ({
+                                        name: ex.name,
+                                        orderIndex: ex.orderIndex,
+                                        stationIndex: ex.stationIndex
+                                      }))
+                                    },
+                                    roundContext: {
+                                      roundType: round.roundType,
+                                      totalStations: round.groupedStations?.length || 0,
+                                      allOrderIndexes: round.exercises?.map(ex => ex.orderIndex) || []
+                                    }
                                   });
                                   setAddExerciseRoundName(round.roundName);
                                   setAddExerciseRoundData(round);
@@ -1685,7 +1701,23 @@ function CircuitWorkoutOverviewContent() {
                           roundName: round.roundName,
                           currentStations: uniqueStations.size,
                           nextStationIndex,
-                          uniqueOrderIndexes: Array.from(uniqueStations).sort((a, b) => a - b)
+                          uniqueOrderIndexes: Array.from(uniqueStations).sort((a, b) => a - b),
+                          // Enhanced debugging for station structure
+                          stationDetails: (() => {
+                            const stationGroups: Record<number, any[]> = {};
+                            round.exercises.forEach(ex => {
+                              if (!stationGroups[ex.orderIndex]) {
+                                stationGroups[ex.orderIndex] = [];
+                              }
+                              stationGroups[ex.orderIndex].push({
+                                exerciseName: ex.exerciseName,
+                                stationIndex: ex.stationExercises?.length > 0 ? 
+                                  'has_sub_exercises' : 'main_exercise',
+                                subExerciseCount: ex.stationExercises?.length || 0
+                              });
+                            });
+                            return stationGroups;
+                          })()
                         });
                         
                         setAddExerciseRoundName(round.roundName);
@@ -2991,7 +3023,33 @@ function CircuitWorkoutOverviewContent() {
                                         targetStationIndex: addExerciseTargetStation,
                                         currentStations: uniqueStations.size,
                                         uniqueOrderIndexes: Array.from(uniqueStations).sort((a, b) => a - b),
-                                        exerciseName: addExerciseSelectedId ? 'Selected from list' : addExerciseSearchQuery.trim()
+                                        exerciseName: addExerciseSelectedId ? 'Selected from list' : addExerciseSearchQuery.trim(),
+                                        // Enhanced debugging for station mapping
+                                        detailedStationInfo: {
+                                          allExercises: addExerciseRoundData.exercises.map(ex => ({
+                                            exerciseName: ex.exerciseName,
+                                            orderIndex: ex.orderIndex,
+                                            id: ex.id
+                                          })),
+                                          stationMapping: (() => {
+                                            const stations: Record<number, any[]> = {};
+                                            addExerciseRoundData.exercises.forEach((ex, i) => {
+                                              if (!stations[ex.orderIndex]) {
+                                                stations[ex.orderIndex] = [];
+                                              }
+                                              stations[ex.orderIndex].push({
+                                                exerciseIndex: i,
+                                                exerciseName: ex.exerciseName,
+                                                id: ex.id
+                                              });
+                                            });
+                                            return stations;
+                                          })(),
+                                          targetOrderIndex: (() => {
+                                            const sortedOrderIndexes = Array.from(uniqueStations).sort((a, b) => a - b);
+                                            return sortedOrderIndexes[addExerciseTargetStation];
+                                          })()
+                                        }
                                       });
                                       addExerciseToStationMutation.mutate({
                                         sessionId: sessionId || "",

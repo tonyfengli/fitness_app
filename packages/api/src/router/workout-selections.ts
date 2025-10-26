@@ -1236,16 +1236,90 @@ export const workoutSelectionsRouter = {
             isShared: ex.isShared,
             custom_exercise: ex.custom_exercise,
           })),
+          // Group by station for clarity
+          groupedByOrderIndex: (() => {
+            const grouped: Record<number, any[]> = {};
+            allRoundExercises.forEach(ex => {
+              if (!grouped[ex.orderIndex]) {
+                grouped[ex.orderIndex] = [];
+              }
+              grouped[ex.orderIndex].push({
+                id: ex.id,
+                stationIndex: ex.stationIndex,
+                exerciseId: ex.exerciseId,
+                custom_exercise: ex.custom_exercise
+              });
+            });
+            return grouped;
+          })()
         });
+
+        console.log("[addExerciseToStationPublic] DETAILED STATION MAPPING DEBUG:");
 
         // Find exercises at the target station
         // For stations rounds, we need to find the exercise that represents this station
         // The frontend sends 0-based station index, but exercises might have gaps in orderIndex
         
         // First, get all exercises in the round sorted by orderIndex
+        console.log("[addExerciseToStationPublic] FILTERING LOGIC - Before filter:", {
+          totalExercises: allRoundExercises.length,
+          nullStationIndexCount: allRoundExercises.filter(ex => ex.stationIndex === null).length,
+          zeroStationIndexCount: allRoundExercises.filter(ex => ex.stationIndex === 0).length,
+          otherStationIndexCount: allRoundExercises.filter(ex => ex.stationIndex !== null && ex.stationIndex !== 0).length,
+          detailedBreakdown: allRoundExercises.map(ex => ({
+            orderIndex: ex.orderIndex,
+            stationIndex: ex.stationIndex,
+            isCustom: ex.custom_exercise !== null,
+            willBeIncluded: (() => {
+              const sameOrderIndexCount = allRoundExercises.filter(e => e.orderIndex === ex.orderIndex).length;
+              if (sameOrderIndexCount === 1) return true;
+              const hasStationIndex0 = allRoundExercises.some(e => e.orderIndex === ex.orderIndex && e.stationIndex === 0);
+              return hasStationIndex0 ? ex.stationIndex === 0 : ex.stationIndex === null;
+            })()
+          }))
+        });
+        
+        // For stations rounds, we need to identify the "main" exercise for each station
+        // Legacy data may have stationIndex: null, new data should have stationIndex: 0
         const allRoundExercisesOrdered = allRoundExercises
-          .filter(ex => ex.stationIndex === null || ex.stationIndex === 0) // Consider both null and 0 as main station exercises
+          .filter(ex => {
+            // Get all exercises with the same orderIndex
+            const sameOrderIndexExercises = allRoundExercises.filter(e => e.orderIndex === ex.orderIndex);
+            
+            // If there's only one exercise with this orderIndex, include it
+            if (sameOrderIndexExercises.length === 1) {
+              return true;
+            }
+            
+            // If there are multiple, prefer stationIndex 0, then null
+            const hasStationIndex0 = sameOrderIndexExercises.some(e => e.stationIndex === 0);
+            if (hasStationIndex0) {
+              return ex.stationIndex === 0;
+            } else {
+              // For legacy data, use the one with stationIndex null
+              return ex.stationIndex === null;
+            }
+          })
           .sort((a, b) => a.orderIndex - b.orderIndex);
+        
+        console.log("[addExerciseToStationPublic] Station mapping logic:", {
+          input: {
+            targetStationIndex: input.targetStationIndex,
+            roundName: input.roundName
+          },
+          allRoundExercisesOrdered: allRoundExercisesOrdered.map(ex => ({
+            id: ex.id,
+            orderIndex: ex.orderIndex,
+            stationIndex: ex.stationIndex,
+            exerciseId: ex.exerciseId
+          })),
+          mapping: {
+            frontendStationIndex: input.targetStationIndex,
+            stationCount: allRoundExercisesOrdered.length,
+            expectedOrderIndex: allRoundExercisesOrdered[input.targetStationIndex]?.orderIndex || 'NOT_FOUND',
+            willMapToOrderIndex: allRoundExercisesOrdered[input.targetStationIndex]?.orderIndex
+          }
+        });
         
         // Find the exercise at the target station position
         const targetStationExercise = allRoundExercisesOrdered[input.targetStationIndex];
