@@ -92,8 +92,14 @@ export default function SessionDetailPage({ params }: SessionDetailPageProps) {
   // Mutations for delete and status update
   const deleteSessionMutation = useMutation(
     trpc.trainingSession.deleteSessionPublic.mutationOptions({
-      onSuccess: () => {
+      onSuccess: async () => {
         toast.success("Session deleted successfully");
+        
+        // Invalidate all circuit sessions list queries to ensure the UI updates
+        await queryClient.invalidateQueries({
+          queryKey: [["trainingSession", "listCircuitSessions"]],
+        });
+        
         router.push("/circuit-sessions");
       },
       onError: (error: any) => {

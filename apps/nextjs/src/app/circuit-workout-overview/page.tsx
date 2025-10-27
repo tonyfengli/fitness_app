@@ -902,7 +902,7 @@ function CircuitWorkoutOverviewContent() {
         <div className="mx-auto max-w-2xl">
           <div className="flex items-center justify-between p-4">
             <button
-              onClick={() => router.back()}
+              onClick={() => router.push(`/circuit-sessions/${sessionId}`)}
               className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 transition-colors rounded-md focus:outline-none focus:ring-0"
             >
               <ChevronLeftIcon className="h-4 w-4" />

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card } from "@acme/ui-shared";
 import { cn } from "@acme/ui-shared";
 import { useTRPC } from "~/trpc/react";
@@ -38,13 +38,19 @@ const LoaderIcon = ({ className = "w-6 h-6" }: { className?: string }) => (
 export default function CircuitConfigPage() {
   const router = useRouter();
   const trpc = useTRPC();
+  const queryClient = useQueryClient();
   const [isCreating, setIsCreating] = useState(false);
   const [selectedType, setSelectedType] = useState<'custom' | 'template' | null>(null);
 
   // Create session mutation
   const createSessionMutation = useMutation(
     trpc.trainingSession.createCircuitSessionPublic.mutationOptions({
-      onSuccess: (data) => {
+      onSuccess: async (data) => {
+        // Invalidate the circuit sessions list cache
+        await queryClient.invalidateQueries({
+          queryKey: [["trainingSession", "listCircuitSessions"]],
+        });
+        
         // Navigate to the circuit config page with the new session ID and workout type
         router.push(`/circuit-sessions/${data.sessionId}/circuit-config?workoutType=${data.workoutType}&fromNew=true`);
       },
