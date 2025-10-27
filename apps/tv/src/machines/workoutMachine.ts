@@ -113,7 +113,8 @@ export const workoutMachine = createMachine({
               currentRoundIndex: ({ context }) => context.currentRoundIndex - 1,
               currentExerciseIndex: 0,
               currentSetNumber: 1
-            })
+            }),
+            reenter: true // Reset timer
           }
         ],
         SELECTIONS_UPDATED: {

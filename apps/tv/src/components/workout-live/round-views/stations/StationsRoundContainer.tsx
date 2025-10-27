@@ -6,6 +6,8 @@ import {
   StationsRestView
 } from '../../../workout-round';
 import { RoundData, CircuitExercise } from '../../types';
+import type { CircuitConfig } from '@acme/db';
+import { useStationCircuitTimers } from '../../../../hooks/useStationCircuitTimers';
 
 interface StationsRoundContainerProps {
   state: any; // Will be typed more specifically later
@@ -17,6 +19,7 @@ interface StationsRoundContainerProps {
   repeatTimes: number;
   restDuration: number;
   workDuration: number;
+  circuitConfig: CircuitConfig;
 }
 
 export function StationsRoundContainer({
@@ -28,8 +31,36 @@ export function StationsRoundContainer({
   roundDuration,
   repeatTimes,
   restDuration,
-  workDuration
+  workDuration,
+  circuitConfig
 }: StationsRoundContainerProps) {
+  console.log('[StationsRoundContainer] Component render');
+  console.log('[StationsRoundContainer] currentRoundIndex:', currentRoundIndex);
+  console.log('[StationsRoundContainer] currentExerciseIndex:', currentExerciseIndex);
+  console.log('[StationsRoundContainer] state.value:', state.value);
+  console.log('[StationsRoundContainer] circuitConfig available:', !!circuitConfig);
+  
+  // Get station circuits configuration for current round
+  const roundTemplate = circuitConfig?.config?.roundTemplates?.find(
+    rt => rt.roundNumber === currentRoundIndex + 1 // roundNumber is 1-based
+  );
+  console.log('[StationsRoundContainer] roundTemplate found:', !!roundTemplate);
+  console.log('[StationsRoundContainer] roundTemplate:', roundTemplate);
+  
+  const stationCircuits = roundTemplate?.template?.stationCircuits;
+  console.log('[StationsRoundContainer] stationCircuits:', stationCircuits);
+
+  // Use the station circuit timers hook
+  const { getStationTimerDisplay } = useStationCircuitTimers({
+    stationCircuits,
+    isPaused: state.context.isPaused,
+    isActive: state.value === 'exercise', // Only active during exercise phase
+    currentStationIndex: currentExerciseIndex,
+    mainTimerValue: state.context.timeRemaining, // Pass main timer value to sync
+    currentSetNumber: state.context.currentSetNumber, // Pass set number to detect resets
+    currentRoundIndex: currentRoundIndex, // Pass round index to detect round changes
+    stateValue: state.value // Pass state value to detect state transitions
+  });
   if (state.value === 'roundPreview') {
     return (
       <StationsRoundPreview 
@@ -49,12 +80,13 @@ export function StationsRoundContainer({
       <>
         <StationsExerciseView 
           currentRound={currentRound}
+          currentExercise={currentRound.exercises[currentExerciseIndex]}
           currentExerciseIndex={currentExerciseIndex}
           timeRemaining={state.context.timeRemaining}
           isPaused={state.context.isPaused}
           workDuration={workDuration}
-          currentSetNumber={state.context.currentSetNumber}
-          totalSets={repeatTimes}
+          getStationTimerDisplay={getStationTimerDisplay}
+          stationCircuits={stationCircuits}
         />
       </>
     );

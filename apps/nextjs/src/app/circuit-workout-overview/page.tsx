@@ -187,7 +187,14 @@ function CircuitWorkoutOverviewContent() {
   // Add exercise to station mutation
   const addExerciseToStationMutation = useMutation({
     ...trpc.workoutSelections.addExerciseToStationPublic.mutationOptions(),
+    onMutate: (variables) => {
+      console.log('[circuit-workout-overview] ADD EXERCISE TO STATION - Starting mutation');
+      console.log('[circuit-workout-overview] Mutation variables:', variables);
+      console.log('[circuit-workout-overview] Adding to existing station with orderIndex:', variables.orderIndex);
+    },
     onSuccess: (data) => {
+      console.log('[circuit-workout-overview] ADD EXERCISE TO STATION - Success');
+      console.log('[circuit-workout-overview] Response data:', data);
       
       // Close modal
       setShowAddExerciseModal(false);
@@ -214,7 +221,28 @@ function CircuitWorkoutOverviewContent() {
   // Add exercise to round mutation (for circuit/amrap rounds)
   const addExerciseToRoundMutation = useMutation({
     ...trpc.workoutSelections.addExerciseToRoundPublic.mutationOptions(),
+    onMutate: (variables) => {
+      console.log('[circuit-workout-overview] ADD EXERCISE TO ROUND - Starting mutation');
+      console.log('[circuit-workout-overview] Mutation variables:', variables);
+      console.log('[circuit-workout-overview] Session ID:', sessionId);
+      console.log('[circuit-workout-overview] Current round data for round', variables.roundNumber, ':', 
+        roundsData.find(r => parseInt(r.roundName.match(/\d+/)?.[0] || '0') === variables.roundNumber));
+      
+      // Check if this is a stations round
+      if (circuitConfig?.config?.roundTemplates) {
+        const roundTemplate = circuitConfig.config.roundTemplates.find(
+          rt => rt.roundNumber === variables.roundNumber
+        );
+        console.log('[circuit-workout-overview] Round template:', roundTemplate);
+        console.log('[circuit-workout-overview] Is stations round:', roundTemplate?.template?.type === 'stations_round');
+        console.log('[circuit-workout-overview] Current stationCircuits before add:', roundTemplate?.template?.stationCircuits);
+      }
+    },
     onSuccess: (data) => {
+      console.log('[circuit-workout-overview] ADD EXERCISE TO ROUND - Success');
+      console.log('[circuit-workout-overview] Response data:', data);
+      console.log('[circuit-workout-overview] New exercise created with orderIndex:', data?.orderIndex);
+      console.log('[circuit-workout-overview] New exercise stationIndex:', data?.stationIndex);
       
       // Close modal
       setShowAddExerciseModal(false);
@@ -230,9 +258,37 @@ function CircuitWorkoutOverviewContent() {
           sessionId: sessionId || "" 
         }).queryKey,
       });
+      
+      // Also invalidate circuit config to reflect cleaned up orphaned configs
+      queryClient.invalidateQueries({
+        queryKey: trpc.circuitConfig.getBySession.queryOptions({ 
+          sessionId: sessionId || "" 
+        }).queryKey,
+      });
+      
+      // Log what happens after refresh
+      setTimeout(() => {
+        console.log('[circuit-workout-overview] POST-ADD: Checking circuit config after refresh...');
+        console.log('[circuit-workout-overview] POST-ADD: Full circuitConfig:', circuitConfig);
+        if (circuitConfig?.config?.roundTemplates) {
+          console.log('[circuit-workout-overview] POST-ADD: All round templates after refresh:', circuitConfig.config.roundTemplates);
+          const roundTemplate = circuitConfig.config.roundTemplates.find(
+            rt => rt.roundNumber === data?.roundNumber
+          );
+          console.log('[circuit-workout-overview] POST-ADD: Target round template after refresh:', roundTemplate);
+          console.log('[circuit-workout-overview] POST-ADD: stationCircuits after refresh:', roundTemplate?.template?.stationCircuits);
+          
+          // Check ALL round templates for stationCircuits
+          circuitConfig.config.roundTemplates.forEach(rt => {
+            if (rt.template.stationCircuits) {
+              console.log('[circuit-workout-overview] POST-ADD: Found stationCircuits in round', rt.roundNumber, ':', rt.template.stationCircuits);
+            }
+          });
+        }
+      }, 1000);
     },
     onError: (error) => {
-      console.error("Failed to add exercise to round:", error);
+      console.error("[circuit-workout-overview] Failed to add exercise to round:", error);
       alert("Failed to add exercise to round. Please try again.");
     },
   });

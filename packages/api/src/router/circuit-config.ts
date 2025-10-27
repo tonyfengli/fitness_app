@@ -38,7 +38,16 @@ function ensureRoundTemplates(config: any) {
               }
             };
           } else if (rt.template.type === 'stations_round') {
-            return {
+            console.log('[BUG TRACE - ensureRoundTemplates] Processing stations_round:', {
+              roundNumber: rt.roundNumber,
+              hasStationCircuits: !!rt.template.stationCircuits,
+              stationCircuitsKeys: rt.template.stationCircuits ? Object.keys(rt.template.stationCircuits) : [],
+              stationCircuitsData: rt.template.stationCircuits,
+              workDuration: rt.template.workDuration,
+              restDuration: rt.template.restDuration
+            });
+            
+            const processedTemplate = {
               ...rt,
               template: {
                 ...rt.template,
@@ -51,6 +60,14 @@ function ensureRoundTemplates(config: any) {
                 repeatTimes: rt.template.repeatTimes ?? 1,
               }
             };
+            
+            console.log('[BUG TRACE - ensureRoundTemplates] Processed stations_round result:', {
+              roundNumber: processedTemplate.roundNumber,
+              hasStationCircuits: !!processedTemplate.template.stationCircuits,
+              stationCircuitsData: processedTemplate.template.stationCircuits
+            });
+            
+            return processedTemplate;
           } else if (rt.template.type === 'amrap_round') {
             return {
               ...rt,
@@ -116,7 +133,28 @@ export const circuitConfigRouter = createTRPCRouter({
         "type" in session.templateConfig &&
         session.templateConfig.type === "circuit"
       ) {
-        return ensureRoundTemplates(session.templateConfig);
+        console.log('[BUG TRACE - getBySession] Processing circuit config:', {
+          sessionId: input.sessionId,
+          templateType: session.templateType,
+          hasTemplateConfig: !!session.templateConfig,
+          templateConfigType: (session.templateConfig as any)?.type
+        });
+        
+        const result = ensureRoundTemplates(session.templateConfig);
+        
+        console.log('[BUG TRACE - getBySession] After ensureRoundTemplates:', {
+          sessionId: input.sessionId,
+          hasRoundTemplates: !!result.config?.roundTemplates,
+          roundTemplatesCount: result.config?.roundTemplates?.length || 0,
+          roundTemplatesWithStationCircuits: result.config?.roundTemplates?.filter((rt: any) => 
+            rt.template.type === 'stations_round' && rt.template.stationCircuits
+          ).map((rt: any) => ({
+            roundNumber: rt.roundNumber,
+            stationCircuitsKeys: Object.keys(rt.template.stationCircuits)
+          })) || []
+        });
+        
+        return result;
       }
 
       // Return default config for circuit sessions without config
@@ -380,13 +418,36 @@ export const circuitConfigRouter = createTRPCRouter({
       
       // Validate station circuit configurations if they exist
       if (input.config.roundTemplates) {
+        console.log('[BUG TRACE - updatePublic] Processing roundTemplates for validation:', {
+          roundTemplatesCount: input.config.roundTemplates.length,
+          roundTemplates: input.config.roundTemplates.map(rt => ({
+            roundNumber: rt.roundNumber,
+            type: rt.template.type,
+            hasStationCircuits: !!rt.template.stationCircuits,
+            stationCircuitsKeys: rt.template.stationCircuits ? Object.keys(rt.template.stationCircuits) : []
+          }))
+        });
+        
         for (const roundTemplate of input.config.roundTemplates) {
           if (roundTemplate.template.type === 'stations_round' && 
               roundTemplate.template.stationCircuits) {
+            console.log('[BUG TRACE - updatePublic] Validating stations_round with stationCircuits:', {
+              roundNumber: roundTemplate.roundNumber,
+              stationWorkDuration: roundTemplate.template.workDuration,
+              stationCircuits: roundTemplate.template.stationCircuits,
+              stationCircuitsKeys: Object.keys(roundTemplate.template.stationCircuits)
+            });
+            
             const stationWorkDuration = roundTemplate.template.workDuration;
             
             // Validate each station circuit configuration
             for (const [stationIndex, circuitConfig] of Object.entries(roundTemplate.template.stationCircuits)) {
+              console.log('[BUG TRACE - updatePublic] Validating station circuit:', {
+                stationIndex,
+                circuitConfig,
+                stationWorkDuration
+              });
+              
               const { workDuration, restDuration, sets } = circuitConfig;
               const totalConfiguredTime = (workDuration * sets) + (restDuration * (sets - 1));
               

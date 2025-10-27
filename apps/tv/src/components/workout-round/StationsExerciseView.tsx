@@ -9,6 +9,8 @@ interface StationsExerciseViewProps {
   timeRemaining: number;
   isPaused: boolean;
   workDuration?: number;
+  getStationTimerDisplay?: (stationIndex: number) => { phase: string; time: string; isActive: boolean } | null;
+  stationCircuits?: Record<string, any>;
 }
 
 // Team configuration - matches the preview
@@ -27,7 +29,9 @@ export function StationsExerciseView({
   currentExerciseIndex,
   timeRemaining,
   isPaused,
-  workDuration = 45
+  workDuration = 45,
+  getStationTimerDisplay,
+  stationCircuits
 }: StationsExerciseViewProps) {
   // Use actual number of exercises as stations
   const exerciseCount = currentRound.exercises.length;
@@ -35,8 +39,148 @@ export function StationsExerciseView({
   // Use only as many teams as there are stations
   const activeTeams = TEAMS.slice(0, exerciseCount);
   
+  // Calculate dynamic positioning for timer based on current station
+  // Account for container padding (48px on each side) in the flex layout
+  // Each station occupies equal width within the padded container
+  const containerPadding = 48;
+  const contentWidthPercent = 100 - ((containerPadding * 2) / 1920 * 100); // Assuming TV width ~1920px
+  const paddingPercent = (containerPadding / 1920) * 100;
+  
+  // Position timer at center of current station within the content area
+  const stationCenterPercent = paddingPercent + (((currentExerciseIndex + 0.5) / exerciseCount) * contentWidthPercent);
+  
+  // Get all station timers (not just current)
+  const getStationCircuitTimers = () => {
+    console.log('[StationsExerciseView] getStationCircuitTimers called');
+    console.log('[StationsExerciseView] stationCircuits:', stationCircuits);
+    console.log('[StationsExerciseView] getStationTimerDisplay available:', !!getStationTimerDisplay);
+    
+    if (!stationCircuits || !getStationTimerDisplay) {
+      console.log('[StationsExerciseView] Early return - missing stationCircuits or getStationTimerDisplay');
+      return {};
+    }
+    
+    const timers: Record<string, any> = {};
+    Object.keys(stationCircuits).forEach(stationIndex => {
+      const stationIdx = parseInt(stationIndex);
+      console.log('[StationsExerciseView] Processing station index:', stationIndex);
+      console.log('[StationsExerciseView] Station index as number:', stationIdx);
+      console.log('[StationsExerciseView] Exercise count (max stations):', exerciseCount);
+      
+      // Safety check: only process stations that actually exist
+      if (stationIdx >= exerciseCount) {
+        console.log('[StationsExerciseView] SKIPPING station', stationIdx, '- exceeds exercise count', exerciseCount);
+        return;
+      }
+      
+      const timer = getStationTimerDisplay(stationIdx);
+      console.log('[StationsExerciseView] Timer for station', stationIndex, ':', timer);
+      if (timer) {
+        timers[stationIndex] = timer;
+      }
+    });
+    console.log('[StationsExerciseView] Final timers object:', timers);
+    return timers;
+  };
+  
+  const allStationTimers = getStationCircuitTimers();
+  
   return (
-    <View style={{ flex: 1, width: '100%' }}>
+    <View style={{ flex: 1, width: '100%', position: 'relative' }}>
+      {/* Floating Circuit Timers - Show for ALL stations with circuit config */}
+      {Object.entries(allStationTimers).map(([stationIndex, timer]) => {
+        const stationIdx = parseInt(stationIndex);
+        const stationPosition = paddingPercent + (((stationIdx + 0.5) / exerciseCount) * contentWidthPercent);
+        const isCurrentStation = stationIdx === currentExerciseIndex;
+        
+        console.log('[StationsExerciseView] Rendering timer for station:', stationIndex);
+        console.log('[StationsExerciseView] - stationIdx:', stationIdx);
+        console.log('[StationsExerciseView] - stationPosition:', stationPosition);
+        console.log('[StationsExerciseView] - isCurrentStation:', isCurrentStation);
+        console.log('[StationsExerciseView] - currentExerciseIndex:', currentExerciseIndex);
+        console.log('[StationsExerciseView] - exerciseCount:', exerciseCount);
+        console.log('[StationsExerciseView] - timer data:', timer);
+        
+        return (
+          <View 
+            key={`circuit-timer-${stationIndex}`}
+            style={{
+              position: 'absolute',
+              bottom: -38,
+              left: `${stationPosition}%`,
+              transform: [{ translateX: -50 }],
+              zIndex: isCurrentStation ? 25 : 20,
+              paddingHorizontal: 14,
+              paddingVertical: 4,
+              backgroundColor: 'rgba(0,0,0,0.9)',
+              borderColor: timer.phase === 'WORK' ? '#f59e0b' : '#5de1ff',
+              borderWidth: 1,
+              borderRadius: 20,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 6,
+              elevation: isCurrentStation ? 10 : 8,
+              shadowColor: '#000',
+              shadowOpacity: 0.5,
+              shadowRadius: isCurrentStation ? 16 : 12,
+              shadowOffset: { width: 0, height: 4 },
+              opacity: timer.isActive ? 1 : 0.6,
+            }}>
+            <Text style={{
+              fontSize: 10,
+              fontWeight: '600',
+              color: timer.phase === 'WORK' ? '#f59e0b' : '#5de1ff',
+              letterSpacing: 0.8,
+              textTransform: 'uppercase',
+            }}>
+              {timer.phase}
+            </Text>
+            <Text style={{
+              fontSize: 16,
+              fontWeight: '900',
+              color: '#ffffff',
+              letterSpacing: 0.2,
+              fontVariant: ['tabular-nums'],
+            }}>
+              {timer.time}
+            </Text>
+            
+            {/* Elegant set progress indicator */}
+            <View style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 2,
+              marginLeft: 2,
+            }}>
+              <View style={{
+                width: 1,
+                height: 12,
+                backgroundColor: 'rgba(255,255,255,0.15)',
+              }} />
+              <View style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 3,
+              }}>
+                {timer.totalSets && Array.from({ length: timer.totalSets }, (_, i) => (
+                  <View
+                    key={i}
+                    style={{
+                      width: 8,
+                      height: 8,
+                      borderRadius: 4,
+                      backgroundColor: i < timer.currentSet 
+                        ? (timer.phase === 'WORK' ? '#f59e0b' : '#5de1ff')
+                        : 'rgba(255,255,255,0.2)',
+                    }}
+                  />
+                ))}
+              </View>
+            </View>
+          </View>
+        );
+      })}
+
       {/* Horizontal Columns Layout - Same as preview */}
       <View style={{ 
         flex: 1, 
@@ -111,6 +255,7 @@ export function StationsExerciseView({
                         {team.name}
                       </Text>
                     </View>
+
                     
                     {/* Station Badge - Right side, aligned with team */}
                     <View style={{
