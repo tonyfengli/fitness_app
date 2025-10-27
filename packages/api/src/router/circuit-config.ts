@@ -378,6 +378,29 @@ export const circuitConfigRouter = createTRPCRouter({
         updatedBy: "anonymous", // Since it's public
       };
       
+      // Validate station circuit configurations if they exist
+      if (input.config.roundTemplates) {
+        for (const roundTemplate of input.config.roundTemplates) {
+          if (roundTemplate.template.type === 'stations_round' && 
+              roundTemplate.template.stationCircuits) {
+            const stationWorkDuration = roundTemplate.template.workDuration;
+            
+            // Validate each station circuit configuration
+            for (const [stationIndex, circuitConfig] of Object.entries(roundTemplate.template.stationCircuits)) {
+              const { workDuration, restDuration, sets } = circuitConfig;
+              const totalConfiguredTime = (workDuration * sets) + (restDuration * (sets - 1));
+              
+              if (totalConfiguredTime !== stationWorkDuration) {
+                throw new TRPCError({
+                  code: "BAD_REQUEST",
+                  message: `Station ${parseInt(stationIndex) + 1} circuit timing (${totalConfiguredTime}s) must equal station duration (${stationWorkDuration}s)`,
+                });
+              }
+            }
+          }
+        }
+      }
+      
 
       // Ensure round templates exist
       const configWithRoundTemplates = ensureRoundTemplates(updatedConfig);

@@ -23,6 +23,13 @@ export const CircuitRoundTemplateSchema = z.object({
   restBetweenSets: z.number().int().min(5).max(CIRCUIT_CONFIG_LIMITS.restBetweenRounds.max).optional(),
 });
 
+// Station circuit configuration schema
+export const StationCircuitConfigSchema = z.object({
+  workDuration: z.number().int().min(5).max(CIRCUIT_CONFIG_LIMITS.workDuration.max),
+  restDuration: z.number().int().min(0).max(CIRCUIT_CONFIG_LIMITS.restDuration.max),
+  sets: z.number().int().min(2).max(10),
+});
+
 export const StationsRoundTemplateSchema = z.object({
   type: z.literal('stations_round'),
   exercisesPerRound: z.number().int().min(2).max(CIRCUIT_CONFIG_LIMITS.exercisesPerRound.max), // Stations require at least 2 exercises
@@ -30,6 +37,7 @@ export const StationsRoundTemplateSchema = z.object({
   restDuration: z.number().int().min(CIRCUIT_CONFIG_LIMITS.restDuration.min).max(CIRCUIT_CONFIG_LIMITS.restDuration.max),
   repeatTimes: z.number().int().min(1).max(5).default(1),
   restBetweenSets: z.number().int().min(5).max(CIRCUIT_CONFIG_LIMITS.restBetweenRounds.max).optional(),
+  stationCircuits: z.record(z.string().regex(/^\d+$/), StationCircuitConfigSchema).optional(),
 });
 
 export const AMRAPRoundTemplateSchema = z.object({
