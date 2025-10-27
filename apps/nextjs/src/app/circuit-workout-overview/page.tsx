@@ -298,6 +298,20 @@ function CircuitWorkoutOverviewContent() {
   const [showRoundOptionsModal, setShowRoundOptionsModal] = useState(false);
   const [selectedRoundForOptions, setSelectedRoundForOptions] = useState<RoundData | null>(null);
 
+  // Station circuit configuration modal state
+  const [showStationCircuitModal, setShowStationCircuitModal] = useState(false);
+  const [selectedStationForCircuit, setSelectedStationForCircuit] = useState<{
+    roundName: string;
+    stationIndex: number;
+    stationNumber: number;
+    totalWorkDuration: number; // Total time available for the station
+  } | null>(null);
+  const [stationCircuitConfig, setStationCircuitConfig] = useState({
+    workDuration: 40,
+    restDuration: 20,
+    sets: 3,
+  });
+
   // Add round modal state
   const [showAddRoundModal, setShowAddRoundModal] = useState(false);
   const [addRoundStep, setAddRoundStep] = useState(1);
@@ -875,6 +889,16 @@ function CircuitWorkoutOverviewContent() {
     }
   }, [showRoundOptionsModal]);
 
+  // Prevent body scroll when station circuit modal is open
+  useEffect(() => {
+    if (showStationCircuitModal) {
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = '';
+      };
+    }
+  }, [showStationCircuitModal]);
+
   // Reset states when modal closes
   useEffect(() => {
     if (!showExerciseSelection) {
@@ -1301,6 +1325,41 @@ function CircuitWorkoutOverviewContent() {
                                     >
                                       <svg className="h-4 w-4 text-gray-500 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                                      </svg>
+                                    </button>
+                                    <div className="w-px h-5 bg-gray-200 dark:bg-gray-700 mx-1" />
+                                    <button 
+                                      onClick={() => {
+                                        // Get the station's total work duration from the round template
+                                        const roundNumber = parseInt(round.roundName.match(/\d+/)?.[0] || '1');
+                                        const roundTemplate = circuitConfig?.config?.roundTemplates?.find(
+                                          rt => rt.roundNumber === roundNumber
+                                        );
+                                        const totalWorkDuration = roundTemplate?.template?.workDuration || 180; // Default 3 minutes
+                                        
+                                        setSelectedStationForCircuit({
+                                          roundName: round.roundName,
+                                          stationIndex: idx,
+                                          stationNumber: idx + 1,
+                                          totalWorkDuration: totalWorkDuration
+                                        });
+                                        setShowStationCircuitModal(true);
+                                      }}
+                                      className="p-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                                      title="Station options"
+                                    >
+                                      <svg 
+                                        width="16" 
+                                        height="16" 
+                                        viewBox="0 0 24 24" 
+                                        fill="none" 
+                                        stroke="currentColor" 
+                                        strokeWidth="2"
+                                        className="text-gray-500 dark:text-gray-400"
+                                      >
+                                        <circle cx="12" cy="12" r="1"/>
+                                        <circle cx="19" cy="12" r="1"/>
+                                        <circle cx="5" cy="12" r="1"/>
                                       </svg>
                                     </button>
                                   </div>
@@ -3446,6 +3505,61 @@ function CircuitWorkoutOverviewContent() {
         </>
       )}
 
+      {/* Station Circuit Configuration Modal - Full Screen */}
+      {showStationCircuitModal && selectedStationForCircuit && (
+        <>
+          {/* Background overlay */}
+          <div
+            className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm"
+            onClick={() => {
+              setShowStationCircuitModal(false);
+              setSelectedStationForCircuit(null);
+            }}
+          />
+
+          {/* Modal - Full Screen */}
+          <div className="fixed inset-0 z-50 flex flex-col bg-white dark:bg-gray-800">
+            {/* Header */}
+            <div className="flex-shrink-0 border-b border-gray-200 dark:border-gray-700 px-6 py-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">
+                    Station {selectedStationForCircuit.stationNumber} Configuration
+                  </h2>
+                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                    Configure timer settings for this station ({selectedStationForCircuit.totalWorkDuration}s total)
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowStationCircuitModal(false);
+                    setSelectedStationForCircuit(null);
+                  }}
+                  className="rounded-lg p-2 text-gray-400 dark:text-gray-500 transition-colors hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-600 dark:hover:text-gray-300 focus:outline-none focus:ring-0"
+                >
+                  <XIcon className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Content */}
+            <StationCircuitConfigContent
+              stationInfo={selectedStationForCircuit}
+              onClose={() => {
+                setShowStationCircuitModal(false);
+                setSelectedStationForCircuit(null);
+              }}
+              onSave={(config) => {
+                // TODO: Save configuration
+                console.log('Saving station circuit config:', config);
+                setShowStationCircuitModal(false);
+                setSelectedStationForCircuit(null);
+              }}
+            />
+          </div>
+        </>
+      )}
+
       {/* Add Round Modal - Full Screen */}
       {showAddRoundModal && (
         <>
@@ -4661,6 +4775,225 @@ function WarmupExercisesList({
         </div>
       ))}
     </>
+  );
+}
+
+// Station Circuit Configuration Component
+function StationCircuitConfigContent({
+  stationInfo,
+  onClose,
+  onSave,
+}: {
+  stationInfo: {
+    roundName: string;
+    stationIndex: number;
+    stationNumber: number;
+    totalWorkDuration: number;
+  };
+  onClose: () => void;
+  onSave: (config: { mode: 'amrap' | 'circuit'; workDuration?: number; restDuration?: number; sets?: number }) => void;
+}) {
+  const [mode, setMode] = useState<'amrap' | 'circuit'>('amrap');
+  const [workDuration, setWorkDuration] = useState("40");
+  const [sets, setSets] = useState(3);
+  
+  // Calculate rest duration automatically
+  const calculateRestDuration = () => {
+    if (mode === 'amrap') return 0;
+    if (sets <= 1) return 0;
+    
+    const workDurationNum = parseInt(workDuration) || 0;
+    const totalWorkTime = workDurationNum * sets;
+    const totalRestTime = stationInfo.totalWorkDuration - totalWorkTime;
+    const restDuration = Math.floor(totalRestTime / (sets - 1));
+    
+    return restDuration;
+  };
+  
+  const restDuration = calculateRestDuration();
+  const isValidConfiguration = mode === 'amrap' || (restDuration >= 0 && restDuration === calculateRestDuration());
+  
+  // Calculate total time for validation
+  const totalConfiguredTime = mode === 'circuit' 
+    ? ((parseInt(workDuration) || 0) * sets) + (restDuration * (sets - 1))
+    : 0;
+  
+  return (
+    <div className="flex-1 overflow-y-auto">
+      <div className="p-6 max-w-2xl mx-auto">
+        {/* Mode Selection */}
+        <div className="mb-8">
+          <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Timer Mode</h3>
+          <div className="flex gap-4">
+            <button
+              onClick={() => setMode('amrap')}
+              className={cn(
+                "flex-1 p-4 rounded-xl border-2 text-left transition-all",
+                mode === 'amrap'
+                  ? "border-blue-500 bg-blue-50 dark:bg-blue-950/20"
+                  : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600"
+              )}
+            >
+              <div className="flex items-center gap-3">
+                <div className={cn(
+                  "w-5 h-5 rounded-full border-2 flex items-center justify-center",
+                  mode === 'amrap' ? "border-blue-500" : "border-gray-400 dark:border-gray-600"
+                )}>
+                  {mode === 'amrap' && <div className="w-2 h-2 rounded-full bg-blue-500" />}
+                </div>
+                <div className="flex-1">
+                  <h4 className="font-semibold text-gray-900 dark:text-white">AMRAP</h4>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                    As Many Rounds As Possible for {stationInfo.totalWorkDuration}s
+                  </p>
+                </div>
+              </div>
+            </button>
+            
+            <button
+              onClick={() => setMode('circuit')}
+              className={cn(
+                "flex-1 p-4 rounded-xl border-2 text-left transition-all",
+                mode === 'circuit'
+                  ? "border-blue-500 bg-blue-50 dark:bg-blue-950/20"
+                  : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600"
+              )}
+            >
+              <div className="flex items-center gap-3">
+                <div className={cn(
+                  "w-5 h-5 rounded-full border-2 flex items-center justify-center",
+                  mode === 'circuit' ? "border-blue-500" : "border-gray-400 dark:border-gray-600"
+                )}>
+                  {mode === 'circuit' && <div className="w-2 h-2 rounded-full bg-blue-500" />}
+                </div>
+                <div className="flex-1">
+                  <h4 className="font-semibold text-gray-900 dark:text-white">Circuit</h4>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                    Structured intervals with work/rest periods
+                  </p>
+                </div>
+              </div>
+            </button>
+          </div>
+        </div>
+        
+        {/* Circuit Configuration */}
+        {mode === 'circuit' && (
+          <div className="space-y-6">
+            {/* Work Duration */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Work Duration (seconds)
+              </label>
+              <input
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                value={workDuration}
+                onChange={(e) => {
+                  const value = e.target.value.replace(/[^0-9]/g, '');
+                  setWorkDuration(value);
+                }}
+                placeholder="Enter work duration"
+                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            
+            {/* Sets Selection */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Number of Sets
+              </label>
+              <div className="flex gap-2">
+                {[2, 3, 4, 5, 6].map((num) => (
+                  <button
+                    key={num}
+                    onClick={() => setSets(num)}
+                    className={cn(
+                      "flex-1 py-2 px-4 rounded-lg border transition-all",
+                      sets === num
+                        ? "border-blue-500 bg-blue-50 dark:bg-blue-950/20 text-blue-700 dark:text-blue-300"
+                        : "border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500"
+                    )}
+                  >
+                    {num}
+                  </button>
+                ))}
+              </div>
+            </div>
+            
+            {/* Rest Duration (Auto-calculated) */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Rest Duration (auto-calculated)
+              </label>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={restDuration >= 0 ? `${restDuration}s` : 'Invalid'}
+                  disabled
+                  className={cn(
+                    "w-full px-4 py-2 border rounded-lg bg-gray-100 dark:bg-gray-900 cursor-not-allowed",
+                    restDuration >= 0 
+                      ? "border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400"
+                      : "border-red-300 dark:border-red-600 text-red-600 dark:text-red-400"
+                  )}
+                />
+              </div>
+              {restDuration < 0 && (
+                <p className="mt-1 text-sm text-red-600 dark:text-red-400">
+                  Invalid configuration: Work time exceeds station duration
+                </p>
+              )}
+            </div>
+            
+            {/* Summary */}
+            {isValidConfiguration && (
+              <div className="p-4 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                <div className="flex items-center gap-2 text-blue-700 dark:text-blue-300">
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span className="font-medium">Configuration Summary</span>
+                </div>
+                <p className="mt-2 text-sm text-blue-600 dark:text-blue-400">
+                  {workDuration}s work / {restDuration}s rest × {sets} sets = {totalConfiguredTime}s total
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+        
+        {/* Action Buttons */}
+        <div className="mt-8 flex gap-3">
+          <Button
+            variant="outline"
+            onClick={onClose}
+            className="flex-1 h-12"
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={() => {
+              if (mode === 'amrap') {
+                onSave({ mode: 'amrap' });
+              } else {
+                onSave({ 
+                  mode: 'circuit', 
+                  workDuration: parseInt(workDuration) || 0, 
+                  restDuration, 
+                  sets 
+                });
+              }
+            }}
+            disabled={mode === 'circuit' && !isValidConfiguration}
+            className="flex-1 h-12 bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Save Configuration
+          </Button>
+        </div>
+      </div>
+    </div>
   );
 }
 
