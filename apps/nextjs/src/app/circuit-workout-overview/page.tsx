@@ -1208,8 +1208,9 @@ function CircuitWorkoutOverviewContent() {
                             const stationsWorkDuration = stationsRoundTemplate?.template?.workDuration;
                             const stationsRestDuration = stationsRoundTemplate?.template?.restDuration;
                             const stationsRepeatTimes = stationsRoundTemplate?.template?.repeatTimes;
+                            const stationsRestBetweenSets = stationsRoundTemplate?.template?.restBetweenSets;
                             const stationsHelpText = stationsRepeatTimes > 1 
-                              ? `Stations • ${stationsWorkDuration}s work / ${stationsRestDuration}s transition • ${stationsRepeatTimes} sets`
+                              ? `Stations • ${stationsWorkDuration}s work / ${stationsRestDuration}s transition • ${stationsRepeatTimes} sets${stationsRestBetweenSets ? ` / ${stationsRestBetweenSets}s between sets` : ''}`
                               : `Stations • ${stationsWorkDuration}s work / ${stationsRestDuration}s transition`;
                             return (
                               <>
@@ -4098,9 +4099,9 @@ function RoundEditContent({
       : String(roundTemplate.template.repeatTimes)
   );
   const [restBetweenSets, setRestBetweenSets] = useState(
-    roundTemplate.template.type === 'circuit_round' 
-      ? String(roundTemplate.template.restBetweenSets)
-      : "60"
+    (roundTemplate.template.type === 'circuit_round' || roundTemplate.template.type === 'stations_round')
+      ? String(roundTemplate.template.restBetweenSets || "30")
+      : "30"
   );
   const [totalDuration, setTotalDuration] = useState(
     roundTemplate.template.type === 'amrap_round' 
@@ -4172,8 +4173,8 @@ function RoundEditContent({
         toast.error("Number of sets must be between 1 and 5");
         return;
       }
-      // Validate rest between sets for circuit rounds with multiple sets
-      if (roundTemplate.template.type === 'circuit_round' && repeatTimesNum > 1) {
+      // Validate rest between sets for circuit and stations rounds with multiple sets
+      if ((roundTemplate.template.type === 'circuit_round' || roundTemplate.template.type === 'stations_round') && repeatTimesNum > 1) {
         if (restBetweenSetsNum < 5 || restBetweenSetsNum > 300) {
           toast.error("Rest between sets must be between 5 and 300 seconds");
           return;
@@ -4198,6 +4199,7 @@ function RoundEditContent({
               workDuration: workDurationNum,
               restDuration: restDurationNum,
               repeatTimes: repeatTimesNum,
+              restBetweenSets: repeatTimesNum > 1 ? Math.max(5, restBetweenSetsNum) : undefined,
             }
           };
         } else if (roundTemplate.template.type === 'circuit_round') {
@@ -4320,6 +4322,30 @@ function RoundEditContent({
                   Min: 1, Max: 5
                 </p>
               </div>
+              
+              {parseInt(repeatTimes) > 1 && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Rest Between Sets (seconds)
+                  </label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    min={5}
+                    max={300}
+                    value={restBetweenSets}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/[^0-9]/g, '');
+                      setRestBetweenSets(value);
+                    }}
+                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    Min: 5s, Max: 5 minutes
+                  </p>
+                </div>
+              )}
             </>
           )}
           

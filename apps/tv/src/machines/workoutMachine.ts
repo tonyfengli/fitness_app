@@ -484,6 +484,8 @@ export const workoutMachine = createMachine({
           
           if (currentTemplate?.template.type === 'circuit_round') {
             return (currentTemplate.template as any).restBetweenSets || 30;
+          } else if (currentTemplate?.template.type === 'stations_round') {
+            return (currentTemplate.template as any).restBetweenSets || 30;
           }
           return 30;
         },
