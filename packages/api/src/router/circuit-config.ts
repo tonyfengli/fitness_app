@@ -423,8 +423,8 @@ export const circuitConfigRouter = createTRPCRouter({
           roundTemplates: input.config.roundTemplates.map(rt => ({
             roundNumber: rt.roundNumber,
             type: rt.template.type,
-            hasStationCircuits: !!rt.template.stationCircuits,
-            stationCircuitsKeys: rt.template.stationCircuits ? Object.keys(rt.template.stationCircuits) : []
+            hasStationCircuits: rt.template.type === 'stations_round' ? !!(rt.template as any).stationCircuits : false,
+            stationCircuitsKeys: rt.template.type === 'stations_round' && (rt.template as any).stationCircuits ? Object.keys((rt.template as any).stationCircuits) : []
           }))
         });
         
