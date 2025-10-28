@@ -4797,8 +4797,14 @@ function RoundEditContent({
       onClose();
     },
     onError: (error: any) => {
-      toast.error("Failed to update round settings");
       console.error("Update error:", error);
+      
+      // Check if it's a circuit timing validation error
+      if (error?.message?.includes('circuit timing') && error?.message?.includes('must equal station duration')) {
+        toast.error("Circuit timer conflicts with station duration. Remove circuit timer before updating station settings.");
+      } else {
+        toast.error("Failed to update round settings");
+      }
     },
   });
   

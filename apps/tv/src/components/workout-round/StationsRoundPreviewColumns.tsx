@@ -15,6 +15,8 @@ const TEAMS = [
   { name: 'Team 4', color: '#f59e0b' },
   { name: 'Team 5', color: '#a855f7' },
   { name: 'Team 6', color: '#14b8a6' },
+  { name: 'Team 7', color: '#fb923c' },
+  { name: 'Team 8', color: '#06b6d4' },
 ];
 
 export function StationsRoundPreviewColumns({ currentRound, repeatTimes = 1 }: StationsRoundPreviewProps) {

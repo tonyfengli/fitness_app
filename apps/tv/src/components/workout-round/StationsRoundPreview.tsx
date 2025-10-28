@@ -18,6 +18,8 @@ const TEAMS = [
   { name: 'Team 4', color: '#f59e0b' },
   { name: 'Team 5', color: '#a855f7' },
   { name: 'Team 6', color: '#14b8a6' },
+  { name: 'Team 7', color: '#fb923c' },
+  { name: 'Team 8', color: '#06b6d4' },
 ];
 
 export function StationsRoundPreview({ currentRound, repeatTimes = 1, workDuration = 45, timeRemaining = 0, isTimerActive = false }: StationsRoundPreviewProps) {
@@ -50,31 +52,77 @@ export function StationsRoundPreview({ currentRound, repeatTimes = 1, workDurati
         ) : null}
       </View>
 
-      {/* Horizontal Columns Layout */}
+      {/* Responsive Grid Layout */}
       <View style={{ 
         flex: 1, 
         paddingHorizontal: 48,
-        flexDirection: 'row',
-        gap: 2, // Minimal gap for connected feel
+        flexDirection: 'column',
+        gap: 2,
       }}>
-        {currentRound.exercises.map((exercise, idx) => {
-          const stationNumber = idx + 1;
-          const team = activeTeams[idx % activeTeams.length];
+        {(() => {
+          // Calculate responsive grid layout
+          const getGridLayout = (stationCount: number) => {
+            if (stationCount <= 4) {
+              return { rows: 1, cols: stationCount };
+            } else if (stationCount === 5) {
+              return { rows: 2, cols: 3 }; // 3 top, 2 bottom
+            } else if (stationCount === 6) {
+              return { rows: 2, cols: 3 }; // 3-3
+            } else if (stationCount === 7) {
+              return { rows: 2, cols: 4 }; // 4 top, 3 bottom
+            } else if (stationCount === 8) {
+              return { rows: 2, cols: 4 }; // 4-4
+            }
+            return { rows: 2, cols: 4 }; // Default for 8+ stations
+          };
+
+          const { rows, cols } = getGridLayout(exerciseCount);
+          const isMultiRow = rows > 1;
           
-          return (
+          // Group stations into rows
+          const getStationRows = () => {
+            if (!isMultiRow) {
+              return [currentRound.exercises];
+            }
+            
+            const stationsInFirstRow = exerciseCount === 5 ? 3 : cols;
+            const firstRow = currentRound.exercises.slice(0, stationsInFirstRow);
+            const secondRow = currentRound.exercises.slice(stationsInFirstRow);
+            
+            return [firstRow, secondRow];
+          };
+
+          const stationRows = getStationRows();
+          
+          return stationRows.map((row, rowIndex) => (
             <View 
-              key={exercise.id} 
+              key={`row-${rowIndex}`}
               style={{ 
-                flex: 1,
-                backgroundColor: TOKENS.color.cardGlass,
-                borderRadius: 0,
-                borderTopLeftRadius: stationNumber === 1 ? 16 : 0,
-                borderBottomLeftRadius: stationNumber === 1 ? 16 : 0,
-                borderTopRightRadius: stationNumber === exerciseCount ? 16 : 0,
-                borderBottomRightRadius: stationNumber === exerciseCount ? 16 : 0,
-                overflow: 'hidden',
+                flex: isMultiRow ? 1 : 1,
+                flexDirection: 'row',
+                gap: 2,
               }}
             >
+              {row.map((exercise, colIndex) => {
+                const idx = rowIndex === 0 ? colIndex : (exerciseCount === 5 ? 3 : cols) + colIndex;
+                const stationNumber = idx + 1;
+                const team = activeTeams[idx % activeTeams.length];
+                
+                return (
+                  <View 
+                    key={exercise.id} 
+                    style={{ 
+                      flex: 1,
+                      backgroundColor: TOKENS.color.cardGlass,
+                      borderRadius: 0,
+                      // Grid corner radius logic
+                      borderTopLeftRadius: (rowIndex === 0 && colIndex === 0) ? 16 : 0,
+                      borderTopRightRadius: (rowIndex === 0 && colIndex === row.length - 1) ? 16 : 0,
+                      borderBottomLeftRadius: (rowIndex === stationRows.length - 1 && colIndex === 0) ? 16 : 0,
+                      borderBottomRightRadius: (rowIndex === stationRows.length - 1 && colIndex === row.length - 1) ? 16 : 0,
+                      overflow: 'hidden',
+                    }}
+                  >
               {/* Team Color Bar */}
               <View style={{
                 height: 6,
@@ -194,9 +242,12 @@ export function StationsRoundPreview({ currentRound, repeatTimes = 1, workDurati
                 </View>
               </View>
             </View>
-          );
-        })}
-      </View>
+                  );
+                })}
+              </View>
+            ));
+          })()}
+        </View>
       
       {/* Repeat Indicator - Bottom Right */}
       {repeatTimes > 1 && (
