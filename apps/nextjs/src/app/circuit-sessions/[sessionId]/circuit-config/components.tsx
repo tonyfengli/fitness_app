@@ -1112,8 +1112,39 @@ export function ReviewStep({ config, repeatRounds, templateData }: ReviewStepPro
         let unitsCount = roundTemplate.exercisesPerRound;
         
         if (roundTemplate.type === 'stations_round' && round && round.exercises) {
-          const uniqueStations = new Set(round.exercises.map((ex: any) => ex.stationIndex || ex.orderIndex));
+          console.log(`[ReviewStep] Round ${index + 1} - TOTAL TIME CALC - Station analysis START:`, {
+            roundType: roundTemplate.type,
+            roundIndex: index,
+            templateExercisesPerRound: roundTemplate.exercisesPerRound,
+            actualExercises: round.exercises.length,
+            exerciseData: round.exercises.map((ex: any, idx: number) => ({
+              index: idx,
+              name: ex.exerciseName,
+              orderIndex: ex.orderIndex,
+              stationIndex: ex.stationIndex,
+              fallbackUsed: ex.stationIndex || ex.orderIndex
+            }))
+          });
+          
+          // FIX: Count unique stations by orderIndex (each orderIndex = one station)
+          const uniqueStations = new Set(round.exercises.map((ex: any) => ex.orderIndex));
           unitsCount = uniqueStations.size || roundTemplate.exercisesPerRound;
+          
+          // Alternative counting methods for comparison
+          const uniqueByOrderIndex = new Set(round.exercises.map((ex: any) => ex.orderIndex));
+          const uniqueByStationIndex = new Set(round.exercises.map((ex: any) => ex.stationIndex));
+          
+          console.log(`[ReviewStep] Round ${index + 1} - TOTAL TIME CALC - Station counting results:`, {
+            currentLogic_result: unitsCount,
+            currentLogic_uniqueStations: Array.from(uniqueStations).sort(),
+            currentLogic_beforeFallback: uniqueStations.size,
+            fallbackToTemplate: uniqueStations.size === 0 ? roundTemplate.exercisesPerRound : 'not used',
+            alternativeA_orderIndex: Array.from(uniqueByOrderIndex).sort(),
+            alternativeA_count: uniqueByOrderIndex.size,
+            alternativeB_stationIndex: Array.from(uniqueByStationIndex).sort(),
+            alternativeB_count: uniqueByStationIndex.size,
+            recommendedLogic: 'Use uniqueByOrderIndex.size for stations'
+          });
         }
         
         const workTime = (roundTemplate as any).workDuration || 0;
@@ -1273,8 +1304,45 @@ export function ReviewStep({ config, repeatRounds, templateData }: ReviewStepPro
                                   
                                   // For stations, count unique stations instead of total exercises
                                   if (isStations) {
-                                    const uniqueStations = new Set(round.exercises.map((ex: any) => ex.stationIndex || ex.orderIndex));
+                                    console.log(`[ReviewStep] Round ${roundIndex + 1} - TIMING CALC - Station analysis START:`, {
+                                      roundName: round.roundName,
+                                      totalExercises: round.exercises.length,
+                                      rawExercises: round.exercises.map((ex: any, idx: number) => ({
+                                        index: idx,
+                                        exerciseName: ex.exerciseName,
+                                        orderIndex: ex.orderIndex,
+                                        stationIndex: ex.stationIndex,
+                                        fallbackValue: ex.stationIndex || ex.orderIndex,
+                                        usedForGrouping: ex.stationIndex || ex.orderIndex
+                                      }))
+                                    });
+                                    
+                                    // FIX: Count unique stations by orderIndex (each orderIndex = one station)
+                                    const uniqueStations = new Set(round.exercises.map((ex: any) => ex.orderIndex));
                                     unitsCount = uniqueStations.size;
+                                    
+                                    // Alternative counting methods for comparison
+                                    const uniqueByOrderIndex = new Set(round.exercises.map((ex: any) => ex.orderIndex));
+                                    const uniqueByStationIndex = new Set(round.exercises.map((ex: any) => ex.stationIndex));
+                                    
+                                    console.log(`[ReviewStep] Round ${roundIndex + 1} - TIMING CALC - Station counting comparison:`, {
+                                      currentLogic_stationOrOrder: Array.from(uniqueStations).sort(),
+                                      currentLogic_count: unitsCount,
+                                      alternativeA_orderIndex: Array.from(uniqueByOrderIndex).sort(),
+                                      alternativeA_count: uniqueByOrderIndex.size,
+                                      alternativeB_stationIndex: Array.from(uniqueByStationIndex).sort(),
+                                      alternativeB_count: uniqueByStationIndex.size,
+                                      templateExercisesPerRound: roundTemplate?.exercisesPerRound,
+                                      exerciseGrouping: round.exercises.reduce((acc: any, ex: any) => {
+                                        const key = `orderIndex_${ex.orderIndex}`;
+                                        if (!acc[key]) acc[key] = [];
+                                        acc[key].push({
+                                          name: ex.exerciseName,
+                                          stationIndex: ex.stationIndex
+                                        });
+                                        return acc;
+                                      }, {})
+                                    });
                                   }
                                   
                                   const workTime = (roundTemplate as any).workDuration || 0;
@@ -1287,16 +1355,19 @@ export function ReviewStep({ config, repeatRounds, templateData }: ReviewStepPro
                                   // Total time: (timePerSet * sets) + (restBetweenSets * (sets - 1))
                                   const totalRoundTime = (timePerSet * sets) + (restBetweenSets * (sets - 1));
                                   
-                                  console.log(`[Round ${roundIndex + 1}] Time calc:`, {
+                                  console.log(`[ReviewStep] Round ${roundIndex + 1} - TIMING CALC - Final calculation:`, {
                                     roundType: isStations ? 'stations' : 'circuit',
-                                    exercises: round.exercises.length,
-                                    unitsCount,
+                                    totalExercises: round.exercises.length,
+                                    calculatedUnitsCount: unitsCount,
                                     workTime,
                                     restTime,
                                     sets,
                                     restBetweenSets,
+                                    formula: `(${unitsCount} * (${workTime} + ${restTime}) - ${restTime}) * ${sets} + (${restBetweenSets} * (${sets} - 1))`,
                                     timePerSet,
                                     totalRoundTime,
+                                    formattedTime: formatTime(totalRoundTime),
+                                    stationCountingMethod: isStations ? 'stationIndex || orderIndex' : 'N/A'
                                   });
                                   
                                   return formatTime(totalRoundTime);
@@ -1470,12 +1541,6 @@ export function ReviewStep({ config, repeatRounds, templateData }: ReviewStepPro
         );
       })()}
 
-      {/* Ready Message */}
-      <div className="rounded-xl bg-green-500/10 border border-green-500/20 p-4 text-center">
-        <p className="text-sm text-green-700 font-medium">
-          ✓ Configuration complete! Tap confirm to continue.
-        </p>
-      </div>
     </div>
   );
 }

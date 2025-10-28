@@ -162,15 +162,15 @@ export default function CircuitConfigPage() {
       } else if (currentStep === 2) {
         setCurrentStep(3); // Go to template selection
       } else if (currentStep === 3) {
-        setCurrentStep(5); // Skip to review after template selection
-      } else if (currentStep === 5) {
-        setCurrentStep(6); // Go to music
+        setCurrentStep(5); // Skip to review after template selection - this is now the final step
+      // } else if (currentStep === 5) {
+      //   setCurrentStep(6); // Go to music (COMMENTED OUT)
       }
     } else {
       // Normal flow for custom workout - skip step 2 and 3
       if (currentStep === 1) {
         setCurrentStep(4); // Skip to rounds (skip category/template steps)
-      } else if (currentStep < (workoutType === 'custom' ? 8 : 6)) {
+      } else if (currentStep < (workoutType === 'custom' ? 7 : 6)) {
         setCurrentStep(currentStep + 1);
       }
     }
@@ -185,8 +185,8 @@ export default function CircuitConfigPage() {
         setCurrentStep(2); // Back to category selection
       } else if (currentStep === 5) {
         setCurrentStep(3); // Back to template selection
-      } else if (currentStep === 6) {
-        setCurrentStep(5); // Back to review
+      // } else if (currentStep === 6) {
+      //   setCurrentStep(5); // Back to review (COMMENTED OUT)
       }
     } else {
       // Normal back navigation for custom
@@ -200,7 +200,7 @@ export default function CircuitConfigPage() {
 
   // Add mutation for generating circuit workout
   const generateWorkoutMutation = useMutation(
-    trpc.trainingSession.generateCircuitWorkout.mutationOptions({
+    trpc.trainingSession.generateCircuitWorkoutPublic.mutationOptions({
       onSuccess: (data) => {
         console.log('[CircuitConfig] generateWorkoutMutation success:', data);
         toast.success("Circuit workout generated successfully!");
@@ -284,15 +284,15 @@ export default function CircuitConfigPage() {
             
             <div className="text-center">
               <p className="text-xs text-gray-500 dark:text-white">
-                {workoutType === 'template' && currentStep === 2 && "Step 1 of 4"}
-                {workoutType === 'template' && currentStep === 3 && "Step 2 of 4"}
-                {workoutType === 'template' && currentStep === 5 && "Step 3 of 4"}
-                {workoutType === 'template' && currentStep === 6 && "Step 4 of 4"}
-                {workoutType === 'custom' && currentStep === 4 && "Step 1 of 5"}
-                {workoutType === 'custom' && currentStep === 5 && "Step 2 of 5"}
-                {workoutType === 'custom' && currentStep === 6 && "Step 3 of 5"}
-                {workoutType === 'custom' && currentStep === 7 && "Step 4 of 5"}
-                {workoutType === 'custom' && currentStep === 8 && "Step 5 of 5"}
+                {workoutType === 'template' && currentStep === 2 && "Step 1 of 3"}
+                {workoutType === 'template' && currentStep === 3 && "Step 2 of 3"}
+                {workoutType === 'template' && currentStep === 5 && "Step 3 of 3"}
+                {/* {workoutType === 'template' && currentStep === 6 && "Step 4 of 4"} */}
+                {workoutType === 'custom' && currentStep === 4 && "Step 1 of 4"}
+                {workoutType === 'custom' && currentStep === 5 && "Step 2 of 4"}
+                {workoutType === 'custom' && currentStep === 6 && "Step 3 of 4"}
+                {workoutType === 'custom' && currentStep === 7 && "Step 4 of 4"}
+                {/* {workoutType === 'custom' && currentStep === 8 && "Step 5 of 5"} */}
                 {currentStep === 1 && ""}
               </p>
               <h1 className="text-sm font-medium text-gray-900 dark:text-gray-100">
@@ -301,15 +301,16 @@ export default function CircuitConfigPage() {
                 {currentStep === 3 && "Templates"}
                 {currentStep === 4 && "Rounds"}
                 {currentStep === 5 && (workoutType === 'custom' ? "Round Types" : "Review")}
-                {currentStep === 6 && (workoutType === 'custom' ? "Per-Round Config" : "Music")}
+                {currentStep === 6 && workoutType === 'custom' && "Per-Round Config"}
+                {/* {currentStep === 6 && workoutType === 'template' && "Music"} */}
                 {currentStep === 7 && workoutType === 'custom' && "Review"}
-                {currentStep === 8 && workoutType === 'custom' && "Music"}
+                {/* {currentStep === 8 && workoutType === 'custom' && "Music"} */}
               </h1>
             </div>
             
-            {currentStep === 1 ? (
+            {currentStep === 1 || (currentStep === 2 && workoutType === 'template') || (currentStep === 3 && workoutType === 'template') ? (
               <div className="w-20" />
-            ) : currentStep < (workoutType === 'custom' ? 8 : 6) ? (
+            ) : currentStep < (workoutType === 'custom' ? 7 : 5) ? (
               <Button
                 size="sm"
                 onClick={handleNext}
@@ -342,20 +343,20 @@ export default function CircuitConfigPage() {
                   let isActive = false;
                   
                   if (workoutType === 'template') {
-                    // Template flow: 2, 3, 5, 6 (4 steps total)
+                    // Template flow: 2, 3, 5 (3 steps total)
                     if (step === 1 && currentStep >= 2) isActive = true;
                     if (step === 2 && currentStep >= 3) isActive = true;
                     if (step === 3 && currentStep >= 5) isActive = true;
-                    if (step === 4 && currentStep >= 6) isActive = true;
-                    // Hide step 5 for template workflow
-                    if (step === 5) return null;
+                    // Hide steps 4 and 5 for template workflow (only 3 steps now)
+                    if (step === 4 || step === 5) return null;
                   } else if (workoutType === 'custom') {
-                    // Custom flow: 4, 5, 6, 7, 8 (5 steps total)
+                    // Custom flow: 4, 5, 6, 7 (4 steps total)
                     if (step === 1 && currentStep >= 4) isActive = true;
                     if (step === 2 && currentStep >= 5) isActive = true;
                     if (step === 3 && currentStep >= 6) isActive = true;
                     if (step === 4 && currentStep >= 7) isActive = true;
-                    if (step === 5 && currentStep >= 8) isActive = true;
+                    // Hide step 5 for custom workflow (music step removed)
+                    if (step === 5) return null;
                   }
                   
                   return (
@@ -506,8 +507,8 @@ export default function CircuitConfigPage() {
               />
             )}
 
-            {/* Step 6: Music (template) / Step 8: Music (custom) */}
-            {((currentStep === 6 && workoutType === 'template') || (currentStep === 8 && workoutType === 'custom')) && (
+            {/* COMMENTED OUT: Step 6: Music (template) / Step 8: Music (custom) */}
+            {/* {((currentStep === 6 && workoutType === 'template') || (currentStep === 8 && workoutType === 'custom')) && (
               <SpotifyStep
                 deviceId={spotifyDeviceId}
                 deviceName={spotifyDeviceName}
@@ -522,7 +523,7 @@ export default function CircuitConfigPage() {
                   });
                 }}
               />
-            )}
+            )} */}
           </div>
         </Card>
         </div>

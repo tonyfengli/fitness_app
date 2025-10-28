@@ -4559,27 +4559,14 @@ Set your goals and preferences for today's session.`;
     }),
 
   // Generate circuit workout without checked-in users
-  generateCircuitWorkout: protectedProcedure
+  generateCircuitWorkoutPublic: publicProcedure
     .input(z.object({ 
       sessionId: z.string().uuid() 
     }))
     .mutation(async ({ ctx, input }) => {
-      const user = ctx.session?.user as SessionUser;
-      
-      // Only trainers can generate circuit workouts
-      if (user.role !== "trainer") {
-        throw new TRPCError({
-          code: "FORBIDDEN",
-          message: "Only trainers can generate circuit workouts",
-        });
-      }
-
       // Get session with circuit config
       const session = await ctx.db.query.TrainingSession.findFirst({
-        where: and(
-          eq(TrainingSession.id, input.sessionId),
-          eq(TrainingSession.businessId, user.businessId),
-        ),
+        where: eq(TrainingSession.id, input.sessionId),
       });
 
       if (!session) {
@@ -4672,8 +4659,8 @@ Set your goals and preferences for today's session.`;
           .values({
             trainingSessionId: input.sessionId,
             userId: MASTER_TRAINER_ID,
-            businessId: user.businessId,
-            createdByTrainerId: user.id,
+            businessId: session.businessId,
+            createdByTrainerId: MASTER_TRAINER_ID,
             notes: "Circuit Training Master Workout",
             workoutType: "circuit",
             totalPlannedSets: 0,
