@@ -1400,6 +1400,62 @@ function CircuitWorkoutOverviewContent() {
             
             <div className="text-center">
               <h1 className="text-sm font-medium text-gray-900 dark:text-gray-100">Circuit Overview</h1>
+              {/* Total Time Display */}
+              {(() => {
+                let totalWorkoutTime = 0;
+                
+                if (circuitConfig?.config?.roundTemplates) {
+                  circuitConfig.config.roundTemplates.forEach((rt, index) => {
+                    const roundTemplate = rt.template;
+                    const round = roundsData[index];
+                    
+                    if (roundTemplate.type === 'amrap_round') {
+                      totalWorkoutTime += (roundTemplate as any).totalDuration || 300;
+                    } else if (roundTemplate.type === 'circuit_round' || roundTemplate.type === 'stations_round') {
+                      let unitsCount = roundTemplate.exercisesPerRound;
+                      
+                      if (roundTemplate.type === 'stations_round' && round?.exercises) {
+                        const uniqueStations = new Set(round.exercises.map((ex: any) => ex.orderIndex));
+                        unitsCount = uniqueStations.size || roundTemplate.exercisesPerRound;
+                      }
+                      
+                      const workTime = (roundTemplate as any).workDuration || 0;
+                      const restTime = (roundTemplate as any).restDuration || 0;
+                      const sets = (roundTemplate as any).repeatTimes || 1;
+                      const restBetweenSets = (roundTemplate as any).restBetweenSets || 0;
+                      
+                      // Time for one set: (units * work) + (rest between units)
+                      const timePerSet = (unitsCount * workTime) + ((unitsCount - 1) * restTime);
+                      const roundDuration = (timePerSet * sets) + (restBetweenSets * (sets - 1));
+                      
+                      totalWorkoutTime += roundDuration;
+                    }
+                    
+                    // Add rest between rounds (except after last round)
+                    if (index < circuitConfig.config.roundTemplates.length - 1 && circuitConfig.config.restBetweenRounds > 0) {
+                      totalWorkoutTime += circuitConfig.config.restBetweenRounds;
+                    }
+                  });
+                }
+                
+                const formatDuration = (seconds: number): string => {
+                  if (seconds < 60) return `${seconds}s`;
+                  const mins = Math.floor(seconds / 60);
+                  const secs = seconds % 60;
+                  return secs === 0 ? `${mins}m` : `${mins}:${secs.toString().padStart(2, '0')}`;
+                };
+                
+                return totalWorkoutTime > 0 ? (
+                  <div className="mt-1 px-2 py-1 bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-800 rounded-full inline-flex items-center gap-1">
+                    <svg className="w-3 h-3 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span className="text-xs font-semibold text-blue-700 dark:text-blue-300">
+                      {formatDuration(totalWorkoutTime)}
+                    </span>
+                  </div>
+                ) : null;
+              })()}
             </div>
             
             <Button
@@ -1419,7 +1475,7 @@ function CircuitWorkoutOverviewContent() {
 
           {/* Session Name Header */}
           {sessionData?.name && (
-            <div className="mt-6 mb-8 text-center">
+            <div className="mt-12 mb-8 text-center">
               {isEditingSessionName ? (
                 <div className="flex flex-col items-center gap-3">
                   <div className="inline-flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 rounded-lg border-2 border-blue-500 dark:border-blue-400 shadow-lg">
@@ -1566,7 +1622,10 @@ function CircuitWorkoutOverviewContent() {
             <Loader2 className="h-8 w-8 animate-spin text-gray-500 dark:text-gray-400" />
           </div>
         ) : roundsData.length > 0 ? (
-          <div className="grid gap-6">
+          <>
+
+            {/* Rounds Content */}
+            <div className="grid gap-6">
             {roundsData.map((round, roundIndex) => {
               // Get music for this round
               const roundMusic = setlist?.rounds?.[roundIndex];
@@ -1677,7 +1736,7 @@ function CircuitWorkoutOverviewContent() {
                         </button>
                       </div>
                     </h2>
-                    <p className="mt-1 text-sm text-gray-600 dark:text-gray-400 flex items-center gap-2">
+                    <p className="mt-1 text-sm text-gray-600 dark:text-gray-400 flex items-center justify-between gap-2">
                       {(() => {
                         const roundType = round.roundType || 'circuit_round';
                         switch (roundType) {
@@ -1686,10 +1745,26 @@ function CircuitWorkoutOverviewContent() {
                             const amrapDuration = Math.floor((amrapRoundTemplate?.template?.totalDuration || 0) / 60);
                             return (
                               <>
-                                <svg className="w-4 h-4 text-violet-500 dark:text-violet-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
-                                <span>AMRAP • {amrapDuration} min rounds / {circuitConfig?.config?.restBetweenRounds}s rest</span>
+                                <div className="flex items-center gap-2">
+                                  <svg className="w-4 h-4 text-violet-500 dark:text-violet-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                  </svg>
+                                  <span>AMRAP • {amrapDuration} min rounds / {circuitConfig?.config?.restBetweenRounds}s rest</span>
+                                </div>
+                                {/* AMRAP Timing Badge */}
+                                <div className="flex items-center gap-2">
+                                  <div className="px-3 py-1 bg-violet-50 dark:bg-violet-950/50 border border-violet-200 dark:border-violet-800 rounded-full">
+                                    <span className="text-sm font-semibold text-violet-700 dark:text-violet-300">
+                                      {(() => {
+                                        const totalDuration = amrapRoundTemplate?.template?.totalDuration || 0;
+                                        if (totalDuration < 60) return `${totalDuration}s`;
+                                        const mins = Math.floor(totalDuration / 60);
+                                        const secs = totalDuration % 60;
+                                        return secs === 0 ? `${mins}m` : `${mins}:${secs.toString().padStart(2, '0')}`;
+                                      })()}
+                                    </span>
+                                  </div>
+                                </div>
                               </>
                             );
                           case 'stations_round':
@@ -1703,10 +1778,37 @@ function CircuitWorkoutOverviewContent() {
                               : `Stations • ${stationsWorkDuration}s work / ${stationsRestDuration}s transition`;
                             return (
                               <>
-                                <svg className="w-4 h-4 text-emerald-500 dark:text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                                </svg>
-                                <span>{stationsHelpText}</span>
+                                <div className="flex items-center gap-2">
+                                  <svg className="w-4 h-4 text-emerald-500 dark:text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 515.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                                  </svg>
+                                  <span>{stationsHelpText}</span>
+                                </div>
+                                {/* Stations Timing Badge */}
+                                <div className="flex items-center gap-2">
+                                  <div className="px-3 py-1 bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 rounded-full">
+                                    <span className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">
+                                      {(() => {
+                                        const workTime = stationsWorkDuration || 0;
+                                        const restTime = stationsRestDuration || 0;
+                                        const sets = stationsRepeatTimes || 1;
+                                        const restBetweenSets = stationsRestBetweenSets || 0;
+                                        const uniqueStations = new Set(round.exercises.map((ex: any) => ex.orderIndex));
+                                        const unitsCount = uniqueStations.size || 1;
+                                        
+                                        // Time for one set: (units * work) + (rest between units)
+                                        const timePerSet = (unitsCount * workTime) + ((unitsCount - 1) * restTime);
+                                        // Total time: (timePerSet * sets) + (restBetweenSets * (sets - 1))
+                                        const totalDuration = (timePerSet * sets) + (restBetweenSets * (sets - 1));
+                                        
+                                        if (totalDuration < 60) return `${totalDuration}s`;
+                                        const mins = Math.floor(totalDuration / 60);
+                                        const secs = totalDuration % 60;
+                                        return secs === 0 ? `${mins}m` : `${mins}:${secs.toString().padStart(2, '0')}`;
+                                      })()}
+                                    </span>
+                                  </div>
+                                </div>
                               </>
                             );
                           case 'circuit_round':
@@ -1731,6 +1833,30 @@ function CircuitWorkoutOverviewContent() {
                                   <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                                 </svg>
                                 <span>{circuitHelpText}</span>
+                                {/* Circuit Timing Badge */}
+                                <div className="flex items-center gap-2">
+                                  <div className="px-3 py-1 bg-sky-50 dark:bg-sky-950/50 border border-sky-200 dark:border-sky-800 rounded-full">
+                                    <span className="text-sm font-semibold text-sky-700 dark:text-sky-300">
+                                      {(() => {
+                                        const workTime = circuitWorkDuration || 0;
+                                        const restTime = circuitRestDuration || 0;
+                                        const sets = circuitRepeatTimes || 1;
+                                        const restBetweenSets = circuitRestBetweenSets || 0;
+                                        const unitsCount = round.exercises.length;
+                                        
+                                        // Time for one set: (units * work) + (rest between units)
+                                        const timePerSet = (unitsCount * workTime) + ((unitsCount - 1) * restTime);
+                                        // Total time: (timePerSet * sets) + (restBetweenSets * (sets - 1))
+                                        const totalDuration = (timePerSet * sets) + (restBetweenSets * (sets - 1));
+                                        
+                                        if (totalDuration < 60) return `${totalDuration}s`;
+                                        const mins = Math.floor(totalDuration / 60);
+                                        const secs = totalDuration % 60;
+                                        return secs === 0 ? `${mins}m` : `${mins}:${secs.toString().padStart(2, '0')}`;
+                                      })()}
+                                    </span>
+                                  </div>
+                                </div>
                               </>
                             );
                         }
@@ -2326,7 +2452,8 @@ function CircuitWorkoutOverviewContent() {
               </button>
             </Card>
             </div>
-          </div>
+            </div>
+          </>
         ) : (
           <Card className="p-16 text-center border-2 border-dashed dark:bg-gray-800 dark:border-gray-700">
             <div className="flex flex-col items-center justify-center">

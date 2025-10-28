@@ -1299,8 +1299,8 @@ export function ReviewStep({ config, repeatRounds, templateData }: ReviewStepPro
         const sets = (roundTemplate as any).repeatTimes || 1;
         const restBetweenSets = (roundTemplate as any).restBetweenSets || 0;
         
-        // Time for one set: units * (work + rest) - last rest
-        const timePerSet = unitsCount * (workTime + restTime) - restTime;
+        // Time for one set: (units * work) + (rest between units)
+        const timePerSet = (unitsCount * workTime) + ((unitsCount - 1) * restTime);
         // Total time for this round: (timePerSet * sets) + (restBetweenSets * (sets - 1))
         const roundTime = (timePerSet * sets) + (restBetweenSets * (sets - 1));
         
