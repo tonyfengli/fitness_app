@@ -4,7 +4,7 @@ import { z } from "zod/v4";
 const CIRCUIT_CONFIG_LIMITS = {
   rounds: { min: 1, max: 10 },
   exercisesPerRound: { min: 2, max: 10 },   // Default minimum for backwards compatibility
-  workDuration: { min: 10, max: 300 },      // 10 seconds to 5 minutes
+  workDuration: { min: 1 },                 // Minimum 1 second, no maximum
   restDuration: { min: 5, max: 120 },       // 5 seconds to 2 minutes  
   restBetweenRounds: { min: 10, max: 300 }  // 10 seconds to 5 minutes
 } as const;
@@ -17,7 +17,7 @@ const CIRCUIT_CONFIG_LIMITS = {
 export const CircuitRoundTemplateSchema = z.object({
   type: z.literal('circuit_round'),
   exercisesPerRound: z.number().int().min(1).max(CIRCUIT_CONFIG_LIMITS.exercisesPerRound.max), // Allow 1 exercise for circuit rounds
-  workDuration: z.number().int().min(CIRCUIT_CONFIG_LIMITS.workDuration.min).max(CIRCUIT_CONFIG_LIMITS.workDuration.max),
+  workDuration: z.number().int().min(CIRCUIT_CONFIG_LIMITS.workDuration.min),
   restDuration: z.number().int().min(0).max(CIRCUIT_CONFIG_LIMITS.restDuration.max),
   repeatTimes: z.number().int().min(1).max(5).default(1),
   restBetweenSets: z.number().int().min(5).max(CIRCUIT_CONFIG_LIMITS.restBetweenRounds.max).optional(),
@@ -25,7 +25,7 @@ export const CircuitRoundTemplateSchema = z.object({
 
 // Station circuit configuration schema
 export const StationCircuitConfigSchema = z.object({
-  workDuration: z.number().int().min(5).max(CIRCUIT_CONFIG_LIMITS.workDuration.max),
+  workDuration: z.number().int().min(CIRCUIT_CONFIG_LIMITS.workDuration.min),
   restDuration: z.number().int().min(0).max(CIRCUIT_CONFIG_LIMITS.restDuration.max),
   sets: z.number().int().min(2).max(10),
 });
@@ -33,7 +33,7 @@ export const StationCircuitConfigSchema = z.object({
 export const StationsRoundTemplateSchema = z.object({
   type: z.literal('stations_round'),
   exercisesPerRound: z.number().int().min(2).max(CIRCUIT_CONFIG_LIMITS.exercisesPerRound.max), // Stations require at least 2 exercises
-  workDuration: z.number().int().min(CIRCUIT_CONFIG_LIMITS.workDuration.min).max(CIRCUIT_CONFIG_LIMITS.workDuration.max),
+  workDuration: z.number().int().min(CIRCUIT_CONFIG_LIMITS.workDuration.min),
   restDuration: z.number().int().min(CIRCUIT_CONFIG_LIMITS.restDuration.min).max(CIRCUIT_CONFIG_LIMITS.restDuration.max),
   repeatTimes: z.number().int().min(1).max(5).default(1),
   restBetweenSets: z.number().int().min(5).max(CIRCUIT_CONFIG_LIMITS.restBetweenRounds.max).optional(),
@@ -43,7 +43,7 @@ export const StationsRoundTemplateSchema = z.object({
 export const AMRAPRoundTemplateSchema = z.object({
   type: z.literal('amrap_round'),
   exercisesPerRound: z.number().int().min(1).max(CIRCUIT_CONFIG_LIMITS.exercisesPerRound.max), // Allow 1 exercise for AMRAP rounds
-  totalDuration: z.number().int().min(60).max(600), // 1-10 minutes
+  totalDuration: z.number().int().min(60), // Minimum 1 minute, no maximum
 });
 
 
@@ -76,8 +76,7 @@ export const CircuitExercisesSchema = z
 export const CircuitWorkDurationSchema = z
   .number()
   .int()
-  .min(CIRCUIT_CONFIG_LIMITS.workDuration.min)
-  .max(CIRCUIT_CONFIG_LIMITS.workDuration.max);
+  .min(CIRCUIT_CONFIG_LIMITS.workDuration.min);
 
 export const CircuitRestDurationSchema = z
   .number()

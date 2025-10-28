@@ -460,6 +460,7 @@ export function CircuitWorkoutLiveScreen() {
                 color: state.value === 'exercise' ? (currentRoundType === 'stations_round' ? '#fff5e6' : TOKENS.color.text) : TOKENS.color.accent, // Different colors for different round types
                 letterSpacing: -2,
                 position: 'absolute',
+                top: -15,
                 left: 0,
                 right: 0,
                 textAlign: 'center',
@@ -481,7 +482,7 @@ export function CircuitWorkoutLiveScreen() {
           {currentRoundType === 'stations_round' && currentRoundTiming.repeatTimes > 1 && (state.value === 'exercise' || state.value === 'rest') && (
             <View style={{
               position: 'absolute',
-              top: 167,
+              top: 159,
               left: 0,
               right: 0,
               alignItems: 'center',

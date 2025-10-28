@@ -110,7 +110,7 @@ export function StationsExerciseView({
               left: `${stationPosition}%`,
               transform: [{ translateX: -50 }],
               zIndex: isCurrentStation ? 25 : 20,
-              paddingHorizontal: 14,
+              paddingHorizontal: 15,
               paddingVertical: 4,
               backgroundColor: 'rgba(0,0,0,0.9)',
               borderColor: timer.phase === 'WORK' ? '#f59e0b' : '#5de1ff',
@@ -127,7 +127,7 @@ export function StationsExerciseView({
               opacity: timer.isActive ? 1 : 0.6,
             }}>
             <Text style={{
-              fontSize: 10,
+              fontSize: 11,
               fontWeight: '600',
               color: timer.phase === 'WORK' ? '#f59e0b' : '#5de1ff',
               letterSpacing: 0.8,
@@ -136,7 +136,7 @@ export function StationsExerciseView({
               {timer.phase}
             </Text>
             <Text style={{
-              fontSize: 16,
+              fontSize: 18,
               fontWeight: '900',
               color: '#ffffff',
               letterSpacing: 0.2,
@@ -158,23 +158,65 @@ export function StationsExerciseView({
                 backgroundColor: 'rgba(255,255,255,0.15)',
               }} />
               <View style={{
-                flexDirection: 'row',
+                flexDirection: 'column',
                 alignItems: 'center',
-                gap: 3,
+                gap: 2,
               }}>
-                {timer.totalSets && Array.from({ length: timer.totalSets }, (_, i) => (
-                  <View
-                    key={i}
-                    style={{
-                      width: 8,
-                      height: 8,
-                      borderRadius: 4,
-                      backgroundColor: i < timer.currentSet 
-                        ? (timer.phase === 'WORK' ? '#f59e0b' : '#5de1ff')
-                        : 'rgba(255,255,255,0.2)',
-                    }}
-                  />
-                ))}
+                {timer.totalSets && (() => {
+                  const totalSets = timer.totalSets;
+                  const cols = Math.ceil(totalSets / 2);
+                  const topRow = [];
+                  const bottomRow = [];
+                  
+                  for (let col = 0; col < cols; col++) {
+                    // Top row dot (set index: col * 2)
+                    const topSetIndex = col * 2;
+                    if (topSetIndex < totalSets) {
+                      topRow.push(
+                        <View
+                          key={`top-${col}`}
+                          style={{
+                            width: 9,
+                            height: 9,
+                            borderRadius: 4,
+                            backgroundColor: topSetIndex < timer.currentSet 
+                              ? (timer.phase === 'WORK' ? '#f59e0b' : '#5de1ff')
+                              : 'rgba(255,255,255,0.2)',
+                          }}
+                        />
+                      );
+                    }
+                    
+                    // Bottom row dot (set index: col * 2 + 1)
+                    const bottomSetIndex = col * 2 + 1;
+                    if (bottomSetIndex < totalSets) {
+                      bottomRow.push(
+                        <View
+                          key={`bottom-${col}`}
+                          style={{
+                            width: 9,
+                            height: 9,
+                            borderRadius: 4,
+                            backgroundColor: bottomSetIndex < timer.currentSet 
+                              ? (timer.phase === 'WORK' ? '#f59e0b' : '#5de1ff')
+                              : 'rgba(255,255,255,0.2)',
+                          }}
+                        />
+                      );
+                    }
+                  }
+                  
+                  return (
+                    <>
+                      <View style={{ flexDirection: 'row', gap: 3 }}>
+                        {topRow}
+                      </View>
+                      <View style={{ flexDirection: 'row', gap: 3 }}>
+                        {bottomRow}
+                      </View>
+                    </>
+                  );
+                })()}
               </View>
             </View>
           </View>
@@ -185,7 +227,7 @@ export function StationsExerciseView({
       <View style={{ 
         flex: 1, 
         paddingHorizontal: 48,
-        paddingTop: 44,
+        paddingTop: 29,
         flexDirection: 'row',
         gap: 2, // Minimal gap for connected feel
       }}>

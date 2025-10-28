@@ -33,6 +33,389 @@ import { supabase } from "~/lib/supabase";
 import { api, useTRPC } from "~/trpc/react";
 import { toast } from "sonner";
 
+// World-class Duration Input Component
+interface DurationInputProps {
+  value: number; // Duration in seconds
+  onChange: (seconds: number) => void;
+  label?: string;
+  presets?: { label: string; value: number; description?: string }[];
+  allowCustom?: boolean;
+  className?: string;
+  disabled?: boolean;
+  min?: number;
+  max?: number;
+}
+
+function DurationInput({ 
+  value, 
+  onChange, 
+  label,
+  presets,
+  allowCustom = true,
+  className,
+  disabled = false,
+  min,
+  max
+}: DurationInputProps) {
+  const [isCustomMode, setIsCustomMode] = useState(!presets || presets.length === 0);
+  const [customMinutes, setCustomMinutes] = useState(() => {
+    const mins = Math.floor(value / 60);
+    return mins > 0 ? mins : '';
+  });
+  const [customSeconds, setCustomSeconds] = useState(() => {
+    const secs = value % 60;
+    return secs > 0 ? secs : '';
+  });
+
+  // Sync internal state when value prop changes externally
+  useEffect(() => {
+    const mins = Math.floor(value / 60);
+    const secs = value % 60;
+    setCustomMinutes(mins > 0 ? mins : '');
+    setCustomSeconds(secs > 0 ? secs : '');
+  }, [value]);
+
+  // Format duration for display
+  const formatDuration = (seconds: number): string => {
+    if (seconds === 0) return '0s';
+    if (seconds < 60) return `${seconds}s`;
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    if (secs === 0) return `${mins}m`;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  // Handle preset selection
+  const handlePresetSelect = (presetValue: number) => {
+    onChange(presetValue);
+    setIsCustomMode(false);
+    setCustomMinutes(Math.floor(presetValue / 60));
+    setCustomSeconds(presetValue % 60);
+  };
+
+  // Handle custom time changes
+  const handleCustomChange = (minutes: number | string, seconds: number | string) => {
+    const numMinutes = typeof minutes === 'string' ? (parseInt(minutes) || 0) : minutes;
+    const numSeconds = typeof seconds === 'string' ? (parseInt(seconds) || 0) : seconds;
+    
+    const maxMinutes = max ? Math.floor(max / 60) : 999;
+    const clampedMinutes = Math.max(0, Math.min(maxMinutes, numMinutes));
+    const clampedSeconds = Math.max(0, Math.min(59, numSeconds));
+    
+    setCustomMinutes(minutes === '' ? '' : clampedMinutes);
+    setCustomSeconds(seconds === '' ? '' : clampedSeconds);
+    
+    const totalSeconds = clampedMinutes * 60 + clampedSeconds;
+    let constrainedSeconds = totalSeconds;
+    
+    if (min !== undefined) {
+      constrainedSeconds = Math.max(min, constrainedSeconds);
+    }
+    if (max !== undefined) {
+      constrainedSeconds = Math.min(max, constrainedSeconds);
+    }
+    
+    onChange(constrainedSeconds);
+  };
+
+  // Check if current value matches any preset
+  const matchingPreset = presets?.find(p => p.value === value);
+  const isPresetValue = !!matchingPreset && !isCustomMode;
+
+  return (
+    <div className={cn("space-y-3", className)}>
+      {label && (
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+            {label}
+          </span>
+        </div>
+      )}
+      
+      {/* Preset Options */}
+      {presets && presets.length > 0 && (
+        <div className="grid grid-cols-4 gap-2">
+          {presets.map((preset) => {
+            const isSelected = value === preset.value && !isCustomMode;
+            const isDisabled = preset.value < min || preset.value > max;
+            return (
+              <Button
+                key={preset.value}
+                variant={isSelected ? "default" : "outline"}
+                className={cn(
+                  "relative h-12 text-sm transition-all duration-200",
+                  "hover:scale-[1.02] active:scale-[0.98]",
+                  isSelected && "ring-2 ring-offset-1 ring-blue-500 shadow-lg bg-blue-600 text-white",
+                  !isSelected && !isDisabled && "hover:border-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20",
+                  isDisabled && "opacity-40 cursor-not-allowed",
+                  disabled && "opacity-50 cursor-not-allowed"
+                )}
+                onClick={() => !isDisabled && handlePresetSelect(preset.value)}
+                disabled={disabled || isDisabled}
+                size="sm"
+                title={preset.description}
+              >
+                <div className="flex flex-col items-center">
+                  <span className={cn(
+                    "font-semibold transition-all duration-200",
+                    isSelected && "scale-105"
+                  )}>
+                    {preset.label}
+                  </span>
+                  {preset.description && (
+                    <span className="text-xs opacity-75 mt-0.5 leading-3">
+                      {preset.description.split(' - ')[0]}
+                    </span>
+                  )}
+                </div>
+                {isSelected && (
+                  <div className="absolute -top-1 -right-1 w-3 h-3 bg-blue-400 rounded-full animate-pulse" />
+                )}
+              </Button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Custom Time Input */}
+      {allowCustom && (
+        <div className="space-y-3">
+          {presets && presets.length > 0 && (
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                Custom Time
+              </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 px-3 text-sm"
+                onClick={() => setIsCustomMode(!isCustomMode)}
+                disabled={disabled}
+              >
+                {isCustomMode ? "Hide" : "Show"}
+              </Button>
+            </div>
+          )}
+          
+          {isCustomMode && (
+            <div className="flex items-center gap-3 p-4 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 bg-gray-50/50 dark:bg-gray-800/50">
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  value={customMinutes}
+                  onChange={(e) => handleCustomChange(e.target.value, customSeconds)}
+                  className={cn(
+                    "w-16 text-center text-lg font-mono bg-white dark:bg-gray-700",
+                    "border-2 rounded-lg px-2 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500",
+                    "transition-all duration-200"
+                  )}
+                  min="0"
+                  max={max ? Math.floor(max / 60) : undefined}
+                  disabled={disabled}
+                  placeholder="0"
+                />
+                <span className="text-sm text-gray-600 dark:text-gray-400 font-semibold">min</span>
+              </div>
+              
+              <div className="text-gray-400 font-bold text-xl">:</div>
+              
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  value={customSeconds}
+                  onChange={(e) => handleCustomChange(customMinutes, e.target.value)}
+                  className={cn(
+                    "w-16 text-center text-lg font-mono bg-white dark:bg-gray-700",
+                    "border-2 rounded-lg px-2 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500",
+                    "transition-all duration-200"
+                  )}
+                  min="0"
+                  max="59"
+                  disabled={disabled}
+                  placeholder="0"
+                />
+                <span className="text-sm text-gray-600 dark:text-gray-400 font-semibold">sec</span>
+              </div>
+              
+              {((customMinutes !== '' && customMinutes > 0) || (customSeconds !== '' && customSeconds > 0)) && (
+                <div className="ml-auto bg-blue-100 dark:bg-blue-900/30 px-3 py-2 rounded-lg">
+                  <div className="text-sm text-blue-700 dark:text-blue-300 font-mono font-semibold">
+                    = {formatDuration((parseInt(customMinutes.toString()) || 0) * 60 + (parseInt(customSeconds.toString()) || 0))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+      
+      {/* Constraint Indicator */}
+      {(min !== undefined || max !== undefined) && (
+        <div className="text-xs text-gray-500 dark:text-gray-400">
+          <span>
+            {min !== undefined && `Min: ${formatDuration(min)}`}
+            {min !== undefined && max !== undefined && ', '}
+            {max !== undefined && `Max: ${formatDuration(max)}`}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// World-class Circuit Timer Calculator Component
+interface CircuitTimerCalculatorProps {
+  onApplyToWorkDuration: (seconds: number) => void;
+}
+
+function CircuitTimerCalculator({ onApplyToWorkDuration }: CircuitTimerCalculatorProps) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [circuitWork, setCircuitWork] = useState<number | ''>('');
+  const [circuitRest, setCircuitRest] = useState<number | ''>('');
+  const [circuitSets, setCircuitSets] = useState<number | ''>('');
+
+  // Calculate total circuit time (correct formula: ends on work, no rest after final set)
+  const workValue = typeof circuitWork === 'number' ? circuitWork : 0;
+  const restValue = typeof circuitRest === 'number' ? circuitRest : 0;
+  const setsValue = typeof circuitSets === 'number' ? circuitSets : 0;
+  
+  // Formula: (work × sets) + (rest × (sets - 1))
+  // Example: 3 sets = work + rest + work + rest + work (no final rest)
+  const totalCircuitTime = setsValue > 0 
+    ? (workValue * setsValue) + (restValue * Math.max(0, setsValue - 1))
+    : 0;
+
+  // Format duration for display (same as DurationInput)
+  const formatDuration = (seconds: number): string => {
+    if (seconds === 0) return '0s';
+    if (seconds < 60) return `${seconds}s`;
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    if (secs === 0) return `${mins}m`;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const handleApplyCalculation = () => {
+    onApplyToWorkDuration(totalCircuitTime);
+    setIsExpanded(false);
+  };
+
+  return (
+    <div className="space-y-3">
+      {/* Simple Toggle Button */}
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
+          Circuit Timer Calculator
+        </span>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-8 px-3 text-sm"
+          onClick={() => setIsExpanded(!isExpanded)}
+        >
+          {isExpanded ? "Hide" : "Show"}
+        </Button>
+      </div>
+      
+      {/* Expanded Calculator */}
+      {isExpanded && (
+        <div className="space-y-3 p-4 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 bg-gray-50/50 dark:bg-gray-800/50">
+          {/* Circuit Inputs */}
+          <div className="grid grid-cols-3 gap-3">
+            {/* Work Input */}
+            <div>
+              <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">
+                Work
+              </label>
+              <input
+                type="number"
+                value={circuitWork}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setCircuitWork(value === '' ? '' : parseInt(value) || 0);
+                }}
+                className={cn(
+                  "w-full text-center text-sm font-mono bg-white dark:bg-gray-700",
+                  "border-2 rounded-lg px-2 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500",
+                  "transition-all duration-200"
+                )}
+                min="0"
+                placeholder="0"
+              />
+              <p className="text-xs text-gray-500 mt-0.5">seconds</p>
+            </div>
+
+            {/* Rest Input */}
+            <div>
+              <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">
+                Rest
+              </label>
+              <input
+                type="number"
+                value={circuitRest}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setCircuitRest(value === '' ? '' : parseInt(value) || 0);
+                }}
+                className={cn(
+                  "w-full text-center text-sm font-mono bg-white dark:bg-gray-700",
+                  "border-2 rounded-lg px-2 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500",
+                  "transition-all duration-200"
+                )}
+                min="0"
+                placeholder="0"
+              />
+              <p className="text-xs text-gray-500 mt-0.5">seconds</p>
+            </div>
+
+            {/* Sets Input */}
+            <div>
+              <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">
+                Sets
+              </label>
+              <input
+                type="number"
+                value={circuitSets}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setCircuitSets(value === '' ? '' : parseInt(value) || 0);
+                }}
+                className={cn(
+                  "w-full text-center text-sm font-mono bg-white dark:bg-gray-700",
+                  "border-2 rounded-lg px-2 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500",
+                  "transition-all duration-200"
+                )}
+                min="1"
+                placeholder="1"
+              />
+              <p className="text-xs text-gray-500 mt-0.5">rounds</p>
+            </div>
+          </div>
+          
+          {/* Result and Apply */}
+          {totalCircuitTime > 0 && (
+            <div className="flex items-center justify-between pt-2 border-t border-gray-200 dark:border-gray-600">
+              <div>
+                <p className="text-xs text-gray-600 dark:text-gray-300">Total Station Time</p>
+                <p className="text-lg font-bold text-gray-900 dark:text-gray-100 font-mono">
+                  {formatDuration(totalCircuitTime)}
+                </p>
+              </div>
+              <Button
+                onClick={handleApplyCalculation}
+                size="sm"
+                className="bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                Apply
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Helper function to get unified muscle group
 const getUnifiedMuscleGroup = (muscle: string | undefined): string => {
   if (!muscle) return "Other";
@@ -4429,10 +4812,7 @@ function RoundEditContent({
     
     // Basic validation
     if (roundTemplate.template.type !== 'amrap_round') {
-      if (workDurationNum < 10 || workDurationNum > 300) {
-        toast.error("Work duration must be between 10 and 300 seconds");
-        return;
-      }
+      // Work duration validation removed - allow any duration
       if (roundTemplate.template.type === 'stations_round') {
         if (restDurationNum < 5 || restDurationNum > 120) {
           toast.error("Rest duration must be between 5 and 120 seconds");
@@ -4456,10 +4836,11 @@ function RoundEditContent({
         }
       }
     } else {
-      if (totalDurationNum < 60 || totalDurationNum > 600) {
-        toast.error("Total duration must be between 60 and 600 seconds");
+      if (totalDurationNum < 60) {
+        toast.error("Total duration must be at least 60 seconds");
         return;
       }
+      // No maximum limit for AMRAP duration
     }
     
     // Create updated round templates array
@@ -4513,6 +4894,28 @@ function RoundEditContent({
     }
   };
   
+  // World-class preset configurations for stations rounds
+  const stationsWorkPresets = [
+    { label: '30s', value: 30, description: 'Quick intervals' },
+    { label: '45s', value: 45, description: 'Standard work' },
+    { label: '60s', value: 60, description: 'Endurance focus' },
+    { label: '90s', value: 90, description: 'Extended sets' },
+    { label: '2m', value: 120, description: 'Long intervals' },
+    { label: '3m', value: 180, description: 'Aerobic training' },
+    { label: '4m', value: 240, description: 'Endurance base' },
+    { label: '5m', value: 300, description: 'Max endurance' },
+  ];
+
+  const stationsRestPresets = [
+    { label: '10s', value: 10, description: 'Active recovery' },
+    { label: '15s', value: 15, description: 'Quick transition' },
+    { label: '30s', value: 30, description: 'Standard rest' },
+    { label: '45s', value: 45, description: 'Extended break' },
+    { label: '60s', value: 60, description: 'Full recovery' },
+    { label: '90s', value: 90, description: 'Complete rest' },
+    { label: '2m', value: 120, description: 'Maximum rest' },
+  ];
+  
   return (
     <div className="flex-1 overflow-y-auto">
       {modalView === 'configure' ? (
@@ -4532,49 +4935,30 @@ function RoundEditContent({
           {/* Stations Round Config */}
           {roundTemplate.template.type === 'stations_round' && (
             <>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Work Duration (seconds)
-                </label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                  min={10}
-                  max={300}
-                  value={workDuration}
-                  onChange={(e) => {
-                    const value = e.target.value.replace(/[^0-9]/g, '');
-                    setWorkDuration(value);
-                  }}
-                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  Min: 10s, Max: 5 minutes
-                </p>
-              </div>
+              <DurationInput
+                label="Work Duration"
+                value={parseInt(workDuration) || 240}
+                onChange={(value) => setWorkDuration(value.toString())}
+                presets={[]} // No preset buttons
+                allowCustom={true}
+              />
+
+              {/* Circuit Timer Calculator - Hidden by default */}
+              <CircuitTimerCalculator
+                onApplyToWorkDuration={(calculatedSeconds) => {
+                  setWorkDuration(calculatedSeconds.toString());
+                }}
+              />
               
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Rest Duration (seconds)
-                </label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                  min={5}
-                  max={120}
-                  value={restDuration}
-                  onChange={(e) => {
-                    const value = e.target.value.replace(/[^0-9]/g, '');
-                    setRestDuration(value);
-                  }}
-                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  Min: 5s, Max: 2 minutes
-                </p>
-              </div>
+              <DurationInput
+                label="Rest Duration"
+                value={parseInt(restDuration) || 60}
+                onChange={(value) => setRestDuration(value.toString())}
+                presets={[]} // No preset buttons
+                allowCustom={true}
+                min={5}
+                max={120}
+              />
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -5081,13 +5465,13 @@ function StationCircuitConfigContent({
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Number of Sets
               </label>
-              <div className="flex gap-2">
-                {[2, 3, 4, 5, 6].map((num) => (
+              <div className="grid grid-cols-5 gap-2">
+                {[2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
                   <button
                     key={num}
                     onClick={() => setSets(num)}
                     className={cn(
-                      "flex-1 py-2 px-4 rounded-lg border transition-all",
+                      "py-2 px-4 rounded-lg border transition-all",
                       sets === num
                         ? "border-blue-500 bg-blue-50 dark:bg-blue-950/20 text-blue-700 dark:text-blue-300"
                         : "border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500"

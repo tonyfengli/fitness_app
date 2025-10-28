@@ -23,6 +23,192 @@ interface TemplateSelectionStepProps {
 // Hardcoded business ID for now
 const BUSINESS_ID = 'd33b41e2-f700-4a08-9489-cb6e3daa7f20';
 
+// World-class Duration Input Component
+interface DurationInputProps {
+  value: number; // Duration in seconds
+  onChange: (seconds: number) => void;
+  label?: string;
+  presets?: { label: string; value: number; description?: string }[];
+  allowCustom?: boolean;
+  className?: string;
+  disabled?: boolean;
+}
+
+function DurationInput({ 
+  value, 
+  onChange, 
+  label,
+  presets,
+  allowCustom = true,
+  className,
+  disabled = false
+}: DurationInputProps) {
+  const [isCustomMode, setIsCustomMode] = useState(false);
+  const [customMinutes, setCustomMinutes] = useState(Math.floor(value / 60));
+  const [customSeconds, setCustomSeconds] = useState(value % 60);
+
+  // Format duration for display
+  const formatDuration = (seconds: number): string => {
+    if (seconds === 0) return '0s';
+    if (seconds < 60) return `${seconds}s`;
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    if (secs === 0) return `${mins}m`;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  // Handle preset selection
+  const handlePresetSelect = (presetValue: number) => {
+    onChange(presetValue);
+    setIsCustomMode(false);
+    setCustomMinutes(Math.floor(presetValue / 60));
+    setCustomSeconds(presetValue % 60);
+  };
+
+  // Handle custom time changes
+  const handleCustomChange = (minutes: number, seconds: number) => {
+    const clampedMinutes = Math.max(0, Math.min(59, minutes));
+    const clampedSeconds = Math.max(0, Math.min(59, seconds));
+    
+    setCustomMinutes(clampedMinutes);
+    setCustomSeconds(clampedSeconds);
+    
+    const totalSeconds = clampedMinutes * 60 + clampedSeconds;
+    onChange(totalSeconds);
+  };
+
+  // Check if current value matches any preset
+  const matchingPreset = presets?.find(p => p.value === value);
+  const isPresetValue = !!matchingPreset && !isCustomMode;
+
+  return (
+    <div className={cn("space-y-3", className)}>
+      {label && (
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-medium text-gray-600 dark:text-gray-300">
+            {label}
+          </span>
+          <span className="text-xs text-gray-500 dark:text-gray-400 font-mono">
+            {formatDuration(value)}
+          </span>
+        </div>
+      )}
+      
+      {/* Preset Options */}
+      {presets && presets.length > 0 && (
+        <div className="grid grid-cols-5 gap-1.5">
+          {presets.map((preset) => {
+            const isSelected = value === preset.value && !isCustomMode;
+            return (
+              <Button
+                key={preset.value}
+                variant={isSelected ? "default" : "outline"}
+                className={cn(
+                  "relative h-9 min-w-0 text-xs transition-all duration-200",
+                  "hover:scale-[1.02] active:scale-[0.98]",
+                  isSelected && "ring-2 ring-offset-1 ring-primary shadow-lg",
+                  !isSelected && "hover:border-primary/50",
+                  disabled && "opacity-50 cursor-not-allowed"
+                )}
+                onClick={() => handlePresetSelect(preset.value)}
+                disabled={disabled}
+                size="sm"
+                title={preset.description}
+              >
+                <span className={cn(
+                  "transition-all duration-200",
+                  isSelected && "font-bold scale-105"
+                )}>
+                  {preset.label}
+                </span>
+                {isSelected && (
+                  <div className="absolute -top-1 -right-1 w-2 h-2 bg-primary rounded-full animate-pulse" />
+                )}
+              </Button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Custom Time Input */}
+      {allowCustom && (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
+              Custom Time
+            </span>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 px-2 text-xs"
+              onClick={() => setIsCustomMode(!isCustomMode)}
+              disabled={disabled}
+            >
+              {isCustomMode ? "Hide" : "Show"}
+            </Button>
+          </div>
+          
+          {isCustomMode && (
+            <div className="flex items-center gap-2 p-3 rounded-lg border bg-gray-50/50 dark:bg-gray-800/50">
+              <div className="flex items-center gap-1">
+                <input
+                  type="number"
+                  value={customMinutes}
+                  onChange={(e) => handleCustomChange(parseInt(e.target.value) || 0, customSeconds)}
+                  className={cn(
+                    "w-12 text-center text-sm font-mono bg-white dark:bg-gray-700",
+                    "border rounded px-1 py-1 focus:ring-2 focus:ring-primary focus:border-transparent",
+                    "transition-all duration-200"
+                  )}
+                  min="0"
+                  max="59"
+                  disabled={disabled}
+                />
+                <span className="text-xs text-gray-500 font-medium">m</span>
+              </div>
+              
+              <div className="text-gray-400 font-bold">:</div>
+              
+              <div className="flex items-center gap-1">
+                <input
+                  type="number"
+                  value={customSeconds}
+                  onChange={(e) => handleCustomChange(customMinutes, parseInt(e.target.value) || 0)}
+                  className={cn(
+                    "w-12 text-center text-sm font-mono bg-white dark:bg-gray-700",
+                    "border rounded px-1 py-1 focus:ring-2 focus:ring-primary focus:border-transparent",
+                    "transition-all duration-200"
+                  )}
+                  min="0"
+                  max="59"
+                  disabled={disabled}
+                />
+                <span className="text-xs text-gray-500 font-medium">s</span>
+              </div>
+              
+              {(customMinutes > 0 || customSeconds > 0) && (
+                <div className="ml-auto">
+                  <div className="text-xs text-gray-600 dark:text-gray-300 font-mono">
+                    = {formatDuration(customMinutes * 60 + customSeconds)}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+      
+      {/* Smart Suggestions */}
+      {!isPresetValue && value > 0 && (
+        <div className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
+          <div className="w-1 h-1 bg-blue-400 rounded-full animate-pulse" />
+          <span>Custom: {formatDuration(value)}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 const CATEGORIES = [
   { id: 'morning_sessions', label: 'Morning Sessions' },
   { id: 'evening_sessions', label: 'Evening Sessions' },
@@ -618,10 +804,45 @@ export function PerRoundConfigStep({
         return [2, 3, 4, 5, 6, 7, 8, 9, 10];
     }
   };
-  const workOptions = [20, 30, 40, 45, 60, 90, 120, 150, 180, 210, 240];
-  const restOptions = [0, 10, 15, 20, 30, 45, 60];
-  const setRestOptions = [15, 30, 45, 60, 90, 120]; // Rest between sets/repeats
-  const amrapOptions = [120, 180, 240, 300, 360]; // 2-6 minutes
+  // World-class preset configurations with descriptions for better UX
+  const workPresets = [
+    { label: '20s', value: 20, description: 'Quick bursts - High intensity' },
+    { label: '30s', value: 30, description: 'Standard cardio intervals' },
+    { label: '40s', value: 40, description: 'Strength-cardio balance' },
+    { label: '45s', value: 45, description: 'Most popular choice' },
+    { label: '60s', value: 60, description: 'Traditional strength training' },
+    { label: '90s', value: 90, description: 'Endurance focus' },
+    { label: '2m', value: 120, description: 'Extended work capacity' },
+    { label: '3m', value: 180, description: 'Aerobic conditioning' },
+    { label: '4m', value: 240, description: 'Long endurance sets' },
+  ];
+
+  const restPresets = [
+    { label: 'None', value: 0, description: 'Continuous movement' },
+    { label: '10s', value: 10, description: 'Active recovery' },
+    { label: '15s', value: 15, description: 'Standard circuit rest' },
+    { label: '20s', value: 20, description: 'Moderate recovery' },
+    { label: '30s', value: 30, description: 'Extended recovery' },
+    { label: '45s', value: 45, description: 'Strength training rest' },
+    { label: '60s', value: 60, description: 'Full recovery' },
+  ];
+
+  const setRestPresets = [
+    { label: '15s', value: 15, description: 'Quick transition' },
+    { label: '30s', value: 30, description: 'Standard set break' },
+    { label: '45s', value: 45, description: 'Moderate recovery' },
+    { label: '1m', value: 60, description: 'Standard rest' },
+    { label: '90s', value: 90, description: 'Extended recovery' },
+    { label: '2m', value: 120, description: 'Full recovery' },
+  ];
+
+  const amrapPresets = [
+    { label: '2m', value: 120, description: 'Sprint rounds' },
+    { label: '3m', value: 180, description: 'Quick AMRAP' },
+    { label: '4m', value: 240, description: 'Standard duration' },
+    { label: '5m', value: 300, description: 'Classic AMRAP' },
+    { label: '6m', value: 360, description: 'Extended challenge' },
+  ];
   
   // Recommended values based on fitness science and round type
   const getRecommendedExercises = (roundType: string) => {
@@ -636,9 +857,6 @@ export function PerRoundConfigStep({
         return 6;
     }
   };
-  const recommendedWork = 45;
-  const recommendedRest = 15;
-  const recommendedAMRAP = 300; // 5 minutes
 
   return (
     <div className="space-y-6">
@@ -725,156 +943,85 @@ export function PerRoundConfigStep({
                 </div>
               </div>
 
-              {/* Timing Configuration */}
+              {/* World-Class Timing Configuration */}
               {(isCircuit || isStations) && (
-                <div className="space-y-3">
-                  <div className="space-y-2">
-                    <span className="text-xs font-medium text-gray-600 dark:text-white">WORK TIME</span>
-                    <div className="grid grid-cols-5 gap-1">
-                      {workOptions.map((option) => {
-                        const isSelected = (round.template as any).workDuration === option;
-                        const isRecommended = option === recommendedWork;
-                        return (
-                          <Button
-                            key={option}
-                            variant={isSelected ? "primary" : "outline"}
-                            className={cn(
-                              "relative h-9 min-w-0 text-xs transition-all",
-                              isSelected && "ring-2 ring-offset-1 ring-primary",
-                              !isSelected && isRecommended && "border-primary/50 hover:border-primary",
-                              !isSelected && "dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:hover:bg-gray-600"
-                            )}
-                            onClick={() => handleTimingChange(round.roundNumber, 'workDuration', option)}
-                            disabled={isSaving}
-                            size="sm"
-                          >
-                            <span className={cn(
-                              isSelected && "font-bold",
-                              !isSelected && isRecommended && "font-medium"
-                            )}>
-                              {option >= 60 ? `${option / 60}m` : `${option}s`}
-                            </span>
-                          </Button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <span className="text-xs font-medium text-gray-600 dark:text-white">REST TIME</span>
-                    <div className="grid grid-cols-7 gap-1">
-                      {restOptions.map((option) => {
-                        const isSelected = (round.template as any).restDuration === option;
-                        const isRecommended = option === recommendedRest;
-                        return (
-                          <Button
-                            key={option}
-                            variant={isSelected ? "primary" : "outline"}
-                            className={cn(
-                              "relative h-9 min-w-0 text-xs transition-all",
-                              isSelected && "ring-2 ring-offset-1 ring-primary",
-                              !isSelected && isRecommended && "border-primary/50 hover:border-primary",
-                              !isSelected && "dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:hover:bg-gray-600"
-                            )}
-                            onClick={() => handleTimingChange(round.roundNumber, 'restDuration', option)}
-                            disabled={isSaving}
-                            size="sm"
-                          >
-                            <span className={cn(
-                              isSelected && "font-bold",
-                              !isSelected && isRecommended && "font-medium"
-                            )}>
-                              {option === 0 ? 'None' : option >= 60 ? `${option / 60}m` : `${option}s`}
-                            </span>
-                          </Button>
-                        );
-                      })}
-                    </div>
-                  </div>
+                <div className="space-y-5">
+                  {/* Work Duration */}
+                  <DurationInput
+                    label="WORK TIME"
+                    value={(round.template as any).workDuration}
+                    onChange={(value) => handleTimingChange(round.roundNumber, 'workDuration', value)}
+                    presets={workPresets}
+                    disabled={isSaving}
+                  />
                   
-                  {/* Repeat Times - For both Circuit and Stations */}
-                  {(isCircuit || isStations) && (
-                    <div className="space-y-2">
-                      <span className="text-xs font-medium text-gray-600 dark:text-white">REPEAT</span>
-                      <div className="grid grid-cols-5 gap-1">
-                        {[1, 2, 3, 4, 5].map((option) => {
-                          const isSelected = (round.template as any).repeatTimes === option || (!round.template.repeatTimes && option === 1);
-                          return (
-                            <Button
-                              key={option}
-                              variant={isSelected ? "primary" : "outline"}
-                              className={cn(
-                                "relative h-9 min-w-0 text-xs transition-all",
-                                isSelected && "ring-2 ring-offset-1 ring-primary",
-                                !isSelected && "dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:hover:bg-gray-600"
-                              )}
-                              onClick={() => handleTimingChange(round.roundNumber, 'repeatTimes', option)}
-                              disabled={isSaving}
-                              size="sm"
-                            >
-                              <span className={cn(isSelected && "font-bold")}>
-                                {option}x
-                              </span>
-                            </Button>
-                          );
-                        })}
-                      </div>
+                  {/* Rest Duration */}
+                  <DurationInput
+                    label="REST TIME"
+                    value={(round.template as any).restDuration}
+                    onChange={(value) => handleTimingChange(round.roundNumber, 'restDuration', value)}
+                    presets={restPresets}
+                    disabled={isSaving}
+                  />
+                  
+                  {/* Repeat Times - Keep as button grid for simplicity */}
+                  <div className="space-y-2">
+                    <span className="text-xs font-medium text-gray-600 dark:text-gray-300">REPEAT</span>
+                    <div className="grid grid-cols-5 gap-1.5">
+                      {[1, 2, 3, 4, 5].map((option) => {
+                        const isSelected = (round.template as any).repeatTimes === option || (!round.template.repeatTimes && option === 1);
+                        return (
+                          <Button
+                            key={option}
+                            variant={isSelected ? "default" : "outline"}
+                            className={cn(
+                              "relative h-9 min-w-0 text-xs transition-all duration-200",
+                              "hover:scale-[1.02] active:scale-[0.98]",
+                              isSelected && "ring-2 ring-offset-1 ring-primary shadow-lg",
+                              !isSelected && "hover:border-primary/50",
+                              isSaving && "opacity-50 cursor-not-allowed"
+                            )}
+                            onClick={() => handleTimingChange(round.roundNumber, 'repeatTimes', option)}
+                            disabled={isSaving}
+                            size="sm"
+                          >
+                            <span className={cn(
+                              "transition-all duration-200",
+                              isSelected && "font-bold scale-105"
+                            )}>
+                              {option}x
+                            </span>
+                            {isSelected && (
+                              <div className="absolute -top-1 -right-1 w-2 h-2 bg-primary rounded-full animate-pulse" />
+                            )}
+                          </Button>
+                        );
+                      })}
                     </div>
-                  )}
+                  </div>
                   
                   {/* Rest Between Sets - Only show if repeatTimes > 1 */}
-                  {(isCircuit || isStations) && ((round.template as any).repeatTimes || 1) > 1 && (
-                    <div className="space-y-2">
-                      <span className="text-xs font-medium text-gray-600 dark:text-white">REST BETWEEN SETS</span>
-                      <div className="grid grid-cols-6 gap-1">
-                        {setRestOptions.map((option) => {
-                          const isSelected = (round.template as any).restBetweenSets === option || (!(round.template as any).restBetweenSets && option === 30);
-                          return (
-                            <Button
-                              key={option}
-                              variant={isSelected ? "primary" : "outline"}
-                              className={cn(
-                                "relative h-9 min-w-0 text-xs transition-all",
-                                isSelected && "ring-2 ring-offset-1 ring-primary",
-                                !isSelected && "dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:hover:bg-gray-600"
-                              )}
-                              onClick={() => handleTimingChange(round.roundNumber, 'restBetweenSets', option)}
-                              disabled={isSaving}
-                              size="sm"
-                            >
-                              <span className={cn(isSelected && "font-bold")}>
-                                {option}s
-                              </span>
-                            </Button>
-                          );
-                        })}
-                      </div>
-                    </div>
+                  {((round.template as any).repeatTimes || 1) > 1 && (
+                    <DurationInput
+                      label="REST BETWEEN SETS"
+                      value={(round.template as any).restBetweenSets || 30}
+                      onChange={(value) => handleTimingChange(round.roundNumber, 'restBetweenSets', value)}
+                      presets={setRestPresets}
+                      disabled={isSaving}
+                    />
                   )}
                 </div>
               )}
               
               {/* AMRAP Total Duration */}
               {isAMRAP && (
-                <div className="space-y-2">
-                  <span className="text-xs font-medium text-gray-600 dark:text-white">TOTAL TIME</span>
-                  <div className="grid grid-cols-5 gap-1">
-                    {amrapOptions.map((option) => (
-                      <Button
-                        key={option}
-                        variant={(round.template as any).totalDuration === option ? "primary" : "outline"}
-                        className={cn(
-                          "relative h-9 min-w-0 text-xs",
-                          (round.template as any).totalDuration !== option && "dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:hover:bg-gray-600"
-                        )}
-                        onClick={() => handleTimingChange(round.roundNumber, 'totalDuration', option)}
-                        disabled={isSaving}
-                        size="sm"
-                      >
-                        {Math.floor(option / 60)}m
-                      </Button>
-                    ))}
-                  </div>
-                </div>
+                <DurationInput
+                  label="TOTAL TIME"
+                  value={(round.template as any).totalDuration}
+                  onChange={(value) => handleTimingChange(round.roundNumber, 'totalDuration', value)}
+                  presets={amrapPresets}
+                  disabled={isSaving}
+                />
               )}
             </div>
           );

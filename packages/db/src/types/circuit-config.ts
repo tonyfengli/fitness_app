@@ -52,7 +52,7 @@ export type TemplateConfig = CircuitConfig | { type: string; [key: string]: any 
 export const CIRCUIT_CONFIG_LIMITS = {
   rounds: { min: 1, max: 10 },
   exercisesPerRound: { min: 1, max: 20 },
-  workDuration: { min: 10, max: 300 },      // 10 seconds to 5 minutes
+  workDuration: { min: 1 },                 // Minimum 1 second, no maximum
   restDuration: { min: 5, max: 120 },       // 5 seconds to 2 minutes  
   restBetweenRounds: { min: 10, max: 300 }  // 10 seconds to 5 minutes
 } as const;
