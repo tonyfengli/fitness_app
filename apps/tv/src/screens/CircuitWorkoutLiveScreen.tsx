@@ -17,6 +17,53 @@ import { useWorkoutMachine } from '../components/workout-live/hooks/useWorkoutMa
 // Re-export MattePanel for backward compatibility
 export { MattePanel } from '../components/workout-live/MattePanel';
 
+// Helper function to shuffle array
+function shuffleArray<T>(array: T[]): T[] {
+  const shuffled = [...array];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled;
+}
+
+// Helper function to distribute clients across teams
+function distributeClientsToTeams(clients: any[], teamCount: number): Map<number, any[]> {
+  const distribution = new Map<number, any[]>();
+  
+  // Initialize empty teams
+  for (let i = 0; i < teamCount; i++) {
+    distribution.set(i, []);
+  }
+  
+  if (!clients || clients.length === 0) {
+    return distribution;
+  }
+  
+  // Shuffle clients for random distribution
+  const shuffledClients = shuffleArray(clients);
+  
+  // Calculate base clients per team and how many teams get extra
+  const baseClientsPerTeam = Math.floor(clients.length / teamCount);
+  const teamsWithExtra = clients.length % teamCount;
+  
+  // Randomly select which teams get extra clients
+  const teamIndices = Array.from({ length: teamCount }, (_, i) => i);
+  const shuffledTeamIndices = shuffleArray(teamIndices);
+  const teamsGettingExtra = new Set(shuffledTeamIndices.slice(0, teamsWithExtra));
+  
+  // Distribute clients
+  let clientIndex = 0;
+  for (let teamIdx = 0; teamIdx < teamCount; teamIdx++) {
+    const clientsForThisTeam = baseClientsPerTeam + (teamsGettingExtra.has(teamIdx) ? 1 : 0);
+    const teamClients = shuffledClients.slice(clientIndex, clientIndex + clientsForThisTeam);
+    distribution.set(teamIdx, teamClients);
+    clientIndex += clientsForThisTeam;
+  }
+  
+  return distribution;
+}
+
 export function CircuitWorkoutLiveScreen() {
   const navigation = useNavigation();
   const sessionId = navigation.getParam('sessionId');
@@ -26,6 +73,7 @@ export function CircuitWorkoutLiveScreen() {
   const teamsButtonRef = useRef<any>(null);
   const backButtonRef = useRef<any>(null);
   const [shouldRestoreFocusToTeams, setShouldRestoreFocusToTeams] = useState(false);
+  const [teamsDistribution, setTeamsDistribution] = useState<Map<number, any[]>>(new Map());
 
   // Get circuit config with polling
   const { data: circuitConfig } = useQuery(
@@ -49,6 +97,18 @@ export function CircuitWorkoutLiveScreen() {
     enabled: !!sessionId && !!selectionsQueryOptions,
     refetchInterval: 3000, // Poll every 3 seconds
   });
+
+  // Get checked-in clients for the session
+  const { data: checkedInClients } = useQuery(
+    sessionId ? {
+      ...api.trainingSession.getCheckedInClients.queryOptions({ sessionId }),
+      refetchInterval: 5000 // Poll every 5 seconds
+    } : {
+      enabled: false,
+      queryKey: ['disabled-checked-in-clients'],
+      queryFn: () => Promise.resolve(null)
+    }
+  );
 
   // Process selections into rounds
   const roundsData = useMemo(() => {
@@ -389,6 +449,11 @@ export function CircuitWorkoutLiveScreen() {
                   ref={teamsButtonRef}
                   onPress={() => {
                     setShouldRestoreFocusToTeams(true);
+                    // Calculate team distribution when opening modal
+                    const stationCount = currentRound?.exercises 
+                      ? [...new Set(currentRound.exercises.map((ex: any) => ex.orderIndex))].length 
+                      : 0;
+                    setTeamsDistribution(distributeClientsToTeams(checkedInClients || [], stationCount));
                     setIsTeamsModalVisible(true);
                   }}
                   focusable
@@ -484,6 +549,11 @@ export function CircuitWorkoutLiveScreen() {
                 <Pressable 
                   onPress={() => {
                     setShouldRestoreFocusToTeams(true);
+                    // Calculate team distribution when opening modal
+                    const stationCount = currentRound?.exercises 
+                      ? [...new Set(currentRound.exercises.map((ex: any) => ex.orderIndex))].length 
+                      : 0;
+                    setTeamsDistribution(distributeClientsToTeams(checkedInClients || [], stationCount));
                     setIsTeamsModalVisible(true);
                   }} 
                   focusable
@@ -733,121 +803,219 @@ export function CircuitWorkoutLiveScreen() {
             elevation: 12,
             padding: 32,
           }}>
-            {/* Content - Station Grid */}
-            <View style={{
-              flexDirection: 'row',
-              flexWrap: 'wrap',
-              gap: 16,
-              justifyContent: 'center',
-            }}>
-              {/* Mock station assignments - using established container patterns */}
-              {[
-                { station: 1, team: 'Team 1', color: '#ef4444', clients: ['Alex M.', 'Sarah K.'] },
-                { station: 2, team: 'Team 2', color: '#3b82f6', clients: ['Mike R.', 'Lisa P.'] },
-                { station: 3, team: 'Team 3', color: '#22c55e', clients: ['David L.', 'Emma W.'] },
-                { station: 4, team: 'Team 4', color: '#f59e0b', clients: ['Chris B.', 'Nina S.'] },
-                { station: 5, team: 'Team 5', color: '#a855f7', clients: ['Ryan T.'] },
-                { station: 6, team: 'Team 6', color: '#14b8a6', clients: ['Jenna M.', 'Tom H.'] },
-              ].map((assignment) => (
-                <View 
-                  key={assignment.station}
-                  style={{
-                    width: 220,
-                    backgroundColor: TOKENS.color.cardGlass,
-                    borderRadius: 16,
-                    overflow: 'hidden',
-                  }}
-                >
-                  {/* Team Color Bar */}
+            {(() => {
+              // Get actual station count from current round  
+              const stationCount = currentRound?.exercises 
+                ? [...new Set(currentRound.exercises.map(ex => ex.orderIndex))].length 
+                : 0;
+              
+              console.log('[TeamsModal] Current round:', currentRound?.roundName);
+              console.log('[TeamsModal] Station count:', stationCount);
+              
+              // Calculate responsive grid layout (same logic as StationsExerciseView)
+              const getGridLayout = (count: number) => {
+                if (count <= 4) {
+                  return { rows: 1, cols: count };
+                } else if (count === 5) {
+                  return { rows: 2, cols: 3 }; // 3 top, 2 bottom
+                } else if (count === 6) {
+                  return { rows: 2, cols: 3 }; // 3-3
+                } else if (count === 7) {
+                  return { rows: 2, cols: 4 }; // 4 top, 3 bottom
+                } else if (count === 8) {
+                  return { rows: 2, cols: 4 }; // 4-4
+                }
+                return { rows: 2, cols: 4 }; // Default for 8+ stations
+              };
+              
+              const { rows, cols } = getGridLayout(stationCount);
+              const isMultiRow = rows > 1;
+              
+              return (
+                <>
+                  {/* Dynamic Station Grid with Beautiful Styling */}
                   <View style={{
-                    height: 6,
-                    backgroundColor: assignment.color,
-                  }} />
-                  
-                  {/* Content */}
-                  <View style={{ 
-                    padding: 20,
-                    paddingTop: 24,
+                    paddingHorizontal: 48,
                   }}>
-                    {/* Team Badge with Station Badge aligned */}
-                    <View style={{ marginBottom: 24 }}>
-                      <View style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                      }}>
-                        {/* Team Badge - Left side */}
-                        <View style={{
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          gap: 8,
-                        }}>
-                          <View style={{
-                            width: 12,
-                            height: 12,
-                            borderRadius: 6,
-                            backgroundColor: assignment.color,
-                          }} />
-                          <Text style={{ 
-                            color: assignment.color, 
-                            fontWeight: '800',
-                            fontSize: 14,
-                            letterSpacing: 0.3,
-                            textTransform: 'uppercase',
+                    <View style={{ 
+                      gap: 2, 
+                      minHeight: 280,
+                      justifyContent: isMultiRow ? 'flex-start' : 'center'
+                    }}>
+                      {(() => {
+                        // Group stations into rows
+                        const getStationRows = () => {
+                  const stations = Array.from({ length: stationCount }, (_, i) => i + 1);
+                  
+                  if (!isMultiRow) {
+                    return [stations];
+                  }
+                  
+                  const stationsInFirstRow = stationCount === 5 ? 3 : cols;
+                  const firstRow = stations.slice(0, stationsInFirstRow);
+                  const secondRow = stations.slice(stationsInFirstRow);
+                  
+                  return [firstRow, secondRow];
+                };
+                
+                const stationRows = getStationRows();
+                
+                // Team configuration
+                const TEAMS = [
+                  { name: 'Team 1', color: '#ef4444' },
+                  { name: 'Team 2', color: '#3b82f6' },
+                  { name: 'Team 3', color: '#22c55e' },
+                  { name: 'Team 4', color: '#f59e0b' },
+                  { name: 'Team 5', color: '#a855f7' },
+                  { name: 'Team 6', color: '#14b8a6' },
+                  { name: 'Team 7', color: '#fb923c' },
+                  { name: 'Team 8', color: '#06b6d4' },
+                ];
+                
+                // Use the pre-calculated distribution (set when modal opens)
+                
+                        return (
+                          <View style={{ 
+                            gap: 2, 
+                            minHeight: 280,
+                            justifyContent: isMultiRow ? 'flex-start' : 'center'
                           }}>
-                            {assignment.team}
-                          </Text>
-                        </View>
-                        
-                        {/* Station Badge - Right side, aligned with team */}
-                        <View style={{
-                          width: 36,
-                          height: 36,
-                          borderRadius: 18,
-                          backgroundColor: 'rgba(255, 255, 255, 0.20)',
-                          borderColor: 'rgba(255, 255, 255, 0.4)',
-                          borderWidth: 1,
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                        }}>
-                          <Text style={{
-                            fontSize: 14,
-                            fontWeight: '800',
-                            color: TOKENS.color.text,
-                            letterSpacing: 0.2,
-                          }}>
-                            S{assignment.station}
-                          </Text>
-                        </View>
-                      </View>
-                    </View>
-                    
-                    {/* Client List */}
-                    <View style={{ gap: 8 }}>
-                      {assignment.clients.map((client, index) => (
-                        <Text 
-                          key={index}
-                          style={{
-                            fontSize: 18,
-                            fontWeight: '700',
-                            color: TOKENS.color.text,
-                          }}
-                        >
-                          {client}
-                        </Text>
-                      ))}
+                            {stationRows.map((row, rowIndex) => (
+                              <View key={`row-${rowIndex}`} style={{ flexDirection: 'row', gap: 2 }}>
+                                {row.map((stationNumber, colIndex) => {
+                          const team = TEAMS[stationNumber - 1];
+                          const teamIndex = stationNumber - 1;
+                          const teamClients = teamsDistribution.get(teamIndex) || [];
+                          
+                          // Calculate corner radius based on position
+                          const isFirstRow = rowIndex === 0;
+                          const isLastRow = rowIndex === stationRows.length - 1;
+                          const isFirstCol = colIndex === 0;
+                          const isLastCol = colIndex === row.length - 1;
+                          
+                          return (
+                            <View 
+                              key={stationNumber}
+                              style={{
+                                flex: 1,
+                                backgroundColor: TOKENS.color.cardGlass,
+                                borderTopLeftRadius: (isFirstRow && isFirstCol) ? 16 : 0,
+                                borderTopRightRadius: (isFirstRow && isLastCol) ? 16 : 0,
+                                borderBottomLeftRadius: (isLastRow && isFirstCol) ? 16 : 0,
+                                borderBottomRightRadius: (isLastRow && isLastCol) ? 16 : 0,
+                                overflow: 'hidden',
+                              }}
+                            >
+                              {/* Team Color Bar */}
+                              <View style={{
+                                height: 6,
+                                backgroundColor: team.color,
+                              }} />
+                              
+                              {/* Content */}
+                              <View style={{ 
+                                padding: 16,
+                                paddingTop: 20,
+                              }}>
+                                {/* Team Badge with Station Badge */}
+                                <View style={{ marginBottom: 20 }}>
+                                  <View style={{
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                  }}>
+                                    {/* Team Badge */}
+                                    <View style={{
+                                      flexDirection: 'row',
+                                      alignItems: 'center',
+                                      gap: 6,
+                                    }}>
+                                      <View style={{
+                                        width: 10,
+                                        height: 10,
+                                        borderRadius: 5,
+                                        backgroundColor: team.color,
+                                      }} />
+                                      <Text style={{ 
+                                        color: team.color, 
+                                        fontWeight: '800',
+                                        fontSize: 12,
+                                        letterSpacing: 0.3,
+                                        textTransform: 'uppercase',
+                                      }}>
+                                        {team.name}
+                                      </Text>
+                                    </View>
+                                    
+                                    {/* Station Badge */}
+                                    <View style={{
+                                      width: 32,
+                                      height: 32,
+                                      borderRadius: 16,
+                                      backgroundColor: 'rgba(255, 255, 255, 0.20)',
+                                      borderColor: 'rgba(255, 255, 255, 0.4)',
+                                      borderWidth: 1,
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                    }}>
+                                      <Text style={{
+                                        fontSize: 12,
+                                        fontWeight: '800',
+                                        color: TOKENS.color.text,
+                                        letterSpacing: 0.2,
+                                      }}>
+                                        S{stationNumber}
+                                      </Text>
+                                    </View>
+                                  </View>
+                                </View>
+                                
+                                {/* Client List */}
+                                <View style={{ gap: 6 }}>
+                                  {teamClients.length > 0 ? (
+                                    teamClients.map((client: any, clientIndex: number) => (
+                                      <Text 
+                                        key={clientIndex}
+                                        style={{
+                                          fontSize: 14,
+                                          fontWeight: '700',
+                                          color: TOKENS.color.text,
+                                        }}
+                                      >
+                                        {client.userName?.split(' ')[0] || client.userEmail?.split('@')[0] || 'Client'}
+                                      </Text>
+                                    ))
+                                  ) : (
+                                    <Text 
+                                      style={{
+                                        fontSize: 14,
+                                        fontWeight: '600',
+                                        color: TOKENS.color.muted,
+                                        fontStyle: 'italic',
+                                      }}
+                                    >
+                                      No clients
+                                    </Text>
+                                  )}
+                                </View>
+                              </View>
+                            </View>
+                                  );
+                                })}
+                              </View>
+                            ))}
+                          </View>
+                        );
+                      })()}
                     </View>
                   </View>
-                </View>
-              ))}
-            </View>
 
-            {/* Single Auto-Focused Close Button */}
-            <View style={{
-              alignItems: 'center',
-              marginTop: 32,
-            }}>
-              <Pressable
+                  {/* Single Auto-Focused Close Button */}
+                  <View style={{
+                    alignItems: 'center',
+                    marginTop: isMultiRow ? 32 : 24,
+                  }}>
+                    <Pressable
                 ref={closeButtonRef}
                 onPress={() => setIsTeamsModalVisible(false)}
                 focusable
@@ -882,6 +1050,9 @@ export function CircuitWorkoutLiveScreen() {
                 )}
               </Pressable>
             </View>
+                </>
+              );
+            })()}
           </MattePanel>
         </TVFocusGuideView>
       )}
