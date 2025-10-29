@@ -23,6 +23,9 @@ export function CircuitWorkoutLiveScreen() {
   const componentInstanceId = useRef(Date.now());
   const [isTeamsModalVisible, setIsTeamsModalVisible] = useState(false);
   const closeButtonRef = useRef<any>(null);
+  const teamsButtonRef = useRef<any>(null);
+  const backButtonRef = useRef<any>(null);
+  const [shouldRestoreFocusToTeams, setShouldRestoreFocusToTeams] = useState(false);
 
   // Get circuit config with polling
   const { data: circuitConfig } = useQuery(
@@ -176,15 +179,38 @@ export function CircuitWorkoutLiveScreen() {
     send({ type: 'START_WORKOUT' });
   };
 
-  // Auto-focus close button when modal opens
+  // Auto-focus close button when modal opens, restore focus when modal closes
   useEffect(() => {
     if (isTeamsModalVisible && closeButtonRef.current) {
       // Small delay to ensure modal is rendered
       setTimeout(() => {
         closeButtonRef.current?.focus();
       }, 100);
+    } else if (!isTeamsModalVisible && shouldRestoreFocusToTeams && teamsButtonRef.current) {
+      // Restore focus to TEAMS button when modal closes
+      setTimeout(() => {
+        if (teamsButtonRef.current?.requestTVFocus) {
+          teamsButtonRef.current.requestTVFocus();
+        } else {
+          teamsButtonRef.current?.focus();
+        }
+        setShouldRestoreFocusToTeams(false); // Reset flag
+      }, 150);
     }
-  }, [isTeamsModalVisible]);
+  }, [isTeamsModalVisible, shouldRestoreFocusToTeams]);
+
+  // Focus BACK button on initial navigation
+  useEffect(() => {
+    if (state.value === 'roundPreview' && backButtonRef.current) {
+      setTimeout(() => {
+        if (backButtonRef.current?.requestTVFocus) {
+          backButtonRef.current.requestTVFocus();
+        } else {
+          backButtonRef.current?.focus();
+        }
+      }, 100);
+    }
+  }, [state.value]);
 
   // Loading state
   if (selectionsLoading || !circuitConfig) {
@@ -229,26 +255,22 @@ export function CircuitWorkoutLiveScreen() {
           }}>
             {/* LEFT SIDE: Back/Skip Navigation */}
             <View style={{ 
-              flexDirection: 'column',
-              gap: 12,
+              flexDirection: 'row',
+              backgroundColor: 'rgba(255,255,255,0.05)',
+              borderRadius: 32,
+              padding: 6,
+              gap: 4,
+              borderWidth: 1,
+              borderColor: 'rgba(255,255,255,0.1)',
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.15,
+              shadowRadius: 8,
+              elevation: 4,
             }}>
-              {/* Back/Skip Pair */}
-              <View style={{ 
-                flexDirection: 'row',
-                backgroundColor: 'rgba(255,255,255,0.05)',
-                borderRadius: 32,
-                padding: 6,
-                gap: 4,
-                borderWidth: 1,
-                borderColor: 'rgba(255,255,255,0.1)',
-                shadowColor: '#000',
-                shadowOffset: { width: 0, height: 4 },
-                shadowOpacity: 0.15,
-                shadowRadius: 8,
-                elevation: 4,
-              }}>
               {/* Back Round */}
               <Pressable
+                ref={backButtonRef}
                 onPress={() => {
                   if (state.context.currentRoundIndex === 0) {
                     navigation.goBack();
@@ -328,49 +350,6 @@ export function CircuitWorkoutLiveScreen() {
                   </MattePanel>
                 )}
               </Pressable>
-              </View>
-              
-              {/* Teams Button - Secondary action */}
-              <Pressable
-                onPress={() => setIsTeamsModalVisible(true)}
-                focusable
-              >
-                {({ focused }) => (
-                  <MattePanel 
-                    focused={focused}
-                    radius={22}
-                    style={{ 
-                      paddingHorizontal: 20,
-                      paddingVertical: 10,
-                      backgroundColor: focused ? 
-                        'rgba(255,255,255,0.08)' : 
-                        'rgba(255,255,255,0.03)',
-                      borderColor: focused ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.06)',
-                      borderWidth: focused ? 1 : 0.5,
-                      shadowColor: '#000',
-                      shadowOffset: { width: 0, height: 2 },
-                      shadowOpacity: 0.08,
-                      shadowRadius: 4,
-                      elevation: 2,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
-                  >
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                      <Icon name="groups" size={14} color={TOKENS.color.muted} />
-                      <Text style={{ 
-                        color: TOKENS.color.muted, 
-                        fontSize: 11, 
-                        fontWeight: '600',
-                        letterSpacing: 0.5,
-                        textTransform: 'uppercase'
-                      }}>
-                        TEAMS
-                      </Text>
-                    </View>
-                  </MattePanel>
-                )}
-              </Pressable>
             </View>
 
             {/* CENTER: Round Header */}
@@ -389,30 +368,103 @@ export function CircuitWorkoutLiveScreen() {
               {currentRound?.roundName || `Round ${state.context.currentRoundIndex + 1}`}
             </Text>
 
-            {/* RIGHT SIDE: Start Button, Triple Controls for AMRAP/Circuit, or Spacer */}
+            {/* RIGHT SIDE: Teams/Start Pair, Triple Controls for AMRAP/Circuit, or Spacer */}
             {state.context.currentRoundIndex === 0 && !state.context.isStarted ? (
-              <Pressable
-                onPress={handleStartWorkout}
-                focusable
-              >
-                {({ focused }) => (
-                  <MattePanel 
-                    focused={focused}
-                    style={{ 
-                      paddingHorizontal: 32,
-                      paddingVertical: 12,
-                      backgroundColor: focused ? 'rgba(255,255,255,0.16)' : TOKENS.color.card,
-                      borderColor: focused ? 'rgba(255,255,255,0.45)' : TOKENS.color.borderGlass,
-                      borderWidth: focused ? 1 : 1,
-                      transform: focused ? [{ translateY: -1 }] : [],
-                    }}
-                  >
-                    <Text style={{ color: TOKENS.color.text, fontSize: 18, letterSpacing: 0.2 }}>Start</Text>
-                  </MattePanel>
-                )}
-              </Pressable>
+              <View style={{ 
+                flexDirection: 'row',
+                backgroundColor: 'rgba(255,255,255,0.05)',
+                borderRadius: 32,
+                padding: 6,
+                gap: 4,
+                borderWidth: 1,
+                borderColor: 'rgba(255,255,255,0.1)',
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.15,
+                shadowRadius: 8,
+                elevation: 4,
+              }}>
+                {/* Teams Button */}
+                <Pressable
+                  ref={teamsButtonRef}
+                  onPress={() => {
+                    setShouldRestoreFocusToTeams(true);
+                    setIsTeamsModalVisible(true);
+                  }}
+                  focusable
+                >
+                  {({ focused }) => (
+                    <MattePanel 
+                      focused={focused}
+                      radius={26}
+                      style={{ 
+                        width: 94,
+                        height: 44,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        backgroundColor: focused ? 
+                          'rgba(255,255,255,0.15)' : 
+                          'rgba(255,255,255,0.08)',
+                        borderColor: focused ? 'rgba(255,255,255,0.3)' : 'transparent',
+                        borderWidth: focused ? 1.5 : 0,
+                      }}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Icon name="groups" size={18} color={TOKENS.color.text} />
+                        <Text style={{ 
+                          color: TOKENS.color.text, 
+                          fontSize: 13, 
+                          fontWeight: '700',
+                          letterSpacing: 0.3,
+                          textTransform: 'uppercase'
+                        }}>
+                          TEAMS
+                        </Text>
+                      </View>
+                    </MattePanel>
+                  )}
+                </Pressable>
+
+                {/* Start Button */}
+                <Pressable
+                  onPress={handleStartWorkout}
+                  focusable
+                  hasTVPreferredFocus
+                >
+                  {({ focused }) => (
+                    <MattePanel 
+                      focused={focused}
+                      radius={26}
+                      style={{ 
+                        width: 94,
+                        height: 44,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        backgroundColor: focused ? 
+                          'rgba(255,255,255,0.15)' : 
+                          'rgba(255,255,255,0.08)',
+                        borderColor: focused ? 'rgba(255,255,255,0.3)' : 'transparent',
+                        borderWidth: focused ? 1.5 : 0,
+                      }}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Text style={{ 
+                          color: TOKENS.color.text, 
+                          fontSize: 13, 
+                          fontWeight: '700',
+                          letterSpacing: 0.3,
+                          textTransform: 'uppercase'
+                        }}>
+                          START
+                        </Text>
+                        <Icon name="play-arrow" size={18} color={TOKENS.color.text} />
+                      </View>
+                    </MattePanel>
+                  )}
+                </Pressable>
+              </View>
             ) : (currentRoundType === 'amrap_round' || currentRoundType === 'circuit_round' || currentRoundType === 'stations_round') ? (
-              // Triple button controls for AMRAP, Circuit, and Stations round preview
+              // Triple button controls for AMRAP, Circuit, and Stations round preview: TEAMS | PAUSE | SKIP
               <View style={{ 
                 flexDirection: 'row',
                 backgroundColor: 'rgba(255,255,255,0.05)',
@@ -428,6 +480,37 @@ export function CircuitWorkoutLiveScreen() {
                 shadowRadius: 4,
                 elevation: 2,
               }}>
+                {/* Teams Button */}
+                <Pressable 
+                  onPress={() => {
+                    setShouldRestoreFocusToTeams(true);
+                    setIsTeamsModalVisible(true);
+                  }} 
+                  focusable
+                >
+                  {({ focused }) => (
+                    <MattePanel 
+                      focused={focused}
+                      radius={26}
+                      style={{ 
+                        width: 62,
+                        height: 44,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        backgroundColor: focused ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.08)',
+                        borderColor: focused ? 'rgba(255,255,255,0.3)' : 'transparent',
+                        borderWidth: focused ? 1.5 : 0,
+                      }}
+                    >
+                      <Icon 
+                        name="groups" 
+                        size={20}
+                        color={TOKENS.color.text}
+                      />
+                    </MattePanel>
+                  )}
+                </Pressable>
+                
                 {/* Pause/Play */}
                 <Pressable onPress={() => send(state.context.isPaused ? { type: 'RESUME' } : { type: 'PAUSE' })} focusable>
                   {({ focused }) => (
