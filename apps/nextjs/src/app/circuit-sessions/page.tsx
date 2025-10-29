@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronRightIcon, CheckIcon, ChevronDownIcon } from "@acme/ui-shared";
 import { api } from "~/trpc/react";
@@ -86,7 +87,12 @@ const getStatusBadge = (status: string) => {
     case "open":
       return {
         label: "Open",
-        className: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300"
+        // Option 1: Purple/Pink theme - "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300"
+        // Option 2: Blue theme - "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
+        // Option 3: Amber/Gold theme - ACTIVE
+        // Option 4: Violet theme - "bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300"
+        // Option 5: Rose theme - "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300"
+        className: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
       };
     case "in_progress":
       return {
@@ -194,30 +200,54 @@ export default function SessionsPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      {/* Header */}
-      <div className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
-        <div className="px-4 py-6">
+      {/* Mobile Navigation Bar */}
+      <div className="lg:hidden sticky top-0 z-50 bg-gradient-to-r from-slate-900 to-purple-900 text-white shadow-lg">
+        <div className="flex items-center justify-between px-4 py-3">
+          <Link href="/trainer-home" className="flex items-center space-x-2 active:opacity-70 transition-opacity">
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+            <span className="text-sm font-medium">Home</span>
+          </Link>
+          <h1 className="text-lg font-semibold">Sessions</h1>
+          <button
+            onClick={() => router.push('/circuit-config')}
+            className="relative p-2.5 -mr-2 rounded-lg bg-white/10 backdrop-blur-sm active:bg-white/20 transition-all duration-200 group"
+            aria-label="Create new session"
+          >
+            <div className="absolute inset-0 bg-white/20 rounded-lg blur-xl opacity-0 group-hover:opacity-100 transition-opacity"></div>
+            <PlusIcon className="relative w-7 h-7 text-white drop-shadow-lg" strokeWidth={2.5} />
+          </button>
+        </div>
+      </div>
+
+      {/* Main Content Area - No redundant header on mobile */}
+      <div className="lg:bg-white lg:dark:bg-gray-800 lg:shadow-sm lg:border-b lg:border-gray-200 lg:dark:border-gray-700">
+        <div className="hidden lg:block px-6 py-6">
           <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Training Sessions</h1>
-              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                Select a session to view details
-              </p>
+            {/* Desktop: Show breadcrumb navigation */}
+            <div className="flex items-center space-x-4 flex-1">
+              <Link href="/trainer-home" className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                </svg>
+              </Link>
+              <div className="text-gray-300 dark:text-gray-600">|</div>
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Training Sessions</h1>
+                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                  Manage your circuit training sessions
+                </p>
+              </div>
             </div>
             
-            {/* Create Session Button */}
+            {/* Desktop Create Button */}
             <button
               onClick={() => router.push('/circuit-config')}
-              className="group relative w-12 h-12 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white rounded-2xl transition-all duration-300 ease-out shadow-lg hover:shadow-xl active:shadow-md active:scale-90 transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-emerald-200 dark:focus:ring-emerald-800"
-              aria-label="Create new training session"
+              className="flex items-center space-x-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg transition-colors"
             >
-              <PlusIcon className="w-6 h-6 absolute inset-0 m-auto group-active:scale-75 transition-transform duration-200 ease-out" />
-              
-              {/* Subtle background glow effect */}
-              <div className="absolute inset-0 rounded-2xl bg-emerald-400 opacity-0 group-hover:opacity-20 transition-opacity duration-300 ease-out" />
-              
-              {/* Ripple effect on click */}
-              <div className="absolute inset-0 rounded-2xl bg-white opacity-0 group-active:opacity-30 group-active:animate-ping transition-opacity duration-150" />
+              <PlusIcon className="w-5 h-5" />
+              <span>New Session</span>
             </button>
           </div>
         </div>
@@ -244,10 +274,10 @@ export default function SessionsPage() {
 
       {/* Sessions List */}
       {!isLoading && !error && (
-        <div className="px-4 py-6 space-y-6">
+        <div className="px-4 pb-20 lg:pb-6 lg:px-6">
           {/* Active Sessions Section */}
-          {activeSessions && activeSessions.length > 0 && (
-            <div className="space-y-3">
+          {activeSessions && activeSessions.length > 0 ? (
+            <div className="space-y-4 max-w-4xl mx-auto mt-4">
               {activeSessions.map((session) => {
                 const statusBadge = getStatusBadge(session.status);
                 
@@ -256,58 +286,92 @@ export default function SessionsPage() {
                     key={session.id}
                     onClick={() => handleSessionSelect(session.id)}
                     onMouseEnter={() => handleSessionHover(session.id)}
-                    className="relative bg-white dark:bg-gray-800 rounded-xl border-2 transition-all duration-200 cursor-pointer border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-600 hover:shadow-md active:scale-98 transform"
+                    className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-sm transition-all duration-200 cursor-pointer hover:shadow-lg active:scale-[0.98] transform overflow-hidden group"
                   >
-                    <div className="p-4">
+                    {/* Status indicator bar */}
+                    {/* Option 1: Purple to Pink (Analogous) - from-purple-500 to-pink-500 */}
+                    {/* Option 2: Purple to Blue (Analogous) - from-indigo-500 to-blue-500 */}
+                    {/* Option 3: Gold to Amber (Complementary) - ACTIVE */}
+                    {/* Option 4: Purple to Violet (Monochromatic) - from-purple-600 to-violet-500 */}
+                    {/* Option 5: Coral to Rose (Split-complementary) - from-orange-400 to-rose-500 */}
+                    <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-yellow-500 to-amber-500"></div>
+                    
+                    <div className="p-4 lg:p-5">
                       {/* Header Row */}
                       <div className="flex items-start justify-between mb-3">
                         <div className="flex-1 min-w-0">
                           <h3 className="text-lg font-semibold text-gray-900 dark:text-white truncate">
                             {session.name}
                           </h3>
+                          {/* Mobile: Show date inline */}
+                          <p className="lg:hidden text-sm text-gray-500 dark:text-gray-400 mt-1">
+                            {new Date(session.scheduledAt).toLocaleDateString('en-US', {
+                              weekday: 'short',
+                              month: 'short',
+                              day: 'numeric',
+                              hour: 'numeric',
+                              minute: '2-digit'
+                            })}
+                          </p>
                         </div>
-                        <ChevronRightIcon className="w-5 h-5 text-gray-400 dark:text-gray-500" />
-                      </div>
-
-                      {/* Details Row */}
-                      <div className="flex items-center justify-between">
-                        {/* Participants Count */}
-                        <div className="flex items-center gap-2">
-                          <UsersIcon className="w-4 h-4 text-gray-400 dark:text-gray-500 flex-shrink-0" />
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium text-gray-900 dark:text-white">
-                              {session.participantCount}
-                            </p>
-                            <p className="text-xs text-gray-500 dark:text-gray-400">
-                              Participants
-                            </p>
-                          </div>
-                        </div>
-
-                        {/* Status Badge or Loading */}
-                        <div className="flex items-center">
-                          {navigatingToSession === session.id ? (
-                            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
-                          ) : (
-                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusBadge.className}`}>
+                        <div className="flex items-center space-x-2">
+                          {statusBadge && (
+                            <span className={`px-2 py-1 text-xs font-medium rounded-full ${statusBadge.className}`}>
                               {statusBadge.label}
                             </span>
                           )}
+                          <ChevronRightIcon className="w-5 h-5 text-gray-400 dark:text-gray-500 group-hover:translate-x-1 transition-transform" />
                         </div>
+                      </div>
+
+                      {/* Details Row - Responsive */}
+                      <div className="flex items-center justify-between">
+                        {/* Participants Count */}
+                        <div className="flex items-center gap-4">
+                          <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 bg-amber-100 dark:bg-amber-900/30 rounded-lg flex items-center justify-center">
+                              <UsersIcon className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium text-gray-900 dark:text-white">
+                                {session.participantCount || 0} clients
+                              </p>
+                              <p className="text-xs text-gray-500 dark:text-gray-400 hidden lg:block">
+                                Participants
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Desktop: Show scheduled time */}
+                          <div className="hidden lg:flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+                            <CalendarIcon className="w-4 h-4" />
+                            <span>
+                              {(() => {
+                                const { date, time } = formatCreatedDate(session.scheduledAt);
+                                return `${date}, ${time}`;
+                              })()}
+                            </span>
+                          </div>
+                        </div>
+                        
+                        {/* Loading indicator on navigation */}
+                        {navigatingToSession === session.id && (
+                          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+                        )}
                       </div>
                     </div>
                   </div>
                 );
               })}
             </div>
-          )}
+          ) : null}
 
           {/* Completed Sessions Section - Always show expandable header */}
-          <div className="space-y-3">
+          <div className="space-y-4 mt-6">
             {/* Collapsible Header */}
             <button
               onClick={() => setShowCompletedSessions(!showCompletedSessions)}
-              className="w-full flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-all duration-200"
+              className="w-full flex items-center justify-between p-4 bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800/50 dark:to-gray-800/30 rounded-xl border border-gray-200 dark:border-gray-700 hover:from-gray-100 hover:to-gray-150 dark:hover:from-gray-700/50 dark:hover:to-gray-700/30 transition-all duration-200 shadow-sm hover:shadow-md"
             >
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center">
@@ -330,7 +394,7 @@ export default function SessionsPage() {
             </button>
 
             {/* Completed Sessions List */}
-            <div className={`space-y-2 transition-all duration-300 ease-in-out ${
+            <div className={`space-y-4 transition-all duration-300 ease-in-out ${
               showCompletedSessions 
                 ? 'opacity-100 max-h-[2000px]' 
                 : 'opacity-0 max-h-0 overflow-hidden'
@@ -349,36 +413,49 @@ export default function SessionsPage() {
                       key={session.id}
                       onClick={() => handleSessionSelect(session.id)}
                       onMouseEnter={() => handleSessionHover(session.id)}
-                      className="relative bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 hover:shadow-sm transition-all duration-200 cursor-pointer opacity-75 hover:opacity-100 active:scale-98 transform"
+                      className="relative bg-white dark:bg-gray-800 rounded-xl shadow-sm transition-all duration-200 cursor-pointer opacity-75 hover:opacity-100 hover:shadow-md active:scale-[0.98] transform overflow-hidden group"
                     >
-                      <div className="p-3">
+                      {/* Completed status indicator bar */}
+                      <div className="absolute top-0 left-0 right-0 h-0.5 bg-gray-300 dark:bg-gray-600"></div>
+                      
+                      <div className="p-4">
                         {/* Compact Header Row */}
                         <div className="flex items-center justify-between">
                           <div className="flex-1 min-w-0">
-                            <h3 className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                            <h3 className="text-base font-medium text-gray-700 dark:text-gray-300 truncate">
                               {session.name}
                             </h3>
-                            <div className="flex items-center gap-3 mt-1">
-                              <div className="flex items-center gap-1">
-                                <UsersIcon className="w-3 h-3 text-gray-400 dark:text-gray-500" />
+                            <div className="flex items-center gap-3 mt-2">
+                              <div className="flex items-center gap-1.5">
+                                <UsersIcon className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500" />
                                 <span className="text-xs text-gray-500 dark:text-gray-400">
-                                  {session.participantCount}
+                                  {session.participantCount || 0} clients
                                 </span>
                               </div>
-                              <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${statusBadge.className}`}>
-                                {statusBadge.label}
-                              </span>
+                              <div className="flex items-center gap-1.5">
+                                <CalendarIcon className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500" />
+                                <span className="text-xs text-gray-500 dark:text-gray-400">
+                                  {new Date(session.scheduledAt).toLocaleDateString('en-US', {
+                                    month: 'short',
+                                    day: 'numeric'
+                                  })}
+                                </span>
+                              </div>
                             </div>
                           </div>
-                          <ChevronRightIcon className="w-4 h-4 text-gray-400 dark:text-gray-500 ml-2" />
+                          <CheckCircleIcon className="w-5 h-5 text-green-500 dark:text-green-400 ml-2" />
                         </div>
                       </div>
                     </div>
                   );
                 })
               ) : showCompletedSessions && completedSessions && completedSessions.length === 0 ? (
-                <div className="text-center py-4">
-                  <p className="text-xs text-gray-500 dark:text-gray-400">No completed sessions found</p>
+                <div className="text-center py-8">
+                  <div className="mx-auto w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mb-3">
+                    <CheckCircleIcon className="w-8 h-8 text-gray-400 dark:text-gray-600" />
+                  </div>
+                  <p className="text-sm font-medium text-gray-600 dark:text-gray-400">No completed sessions yet</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">Completed sessions will appear here</p>
                 </div>
               ) : null}
             </div>
@@ -386,8 +463,27 @@ export default function SessionsPage() {
 
           {/* Show empty state only if no active sessions and user hasn't checked completed sessions yet */}
           {(!activeSessions || activeSessions.length === 0) && !showCompletedSessions && (
-            <div className="text-center py-8">
-              <p className="text-gray-500 dark:text-gray-400">No active sessions found. Check completed sessions above.</p>
+            <div className="text-center py-12">
+              {/* Empty state illustration */}
+              <div className="mb-6">
+                <div className="mx-auto w-24 h-24 bg-gradient-to-br from-purple-100 to-blue-100 dark:from-purple-900/30 dark:to-blue-900/30 rounded-full flex items-center justify-center">
+                  <svg className="w-12 h-12 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110 4m0-4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110 4m0-4v2m0-6V4" />
+                  </svg>
+                </div>
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                No Active Sessions
+              </h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+                Get started by creating your first circuit training session
+              </p>
+              <button
+                onClick={() => router.push('/circuit-config')}
+                className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white font-medium rounded-full shadow-lg transform transition-all duration-200 hover:scale-105 active:scale-95">
+                <PlusIcon className="w-5 h-5" />
+                <span>Create Session</span>
+              </button>
             </div>
           )}
         </div>

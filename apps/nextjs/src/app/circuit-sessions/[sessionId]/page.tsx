@@ -178,10 +178,14 @@ export default function SessionDetailPage({ params }: SessionDetailPageProps) {
   }
 
 
-  // Filter clients based on search and status
+  // Filter clients based on search and check-in status
   const filteredClients = CLIENTS.filter(client => {
     const matchesSearch = client.name.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesStatus = statusFilter === "all" || client.status === statusFilter;
+    // For demo purposes, assume clients with "regular" status are checked in
+    const isCheckedIn = client.status === "regular";
+    const matchesStatus = statusFilter === "all" || 
+                         (statusFilter === "checked_in" && isCheckedIn) ||
+                         (statusFilter === "not_checked_in" && !isCheckedIn);
     return matchesSearch && matchesStatus;
   });
 
@@ -208,24 +212,20 @@ export default function SessionDetailPage({ params }: SessionDetailPageProps) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
         {/* Header */}
-        <div className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
-          <div className="px-4 py-4">
-            <div className="flex items-center gap-4">
-              <button
-                onClick={() => setShowAttendance(false)}
-                className="p-2 -ml-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-              >
-                <ChevronLeftIcon className="w-5 h-5 text-gray-600 dark:text-gray-400" />
-              </button>
-              <div className="flex-1 min-w-0">
-                <h1 className="text-xl font-bold text-gray-900 dark:text-white">
-                  Get Attendance
-                </h1>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  {session.name} • {selectedClients.size} selected
-                </p>
-              </div>
+        <div className="lg:hidden sticky top-0 z-50 bg-gradient-to-r from-slate-900 to-purple-900 text-white shadow-lg">
+          <div className="flex items-center justify-between px-4 py-3">
+            <button
+              onClick={() => setShowAttendance(false)}
+              className="flex items-center space-x-2 active:opacity-70 transition-opacity"
+            >
+              <ChevronLeftIcon className="w-6 h-6" />
+              <span className="text-sm font-medium">Back</span>
+            </button>
+            <div className="text-center">
+              <h1 className="text-lg font-semibold">Attendance</h1>
+              <p className="text-xs text-purple-200">{selectedClients.size} selected</p>
             </div>
+            <div className="w-14"></div> {/* Spacer for centering */}
           </div>
         </div>
 
@@ -245,7 +245,7 @@ export default function SessionDetailPage({ params }: SessionDetailPageProps) {
 
           {/* Status Filter */}
           <div className="flex gap-2 overflow-x-auto pb-2">
-            {["all", "regular", "new", "returning"].map((status) => (
+            {["all", "checked_in", "not_checked_in"].map((status) => (
               <button
                 key={status}
                 onClick={() => setStatusFilter(status)}
@@ -255,10 +255,14 @@ export default function SessionDetailPage({ params }: SessionDetailPageProps) {
                     : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
                 }`}
               >
-                {status === "all" ? "All" : status.charAt(0).toUpperCase() + status.slice(1)}
+                {status === "all" ? "All" : 
+                 status === "checked_in" ? "Checked In" : 
+                 status === "not_checked_in" ? "Not Checked In" : 
+                 status.charAt(0).toUpperCase() + status.slice(1)}
               </button>
             ))}
           </div>
+
         </div>
 
         {/* Select All */}
@@ -368,42 +372,40 @@ export default function SessionDetailPage({ params }: SessionDetailPageProps) {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Header */}
-      <div className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
-        <div className="px-4 py-4">
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => router.push('/circuit-sessions')}
-              className="p-2 -ml-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-            >
-              <ChevronLeftIcon className="w-5 h-5 text-gray-600 dark:text-gray-400" />
-            </button>
-            <div className="flex-1 min-w-0">
-              <h1 className="text-xl font-bold text-gray-900 dark:text-white truncate">
-                {session.name}
-              </h1>
-              <div className="flex items-center gap-1 mt-1">
-                <UsersIcon className="w-4 h-4 text-gray-400 dark:text-gray-500" />
-                <span className="text-sm text-gray-600 dark:text-gray-400">
-                  {participantCount} participants
-                </span>
-              </div>
+      <div className="lg:hidden sticky top-0 z-50 bg-gradient-to-r from-slate-900 to-purple-900 text-white shadow-lg">
+        <div className="flex items-center justify-between px-4 py-3">
+          <button
+            onClick={() => router.push('/circuit-sessions')}
+            className="flex items-center space-x-2 active:opacity-70 transition-opacity"
+          >
+            <ChevronLeftIcon className="w-6 h-6" />
+            <span className="text-sm font-medium">Sessions</span>
+          </button>
+          <div className="text-center">
+            <h1 className="text-lg font-semibold truncate max-w-40">{session.name}</h1>
+            <div className="flex items-center justify-center gap-1">
+              <UsersIcon className="w-3 h-3 text-purple-200" />
+              <span className="text-xs text-purple-200">
+                {participantCount} participants
+              </span>
             </div>
           </div>
+          <div className="w-14"></div> {/* Spacer for centering */}
         </div>
       </div>
 
       {/* Main Content */}
-      <div className="px-4 py-8">
-        <div className="space-y-4">
+      <div className="px-4 py-6 bg-gray-50 dark:bg-gray-900">
+        <div className="space-y-4 max-w-lg mx-auto">
           {/* Get Attendance Card */}
           <button
             onClick={() => {
               setShowAttendance(true);
             }}
-            className="w-full bg-white dark:bg-gray-800 rounded-xl border-2 border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-600 transition-all p-6 text-left group active:scale-98 transform"
+            className="w-full bg-white dark:bg-gray-800 rounded-2xl shadow-sm transition-all duration-200 cursor-pointer hover:shadow-lg active:scale-[0.98] transform overflow-hidden group border border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-600 p-6 text-left"
           >
             <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center group-hover:bg-blue-200 dark:group-hover:bg-blue-800/50 transition-colors">
+              <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-2xl flex items-center justify-center group-hover:bg-blue-200 dark:group-hover:bg-blue-800/50 transition-colors">
                 <UsersIcon className="w-6 h-6 text-blue-600 dark:text-blue-400" />
               </div>
               <div className="flex-1 min-w-0">
@@ -449,14 +451,14 @@ export default function SessionDetailPage({ params }: SessionDetailPageProps) {
               }
             }}
             disabled={hasWorkout === undefined}
-            className={`w-full bg-white dark:bg-gray-800 rounded-xl border-2 border-gray-200 dark:border-gray-700 transition-all p-6 text-left group active:scale-98 transform ${
+            className={`w-full bg-white dark:bg-gray-800 rounded-2xl shadow-sm transition-all duration-200 overflow-hidden group border border-gray-200 dark:border-gray-700 p-6 text-left ${
               hasWorkout === undefined 
                 ? 'opacity-75 cursor-wait' 
-                : 'hover:border-purple-300 dark:hover:border-purple-600 cursor-pointer'
+                : 'hover:border-purple-300 dark:hover:border-purple-600 cursor-pointer hover:shadow-lg active:scale-[0.98] transform'
             }`}
           >
             <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-purple-100 dark:bg-purple-900/30 rounded-full flex items-center justify-center group-hover:bg-purple-200 dark:group-hover:bg-purple-800/50 transition-colors">
+              <div className="w-12 h-12 bg-purple-100 dark:bg-purple-900/30 rounded-2xl flex items-center justify-center group-hover:bg-purple-200 dark:group-hover:bg-purple-800/50 transition-colors">
                 <SettingsIcon className="w-6 h-6 text-purple-600 dark:text-purple-400" />
               </div>
               <div className="flex-1 min-w-0">
@@ -488,30 +490,6 @@ export default function SessionDetailPage({ params }: SessionDetailPageProps) {
             </div>
           </button>
 
-          {/* View Feedback Card */}
-          <button
-            disabled
-            className="w-full bg-gray-50 dark:bg-gray-800/50 rounded-xl border-2 border-gray-200 dark:border-gray-700 transition-all p-6 text-left cursor-not-allowed opacity-60"
-          >
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center group-hover:bg-green-200 dark:group-hover:bg-green-800/50 transition-colors">
-                <FeedbackIcon className="w-6 h-6 text-green-600 dark:text-green-400" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <h3 className="text-lg font-semibold text-gray-500 dark:text-gray-500">
-                  View Feedback
-                </h3>
-                <p className="text-sm text-gray-500 dark:text-gray-500 mt-1">
-                  Coming soon - Review participant feedback and session insights
-                </p>
-              </div>
-              <div className="w-5 h-5 text-gray-400 dark:text-gray-500 group-hover:text-green-600 dark:group-hover:text-green-400 transition-colors">
-                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
-              </div>
-            </div>
-          </button>
 
           {/* Action Buttons */}
           <div className="flex gap-3 mt-6">
@@ -576,7 +554,7 @@ export default function SessionDetailPage({ params }: SessionDetailPageProps) {
               Update Status
             </h3>
             <div className="space-y-2 mb-6">
-              {["open", "in_progress", "completed", "cancelled"].map((status) => (
+              {["open", "completed", "cancelled"].map((status) => (
                 <button
                   key={status}
                   onClick={() => updateStatusMutation.mutate({ sessionId, status: status as "open" | "in_progress" | "completed" | "cancelled" })}
