@@ -1,5 +1,5 @@
-import React, { useMemo, useRef } from 'react';
-import { View, Text, Pressable, ActivityIndicator } from 'react-native';
+import React, { useMemo, useRef, useState, useEffect } from 'react';
+import { View, Text, Pressable, ActivityIndicator, TVFocusGuideView } from 'react-native';
 import { useNavigation } from '../App';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../providers/TRPCProvider';
@@ -21,6 +21,8 @@ export function CircuitWorkoutLiveScreen() {
   const navigation = useNavigation();
   const sessionId = navigation.getParam('sessionId');
   const componentInstanceId = useRef(Date.now());
+  const [isTeamsModalVisible, setIsTeamsModalVisible] = useState(false);
+  const closeButtonRef = useRef<any>(null);
 
   // Get circuit config with polling
   const { data: circuitConfig } = useQuery(
@@ -174,6 +176,16 @@ export function CircuitWorkoutLiveScreen() {
     send({ type: 'START_WORKOUT' });
   };
 
+  // Auto-focus close button when modal opens
+  useEffect(() => {
+    if (isTeamsModalVisible && closeButtonRef.current) {
+      // Small delay to ensure modal is rendered
+      setTimeout(() => {
+        closeButtonRef.current?.focus();
+      }, 100);
+    }
+  }, [isTeamsModalVisible]);
+
   // Loading state
   if (selectionsLoading || !circuitConfig) {
     return (
@@ -217,19 +229,24 @@ export function CircuitWorkoutLiveScreen() {
           }}>
             {/* LEFT SIDE: Back/Skip Navigation */}
             <View style={{ 
-              flexDirection: 'row',
-              backgroundColor: 'rgba(255,255,255,0.05)',
-              borderRadius: 32,
-              padding: 6,
-              gap: 4,
-              borderWidth: 1,
-              borderColor: 'rgba(255,255,255,0.1)',
-              shadowColor: '#000',
-              shadowOffset: { width: 0, height: 4 },
-              shadowOpacity: 0.15,
-              shadowRadius: 8,
-              elevation: 4,
+              flexDirection: 'column',
+              gap: 12,
             }}>
+              {/* Back/Skip Pair */}
+              <View style={{ 
+                flexDirection: 'row',
+                backgroundColor: 'rgba(255,255,255,0.05)',
+                borderRadius: 32,
+                padding: 6,
+                gap: 4,
+                borderWidth: 1,
+                borderColor: 'rgba(255,255,255,0.1)',
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.15,
+                shadowRadius: 8,
+                elevation: 4,
+              }}>
               {/* Back Round */}
               <Pressable
                 onPress={() => {
@@ -307,6 +324,49 @@ export function CircuitWorkoutLiveScreen() {
                         SKIP
                       </Text>
                       <Icon name="navigate-next" size={18} color={TOKENS.color.text} />
+                    </View>
+                  </MattePanel>
+                )}
+              </Pressable>
+              </View>
+              
+              {/* Teams Button - Secondary action */}
+              <Pressable
+                onPress={() => setIsTeamsModalVisible(true)}
+                focusable
+              >
+                {({ focused }) => (
+                  <MattePanel 
+                    focused={focused}
+                    radius={22}
+                    style={{ 
+                      paddingHorizontal: 20,
+                      paddingVertical: 10,
+                      backgroundColor: focused ? 
+                        'rgba(255,255,255,0.08)' : 
+                        'rgba(255,255,255,0.03)',
+                      borderColor: focused ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.06)',
+                      borderWidth: focused ? 1 : 0.5,
+                      shadowColor: '#000',
+                      shadowOffset: { width: 0, height: 2 },
+                      shadowOpacity: 0.08,
+                      shadowRadius: 4,
+                      elevation: 2,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                      <Icon name="groups" size={14} color={TOKENS.color.muted} />
+                      <Text style={{ 
+                        color: TOKENS.color.muted, 
+                        fontSize: 11, 
+                        fontWeight: '600',
+                        letterSpacing: 0.5,
+                        textTransform: 'uppercase'
+                      }}>
+                        TEAMS
+                      </Text>
                     </View>
                   </MattePanel>
                 )}
@@ -556,6 +616,191 @@ export function CircuitWorkoutLiveScreen() {
             />
           </View>
         </>
+      )}
+
+      {/* Teams Assignment Modal */}
+      {isTeamsModalVisible && (
+        <TVFocusGuideView 
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.75)',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 1000,
+          }}
+          trapFocusUp={true}
+          trapFocusDown={true}
+          trapFocusLeft={true}
+          trapFocusRight={true}
+        >
+          <MattePanel style={{
+            width: 800,
+            maxHeight: 600,
+            backgroundColor: TOKENS.color.card,
+            borderColor: TOKENS.color.borderGlass,
+            borderWidth: 1,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 8 },
+            shadowOpacity: 0.3,
+            shadowRadius: 24,
+            elevation: 12,
+            padding: 32,
+          }}>
+            {/* Content - Station Grid */}
+            <View style={{
+              flexDirection: 'row',
+              flexWrap: 'wrap',
+              gap: 16,
+              justifyContent: 'center',
+            }}>
+              {/* Mock station assignments - using established container patterns */}
+              {[
+                { station: 1, team: 'Team 1', color: '#ef4444', clients: ['Alex M.', 'Sarah K.'] },
+                { station: 2, team: 'Team 2', color: '#3b82f6', clients: ['Mike R.', 'Lisa P.'] },
+                { station: 3, team: 'Team 3', color: '#22c55e', clients: ['David L.', 'Emma W.'] },
+                { station: 4, team: 'Team 4', color: '#f59e0b', clients: ['Chris B.', 'Nina S.'] },
+                { station: 5, team: 'Team 5', color: '#a855f7', clients: ['Ryan T.'] },
+                { station: 6, team: 'Team 6', color: '#14b8a6', clients: ['Jenna M.', 'Tom H.'] },
+              ].map((assignment) => (
+                <View 
+                  key={assignment.station}
+                  style={{
+                    width: 220,
+                    backgroundColor: TOKENS.color.cardGlass,
+                    borderRadius: 16,
+                    overflow: 'hidden',
+                  }}
+                >
+                  {/* Team Color Bar */}
+                  <View style={{
+                    height: 6,
+                    backgroundColor: assignment.color,
+                  }} />
+                  
+                  {/* Content */}
+                  <View style={{ 
+                    padding: 20,
+                    paddingTop: 24,
+                  }}>
+                    {/* Team Badge with Station Badge aligned */}
+                    <View style={{ marginBottom: 24 }}>
+                      <View style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                      }}>
+                        {/* Team Badge - Left side */}
+                        <View style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 8,
+                        }}>
+                          <View style={{
+                            width: 12,
+                            height: 12,
+                            borderRadius: 6,
+                            backgroundColor: assignment.color,
+                          }} />
+                          <Text style={{ 
+                            color: assignment.color, 
+                            fontWeight: '800',
+                            fontSize: 14,
+                            letterSpacing: 0.3,
+                            textTransform: 'uppercase',
+                          }}>
+                            {assignment.team}
+                          </Text>
+                        </View>
+                        
+                        {/* Station Badge - Right side, aligned with team */}
+                        <View style={{
+                          width: 36,
+                          height: 36,
+                          borderRadius: 18,
+                          backgroundColor: 'rgba(255, 255, 255, 0.20)',
+                          borderColor: 'rgba(255, 255, 255, 0.4)',
+                          borderWidth: 1,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}>
+                          <Text style={{
+                            fontSize: 14,
+                            fontWeight: '800',
+                            color: TOKENS.color.text,
+                            letterSpacing: 0.2,
+                          }}>
+                            S{assignment.station}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                    
+                    {/* Client List */}
+                    <View style={{ gap: 8 }}>
+                      {assignment.clients.map((client, index) => (
+                        <Text 
+                          key={index}
+                          style={{
+                            fontSize: 18,
+                            fontWeight: '700',
+                            color: TOKENS.color.text,
+                          }}
+                        >
+                          {client}
+                        </Text>
+                      ))}
+                    </View>
+                  </View>
+                </View>
+              ))}
+            </View>
+
+            {/* Single Auto-Focused Close Button */}
+            <View style={{
+              alignItems: 'center',
+              marginTop: 32,
+            }}>
+              <Pressable
+                ref={closeButtonRef}
+                onPress={() => setIsTeamsModalVisible(false)}
+                focusable
+                hasTVPreferredFocus
+              >
+                {({ focused }) => (
+                  <MattePanel 
+                    focused={focused}
+                    radius={26}
+                    style={{ 
+                      width: 94,
+                      height: 44,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      backgroundColor: focused ? 
+                        'rgba(255,255,255,0.15)' : 
+                        'rgba(255,255,255,0.08)',
+                      borderColor: focused ? 'rgba(255,255,255,0.3)' : 'transparent',
+                      borderWidth: focused ? 1.5 : 0,
+                    }}
+                  >
+                    <Text style={{ 
+                      color: TOKENS.color.text, 
+                      fontSize: 13, 
+                      fontWeight: '700',
+                      letterSpacing: 0.3,
+                      textTransform: 'uppercase'
+                    }}>
+                      CLOSE
+                    </Text>
+                  </MattePanel>
+                )}
+              </Pressable>
+            </View>
+          </MattePanel>
+        </TVFocusGuideView>
       )}
     </View>
   );
