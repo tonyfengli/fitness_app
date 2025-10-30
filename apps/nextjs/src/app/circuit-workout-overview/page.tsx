@@ -33,6 +33,7 @@ import { supabase } from "~/lib/supabase";
 import { api, useTRPC } from "~/trpc/react";
 import { toast } from "sonner";
 import { CircuitHeader } from "~/components/CircuitHeader";
+import { OptionsDrawer } from "~/components/workout/OptionsDrawer";
 
 // World-class Duration Input Component
 interface DurationInputProps {
@@ -734,6 +735,19 @@ function CircuitWorkoutOverviewContent() {
   
   // Modal view state - 'configure' or 'delete'
   const [setsModalView, setSetsModalView] = useState<'configure' | 'delete'>('configure');
+  
+  // Options drawer state (for rounds, stations, and exercises)
+  const [showOptionsDrawer, setShowOptionsDrawer] = useState(false);
+  const [selectedItemForOptions, setSelectedItemForOptions] = useState<{
+    type: 'round' | 'station' | 'exercise';
+    id: string;
+    name: string;
+    roundName?: string;
+    exerciseId?: string;
+    repsPlanned?: number;
+    roundIndex?: number;
+    stationIndex?: number;
+  } | null>(null);
 
   // Round options modal state
   const [showRoundOptionsModal, setShowRoundOptionsModal] = useState(false);
@@ -1642,21 +1656,6 @@ function CircuitWorkoutOverviewContent() {
                 <div className="p-6 space-y-4">
                   <div>
                     <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-3">
-                      <span className={`w-8 h-8 rounded-full flex items-center justify-center font-bold ${(() => {
-                        const type = round.roundType || 'circuit_round';
-                        if (round.isRepeat) return 'bg-purple-500/20 dark:bg-violet-300/20 text-purple-700 dark:text-violet-200 ring-2 ring-purple-400/50 dark:ring-violet-300/40';
-                        switch (type) {
-                          case 'amrap_round':
-                            return 'bg-purple-500/20 dark:bg-violet-300/20 text-purple-700 dark:text-violet-200 ring-2 ring-purple-400/50 dark:ring-violet-300/40';
-                          case 'stations_round':
-                            return 'bg-green-500/20 dark:bg-emerald-300/20 text-green-700 dark:text-emerald-200 ring-2 ring-green-400/50 dark:ring-emerald-300/40';
-                          case 'circuit_round':
-                          default:
-                            return 'bg-blue-500/20 dark:bg-sky-300/20 text-blue-700 dark:text-sky-200 ring-2 ring-blue-400/50 dark:ring-sky-300/40';
-                        }
-                      })()}`}>
-                        {round.roundName.match(/\d+/)?.[0] || ''}
-                      </span>
                       <span className="flex items-center gap-2">
                         {round.roundName}
                         {round.isRepeat && (
@@ -1665,72 +1664,38 @@ function CircuitWorkoutOverviewContent() {
                           </span>
                         )}
                       </span>
-                      {/* Round reorder buttons */}
+                      {/* Round options button */}
                       <div className="ml-auto flex items-center gap-1">
                         <button
                           onClick={() => {
-                            const roundNumber = parseInt(round.roundName.match(/\d+/)?.[0] || '0');
-                            if (roundNumber > 0) {
-                              reorderRoundsMutation.mutate({
-                                sessionId: sessionId!,
-                                currentRoundNumber: roundNumber,
-                                direction: "up",
-                              });
-                            }
+                            setSelectedItemForOptions({
+                              type: 'round',
+                              id: round.roundName,
+                              name: round.roundName,
+                              roundIndex: roundIndex,
+                            });
+                            setShowOptionsDrawer(true);
                           }}
-                          disabled={roundIndex === 0 || reorderRoundsMutation.isPending}
-                          className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                          title="Move round up"
+                          className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                          aria-label="Round options"
                         >
-                          <svg className="h-4 w-4 text-gray-500 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
-                          </svg>
-                        </button>
-                        <button
-                          onClick={() => {
-                            const roundNumber = parseInt(round.roundName.match(/\d+/)?.[0] || '0');
-                            if (roundNumber > 0) {
-                              reorderRoundsMutation.mutate({
-                                sessionId: sessionId!,
-                                currentRoundNumber: roundNumber,
-                                direction: "down",
-                              });
-                            }
-                          }}
-                          disabled={roundIndex === roundsData.length - 1 || reorderRoundsMutation.isPending}
-                          className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                          title="Move round down"
-                        >
-                          <svg className="h-4 w-4 text-gray-500 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                          </svg>
-                        </button>
-                        <div className="w-px h-5 bg-gray-200 dark:bg-gray-700 mx-1" />
-                        <button 
-                          onClick={() => {
-                            setSelectedRoundForOptions(round);
-                            setShowRoundOptionsModal(true);
-                          }}
-                          className="p-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                          title="Round options"
-                        >
-                          <svg 
-                            width="16" 
-                            height="16" 
-                            viewBox="0 0 24 24" 
-                            fill="none" 
-                            stroke="currentColor" 
+                          <svg
+                            width="20"
+                            height="20"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
                             strokeWidth="2"
                             className="text-gray-500 dark:text-gray-400"
                           >
-                            <circle cx="12" cy="12" r="1"/>
-                            <circle cx="19" cy="12" r="1"/>
-                            <circle cx="5" cy="12" r="1"/>
+                            <circle cx="12" cy="5" r="1" />
+                            <circle cx="12" cy="12" r="1" />
+                            <circle cx="12" cy="19" r="1" />
                           </svg>
                         </button>
                       </div>
                     </h2>
-                    <p className="mt-1 text-sm text-gray-600 dark:text-gray-400 flex items-center justify-between gap-2">
+                    <p className="mt-1 text-sm text-gray-600 dark:text-gray-400 flex items-center gap-2">
                       {(() => {
                         const roundType = round.roundType || 'circuit_round';
                         switch (roundType) {
@@ -1739,26 +1704,19 @@ function CircuitWorkoutOverviewContent() {
                             const amrapDuration = Math.floor((amrapRoundTemplate?.template?.totalDuration || 0) / 60);
                             return (
                               <>
-                                <div className="flex items-center gap-2">
-                                  <svg className="w-4 h-4 text-violet-500 dark:text-violet-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                  </svg>
-                                  <span>AMRAP • {amrapDuration} min rounds / {circuitConfig?.config?.restBetweenRounds}s rest</span>
-                                </div>
                                 {/* AMRAP Timing Badge */}
-                                <div className="flex items-center gap-2">
-                                  <div className="px-3 py-1 bg-violet-50 dark:bg-violet-950/50 border border-violet-200 dark:border-violet-800 rounded-full">
-                                    <span className="text-sm font-semibold text-violet-700 dark:text-violet-300">
-                                      {(() => {
-                                        const totalDuration = amrapRoundTemplate?.template?.totalDuration || 0;
-                                        if (totalDuration < 60) return `${totalDuration}s`;
-                                        const mins = Math.floor(totalDuration / 60);
-                                        const secs = totalDuration % 60;
-                                        return secs === 0 ? `${mins}m` : `${mins}:${secs.toString().padStart(2, '0')}`;
-                                      })()}
-                                    </span>
-                                  </div>
+                                <div className="px-3 py-1 bg-violet-50 dark:bg-violet-950/50 border border-violet-200 dark:border-violet-800 rounded-full">
+                                  <span className="text-sm font-semibold text-violet-700 dark:text-violet-300">
+                                    {(() => {
+                                      const totalDuration = amrapRoundTemplate?.template?.totalDuration || 0;
+                                      if (totalDuration < 60) return `${totalDuration}s`;
+                                      const mins = Math.floor(totalDuration / 60);
+                                      const secs = totalDuration % 60;
+                                      return secs === 0 ? `${mins}m` : `${mins}:${secs.toString().padStart(2, '0')}`;
+                                    })()}
+                                  </span>
                                 </div>
+                                <span>AMRAP • {amrapDuration} min rounds / {circuitConfig?.config?.restBetweenRounds}s rest</span>
                               </>
                             );
                           case 'stations_round':
@@ -1772,37 +1730,30 @@ function CircuitWorkoutOverviewContent() {
                               : `Stations • ${stationsWorkDuration}s work / ${stationsRestDuration}s transition`;
                             return (
                               <>
-                                <div className="flex items-center gap-2">
-                                  <svg className="w-4 h-4 text-emerald-500 dark:text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 515.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                                  </svg>
-                                  <span>{stationsHelpText}</span>
-                                </div>
                                 {/* Stations Timing Badge */}
-                                <div className="flex items-center gap-2">
-                                  <div className="px-3 py-1 bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 rounded-full">
-                                    <span className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">
-                                      {(() => {
-                                        const workTime = stationsWorkDuration || 0;
-                                        const restTime = stationsRestDuration || 0;
-                                        const sets = stationsRepeatTimes || 1;
-                                        const restBetweenSets = stationsRestBetweenSets || 0;
-                                        const uniqueStations = new Set(round.exercises.map((ex: any) => ex.orderIndex));
-                                        const unitsCount = uniqueStations.size || 1;
-                                        
-                                        // Time for one set: (units * work) + (rest between units)
-                                        const timePerSet = (unitsCount * workTime) + ((unitsCount - 1) * restTime);
-                                        // Total time: (timePerSet * sets) + (restBetweenSets * (sets - 1))
-                                        const totalDuration = (timePerSet * sets) + (restBetweenSets * (sets - 1));
-                                        
-                                        if (totalDuration < 60) return `${totalDuration}s`;
-                                        const mins = Math.floor(totalDuration / 60);
-                                        const secs = totalDuration % 60;
-                                        return secs === 0 ? `${mins}m` : `${mins}:${secs.toString().padStart(2, '0')}`;
-                                      })()}
-                                    </span>
-                                  </div>
+                                <div className="px-3 py-1 bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 rounded-full">
+                                  <span className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">
+                                    {(() => {
+                                      const workTime = stationsWorkDuration || 0;
+                                      const restTime = stationsRestDuration || 0;
+                                      const sets = stationsRepeatTimes || 1;
+                                      const restBetweenSets = stationsRestBetweenSets || 0;
+                                      const uniqueStations = new Set(round.exercises.map((ex: any) => ex.orderIndex));
+                                      const unitsCount = uniqueStations.size || 1;
+                                      
+                                      // Time for one set: (units * work) + (rest between units)
+                                      const timePerSet = (unitsCount * workTime) + ((unitsCount - 1) * restTime);
+                                      // Total time: (timePerSet * sets) + (restBetweenSets * (sets - 1))
+                                      const totalDuration = (timePerSet * sets) + (restBetweenSets * (sets - 1));
+                                      
+                                      if (totalDuration < 60) return `${totalDuration}s`;
+                                      const mins = Math.floor(totalDuration / 60);
+                                      const secs = totalDuration % 60;
+                                      return secs === 0 ? `${mins}m` : `${mins}:${secs.toString().padStart(2, '0')}`;
+                                    })()}
+                                  </span>
                                 </div>
+                                <span>{stationsHelpText}</span>
                               </>
                             );
                           case 'circuit_round':
@@ -1823,34 +1774,29 @@ function CircuitWorkoutOverviewContent() {
                             
                             return (
                               <>
-                                <svg className="w-4 h-4 text-sky-500 dark:text-sky-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                                </svg>
-                                <span>{circuitHelpText}</span>
                                 {/* Circuit Timing Badge */}
-                                <div className="flex items-center gap-2">
-                                  <div className="px-3 py-1 bg-sky-50 dark:bg-sky-950/50 border border-sky-200 dark:border-sky-800 rounded-full">
-                                    <span className="text-sm font-semibold text-sky-700 dark:text-sky-300">
-                                      {(() => {
-                                        const workTime = circuitWorkDuration || 0;
-                                        const restTime = circuitRestDuration || 0;
-                                        const sets = circuitRepeatTimes || 1;
-                                        const restBetweenSets = circuitRestBetweenSets || 0;
-                                        const unitsCount = round.exercises.length;
-                                        
-                                        // Time for one set: (units * work) + (rest between units)
-                                        const timePerSet = (unitsCount * workTime) + ((unitsCount - 1) * restTime);
-                                        // Total time: (timePerSet * sets) + (restBetweenSets * (sets - 1))
-                                        const totalDuration = (timePerSet * sets) + (restBetweenSets * (sets - 1));
-                                        
-                                        if (totalDuration < 60) return `${totalDuration}s`;
-                                        const mins = Math.floor(totalDuration / 60);
-                                        const secs = totalDuration % 60;
-                                        return secs === 0 ? `${mins}m` : `${mins}:${secs.toString().padStart(2, '0')}`;
-                                      })()}
-                                    </span>
-                                  </div>
+                                <div className="px-3 py-1 bg-sky-50 dark:bg-sky-950/50 border border-sky-200 dark:border-sky-800 rounded-full">
+                                  <span className="text-sm font-semibold text-sky-700 dark:text-sky-300">
+                                    {(() => {
+                                      const workTime = circuitWorkDuration || 0;
+                                      const restTime = circuitRestDuration || 0;
+                                      const sets = circuitRepeatTimes || 1;
+                                      const restBetweenSets = circuitRestBetweenSets || 0;
+                                      const unitsCount = round.exercises.length;
+                                      
+                                      // Time for one set: (units * work) + (rest between units)
+                                      const timePerSet = (unitsCount * workTime) + ((unitsCount - 1) * restTime);
+                                      // Total time: (timePerSet * sets) + (restBetweenSets * (sets - 1))
+                                      const totalDuration = (timePerSet * sets) + (restBetweenSets * (sets - 1));
+                                      
+                                      if (totalDuration < 60) return `${totalDuration}s`;
+                                      const mins = Math.floor(totalDuration / 60);
+                                      const secs = totalDuration % 60;
+                                      return secs === 0 ? `${mins}m` : `${mins}:${secs.toString().padStart(2, '0')}`;
+                                    })()}
+                                  </span>
                                 </div>
+                                <span>{circuitHelpText}</span>
                               </>
                             );
                         }
@@ -1866,7 +1812,7 @@ function CircuitWorkoutOverviewContent() {
                       <div key={exercise.id} className="relative">
                         {round.roundType === 'stations_round' ? (
                           // Clean station layout for multiple exercises
-                          <div className="rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 overflow-hidden">
+                          <div className="rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 overflow-visible">
                             {/* Station header */}
                             <div className="px-6 py-3 bg-gray-50 dark:bg-gray-900/50 border-b border-gray-200 dark:border-gray-700">
                               <div className="flex items-center justify-between">
@@ -1911,70 +1857,31 @@ function CircuitWorkoutOverviewContent() {
                                 {!isEditing && (
                                   <div className="flex items-center gap-1 opacity-40 hover:opacity-100 transition-opacity">
                                     <button
-                                      disabled={idx === 0 || reorderExerciseMutation.isPending}
                                       onClick={() => {
-                                        reorderExerciseMutation.mutate({
-                                          sessionId: sessionId!,
-                                          roundName: round.roundName,
-                                          currentIndex: exercise.orderIndex,
-                                          direction: "up",
-                                        });
-                                      }}
-                                      className="h-7 w-7 p-0 rounded hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-30 transition-colors"
-                                    >
-                                      <svg className="h-4 w-4 text-gray-500 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
-                                      </svg>
-                                    </button>
-                                    <button
-                                      disabled={idx === round.exercises.length - 1 || reorderExerciseMutation.isPending}
-                                      onClick={() => {
-                                        reorderExerciseMutation.mutate({
-                                          sessionId: sessionId!,
-                                          roundName: round.roundName,
-                                          currentIndex: exercise.orderIndex,
-                                          direction: "down",
-                                        });
-                                      }}
-                                      className="h-7 w-7 p-0 rounded hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-30 transition-colors"
-                                    >
-                                      <svg className="h-4 w-4 text-gray-500 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                                      </svg>
-                                    </button>
-                                    <div className="w-px h-5 bg-gray-200 dark:bg-gray-700 mx-1" />
-                                    <button 
-                                      onClick={() => {
-                                        // Get the station's total work duration from the round template
-                                        const roundNumber = parseInt(round.roundName.match(/\d+/)?.[0] || '1');
-                                        const roundTemplate = circuitConfig?.config?.roundTemplates?.find(
-                                          rt => rt.roundNumber === roundNumber
-                                        );
-                                        const totalWorkDuration = roundTemplate?.template?.workDuration || 180; // Default 3 minutes
-                                        
-                                        setSelectedStationForCircuit({
+                                        setSelectedItemForOptions({
+                                          type: 'station',
+                                          id: `${round.roundName}-${idx}`,
+                                          name: `Station ${idx + 1}`,
                                           roundName: round.roundName,
                                           stationIndex: idx,
-                                          stationNumber: idx + 1,
-                                          totalWorkDuration: totalWorkDuration
                                         });
-                                        setShowStationCircuitModal(true);
+                                        setShowOptionsDrawer(true);
                                       }}
-                                      className="p-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                                      title="Station options"
+                                      className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                                      aria-label="Station options"
                                     >
-                                      <svg 
-                                        width="16" 
-                                        height="16" 
-                                        viewBox="0 0 24 24" 
-                                        fill="none" 
-                                        stroke="currentColor" 
+                                      <svg
+                                        width="20"
+                                        height="20"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
                                         strokeWidth="2"
                                         className="text-gray-500 dark:text-gray-400"
                                       >
-                                        <circle cx="12" cy="12" r="1"/>
-                                        <circle cx="19" cy="12" r="1"/>
-                                        <circle cx="5" cy="12" r="1"/>
+                                        <circle cx="12" cy="5" r="1" />
+                                        <circle cx="12" cy="12" r="1" />
+                                        <circle cx="12" cy="19" r="1" />
                                       </svg>
                                     </button>
                                   </div>
@@ -1997,37 +1904,35 @@ function CircuitWorkoutOverviewContent() {
                                       )}
                                     </div>
                                   </div>
-                                  <div className="flex items-center gap-2 ml-4">
+                                  <div className="ml-4">
                                     <button
                                       onClick={() => {
-                                        setSelectedExerciseForSets({
+                                        setSelectedItemForOptions({
+                                          type: 'exercise',
                                           id: exercise.id,
-                                          exerciseName: exercise.exerciseName,
+                                          name: exercise.exerciseName,
                                           exerciseId: exercise.exerciseId,
                                           roundName: round.roundName,
+                                          repsPlanned: exercise.repsPlanned,
                                         });
-                                        setRepsValue(exercise.repsPlanned || 0);
-                                        setSetsModalView('configure');
-                                        setShowSetsModal(true);
+                                        setShowOptionsDrawer(true);
                                       }}
-                                      className="p-2 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-all"
+                                      className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                                      aria-label="More options"
                                     >
-                                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                                        <path d="M12 15a3 3 0 100-6 3 3 0 000 6z" />
-                                        <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z" />
+                                      <svg
+                                        width="20"
+                                        height="20"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        strokeWidth="2"
+                                        className="text-gray-500 dark:text-gray-400"
+                                      >
+                                        <circle cx="12" cy="5" r="1" />
+                                        <circle cx="12" cy="12" r="1" />
+                                        <circle cx="12" cy="19" r="1" />
                                       </svg>
-                                    </button>
-                                    <button
-                                      onClick={() => {
-                                        setEditingExerciseId(exercise.id);
-                                        setInlineSearchQuery("");
-                                        setInlineSelectedId(null);
-                                        setSelectedCategory(null);
-                                        setCategoryMode('choice');
-                                      }}
-                                      className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-all font-medium"
-                                    >
-                                      Replace
                                     </button>
                                   </div>
                                 </div>
@@ -2050,33 +1955,32 @@ function CircuitWorkoutOverviewContent() {
                                     <div className="flex items-center gap-2 ml-4">
                                       <button
                                         onClick={() => {
-                                          setSelectedExerciseForSets({
+                                          setSelectedItemForOptions({
+                                            type: 'exercise',
                                             id: stationEx.id,
-                                            exerciseName: stationEx.exerciseName,
+                                            name: stationEx.exerciseName,
                                             exerciseId: stationEx.exerciseId,
                                             roundName: round.roundName,
+                                            repsPlanned: stationEx.repsPlanned,
                                           });
-                                          setRepsValue(stationEx.repsPlanned || 0);
-                                          setShowSetsModal(true);
+                                          setShowOptionsDrawer(true);
                                         }}
-                                        className="p-2 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-all"
+                                        className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                                        aria-label="More options"
                                       >
-                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                                          <path d="M12 15a3 3 0 100-6 3 3 0 000 6z" />
-                                          <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z" />
+                                        <svg
+                                          width="20"
+                                          height="20"
+                                          viewBox="0 0 24 24"
+                                          fill="none"
+                                          stroke="currentColor"
+                                          strokeWidth="2"
+                                          className="text-gray-500 dark:text-gray-400"
+                                        >
+                                          <circle cx="12" cy="5" r="1" />
+                                          <circle cx="12" cy="12" r="1" />
+                                          <circle cx="12" cy="19" r="1" />
                                         </svg>
-                                      </button>
-                                      <button
-                                        onClick={() => {
-                                          setEditingExerciseId(stationEx.id);
-                                          setInlineSearchQuery("");
-                                          setInlineSelectedId(null);
-                                          setSelectedCategory(null);
-                                          setCategoryMode('choice');
-                                        }}
-                                        className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-all font-medium"
-                                      >
-                                        Replace
                                       </button>
                                     </div>
                                   </div>
@@ -2199,41 +2103,37 @@ function CircuitWorkoutOverviewContent() {
                               </div>
                               <div className="flex items-center gap-2">
                                 {!isEditing ? (
-                                  <>
-                                    <button
-                                      onClick={() => {
-                                        setSelectedExerciseForSets({
-                                          id: exercise.id,
-                                          exerciseName: exercise.exerciseName,
-                                          exerciseId: exercise.exerciseId,
-                                          roundName: round.roundName,
-                                        });
-                                        setRepsValue(exercise.repsPlanned || 0);
-                                        setSetsModalView('configure');
-                                        setShowSetsModal(true);
-                                      }}
-                                      className="h-8 w-10 flex items-center justify-center border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors focus:outline-none focus:ring-0"
+                                  <button
+                                    onClick={() => {
+                                      setSelectedItemForOptions({
+                                        type: 'exercise',
+                                        id: exercise.id,
+                                        name: exercise.exerciseName,
+                                        exerciseId: exercise.exerciseId,
+                                        roundName: round.roundName,
+                                        repsPlanned: exercise.repsPlanned,
+                                        roundIndex: roundIndex,
+                                        stationIndex: idx, // This represents exercise index in non-station rounds
+                                      });
+                                      setShowOptionsDrawer(true);
+                                    }}
+                                    className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                                    aria-label="Exercise options"
+                                  >
+                                    <svg
+                                      width="20"
+                                      height="20"
+                                      viewBox="0 0 24 24"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      strokeWidth="2"
+                                      className="text-gray-500 dark:text-gray-400"
                                     >
-                                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-gray-600 dark:text-gray-400">
-                                        <path d="M12 15a3 3 0 100-6 3 3 0 000 6z" />
-                                        <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z" />
-                                      </svg>
-                                    </button>
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      onClick={() => {
-                                        setEditingExerciseId(exercise.id);
-                                        setInlineSearchQuery("");
-                                        setInlineSelectedId(null);
-                                        setSelectedCategory(null);
-                                        setCategoryMode('choice');
-                                      }}
-                                      className="h-8 px-3 font-medium dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:hover:bg-gray-600 focus:outline-none focus:ring-0"
-                                    >
-                                      Replace
-                                    </Button>
-                                  </>
+                                      <circle cx="12" cy="5" r="1" />
+                                      <circle cx="12" cy="12" r="1" />
+                                      <circle cx="12" cy="19" r="1" />
+                                    </svg>
+                                  </button>
                                 ) : null}
                               </div>
                             </div>
@@ -3297,6 +3197,264 @@ function CircuitWorkoutOverviewContent() {
           </div>
         </>
       )}
+
+      {/* Unified Options Drawer */}
+      <OptionsDrawer
+        isOpen={showOptionsDrawer}
+        onClose={() => {
+          setShowOptionsDrawer(false);
+          setSelectedItemForOptions(null);
+        }}
+        title={
+          selectedItemForOptions?.type === 'round' 
+            ? selectedItemForOptions.name 
+            : selectedItemForOptions?.type === 'station'
+            ? selectedItemForOptions.name
+            : selectedItemForOptions?.name || "Options"
+        }
+        items={
+          selectedItemForOptions?.type === 'round' 
+            ? [
+                {
+                  id: "settings",
+                  label: "Round Settings",
+                  icon: (
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                      <path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                  ),
+                  onClick: () => {
+                    const round = roundsData.find(r => r.roundName === selectedItemForOptions?.name);
+                    if (round) {
+                      setSelectedRoundForOptions(round);
+                      setShowRoundOptionsModal(true);
+                    }
+                  },
+                },
+                {
+                  id: "move-up",
+                  label: "Move Up",
+                  icon: (
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
+                    </svg>
+                  ),
+                  disabled: selectedItemForOptions?.roundIndex === 0 || reorderRoundsMutation.isPending,
+                  onClick: () => {
+                    const roundNumber = parseInt(selectedItemForOptions?.name.match(/\d+/)?.[0] || '0');
+                    if (roundNumber > 0) {
+                      reorderRoundsMutation.mutate({
+                        sessionId: sessionId!,
+                        currentRoundNumber: roundNumber,
+                        direction: "up",
+                      });
+                    }
+                  },
+                },
+                {
+                  id: "move-down",
+                  label: "Move Down",
+                  icon: (
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  ),
+                  disabled: selectedItemForOptions?.roundIndex === roundsData.length - 1 || reorderRoundsMutation.isPending,
+                  onClick: () => {
+                    const roundNumber = parseInt(selectedItemForOptions?.name.match(/\d+/)?.[0] || '0');
+                    if (roundNumber > 0) {
+                      reorderRoundsMutation.mutate({
+                        sessionId: sessionId!,
+                        currentRoundNumber: roundNumber,
+                        direction: "down",
+                      });
+                    }
+                  },
+                },
+              ]
+            : selectedItemForOptions?.type === 'station'
+            ? [
+                {
+                  id: "station-settings",
+                  label: "Station Settings",
+                  icon: (
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                      <path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                  ),
+                  onClick: () => {
+                    if (selectedItemForOptions?.roundName && selectedItemForOptions?.stationIndex !== undefined) {
+                      const roundNumber = parseInt(selectedItemForOptions.roundName.match(/\d+/)?.[0] || '1');
+                      const roundTemplate = circuitConfig?.config?.roundTemplates?.find(
+                        rt => rt.roundNumber === roundNumber
+                      );
+                      const totalWorkDuration = roundTemplate?.template?.workDuration || 180;
+                      
+                      setSelectedStationForCircuit({
+                        roundName: selectedItemForOptions.roundName,
+                        stationIndex: selectedItemForOptions.stationIndex,
+                        stationNumber: selectedItemForOptions.stationIndex + 1,
+                        totalWorkDuration: totalWorkDuration
+                      });
+                      setShowStationCircuitModal(true);
+                    }
+                  },
+                },
+                {
+                  id: "station-move-up",
+                  label: "Move Up",
+                  icon: (
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
+                    </svg>
+                  ),
+                  disabled: selectedItemForOptions?.stationIndex === 0 || reorderExerciseMutation.isPending,
+                  onClick: () => {
+                    if (selectedItemForOptions?.roundName && selectedItemForOptions?.stationIndex !== undefined) {
+                      const round = roundsData.find(r => r.roundName === selectedItemForOptions.roundName);
+                      const exercise = round?.exercises[selectedItemForOptions.stationIndex];
+                      if (exercise) {
+                        reorderExerciseMutation.mutate({
+                          sessionId: sessionId!,
+                          roundName: selectedItemForOptions.roundName,
+                          currentIndex: exercise.orderIndex,
+                          direction: "up",
+                        });
+                      }
+                    }
+                  },
+                },
+                {
+                  id: "station-move-down",
+                  label: "Move Down",
+                  icon: (
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  ),
+                  disabled: selectedItemForOptions?.stationIndex === (roundsData.find(r => r.roundName === selectedItemForOptions?.roundName)?.exercises.length || 0) - 1 || reorderExerciseMutation.isPending,
+                  onClick: () => {
+                    if (selectedItemForOptions?.roundName && selectedItemForOptions?.stationIndex !== undefined) {
+                      const round = roundsData.find(r => r.roundName === selectedItemForOptions.roundName);
+                      const exercise = round?.exercises[selectedItemForOptions.stationIndex];
+                      if (exercise) {
+                        reorderExerciseMutation.mutate({
+                          sessionId: sessionId!,
+                          roundName: selectedItemForOptions.roundName,
+                          currentIndex: exercise.orderIndex,
+                          direction: "down",
+                        });
+                      }
+                    }
+                  },
+                },
+              ]
+            : selectedItemForOptions?.type === 'exercise'
+            ? (() => {
+                // Get the round data to check if this is a non-station round
+                const round = roundsData.find(r => r.roundName === selectedItemForOptions?.roundName);
+                const isNonStationRound = round && round.roundType !== 'stations_round';
+                const exerciseCount = round?.exercises.length || 0;
+                
+                return [
+                  {
+                    id: "replace-exercise",
+                    label: "Replace Exercise",
+                    icon: (
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M1 4v6h6M23 20v-6h-6"/>
+                        <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/>
+                      </svg>
+                    ),
+                    onClick: () => {
+                      if (selectedItemForOptions) {
+                        setEditingExerciseId(selectedItemForOptions.id);
+                        setInlineSearchQuery("");
+                        setInlineSelectedId(null);
+                        setSelectedCategory(null);
+                        setCategoryMode('choice');
+                      }
+                    },
+                  },
+                  {
+                    id: "configure-reps",
+                    label: "Configure Reps",
+                    icon: (
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                        <path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                    ),
+                    onClick: () => {
+                      if (selectedItemForOptions) {
+                        setSelectedExerciseForSets({
+                          id: selectedItemForOptions.id,
+                          exerciseName: selectedItemForOptions.name,
+                          exerciseId: selectedItemForOptions.exerciseId!,
+                          roundName: selectedItemForOptions.roundName!,
+                        });
+                        setRepsValue(selectedItemForOptions.repsPlanned || 0);
+                        setSetsModalView('configure');
+                        setShowSetsModal(true);
+                      }
+                    },
+                  },
+                  // Add Move Up and Move Down for non-station exercises
+                  ...(isNonStationRound ? [
+                    {
+                      id: "move-up",
+                      label: "Move Up",
+                      icon: (
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
+                        </svg>
+                      ),
+                      disabled: selectedItemForOptions?.stationIndex === 0 || reorderExerciseMutation.isPending,
+                      onClick: () => {
+                        if (selectedItemForOptions?.roundName && selectedItemForOptions?.stationIndex !== undefined && round) {
+                          const exercise = round.exercises[selectedItemForOptions.stationIndex];
+                          if (exercise) {
+                            reorderExerciseMutation.mutate({
+                              sessionId: sessionId!,
+                              roundName: selectedItemForOptions.roundName,
+                              currentIndex: exercise.orderIndex,
+                              direction: "up",
+                            });
+                          }
+                        }
+                      },
+                    },
+                    {
+                      id: "move-down",
+                      label: "Move Down",
+                      icon: (
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                        </svg>
+                      ),
+                      disabled: selectedItemForOptions?.stationIndex === exerciseCount - 1 || reorderExerciseMutation.isPending,
+                      onClick: () => {
+                        if (selectedItemForOptions?.roundName && selectedItemForOptions?.stationIndex !== undefined && round) {
+                          const exercise = round.exercises[selectedItemForOptions.stationIndex];
+                          if (exercise) {
+                            reorderExerciseMutation.mutate({
+                              sessionId: sessionId!,
+                              roundName: selectedItemForOptions.roundName,
+                              currentIndex: exercise.orderIndex,
+                              direction: "down",
+                            });
+                          }
+                        }
+                      },
+                    },
+                  ] : []),
+                ];
+              })()
+            : []
+        }
+      />
 
       {/* Sets Configuration Modal */}
       {showSetsModal && selectedExerciseForSets && (
