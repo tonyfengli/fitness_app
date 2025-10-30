@@ -6,6 +6,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { ChevronLeftIcon, SearchIcon, CheckIcon } from "@acme/ui-shared";
 import { api } from "~/trpc/react";
 import { toast } from "sonner";
+import { CircuitHeader } from "~/components/CircuitHeader";
 
 // Custom icons
 const UsersIcon = ({ className = "w-6 h-6" }: { className?: string }) => (
@@ -327,10 +328,18 @@ export default function SessionDetailPage({ params }: SessionDetailPageProps) {
   // Loading state
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">Loading session...</p>
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+        <CircuitHeader
+          onBack={() => router.push('/circuit-sessions')}
+          backText="Sessions"
+          title="Session Details"
+          subtitle="Loading session..."
+        />
+        <div className="flex h-[calc(100vh-4rem)] items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+            <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">Loading session...</p>
+          </div>
         </div>
       </div>
     );
@@ -583,28 +592,17 @@ export default function SessionDetailPage({ params }: SessionDetailPageProps) {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      {/* Header */}
-      <div className="lg:hidden sticky top-0 z-50 bg-gradient-to-r from-slate-900 to-purple-900 text-white shadow-lg">
-        <div className="flex items-center justify-between px-4 py-3">
-          <button
-            onClick={() => router.push('/circuit-sessions')}
-            className="flex items-center space-x-2 active:opacity-70 transition-opacity"
-          >
-            <ChevronLeftIcon className="w-6 h-6" />
-            <span className="text-sm font-medium">Sessions</span>
-          </button>
-          <div className="text-center">
-            <h1 className="text-lg font-semibold truncate max-w-40">{session.name}</h1>
-            <div className="flex items-center justify-center gap-1">
-              <UsersIcon className="w-3 h-3 text-purple-200" />
-              <span className="text-xs text-purple-200">
-                {participantCount} participants
-              </span>
-            </div>
+      <CircuitHeader
+        onBack={() => router.push('/circuit-sessions')}
+        backText="Sessions"
+        title={session.name}
+        subtitle={
+          <div className="flex items-center justify-center gap-1">
+            <UsersIcon className="w-3 h-3 text-purple-200" />
+            <span>{participantCount} participants</span>
           </div>
-          <div className="w-14"></div> {/* Spacer for centering */}
-        </div>
-      </div>
+        }
+      />
 
       {/* Main Content */}
       <div className="px-4 py-6 bg-gray-50 dark:bg-gray-900">

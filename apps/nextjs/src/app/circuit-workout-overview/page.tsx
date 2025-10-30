@@ -32,6 +32,7 @@ import {
 import { supabase } from "~/lib/supabase";
 import { api, useTRPC } from "~/trpc/react";
 import { toast } from "sonner";
+import { CircuitHeader } from "~/components/CircuitHeader";
 
 // World-class Duration Input Component
 interface DurationInputProps {
@@ -1389,11 +1390,54 @@ function CircuitWorkoutOverviewContent() {
     }
   }, [showExerciseSelection]);
 
+  // Scroll to top when Replace Exercise modal opens
+  useEffect(() => {
+    if (editingExerciseId) {
+      window.scrollTo({ top: 0, behavior: 'instant' });
+    }
+  }, [editingExerciseId]);
+
+  // Scroll to top when Configure Exercise modal opens
+  useEffect(() => {
+    if (showSetsModal) {
+      window.scrollTo({ top: 0, behavior: 'instant' });
+    }
+  }, [showSetsModal]);
+
+  // Scroll to top when Add Exercise to Station modal opens
+  useEffect(() => {
+    if (showAddExerciseModal) {
+      window.scrollTo({ top: 0, behavior: 'instant' });
+    }
+  }, [showAddExerciseModal]);
+
+  // Scroll to top when Round Settings modal opens
+  useEffect(() => {
+    if (showRoundOptionsModal) {
+      window.scrollTo({ top: 0, behavior: 'instant' });
+    }
+  }, [showRoundOptionsModal]);
+
+  // Scroll to top when Station Configuration modal opens
+  useEffect(() => {
+    if (showStationCircuitModal) {
+      window.scrollTo({ top: 0, behavior: 'instant' });
+    }
+  }, [showStationCircuitModal]);
+
   if (isLoadingSelections) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin" />
-        <span className="ml-2">Loading circuit exercises...</span>
+      <div className="min-h-screen bg-white dark:bg-gray-900">
+        <CircuitHeader
+          onBack={() => router.push(`/circuit-sessions/${sessionId}`)}
+          backText="Session"
+          title="Circuit Workout"
+          subtitle="Loading exercises..."
+        />
+        <div className="flex h-[calc(100vh-4rem)] items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin" />
+          <span className="ml-2">Loading circuit exercises...</span>
+        </div>
       </div>
     );
   }
@@ -1401,7 +1445,7 @@ function CircuitWorkoutOverviewContent() {
   return (
     <div className="min-h-screen bg-white dark:bg-gray-900">
       {/* Fixed Header */}
-      <div className="lg:hidden fixed top-0 left-0 right-0 z-30 bg-gradient-to-r from-slate-900 to-purple-900 text-white shadow-lg">
+      <div className="fixed top-0 left-0 right-0 z-50 bg-gradient-to-r from-slate-900 to-purple-900 text-white shadow-lg">
         <div className="flex items-center justify-between px-4 py-3">
             <button
               onClick={() => router.push(`/circuit-sessions/${sessionId}`)}

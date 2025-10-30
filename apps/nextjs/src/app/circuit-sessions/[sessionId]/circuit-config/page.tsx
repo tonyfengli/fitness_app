@@ -6,6 +6,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, Button, Loader2Icon as Loader2, ChevronLeftIcon as ChevronLeft, ChevronRightIcon as ChevronRight } from "@acme/ui-shared";
 import { toast } from "sonner";
 import { useTRPC } from "~/trpc/react";
+import { CircuitHeader } from "~/components/CircuitHeader";
 import { supabase } from "~/lib/supabase/client";
 import { useRealtimeCircuitConfig } from "@acme/ui-shared";
 import type { CircuitConfig } from "@acme/db";
@@ -243,140 +244,153 @@ export default function CircuitConfigPage() {
 
   if (isLoading || isLoadingConfig) {
     return (
-      <div className="flex h-screen items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin" />
+      <div className="min-h-screen bg-white dark:bg-gray-900">
+        <CircuitHeader
+          onBack={() => router.push(`/circuit-sessions/${sessionId}`)}
+          backText="Session"
+          title="Configure Session"
+          subtitle="Loading configuration..."
+        />
+        <div className="flex h-[calc(100vh-4rem)] items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin" />
+        </div>
       </div>
     );
   }
 
   if (!config) {
     return (
-      <div className="flex h-screen items-center justify-center">
-        <p>No configuration found</p>
+      <div className="min-h-screen bg-white dark:bg-gray-900">
+        <CircuitHeader
+          onBack={() => router.push(`/circuit-sessions/${sessionId}`)}
+          backText="Session"
+          title="Configure Session"
+          subtitle="Configuration not found"
+        />
+        <div className="flex h-[calc(100vh-4rem)] items-center justify-center">
+          <p>No configuration found</p>
+        </div>
       </div>
     );
   }
 
+  // Get step info for header
+  const getStepInfo = () => {
+    const stepProgress = (() => {
+      if (workoutType === 'template') {
+        if (currentStep === 2) return "Step 1 of 3";
+        if (currentStep === 3) return "Step 2 of 3";
+        if (currentStep === 5) return "Step 3 of 3";
+      } else if (workoutType === 'custom') {
+        if (currentStep === 4) return "Step 1 of 4";
+        if (currentStep === 5) return "Step 2 of 4";
+        if (currentStep === 6) return "Step 3 of 4";
+        if (currentStep === 7) return "Step 4 of 4";
+      }
+      return "";
+    })();
+
+    const stepTitle = (() => {
+      if (currentStep === 1) return "Choose Your Workout Type";
+      if (currentStep === 2) return "Category";
+      if (currentStep === 3) return "Templates";
+      if (currentStep === 4) return "Rounds";
+      if (currentStep === 5) return workoutType === 'custom' ? "Round Types" : "Review";
+      if (currentStep === 6 && workoutType === 'custom') return "Per-Round Config";
+      if (currentStep === 7 && workoutType === 'custom') return "Review";
+      return "Configure Session";
+    })();
+
+    return { stepProgress, stepTitle };
+  };
+
+  const { stepProgress, stepTitle } = getStepInfo();
+
+  // Get right action for header
+  const getRightAction = () => {
+    if (currentStep === 1 || (currentStep === 2 && workoutType === 'template') || (currentStep === 3 && workoutType === 'template')) {
+      return null;
+    }
+    
+    if (currentStep < (workoutType === 'custom' ? 7 : 5)) {
+      return (
+        <Button
+          size="sm"
+          onClick={handleNext}
+          className="flex items-center gap-1"
+        >
+          <span className="text-sm">Next</span>
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+      );
+    }
+    
+    return (
+      <Button
+        size="sm"
+        onClick={handleComplete}
+        disabled={generateWorkoutMutation.isPending}
+        className="bg-green-600 hover:bg-green-700 disabled:opacity-50"
+      >
+        {generateWorkoutMutation.isPending 
+          ? "Generating..." 
+          : hasWorkout 
+            ? "View Workout" 
+            : "Generate Workout"}
+      </Button>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-white dark:bg-gray-900">
-      {/* Fixed Header with Navigation */}
-      <div className="fixed top-0 left-0 right-0 z-40 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm border-b">
-        <div className="mx-auto max-w-md">
-          {/* Top Navigation Row */}
-          <div className="flex items-center justify-between p-4 pb-2">
-            {currentStep > 1 ? (
-              <button
-                onClick={handleBack}
-                className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 transition-colors rounded-md"
-              >
-                <ChevronLeft className="h-4 w-4" />
-                <span className="text-sm">Back</span>
-              </button>
-            ) : (
-              <button
-                onClick={() => router.push(`/circuit-sessions/${sessionId}`)}
-                className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 transition-colors rounded-md"
-              >
-                <ChevronLeft className="h-4 w-4" />
-                <span className="text-sm">Back</span>
-              </button>
-            )}
-            
-            <div className="text-center">
-              <p className="text-xs text-gray-500 dark:text-white">
-                {workoutType === 'template' && currentStep === 2 && "Step 1 of 3"}
-                {workoutType === 'template' && currentStep === 3 && "Step 2 of 3"}
-                {workoutType === 'template' && currentStep === 5 && "Step 3 of 3"}
-                {/* {workoutType === 'template' && currentStep === 6 && "Step 4 of 4"} */}
-                {workoutType === 'custom' && currentStep === 4 && "Step 1 of 4"}
-                {workoutType === 'custom' && currentStep === 5 && "Step 2 of 4"}
-                {workoutType === 'custom' && currentStep === 6 && "Step 3 of 4"}
-                {workoutType === 'custom' && currentStep === 7 && "Step 4 of 4"}
-                {/* {workoutType === 'custom' && currentStep === 8 && "Step 5 of 5"} */}
-                {currentStep === 1 && ""}
-              </p>
-              <h1 className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                {currentStep === 1 && "Choose Your Workout Type"}
-                {currentStep === 2 && "Category"}
-                {currentStep === 3 && "Templates"}
-                {currentStep === 4 && "Rounds"}
-                {currentStep === 5 && (workoutType === 'custom' ? "Round Types" : "Review")}
-                {currentStep === 6 && workoutType === 'custom' && "Per-Round Config"}
-                {/* {currentStep === 6 && workoutType === 'template' && "Music"} */}
-                {currentStep === 7 && workoutType === 'custom' && "Review"}
-                {/* {currentStep === 8 && workoutType === 'custom' && "Music"} */}
-              </h1>
-            </div>
-            
-            {currentStep === 1 || (currentStep === 2 && workoutType === 'template') || (currentStep === 3 && workoutType === 'template') ? (
-              <div className="w-20" />
-            ) : currentStep < (workoutType === 'custom' ? 7 : 5) ? (
-              <Button
-                size="sm"
-                onClick={handleNext}
-                className="flex items-center gap-1"
-              >
-                <span className="text-sm">Next</span>
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            ) : (
-              <Button
-                size="sm"
-                onClick={handleComplete}
-                disabled={generateWorkoutMutation.isPending}
-                className="bg-green-600 hover:bg-green-700 disabled:opacity-50"
-              >
-                {generateWorkoutMutation.isPending 
-                  ? "Generating..." 
-                  : hasWorkout 
-                    ? "View Workout" 
-                    : "Generate Workout"}
-              </Button>
-            )}
+      <CircuitHeader
+        onBack={currentStep > 1 ? handleBack : () => router.push(`/circuit-sessions/${sessionId}`)}
+        backText={currentStep > 1 ? "Back" : "Session"}
+        title={stepTitle}
+        subtitle={stepProgress}
+        rightAction={getRightAction()}
+      />
+
+      {/* Progress indicator - only show after workout type is selected */}
+      {workoutType && (
+        <div className="px-4 pb-3 bg-gradient-to-r from-slate-900 to-purple-900">
+          <div className="flex gap-1 max-w-md mx-auto">
+            {[1, 2, 3, 4, 5].map((step) => {
+              let isActive = false;
+              
+              if (workoutType === 'template') {
+                // Template flow: 2, 3, 5 (3 steps total)
+                if (step === 1 && currentStep >= 2) isActive = true;
+                if (step === 2 && currentStep >= 3) isActive = true;
+                if (step === 3 && currentStep >= 5) isActive = true;
+                // Hide steps 4 and 5 for template workflow (only 3 steps now)
+                if (step === 4 || step === 5) return null;
+              } else if (workoutType === 'custom') {
+                // Custom flow: 4, 5, 6, 7 (4 steps total)
+                if (step === 1 && currentStep >= 4) isActive = true;
+                if (step === 2 && currentStep >= 5) isActive = true;
+                if (step === 3 && currentStep >= 6) isActive = true;
+                if (step === 4 && currentStep >= 7) isActive = true;
+                // Hide step 5 for custom workflow (music step removed)
+                if (step === 5) return null;
+              }
+              
+              return (
+                <div
+                  key={step}
+                  className={cn(
+                    "h-1 flex-1 rounded-full transition-all duration-300",
+                    isActive ? "bg-white/80" : "bg-white/20"
+                  )}
+                />
+              );
+            })}
           </div>
-
-          {/* Progress indicator - only show after workout type is selected */}
-          {workoutType && (
-            <div className="px-4 pb-3">
-              <div className="flex gap-1">
-                {[1, 2, 3, 4, 5].map((step) => {
-                  let isActive = false;
-                  
-                  if (workoutType === 'template') {
-                    // Template flow: 2, 3, 5 (3 steps total)
-                    if (step === 1 && currentStep >= 2) isActive = true;
-                    if (step === 2 && currentStep >= 3) isActive = true;
-                    if (step === 3 && currentStep >= 5) isActive = true;
-                    // Hide steps 4 and 5 for template workflow (only 3 steps now)
-                    if (step === 4 || step === 5) return null;
-                  } else if (workoutType === 'custom') {
-                    // Custom flow: 4, 5, 6, 7 (4 steps total)
-                    if (step === 1 && currentStep >= 4) isActive = true;
-                    if (step === 2 && currentStep >= 5) isActive = true;
-                    if (step === 3 && currentStep >= 6) isActive = true;
-                    if (step === 4 && currentStep >= 7) isActive = true;
-                    // Hide step 5 for custom workflow (music step removed)
-                    if (step === 5) return null;
-                  }
-                  
-                  return (
-                    <div
-                      key={step}
-                      className={cn(
-                        "h-1 flex-1 rounded-full transition-all duration-300",
-                        isActive ? "bg-primary" : "bg-muted"
-                      )}
-                    />
-                  );
-                })}
-              </div>
-            </div>
-          )}
         </div>
-      </div>
+      )}
 
-      {/* Content with top padding for fixed header */}
-      <div className="pt-24 p-4 pb-8">
+      {/* Content */}
+      <div className="p-4 pb-8">
         <div className="mx-auto max-w-md">
 
         {/* Step content */}

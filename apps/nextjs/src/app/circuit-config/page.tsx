@@ -3,17 +3,13 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Card } from "@acme/ui-shared";
+import { Card, ChevronLeftIcon } from "@acme/ui-shared";
 import { cn } from "@acme/ui-shared";
 import { useTRPC } from "~/trpc/react";
 import { toast } from "sonner";
+import { CircuitHeader } from "~/components/CircuitHeader";
 
 // Icons
-const ChevronLeftIcon = ({ className = "w-4 h-4" }: { className?: string }) => (
-  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-  </svg>
-);
 
 const DumbbellIcon = ({ className = "w-6 h-6" }: { className?: string }) => (
   <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -75,32 +71,15 @@ export default function CircuitConfigPage() {
   };
 
   return (
-    <div className="min-h-screen bg-white dark:bg-gray-900">
-      {/* Fixed Header */}
-      <div className="fixed top-0 left-0 right-0 z-40 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm border-b">
-        <div className="mx-auto max-w-md">
-          <div className="flex items-center justify-between p-4 pb-2">
-            <button
-              onClick={handleBack}
-              className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 transition-colors rounded-md"
-            >
-              <ChevronLeftIcon className="h-4 w-4" />
-              <span className="text-sm">Back</span>
-            </button>
-            
-            <div className="text-center">
-              <h1 className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                New Circuit Session
-              </h1>
-            </div>
-            
-            <div className="w-20" /> {/* Spacer for centering */}
-          </div>
-        </div>
-      </div>
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      <CircuitHeader
+        onBack={handleBack}
+        backText="Sessions"
+        title="New Circuit Session"
+      />
 
       {/* Content */}
-      <div className="pt-24 p-4 pb-8">
+      <div className="p-4 pb-8">
         <div className="mx-auto max-w-md">
           <Card className="p-0 shadow-sm bg-white dark:bg-gray-800">
             <div className="p-6 space-y-6">

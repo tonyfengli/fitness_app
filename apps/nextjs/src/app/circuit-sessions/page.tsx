@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronRightIcon, CheckIcon, ChevronDownIcon } from "@acme/ui-shared";
 import { api } from "~/trpc/react";
+import { CircuitHeader } from "~/components/CircuitHeader";
 
 // Custom icons
 const ClockIcon = ({ className = "w-4 h-4" }: { className?: string }) => (
@@ -189,16 +190,11 @@ export default function SessionsPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      {/* Mobile Navigation Bar */}
-      <div className="lg:hidden sticky top-0 z-50 bg-gradient-to-r from-slate-900 to-purple-900 text-white shadow-lg">
-        <div className="flex items-center justify-between px-4 py-3">
-          <Link href="/trainer-home" className="flex items-center space-x-2 active:opacity-70 transition-opacity">
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-            <span className="text-sm font-medium">Home</span>
-          </Link>
-          <h1 className="text-lg font-semibold">Sessions</h1>
+      <CircuitHeader
+        onBack={() => router.push('/trainer-home')}
+        backText="Home"
+        title="Sessions"
+        rightAction={
           <button
             onClick={() => router.push('/circuit-config')}
             className="relative p-2.5 -mr-2 rounded-lg bg-white/10 backdrop-blur-sm active:bg-white/20 transition-all duration-200 group"
@@ -207,8 +203,8 @@ export default function SessionsPage() {
             <div className="absolute inset-0 bg-white/20 rounded-lg blur-xl opacity-0 group-hover:opacity-100 transition-opacity"></div>
             <PlusIcon className="relative w-7 h-7 text-white drop-shadow-lg" strokeWidth={2.5} />
           </button>
-        </div>
-      </div>
+        }
+      />
 
       {/* Main Content Area - No redundant header on mobile */}
       <div className="lg:bg-white lg:dark:bg-gray-800 lg:shadow-sm lg:border-b lg:border-gray-200 lg:dark:border-gray-700">
