@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, use } from "react";
+import { useState, use, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { ChevronLeftIcon, SearchIcon, CheckIcon } from "@acme/ui-shared";
@@ -46,19 +46,22 @@ interface SessionDetailPageProps {
   }>;
 }
 
-// Hard-coded client data
-const CLIENTS = [
-  { id: "1", name: "Sarah Johnson", status: "regular", lastSeen: "2024-01-15" },
-  { id: "2", name: "Mike Chen", status: "new", lastSeen: "2024-01-14" },
-  { id: "3", name: "Emily Davis", status: "regular", lastSeen: "2024-01-15" },
-  { id: "4", name: "Alex Rodriguez", status: "returning", lastSeen: "2024-01-10" },
-  { id: "5", name: "Jessica Wong", status: "regular", lastSeen: "2024-01-15" },
-  { id: "6", name: "David Thompson", status: "new", lastSeen: "2024-01-13" },
-  { id: "7", name: "Maria Garcia", status: "returning", lastSeen: "2024-01-08" },
-  { id: "8", name: "Ryan Miller", status: "regular", lastSeen: "2024-01-14" },
-  { id: "9", name: "Lisa Park", status: "new", lastSeen: "2024-01-12" },
-  { id: "10", name: "Tom Wilson", status: "regular", lastSeen: "2024-01-15" },
-];
+// Client interface to match API response structure
+interface Client {
+  id: string;
+  name: string;
+  email: string;
+  phone?: string;
+  profile: {
+    strengthLevel: string;
+    skillLevel: string;
+    notes?: string;
+  } | null;
+  status: "new" | "regular" | "returning"; // Derived status for UI
+  lastSeen: string; // Will be derived from session attendance or profile data
+  isCheckedIn: boolean; // Whether user is checked into this session
+  checkedInAt?: Date | null; // When they checked in
+}
 
 export default function SessionDetailPage({ params }: SessionDetailPageProps) {
   const router = useRouter();
@@ -69,6 +72,7 @@ export default function SessionDetailPage({ params }: SessionDetailPageProps) {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [navigatingToConfig, setNavigatingToConfig] = useState(false);
+  const [hasInitializedSelection, setHasInitializedSelection] = useState(false);
   
   // Unwrap params Promise (Next.js 15 pattern)
   const resolvedParams = use(params);
@@ -87,6 +91,41 @@ export default function SessionDetailPage({ params }: SessionDetailPageProps) {
   const { data: hasWorkout, isLoading: workoutCheckLoading } = useQuery({
     ...trpc.trainingSession.hasWorkoutForSession.queryOptions({ sessionId }),
     enabled: !!sessionId
+  });
+
+  // Fetch business clients for attendance
+  const { data: clientsData, isLoading: clientsLoading, error: clientsError } = useQuery({
+    ...trpc.auth.getClientsByBusiness.queryOptions(),
+    enabled: !!sessionId
+  });
+
+  // Fetch checked-in clients for this session
+  const { data: checkedInClients, isLoading: checkedInLoading } = useQuery({
+    ...trpc.trainingSession.getCheckedInClients.queryOptions({ sessionId }),
+    enabled: !!sessionId,
+    onSuccess: (data) => {
+      console.log(`[FRONTEND] getCheckedInClients returned ${data?.length || 0} users:`, 
+        data?.map(u => ({
+          userId: u.userId,
+          userName: u.userName,
+          checkedInAt: u.checkedInAt,
+          status: u.status,
+        }))
+      );
+    }
+  });
+
+  // Fetch ALL session participants (any status) to show remove buttons
+  const { data: allParticipants, isLoading: allParticipantsLoading } = useQuery({
+    ...trpc.trainingSession.getById.queryOptions({ id: sessionId }),
+    enabled: !!sessionId,
+    onSuccess: (data) => {
+      console.log(`[FRONTEND] getAllParticipants returned session with ${data?.participants?.length || 0} total participants:`, 
+        data?.participants?.map(p => ({
+          userId: p.userId,
+        }))
+      );
+    }
   });
 
   // Mutations for delete and status update
@@ -124,12 +163,166 @@ export default function SessionDetailPage({ params }: SessionDetailPageProps) {
     })
   );
 
-  // For now, we'll use a placeholder participant count since we don't have the count in the basic session data
-  // In a real implementation, you'd get this from the UserTrainingSession table
-  const participantCount = 0; // TODO: Implement actual participant count query
+  // Bulk check-in mutation for selected users
+  const addParticipantMutation = useMutation(
+    trpc.trainingSession.addParticipant.mutationOptions({
+      onSuccess: async (data) => {
+        console.log(`[FRONTEND] addParticipant successful, returned:`, data);
+        toast.success("User added to session!");
+        // Refresh all related session data
+        await Promise.all([
+          queryClient.invalidateQueries({
+            queryKey: [["trainingSession", "getCheckedInClients"]],
+          }),
+          queryClient.invalidateQueries({
+            queryKey: [["trainingSession", "getById"]],
+          }),
+          queryClient.invalidateQueries({
+            queryKey: [["trainingSession", "listCircuitSessions"]],
+          }),
+        ]);
+      },
+      onError: (error: any) => {
+        console.error(`[FRONTEND] addParticipant failed:`, error);
+        toast.error("Failed to add user to session");
+      },
+    })
+  );
+
+  // Remove participant mutation
+  const removeParticipantMutation = useMutation(
+    trpc.trainingSession.removeParticipant.mutationOptions({
+      onSuccess: async (data) => {
+        console.log(`[FRONTEND] removeParticipant successful:`, data);
+        toast.success("User removed from session");
+        // Refresh all related session data
+        await Promise.all([
+          queryClient.invalidateQueries({
+            queryKey: [["trainingSession", "getCheckedInClients"]],
+          }),
+          queryClient.invalidateQueries({
+            queryKey: [["trainingSession", "getById"]],
+          }),
+          queryClient.invalidateQueries({
+            queryKey: [["trainingSession", "listCircuitSessions"]],
+          }),
+        ]);
+      },
+      onError: (error: any) => {
+        console.error(`[FRONTEND] removeParticipant failed:`, error);
+        toast.error("Failed to remove user from session");
+      },
+    })
+  );
+
+  // Handle bulk check-in by calling addParticipant for each user
+  const handleBulkCheckIn = async (userIds: string[]) => {
+    console.log(`[FRONTEND] handleBulkCheckIn called with userIds:`, userIds);
+    console.log(`[FRONTEND] sessionId:`, sessionId);
+    
+    let successCount = 0;
+    let errorCount = 0;
+
+    for (const userId of userIds) {
+      console.log(`[FRONTEND] Processing user ${userId}`);
+      try {
+        await new Promise<void>((resolve, reject) => {
+          addParticipantMutation.mutate(
+            { sessionId, userId },
+            {
+              onSuccess: (data) => {
+                console.log(`[FRONTEND] User ${userId} added successfully:`, data);
+                successCount++;
+                resolve();
+              },
+              onError: (error) => {
+                console.error(`[FRONTEND] Failed to add user ${userId}:`, error);
+                errorCount++;
+                resolve(); // Continue with other users
+              },
+            }
+          );
+        });
+      } catch (error) {
+        errorCount++;
+        console.error(`[FRONTEND] Exception adding user ${userId}:`, error);
+      }
+    }
+
+    // Show summary results
+    if (successCount > 0) {
+      toast.success(`${successCount} user${successCount !== 1 ? 's' : ''} added to session!`);
+    }
+    if (errorCount > 0) {
+      toast.error(`${errorCount} user${errorCount !== 1 ? 's' : ''} failed to add`);
+    }
+
+    // Clear selection after processing
+    setSelectedClients(new Set());
+  };
+
+  // Handle removing a single client from the session
+  const handleRemoveClient = (userId: string) => {
+    console.log(`[FRONTEND] handleRemoveClient called for userId:`, userId);
+    removeParticipantMutation.mutate({
+      sessionId,
+      userId
+    });
+  };
+
+  // Calculate actual participant count from checked-in users
+  const participantCount = checkedInClients?.length || 0;
+
+  // Create a map of checked-in user IDs for quick lookup
+  const checkedInUserIds = new Set(checkedInClients?.map(client => client.userId) || []);
+
+  // Transform API clients data to match UI interface
+  const clients: Client[] = clientsData?.map((client) => {
+    // Determine client status based on profile and activity
+    // This is a simplified logic - you might want more sophisticated status determination
+    const getClientStatus = (): "new" | "regular" | "returning" => {
+      if (!client.profile) return "new";
+      // You could check session attendance history here
+      // For now, using creation date as heuristic
+      const profileAge = client.createdAt ? new Date().getTime() - new Date(client.createdAt).getTime() : 0;
+      const daysOld = profileAge / (1000 * 60 * 60 * 24);
+      
+      if (daysOld < 7) return "new";
+      if (daysOld > 30) return "returning";
+      return "regular";
+    };
+
+    // Check if this client is already checked in
+    const isCheckedIn = checkedInUserIds.has(client.id);
+    const checkedInData = checkedInClients?.find(c => c.userId === client.id);
+
+    return {
+      id: client.id,
+      name: client.name || client.email.split("@")[0], // Fallback to email username if no name
+      email: client.email,
+      phone: client.phone,
+      profile: client.profile,
+      status: getClientStatus(),
+      lastSeen: client.createdAt || new Date().toISOString(), // TODO: Replace with actual last session attendance
+      isCheckedIn,
+      checkedInAt: checkedInData?.checkedInAt || null,
+    };
+  }) || [];
+
+  // Create a set of ALL users who are in this session (any status)
+  // This includes both checked-in users and registered users
+  const allSessionUserIds = new Set(allParticipants?.participants?.map(p => p.userId) || []);
+
+  // Initialize selection state (don't pre-select checked-in users)
+  useEffect(() => {
+    if (!hasInitializedSelection && clients.length > 0) {
+      setSelectedClients(new Set());
+      setHasInitializedSelection(true);
+    }
+  }, [clients, hasInitializedSelection]);
 
   // Combined loading state
-  const isLoading = sessionLoading || workoutCheckLoading;
+  const isLoading = sessionLoading || workoutCheckLoading || clientsLoading || checkedInLoading || allParticipantsLoading;
   
   // Loading state
   if (isLoading) {
@@ -144,11 +337,13 @@ export default function SessionDetailPage({ params }: SessionDetailPageProps) {
   }
 
   // Error state
-  if (sessionError) {
+  if (sessionError || clientsError) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
         <div className="text-center">
-          <h1 className="text-xl font-semibold text-gray-900 dark:text-white">Failed to load session</h1>
+          <h1 className="text-xl font-semibold text-gray-900 dark:text-white">
+            {sessionError ? "Failed to load session" : "Failed to load clients"}
+          </h1>
           <button 
             onClick={() => router.back()}
             className="mt-4 text-blue-600 dark:text-blue-400 hover:underline"
@@ -179,13 +374,13 @@ export default function SessionDetailPage({ params }: SessionDetailPageProps) {
 
 
   // Filter clients based on search and check-in status
-  const filteredClients = CLIENTS.filter(client => {
-    const matchesSearch = client.name.toLowerCase().includes(searchQuery.toLowerCase());
-    // For demo purposes, assume clients with "regular" status are checked in
-    const isCheckedIn = client.status === "regular";
+  const filteredClients = clients.filter(client => {
+    const matchesSearch = client.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         client.email.toLowerCase().includes(searchQuery.toLowerCase());
+    // Use actual check-in status from session attendance
     const matchesStatus = statusFilter === "all" || 
-                         (statusFilter === "checked_in" && isCheckedIn) ||
-                         (statusFilter === "not_checked_in" && !isCheckedIn);
+                         (statusFilter === "checked_in" && client.isCheckedIn) ||
+                         (statusFilter === "not_checked_in" && !client.isCheckedIn);
     return matchesSearch && matchesStatus;
   });
 
@@ -199,13 +394,6 @@ export default function SessionDetailPage({ params }: SessionDetailPageProps) {
     setSelectedClients(newSelected);
   };
 
-  const handleSelectAll = () => {
-    if (selectedClients.size === filteredClients.length) {
-      setSelectedClients(new Set());
-    } else {
-      setSelectedClients(new Set(filteredClients.map(c => c.id)));
-    }
-  };
 
   // Show attendance view
   if (showAttendance) {
@@ -265,56 +453,24 @@ export default function SessionDetailPage({ params }: SessionDetailPageProps) {
 
         </div>
 
-        {/* Select All */}
-        <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-3">
-          <button
-            onClick={handleSelectAll}
-            className="flex items-center gap-3 w-full text-left"
-          >
-            <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
-              selectedClients.size === filteredClients.length && filteredClients.length > 0
-                ? "bg-blue-600 border-blue-600"
-                : "border-gray-300 dark:border-gray-600"
-            }`}>
-              {selectedClients.size === filteredClients.length && filteredClients.length > 0 && (
-                <CheckIcon className="w-3 h-3 text-white" />
-              )}
-            </div>
-            <span className="text-sm font-medium text-gray-900 dark:text-white">
-              Select All ({filteredClients.length})
-            </span>
-          </button>
-        </div>
 
         {/* Client List */}
         <div className="px-4 py-4">
           <div className="space-y-2">
             {filteredClients.map((client) => {
               const isSelected = selectedClients.has(client.id);
-              const getStatusColor = (status: string) => {
-                switch (status) {
-                  case "new":
-                    return "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300";
-                  case "returning":
-                    return "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300";
-                  case "regular":
-                    return "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300";
-                  default:
-                    return "bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-300";
-                }
-              };
 
               return (
                 <button
                   key={client.id}
                   onClick={() => handleClientToggle(client.id)}
-                  className={`w-full p-4 rounded-lg border-2 transition-all text-left ${
+                  className={`w-full p-4 h-[75px] rounded-lg border-2 transition-all text-left ${
                     isSelected
                       ? "border-blue-500 dark:border-blue-400 bg-blue-50 dark:bg-blue-950/20"
                       : "border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-600"
                   }`}
                 >
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 h-full">
                     <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
                       isSelected
                         ? "bg-blue-600 border-blue-600"
@@ -324,16 +480,61 @@ export default function SessionDetailPage({ params }: SessionDetailPageProps) {
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between">
-                        <h3 className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                          {client.name}
-                        </h3>
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(client.status)}`}>
-                          {client.status.charAt(0).toUpperCase() + client.status.slice(1)}
-                        </span>
+                        <div className="flex-1 min-w-0">
+                          <h3 className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                            {client.name}
+                          </h3>
+                          {allSessionUserIds.has(client.id) && (
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                              {client.isCheckedIn 
+                                ? client.checkedInAt 
+                                  ? `Checked in at ${new Date(client.checkedInAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+                                  : "Checked in"
+                                : "Registered • Not checked in"
+                              }
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex flex-col items-end gap-1 min-w-[80px]">
+                          <span className={`w-full px-2.5 py-1 rounded-lg text-xs font-medium text-center transition-all ${
+                            allSessionUserIds.has(client.id) 
+                              ? client.isCheckedIn 
+                                ? "bg-green-50 text-green-700 border border-green-200 dark:bg-green-900/20 dark:text-green-300 dark:border-green-800"
+                                : "bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-900/20 dark:text-amber-300 dark:border-amber-800"
+                              : "bg-gray-50 text-gray-600 border border-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-700"
+                          }`}>
+                            <div className="flex items-center justify-center gap-1.5">
+                              {allSessionUserIds.has(client.id) ? (
+                                client.isCheckedIn ? (
+                                  <>
+                                    <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
+                                    <span>Present</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <div className="w-1.5 h-1.5 bg-amber-500 rounded-full" />
+                                    <span>Pending</span>
+                                  </>
+                                )
+                              ) : (
+                                <span>Not in session</span>
+                              )}
+                            </div>
+                          </span>
+                          {allSessionUserIds.has(client.id) && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleRemoveClient(client.id);
+                              }}
+                              className="w-full text-xs font-medium text-gray-500 hover:text-red-600 dark:text-gray-400 dark:hover:text-red-400 transition-all hover:scale-105 active:scale-95 text-center"
+                              title={`Remove ${client.name} from session`}
+                            >
+                              Remove
+                            </button>
+                          )}
+                        </div>
                       </div>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                        Last seen: {new Date(client.lastSeen).toLocaleDateString()}
-                      </p>
                     </div>
                   </div>
                 </button>
@@ -353,12 +554,23 @@ export default function SessionDetailPage({ params }: SessionDetailPageProps) {
           <div className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 p-4">
             <button
               onClick={() => {
-                console.log('Mark attendance for:', Array.from(selectedClients));
-                // TODO: Handle attendance submission
+                const selectedUserIds = Array.from(selectedClients);
+                void handleBulkCheckIn(selectedUserIds);
               }}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg transition-colors"
+              disabled={addParticipantMutation.isPending}
+              className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium py-3 px-4 rounded-lg transition-colors"
             >
-              Mark {selectedClients.size} Client{selectedClients.size !== 1 ? 's' : ''} Present
+              {addParticipantMutation.isPending ? (
+                <span className="flex items-center justify-center">
+                  <svg className="animate-spin -ml-1 mr-3 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Checking in...
+                </span>
+              ) : (
+                `Check In ${selectedClients.size} Client${selectedClients.size !== 1 ? 's' : ''}`
+              )}
             </button>
           </div>
         )}
@@ -441,14 +653,6 @@ export default function SessionDetailPage({ params }: SessionDetailPageProps) {
                 ? `/circuit-workout-overview?sessionId=${sessionId}`
                 : `/circuit-sessions/${sessionId}/circuit-config`;
               router.push(destination);
-            }}
-            onMouseEnter={async () => {
-              // Prefetch circuit config data on hover
-              if (hasWorkout === false) {
-                await queryClient.prefetchQuery(
-                  trpc.circuitConfig.getPublic.queryOptions({ sessionId })
-                );
-              }
             }}
             disabled={hasWorkout === undefined}
             className={`w-full bg-white dark:bg-gray-800 rounded-2xl shadow-sm transition-all duration-200 overflow-hidden group border border-gray-200 dark:border-gray-700 p-6 text-left ${

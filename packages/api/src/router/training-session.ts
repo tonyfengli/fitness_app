@@ -503,6 +503,21 @@ export const trainingSessionRouter = {
       // Get checked-in and ready users
       console.log(`[BUG TRACE] Querying UserTrainingSession for sessionId: ${input.sessionId}`);
       
+      // First, let's see ALL users in this session regardless of status
+      const allUsers = await ctx.db
+        .select()
+        .from(UserTrainingSession)
+        .where(eq(UserTrainingSession.trainingSessionId, input.sessionId));
+      
+      console.log(`[BUG TRACE] ALL users in session (${allUsers.length} total):`, 
+        allUsers.map(u => ({
+          userId: u.userId,
+          status: u.status,
+          checkedInAt: u.checkedInAt,
+          createdAt: u.createdAt,
+        }))
+      );
+      
       const checkedInUsers = await ctx.db
         .select()
         .from(UserTrainingSession)
@@ -518,7 +533,7 @@ export const trainingSessionRouter = {
         )
         .orderBy(desc(UserTrainingSession.checkedInAt));
       
-      console.log(`[BUG TRACE] Found ${checkedInUsers.length} checked-in users:`, 
+      console.log(`[BUG TRACE] FILTERED checked-in users (${checkedInUsers.length} filtered):`, 
         checkedInUsers.map(u => ({
           userId: u.userId,
           status: u.status,
@@ -636,7 +651,7 @@ export const trainingSessionRouter = {
         });
       }
 
-      // Check if already registered
+      // Check if already exists and what status
       const existing = await ctx.db.query.UserTrainingSession.findFirst({
         where: and(
           eq(UserTrainingSession.userId, targetUserId),
@@ -644,14 +659,46 @@ export const trainingSessionRouter = {
         ),
       });
 
+      console.log(`[addParticipant] Adding user ${targetUserId} to session ${input.sessionId}`);
+      console.log(`[addParticipant] Existing registration:`, existing);
+
+      const now = new Date();
+
       if (existing) {
-        throw new TRPCError({
-          code: "CONFLICT",
-          message: "User already registered for this session",
-        });
+        // If already checked-in, ready, or workout_ready, don't allow duplicate
+        if (existing.status === "checked_in" || existing.status === "ready" || existing.status === "workout_ready") {
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: "User already checked into this session",
+          });
+        }
+
+        // If only registered, update to checked_in
+        if (existing.status === "registered") {
+          console.log(`[addParticipant] Updating existing registration from 'registered' to 'checked_in'`);
+          
+          const [updatedRegistration] = await ctx.db
+            .update(UserTrainingSession)
+            .set({
+              status: "checked_in",
+              checkedInAt: now,
+            })
+            .where(eq(UserTrainingSession.id, existing.id))
+            .returning();
+
+          console.log(`[addParticipant] Updated registration:`, {
+            id: updatedRegistration.id,
+            userId: updatedRegistration.userId,
+            sessionId: updatedRegistration.trainingSessionId,
+            status: updatedRegistration.status,
+            checkedInAt: updatedRegistration.checkedInAt,
+          });
+
+          return updatedRegistration;
+        }
       }
 
-      // Check max participants limit
+      // Check max participants limit for new registrations
       if (session.maxParticipants) {
         const currentCount = await ctx.db
           .select({ count: UserTrainingSession.id })
@@ -666,14 +713,26 @@ export const trainingSessionRouter = {
         }
       }
 
-      // Add participant
+      // Create new checked-in registration
+      console.log(`[addParticipant] Creating new checked-in registration`);
+      
       const [registration] = await ctx.db
         .insert(UserTrainingSession)
         .values({
           userId: targetUserId,
           trainingSessionId: input.sessionId,
+          status: "checked_in",  // Mark as checked_in immediately
+          checkedInAt: now,      // Set check-in timestamp
         })
         .returning();
+
+      console.log(`[addParticipant] Created new registration:`, {
+        id: registration.id,
+        userId: registration.userId,
+        sessionId: registration.trainingSessionId,
+        status: registration.status,
+        checkedInAt: registration.checkedInAt,
+      });
 
       return registration;
     }),
@@ -690,6 +749,8 @@ export const trainingSessionRouter = {
       const user = ctx.session?.user as SessionUser;
       const targetUserId = input.userId || user.id;
 
+      console.log(`[removeParticipant] Removing user ${targetUserId} from session ${input.sessionId}`);
+
       // Only trainers can remove other users
       if (input.userId && input.userId !== user.id && user.role !== "trainer") {
         throw new TRPCError({
@@ -698,16 +759,46 @@ export const trainingSessionRouter = {
         });
       }
 
-      await ctx.db
+      // Check if user is actually in the session
+      const existing = await ctx.db.query.UserTrainingSession.findFirst({
+        where: and(
+          eq(UserTrainingSession.userId, targetUserId),
+          eq(UserTrainingSession.trainingSessionId, input.sessionId),
+        ),
+      });
+
+      console.log(`[removeParticipant] Found existing registration:`, existing);
+
+      if (!existing) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "User is not registered for this session",
+        });
+      }
+
+      // Remove the participant (works for any status: registered, checked_in, ready, etc.)
+      const result = await ctx.db
         .delete(UserTrainingSession)
         .where(
           and(
             eq(UserTrainingSession.userId, targetUserId),
             eq(UserTrainingSession.trainingSessionId, input.sessionId),
           ),
-        );
+        )
+        .returning();
 
-      return { success: true };
+      console.log(`[removeParticipant] Removed registration:`, {
+        userId: targetUserId,
+        sessionId: input.sessionId,
+        previousStatus: existing.status,
+        removedCount: result.length,
+      });
+
+      return { 
+        success: true, 
+        removedUser: targetUserId,
+        previousStatus: existing.status 
+      };
     }),
 
   // Get session with template config (blueprint)

@@ -168,17 +168,6 @@ export default function SessionsPage() {
   const isLoading = activeLoading;
   const error = activeError || completedError;
 
-  // Debug logging
-  console.log('[CircuitSessions] State:', {
-    isLoading,
-    error: !!error,
-    activeSessions: activeSessions?.length || 0,
-    completedSessions: completedSessions?.length || 0,
-    showCompletedSessions,
-    completedLoading,
-    hasActiveData: !!activeSessions,
-    hasCompletedData: !!completedSessions,
-  });
 
   const handleSessionSelect = (sessionId: string) => {
     // Show loading state immediately
