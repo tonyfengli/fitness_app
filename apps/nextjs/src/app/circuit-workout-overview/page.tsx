@@ -701,6 +701,7 @@ function CircuitWorkoutOverviewContent() {
   // Session name editing state
   const [isEditingSessionName, setIsEditingSessionName] = useState(false);
   const [editingSessionName, setEditingSessionName] = useState("");
+  const nameInputRef = useRef<HTMLInputElement>(null);
   
   // Add exercise modal state (for stations rounds)
   const [showAddExerciseModal, setShowAddExerciseModal] = useState(false);
@@ -939,6 +940,19 @@ function CircuitWorkoutOverviewContent() {
       toast.error("Failed to update session name. Please try again.");
     },
   });
+
+  // Handle saving session name
+  const handleSaveSessionName = () => {
+    if (editingSessionName.trim() && editingSessionName.trim() !== sessionData?.name) {
+      updateSessionNameMutation.mutate({
+        sessionId: sessionId!,
+        name: editingSessionName.trim(),
+      });
+    } else {
+      setIsEditingSessionName(false);
+      setEditingSessionName("");
+    }
+  };
 
   // Delete round mutation
   const deleteRoundMutation = useMutation({
@@ -1387,85 +1401,132 @@ function CircuitWorkoutOverviewContent() {
   return (
     <div className="min-h-screen bg-white dark:bg-gray-900">
       {/* Fixed Header */}
-      <div className="fixed top-0 left-0 right-0 z-30 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm border-b border-gray-200 dark:border-gray-800">
-        <div className="mx-auto max-w-2xl">
-          <div className="flex items-center justify-between p-4">
+      <div className="lg:hidden fixed top-0 left-0 right-0 z-30 bg-gradient-to-r from-slate-900 to-purple-900 text-white shadow-lg">
+        <div className="flex items-center justify-between px-4 py-3">
             <button
               onClick={() => router.push(`/circuit-sessions/${sessionId}`)}
-              className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 transition-colors rounded-md focus:outline-none focus:ring-0"
+              className="p-4 -m-1 active:opacity-70 transition-opacity min-w-[48px] min-h-[48px] flex items-center justify-center"
             >
-              <ChevronLeftIcon className="h-4 w-4" />
-              <span>Back</span>
+              <ChevronLeftIcon className="w-6 h-6" />
             </button>
             
-            <div className="text-center">
-              <h1 className="text-sm font-medium text-gray-900 dark:text-gray-100">Circuit Overview</h1>
-              {/* Total Time Display */}
-              {(() => {
-                let totalWorkoutTime = 0;
+            <div className="flex-1 flex justify-center items-center min-w-0">
+            {/* Editable Session Name - Primary info hierarchy */}
+            {sessionData?.name && (
+              <div className="flex items-center justify-center">
+                {isEditingSessionName ? (
+                  <div className="flex items-center gap-3">
+                    <input
+                      ref={nameInputRef}
+                      type="text"
+                      value={editingSessionName}
+                      onChange={(e) => setEditingSessionName(e.target.value)}
+                      onBlur={handleSaveSessionName}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          handleSaveSessionName();
+                        } else if (e.key === 'Escape') {
+                          setIsEditingSessionName(false);
+                          setEditingSessionName(sessionData.name);
+                        }
+                      }}
+                      className="text-lg font-bold text-white bg-white/10 backdrop-blur-sm border-2 border-white/30 focus:border-white rounded-lg px-3 py-1.5 min-w-0 max-w-48 text-center focus:outline-none focus:ring-2 focus:ring-white/50 transition-all"
+                      placeholder="Session name"
+                      autoFocus
+                    />
+                    <button
+                      onClick={handleSaveSessionName}
+                      className="p-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors"
+                      title="Save"
+                    >
+                      <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                      </svg>
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => {
+                      setIsEditingSessionName(true);
+                      setEditingSessionName(sessionData.name);
+                      setTimeout(() => nameInputRef.current?.select(), 100);
+                    }}
+                    className="group flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-xl transition-all duration-200 border-2 border-transparent hover:border-white/30"
+                  >
+                    <span className="text-lg font-bold text-white truncate max-w-44">
+                      {sessionData.name}
+                    </span>
+                    <svg 
+                      className="w-4 h-4 text-white/60 group-hover:text-white transition-colors" 
+                      fill="none" 
+                      stroke="currentColor" 
+                      viewBox="0 0 24 24" 
+                      strokeWidth="2"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+          
+          {/* Timer badge moved to top right */}
+          {(() => {
+            let totalWorkoutTime = 0;
+            
+            if (circuitConfig?.config?.roundTemplates) {
+              circuitConfig.config.roundTemplates.forEach((rt, index) => {
+                const roundTemplate = rt.template;
+                const round = roundsData[index];
                 
-                if (circuitConfig?.config?.roundTemplates) {
-                  circuitConfig.config.roundTemplates.forEach((rt, index) => {
-                    const roundTemplate = rt.template;
-                    const round = roundsData[index];
-                    
-                    if (roundTemplate.type === 'amrap_round') {
-                      totalWorkoutTime += (roundTemplate as any).totalDuration || 300;
-                    } else if (roundTemplate.type === 'circuit_round' || roundTemplate.type === 'stations_round') {
-                      let unitsCount = roundTemplate.exercisesPerRound;
-                      
-                      if (roundTemplate.type === 'stations_round' && round?.exercises) {
-                        const uniqueStations = new Set(round.exercises.map((ex: any) => ex.orderIndex));
-                        unitsCount = uniqueStations.size || roundTemplate.exercisesPerRound;
-                      }
-                      
-                      const workTime = (roundTemplate as any).workDuration || 0;
-                      const restTime = (roundTemplate as any).restDuration || 0;
-                      const sets = (roundTemplate as any).repeatTimes || 1;
-                      const restBetweenSets = (roundTemplate as any).restBetweenSets || 0;
-                      
-                      // Time for one set: (units * work) + (rest between units)
-                      const timePerSet = (unitsCount * workTime) + ((unitsCount - 1) * restTime);
-                      const roundDuration = (timePerSet * sets) + (restBetweenSets * (sets - 1));
-                      
-                      totalWorkoutTime += roundDuration;
-                    }
-                    
-                    // Add rest between rounds (except after last round)
-                    if (index < circuitConfig.config.roundTemplates.length - 1 && circuitConfig.config.restBetweenRounds > 0) {
-                      totalWorkoutTime += circuitConfig.config.restBetweenRounds;
-                    }
-                  });
+                if (roundTemplate.type === 'amrap_round') {
+                  totalWorkoutTime += (roundTemplate as any).totalDuration || 300;
+                } else if (roundTemplate.type === 'circuit_round' || roundTemplate.type === 'stations_round') {
+                  let unitsCount = roundTemplate.exercisesPerRound;
+                  
+                  if (roundTemplate.type === 'stations_round' && round?.exercises) {
+                    const uniqueStations = new Set(round.exercises.map((ex: any) => ex.orderIndex));
+                    unitsCount = uniqueStations.size || roundTemplate.exercisesPerRound;
+                  }
+                  
+                  const workTime = (roundTemplate as any).workDuration || 0;
+                  const restTime = (roundTemplate as any).restDuration || 0;
+                  const sets = (roundTemplate as any).repeatTimes || 1;
+                  const restBetweenSets = (roundTemplate as any).restBetweenSets || 0;
+                  
+                  // Time for one set: (units * work) + (rest between units)
+                  const timePerSet = (unitsCount * workTime) + ((unitsCount - 1) * restTime);
+                  const roundDuration = (timePerSet * sets) + (restBetweenSets * (sets - 1));
+                  
+                  totalWorkoutTime += roundDuration;
                 }
                 
-                const formatDuration = (seconds: number): string => {
-                  if (seconds < 60) return `${seconds}s`;
-                  const mins = Math.floor(seconds / 60);
-                  const secs = seconds % 60;
-                  return secs === 0 ? `${mins}m` : `${mins}:${secs.toString().padStart(2, '0')}`;
-                };
-                
-                return totalWorkoutTime > 0 ? (
-                  <div className="mt-1 px-2 py-1 bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-800 rounded-full inline-flex items-center gap-1">
-                    <svg className="w-3 h-3 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    <span className="text-xs font-semibold text-blue-700 dark:text-blue-300">
-                      {formatDuration(totalWorkoutTime)}
-                    </span>
-                  </div>
-                ) : null;
-              })()}
-            </div>
+                // Add rest between rounds (except after last round)
+                if (index < circuitConfig.config.roundTemplates.length - 1 && circuitConfig.config.restBetweenRounds > 0) {
+                  totalWorkoutTime += circuitConfig.config.restBetweenRounds;
+                }
+              });
+            }
             
-            <Button
-              size="sm"
-              onClick={() => router.push('/workout-tv')}
-              className="bg-green-600 hover:bg-green-700 text-white focus:outline-none focus:ring-0"
-            >
-              Finalize
-            </Button>
-          </div>
+            const formatDuration = (seconds: number): string => {
+              if (seconds < 60) return `${seconds}s`;
+              const mins = Math.floor(seconds / 60);
+              const secs = seconds % 60;
+              return secs === 0 ? `${mins}m` : `${mins}:${secs.toString().padStart(2, '0')}`;
+            };
+            
+            return totalWorkoutTime > 0 ? (
+              <div className="px-3 py-1.5 bg-white/20 backdrop-blur-sm rounded-lg inline-flex items-center gap-1.5">
+                <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span className="text-sm font-medium text-white">
+                  {formatDuration(totalWorkoutTime)}
+                </span>
+              </div>
+            ) : null;
+          })()}
         </div>
       </div>
 
@@ -1473,117 +1534,6 @@ function CircuitWorkoutOverviewContent() {
       <div className="pt-16 px-4 pb-8">
         <div className="mx-auto max-w-2xl">
 
-          {/* Session Name Header */}
-          {sessionData?.name && (
-            <div className="mt-12 mb-8 text-center">
-              {isEditingSessionName ? (
-                <div className="flex flex-col items-center gap-3">
-                  <div className="inline-flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 rounded-lg border-2 border-blue-500 dark:border-blue-400 shadow-lg">
-                    <input
-                      type="text"
-                      value={editingSessionName}
-                      onChange={(e) => setEditingSessionName(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          if (editingSessionName.trim() && editingSessionName.trim() !== sessionData.name) {
-                            updateSessionNameMutation.mutate({
-                              sessionId: sessionId!,
-                              name: editingSessionName.trim(),
-                            });
-                          } else {
-                            setIsEditingSessionName(false);
-                            setEditingSessionName("");
-                          }
-                        } else if (e.key === 'Escape') {
-                          setIsEditingSessionName(false);
-                          setEditingSessionName("");
-                        }
-                      }}
-                      autoFocus
-                      className="text-lg font-semibold text-gray-900 dark:text-gray-100 bg-transparent border-none outline-none focus:ring-0 px-2 py-1 min-w-0"
-                      style={{ width: `${Math.max(editingSessionName.length, sessionData.name.length)}ch` }}
-                      disabled={updateSessionNameMutation.isPending}
-                      placeholder="Enter session name"
-                    />
-                  </div>
-                  
-                  <div className="flex items-center gap-2">
-                    <Button
-                      size="sm"
-                      onClick={() => {
-                        if (editingSessionName.trim() && editingSessionName.trim() !== sessionData.name) {
-                          updateSessionNameMutation.mutate({
-                            sessionId: sessionId!,
-                            name: editingSessionName.trim(),
-                          });
-                        } else {
-                          setIsEditingSessionName(false);
-                          setEditingSessionName("");
-                        }
-                      }}
-                      disabled={updateSessionNameMutation.isPending || !editingSessionName.trim()}
-                      className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 focus:outline-none focus:ring-0 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {updateSessionNameMutation.isPending ? (
-                        <>
-                          <svg className="animate-spin w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                          </svg>
-                          Updating...
-                        </>
-                      ) : (
-                        <>
-                          <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                          </svg>
-                          Update
-                        </>
-                      )}
-                    </Button>
-                    
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        setIsEditingSessionName(false);
-                        setEditingSessionName("");
-                      }}
-                      disabled={updateSessionNameMutation.isPending}
-                      className="px-4 py-2 focus:outline-none focus:ring-0"
-                    >
-                      <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                      Cancel
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <div 
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors cursor-pointer group"
-                  onClick={() => {
-                    setIsEditingSessionName(true);
-                    setEditingSessionName(sessionData.name);
-                  }}
-                >
-                  <h1 className="text-lg font-semibold text-gray-900 dark:text-gray-100 group-hover:text-gray-700 dark:group-hover:text-gray-300 transition-colors">
-                    {sessionData.name}
-                  </h1>
-                  <svg 
-                    className="w-4 h-4 text-gray-400 dark:text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity" 
-                    fill="none" 
-                    viewBox="0 0 24 24" 
-                    stroke="currentColor" 
-                    strokeWidth="2"
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                  </svg>
-                </div>
-              )}
-            </div>
-          )}
 
         {/* Warm-up Section */}
         {circuitConfig?.config?.warmup?.enabled && (
@@ -2455,26 +2405,9 @@ function CircuitWorkoutOverviewContent() {
             </div>
           </>
         ) : (
-          <Card className="p-16 text-center border-2 border-dashed dark:bg-gray-800 dark:border-gray-700">
-            <div className="flex flex-col items-center justify-center">
-              <div className="mb-6 w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center">
-                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" className="text-primary animate-pulse">
-                  <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2"/>
-                  <path d="M12 6V12L16 14" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-                </svg>
-              </div>
-              <h2 className="mb-3 text-2xl font-bold text-gray-900 dark:text-gray-100">
-                Generating Your Circuit...
-              </h2>
-              <p className="text-gray-600 dark:text-gray-400 max-w-md">
-                The AI is creating your personalized circuit workout. This page will update automatically when ready.
-              </p>
-              <div className="mt-6 flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-                <div className="w-2 h-2 bg-primary rounded-full animate-pulse"></div>
-                <span>Checking for updates every 5 seconds</span>
-              </div>
-            </div>
-          </Card>
+          <div className="flex items-center justify-center py-16">
+            <Loader2 className="h-8 w-8 animate-spin text-gray-500 dark:text-gray-400" />
+          </div>
         )}
 
         </div>
