@@ -11,13 +11,15 @@ interface DrawerItem {
   onClick: () => void;
   variant?: "default" | "danger";
   disabled?: boolean;
+  preventAutoClose?: boolean;
 }
 
 interface OptionsDrawerProps {
   isOpen: boolean;
   onClose: () => void;
-  items: DrawerItem[];
+  items?: DrawerItem[];
   title?: string;
+  customContent?: React.ReactNode;
 }
 
 export function OptionsDrawer({
@@ -25,6 +27,7 @@ export function OptionsDrawer({
   onClose,
   items,
   title = "Options",
+  customContent,
 }: OptionsDrawerProps) {
   const [mounted, setMounted] = useState(false);
 
@@ -214,52 +217,63 @@ export function OptionsDrawer({
           <div className="h-1 w-12 rounded-full bg-gray-300 dark:bg-gray-600" />
         </div>
 
-        {/* Header */}
-        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-            {title}
-          </h3>
-        </div>
+        {/* Custom content or default menu */}
+        {customContent ? (
+          <div className="max-h-[80vh] overflow-y-auto">
+            {customContent}
+          </div>
+        ) : (
+          <>
+            {/* Header */}
+            <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                {title}
+              </h3>
+            </div>
 
-        {/* Options */}
-        <div className="py-2 max-h-[60vh] overflow-y-auto">
-          {items.map((item) => (
-            <button
-              key={item.id}
-              onClick={() => {
-                if (!item.disabled) {
-                  item.onClick();
-                  onClose();
-                }
-              }}
-              disabled={item.disabled}
-              className={cn(
-                "w-full flex items-center gap-4 px-6 py-4 text-left transition-colors",
-                item.disabled
-                  ? "opacity-30 cursor-not-allowed"
-                  : "hover:bg-gray-50 dark:hover:bg-gray-700/50",
-                item.variant === "danger"
-                  ? "text-red-600 dark:text-red-400"
-                  : "text-gray-700 dark:text-gray-300"
-              )}
-            >
-              {item.icon && (
-                <span className="flex-shrink-0">{item.icon}</span>
-              )}
-              <span className="text-base font-medium">{item.label}</span>
-            </button>
-          ))}
-        </div>
+            {/* Options */}
+            <div className="py-2 max-h-[60vh] overflow-y-auto">
+              {items?.map((item) => (
+                <button
+                  key={item.id}
+                  onClick={() => {
+                    if (!item.disabled) {
+                      item.onClick();
+                      if (!item.preventAutoClose) {
+                        onClose();
+                      }
+                    }
+                  }}
+                  disabled={item.disabled}
+                  className={cn(
+                    "w-full flex items-center gap-4 px-6 py-4 text-left transition-colors",
+                    item.disabled
+                      ? "opacity-30 cursor-not-allowed"
+                      : "hover:bg-gray-50 dark:hover:bg-gray-700/50",
+                    item.variant === "danger"
+                      ? "text-red-600 dark:text-red-400"
+                      : "text-gray-700 dark:text-gray-300"
+                  )}
+                >
+                  {item.icon && (
+                    <span className="flex-shrink-0">{item.icon}</span>
+                  )}
+                  <span className="text-base font-medium">{item.label}</span>
+                </button>
+              ))}
+            </div>
 
-        {/* Cancel button with safe area padding */}
-        <div className="px-6 pb-20 pt-2">
-          <button
-            onClick={onClose}
-            className="w-full py-3 text-base font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-          >
-            Cancel
-          </button>
-        </div>
+            {/* Cancel button with safe area padding */}
+            <div className="px-6 pb-20 pt-2">
+              <button
+                onClick={onClose}
+                className="w-full py-3 text-base font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </>
   );

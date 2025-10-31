@@ -34,6 +34,7 @@ import { api, useTRPC } from "~/trpc/react";
 import { toast } from "sonner";
 import { CircuitHeader } from "~/components/CircuitHeader";
 import { OptionsDrawer } from "~/components/workout/OptionsDrawer";
+import { RepsConfiguration } from "~/components/workout/RepsConfiguration";
 
 // World-class Duration Input Component
 interface DurationInputProps {
@@ -738,6 +739,7 @@ function CircuitWorkoutOverviewContent() {
   
   // Options drawer state (for rounds, stations, and exercises)
   const [showOptionsDrawer, setShowOptionsDrawer] = useState(false);
+  const [showRepsInDrawer, setShowRepsInDrawer] = useState(false);
   const [selectedItemForOptions, setSelectedItemForOptions] = useState<{
     type: 'round' | 'station' | 'exercise';
     id: string;
@@ -1488,13 +1490,13 @@ function CircuitWorkoutOverviewContent() {
                           setEditingSessionName(sessionData.name);
                         }
                       }}
-                      className="text-lg font-bold text-white bg-white/10 backdrop-blur-sm border-2 border-white/30 focus:border-white rounded-lg px-3 py-1.5 min-w-0 max-w-48 text-center focus:outline-none focus:ring-2 focus:ring-white/50 transition-all"
+                      className="text-lg font-bold text-white bg-white/10 dark:bg-gray-700/30 backdrop-blur-sm border-2 border-white/30 dark:border-gray-500/50 focus:border-white dark:focus:border-gray-400 rounded-lg px-3 py-1.5 min-w-0 max-w-48 text-center focus:outline-none focus:ring-2 focus:ring-white/50 dark:focus:ring-gray-400/50 transition-all"
                       placeholder="Session name"
                       autoFocus
                     />
                     <button
                       onClick={handleSaveSessionName}
-                      className="p-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors"
+                      className="p-2 bg-white/20 hover:bg-white/30 dark:bg-gray-700/50 dark:hover:bg-gray-600/50 rounded-lg transition-colors"
                       title="Save"
                     >
                       <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5">
@@ -1509,7 +1511,7 @@ function CircuitWorkoutOverviewContent() {
                       setEditingSessionName(sessionData.name);
                       setTimeout(() => nameInputRef.current?.select(), 100);
                     }}
-                    className="group flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-xl transition-all duration-200 border-2 border-transparent hover:border-white/30"
+                    className="group flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 dark:bg-gray-700/30 dark:hover:bg-gray-600/40 backdrop-blur-sm rounded-xl transition-all duration-200 border-2 border-transparent hover:border-white/30 dark:hover:border-gray-500/50"
                   >
                     <span className="text-lg font-bold text-white truncate max-w-44">
                       {sessionData.name}
@@ -1575,7 +1577,7 @@ function CircuitWorkoutOverviewContent() {
             };
             
             return totalWorkoutTime > 0 ? (
-              <div className="px-3 py-1.5 bg-white/20 backdrop-blur-sm rounded-lg inline-flex items-center gap-1.5">
+              <div className="px-3 py-1.5 bg-white/20 dark:bg-gray-700/40 backdrop-blur-sm rounded-lg inline-flex items-center gap-1.5">
                 <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
@@ -3204,15 +3206,57 @@ function CircuitWorkoutOverviewContent() {
         onClose={() => {
           setShowOptionsDrawer(false);
           setSelectedItemForOptions(null);
+          setShowRepsInDrawer(false);
         }}
         title={
-          selectedItemForOptions?.type === 'round' 
+          showRepsInDrawer 
+            ? "Configure Exercise"
+            : selectedItemForOptions?.type === 'round' 
             ? selectedItemForOptions.name 
             : selectedItemForOptions?.type === 'station'
             ? selectedItemForOptions.name
             : selectedItemForOptions?.name || "Options"
         }
+        customContent={
+          showRepsInDrawer && selectedExerciseForSets ? (
+            <RepsConfiguration
+              exerciseName={selectedExerciseForSets.exerciseName}
+              exerciseId={selectedExerciseForSets.exerciseId}
+              initialReps={repsValue}
+              onSave={(newReps) => {
+                updateRepsPlannedMutation.mutate({
+                  sessionId: sessionId || "",
+                  clientId: dummyUserId || "",
+                  exerciseId: selectedExerciseForSets.id,
+                  repsPlanned: newReps > 0 ? newReps : null,
+                });
+                setShowRepsInDrawer(false);
+                setShowOptionsDrawer(false);
+                setSelectedExerciseForSets(null);
+                setSetsModalView('configure');
+              }}
+              onDelete={() => {
+                deleteCircuitExerciseMutation.mutate({
+                  sessionId: sessionId || "",
+                  exerciseId: selectedExerciseForSets.id,
+                });
+                setShowRepsInDrawer(false);
+                setShowOptionsDrawer(false);
+                setSelectedExerciseForSets(null);
+                setSetsModalView('configure');
+              }}
+              onBack={() => {
+                setShowRepsInDrawer(false);
+                setSelectedExerciseForSets(null);
+                setSetsModalView('configure');
+              }}
+              isSaving={updateRepsPlannedMutation.isPending}
+              isDeleting={deleteCircuitExerciseMutation.isPending}
+            />
+          ) : undefined
+        }
         items={
+          showRepsInDrawer ? undefined :
           selectedItemForOptions?.type === 'round' 
             ? [
                 {
@@ -3387,6 +3431,7 @@ function CircuitWorkoutOverviewContent() {
                         <path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                       </svg>
                     ),
+                    preventAutoClose: true,
                     onClick: () => {
                       if (selectedItemForOptions) {
                         setSelectedExerciseForSets({
@@ -3397,7 +3442,7 @@ function CircuitWorkoutOverviewContent() {
                         });
                         setRepsValue(selectedItemForOptions.repsPlanned || 0);
                         setSetsModalView('configure');
-                        setShowSetsModal(true);
+                        setShowRepsInDrawer(true);
                       }
                     },
                   },
