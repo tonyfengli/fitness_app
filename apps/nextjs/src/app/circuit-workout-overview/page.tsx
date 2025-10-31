@@ -31,6 +31,7 @@ import { OptionsDrawer } from "~/components/workout/OptionsDrawer";
 import { RepsConfiguration } from "~/components/workout/RepsConfiguration";
 import { ExerciseReplacement } from "~/components/workout/ExerciseReplacement";
 import { AddExerciseDrawer } from "~/components/workout/AddExerciseDrawer";
+import { ConfirmDialog } from "~/components/ConfirmDialog";
 
 // World-class Duration Input Component
 interface DurationInputProps {
@@ -716,6 +717,12 @@ function CircuitWorkoutOverviewContent() {
   // Round options modal state
   const [showRoundOptionsModal, setShowRoundOptionsModal] = useState(false);
   const [selectedRoundForOptions, setSelectedRoundForOptions] = useState<RoundData | null>(null);
+
+  // Confirmation dialog state
+  const [showDeleteExerciseConfirm, setShowDeleteExerciseConfirm] = useState(false);
+  const [showDeleteRoundConfirm, setShowDeleteRoundConfirm] = useState(false);
+  const [deleteExerciseData, setDeleteExerciseData] = useState<{id: string; name: string} | null>(null);
+  const [deleteRoundData, setDeleteRoundData] = useState<{roundNumber: number; name: string} | null>(null);
 
   // Station circuit configuration modal state
   const [showStationCircuitModal, setShowStationCircuitModal] = useState(false);
@@ -2860,21 +2867,11 @@ function CircuitWorkoutOverviewContent() {
                 setShowOptionsDrawer(false);
                 setSelectedExerciseForSets(null);
               }}
-              onDelete={() => {
-                deleteCircuitExerciseMutation.mutate({
-                  sessionId: sessionId || "",
-                  exerciseId: selectedExerciseForSets.id,
-                });
-                setShowRepsInDrawer(false);
-                setShowOptionsDrawer(false);
-                setSelectedExerciseForSets(null);
-              }}
               onBack={() => {
                 setShowRepsInDrawer(false);
                 setSelectedExerciseForSets(null);
               }}
               isSaving={updateRepsPlannedMutation.isPending}
-              isDeleting={deleteCircuitExerciseMutation.isPending}
             />
           ) : showAddExerciseInDrawer && addExerciseModalConfig ? (
             <AddExerciseDrawer
@@ -2962,6 +2959,26 @@ function CircuitWorkoutOverviewContent() {
                     if (round) {
                       setSelectedRoundForOptions(round);
                       setShowRoundOptionsModal(true);
+                    }
+                  },
+                },
+                {
+                  id: "delete-round",
+                  label: "Delete Round",
+                  icon: (
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="red" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  ),
+                  onClick: () => {
+                    const roundNumber = parseInt(selectedItemForOptions?.name.match(/\d+/)?.[0] || '0');
+                    if (roundNumber > 0) {
+                      setDeleteRoundData({
+                        roundNumber: roundNumber,
+                        name: selectedItemForOptions?.name || '',
+                      });
+                      setShowDeleteRoundConfirm(true);
+                      setShowOptionsDrawer(false);
                     }
                   },
                 },
@@ -3135,6 +3152,25 @@ function CircuitWorkoutOverviewContent() {
                         });
                         setRepsValue(selectedItemForOptions.repsPlanned || 0);
                                 setShowRepsInDrawer(true);
+                      }
+                    },
+                  },
+                  {
+                    id: "delete-exercise",
+                    label: "Delete Exercise",
+                    icon: (
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="red" strokeWidth="2">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    ),
+                    onClick: () => {
+                      if (selectedItemForOptions) {
+                        setDeleteExerciseData({
+                          id: selectedItemForOptions.id,
+                          name: selectedItemForOptions.name,
+                        });
+                        setShowDeleteExerciseConfirm(true);
+                        setShowOptionsDrawer(false);
                       }
                     },
                   },
@@ -3546,6 +3582,54 @@ function CircuitWorkoutOverviewContent() {
           </div>
         </>
       )}
+
+      {/* Delete Exercise Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={showDeleteExerciseConfirm}
+        onClose={() => {
+          setShowDeleteExerciseConfirm(false);
+          setDeleteExerciseData(null);
+        }}
+        onConfirm={() => {
+          if (deleteExerciseData) {
+            deleteCircuitExerciseMutation.mutate({
+              sessionId: sessionId || "",
+              exerciseId: deleteExerciseData.id,
+            });
+            setShowDeleteExerciseConfirm(false);
+            setDeleteExerciseData(null);
+          }
+        }}
+        title="Delete Exercise"
+        message={`Are you sure you want to delete "${deleteExerciseData?.name}"? This action cannot be undone.`}
+        confirmText="Delete"
+        isLoading={deleteCircuitExerciseMutation.isPending}
+        variant="danger"
+      />
+
+      {/* Delete Round Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={showDeleteRoundConfirm}
+        onClose={() => {
+          setShowDeleteRoundConfirm(false);
+          setDeleteRoundData(null);
+        }}
+        onConfirm={() => {
+          if (deleteRoundData) {
+            deleteRoundMutation.mutate({
+              sessionId: sessionId || "",
+              roundNumber: deleteRoundData.roundNumber,
+            });
+            setShowDeleteRoundConfirm(false);
+            setDeleteRoundData(null);
+          }
+        }}
+        title="Delete Round"
+        message={`Are you sure you want to delete "${deleteRoundData?.name}"? This action cannot be undone.`}
+        confirmText="Delete"
+        isLoading={deleteRoundMutation.isPending}
+        variant="danger"
+      />
 
     </div>
   );
@@ -3988,7 +4072,6 @@ function RoundEditContent({
 }) {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
-  const [modalView, setModalView] = useState<'configure' | 'delete'>('configure');
   
   // Extract round number from round name (e.g., "Round 1" -> 1)
   const roundNumber = parseInt(round.roundName.match(/\d+/)?.[0] || '1');
@@ -4192,7 +4275,6 @@ function RoundEditContent({
   
   return (
     <div className="flex-1 overflow-y-auto">
-      {modalView === 'configure' ? (
         <div className="p-6 space-y-6">
           {/* Round Type Badge */}
           <div className="flex items-center gap-2">
@@ -4403,127 +4485,32 @@ function RoundEditContent({
         
         {/* Action Buttons */}
         <div className="pt-6 border-t border-gray-200 dark:border-gray-700">
-          {circuitConfig.config.roundTemplates && circuitConfig.config.roundTemplates.length > 1 ? (
-            /* 3-Button Layout: Delete gets smaller space, primary actions dominant */
-            <div className="flex gap-3">
-              {/* Delete - Compact button with icon only on mobile */}
-              <Button
-                variant="outline"
-                onClick={() => setModalView('delete')}
-                disabled={updateConfigMutation.isPending}
-                className="h-12 px-3 min-w-[48px] border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 hover:text-red-700 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950/20 dark:hover:border-red-700 dark:hover:text-red-300"
-                title="Delete Round"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                </svg>
-                <span className="sr-only">Delete Round</span>
-              </Button>
-              
-              {/* Cancel - Medium space */}
-              <Button
-                variant="outline"
-                onClick={onClose}
-                disabled={updateConfigMutation.isPending}
-                className="flex-1 h-12"
-              >
-                Cancel
-              </Button>
-              
-              {/* Save - Primary action, takes most space */}
-              <Button
-                onClick={handleSave}
-                disabled={updateConfigMutation.isPending}
-                className="flex-[2] h-12 bg-blue-600 hover:bg-blue-700 text-white"
-              >
-                {updateConfigMutation.isPending ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                    Saving...
-                  </>
-                ) : (
-                  'Save Changes'
-                )}
-              </Button>
-            </div>
-          ) : (
-            /* 2-Button Layout: When delete not available */
-            <div className="flex gap-3">
-              <Button
-                variant="outline"
-                onClick={onClose}
-                disabled={updateConfigMutation.isPending}
-                className="flex-1 h-12"
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={handleSave}
-                disabled={updateConfigMutation.isPending}
-                className="flex-1 h-12 bg-blue-600 hover:bg-blue-700 text-white"
-              >
-                {updateConfigMutation.isPending ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                    Saving...
-                  </>
-                ) : (
-                  'Save Changes'
-                )}
-              </Button>
-            </div>
-          )}
-        </div>
-      </div>
-      ) : (
-        /* Delete View */
-        <div className="p-6">
-          <div className="space-y-6">
-            {/* Warning Icon */}
-            <div className="flex justify-center">
-              <div className="w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center">
-                <svg className="w-8 h-8 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
-              </div>
-            </div>
-            
-            {/* Confirmation Message */}
-            <div className="text-center space-y-2">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                Delete {round.roundName}?
-              </h3>
-              <p className="text-sm text-gray-500 dark:text-gray-400">
-                This will permanently delete this round and all its exercises. This action cannot be undone.
-              </p>
-            </div>
-            
-            {/* Action Buttons */}
-            <div className="flex gap-3 pt-2">
-              <Button
-                variant="outline"
-                onClick={() => setModalView('configure')}
-                disabled={deleteRoundMutation.isPending}
-                className="flex-1 h-12"
-              >
-                Back
-              </Button>
-              <Button
-                onClick={() => {
-                  deleteRoundMutation.mutate({
-                    sessionId,
-                    roundNumber,
-                  });
-                }}
-                disabled={deleteRoundMutation.isPending}
-                className="flex-1 h-12 bg-red-600 hover:bg-red-700 text-white focus:outline-none focus:ring-0"
-              >
-                {deleteRoundMutation.isPending ? 'Deleting...' : 'Delete Round'}
-              </Button>
-            </div>
+          <div className="flex gap-3">
+            <Button
+              variant="outline"
+              onClick={onClose}
+              disabled={updateConfigMutation.isPending}
+              className="flex-1 h-12"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSave}
+              disabled={updateConfigMutation.isPending}
+              className="flex-1 h-12 bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              {updateConfigMutation.isPending ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                  Saving...
+                </>
+              ) : (
+                'Save Changes'
+              )}
+            </Button>
+          </div>
           </div>
         </div>
-      )}
     </div>
   );
 }
