@@ -30,7 +30,7 @@ import { CircuitHeader } from "~/components/CircuitHeader";
 import { OptionsDrawer } from "~/components/workout/OptionsDrawer";
 import { RepsConfiguration } from "~/components/workout/RepsConfiguration";
 import { ExerciseReplacement } from "~/components/workout/ExerciseReplacement";
-import { AddExerciseModal } from "~/components/workout/AddExerciseModal";
+import { AddExerciseDrawer } from "~/components/workout/AddExerciseDrawer";
 
 // World-class Duration Input Component
 interface DurationInputProps {
@@ -553,8 +553,9 @@ function CircuitWorkoutOverviewContent() {
       console.log('[circuit-workout-overview] ADD EXERCISE TO STATION - Success');
       console.log('[circuit-workout-overview] Response data:', data);
       
-      // Close modal
-      setShowAddExerciseModal(false);
+      // Close drawer
+      setShowAddExerciseInDrawer(false);
+      setShowOptionsDrawer(false);
       setAddExerciseModalConfig(null);
       
       // Invalidate queries to refresh data
@@ -596,8 +597,9 @@ function CircuitWorkoutOverviewContent() {
       console.log('[circuit-workout-overview] New exercise created with orderIndex:', data?.orderIndex);
       console.log('[circuit-workout-overview] New exercise stationIndex:', data?.stationIndex);
       
-      // Close modal
-      setShowAddExerciseModal(false);
+      // Close drawer
+      setShowAddExerciseInDrawer(false);
+      setShowOptionsDrawer(false);
       setAddExerciseModalConfig(null);
       
       // Invalidate queries to refresh data
@@ -662,7 +664,6 @@ function CircuitWorkoutOverviewContent() {
   const nameInputRef = useRef<HTMLInputElement>(null);
   
   // Add exercise modal state (for stations rounds)
-  const [showAddExerciseModal, setShowAddExerciseModal] = useState(false);
   const [addExerciseModalConfig, setAddExerciseModalConfig] = useState<{
     roundName: string;
     roundData: RoundData;
@@ -693,6 +694,7 @@ function CircuitWorkoutOverviewContent() {
   const [showOptionsDrawer, setShowOptionsDrawer] = useState(false);
   const [showRepsInDrawer, setShowRepsInDrawer] = useState(false);
   const [showReplaceInDrawer, setShowReplaceInDrawer] = useState(false);
+  const [showAddExerciseInDrawer, setShowAddExerciseInDrawer] = useState(false);
   const [selectedItemForOptions, setSelectedItemForOptions] = useState<{
     type: 'round' | 'station' | 'exercise';
     id: string;
@@ -1084,13 +1086,15 @@ function CircuitWorkoutOverviewContent() {
     return "v4dxeCHAJ31kgL3To8NygjuNNZXZGf9W";
   }, [savedSelections]);
 
-  // Fetch available exercises when any modal is open or inline editing
+  // Fetch available exercises - always fetch when we have sessionId and userId
+  // This prevents race conditions where drawers open before data is loaded
   const { data: exercisesData, isLoading: isLoadingExercises } = useQuery({
     ...trpc.exercise.getAvailablePublic.queryOptions({
       sessionId: sessionId || "",
       userId: dummyUserId || "",
     }),
-    enabled: !!sessionId && !!dummyUserId && (!!editingExerciseId || showAddExerciseModal || showReplaceInDrawer),
+    enabled: !!sessionId && !!dummyUserId,
+    staleTime: 5 * 60 * 1000, // Keep data fresh for 5 minutes to avoid unnecessary refetches
   });
 
   const availableExercises = exercisesData?.exercises || [];
@@ -1882,7 +1886,8 @@ function CircuitWorkoutOverviewContent() {
                                     targetStation: idx,
                                     mode: 'add-to-station'
                                   });
-                                  setShowAddExerciseModal(true);
+                                  setShowAddExerciseInDrawer(true);
+                                  setShowOptionsDrawer(true);
                                 }}
                                 className="w-full p-3 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500 transition-colors bg-gray-50/50 dark:bg-gray-700/30 hover:bg-gray-100/50 dark:hover:bg-gray-600/30"
                               >
@@ -2111,7 +2116,8 @@ function CircuitWorkoutOverviewContent() {
                           targetStation: 0,
                           mode: 'add-to-round'
                         });
-                        setShowAddExerciseModal(true);
+                        setShowAddExerciseInDrawer(true);
+                        setShowOptionsDrawer(true);
                       }}
                       className="w-full p-3 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500 transition-colors bg-gray-50/50 dark:bg-gray-700/30 hover:bg-gray-100/50 dark:hover:bg-gray-600/30"
                     >
@@ -2163,7 +2169,8 @@ function CircuitWorkoutOverviewContent() {
                           targetStation: nextStationIndex,
                           mode: 'create-station'
                         });
-                        setShowAddExerciseModal(true);
+                        setShowAddExerciseInDrawer(true);
+                        setShowOptionsDrawer(true);
                       }}
                       className="w-full p-3 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500 transition-colors bg-gray-50/50 dark:bg-gray-700/30 hover:bg-gray-100/50 dark:hover:bg-gray-600/30"
                     >
@@ -2811,17 +2818,25 @@ function CircuitWorkoutOverviewContent() {
       {/* Unified Options Drawer */}
       <OptionsDrawer
         isOpen={showOptionsDrawer}
+        fullScreen={false}
         onClose={() => {
           setShowOptionsDrawer(false);
           setSelectedItemForOptions(null);
           setShowRepsInDrawer(false);
           setShowReplaceInDrawer(false);
+          setShowAddExerciseInDrawer(false);
         }}
         title={
           showRepsInDrawer 
             ? "Configure Exercise"
             : showReplaceInDrawer
             ? "Replace Exercise"
+            : showAddExerciseInDrawer
+            ? addExerciseModalConfig?.mode === 'add-to-station' 
+              ? `Add Exercise to Station ${(addExerciseModalConfig?.targetStation || 0) + 1}`
+              : addExerciseModalConfig?.mode === 'create-station'
+              ? `Create Station ${(addExerciseModalConfig?.targetStation || 0) + 1}`
+              : `Add Exercise to ${addExerciseModalConfig?.roundName || 'Round'}`
             : selectedItemForOptions?.type === 'round' 
             ? selectedItemForOptions.name 
             : selectedItemForOptions?.type === 'station'
@@ -2860,6 +2875,26 @@ function CircuitWorkoutOverviewContent() {
               }}
               isSaving={updateRepsPlannedMutation.isPending}
               isDeleting={deleteCircuitExerciseMutation.isPending}
+            />
+          ) : showAddExerciseInDrawer && addExerciseModalConfig ? (
+            <AddExerciseDrawer
+              isOpen={showAddExerciseInDrawer}
+              onClose={() => {
+                setShowAddExerciseInDrawer(false);
+                setShowOptionsDrawer(false);
+                setAddExerciseModalConfig(null);
+              }}
+              mode={addExerciseModalConfig.mode}
+              roundData={addExerciseModalConfig.roundData}
+              roundName={addExerciseModalConfig.roundName}
+              targetStation={addExerciseModalConfig.targetStation}
+              availableExercises={availableExercisesRef.current}
+              mutations={{
+                addToStation: addExerciseToStationMutation,
+                addToRound: addExerciseToRoundMutation,
+              }}
+              sessionId={sessionId || ""}
+              userId={dummyUserId || ""}
             />
           ) : showReplaceInDrawer && selectedExerciseForReplace ? (
             <ExerciseReplacement
@@ -3159,11 +3194,12 @@ function CircuitWorkoutOverviewContent() {
       />
 
       
-      {/* Add Exercise Modal */}
-      <AddExerciseModal
-        isOpen={showAddExerciseModal}
+      {/* Add Exercise Drawer */}
+      <AddExerciseDrawer
+        isOpen={showAddExerciseInDrawer}
         onClose={() => {
-          setShowAddExerciseModal(false);
+          setShowAddExerciseInDrawer(false);
+          setShowOptionsDrawer(false);
           setAddExerciseModalConfig(null);
         }}
         mode={addExerciseModalConfig?.mode || 'add-to-round'}
