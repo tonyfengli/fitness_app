@@ -43,13 +43,41 @@ export async function replaceExercise(params: ReplaceExerciseParams): Promise<vo
     mutations
   } = params;
 
+  console.log('[replaceExercise] DEBUG - Starting replacement:', {
+    exerciseId: exercise.id,
+    exerciseName: exercise.exerciseName,
+    orderIndex: exercise.orderIndex,
+    stationExercises: exercise.stationExercises,
+    roundName: round.roundName,
+    roundExercises: round.exercises.map(ex => ({
+      id: ex.id,
+      name: ex.exerciseName,
+      orderIndex: ex.orderIndex,
+      stationExercises: ex.stationExercises
+    }))
+  });
+
   // Determine if this is a station exercise
   const stationInfo = getStationInfo(exercise, round.exercises);
   const isStationRound = isStationsRound(round.roundName, circuitConfig);
   
+  console.log('[replaceExercise] DEBUG - Station analysis:', {
+    isStationRound,
+    stationInfo,
+    exerciseHasStationExercises: !!exercise.stationExercises && exercise.stationExercises.length > 0
+  });
+
   // Use specific swap for station exercises in station rounds
   if (isStationRound && stationInfo.isStation) {
     console.log('[replaceExercise] Using specific swap for station exercise');
+    console.log('[replaceExercise] DEBUG - Specific swap params:', {
+      sessionId,
+      exerciseId: exercise.id,
+      newExerciseId,
+      customName,
+      reason: "Station exercise swap",
+      swappedBy: userId,
+    });
     
     return mutations.swapSpecific.mutateAsync({
       sessionId,
@@ -61,6 +89,16 @@ export async function replaceExercise(params: ReplaceExerciseParams): Promise<vo
     });
   } else {
     console.log('[replaceExercise] Using circuit swap for non-station exercise');
+    console.log('[replaceExercise] DEBUG - Circuit swap params:', {
+      sessionId,
+      roundName: round.roundName,
+      exerciseIndex: exercise.orderIndex,
+      originalExerciseId: exercise.exerciseId || exercise.custom_exercise?.originalExerciseId || null,
+      newExerciseId,
+      customName,
+      reason: "Circuit exercise swap",
+      swappedBy: userId,
+    });
     
     return mutations.swapCircuit.mutateAsync({
       sessionId,

@@ -20,6 +20,7 @@ interface OptionsDrawerProps {
   items?: DrawerItem[];
   title?: string;
   customContent?: React.ReactNode;
+  fullScreen?: boolean;
 }
 
 export function OptionsDrawer({
@@ -28,6 +29,7 @@ export function OptionsDrawer({
   items,
   title = "Options",
   customContent,
+  fullScreen = false,
 }: OptionsDrawerProps) {
   const [mounted, setMounted] = useState(false);
 
@@ -181,10 +183,24 @@ export function OptionsDrawer({
       <div
         data-drawer="options-drawer"
         className={cn(
-          "fixed z-50 bg-white dark:bg-gray-800 rounded-t-2xl shadow-xl",
-          !isSafari && "animate-in slide-in-from-bottom duration-300"
+          "fixed z-50 bg-white dark:bg-gray-800 shadow-xl",
+          fullScreen ? "inset-0" : "rounded-t-2xl",
+          !isSafari && !fullScreen && "animate-in slide-in-from-bottom duration-300",
+          !isSafari && fullScreen && "animate-in fade-in-0 duration-200"
         )}
-        style={isSafari ? {
+        style={fullScreen ? {
+          // Full-screen positioning
+          position: 'fixed',
+          top: '0px',
+          left: '0px',
+          right: '0px',
+          bottom: '0px',
+          width: '100vw',
+          height: '100vh',
+          transform: 'none',
+          WebkitTransform: 'none',
+          zIndex: 9999,
+        } : isSafari ? {
           // Safari-specific positioning using viewport units
           position: 'fixed',
           bottom: '0px',
@@ -212,14 +228,18 @@ export function OptionsDrawer({
           zIndex: 9999,
         }}
       >
-        {/* Handle */}
-        <div className="flex justify-center pt-2">
-          <div className="h-1 w-12 rounded-full bg-gray-300 dark:bg-gray-600" />
-        </div>
+        {/* Handle (only show for normal drawer) */}
+        {!fullScreen && (
+          <div className="flex justify-center pt-2">
+            <div className="h-1 w-12 rounded-full bg-gray-300 dark:bg-gray-600" />
+          </div>
+        )}
 
         {/* Custom content or default menu */}
         {customContent ? (
-          <div className="max-h-[80vh] overflow-y-auto">
+          <div className={cn(
+            fullScreen ? "h-full overflow-y-auto" : "max-h-[80vh] overflow-y-auto"
+          )}>
             {customContent}
           </div>
         ) : (

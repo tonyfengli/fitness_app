@@ -200,6 +200,13 @@ export function ExerciseReplacement({
             {(() => {
               // If there's search text or a category selected, show filtered results
               if ((inlineSearchQuery || selectedCategory) && !inlineSelectedId) {
+                console.log('[ExerciseReplacement] Filtering exercises:', {
+                  availableExercisesCount: availableExercises.length,
+                  selectedCategory,
+                  inlineSearchQuery,
+                  roundName: round?.roundName
+                });
+
                 const isReplacingWarmup = round?.roundName === 'Warm-up';
                 
                 let filtered = availableExercises.filter((ex: any) => {
@@ -214,40 +221,103 @@ export function ExerciseReplacement({
                     return !ex.functionTags?.includes('warmup_only');
                   }
                 });
+
+                console.log('[ExerciseReplacement] After basic filtering:', {
+                  filteredCount: filtered.length,
+                  sampleExercises: filtered.slice(0, 3).map(ex => ({
+                    name: ex.name,
+                    primaryMuscle: ex.primaryMuscle,
+                    movementPattern: ex.movementPattern,
+                    equipment: ex.equipment
+                  }))
+                });
                 
                 // If there's a search query, it takes priority - search all exercises
                 if (inlineSearchQuery) {
                   filtered = filterExercisesBySearch(filtered, inlineSearchQuery);
                 } else if (selectedCategory) {
+                  console.log('[ExerciseReplacement] Applying category filter:', selectedCategory);
+                  
                   // Only apply category filter if there's no search query
                   if (selectedCategory.type === 'muscle') {
                     filtered = filtered.filter((ex: any) => {
                       const unifiedMuscle = getUnifiedMuscleGroup(ex.primaryMuscle);
-                      return unifiedMuscle === selectedCategory.value;
+                      const matches = unifiedMuscle?.toLowerCase() === selectedCategory.value.toLowerCase();
+                      if (!matches) {
+                        console.log('[ExerciseReplacement] Muscle filter miss:', {
+                          exerciseName: ex.name,
+                          primaryMuscle: ex.primaryMuscle,
+                          unifiedMuscle,
+                          expectedValue: selectedCategory.value,
+                          comparison: `${unifiedMuscle?.toLowerCase()} === ${selectedCategory.value.toLowerCase()}`
+                        });
+                      }
+                      return matches;
                     });
                   } else if (selectedCategory.type === 'movement') {
-                    filtered = filtered.filter((ex: any) => ex.movementPattern === selectedCategory.value);
+                    filtered = filtered.filter((ex: any) => {
+                      const matches = ex.movementPattern === selectedCategory.value;
+                      if (!matches) {
+                        console.log('[ExerciseReplacement] Movement filter miss:', {
+                          exerciseName: ex.name,
+                          movementPattern: ex.movementPattern,
+                          expectedValue: selectedCategory.value
+                        });
+                      }
+                      return matches;
+                    });
                   } else if (selectedCategory.type === 'equipment') {
                     filtered = filtered.filter((ex: any) => {
                       // More robust equipment checking
-                      if (!ex.equipment) return false;
+                      if (!ex.equipment) {
+                        console.log('[ExerciseReplacement] Equipment filter miss - no equipment:', ex.name);
+                        return false;
+                      }
                       
                       // Handle different equipment formats
                       if (Array.isArray(ex.equipment)) {
                         // Array format: ["Barbell", "Dumbbell"]
-                        return ex.equipment.some((eq: string) => 
+                        const matches = ex.equipment.some((eq: string) => 
                           eq && eq.toLowerCase().trim() === selectedCategory.value.toLowerCase()
                         );
+                        if (!matches) {
+                          console.log('[ExerciseReplacement] Equipment array filter miss:', {
+                            exerciseName: ex.name,
+                            equipment: ex.equipment,
+                            expectedValue: selectedCategory.value
+                          });
+                        }
+                        return matches;
                       } else if (typeof ex.equipment === 'string') {
                         // String format: might be single equipment or comma-separated
                         const equipmentList = ex.equipment.split(',').map((e: string) => e.trim().toLowerCase());
-                        return equipmentList.includes(selectedCategory.value.toLowerCase());
+                        const matches = equipmentList.includes(selectedCategory.value.toLowerCase());
+                        if (!matches) {
+                          console.log('[ExerciseReplacement] Equipment string filter miss:', {
+                            exerciseName: ex.name,
+                            equipment: ex.equipment,
+                            equipmentList,
+                            expectedValue: selectedCategory.value
+                          });
+                        }
+                        return matches;
                       }
                       
+                      console.log('[ExerciseReplacement] Equipment filter miss - invalid type:', {
+                        exerciseName: ex.name,
+                        equipment: ex.equipment,
+                        equipmentType: typeof ex.equipment
+                      });
                       return false;
                     });
                   }
                 }
+
+                console.log('[ExerciseReplacement] Final filtered results:', {
+                  finalCount: filtered.length,
+                  selectedCategoryType: selectedCategory?.type,
+                  selectedCategoryValue: selectedCategory?.value
+                });
                 
                 // Show results even if empty
                 return (
