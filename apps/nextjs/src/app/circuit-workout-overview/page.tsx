@@ -724,6 +724,10 @@ function CircuitWorkoutOverviewContent() {
   const [deleteExerciseData, setDeleteExerciseData] = useState<{id: string; name: string} | null>(null);
   const [deleteRoundData, setDeleteRoundData] = useState<{roundNumber: number; name: string} | null>(null);
 
+  // Global loading states for move operations
+  const [movingRoundId, setMovingRoundId] = useState<string | null>(null);
+  const [movingExerciseId, setMovingExerciseId] = useState<string | null>(null);
+
   // Station circuit configuration modal state
   const [showStationCircuitModal, setShowStationCircuitModal] = useState(false);
   const [selectedStationForCircuit, setSelectedStationForCircuit] = useState<{
@@ -760,13 +764,26 @@ function CircuitWorkoutOverviewContent() {
   // Set up the reorder mutation for circuits
   const reorderExerciseMutation = useMutation({
     ...trpc.workoutSelections.reorderCircuitExercise.mutationOptions(),
+    onMutate: (variables) => {
+      // Set loading state for the specific exercise being moved
+      const exerciseId = variables.currentIndex.toString();
+      setMovingExerciseId(exerciseId);
+    },
     onSuccess: () => {
+      // Clear loading state
+      setMovingExerciseId(null);
+      
       // Invalidate queries to refresh data
       queryClient.invalidateQueries({
         queryKey: [["workoutSelections", "getSelections"]],
       });
+      
+      toast.success("Exercise order updated successfully");
     },
     onError: (error) => {
+      // Clear loading state on error
+      setMovingExerciseId(null);
+      
       console.error("Failed to reorder exercise:", error);
       alert("Failed to reorder exercise. Please try again.");
     },
@@ -1024,7 +1041,21 @@ function CircuitWorkoutOverviewContent() {
   // Round reordering mutation
   const reorderRoundsMutation = useMutation({
     ...trpc.circuitConfig.reorderRounds.mutationOptions(),
+    onMutate: (variables) => {
+      // Set loading state for the specific round being moved
+      const roundId = `round-${variables.currentRoundNumber}`;
+      console.log('[reorderRoundsMutation] onMutate called', {
+        variables,
+        roundId,
+        currentMovingRoundId: movingRoundId
+      });
+      setMovingRoundId(roundId);
+    },
     onSuccess: () => {
+      console.log('[reorderRoundsMutation] onSuccess called, clearing loading state');
+      // Clear loading state
+      setMovingRoundId(null);
+      
       // Invalidate both circuit config and selections to refresh data
       queryClient.invalidateQueries({
         queryKey: trpc.circuitConfig.getBySession.queryOptions({ 
@@ -1040,6 +1071,10 @@ function CircuitWorkoutOverviewContent() {
       toast.success("Round order updated successfully");
     },
     onError: (error) => {
+      console.log('[reorderRoundsMutation] onError called, clearing loading state', error);
+      // Clear loading state on error
+      setMovingRoundId(null);
+      
       console.error("Failed to reorder rounds:", error);
       toast.error("Failed to reorder rounds. Please try again.");
     },
@@ -1300,19 +1335,7 @@ function CircuitWorkoutOverviewContent() {
 
 
 
-  // Scroll to top when Round Settings modal opens
-  useEffect(() => {
-    if (showRoundOptionsModal) {
-      window.scrollTo({ top: 0, behavior: 'instant' });
-    }
-  }, [showRoundOptionsModal]);
 
-  // Scroll to top when Station Configuration modal opens
-  useEffect(() => {
-    if (showStationCircuitModal) {
-      window.scrollTo({ top: 0, behavior: 'instant' });
-    }
-  }, [showStationCircuitModal]);
 
   if (isLoadingSelections) {
     return (
@@ -1934,6 +1957,7 @@ function CircuitWorkoutOverviewContent() {
                                       <button
                                         disabled={idx === 0 || reorderExerciseMutation.isPending}
                                         onClick={() => {
+                                          toast.info(`Moving ${exercise.exerciseName} up...`);
                                           reorderExerciseMutation.mutate({
                                             sessionId: sessionId!,
                                             roundName: round.roundName,
@@ -2965,8 +2989,9 @@ function CircuitWorkoutOverviewContent() {
                 {
                   id: "delete-round",
                   label: "Delete Round",
+                  variant: "danger" as const,
                   icon: (
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="red" strokeWidth="2">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                     </svg>
                   ),
@@ -2984,8 +3009,10 @@ function CircuitWorkoutOverviewContent() {
                 },
                 {
                   id: "move-up",
-                  label: "Move Up",
-                  icon: (
+                  label: movingRoundId === `round-${parseInt(selectedItemForOptions?.name.match(/\d+/)?.[0] || '0')}` && reorderRoundsMutation.isPending ? "Moving Up..." : "Move Up",
+                  icon: movingRoundId === `round-${parseInt(selectedItemForOptions?.name.match(/\d+/)?.[0] || '0')}` && reorderRoundsMutation.isPending ? (
+                    <SpinnerIcon className="w-5 h-5 animate-spin" />
+                  ) : (
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
                     </svg>
@@ -2993,7 +3020,14 @@ function CircuitWorkoutOverviewContent() {
                   disabled: selectedItemForOptions?.roundIndex === 0 || reorderRoundsMutation.isPending,
                   onClick: () => {
                     const roundNumber = parseInt(selectedItemForOptions?.name.match(/\d+/)?.[0] || '0');
+                    console.log('[Move Round Up] Starting move operation', {
+                      roundNumber,
+                      selectedItem: selectedItemForOptions,
+                      movingRoundId,
+                      isPending: reorderRoundsMutation.isPending
+                    });
                     if (roundNumber > 0) {
+                      toast.info(`Moving ${selectedItemForOptions?.name} up...`);
                       reorderRoundsMutation.mutate({
                         sessionId: sessionId!,
                         currentRoundNumber: roundNumber,
@@ -3004,8 +3038,10 @@ function CircuitWorkoutOverviewContent() {
                 },
                 {
                   id: "move-down",
-                  label: "Move Down",
-                  icon: (
+                  label: movingRoundId === `round-${parseInt(selectedItemForOptions?.name.match(/\d+/)?.[0] || '0')}` && reorderRoundsMutation.isPending ? "Moving Down..." : "Move Down",
+                  icon: movingRoundId === `round-${parseInt(selectedItemForOptions?.name.match(/\d+/)?.[0] || '0')}` && reorderRoundsMutation.isPending ? (
+                    <SpinnerIcon className="w-5 h-5 animate-spin" />
+                  ) : (
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
                     </svg>
@@ -3013,7 +3049,14 @@ function CircuitWorkoutOverviewContent() {
                   disabled: selectedItemForOptions?.roundIndex === roundsData.length - 1 || reorderRoundsMutation.isPending,
                   onClick: () => {
                     const roundNumber = parseInt(selectedItemForOptions?.name.match(/\d+/)?.[0] || '0');
+                    console.log('[Move Round Down] Starting move operation', {
+                      roundNumber,
+                      selectedItem: selectedItemForOptions,
+                      movingRoundId,
+                      isPending: reorderRoundsMutation.isPending
+                    });
                     if (roundNumber > 0) {
+                      toast.info(`Moving ${selectedItemForOptions?.name} down...`);
                       reorderRoundsMutation.mutate({
                         sessionId: sessionId!,
                         currentRoundNumber: roundNumber,
@@ -3066,6 +3109,7 @@ function CircuitWorkoutOverviewContent() {
                       const round = roundsData.find(r => r.roundName === selectedItemForOptions.roundName);
                       const exercise = round?.exercises[selectedItemForOptions.stationIndex];
                       if (exercise) {
+                        toast.info(`Moving ${exercise.exerciseName} up...`);
                         reorderExerciseMutation.mutate({
                           sessionId: sessionId!,
                           roundName: selectedItemForOptions.roundName,
@@ -3090,6 +3134,7 @@ function CircuitWorkoutOverviewContent() {
                       const round = roundsData.find(r => r.roundName === selectedItemForOptions.roundName);
                       const exercise = round?.exercises[selectedItemForOptions.stationIndex];
                       if (exercise) {
+                        toast.info(`Moving ${exercise.exerciseName} down...`);
                         reorderExerciseMutation.mutate({
                           sessionId: sessionId!,
                           roundName: selectedItemForOptions.roundName,
@@ -3158,9 +3203,10 @@ function CircuitWorkoutOverviewContent() {
                   {
                     id: "delete-exercise",
                     label: "Delete Exercise",
+                    variant: "danger" as const,
                     icon: (
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="red" strokeWidth="2">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1 1v3M4 7h16" />
                       </svg>
                     ),
                     onClick: () => {
@@ -3178,17 +3224,34 @@ function CircuitWorkoutOverviewContent() {
                   ...(isNonStationRound ? [
                     {
                       id: "move-up",
-                      label: "Move Up",
-                      icon: (
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
-                        </svg>
-                      ),
+                      label: (() => {
+                        if (selectedItemForOptions?.roundName && selectedItemForOptions?.stationIndex !== undefined && round) {
+                          const exercise = round.exercises[selectedItemForOptions.stationIndex];
+                          if (exercise && movingExerciseId === exercise.orderIndex.toString() && reorderExerciseMutation.isPending) {
+                            return "Moving Up...";
+                          }
+                        }
+                        return "Move Up";
+                      })(),
+                      icon: (() => {
+                        if (selectedItemForOptions?.roundName && selectedItemForOptions?.stationIndex !== undefined && round) {
+                          const exercise = round.exercises[selectedItemForOptions.stationIndex];
+                          if (exercise && movingExerciseId === exercise.orderIndex.toString() && reorderExerciseMutation.isPending) {
+                            return <SpinnerIcon className="w-5 h-5 animate-spin" />;
+                          }
+                        }
+                        return (
+                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
+                          </svg>
+                        );
+                      })(),
                       disabled: selectedItemForOptions?.stationIndex === 0 || reorderExerciseMutation.isPending,
                       onClick: () => {
                         if (selectedItemForOptions?.roundName && selectedItemForOptions?.stationIndex !== undefined && round) {
                           const exercise = round.exercises[selectedItemForOptions.stationIndex];
                           if (exercise) {
+                            toast.info(`Moving ${exercise.exerciseName} up...`);
                             reorderExerciseMutation.mutate({
                               sessionId: sessionId!,
                               roundName: selectedItemForOptions.roundName,
@@ -3201,17 +3264,34 @@ function CircuitWorkoutOverviewContent() {
                     },
                     {
                       id: "move-down",
-                      label: "Move Down",
-                      icon: (
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                        </svg>
-                      ),
+                      label: (() => {
+                        if (selectedItemForOptions?.roundName && selectedItemForOptions?.stationIndex !== undefined && round) {
+                          const exercise = round.exercises[selectedItemForOptions.stationIndex];
+                          if (exercise && movingExerciseId === exercise.orderIndex.toString() && reorderExerciseMutation.isPending) {
+                            return "Moving Down...";
+                          }
+                        }
+                        return "Move Down";
+                      })(),
+                      icon: (() => {
+                        if (selectedItemForOptions?.roundName && selectedItemForOptions?.stationIndex !== undefined && round) {
+                          const exercise = round.exercises[selectedItemForOptions.stationIndex];
+                          if (exercise && movingExerciseId === exercise.orderIndex.toString() && reorderExerciseMutation.isPending) {
+                            return <SpinnerIcon className="w-5 h-5 animate-spin" />;
+                          }
+                        }
+                        return (
+                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                          </svg>
+                        );
+                      })(),
                       disabled: selectedItemForOptions?.stationIndex === exerciseCount - 1 || reorderExerciseMutation.isPending,
                       onClick: () => {
                         if (selectedItemForOptions?.roundName && selectedItemForOptions?.stationIndex !== undefined && round) {
                           const exercise = round.exercises[selectedItemForOptions.stationIndex];
                           if (exercise) {
+                            toast.info(`Moving ${exercise.exerciseName} down...`);
                             reorderExerciseMutation.mutate({
                               sessionId: sessionId!,
                               roundName: selectedItemForOptions.roundName,
