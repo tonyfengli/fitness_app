@@ -2940,6 +2940,11 @@ function CircuitWorkoutOverviewContent() {
               }}
               onCancel={() => {
                 setShowReplaceInDrawer(false);
+                setShowOptionsDrawer(false);
+                setSelectedExerciseForReplace(null);
+              }}
+              onBack={() => {
+                setShowReplaceInDrawer(false);
                 setSelectedExerciseForReplace(null);
               }}
               onReplace={() => {

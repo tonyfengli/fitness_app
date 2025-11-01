@@ -26,6 +26,7 @@ interface ExerciseReplacementProps {
   };
   onCancel: () => void;
   onReplace: () => void;
+  onBack?: () => void;
 }
 
 // Single source of truth for replacement state
@@ -46,6 +47,7 @@ export function ExerciseReplacement({
   mutations,
   onCancel,
   onReplace,
+  onBack,
 }: ExerciseReplacementProps) {
   // Single state object - no dual state management
   const [state, setState] = useState<ReplacementState>({
@@ -54,7 +56,6 @@ export function ExerciseReplacement({
     mode: 'empty'
   });
 
-  const [showResults, setShowResults] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<NodeJS.Timeout>();
 
@@ -72,8 +73,7 @@ export function ExerciseReplacement({
       clearTimeout(debounceRef.current);
     }
 
-    // Show/hide results immediately for better UX
-    setShowResults(value.trim().length > 0);
+    // Always show results - no need to hide/show
   };
 
   // Handle exercise selection from results
@@ -84,11 +84,10 @@ export function ExerciseReplacement({
       selectedExercise,
       mode: 'selected'
     });
-    setShowResults(false);
   };
 
-  // Filter exercises based on input
-  const filteredExercises = state.mode === 'typing' 
+  // Filter exercises based on input - only show when there's text input
+  const filteredExercises = state.inputValue.trim() 
     ? filterExercises(
         availableExercises,
         state.inputValue,
@@ -97,7 +96,7 @@ export function ExerciseReplacement({
           excludeWarmupOnly: round?.roundName !== 'Warm-up',
           templateTypes: ['circuit']
         }
-      ).slice(0, 10) // Limit results for performance
+      )
     : [];
 
   // Clear input
@@ -107,7 +106,6 @@ export function ExerciseReplacement({
       selectedExercise: null,
       mode: 'empty'
     });
-    setShowResults(false);
     inputRef.current?.focus();
   };
 
@@ -154,7 +152,7 @@ export function ExerciseReplacement({
   const canReplace = state.mode !== 'empty' && !isReplacing;
 
   return (
-    <div className="flex flex-col bg-gray-50 dark:bg-gray-900 h-full">
+    <div className="flex flex-col bg-white dark:bg-gray-800 h-full">
       {/* Header */}
       <div className="flex-shrink-0 border-b border-gray-200 dark:border-gray-700 px-6 py-4">
         <div className="flex items-center justify-between">
@@ -178,44 +176,60 @@ export function ExerciseReplacement({
       {/* Content */}
       <div className="flex-1 p-6">
         <div className="space-y-4">
-          {/* Search Input */}
-          <div className="relative">
-            <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 pointer-events-none">
-              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
+          {/* Search Input Row */}
+          <div className="flex items-center gap-3">
+            {/* Search Input Container */}
+            <div className="relative w-4/5">
+              <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 pointer-events-none">
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </div>
+              <input
+                ref={inputRef}
+                type="text"
+                placeholder="Type exercise name..."
+                value={state.inputValue}
+                onChange={(e) => handleInputChange(e.target.value)}
+                className="w-full bg-white dark:bg-gray-800 border-2 border-gray-900 dark:border-gray-100 rounded-lg pl-12 pr-12 py-3 text-lg font-medium text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-4 focus:ring-gray-900/20 dark:focus:ring-gray-100/20 focus:border-gray-900 dark:focus:border-gray-100 shadow-sm"
+                autoComplete="off"
+                spellCheck="false"
+              />
+              {/* Clear button */}
+              {state.inputValue && (
+                <button
+                  onClick={handleClear}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 rounded-md text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-200/50 dark:hover:bg-gray-700/50 transition-colors"
+                >
+                  <XIcon className="h-5 w-5" />
+                </button>
+              )}
             </div>
-            <input
-              ref={inputRef}
-              type="text"
-              placeholder="Type exercise name..."
-              value={state.inputValue}
-              onChange={(e) => handleInputChange(e.target.value)}
-              className="w-full bg-white dark:bg-gray-800 border-2 border-gray-900 dark:border-gray-100 rounded-lg pl-12 pr-12 py-3 text-lg font-medium text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-4 focus:ring-gray-900/20 dark:focus:ring-gray-100/20 focus:border-gray-900 dark:focus:border-gray-100 shadow-sm"
-              autoComplete="off"
-              autoCorrect="off"
-              autoCapitalize="off"
-              spellCheck="false"
-            />
-            {/* Clear button */}
-            {state.inputValue && (
-              <button
-                onClick={handleClear}
-                className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 rounded-md text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-200/50 dark:hover:bg-gray-700/50 transition-colors"
-              >
-                <XIcon className="h-5 w-5" />
-              </button>
-            )}
+
+            {/* Browse Button - Standalone */}
+            <button
+              onClick={() => {
+                // TODO: Toggle to browse mode
+                console.log('Browse mode clicked');
+              }}
+              className="p-3 rounded-lg border-2 border-gray-900 dark:border-gray-100 bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all duration-200 shadow-sm"
+              title="Browse by category"
+            >
+              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+              </svg>
+            </button>
           </div>
 
-          {/* Exercise Results */}
-          {showResults && filteredExercises.length > 0 && (
-            <div className="border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 max-h-80 overflow-y-auto">
-              {filteredExercises.map((ex: Exercise) => (
+          {/* Exercise Results - Always visible, max 3 items */}
+          <div className="border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 overflow-y-auto" style={{ height: '180px' }}>
+            {filteredExercises.length > 0 ? (
+              filteredExercises.map((ex: Exercise) => (
                 <button
                   key={ex.id}
                   onClick={() => handleExerciseSelect(ex)}
-                  className="w-full px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-700 border-b border-gray-100 dark:border-gray-600 last:border-b-0 transition-colors"
+                  className="w-full px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-700 border-b border-gray-100 dark:border-gray-600 last:border-b-0 transition-colors flex-shrink-0"
+                  style={{ height: '60px' }}
                 >
                   <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
                     {ex.name || ex.exerciseName}
@@ -224,9 +238,13 @@ export function ExerciseReplacement({
                     {ex.primaryMuscle?.toLowerCase().replace(/_/g, ' ')}
                   </div>
                 </button>
-              ))}
-            </div>
-          )}
+              ))
+            ) : (
+              <div className="flex items-center justify-center h-full text-gray-500 dark:text-gray-400 text-sm">
+                {state.inputValue.trim() ? 'No exercises found' : 'Start typing to search exercises'}
+              </div>
+            )}
+          </div>
 
           {/* Status Indicator */}
           {state.mode !== 'empty' && (
@@ -252,10 +270,14 @@ export function ExerciseReplacement({
       <div className="flex-shrink-0 border-t border-gray-200 dark:border-gray-700 p-6">
         <div className="flex gap-3">
           <button
-            onClick={handleCancel}
+            onClick={() => {
+              if (onBack) {
+                onBack();
+              }
+            }}
             className="flex-1 px-6 py-3 text-base font-medium text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-200/50 dark:hover:bg-gray-700/50 rounded-lg transition-all focus:outline-none focus:ring-0 bg-transparent border border-gray-300 dark:border-gray-600"
           >
-            Cancel
+            Back
           </button>
           <button
             onClick={handleReplace}
