@@ -76,3 +76,51 @@
 .animate-slideUp {
   animation: slideUp 0.3s ease-out;
 }
+
+/* iOS Safari autofill fixes */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px white inset !important;
+  -webkit-text-fill-color: #333 !important;
+  transition: background-color 5000s ease-in-out 0s;
+}
+
+/* Dark mode autofill fixes */
+.dark input:-webkit-autofill,
+.dark input:-webkit-autofill:hover,
+.dark input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px #374151 inset !important;
+  -webkit-text-fill-color: #f9fafb !important;
+}
+
+/* Hide autofill buttons that can cause issues */
+input::-webkit-contacts-auto-fill-button,
+input::-webkit-credentials-auto-fill-button {
+  visibility: hidden;
+  position: absolute;
+  right: 0;
+}
+
+/* Ensure touch events work properly on iOS */
+input, 
+button, 
+[role="button"],
+[data-clickable] {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Prevent zoom on iOS when focusing inputs */
+@media screen and (max-width: 768px) {
+  input[type="text"],
+  input[type="email"],
+  input[type="number"],
+  input[type="tel"],
+  input[type="url"],
+  input[type="password"],
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}

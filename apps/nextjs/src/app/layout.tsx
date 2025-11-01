@@ -8,6 +8,7 @@ import { DebugInitializer } from "./_components/debug-initializer";
 import { GroupTestDataInitializer } from "./_components/group-test-data-initializer";
 import { Navigation } from "./_components/navigation";
 import { SessionTestDataInitializer } from "./_components/session-test-data-initializer";
+import { IOSSafariFix } from "~/components/IOSSafariFix";
 
 import "~/app/globals.css";
 
@@ -35,6 +36,9 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  userScalable: false,
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "white" },
     { media: "(prefers-color-scheme: dark)", color: "black" },
@@ -68,6 +72,7 @@ export default function RootLayout(props: { children: React.ReactNode }) {
       >
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           <TRPCReactProvider>
+            <IOSSafariFix />
             <DebugInitializer />
             <SessionTestDataInitializer />
             <GroupTestDataInitializer />
