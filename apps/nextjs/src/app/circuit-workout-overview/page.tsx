@@ -1932,7 +1932,7 @@ function CircuitWorkoutOverviewContent() {
                                     {idx + 1}
                                   </span>
                                   {/* Reorder buttons - subtle positioning */}
-                                  {!isEditing && (
+                                  {!isEditing && (round.roundType !== 'circuit_round' && round.roundType !== 'amrap_round') && (
                                     <div className="flex flex-col gap-1">
                                       <button
                                         disabled={idx === 0 || reorderExerciseMutation.isPending}

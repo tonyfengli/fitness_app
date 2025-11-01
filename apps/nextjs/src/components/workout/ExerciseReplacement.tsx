@@ -65,6 +65,14 @@ export function ExerciseReplacement({
   const [selectedCategory, setSelectedCategory] = useState<SelectedCategory | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<NodeJS.Timeout>();
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  // Scroll to top of container
+  const scrollToTop = () => {
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTop = 0;
+    }
+  };
 
   // Handle input changes with iOS-safe debouncing
   const handleInputChange = (value: string) => {
@@ -242,8 +250,6 @@ export function ExerciseReplacement({
                 onChange={(e) => handleInputChange(e.target.value)}
                 className="w-full bg-gray-50 dark:bg-gray-900 border-2 border-gray-900 dark:border-gray-100 rounded-lg pl-12 pr-12 py-4 text-lg font-medium text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:bg-white dark:focus:bg-gray-800 transition-all duration-200"
                 autoComplete="off"
-                autoCorrect="off"
-                autoCapitalize="off"
                 spellCheck="false"
               />
               {/* Clear button */}
@@ -272,6 +278,7 @@ export function ExerciseReplacement({
                 } else {
                   setSelectedCategory(null);
                 }
+                scrollToTop();
               }}
               className={`p-3 rounded-lg border-2 transition-all duration-200 shadow-sm ${
                 isBrowseMode 
@@ -287,13 +294,14 @@ export function ExerciseReplacement({
           </div>
 
           {/* Exercise Results or Browse Categories - Fixed height for 3 items */}
-          <div className="border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-900/50 overflow-y-auto" style={{ height: '180px' }}>
+          <div ref={scrollContainerRef} className="border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-900/50 overflow-y-auto" style={{ height: '180px' }}>
 {isBrowseMode && !selectedCategory ? (
               /* Browse Categories */
               <div className="space-y-0 h-full">
                 <button
                   onClick={() => {
                     setSelectedCategory({ type: 'movement', value: '' });
+                    scrollToTop();
                   }}
                   className="w-full p-4 text-left hover:bg-white dark:hover:bg-gray-800 border-b border-gray-200 dark:border-gray-700 transition-colors"
                   style={{ height: '60px' }}
@@ -304,6 +312,7 @@ export function ExerciseReplacement({
                 <button
                   onClick={() => {
                     setSelectedCategory({ type: 'muscle', value: '' });
+                    scrollToTop();
                   }}
                   className="w-full p-4 text-left hover:bg-white dark:hover:bg-gray-800 border-b border-gray-200 dark:border-gray-700 transition-colors"
                   style={{ height: '60px' }}
@@ -314,6 +323,7 @@ export function ExerciseReplacement({
                 <button
                   onClick={() => {
                     setSelectedCategory({ type: 'equipment', value: '' });
+                    scrollToTop();
                   }}
                   className="w-full p-4 text-left hover:bg-white dark:hover:bg-gray-800 transition-colors"
                   style={{ height: '60px' }}
@@ -327,7 +337,10 @@ export function ExerciseReplacement({
               <div className="space-y-0">
                 {/* Back button */}
                 <button
-                  onClick={() => setSelectedCategory(null)}
+                  onClick={() => {
+                    setSelectedCategory(null);
+                    scrollToTop();
+                  }}
                   className="w-full p-3 text-left hover:bg-white dark:hover:bg-gray-800 border-b border-gray-200 dark:border-gray-700 transition-colors flex items-center gap-2"
                   style={{ height: '50px' }}
                 >
@@ -341,6 +354,7 @@ export function ExerciseReplacement({
                     key={pattern.value}
                     onClick={() => {
                       setSelectedCategory({ type: 'movement', value: pattern.value });
+                      scrollToTop();
                     }}
                     className="w-full p-4 text-left hover:bg-white dark:hover:bg-gray-800 border-b border-gray-200 dark:border-gray-700 last:border-b-0 transition-colors flex-shrink-0"
                     style={{ height: '60px' }}
@@ -354,7 +368,10 @@ export function ExerciseReplacement({
               <div className="space-y-0">
                 {/* Back button */}
                 <button
-                  onClick={() => setSelectedCategory(null)}
+                  onClick={() => {
+                    setSelectedCategory(null);
+                    scrollToTop();
+                  }}
                   className="w-full p-3 text-left hover:bg-white dark:hover:bg-gray-800 border-b border-gray-200 dark:border-gray-700 transition-colors flex items-center gap-2"
                   style={{ height: '50px' }}
                 >
@@ -368,6 +385,7 @@ export function ExerciseReplacement({
                     key={muscle}
                     onClick={() => {
                       setSelectedCategory({ type: 'muscle', value: muscle });
+                      scrollToTop();
                     }}
                     className="w-full p-4 text-left hover:bg-white dark:hover:bg-gray-800 border-b border-gray-200 dark:border-gray-700 last:border-b-0 transition-colors flex-shrink-0"
                     style={{ height: '60px' }}
@@ -381,7 +399,10 @@ export function ExerciseReplacement({
               <div className="space-y-0">
                 {/* Back button */}
                 <button
-                  onClick={() => setSelectedCategory(null)}
+                  onClick={() => {
+                    setSelectedCategory(null);
+                    scrollToTop();
+                  }}
                   className="w-full p-3 text-left hover:bg-white dark:hover:bg-gray-800 border-b border-gray-200 dark:border-gray-700 transition-colors flex items-center gap-2"
                   style={{ height: '50px' }}
                 >
@@ -395,6 +416,7 @@ export function ExerciseReplacement({
                     key={equipment.value}
                     onClick={() => {
                       setSelectedCategory({ type: 'equipment', value: equipment.value });
+                      scrollToTop();
                     }}
                     className="w-full p-4 text-left hover:bg-white dark:hover:bg-gray-800 border-b border-gray-200 dark:border-gray-700 last:border-b-0 transition-colors flex-shrink-0"
                     style={{ height: '60px' }}
@@ -406,7 +428,24 @@ export function ExerciseReplacement({
             ) : (isBrowseMode && selectedCategory?.value) || (!isBrowseMode) ? (
               /* Exercise Results */
               filteredExercises.length > 0 ? (
-                filteredExercises.map((ex: Exercise) => (
+                <div className="space-y-0">
+                  {/* Back button when showing category results */}
+                  {isBrowseMode && selectedCategory?.value && (
+                    <button
+                      onClick={() => {
+                        setSelectedCategory({ ...selectedCategory, value: '' });
+                        scrollToTop();
+                      }}
+                      className="w-full p-3 text-left hover:bg-white dark:hover:bg-gray-800 border-b border-gray-200 dark:border-gray-700 transition-colors flex items-center gap-2"
+                      style={{ height: '50px' }}
+                    >
+                      <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                      </svg>
+                      <span className="text-sm text-gray-500 dark:text-gray-400">Back to {selectedCategory.type === 'movement' ? 'movement patterns' : selectedCategory.type === 'muscle' ? 'muscle groups' : 'equipment'}</span>
+                    </button>
+                  )}
+                  {filteredExercises.map((ex: Exercise) => (
                   <button
                     key={ex.id}
                     onClick={() => handleExerciseSelect(ex)}
@@ -424,7 +463,8 @@ export function ExerciseReplacement({
                       {ex.primaryMuscle?.toLowerCase().replace(/_/g, ' ')}
                     </div>
                   </button>
-                ))
+                  ))}
+                </div>
               ) : (
                 <div className="flex items-center justify-center h-full text-gray-500 dark:text-gray-400 text-sm">
                   {selectedCategory ? 'No exercises found in this category' : (state.inputValue.trim() ? 'No exercises found' : 'Start typing to search exercises')}
