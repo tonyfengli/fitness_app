@@ -107,11 +107,8 @@ export function ExerciseReplacement({
       {/* Content */}
       <div className="p-6">
         <div className="space-y-4">
-          {/* Exercise index indicator and search */}
+          {/* Exercise search */}
           <div className="flex items-center gap-4">
-            <span className="w-10 h-10 bg-gray-200 dark:bg-gray-700 rounded-lg flex items-center justify-center text-sm font-semibold text-gray-700 dark:text-gray-300 flex-shrink-0">
-              {exerciseIndex + 1}
-            </span>
             <div className="flex-1">
               <ExercisePicker
                 availableExercises={availableExercises}
@@ -133,7 +130,7 @@ export function ExerciseReplacement({
           </div>
           
           {/* Replace button */}
-          <div className="ml-16">
+          <div>
             <button
               onClick={handleReplace}
               disabled={(!selectedExerciseId && !customExerciseName.trim()) || isReplacing}

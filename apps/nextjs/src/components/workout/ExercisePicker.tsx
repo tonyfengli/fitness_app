@@ -73,6 +73,12 @@ export function ExercisePicker({
     if (selectedId) {
       setSelectedId(null);
     }
+    // Automatically trigger custom exercise when typing
+    if (query.trim()) {
+      onExerciseSelect(null, query.trim());
+    } else {
+      onExerciseSelect(null);
+    }
   };
 
   // Handle exercise selection
@@ -83,12 +89,6 @@ export function ExercisePicker({
     onExerciseSelect(exercise.id, exerciseName);
   };
 
-  // Handle custom exercise creation
-  const handleCustomExercise = () => {
-    if (searchQuery.trim()) {
-      onExerciseSelect(null, searchQuery.trim());
-    }
-  };
 
   // Clear search and selection
   const handleClear = () => {
@@ -118,11 +118,6 @@ export function ExercisePicker({
       {/* Search input row */}
       <div>
         <div className="flex items-center gap-4">
-          {showIcon && (
-            <span className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center text-sm font-semibold text-green-700 dark:text-green-300 flex-shrink-0">
-              {iconElement || '+'}
-            </span>
-          )}
           <div className="relative flex-1">
             <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 pointer-events-none">
               {iconElement || defaultIcon}
@@ -200,27 +195,15 @@ export function ExercisePicker({
                     <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">
                       No exercises found
                     </p>
-                    {searchQuery.trim() && (
-                      <div className="mt-4">
-                        <p className="text-xs text-gray-400 dark:text-gray-500 mb-3">
-                          Create a custom exercise instead?
-                        </p>
-                        <button
-                          onClick={handleCustomExercise}
-                          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg transition-colors"
-                        >
-                          Add "{searchQuery.trim()}" as Custom Exercise
-                        </button>
-                      </div>
-                    )}
                   </div>
                 )}
               </div>
             );
           } else if (!selectedId && categoryMode === 'choice') {
-            // Show category choice buttons
+            // Show category choice buttons (temporarily commented out)
             return (
               <div className="space-y-3">
+                {/* Temporarily commented out browse options
                 <button
                   onClick={() => setCategoryMode('movement')}
                   className="w-full p-6 bg-white dark:bg-gray-800 rounded-lg border-2 border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 transition-all text-left group"
@@ -250,6 +233,12 @@ export function ExercisePicker({
                     <ChevronRightIcon className="h-5 w-5 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300" />
                   </div>
                 </button>
+                */}
+                
+                {/* Placeholder message */}
+                <div className="text-center p-8 text-gray-500 dark:text-gray-400">
+                  Browse options temporarily disabled. Use search above to find exercises.
+                </div>
               </div>
             );
           } else if (!selectedId && categoryMode === 'muscle') {

@@ -122,72 +122,43 @@ export function AddExerciseDrawer({
 
       {/* Content */}
       <div className="flex-1 overflow-hidden p-6 flex flex-col">
-        {!selectedExerciseId && !customExerciseName ? (
-          <ExercisePicker
-            availableExercises={availableExercises}
-            onExerciseSelect={handleExerciseSelect}
-            placeholder="Type exercise name..."
-            filterOptions={{
-              excludeWarmupOnly: roundName !== 'Warm-up',
-              templateTypes: ['circuit']
-            }}
-          />
-        ) : (
-          // Exercise confirmation view
-          <div className="space-y-4">
-            <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <div className="p-1 bg-green-100 dark:bg-green-900/30 rounded">
-                  <svg className="w-4 h-4 text-green-700 dark:text-green-400" fill="none" viewBox="0 0 20 20" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                  </svg>
-                </div>
-                <span className="font-medium text-gray-900 dark:text-gray-100">
-                  {selectedExerciseId 
-                    ? availableExercises.find(ex => ex.id === selectedExerciseId)?.name || "Exercise Selected"
-                    : customExerciseName || "Custom Exercise"
-                  }
-                </span>
-              </div>
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                {(() => {
-                  const isStationsRound = roundData?.roundType === 'stations_round';
-                  const isCustom = !selectedExerciseId && customExerciseName;
-                  
-                  if (isCustom) {
-                    return isStationsRound 
-                      ? `Ready to add custom exercise to Station ${targetStation + 1}`
-                      : `Ready to add custom exercise to ${roundName}`;
-                  } else {
-                    return isStationsRound 
-                      ? `Ready to add this exercise to Station ${targetStation + 1}`
-                      : `Ready to add this exercise to ${roundName}`;
-                  }
-                })()}
-              </p>
-            </div>
-            
-            {/* Action buttons */}
-            <div className="flex gap-3">
-              <button
-                onClick={() => {
-                  setSelectedExerciseId(null);
-                  setCustomExerciseName("");
+        <div className="space-y-4">
+          {/* Exercise search */}
+          <div className="flex items-center gap-4">
+            <div className="flex-1">
+              <ExercisePicker
+                availableExercises={availableExercises}
+                onExerciseSelect={handleExerciseSelect}
+                placeholder="Type exercise name..."
+                filterOptions={{
+                  excludeWarmupOnly: roundName !== 'Warm-up',
+                  templateTypes: ['circuit']
                 }}
-                className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-              >
-                Back
-              </button>
-              <button
-                onClick={handleAddExercise}
-                disabled={(!selectedExerciseId && !customExerciseName) || isLoading}
-                className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors disabled:opacity-50 font-medium"
-              >
-                {(() => {
+                maxHeight="max-h-[400px]"
+              />
+            </div>
+          </div>
+          
+          {/* Add button */}
+          <div>
+            <button
+              onClick={handleAddExercise}
+              disabled={(!selectedExerciseId && !customExerciseName) || isLoading}
+              className={`h-12 px-10 text-base font-semibold rounded-lg transition-all focus:outline-none focus:ring-0 ${
+                (selectedExerciseId || customExerciseName) && !isLoading
+                  ? 'bg-green-600 hover:bg-green-700 text-white shadow-md' 
+                  : 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
+              }`}
+            >
+              {isLoading ? (
+                <div className="flex items-center gap-2">
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
+                  <span>Adding...</span>
+                </div>
+              ) : (
+                (() => {
                   const isStationsRound = roundData?.roundType === 'stations_round';
                   const isCustom = !selectedExerciseId && customExerciseName;
-                  
-                  if (isLoading) return 'Adding...';
                   
                   if (isStationsRound) {
                     const uniqueStations = new Set(roundData.exercises.map(ex => ex.orderIndex));
@@ -195,21 +166,21 @@ export function AddExerciseDrawer({
                     
                     if (isNewStation) {
                       return isCustom 
-                        ? `Create Station ${targetStation + 1} with Custom` 
+                        ? `Create Station ${targetStation + 1}` 
                         : `Create Station ${targetStation + 1}`;
                     } else {
                       return isCustom 
-                        ? `Add Custom to Station ${targetStation + 1}` 
+                        ? `Add to Station ${targetStation + 1}` 
                         : `Add to Station ${targetStation + 1}`;
                     }
                   } else {
-                    return isCustom ? 'Add Custom to Round' : 'Add to Round';
+                    return isCustom ? 'Add to Round' : 'Add to Round';
                   }
-                })()}
-              </button>
-            </div>
+                })()
+              )}
+            </button>
           </div>
-        )}
+        </div>
       </div>
     </div>
   );

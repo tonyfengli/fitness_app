@@ -32,6 +32,7 @@ import { RepsConfiguration } from "~/components/workout/RepsConfiguration";
 import { ExerciseReplacement } from "~/components/workout/ExerciseReplacement";
 import { AddExerciseDrawer } from "~/components/workout/AddExerciseDrawer";
 import { ConfirmDialog } from "~/components/ConfirmDialog";
+import { useScrollManager } from "~/hooks/useScrollManager";
 
 // World-class Duration Input Component
 interface DurationInputProps {
@@ -1266,19 +1267,6 @@ function CircuitWorkoutOverviewContent() {
 
   // PHASE 4: Modal muscle group toggle function removed
 
-  // Prevent body scroll when inline modal is open
-  useEffect(() => {
-    if (editingExerciseId) {
-      // Prevent body scroll
-      document.body.style.overflow = 'hidden';
-      
-      return () => {
-        // Restore body scroll
-        document.body.style.overflow = '';
-      };
-    }
-  }, [editingExerciseId]);
-
   // PHASE 4: Body scroll prevention for modal removed
 
 
@@ -1306,15 +1294,7 @@ function CircuitWorkoutOverviewContent() {
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [isEditingSessionName]);
 
-  // Prevent body scroll when round options modal is open
-  useEffect(() => {
-    if (showRoundOptionsModal) {
-      document.body.style.overflow = 'hidden';
-      return () => {
-        document.body.style.overflow = '';
-      };
-    }
-  }, [showRoundOptionsModal]);
+  // Removed iOS Safari fix for RoundOptionsModal - replaced with unified scroll manager
 
   // Prevent body scroll when station circuit modal is open
   useEffect(() => {
@@ -1328,15 +1308,13 @@ function CircuitWorkoutOverviewContent() {
 
   // PHASE 4: Modal state reset effect removed
 
-  // Scroll to top when Replace Exercise modal opens
-  useEffect(() => {
-    if (editingExerciseId) {
-      window.scrollTo({ top: 0, behavior: 'instant' });
-    }
-  }, [editingExerciseId]);
+  // Removed automatic scroll-to-top for editingExerciseId
 
-
-
+  // Unified scroll management for iOS Safari fixes
+  useScrollManager({ 
+    isActive: showAddExerciseInDrawer || showOptionsDrawer, 
+    priority: 1 
+  });
 
 
   if (isLoadingSelections) {
