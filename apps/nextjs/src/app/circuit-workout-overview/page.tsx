@@ -2897,6 +2897,11 @@ function CircuitWorkoutOverviewContent() {
                 setShowRepsInDrawer(false);
                 setSelectedExerciseForSets(null);
               }}
+              onClose={() => {
+                setShowRepsInDrawer(false);
+                setShowOptionsDrawer(false);
+                setSelectedExerciseForSets(null);
+              }}
               isSaving={updateRepsPlannedMutation.isPending}
             />
           ) : showAddExerciseInDrawer && addExerciseModalConfig ? (

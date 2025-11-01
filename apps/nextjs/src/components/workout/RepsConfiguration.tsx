@@ -9,6 +9,7 @@ interface RepsConfigurationProps {
   initialReps: number;
   onSave: (reps: number) => void;
   onBack?: () => void;
+  onClose?: () => void;
   isSaving?: boolean;
 }
 
@@ -18,6 +19,7 @@ export function RepsConfiguration({
   initialReps,
   onSave,
   onBack,
+  onClose,
   isSaving = false,
 }: RepsConfigurationProps) {
   const [repsValue, setRepsValue] = useState(initialReps);
@@ -38,12 +40,12 @@ export function RepsConfiguration({
             {exerciseName}
           </p>
         </div>
-        {/* Back button if provided */}
-        {onBack && (
+        {/* Close button if provided */}
+        {onClose && (
           <button
-            onClick={onBack}
+            onClick={onClose}
             className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors focus:outline-none focus:ring-0"
-            title="Back"
+            title="Close"
           >
             <XIcon className="w-5 h-5 text-gray-500 dark:text-gray-400" />
           </button>
@@ -91,7 +93,7 @@ export function RepsConfiguration({
       </div>
 
       {/* Footer */}
-      <div className="flex gap-3 pt-4 border-t dark:border-gray-700">
+      <div className="flex gap-3 pt-4 pb-10 border-t dark:border-gray-700">
         <Button
           variant="outline"
           onClick={() => {
@@ -101,7 +103,7 @@ export function RepsConfiguration({
           }}
           className="flex-1 bg-transparent dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600"
         >
-          Cancel
+          Back
         </Button>
         <Button
           onClick={handleSave}
