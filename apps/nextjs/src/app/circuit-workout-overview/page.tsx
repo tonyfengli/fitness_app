@@ -1553,17 +1553,17 @@ function CircuitWorkoutOverviewContent() {
                             });
                             setShowOptionsDrawer(true);
                           }}
-                          className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                          className="p-1.5 sm:p-2 rounded-md sm:rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600"
                           aria-label="Round options"
                         >
                           <svg
-                            width="20"
-                            height="20"
+                            width="16"
+                            height="16"
                             viewBox="0 0 24 24"
                             fill="none"
                             stroke="currentColor"
                             strokeWidth="2"
-                            className="text-gray-500 dark:text-gray-400"
+                            className="text-gray-600 dark:text-gray-400 sm:w-[18px] sm:h-[18px]"
                           >
                             <circle cx="12" cy="5" r="1" />
                             <circle cx="12" cy="12" r="1" />
@@ -1694,9 +1694,6 @@ function CircuitWorkoutOverviewContent() {
                             <div className="px-6 py-3 bg-gray-50 dark:bg-gray-900/50 border-b border-gray-200 dark:border-gray-700">
                               <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-3">
-                                  <span className="w-8 h-8 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 flex items-center justify-center text-sm font-bold">
-                                    {idx + 1}
-                                  </span>
                                   <div className="flex items-center gap-2">
                                     <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
                                       Station {idx + 1}
@@ -1766,22 +1763,24 @@ function CircuitWorkoutOverviewContent() {
                               </div>
                             </div>
                             
-                            {/* Exercises list */}
-                            <div className="divide-y divide-gray-100 dark:divide-gray-700/50">
+                            {/* Exercises list - Minimalistic design */}
+                            <div className="border-b border-gray-100 dark:border-gray-700 last:border-b-0">
                               {/* Primary exercise */}
-                              <div className="px-6 py-4 hover:bg-gray-50/50 dark:hover:bg-gray-700/20 transition-colors">
-                                <div className="flex items-center justify-between">
-                                  <div className="flex-1">
-                                    <div className="font-medium text-gray-900 dark:text-gray-100">
-                                      {exercise.exerciseName}
+                              <div className="px-3 sm:px-6 py-3 sm:py-4 bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700">
+                                <div className="flex items-start gap-1 sm:gap-4 min-w-0 w-full">
+                                  <div className="flex items-center gap-1 sm:gap-3 flex-shrink-0 pt-1">
+                                  </div>
+                                  <div className="flex-1 min-w-0 mx-1 sm:mx-0">
+                                    <div className="flex flex-col gap-1 sm:gap-2">
+                                      <span className="font-normal text-gray-900 dark:text-gray-100 text-base sm:text-lg break-words">{exercise.exerciseName}</span>
                                       {exercise.repsPlanned && (
-                                        <span className="ml-2 text-sm font-normal text-gray-500 dark:text-gray-400">
+                                        <span className="text-xs text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-md font-semibold whitespace-nowrap self-start shadow-sm">
                                           {exercise.repsPlanned} {exercise.repsPlanned === 1 ? 'rep' : 'reps'}
                                         </span>
                                       )}
                                     </div>
                                   </div>
-                                  <div className="ml-4">
+                                  <div className="flex items-center flex-shrink-0">
                                     <button
                                       onClick={() => {
                                         setSelectedItemForOptions({
@@ -1794,17 +1793,17 @@ function CircuitWorkoutOverviewContent() {
                                         });
                                         setShowOptionsDrawer(true);
                                       }}
-                                      className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                                      aria-label="More options"
+                                      className="p-1.5 sm:p-2 rounded-md sm:rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600"
+                                      aria-label="Exercise options"
                                     >
                                       <svg
-                                        width="20"
-                                        height="20"
+                                        width="16"
+                                        height="16"
                                         viewBox="0 0 24 24"
                                         fill="none"
                                         stroke="currentColor"
                                         strokeWidth="2"
-                                        className="text-gray-500 dark:text-gray-400"
+                                        className="text-gray-600 dark:text-gray-400 sm:w-[18px] sm:h-[18px]"
                                       >
                                         <circle cx="12" cy="5" r="1" />
                                         <circle cx="12" cy="12" r="1" />
@@ -1816,20 +1815,22 @@ function CircuitWorkoutOverviewContent() {
                               </div>
                               
                               {/* Additional exercises */}
-                              {exercise.stationExercises?.map((stationEx) => (
-                                <div key={stationEx.id} className="px-6 py-4 hover:bg-gray-50/50 dark:hover:bg-gray-700/20 transition-colors">
-                                  <div className="flex items-center justify-between">
-                                    <div className="flex-1">
-                                      <div className="font-medium text-gray-900 dark:text-gray-100">
-                                        {stationEx.exerciseName}
+                              {exercise.stationExercises?.map((stationEx, stationIdx) => (
+                                <div key={stationEx.id} className="px-3 sm:px-6 py-3 sm:py-4 bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700 last:border-b-0">
+                                  <div className="flex items-start gap-1 sm:gap-4 min-w-0 w-full">
+                                    <div className="flex items-center gap-1 sm:gap-3 flex-shrink-0 pt-1">
+                                    </div>
+                                    <div className="flex-1 min-w-0 mx-1 sm:mx-0">
+                                      <div className="flex flex-col gap-1 sm:gap-2">
+                                        <span className="font-normal text-gray-900 dark:text-gray-100 text-base sm:text-lg break-words">{stationEx.exerciseName}</span>
                                         {stationEx.repsPlanned && (
-                                          <span className="ml-2 text-sm font-normal text-gray-500 dark:text-gray-400">
+                                          <span className="text-xs text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-md font-semibold whitespace-nowrap self-start shadow-sm">
                                             {stationEx.repsPlanned} {stationEx.repsPlanned === 1 ? 'rep' : 'reps'}
                                           </span>
                                         )}
                                       </div>
                                     </div>
-                                    <div className="flex items-center gap-2 ml-4">
+                                    <div className="flex items-center flex-shrink-0">
                                       <button
                                         onClick={() => {
                                           setSelectedItemForOptions({
@@ -1842,17 +1843,17 @@ function CircuitWorkoutOverviewContent() {
                                           });
                                           setShowOptionsDrawer(true);
                                         }}
-                                        className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                                        aria-label="More options"
+                                        className="p-1.5 sm:p-2 rounded-md sm:rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600"
+                                        aria-label="Exercise options"
                                       >
                                         <svg
-                                          width="20"
-                                          height="20"
+                                          width="16"
+                                          height="16"
                                           viewBox="0 0 24 24"
                                           fill="none"
                                           stroke="currentColor"
                                           strokeWidth="2"
-                                          className="text-gray-500 dark:text-gray-400"
+                                          className="text-gray-600 dark:text-gray-400 sm:w-[18px] sm:h-[18px]"
                                         >
                                           <circle cx="12" cy="5" r="1" />
                                           <circle cx="12" cy="12" r="1" />
@@ -1899,38 +1900,27 @@ function CircuitWorkoutOverviewContent() {
                                   setShowAddExerciseInDrawer(true);
                                   setShowOptionsDrawer(true);
                                 }}
-                                className="w-full p-3 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500 transition-colors bg-gray-50/50 dark:bg-gray-700/30 hover:bg-gray-100/50 dark:hover:bg-gray-600/30"
+                                className="w-full p-4 rounded-xl border border-gray-200 dark:border-gray-700 hover:border-green-300 dark:hover:border-green-600 transition-all duration-200 bg-white dark:bg-gray-800 hover:bg-green-50 dark:hover:bg-green-950/30 shadow-sm hover:shadow-md"
                               >
-                                <div className="flex items-center justify-center gap-2 text-gray-600 dark:text-gray-400">
-                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                                  </svg>
-                                  <span className="text-sm font-medium">Add to Station {idx + 1}</span>
+                                <div className="flex items-center justify-center gap-3 text-gray-700 dark:text-gray-300 hover:text-green-700 dark:hover:text-green-300 transition-colors">
+                                  <div className="w-8 h-8 rounded-full bg-green-100 dark:bg-green-900/50 flex items-center justify-center">
+                                    <svg className="w-4 h-4 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                                    </svg>
+                                  </div>
+                                  <span className="font-medium">Add to Station {idx + 1}</span>
                                 </div>
                               </button>
                             </div>
                           </div>
                         ) : (
-                          // Original single exercise layout for circuit rounds
-                          <div className="p-6 rounded-xl transition-all focus-within:outline-none focus-within:ring-0 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-6 flex-1">
-                                <div className="flex items-center gap-2">
-                                  <span className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-semibold flex-shrink-0 ${(() => {
-                                    const type = round.roundType || 'circuit_round';
-                                    if (round.isRepeat) return 'bg-purple-500/20 dark:bg-violet-300/20 text-purple-700 dark:text-violet-200 ring-2 ring-purple-400/50 dark:ring-violet-300/40';
-                                    switch (type) {
-                                      case 'amrap_round':
-                                        return 'bg-purple-500/20 dark:bg-violet-300/20 text-purple-700 dark:text-violet-200 ring-2 ring-purple-400/50 dark:ring-violet-300/40';
-                                      case 'stations_round':
-                                        return 'bg-green-500/20 dark:bg-emerald-300/20 text-green-700 dark:text-emerald-200 ring-2 ring-green-400/50 dark:ring-emerald-300/40';
-                                      case 'circuit_round':
-                                      default:
-                                        return 'bg-blue-500/20 dark:bg-sky-300/20 text-blue-700 dark:text-sky-200 ring-2 ring-blue-400/50 dark:ring-sky-300/40';
-                                    }
-                                  })()}`}>
-                                    {idx + 1}
-                                  </span>
+                          // Minimalistic single exercise layout for circuit rounds
+                          <div className="px-3 sm:px-6 py-3 sm:py-4 bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700 last:border-b-0">
+                            <div className="flex items-start gap-1 sm:gap-4 min-w-0 w-full">
+                              <div className="flex items-center gap-1 sm:gap-3 flex-shrink-0 pt-1">
+                                <span className="w-5 h-5 sm:w-6 sm:h-6 rounded bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 flex items-center justify-center text-xs font-medium">
+                                  {idx + 1}
+                                </span>
                                   {/* Reorder buttons - subtle positioning */}
                                   {!isEditing && (round.roundType !== 'circuit_round' && round.roundType !== 'amrap_round') && (
                                     <div className="flex flex-col gap-1">
@@ -1969,17 +1959,18 @@ function CircuitWorkoutOverviewContent() {
                                       </button>
                                     </div>
                                   )}
-                                </div>
-                                <div className="flex-1">
-                                  <span className="font-medium text-base leading-tight py-1 text-gray-900 dark:text-gray-100">{exercise.exerciseName}</span>
+                              </div>
+                              <div className="flex-1 min-w-0 mx-1 sm:mx-0">
+                                <div className="flex flex-col gap-1 sm:gap-2">
+                                  <span className="font-normal text-gray-900 dark:text-gray-100 text-base sm:text-lg break-words">{exercise.exerciseName}</span>
                                   {exercise.repsPlanned && (
-                                    <span className="text-sm text-gray-500 dark:text-gray-400 ml-2">
+                                    <span className="text-xs text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-md font-semibold whitespace-nowrap self-start shadow-sm">
                                       {exercise.repsPlanned} {exercise.repsPlanned === 1 ? 'rep' : 'reps'}
                                     </span>
                                   )}
                                 </div>
                               </div>
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center flex-shrink-0">
                                 {!isEditing ? (
                                   <button
                                     onClick={() => {
@@ -1995,17 +1986,17 @@ function CircuitWorkoutOverviewContent() {
                                       });
                                       setShowOptionsDrawer(true);
                                     }}
-                                    className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                                    className="p-1.5 sm:p-2 rounded-md sm:rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600"
                                     aria-label="Exercise options"
                                   >
                                     <svg
-                                      width="20"
-                                      height="20"
+                                      width="16"
+                                      height="16"
                                       viewBox="0 0 24 24"
                                       fill="none"
                                       stroke="currentColor"
                                       strokeWidth="2"
-                                      className="text-gray-500 dark:text-gray-400"
+                                      className="text-gray-600 dark:text-gray-400 sm:w-[18px] sm:h-[18px]"
                                     >
                                       <circle cx="12" cy="5" r="1" />
                                       <circle cx="12" cy="12" r="1" />
@@ -2130,13 +2121,15 @@ function CircuitWorkoutOverviewContent() {
                         setShowAddExerciseInDrawer(true);
                         setShowOptionsDrawer(true);
                       }}
-                      className="w-full p-3 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500 transition-colors bg-gray-50/50 dark:bg-gray-700/30 hover:bg-gray-100/50 dark:hover:bg-gray-600/30"
+                      className="w-full p-4 rounded-xl border border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-600 transition-all duration-200 bg-white dark:bg-gray-800 hover:bg-blue-50 dark:hover:bg-blue-950/30 shadow-sm hover:shadow-md"
                     >
-                      <div className="flex items-center justify-center gap-2 text-gray-600 dark:text-gray-400">
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                        </svg>
-                        <span className="text-sm font-medium">Add Exercise</span>
+                      <div className="flex items-center justify-center gap-3 text-gray-700 dark:text-gray-300 hover:text-blue-700 dark:hover:text-blue-300 transition-colors">
+                        <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center">
+                          <svg className="w-4 h-4 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                          </svg>
+                        </div>
+                        <span className="font-medium">Add Exercise</span>
                       </div>
                     </button>
                   </div>
@@ -2183,13 +2176,15 @@ function CircuitWorkoutOverviewContent() {
                         setShowAddExerciseInDrawer(true);
                         setShowOptionsDrawer(true);
                       }}
-                      className="w-full p-3 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500 transition-colors bg-gray-50/50 dark:bg-gray-700/30 hover:bg-gray-100/50 dark:hover:bg-gray-600/30"
+                      className="w-full p-4 rounded-xl border border-gray-200 dark:border-gray-700 hover:border-green-300 dark:hover:border-green-600 transition-all duration-200 bg-white dark:bg-gray-800 hover:bg-green-50 dark:hover:bg-green-950/30 shadow-sm hover:shadow-md"
                     >
-                      <div className="flex items-center justify-center gap-2 text-gray-600 dark:text-gray-400">
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                        </svg>
-                        <span className="text-sm font-medium">Add Station</span>
+                      <div className="flex items-center justify-center gap-3 text-gray-700 dark:text-gray-300 hover:text-green-700 dark:hover:text-green-300 transition-colors">
+                        <div className="w-8 h-8 rounded-full bg-green-100 dark:bg-green-900/50 flex items-center justify-center">
+                          <svg className="w-4 h-4 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                          </svg>
+                        </div>
+                        <span className="font-medium">Add Station</span>
                       </div>
                     </button>
                   </div>
