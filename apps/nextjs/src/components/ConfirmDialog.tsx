@@ -63,7 +63,7 @@ export function ConfirmDialog({
       {/* Dialog */}
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
         <div
-          className="w-full max-w-md rounded-lg bg-white shadow-xl"
+          className="w-full max-w-md rounded-lg bg-white dark:bg-gray-800 shadow-xl"
           data-testid="confirm-dialog"
         >
           <div className="p-6">
@@ -75,16 +75,16 @@ export function ConfirmDialog({
             </div>
 
             {/* Title */}
-            <h3 className="mt-4 text-center text-lg font-medium text-gray-900">
+            <h3 className="mt-4 text-center text-lg font-medium text-gray-900 dark:text-white">
               {title}
             </h3>
 
             {/* Message */}
-            <p className="mt-2 text-center text-sm text-gray-500">{message}</p>
+            <p className="mt-2 text-center text-sm text-gray-500 dark:text-gray-300">{message}</p>
           </div>
 
           {/* Actions */}
-          <div className="gap-3 bg-gray-50 px-6 py-4 sm:flex sm:flex-row-reverse">
+          <div className="gap-3 bg-gray-50 dark:bg-gray-700 px-6 py-4 sm:flex sm:flex-row-reverse">
             <Button
               onClick={onConfirm}
               disabled={isLoading}
