@@ -881,10 +881,12 @@ function CircuitWorkoutOverviewContent() {
           sessionId: sessionId || "" 
         }).queryKey,
       });
+      
+      toast.success("Exercise deleted successfully");
     },
     onError: (error) => {
       console.error("Failed to delete exercise:", error);
-      alert("Failed to delete exercise. Please try again.");
+      toast.error("Failed to delete exercise. Please try again.");
     },
   });
 
@@ -3672,6 +3674,7 @@ function CircuitWorkoutOverviewContent() {
         }}
         onConfirm={() => {
           if (deleteExerciseData) {
+            toast.info(`Deleting ${deleteExerciseData.name}...`);
             deleteCircuitExerciseMutation.mutate({
               sessionId: sessionId || "",
               exerciseId: deleteExerciseData.id,
@@ -3696,6 +3699,7 @@ function CircuitWorkoutOverviewContent() {
         }}
         onConfirm={() => {
           if (deleteRoundData) {
+            toast.info(`Deleting ${deleteRoundData.name}...`);
             deleteRoundMutation.mutate({
               sessionId: sessionId || "",
               roundNumber: deleteRoundData.roundNumber,
