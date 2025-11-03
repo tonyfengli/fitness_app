@@ -35,17 +35,6 @@ export function OptionsDrawer({
 
   // Ensure component is mounted before rendering portal
   useEffect(() => {
-    console.log('[OptionsDrawer] 🏗️ PORTAL SETUP:', {
-      timestamp: new Date().toISOString(),
-      userAgent: navigator.userAgent,
-      browser: /Chrome/.test(navigator.userAgent) ? 'Chrome' : /Safari/.test(navigator.userAgent) ? 'Safari' : 'Other',
-      isSafari,
-      platform: navigator.platform,
-      existingPortal: !!document.getElementById('drawer-portal-root'),
-      bodyChildren: document.body.children.length,
-      bodyChildrenIds: Array.from(document.body.children).map(el => el.id).filter(Boolean)
-    });
-    
     setMounted(true);
     
     // Create a dedicated portal container for Safari
@@ -56,20 +45,6 @@ export function OptionsDrawer({
         portalRoot.id = 'drawer-portal-root';
         // Place it as a direct child of body, outside of Next.js root
         document.body.appendChild(portalRoot);
-        console.log('[OptionsDrawer] ✅ CREATED PORTAL ROOT:', {
-          portalId: portalRoot.id,
-          bodyChildren: document.body.children.length,
-          portalPosition: Array.from(document.body.children).indexOf(portalRoot),
-          portalParent: portalRoot.parentElement?.tagName,
-          portalRect: portalRoot.getBoundingClientRect()
-        });
-      } else {
-        console.log('[OptionsDrawer] 📋 PORTAL ALREADY EXISTS:', {
-          portalId: portalRoot.id,
-          portalParent: portalRoot.parentElement?.tagName,
-          portalRect: portalRoot.getBoundingClientRect(),
-          portalHTML: portalRoot.innerHTML.length > 0 ? `${portalRoot.innerHTML.length} chars` : 'empty'
-        });
       }
     }
   }, []);
@@ -83,27 +58,12 @@ export function OptionsDrawer({
     };
 
     if (isOpen) {
-      console.log('[OptionsDrawer] 🔓 OPENING DRAWER:', {
-        timestamp: new Date().toISOString(),
-        browser: /Chrome/.test(navigator.userAgent) ? 'Chrome' : /Safari/.test(navigator.userAgent) ? 'Safari' : 'Other',
-        isOpen,
-        mounted,
-        isSafari,
-        bodyScrollY: window.scrollY,
-        viewportHeight: window.innerHeight,
-        documentHeight: document.documentElement.scrollHeight,
-        portalExists: !!document.getElementById('drawer-portal-root'),
-        bodyOverflow: document.body.style.overflow || 'initial',
-        bodyPosition: document.body.style.position || 'initial'
-      });
-      
       document.addEventListener("keydown", handleEscape);
       // Prevent body scroll when drawer is open
       document.body.style.overflow = "hidden";
       
       // Safari fix: Force viewport recalculation with micro-scroll
       if (isSafari && typeof window !== 'undefined') {
-        console.log('[OptionsDrawer] 🍎 APPLYING SAFARI SCROLL FIX');
         const currentScrollY = window.scrollY;
         window.scrollBy(0, 1);
         requestAnimationFrame(() => {
@@ -112,10 +72,7 @@ export function OptionsDrawer({
           if (window.scrollY !== currentScrollY) {
             window.scrollTo(0, currentScrollY);
           }
-          console.log('[OptionsDrawer] ✅ Safari scroll fix complete');
         });
-      } else {
-        console.log('[OptionsDrawer] ⏭️ SKIPPING SAFARI FIXES (Not Safari)');
       }
     }
 
@@ -125,26 +82,6 @@ export function OptionsDrawer({
     };
   }, [isOpen, onClose, mounted]);
 
-  // Log when drawer is about to render
-  useEffect(() => {
-    if (isOpen && mounted) {
-      // Check after a small delay to ensure drawer is rendered
-      setTimeout(() => {
-        const drawerElement = document.querySelector('[data-drawer="options-drawer"]');
-        if (drawerElement) {
-          const rect = drawerElement.getBoundingClientRect();
-          console.log('[OptionsDrawer] Drawer element position', {
-            rect,
-            computedStyle: window.getComputedStyle(drawerElement),
-            parentElement: drawerElement.parentElement,
-            offsetParent: (drawerElement as HTMLElement).offsetParent,
-          });
-        } else {
-          console.log('[OptionsDrawer] Drawer element not found in DOM');
-        }
-      }, 100);
-    }
-  }, [isOpen, mounted]);
 
   // Detect Safari
   const isSafari = typeof navigator !== 'undefined' && /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
@@ -231,43 +168,35 @@ export function OptionsDrawer({
           transform: 'none',
           WebkitTransform: 'none',
           zIndex: 9999,
-        } : isSafari ? (() => {
-          const safariStyles = {
-            // Safari-specific positioning using viewport units
-            position: 'fixed' as const,
-            bottom: '0px',
-            left: '0px',
-            width: '100vw',
-            maxWidth: '100vw',
-            height: 'auto',
-            transform: 'none',
-            WebkitTransform: 'none',
-            zIndex: 9999,
-            // Force Safari to recalculate position
-            WebkitBackfaceVisibility: 'hidden' as const,
-            WebkitPerspective: 1000,
-            WebkitTransformStyle: 'preserve-3d' as const,
-          };
-          console.log('[OptionsDrawer] 🍎 APPLYING SAFARI STYLES:', safariStyles);
-          return safariStyles;
-        })() : (() => {
-          const chromeStyles = {
-            // Fixed positioning similar to Safari but adapted for Chrome
-            position: 'fixed' as const,
-            bottom: '0px',
-            left: '0px',
-            right: '0px',
-            width: '100%',
-            height: 'auto',
-            maxWidth: '100vw',
-            transform: 'none', // Remove conflicting transforms
-            WebkitTransform: 'none', // Ensure no webkit transforms
-            zIndex: 9999,
-            // Remove animation that conflicts with positioning
-          };
-          console.log('[OptionsDrawer] 🌐 APPLYING CHROME/OTHER STYLES (FIXED):', chromeStyles);
-          return chromeStyles;
-        })()}
+        } : isSafari ? {
+          // Safari-specific positioning using viewport units
+          position: 'fixed' as const,
+          bottom: '0px',
+          left: '0px',
+          width: '100vw',
+          maxWidth: '100vw',
+          height: 'auto',
+          transform: 'none',
+          WebkitTransform: 'none',
+          zIndex: 9999,
+          // Force Safari to recalculate position
+          WebkitBackfaceVisibility: 'hidden' as const,
+          WebkitPerspective: 1000,
+          WebkitTransformStyle: 'preserve-3d' as const,
+        } : {
+          // Fixed positioning similar to Safari but adapted for Chrome
+          position: 'fixed' as const,
+          bottom: '0px',
+          left: '0px',
+          right: '0px',
+          width: '100%',
+          height: 'auto',
+          maxWidth: '100vw',
+          transform: 'none', // Remove conflicting transforms
+          WebkitTransform: 'none', // Ensure no webkit transforms
+          zIndex: 9999,
+          // Remove animation that conflicts with positioning
+        }}
       >
         {/* Handle (only show for normal drawer) */}
         {!fullScreen && (
@@ -340,30 +269,6 @@ export function OptionsDrawer({
   );
 
   const portalRoot = document.getElementById('drawer-portal-root') || document.body;
-  
-  console.log('[OptionsDrawer] 🌀 CREATING PORTAL:', {
-    timestamp: new Date().toISOString(),
-    browser: /Chrome/.test(navigator.userAgent) ? 'Chrome' : /Safari/.test(navigator.userAgent) ? 'Safari' : 'Other',
-    isOpen,
-    mounted,
-    targetElement: portalRoot.tagName,
-    portalRootId: portalRoot.id,
-    portalRootRect: portalRoot.getBoundingClientRect(),
-    bodyClasses: document.body.className,
-    bodyTransform: window.getComputedStyle(document.body).transform,
-    bodyPosition: window.getComputedStyle(document.body).position,
-    bodyOverflow: window.getComputedStyle(document.body).overflow,
-    htmlTransform: window.getComputedStyle(document.documentElement).transform,
-    nextRoot: !!document.getElementById('__next'),
-    nextRootTransform: document.getElementById('__next') ? window.getComputedStyle(document.getElementById('__next')!).transform : 'none',
-    portalHasContent: portalRoot.children.length > 0,
-    portalChildren: portalRoot.children.length,
-    drawerWillRender: isOpen && mounted
-  });
-  
-  if (isOpen && mounted) {
-    console.log('[OptionsDrawer] 🎬 PORTAL RENDER CONFIRMED - Creating portal to:', portalRoot.id || 'body');
-  }
   
   return createPortal(drawerContent, portalRoot);
 }
