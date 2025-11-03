@@ -7,44 +7,6 @@ import { api } from '~/trpc/react';
 import { CircuitHeader } from '~/components/CircuitHeader';
 import { Loader2Icon } from '@acme/ui-shared';
 
-// Generate consistent random data based on client ID
-function generateClientStats(clientId: string, filter: string) {
-  // Use client ID to generate consistent random numbers
-  const seed = clientId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-  const random1 = (seed * 9301 + 49297) % 233280 / 233280;
-  const random2 = ((seed + 1) * 9301 + 49297) % 233280 / 233280;
-  const random3 = ((seed + 2) * 9301 + 49297) % 233280 / 233280;
-  
-  // Generate commitment level (1-3 times per week)
-  const commitment = Math.floor(random3 * 3) + 1;
-  
-  // Calculate sessions based on filter
-  let weeks = 4;
-  const months = ['January', 'February', 'March', 'April', 'May', 'June', 
-                  'July', 'August', 'September', 'October', 'November', 'December'];
-  
-  if (months.includes(filter)) {
-    weeks = 4; // Assume 4 weeks per month for simplicity
-  } else if (filter === '2 Weeks') {
-    weeks = 2;
-  } else if (filter === '4 Weeks') {
-    weeks = 4;
-  } else if (filter.includes('Weeks')) {
-    weeks = parseInt(filter);
-  }
-  
-  const totalSessions = commitment * weeks;
-  const attendedSessions = Math.floor(random2 * totalSessions * 0.9) + Math.floor(totalSessions * 0.5); // 50-90% attendance
-  const attendancePercentage = Math.round((attendedSessions / totalSessions) * 100);
-  
-  return {
-    attendedSessions: Math.min(attendedSessions, totalSessions),
-    totalSessions,
-    attendancePercentage,
-    commitment,
-    filterLabel: filter
-  };
-}
 
 // Get progress bar color based on percentage
 function getProgressColor(percentage: number) {
@@ -72,9 +34,9 @@ export default function ClientsPage() {
   const [customStartMonth, setCustomStartMonth] = useState('');
   const [customEndMonth, setCustomEndMonth] = useState('');
 
-  // Fetch clients data using the same pattern as attendance page
+  // Fetch clients data with their training packages
   const { data: clientsData, isLoading } = useQuery({
-    ...trpc.auth.getClientsByBusiness.queryOptions(),
+    ...trpc.clients.getClientsWithPackages.queryOptions(),
   });
 
   if (isLoading) {
@@ -93,10 +55,11 @@ export default function ClientsPage() {
     );
   }
 
-  const clients = clientsData || [];
+  // Only include clients with active packages
+  const clientsWithPackages = (clientsData || []).filter(client => client.currentPackage !== null);
   
   // Filter clients based on search query
-  const filteredClients = clients.filter(client =>
+  const filteredClients = clientsWithPackages.filter(client =>
     client.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     client.email.toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -107,7 +70,7 @@ export default function ClientsPage() {
         onBack={() => router.push('/trainer-home')}
         backText="Back"
         title="Clients"
-        subtitle={`${clients.length} active clients`}
+        subtitle={`${clientsWithPackages.length} active clients`}
       />
 
       <div className="px-4 py-6">
@@ -156,15 +119,15 @@ export default function ClientsPage() {
           </button>
         </div>
 
-        {clients.length === 0 ? (
+        {clientsWithPackages.length === 0 ? (
           <div className="text-center py-12">
             <div className="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
               <svg className="w-8 h-8 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
               </svg>
             </div>
-            <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">No clients yet</h3>
-            <p className="text-gray-500 dark:text-gray-400 text-sm">Your client list will appear here once you add them</p>
+            <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">No clients with packages</h3>
+            <p className="text-gray-500 dark:text-gray-400 text-sm">Clients with active training packages will appear here</p>
           </div>
         ) : filteredClients.length === 0 ? (
           <div className="text-center py-12">
@@ -179,8 +142,18 @@ export default function ClientsPage() {
         ) : (
           <div className="space-y-4">
             {filteredClients.map((client) => {
-              const stats = generateClientStats(client.id, selectedFilter);
               const initials = getInitials(client.name);
+              
+              // Use real package data (all clients here have packages)
+              const packageData = client.currentPackage!; // Non-null assertion safe here
+              const stats = {
+                commitment: packageData.sessionsPerWeek,
+                attendedSessions: 0, // TODO: Calculate real attendance
+                totalSessions: 0,    // TODO: Calculate based on time period
+                attendancePercentage: 0, // TODO: Calculate real percentage
+                filterLabel: selectedFilter
+              };
+              
               const progressColor = getProgressColor(stats.attendancePercentage);
 
               return (

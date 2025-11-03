@@ -535,6 +535,67 @@ export const CreateExercisePerformanceLogSchema = createInsertSchema(
   createdAt: true,
 });
 
+// Training packages - subscription tiers for gym members
+export const TrainingPackage = pgTable("training_package", (t) => ({
+  id: t.uuid().notNull().primaryKey().defaultRandom(),
+  businessId: t
+    .uuid()
+    .notNull()
+    .references(() => Business.id, { onDelete: "cascade" }),
+  name: t.varchar({ length: 255 }).notNull(), // e.g., "1x Weekly", "2x Weekly", "3x Weekly"
+  sessionsPerWeek: t.integer().notNull(), // 1, 2, or 3
+  monthlyPrice: numeric("monthly_price", { precision: 10, scale: 2 }).notNull(),
+  isActive: t.boolean().notNull().default(true),
+  createdAt: t.timestamp().defaultNow().notNull(),
+  updatedAt: t
+    .timestamp({ mode: "date", withTimezone: true })
+    .$onUpdateFn(() => sql`now()`),
+}));
+
+export const CreateTrainingPackageSchema = createInsertSchema(TrainingPackage, {
+  businessId: z.string().uuid(),
+  name: z.string().min(1).max(255),
+  sessionsPerWeek: z.number().int().min(1).max(7),
+  monthlyPrice: z.string().regex(/^\d+(\.\d{2})?$/), // String format for decimal
+  isActive: z.boolean().default(true),
+}).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+// User's active training package subscription
+export const UserTrainingPackage = pgTable("user_training_package", (t) => ({
+  id: t.uuid().notNull().primaryKey().defaultRandom(),
+  userId: t
+    .text()
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  trainingPackageId: t
+    .uuid()
+    .notNull()
+    .references(() => TrainingPackage.id),
+  startDate: t.date().notNull(),
+  endDate: t.date().notNull(),
+  status: t.text().notNull().default("active"), // 'active', 'expired', 'cancelled'
+  createdAt: t.timestamp().defaultNow().notNull(),
+  updatedAt: t
+    .timestamp({ mode: "date", withTimezone: true })
+    .$onUpdateFn(() => sql`now()`),
+}));
+
+export const CreateUserTrainingPackageSchema = createInsertSchema(UserTrainingPackage, {
+  userId: z.string(),
+  trainingPackageId: z.string().uuid(),
+  startDate: z.date(),
+  endDate: z.date(),
+  status: z.enum(["active", "expired", "cancelled"]).default("active"),
+}).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 // Export all relations from the relations file
 export * from "../drizzle/relations";
 
