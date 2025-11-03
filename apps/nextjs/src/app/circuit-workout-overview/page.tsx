@@ -1321,7 +1321,10 @@ function CircuitWorkoutOverviewContent() {
     return (
       <div className="min-h-screen bg-white dark:bg-gray-900">
         <CircuitHeader
-          onBack={() => router.push(`/circuit-sessions/${sessionId}`)}
+          onBack={() => {
+            // Use router.replace for instant navigation (no back stack delay)
+            router.replace(`/circuit-sessions/${sessionId}`);
+          }}
           backText="Session"
           title="Circuit Workout"
           subtitle="Loading exercises..."
@@ -1338,12 +1341,17 @@ function CircuitWorkoutOverviewContent() {
     <div className="min-h-screen bg-white dark:bg-gray-900">
       {/* Fixed Header */}
       <div className="fixed top-0 left-0 right-0 z-50 bg-gradient-to-r from-slate-900 to-purple-900 text-white shadow-lg">
-        <div className="flex items-center justify-between px-4 py-3">
+        <div className="flex items-center justify-between pl-1 pr-4 py-3">
             <button
-              onClick={() => router.push(`/circuit-sessions/${sessionId}`)}
-              className="p-4 -m-1 active:opacity-70 transition-opacity min-w-[48px] min-h-[48px] flex items-center justify-center"
+              onClick={() => {
+                // Use router.replace for instant navigation (no back stack delay)
+                // This bypasses the heavy cleanup operations that cause delays
+                router.replace(`/circuit-sessions/${sessionId}`);
+              }}
+              className="flex items-center space-x-2 active:opacity-70 transition-opacity min-w-0 p-2"
             >
-              <ChevronLeftIcon className="w-6 h-6" />
+              <ChevronLeftIcon className="w-6 h-6 flex-shrink-0" />
+              <span className="text-sm font-medium">Back</span>
             </button>
             
             <div className="flex-1 flex justify-center items-center min-w-0">
@@ -1368,6 +1376,7 @@ function CircuitWorkoutOverviewContent() {
                       }}
                       className="text-lg font-bold text-white bg-white/10 dark:bg-gray-700/30 backdrop-blur-sm border-2 border-white/30 dark:border-gray-500/50 focus:border-white dark:focus:border-gray-400 rounded-lg px-3 py-1.5 min-w-0 max-w-48 text-center focus:outline-none focus:ring-2 focus:ring-white/50 dark:focus:ring-gray-400/50 transition-all"
                       placeholder="Session name"
+                      autoCapitalize="words"
                       autoFocus
                     />
                     <button
@@ -1387,9 +1396,9 @@ function CircuitWorkoutOverviewContent() {
                       setEditingSessionName(sessionData.name);
                       setTimeout(() => nameInputRef.current?.select(), 100);
                     }}
-                    className="group flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 dark:bg-gray-700/30 dark:hover:bg-gray-600/40 backdrop-blur-sm rounded-xl transition-all duration-200 border-2 border-transparent hover:border-white/30 dark:hover:border-gray-500/50"
+                    className="group relative px-4 py-2.5 bg-white/25 dark:bg-gray-700/50 backdrop-blur-md rounded-lg flex items-center gap-3 shadow-lg border border-white/20 dark:border-gray-600/30 hover:bg-white/35 dark:hover:bg-gray-600/60 transition-all duration-200"
                   >
-                    <span className="text-lg font-bold text-white truncate max-w-44">
+                    <span className="text-lg font-bold text-white tracking-wide truncate max-w-44">
                       {sessionData.name}
                     </span>
                     <svg 
@@ -1453,11 +1462,13 @@ function CircuitWorkoutOverviewContent() {
             };
             
             return totalWorkoutTime > 0 ? (
-              <div className="px-3 py-1.5 bg-white/20 dark:bg-gray-700/40 backdrop-blur-sm rounded-lg inline-flex items-center gap-1.5">
-                <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <span className="text-sm font-medium text-white">
+              <div className="relative px-3 py-2 bg-white/25 dark:bg-gray-700/50 backdrop-blur-md rounded-lg inline-flex items-center shadow-lg border border-white/20 dark:border-gray-600/30">
+                <div className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-gray-600 dark:bg-gray-400 rounded-full flex items-center justify-center shadow-md border border-white/30">
+                  <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <span className="text-sm font-semibold text-white tracking-wide">
                   {formatDuration(totalWorkoutTime)}
                 </span>
               </div>
