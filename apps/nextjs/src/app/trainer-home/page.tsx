@@ -52,8 +52,8 @@ export default function TrainerHomePage() {
           </Link>
 
           {/* Clients Button */}
-          <div className="block">
-            <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-emerald-600 to-teal-600 p-8 shadow-2xl opacity-75 cursor-not-allowed">
+          <Link href="/clients" className="block">
+            <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-emerald-600 to-teal-600 p-8 shadow-2xl transform transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]">
               {/* Background decoration */}
               <div className="absolute -right-8 -top-8 w-32 h-32 bg-white/10 rounded-full blur-2xl"></div>
               <div className="absolute -left-8 -bottom-8 w-40 h-40 bg-teal-500/20 rounded-full blur-3xl"></div>
@@ -71,12 +71,15 @@ export default function TrainerHomePage() {
                 <p className="text-emerald-100 text-sm">
                   Track client progress and insights
                 </p>
-                <div className="mt-6 flex items-center text-white/60 text-sm">
-                  <span className="bg-white/20 px-3 py-1 rounded-full text-xs">Coming Soon</span>
+                <div className="mt-6 flex items-center text-white/80 text-sm">
+                  <span>5 active clients</span>
+                  <svg className="w-5 h-5 ml-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
+                  </svg>
                 </div>
               </div>
             </div>
-          </div>
+          </Link>
         </div>
 
         {/* Mobile-optimized footer */}
