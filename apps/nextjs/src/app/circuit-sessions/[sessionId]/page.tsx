@@ -40,6 +40,12 @@ const PlayPauseIcon = ({ className = "w-6 h-6" }: { className?: string }) => (
   </svg>
 );
 
+const CalendarIcon = ({ className = "w-6 h-6" }: { className?: string }) => (
+  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+  </svg>
+);
+
 
 interface SessionDetailPageProps {
   params: Promise<{
@@ -74,6 +80,11 @@ export default function SessionDetailPage({ params }: SessionDetailPageProps) {
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [navigatingToConfig, setNavigatingToConfig] = useState(false);
   const [hasInitializedSelection, setHasInitializedSelection] = useState(false);
+  const [showDateModal, setShowDateModal] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [showProgramModal, setShowProgramModal] = useState(false);
+  const [editingSessionName, setEditingSessionName] = useState("");
+  const [selectedProgram, setSelectedProgram] = useState<"h4h_5am" | "h4h_5pm" | "saturday_cg" | "monday_cg" | "unassigned">("unassigned");
   
   // Unwrap params Promise (Next.js 15 pattern)
   const resolvedParams = use(params);
@@ -94,9 +105,9 @@ export default function SessionDetailPage({ params }: SessionDetailPageProps) {
     enabled: !!sessionId
   });
 
-  // Fetch business clients for attendance
+  // Fetch clients with active training packages for attendance
   const { data: clientsData, isLoading: clientsLoading, error: clientsError } = useQuery({
-    ...trpc.auth.getClientsByBusiness.queryOptions(),
+    ...trpc.clients.getClientsWithActivePackages.queryOptions(),
     enabled: !!sessionId
   });
 
@@ -216,6 +227,78 @@ export default function SessionDetailPage({ params }: SessionDetailPageProps) {
     })
   );
 
+  // Update scheduled date mutation
+  const updateScheduledDateMutation = useMutation(
+    trpc.trainingSession.updateScheduledDate.mutationOptions({
+      onSuccess: async (data) => {
+        console.log(`[FRONTEND] updateScheduledDate successful:`, data);
+        toast.success("Session date updated successfully");
+        setShowDateModal(false);
+        setSelectedDate(null);
+        // Refresh session data
+        await Promise.all([
+          queryClient.invalidateQueries({
+            queryKey: [["trainingSession", "getSession"]],
+          }),
+          queryClient.invalidateQueries({
+            queryKey: [["trainingSession", "listCircuitSessions"]],
+          }),
+        ]);
+      },
+      onError: (error: any) => {
+        console.error(`[FRONTEND] updateScheduledDate failed:`, error);
+        toast.error("Failed to update session date");
+      },
+    })
+  );
+
+  // Update program assignment mutation
+  const updateProgramMutation = useMutation(
+    trpc.trainingSession.updateSessionProgram.mutationOptions({
+      onSuccess: async (data) => {
+        console.log(`[FRONTEND] updateSessionProgram successful:`, data);
+        toast.success("Session program updated successfully");
+        setShowProgramModal(false);
+        // Refresh session data
+        await Promise.all([
+          queryClient.invalidateQueries({
+            queryKey: [["trainingSession", "getSession"]],
+          }),
+          queryClient.invalidateQueries({
+            queryKey: [["trainingSession", "listCircuitSessions"]],
+          }),
+        ]);
+      },
+      onError: (error: any) => {
+        console.error(`[FRONTEND] updateSessionProgram failed:`, error);
+        toast.error("Failed to update session program");
+      },
+    })
+  );
+
+  // Update session name mutation
+  const updateSessionNameMutation = useMutation(
+    trpc.trainingSession.updateSessionName.mutationOptions({
+      onSuccess: async (data) => {
+        console.log(`[FRONTEND] updateSessionName successful:`, data);
+        toast.success("Session name updated successfully");
+        // Refresh session data
+        await Promise.all([
+          queryClient.invalidateQueries({
+            queryKey: [["trainingSession", "getSession"]],
+          }),
+          queryClient.invalidateQueries({
+            queryKey: [["trainingSession", "listCircuitSessions"]],
+          }),
+        ]);
+      },
+      onError: (error: any) => {
+        console.error(`[FRONTEND] updateSessionName failed:`, error);
+        toast.error("Failed to update session name");
+      },
+    })
+  );
+
   // Handle bulk check-in by calling addParticipant for each user
   const handleBulkCheckIn = async (userIds: string[]) => {
     console.log(`[FRONTEND] handleBulkCheckIn called with userIds:`, userIds);
@@ -271,6 +354,78 @@ export default function SessionDetailPage({ params }: SessionDetailPageProps) {
     });
   };
 
+  // Handle updating scheduled date
+  const handleDateUpdate = () => {
+    if (!selectedDate) {
+      toast.error("Please select a date and time");
+      return;
+    }
+
+    updateScheduledDateMutation.mutate({
+      sessionId,
+      scheduledAt: selectedDate
+    });
+  };
+
+  // Handle opening date modal
+  const handleOpenDateModal = () => {
+    setSelectedDate(session?.scheduledAt ? new Date(session.scheduledAt) : new Date());
+    setShowDateModal(true);
+  };
+
+  // Handle opening program modal
+  const handleOpenProgramModal = () => {
+    setEditingSessionName(session?.name || "");
+    setSelectedProgram(session?.program || "unassigned");
+    setShowProgramModal(true);
+  };
+
+  // Handle saving both description and program
+  const handleSaveSessionConfig = async () => {
+    const promises = [];
+    
+    // Update session name if changed
+    if (editingSessionName.trim() && editingSessionName !== session?.name) {
+      promises.push(
+        new Promise<void>((resolve, reject) => {
+          updateSessionNameMutation.mutate(
+            { sessionId, name: editingSessionName.trim() },
+            {
+              onSuccess: () => resolve(),
+              onError: (error) => reject(error),
+            }
+          );
+        })
+      );
+    }
+
+    // Update program if changed
+    if (selectedProgram !== session?.program) {
+      promises.push(
+        new Promise<void>((resolve, reject) => {
+          updateProgramMutation.mutate(
+            { sessionId, program: selectedProgram },
+            {
+              onSuccess: () => resolve(),
+              onError: (error) => reject(error),
+            }
+          );
+        })
+      );
+    }
+
+    try {
+      await Promise.all(promises);
+      if (promises.length > 0) {
+        toast.success("Session updated successfully");
+      }
+      setShowProgramModal(false);
+    } catch (error) {
+      console.error("Failed to update session:", error);
+      toast.error("Failed to update session");
+    }
+  };
+
   // Calculate actual participant count from checked-in users
   const participantCount = checkedInClients?.length || 0;
 
@@ -321,6 +476,7 @@ export default function SessionDetailPage({ params }: SessionDetailPageProps) {
       setHasInitializedSelection(true);
     }
   }, [clients, hasInitializedSelection]);
+
 
   // Combined loading state
   const isLoading = sessionLoading || workoutCheckLoading || clientsLoading || checkedInLoading || allParticipantsLoading;
@@ -592,17 +748,90 @@ export default function SessionDetailPage({ params }: SessionDetailPageProps) {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      <CircuitHeader
-        onBack={() => router.push('/circuit-sessions')}
-        backText="Sessions"
-        title={session.name}
-        subtitle={
-          <div className="flex items-center justify-center gap-1">
-            <UsersIcon className="w-3 h-3 text-purple-200" />
-            <span>{participantCount} participants</span>
+      {/* Custom Header with Status Badge */}
+      <div className="bg-gradient-to-r from-slate-900 to-purple-900 text-white">
+        <div className="px-4 py-4">
+          <div className="flex items-center justify-between">
+            <button
+              onClick={() => router.push('/circuit-sessions')}
+              className="flex items-center space-x-2 active:opacity-70 transition-opacity"
+            >
+              <ChevronLeftIcon className="w-6 h-6" />
+              <span className="text-sm font-medium">Sessions</span>
+            </button>
+            <div className="text-center flex-1 mx-8">
+              <h1 className="text-xl font-bold">
+                {session.program === 'h4h_5am' ? 'H4H 5AM' :
+                 session.program === 'h4h_5pm' ? 'H4H 5PM' :
+                 session.program === 'saturday_cg' ? 'Saturday CG' :
+                 session.program === 'monday_cg' ? 'Monday CG' :
+                 'Unassigned'}
+              </h1>
+              <p className="text-purple-200 text-sm">{session.name}</p>
+            </div>
+            <span className="px-2.5 py-1 text-xs font-medium border border-white/20 text-white bg-white/10 rounded-full">
+              {session.status.replace('_', ' ').charAt(0).toUpperCase() + session.status.replace('_', ' ').slice(1)}
+            </span>
           </div>
-        }
-      />
+        </div>
+      </div>
+
+      {/* Session Toolkit - Unified Control Panel */}
+      <div className="sticky top-0 z-40 bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl border-b border-gray-200/50 dark:border-gray-700/50 px-4 py-4">
+        <div className="max-w-lg mx-auto">
+          {/* Date Display & Quick Actions */}
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+            {/* Scheduled Date Header */}
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <CalendarIcon className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                <div>
+                  <h3 className="text-sm font-medium text-gray-900 dark:text-white">Scheduled</h3>
+                  <p className="text-lg font-semibold text-gray-900 dark:text-white">
+                    {session?.scheduledAt 
+                      ? new Date(session.scheduledAt).toLocaleDateString('en-US', {
+                          weekday: 'short',
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric'
+                        })
+                      : "No date set"
+                    }
+                  </p>
+                </div>
+              </div>
+              <SettingsIcon className="w-5 h-5 text-gray-400" />
+            </div>
+            
+            {/* Action Buttons Grid */}
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                onClick={handleOpenDateModal}
+                className="flex flex-col items-center gap-2 p-3 rounded-xl bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-600 transition-all duration-200 active:scale-95"
+              >
+                <CalendarIcon className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+                <span className="text-xs font-medium text-gray-700 dark:text-gray-300">Edit Date</span>
+              </button>
+              
+              <button
+                onClick={() => setShowStatusModal(true)}
+                className="flex flex-col items-center gap-2 p-3 rounded-xl bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-600 transition-all duration-200 active:scale-95"
+              >
+                <SettingsIcon className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+                <span className="text-xs font-medium text-gray-700 dark:text-gray-300">Edit Status</span>
+              </button>
+              
+              <button
+                onClick={handleOpenProgramModal}
+                className="flex flex-col items-center gap-2 p-3 rounded-xl bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-600 transition-all duration-200 active:scale-95"
+              >
+                <UsersIcon className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+                <span className="text-xs font-medium text-gray-700 dark:text-gray-300">Edit Program</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* Main Content */}
       <div className="px-4 py-6 bg-gray-50 dark:bg-gray-900">
@@ -622,9 +851,12 @@ export default function SessionDetailPage({ params }: SessionDetailPageProps) {
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
                   Get Attendance
                 </h3>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                  View and manage participant attendance for this session
-                </p>
+                <div className="flex items-center gap-1.5 mt-2">
+                  <UsersIcon className="w-4 h-4 text-gray-500" />
+                  <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                    {participantCount} {participantCount === 1 ? 'participant' : 'participants'} checked in
+                  </span>
+                </div>
               </div>
               <div className="w-5 h-5 text-gray-400 dark:text-gray-500 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -692,27 +924,24 @@ export default function SessionDetailPage({ params }: SessionDetailPageProps) {
             </div>
           </button>
 
-
-          {/* Action Buttons */}
-          <div className="flex gap-3 mt-6">
-            <button
-              onClick={() => setShowStatusModal(true)}
-              className="flex-1 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 transition-all py-3 px-4 group"
-            >
-              <div className="flex items-center justify-center gap-2">
-                <PlayPauseIcon className="w-4 h-4 text-gray-600 dark:text-gray-400" />
-                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Update Status</span>
-              </div>
-            </button>
-
+          {/* Danger Zone */}
+          <div className="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
             <button
               onClick={() => setShowDeleteModal(true)}
-              className="flex-1 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-red-300 dark:hover:border-red-600 transition-all py-3 px-4 group"
+              className="group flex items-center justify-between w-full px-4 py-3 text-left bg-red-50/50 dark:bg-red-950/20 hover:bg-red-50 dark:hover:bg-red-950/30 border border-red-100 dark:border-red-900/30 hover:border-red-200 dark:hover:border-red-800/50 rounded-lg transition-all duration-200 active:scale-[0.99]"
             >
-              <div className="flex items-center justify-center gap-2">
-                <TrashIcon className="w-4 h-4 text-red-600 dark:text-red-400" />
-                <span className="text-sm font-medium text-red-600 dark:text-red-400">Delete</span>
+              <div className="flex items-center gap-3">
+                <div className="w-7 h-7 rounded-md bg-red-100 dark:bg-red-900/30 flex items-center justify-center group-hover:bg-red-200 dark:group-hover:bg-red-900/50 transition-colors">
+                  <TrashIcon className="w-3.5 h-3.5 text-red-600 dark:text-red-400" />
+                </div>
+                <div>
+                  <div className="text-sm font-medium text-red-700 dark:text-red-300">Delete Session</div>
+                  <div className="text-xs text-red-600/70 dark:text-red-400/70 mt-0.5">Permanently remove this session</div>
+                </div>
               </div>
+              <svg className="w-4 h-4 text-red-400 dark:text-red-500 group-hover:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5l7 7-7 7" />
+              </svg>
             </button>
           </div>
         </div>
@@ -782,6 +1011,126 @@ export default function SessionDetailPage({ params }: SessionDetailPageProps) {
             >
               Cancel
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Date Update Modal */}
+      {showDateModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setShowDateModal(false)}>
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+              Update Scheduled Date
+            </h3>
+            
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Date
+              </label>
+              <input
+                type="date"
+                value={selectedDate ? selectedDate.toISOString().slice(0, 10) : ''}
+                onChange={(e) => setSelectedDate(e.target.value ? new Date(e.target.value + 'T12:00:00') : null)}
+                className="w-full px-3 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+              />
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                Select the date when this session is scheduled to take place
+              </p>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowDateModal(false)}
+                className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDateUpdate}
+                disabled={updateScheduledDateMutation.isPending || !selectedDate}
+                className="flex-1 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50"
+              >
+                {updateScheduledDateMutation.isPending ? "Updating..." : "Update Date"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Session Configuration Modal */}
+      {showProgramModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setShowProgramModal(false)}>
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-6">
+              Session Configuration
+            </h3>
+            
+            {/* Description Section */}
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Description
+              </label>
+              <input
+                type="text"
+                value={editingSessionName}
+                onChange={(e) => setEditingSessionName(e.target.value)}
+                placeholder="Enter session description"
+                className="w-full px-3 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+
+            {/* Program Assignment Section */}
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Program Assignment
+              </label>
+              <div className="space-y-2">
+                {[
+                  { value: "h4h_5am", label: "H4H 5AM" },
+                  { value: "h4h_5pm", label: "H4H 5PM" },
+                  { value: "saturday_cg", label: "Saturday CG" },
+                  { value: "monday_cg", label: "Monday CG" },
+                  { value: "unassigned", label: "Unassigned" }
+                ].map((program) => (
+                  <button
+                    key={program.value}
+                    onClick={() => setSelectedProgram(program.value as "h4h_5am" | "h4h_5pm" | "saturday_cg" | "monday_cg" | "unassigned")}
+                    className={`w-full px-4 py-2.5 rounded-lg border transition-all text-left ${
+                      program.value === selectedProgram
+                        ? "border-blue-500 dark:border-blue-400 bg-blue-50 dark:bg-blue-950/20 text-blue-700 dark:text-blue-300"
+                        : "border-gray-300 dark:border-gray-600 hover:border-blue-500 dark:hover:border-blue-400 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-900 dark:text-white"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium">{program.label}</span>
+                      {program.value === selectedProgram && (
+                        <div className="flex items-center gap-1">
+                          <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                          <span className="text-xs">Selected</span>
+                        </div>
+                      )}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowProgramModal(false)}
+                className="flex-1 px-4 py-2.5 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveSessionConfig}
+                disabled={updateSessionNameMutation.isPending || updateProgramMutation.isPending || !editingSessionName.trim()}
+                className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {(updateSessionNameMutation.isPending || updateProgramMutation.isPending) ? "Saving..." : "Save"}
+              </button>
+            </div>
           </div>
         </div>
       )}

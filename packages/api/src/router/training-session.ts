@@ -4196,6 +4196,7 @@ Set your goals and preferences for today's session.`;
           durationMinutes: TrainingSession.durationMinutes,
           maxParticipants: TrainingSession.maxParticipants,
           status: TrainingSession.status,
+          program: TrainingSession.program,
           templateType: TrainingSession.templateType,
           templateConfig: TrainingSession.templateConfig,
           workoutOrganization: TrainingSession.workoutOrganization,
@@ -5161,5 +5162,106 @@ Set your goals and preferences for today's session.`;
       
       // The result already has the proper structure from checkInService
       return result;
+    }),
+
+  /**
+   * Update session scheduled date (public route)
+   */
+  updateScheduledDate: publicProcedure
+    .input(
+      z.object({
+        sessionId: z.string().uuid(),
+        scheduledAt: z.date(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      // Hardcoded values for public circuit session operations
+      const HARDCODED_BUSINESS_ID = "d33b41e2-f700-4a08-9489-cb6e3daa7f20";
+
+      // Get the session to verify it exists and belongs to the business
+      const [session] = await ctx.db
+        .select()
+        .from(TrainingSession)
+        .where(
+          and(
+            eq(TrainingSession.id, input.sessionId),
+            eq(TrainingSession.businessId, HARDCODED_BUSINESS_ID)
+          )
+        );
+
+      if (!session) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Session not found or access denied",
+        });
+      }
+
+      // Update the scheduled date
+      const [updatedSession] = await ctx.db
+        .update(TrainingSession)
+        .set({
+          scheduledAt: input.scheduledAt,
+          updatedAt: new Date(),
+        })
+        .where(eq(TrainingSession.id, input.sessionId))
+        .returning();
+
+      console.log(`[updateScheduledDate] Session ${input.sessionId} scheduled date updated to: ${input.scheduledAt}`);
+
+      return {
+        success: true,
+        sessionId: updatedSession!.id,
+        scheduledAt: updatedSession!.scheduledAt,
+        session: updatedSession,
+      };
+    }),
+
+  updateSessionProgram: publicProcedure
+    .input(
+      z.object({
+        sessionId: z.string().uuid(),
+        program: z.enum(["h4h_5am", "h4h_5pm", "saturday_cg", "monday_cg", "unassigned"]),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      // Hardcoded values for public circuit session operations
+      const HARDCODED_BUSINESS_ID = "d33b41e2-f700-4a08-9489-cb6e3daa7f20";
+
+      // Get the session to verify it exists and belongs to the business
+      const [session] = await ctx.db
+        .select()
+        .from(TrainingSession)
+        .where(
+          and(
+            eq(TrainingSession.id, input.sessionId),
+            eq(TrainingSession.businessId, HARDCODED_BUSINESS_ID)
+          )
+        );
+
+      if (!session) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Session not found or access denied",
+        });
+      }
+
+      // Update the program assignment
+      const [updatedSession] = await ctx.db
+        .update(TrainingSession)
+        .set({
+          program: input.program,
+          updatedAt: new Date(),
+        })
+        .where(eq(TrainingSession.id, input.sessionId))
+        .returning();
+
+      console.log(`[updateSessionProgram] Session ${input.sessionId} program updated to: ${input.program}`);
+
+      return {
+        success: true,
+        sessionId: updatedSession!.id,
+        program: updatedSession!.program,
+        session: updatedSession,
+      };
     }),
 } satisfies TRPCRouterRecord;

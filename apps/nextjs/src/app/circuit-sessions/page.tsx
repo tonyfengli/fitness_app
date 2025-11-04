@@ -285,17 +285,24 @@ export default function SessionsPage() {
                       {/* Header Row */}
                       <div className="flex items-start justify-between mb-3">
                         <div className="flex-1 min-w-0">
-                          <h3 className="text-lg font-semibold text-gray-900 dark:text-white truncate">
-                            {session.name}
-                          </h3>
+                          <div className="flex items-baseline gap-2 mb-1">
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white shrink-0">
+                              {session.program === 'h4h_5am' ? 'H4H 5AM' :
+                               session.program === 'h4h_5pm' ? 'H4H 5PM' :
+                               session.program === 'saturday_cg' ? 'Saturday CG' :
+                               session.program === 'monday_cg' ? 'Monday CG' :
+                               'Unassigned'}
+                            </h3>
+                            <span className="text-sm font-medium text-gray-400 dark:text-gray-500 truncate min-w-0">
+                              · {session.name}
+                            </span>
+                          </div>
                           {/* Mobile: Show date inline */}
                           <p className="lg:hidden text-sm text-gray-500 dark:text-gray-400 mt-1">
                             {new Date(session.scheduledAt).toLocaleDateString('en-US', {
                               weekday: 'short',
                               month: 'short',
-                              day: 'numeric',
-                              hour: 'numeric',
-                              minute: '2-digit'
+                              day: 'numeric'
                             })}
                           </p>
                         </div>
@@ -327,13 +334,13 @@ export default function SessionsPage() {
                             </div>
                           </div>
 
-                          {/* Desktop: Show scheduled time */}
+                          {/* Desktop: Show scheduled date */}
                           <div className="hidden lg:flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
                             <CalendarIcon className="w-4 h-4" />
                             <span>
                               {(() => {
-                                const { date, time } = formatCreatedDate(session.scheduledAt);
-                                return `${date}, ${time}`;
+                                const { date } = formatCreatedDate(session.scheduledAt);
+                                return date;
                               })()}
                             </span>
                           </div>
@@ -407,9 +414,18 @@ export default function SessionsPage() {
                         {/* Compact Header Row */}
                         <div className="flex items-center justify-between">
                           <div className="flex-1 min-w-0">
-                            <h3 className="text-base font-medium text-gray-700 dark:text-gray-300 truncate">
-                              {session.name}
-                            </h3>
+                            <div className="flex items-baseline gap-2 mb-2">
+                              <h3 className="text-base font-medium text-gray-700 dark:text-gray-300 shrink-0">
+                                {session.program === 'h4h_5am' ? 'H4H 5AM' :
+                                 session.program === 'h4h_5pm' ? 'H4H 5PM' :
+                                 session.program === 'saturday_cg' ? 'Saturday CG' :
+                                 session.program === 'monday_cg' ? 'Monday CG' :
+                                 'Unassigned'}
+                              </h3>
+                              <span className="text-xs text-gray-400 dark:text-gray-500 truncate min-w-0">
+                                · {session.name}
+                              </span>
+                            </div>
                             <div className="flex items-center gap-3 mt-2">
                               <div className="flex items-center gap-1.5">
                                 <UsersIcon className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500" />
@@ -421,6 +437,7 @@ export default function SessionsPage() {
                                 <CalendarIcon className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500" />
                                 <span className="text-xs text-gray-500 dark:text-gray-400">
                                   {new Date(session.scheduledAt).toLocaleDateString('en-US', {
+                                    weekday: 'short',
                                     month: 'short',
                                     day: 'numeric'
                                   })}
