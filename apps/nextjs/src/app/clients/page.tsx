@@ -1,11 +1,12 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '~/trpc/react';
 import { CircuitHeader } from '~/components/CircuitHeader';
 import { Loader2Icon } from '@acme/ui-shared';
+import { processFilterSelection, formatLongDate, type WeekRange } from '~/utils/weekUtils';
 
 
 // Get progress bar color based on percentage
@@ -33,6 +34,64 @@ export default function ClientsPage() {
   const [showCustomPicker, setShowCustomPicker] = useState(false);
   const [customStartMonth, setCustomStartMonth] = useState('');
   const [customEndMonth, setCustomEndMonth] = useState('');
+
+  // Generate available historical months (up to 1 year back)
+  const availableMonths = useMemo(() => {
+    const months = [];
+    const currentDate = new Date();
+    const currentYear = currentDate.getFullYear();
+    const currentMonth = currentDate.getMonth(); // 0-11 (November = 10)
+    
+    const monthNames = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+    
+    console.log('Current date:', currentDate, 'Month index:', currentMonth, 'Year:', currentYear);
+    
+    // Go back 12 months from current month
+    for (let i = 0; i < 12; i++) {
+      let monthIndex = currentMonth - i;
+      let year = currentYear;
+      
+      // Handle going back to previous year
+      if (monthIndex < 0) {
+        monthIndex = monthIndex + 12;
+        year = currentYear - 1;
+      }
+      
+      const monthName = monthNames[monthIndex];
+      
+      console.log(`Month ${i}: ${monthName} ${year} (monthIndex: ${monthIndex})`);
+      
+      months.push({
+        name: monthName,
+        value: `${monthName} ${year}`,
+        year: year,
+        displayName: `${monthName} ${year}`
+      });
+    }
+    
+    console.log('Generated months:', months);
+    
+    // Reverse to show earliest to latest (oldest first)
+    return months.reverse();
+  }, []);
+
+  // Calculate the adjusted date range for the selected filter
+  const dateRange: WeekRange = useMemo(() => {
+    const range = processFilterSelection(selectedFilter);
+    console.log('Filter processed:', {
+      selectedFilter,
+      originalStart: range.originalStart,
+      originalEnd: range.originalEnd,
+      adjustedStart: range.start,
+      adjustedEnd: range.end,
+      wasAdjusted: range.wasAdjusted,
+      weekCount: Math.ceil((range.end.getTime() - range.start.getTime()) / (7 * 24 * 60 * 60 * 1000))
+    });
+    return range;
+  }, [selectedFilter]);
 
   // Fetch clients data with their training packages
   const { data: clientsData, isLoading } = useQuery({
@@ -93,7 +152,7 @@ export default function ClientsPage() {
         </div>
 
         {/* Time Filter */}
-        <div className="mb-6 grid grid-cols-5 gap-1.5">
+        <div className="mb-4 grid grid-cols-5 gap-1.5">
           {['October', 'November', '2 Weeks', '4 Weeks'].map((filter) => (
             <button
               key={filter}
@@ -117,6 +176,13 @@ export default function ClientsPage() {
           >
             Custom ▼
           </button>
+        </div>
+
+        {/* Simple Date Range Display */}
+        <div className="mb-6 text-center">
+          <div className="text-sm text-gray-500 dark:text-gray-400">
+            {formatLongDate(dateRange.start)} to {formatLongDate(dateRange.end)}
+          </div>
         </div>
 
         {clientsWithPackages.length === 0 ? (
@@ -151,7 +217,6 @@ export default function ClientsPage() {
                 attendedSessions: 0, // TODO: Calculate real attendance
                 totalSessions: 0,    // TODO: Calculate based on time period
                 attendancePercentage: 0, // TODO: Calculate real percentage
-                filterLabel: selectedFilter
               };
               
               const progressColor = getProgressColor(stats.attendancePercentage);
@@ -206,9 +271,6 @@ export default function ClientsPage() {
                           }`}>
                             {stats.attendancePercentage}%
                           </div>
-                          <div className="text-xs text-gray-500 dark:text-gray-400">
-                            {stats.filterLabel}
-                          </div>
                         </div>
                         <svg className="w-5 h-5 text-gray-300 dark:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
@@ -231,19 +293,18 @@ export default function ClientsPage() {
             
             {/* Single Month Selection */}
             <div className="mb-6">
-              <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Select Month</p>
-              <div className="grid grid-cols-3 gap-2">
-                {['January', 'February', 'March', 'April', 'May', 'June', 
-                  'July', 'August', 'September', 'October', 'November', 'December'].map((month) => (
+              <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Select Month (Historical)</p>
+              <div className="grid grid-cols-2 gap-2 max-h-60 overflow-y-auto">
+                {availableMonths.map((month) => (
                   <button
-                    key={month}
+                    key={`${month.name}-${month.year}`}
                     onClick={() => {
-                      setSelectedFilter(month);
+                      setSelectedFilter(month.value);
                       setShowCustomPicker(false);
                     }}
                     className="py-2.5 px-3 rounded-lg bg-gray-50 dark:bg-gray-700 hover:bg-purple-50 dark:hover:bg-purple-900/20 hover:border-purple-200 dark:hover:border-purple-700 border border-transparent transition-all text-gray-700 dark:text-gray-300 font-medium text-sm"
                   >
-                    {month}
+                    {month.displayName}
                   </button>
                 ))}
               </div>
@@ -263,9 +324,10 @@ export default function ClientsPage() {
                     className="w-full px-3 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all text-sm"
                   >
                     <option value="">Select start month</option>
-                    {['January', 'February', 'March', 'April', 'May', 'June', 
-                      'July', 'August', 'September', 'October', 'November', 'December'].map((month) => (
-                      <option key={month} value={month}>{month}</option>
+                    {availableMonths.map((month) => (
+                      <option key={`start-${month.name}-${month.year}`} value={month.value}>
+                        {month.displayName}
+                      </option>
                     ))}
                   </select>
                 </div>
@@ -281,16 +343,19 @@ export default function ClientsPage() {
                     className="w-full px-3 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <option value="">Select end month</option>
-                    {['January', 'February', 'March', 'April', 'May', 'June', 
-                      'July', 'August', 'September', 'October', 'November', 'December']
-                      .filter((month, index) => {
+                    {availableMonths
+                      .filter((month) => {
                         if (!customStartMonth) return false;
-                        const startIndex = ['January', 'February', 'March', 'April', 'May', 'June', 
-                                          'July', 'August', 'September', 'October', 'November', 'December'].indexOf(customStartMonth);
-                        return index >= startIndex;
+                        // Find the start month in available months
+                        const startMonthIndex = availableMonths.findIndex(m => m.value === customStartMonth);
+                        const currentMonthIndex = availableMonths.findIndex(m => m.value === month.value);
+                        // Only show months that are >= start month (later in the array since we reversed it)
+                        return currentMonthIndex >= startMonthIndex;
                       })
                       .map((month) => (
-                        <option key={month} value={month}>{month}</option>
+                        <option key={`end-${month.name}-${month.year}`} value={month.value}>
+                          {month.displayName}
+                        </option>
                       ))}
                   </select>
                 </div>
@@ -303,7 +368,8 @@ export default function ClientsPage() {
                   </span>
                   <button
                     onClick={() => {
-                      setSelectedFilter(`${customStartMonth} - ${customEndMonth}`);
+                      const customFilter = customEndMonth === customStartMonth ? customStartMonth : `${customStartMonth} - ${customEndMonth}`;
+                      setSelectedFilter(customFilter);
                       setShowCustomPicker(false);
                       setCustomStartMonth('');
                       setCustomEndMonth('');
