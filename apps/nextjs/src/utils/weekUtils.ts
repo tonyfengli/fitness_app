@@ -70,12 +70,6 @@ export function processFilterSelection(filter: string, currentDate: Date = new D
   let originalStart: Date;
   let originalEnd: Date;
   
-  console.log('=== FILTER DEBUG ===');
-  console.log('Filter received:', JSON.stringify(filter));
-  console.log('Filter length:', filter.length);
-  console.log('Contains " - "?', filter.includes(' - '));
-  console.log('isMonthName?', isMonthName(filter));
-  console.log('Contains space?', filter.includes(' '));
   
   if (filter === '2 Weeks') {
     originalEnd = new Date(today);
@@ -89,9 +83,6 @@ export function processFilterSelection(filter: string, currentDate: Date = new D
     // Handle custom month ranges like "January 2025 - June 2025" - CHECK THIS FIRST!
     const [startMonthYear, endMonthYear] = filter.split(' - ');
     
-    console.log('Parsing date range:', filter);
-    console.log('Start part:', JSON.stringify(startMonthYear), 'End part:', JSON.stringify(endMonthYear));
-    
     // Parse start month and year
     const startParts = startMonthYear!.trim().split(' ');
     const startMonthName = startParts[0]!;
@@ -104,21 +95,14 @@ export function processFilterSelection(filter: string, currentDate: Date = new D
     const endYear = endParts[1] ? parseInt(endParts[1]) : today.getFullYear();
     const endMonthIndex = getMonthIndex(endMonthName);
     
-    console.log('Start parts:', JSON.stringify(startParts), 'parsed:', startMonthName, startYear, 'index:', startMonthIndex);
-    console.log('End parts:', JSON.stringify(endParts), 'parsed:', endMonthName, endYear, 'index:', endMonthIndex);
-    
     if (startMonthIndex !== -1 && endMonthIndex !== -1) {
       originalStart = new Date(startYear, startMonthIndex, 1);
       originalEnd = new Date(endYear, endMonthIndex + 1, 0); // Last day of end month
-      
-      console.log('Created dates - Start:', originalStart, 'End:', originalEnd);
     } else {
       // Fallback if invalid month names
       originalStart = new Date(today);
       originalStart.setDate(today.getDate() - 13);
       originalEnd = new Date(today);
-      
-      console.log('Fallback used - invalid month names, startIndex:', startMonthIndex, 'endIndex:', endMonthIndex);
     }
   } else if (isMonthName(filter) || filter.includes(' ')) {
     // Handle both "October" and "October 2023" formats
@@ -160,9 +144,6 @@ export function processFilterSelection(filter: string, currentDate: Date = new D
   const adjustedStart = getWeekStart(originalStart);
   const adjustedEnd = getWeekEnd(originalEnd);
   
-  console.log('Week adjustment:');
-  console.log('Adjusted start:', adjustedStart);
-  console.log('Adjusted end:', adjustedEnd);
   
   const wasAdjusted = 
     adjustedStart.getTime() !== originalStart.getTime() || 

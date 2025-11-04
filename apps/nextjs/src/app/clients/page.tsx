@@ -47,8 +47,6 @@ export default function ClientsPage() {
       'July', 'August', 'September', 'October', 'November', 'December'
     ];
     
-    console.log('Current date:', currentDate, 'Month index:', currentMonth, 'Year:', currentYear);
-    
     // Go back 12 months from current month
     for (let i = 0; i < 12; i++) {
       let monthIndex = currentMonth - i;
@@ -62,8 +60,6 @@ export default function ClientsPage() {
       
       const monthName = monthNames[monthIndex];
       
-      console.log(`Month ${i}: ${monthName} ${year} (monthIndex: ${monthIndex})`);
-      
       months.push({
         name: monthName,
         value: `${monthName} ${year}`,
@@ -72,8 +68,6 @@ export default function ClientsPage() {
       });
     }
     
-    console.log('Generated months:', months);
-    
     // Reverse to show earliest to latest (oldest first)
     return months.reverse();
   }, []);
@@ -81,22 +75,18 @@ export default function ClientsPage() {
   // Calculate the adjusted date range for the selected filter
   const dateRange: WeekRange = useMemo(() => {
     const range = processFilterSelection(selectedFilter);
-    console.log('Filter processed:', {
-      selectedFilter,
-      originalStart: range.originalStart,
-      originalEnd: range.originalEnd,
-      adjustedStart: range.start,
-      adjustedEnd: range.end,
-      wasAdjusted: range.wasAdjusted,
-      weekCount: Math.ceil((range.end.getTime() - range.start.getTime()) / (7 * 24 * 60 * 60 * 1000))
-    });
     return range;
   }, [selectedFilter]);
 
   // Fetch clients data with their training packages
-  const { data: clientsData, isLoading } = useQuery({
-    ...trpc.clients.getClientsWithPackages.queryOptions(),
+  const { data: clientsData, isLoading, error } = useQuery({
+    ...trpc.clients.getClientsWithPackages.queryOptions({
+      startDate: dateRange.start.toISOString(),
+      endDate: dateRange.end.toISOString(),
+      weekCount: Math.ceil((dateRange.end.getTime() - dateRange.start.getTime()) / (7 * 24 * 60 * 60 * 1000)),
+    }),
   });
+
 
   if (isLoading) {
     return (
@@ -114,8 +104,8 @@ export default function ClientsPage() {
     );
   }
 
-  // Only include clients with active packages
-  const clientsWithPackages = (clientsData || []).filter(client => client.currentPackage !== null);
+  // All clients returned already have packages and attendance data
+  const clientsWithPackages = clientsData || [];
   
   // Filter clients based on search query
   const filteredClients = clientsWithPackages.filter(client =>
@@ -210,13 +200,14 @@ export default function ClientsPage() {
             {filteredClients.map((client) => {
               const initials = getInitials(client.name);
               
-              // Use real package data (all clients here have packages)
+              // Use real package data and attendance (all clients here have packages and attendance)
               const packageData = client.currentPackage!; // Non-null assertion safe here
+              const attendanceData = client.attendance;
               const stats = {
                 commitment: packageData.sessionsPerWeek,
-                attendedSessions: 0, // TODO: Calculate real attendance
-                totalSessions: 0,    // TODO: Calculate based on time period
-                attendancePercentage: 0, // TODO: Calculate real percentage
+                attendedSessions: attendanceData.attendedSessions,
+                totalSessions: attendanceData.expectedSessions,
+                attendancePercentage: attendanceData.attendancePercentage,
               };
               
               const progressColor = getProgressColor(stats.attendancePercentage);
@@ -225,8 +216,7 @@ export default function ClientsPage() {
                 <button
                   key={client.id}
                   onClick={() => {
-                    // TODO: Navigate to individual client page
-                    console.log('Navigate to client:', client.id);
+                    router.push(`/clients/${client.id}`);
                   }}
                   className="w-full bg-white dark:bg-gray-800 rounded-2xl shadow-sm transition-all duration-200 cursor-pointer hover:shadow-lg active:scale-[0.98] transform overflow-hidden group"
                 >
