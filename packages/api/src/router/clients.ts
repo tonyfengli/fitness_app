@@ -4,6 +4,47 @@ import { z } from "zod";
 import { and, eq, gte, lte, ne, count, sql } from "@acme/db";
 import { user, UserTrainingPackage, TrainingPackage, UserTrainingSession, TrainingSession } from "@acme/db/schema";
 
+// Import week utility functions for package date alignment
+function getWeekStart(date: Date): Date {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1); // adjust when day is Sunday
+  d.setDate(diff);
+  return d;
+}
+
+function getWeekEnd(date: Date): Date {
+  const weekStart = getWeekStart(date);
+  const weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekStart.getDate() + 6);
+  return weekEnd;
+}
+
+function getCompleteWeeksInRange(startDate: Date, endDate: Date): Array<{start: Date, end: Date}> {
+  const weeks: Array<{start: Date, end: Date}> = [];
+  const adjustedStart = getWeekStart(startDate);
+  const adjustedEnd = getWeekEnd(endDate);
+  
+  let currentWeekStart = new Date(adjustedStart);
+  
+  while (currentWeekStart <= adjustedEnd) {
+    const weekEnd = getWeekEnd(currentWeekStart);
+    
+    // Only include complete weeks that fall within our range
+    if (weekEnd <= adjustedEnd) {
+      weeks.push({
+        start: new Date(currentWeekStart),
+        end: weekEnd
+      });
+    }
+    
+    // Move to next week
+    currentWeekStart.setDate(currentWeekStart.getDate() + 7);
+  }
+  
+  return weeks;
+}
+
 import type { SessionUser } from "../types/auth";
 import { protectedProcedure } from "../trpc";
 
@@ -18,6 +59,9 @@ export const clientsRouter = {
     )
     .query(async ({ ctx, input }) => {
       const { clientId, startDate, endDate } = input;
+
+      // Debug logging (uncomment if needed)
+      // console.log('[Attendance History]', clientId, startDate, 'to', endDate);
 
       // Only trainers should be able to see client attendance history
       const currentUser = ctx.session?.user as SessionUser;
@@ -53,6 +97,32 @@ export const clientsRouter = {
         )
         .orderBy(TrainingSession.scheduledAt);
 
+      // Debug logging for specific client
+      if (clientId === '4wnrsk1032vmhjxn5wl') {
+        console.log('🔍 [Client 4wnrsk1032vmhjxn5wl] Attendance History Query:', {
+          clientId,
+          dateRange: { 
+            startDate, 
+            endDate,
+            startFormatted: new Date(startDate).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }),
+            endFormatted: new Date(endDate).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+          },
+          foundSessions: attendanceHistory.length
+        });
+        attendanceHistory.forEach((session, index) => {
+          console.log(`📅 [Session ${index + 1}]`, {
+            date: session.scheduledAt?.toISOString(),
+            dateFormatted: session.scheduledAt?.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
+            name: session.sessionName,
+            status: session.status,
+            sessionStatus: session.sessionStatus,
+            withinRange: session.scheduledAt && 
+              session.scheduledAt >= new Date(startDate) && 
+              session.scheduledAt <= new Date(endDate)
+          });
+        });
+      }
+
       return attendanceHistory;
     }),
 
@@ -65,7 +135,7 @@ export const clientsRouter = {
       })
     )
     .query(async ({ ctx, input }) => {
-      const { startDate, endDate, weekCount } = input;
+      const { startDate, endDate } = input;
     // Only trainers should be able to see all clients
     const currentUser = ctx.session?.user as SessionUser;
     if (currentUser?.role !== "trainer") {
@@ -127,9 +197,47 @@ export const clientsRouter = {
       client.status !== null
     );
 
+    // Debug logging (uncomment if needed)
+    // console.log('[Clients With Packages]', startDate, 'to', endDate, 'weeks:', weekCount);
+
     const clientsWithAttendance = await Promise.all(
       clientsWithPackagesOnly.map(async (client) => {
-        // Count sessions attended in date range (excluding 'no_show')
+        // Calculate effective date range considering package start/end dates aligned to week boundaries
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+        const packageStart = new Date(client.startDate!);
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+        const packageEnd = new Date(client.endDate!);
+        
+        // For effective calculations, we need to ensure we only count complete weeks
+        // where the client actually had an active package
+        
+        // Calculate effective range (intersection of filter range and actual package range)
+        // Don't week-align the package dates yet - use actual package dates for intersection
+        const effectiveStartDate = new Date(Math.max(
+          new Date(startDate).getTime(), 
+          packageStart.getTime()
+        ));
+        const effectiveEndDate = new Date(Math.min(
+          new Date(endDate).getTime(), 
+          packageEnd.getTime()
+        ));
+        
+        // Now align the effective range to week boundaries for complete week counting
+        const weekAlignedEffectiveStart = getWeekStart(effectiveStartDate);
+        const weekAlignedEffectiveEnd = getWeekEnd(effectiveEndDate);
+        
+        // Only count weeks where the entire week falls within the package period
+        // This ensures we don't count weeks before the package started or after it ended
+        
+        // Generate all potential complete weeks in the effective range
+        const potentialWeeks = getCompleteWeeksInRange(weekAlignedEffectiveStart, weekAlignedEffectiveEnd);
+        
+        // Filter to only count weeks where the package was active for the ENTIRE week
+        const activeWeeks = potentialWeeks.filter(week => {
+          return week.start >= packageStart && week.end <= packageEnd;
+        });
+        
+        // Count sessions attended in effective date range (excluding 'no_show')
         const attendanceResult = await ctx.db
           .select({ count: count() })
           .from(UserTrainingSession)
@@ -138,17 +246,75 @@ export const clientsRouter = {
             and(
               eq(UserTrainingSession.userId, client.id),
               ne(UserTrainingSession.status, 'no_show'),
-              gte(TrainingSession.scheduledAt, new Date(startDate)),
-              lte(TrainingSession.scheduledAt, new Date(endDate))
+              gte(TrainingSession.scheduledAt, effectiveStartDate),
+              lte(TrainingSession.scheduledAt, effectiveEndDate)
             )
           );
 
         const attendedSessions = attendanceResult[0]?.count ?? 0;
+        
+        // Calculate expected sessions based on complete weeks where package was fully active
         // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-        const expectedSessions = client.sessionsPerWeek! * weekCount;
+        const expectedSessions = client.sessionsPerWeek! * activeWeeks.length;
         const attendancePercentage = expectedSessions > 0 
           ? Math.round((attendedSessions / expectedSessions) * 100)
           : 0;
+
+        // Debug specific client
+        if (client.id === '4wnrsk1032vmhjxn5wl') {
+          console.log('🔍 [Client 4wnrsk1032vmhjxn5wl] Backend calculation with package dates:', {
+            clientName: client.name,
+            clientId: client.id,
+            packageDates: {
+              original: { 
+                start: packageStart.toISOString(), 
+                end: packageEnd.toISOString(),
+                startFormatted: packageStart.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }),
+                endFormatted: packageEnd.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+              },
+              weekAligned: { 
+                start: weekAlignedEffectiveStart.toISOString(), 
+                end: weekAlignedEffectiveEnd.toISOString(),
+                startFormatted: weekAlignedEffectiveStart.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }),
+                endFormatted: weekAlignedEffectiveEnd.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+              }
+            },
+            filterDates: { 
+              start: startDate, 
+              end: endDate,
+              startFormatted: new Date(startDate).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }),
+              endFormatted: new Date(endDate).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+            },
+            effectiveDates: { 
+              start: effectiveStartDate.toISOString(), 
+              end: effectiveEndDate.toISOString(),
+              startFormatted: effectiveStartDate.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }),
+              endFormatted: effectiveEndDate.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+            },
+            calculations: {
+              attendedSessions,
+              activeWeeks: activeWeeks.length,
+              potentialWeeks: potentialWeeks.length,
+              expectedSessions,
+              attendancePercentage,
+              sessionsPerWeek: client.sessionsPerWeek,
+              calculation: `${client.sessionsPerWeek} sessions/week × ${activeWeeks.length} active weeks = ${expectedSessions} expected sessions`,
+              attendanceCalculation: `${attendedSessions} attended / ${expectedSessions} expected = ${attendancePercentage}%`
+            },
+            activeWeeksDetails: activeWeeks.map((week, index) => ({
+              weekNumber: index + 1,
+              start: week.start.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
+              end: week.end.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
+              packageActiveForFullWeek: week.start >= packageStart && week.end <= packageEnd
+            })),
+            potentialWeeksDetails: potentialWeeks.map((week, index) => ({
+              weekNumber: index + 1,
+              start: week.start.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
+              end: week.end.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
+              packageActiveForFullWeek: week.start >= packageStart && week.end <= packageEnd
+            }))
+          });
+        }
 
         return {
           id: client.id,

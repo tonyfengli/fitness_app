@@ -86,12 +86,20 @@ export default function ClientDetailPage({ params }: ClientDetailPageProps) {
     return range;
   }, [selectedFilter]);
 
+  // Calculate week count with proper logic for explicit week filters
+  const weekCount = React.useMemo(() => {
+    if (selectedFilter === '2 Weeks') return 2;
+    if (selectedFilter === '4 Weeks') return 4;
+    // For other filters, use rounded calculation since all ranges are adjusted to complete weeks
+    return Math.round((dateRange.end.getTime() - dateRange.start.getTime()) / (7 * 24 * 60 * 60 * 1000));
+  }, [dateRange, selectedFilter]);
+
   // Fetch client data with attendance
   const { data: clientData, isLoading: clientLoading } = useQuery({
     ...trpc.clients.getClientsWithPackages.queryOptions({
       startDate: dateRange.start.toISOString(),
       endDate: dateRange.end.toISOString(),
-      weekCount: Math.ceil((dateRange.end.getTime() - dateRange.start.getTime()) / (7 * 24 * 60 * 60 * 1000)),
+      weekCount: weekCount,
     }),
   });
 
@@ -106,6 +114,81 @@ export default function ClientDetailPage({ params }: ClientDetailPageProps) {
       endDate: dateRange.end.toISOString(),
     }),
   });
+
+  // Debug logging for specific client
+  React.useEffect(() => {
+    if (clientId === '4wnrsk1032vmhjxn5wl') {
+      console.log('🔍 [Client 4wnrsk1032vmhjxn5wl] Calendar Page Debug Info:');
+      console.log('📅 [Filter & Date Range]', {
+        selectedFilter,
+        filterDateRange: {
+          start: dateRange.start.toISOString(),
+          end: dateRange.end.toISOString(),
+          startFormatted: dateRange.start.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }),
+          endFormatted: dateRange.end.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }),
+          wasAdjusted: dateRange.wasAdjusted
+        },
+        weekCount
+      });
+      
+      if (client) {
+        console.log('📦 [Package Data]', {
+          name: client.name,
+          id: client.id,
+          package: {
+            name: client.currentPackage.name,
+            sessionsPerWeek: client.currentPackage.sessionsPerWeek,
+            startDate: client.currentPackage.startDate,
+            endDate: client.currentPackage.endDate,
+            status: client.currentPackage.status,
+            startDateFormatted: new Date(client.currentPackage.startDate).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }),
+            endDateFormatted: new Date(client.currentPackage.endDate).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+          }
+        });
+        
+        console.log('📊 [Commitment Calculation]', {
+          sessionsPerWeek: client.currentPackage.sessionsPerWeek,
+          weekCount: weekCount,
+          expectedSessions: client.attendance.expectedSessions,
+          attendedSessions: client.attendance.attendedSessions,
+          attendancePercentage: client.attendance.attendancePercentage,
+          calculation: `${client.currentPackage.sessionsPerWeek} sessions/week × ${weekCount} weeks = ${client.attendance.expectedSessions} expected sessions`
+        });
+      }
+      
+      if (attendanceHistory) {
+        console.log('📝 [Attendance History]', {
+          totalSessions: attendanceHistory.length,
+          sessionsInDateRange: attendanceHistory.filter(session => 
+            session.scheduledAt && 
+            session.scheduledAt >= dateRange.start && 
+            session.scheduledAt <= dateRange.end
+          ).length
+        });
+        
+        attendanceHistory.forEach((session, index) => {
+          const sessionDate = new Date(session.scheduledAt);
+          const packageStartDate = client ? new Date(client.currentPackage.startDate) : null;
+          const packageEndDate = client ? new Date(client.currentPackage.endDate) : null;
+          
+          console.log(`📅 [Session ${index + 1}]`, {
+            date: session.scheduledAt?.toISOString(),
+            dateFormatted: sessionDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
+            name: session.sessionName,
+            status: session.status,
+            withinFilterRange: session.scheduledAt && 
+              session.scheduledAt >= dateRange.start && 
+              session.scheduledAt <= dateRange.end,
+            withinPackageRange: packageStartDate && packageEndDate &&
+              sessionDate >= packageStartDate && 
+              sessionDate <= packageEndDate,
+            afterPackageStart: packageStartDate && sessionDate >= packageStartDate,
+            beforePackageEnd: packageEndDate && sessionDate <= packageEndDate
+          });
+        });
+      }
+    }
+  }, [client, attendanceHistory, selectedFilter, dateRange, weekCount, clientId]);
 
   if (clientLoading || historyLoading) {
     return (
@@ -252,12 +335,20 @@ export default function ClientDetailPage({ params }: ClientDetailPageProps) {
                     const dateKey = date.toDateString();
                     const sessionsOnDate = sessionsByDate.get(dateKey) || [];
                     
+                    // Check if this date is the package start or end date
+                    const packageStartDate = new Date(packageData.startDate);
+                    const packageEndDate = new Date(packageData.endDate);
+                    const isPackageStartDate = date.toDateString() === packageStartDate.toDateString();
+                    const isPackageEndDate = date.toDateString() === packageEndDate.toDateString();
+                    
                     calendarDays.push({
                       date,
                       dayNumber: isCurrentMonth ? dayNumber : '',
                       isCurrentMonth,
                       isInRange,
                       sessions: sessionsOnDate,
+                      isPackageStartDate,
+                      isPackageEndDate,
                     });
                   }
 
@@ -281,20 +372,33 @@ export default function ClientDetailPage({ params }: ClientDetailPageProps) {
                           const hasNoShow = day.sessions.some(s => s.status === 'no_show');
                           const hasMultipleSessions = day.sessions.length > 1;
                           
+                          // Build tooltip text
+                          let tooltipText = '';
+                          if (day.sessions.length > 0) {
+                            tooltipText = day.sessions.map(s => `${s.sessionName} - ${s.status}`).join('\n');
+                          }
+                          if (day.isPackageStartDate) {
+                            tooltipText = tooltipText ? `${tooltipText}\n📦 Package Start` : '📦 Package Start';
+                          }
+                          if (day.isPackageEndDate) {
+                            tooltipText = tooltipText ? `${tooltipText}\n📦 Package End` : '📦 Package End';
+                          }
+                          
                           return (
                             <div
                               key={index}
-                              className={`relative p-2 min-h-[3rem] border border-gray-100 dark:border-gray-700 ${
+                              className={`relative p-2 min-h-[3rem] border ${
+                                day.isPackageStartDate || day.isPackageEndDate 
+                                  ? 'border-purple-300 dark:border-purple-600' 
+                                  : 'border-gray-100 dark:border-gray-700'
+                              } ${
                                 day.isCurrentMonth && day.isInRange
                                   ? 'bg-white dark:bg-gray-800'
                                   : 'bg-gray-50 dark:bg-gray-900'
                               } ${
                                 day.sessions.length > 0 ? 'cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700' : ''
                               }`}
-                              title={day.sessions.length > 0 ? 
-                                day.sessions.map(s => `${s.sessionName} - ${s.status}`).join('\n') : 
-                                ''
-                              }
+                              title={tooltipText}
                             >
                               {/* Day number */}
                               <div className={`text-sm font-medium ${
@@ -304,6 +408,18 @@ export default function ClientDetailPage({ params }: ClientDetailPageProps) {
                               }`}>
                                 {day.dayNumber}
                               </div>
+                              
+                              {/* Package start/end indicators */}
+                              {day.isCurrentMonth && (day.isPackageStartDate || day.isPackageEndDate) && (
+                                <div className="absolute top-1 right-1">
+                                  {day.isPackageStartDate && (
+                                    <div className="w-2 h-2 bg-purple-500 rounded-full" title="Package Start"></div>
+                                  )}
+                                  {day.isPackageEndDate && (
+                                    <div className="w-2 h-2 bg-purple-700 rounded-full" title="Package End"></div>
+                                  )}
+                                </div>
+                              )}
                               
                               {/* Session indicators */}
                               {day.isCurrentMonth && day.sessions.length > 0 && (
@@ -338,7 +454,7 @@ export default function ClientDetailPage({ params }: ClientDetailPageProps) {
               {/* Calendar Legend */}
               <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
                 <h5 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Legend</h5>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
                   <div className="flex items-center gap-2">
                     <div className="w-3 h-3 rounded-full bg-emerald-500"></div>
                     <span className="text-gray-600 dark:text-gray-400">Completed</span>
@@ -354,6 +470,14 @@ export default function ClientDetailPage({ params }: ClientDetailPageProps) {
                   <div className="flex items-center gap-2">
                     <div className="w-5 h-5 rounded-full bg-emerald-500 text-white text-xs font-bold flex items-center justify-center">2</div>
                     <span className="text-gray-600 dark:text-gray-400">Multiple Sessions</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full bg-purple-500"></div>
+                    <span className="text-gray-600 dark:text-gray-400">Package Start</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full bg-purple-700"></div>
+                    <span className="text-gray-600 dark:text-gray-400">Package End</span>
                   </div>
                 </div>
               </div>

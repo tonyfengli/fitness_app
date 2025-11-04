@@ -14,16 +14,19 @@ export interface WeekRange {
 
 /**
  * Get the Monday of the week containing the given date
+ * Preserves the time from the original date
  */
 export function getWeekStart(date: Date): Date {
   const d = new Date(date);
   const day = d.getDay();
   const diff = d.getDate() - day + (day === 0 ? -6 : 1); // adjust when day is Sunday
-  return new Date(d.setDate(diff));
+  d.setDate(diff);
+  return d;
 }
 
 /**
  * Get the Sunday of the week containing the given date
+ * Preserves the time from the original date
  */
 export function getWeekEnd(date: Date): Date {
   const weekStart = getWeekStart(date);
@@ -71,14 +74,30 @@ export function processFilterSelection(filter: string, currentDate: Date = new D
   let originalEnd: Date;
   
   
-  if (filter === '2 Weeks') {
-    originalEnd = new Date(today);
-    originalStart = new Date(today);
-    originalStart.setDate(today.getDate() - 13); // 2 weeks ago = 14 days back
-  } else if (filter === '4 Weeks') {
-    originalEnd = new Date(today);
-    originalStart = new Date(today);
-    originalStart.setDate(today.getDate() - 27); // 4 weeks ago = 28 days back
+  if (filter === 'Last 2 Weeks' || filter === '2 Weeks') {
+    // For "last 2 completed weeks", we need to exclude the current week
+    // End should be last Sunday (end of previous week) at end of day
+    const currentWeekStart = getWeekStart(today);
+    originalEnd = new Date(currentWeekStart);
+    originalEnd.setDate(currentWeekStart.getDate() - 1); // Go to last Sunday
+    originalEnd.setHours(23, 59, 59, 999); // Set to end of day
+    
+    // Start should be 2 weeks before that at start of day
+    originalStart = new Date(originalEnd);
+    originalStart.setDate(originalEnd.getDate() - 13); // 2 weeks ago = 14 days back
+    originalStart.setHours(0, 0, 0, 0); // Set to start of day
+  } else if (filter === 'Last 4 Weeks' || filter === '4 Weeks') {
+    // For "last 4 completed weeks", we need to exclude the current week
+    // End should be last Sunday (end of previous week) at end of day
+    const currentWeekStart = getWeekStart(today);
+    originalEnd = new Date(currentWeekStart);
+    originalEnd.setDate(currentWeekStart.getDate() - 1); // Go to last Sunday
+    originalEnd.setHours(23, 59, 59, 999); // Set to end of day
+    
+    // Start should be 4 weeks before that at start of day
+    originalStart = new Date(originalEnd);
+    originalStart.setDate(originalEnd.getDate() - 27); // 4 weeks ago = 28 days back
+    originalStart.setHours(0, 0, 0, 0); // Set to start of day
   } else if (filter.includes(' - ')) {
     // Handle custom month ranges like "January 2025 - June 2025" - CHECK THIS FIRST!
     const [startMonthYear, endMonthYear] = filter.split(' - ');
@@ -97,12 +116,16 @@ export function processFilterSelection(filter: string, currentDate: Date = new D
     
     if (startMonthIndex !== -1 && endMonthIndex !== -1) {
       originalStart = new Date(startYear, startMonthIndex, 1);
+      originalStart.setHours(0, 0, 0, 0); // Start of first day
       originalEnd = new Date(endYear, endMonthIndex + 1, 0); // Last day of end month
+      originalEnd.setHours(23, 59, 59, 999); // End of last day
     } else {
       // Fallback if invalid month names
       originalStart = new Date(today);
       originalStart.setDate(today.getDate() - 13);
+      originalStart.setHours(0, 0, 0, 0);
       originalEnd = new Date(today);
+      originalEnd.setHours(23, 59, 59, 999);
     }
   } else if (isMonthName(filter) || filter.includes(' ')) {
     // Handle both "October" and "October 2023" formats
@@ -118,12 +141,16 @@ export function processFilterSelection(filter: string, currentDate: Date = new D
     const monthIndex = getMonthIndex(monthName);
     if (monthIndex !== -1) {
       originalStart = new Date(year, monthIndex, 1);
+      originalStart.setHours(0, 0, 0, 0); // Start of first day
       originalEnd = new Date(year, monthIndex + 1, 0); // Last day of month
+      originalEnd.setHours(23, 59, 59, 999); // End of last day
     } else {
       // Fallback if invalid month
       originalStart = new Date(today);
       originalStart.setDate(today.getDate() - 13);
+      originalStart.setHours(0, 0, 0, 0);
       originalEnd = new Date(today);
+      originalEnd.setHours(23, 59, 59, 999);
     }
   } else {
     // Handle single custom month or fallback
@@ -131,19 +158,30 @@ export function processFilterSelection(filter: string, currentDate: Date = new D
     if (monthIndex !== -1) {
       const year = today.getFullYear();
       originalStart = new Date(year, monthIndex, 1);
+      originalStart.setHours(0, 0, 0, 0); // Start of first day
       originalEnd = new Date(year, monthIndex + 1, 0);
+      originalEnd.setHours(23, 59, 59, 999); // End of last day
     } else {
       // Fallback to 2 weeks
       originalStart = new Date(today);
+      originalStart.setDate(today.getDate() - 13);
+      originalStart.setHours(0, 0, 0, 0);
       originalEnd = new Date(today);
-      originalEnd.setDate(today.getDate() + 13);
+      originalEnd.setHours(23, 59, 59, 999);
     }
   }
   
-  // Auto-adjust to complete weeks
+  // Auto-adjust to complete weeks (this is the core design principle)
+  // ALL filters should start on Monday and end on Sunday for consistent week-based calculations
   const adjustedStart = getWeekStart(originalStart);
   const adjustedEnd = getWeekEnd(originalEnd);
   
+  // Ensure proper start/end of day timing for week boundaries
+  adjustedStart.setHours(0, 0, 0, 0);
+  adjustedEnd.setHours(23, 59, 59, 999);
+  
+  // Minimal logging for debugging (uncomment if needed)
+  // console.log(`[${filter}] ${adjustedStart.toISOString()} to ${adjustedEnd.toISOString()}`);
   
   const wasAdjusted = 
     adjustedStart.getTime() !== originalStart.getTime() || 
@@ -220,4 +258,50 @@ export function formatLongDate(date: Date): string {
 export function getWeekCount(startDate: Date, endDate: Date): number {
   const weeks = getCompleteWeeksInRange(startDate, endDate);
   return weeks.length;
+}
+
+/**
+ * Get the most recent complete month
+ * A complete month is one where all full weeks of that month are in the past
+ */
+export function getMostRecentCompleteMonth(currentDate: Date = new Date()): string {
+  const today = new Date(currentDate);
+  const currentYear = today.getFullYear();
+  const currentMonth = today.getMonth(); // 0-11
+  
+  const monthNames = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
+  
+  // Start from previous month and work backwards
+  let testMonth = currentMonth - 1;
+  let testYear = currentYear;
+  
+  // Handle January (go to December of previous year)
+  if (testMonth < 0) {
+    testMonth = 11;
+    testYear = currentYear - 1;
+  }
+  
+  // Check if this month has all complete weeks in the past
+  const firstDayOfMonth = new Date(testYear, testMonth, 1);
+  const lastDayOfMonth = new Date(testYear, testMonth + 1, 0);
+  
+  // Get the last complete week of the month
+  const lastWeekEnd = getWeekEnd(lastDayOfMonth);
+  
+  // If the last week of the month ends before today, this month is complete
+  if (lastWeekEnd < today) {
+    return `${monthNames[testMonth]} ${testYear}`;
+  }
+  
+  // If current month isn't complete, go to previous month
+  testMonth = testMonth - 1;
+  if (testMonth < 0) {
+    testMonth = 11;
+    testYear = testYear - 1;
+  }
+  
+  return `${monthNames[testMonth]} ${testYear}`;
 }

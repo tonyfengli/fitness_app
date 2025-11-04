@@ -6,7 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '~/trpc/react';
 import { CircuitHeader } from '~/components/CircuitHeader';
 import { Loader2Icon } from '@acme/ui-shared';
-import { processFilterSelection, formatLongDate, type WeekRange } from '~/utils/weekUtils';
+import { processFilterSelection, formatLongDate, getMostRecentCompleteMonth, type WeekRange } from '~/utils/weekUtils';
 
 
 // Get progress bar color based on percentage
@@ -30,7 +30,10 @@ export default function ClientsPage() {
   const router = useRouter();
   const trpc = api();
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedFilter, setSelectedFilter] = useState('2 Weeks');
+  
+  // Get the most recent complete month as an additional filter option
+  const mostRecentCompleteMonth = useMemo(() => getMostRecentCompleteMonth(), []);
+  const [selectedFilter, setSelectedFilter] = useState('Last 2 Weeks');
   const [showCustomPicker, setShowCustomPicker] = useState(false);
   const [customStartMonth, setCustomStartMonth] = useState('');
   const [customEndMonth, setCustomEndMonth] = useState('');
@@ -78,12 +81,25 @@ export default function ClientsPage() {
     return range;
   }, [selectedFilter]);
 
+  // Calculate week count
+  const weekCount = useMemo(() => {
+    // For explicit week filters, use the expected count instead of calculation
+    if (selectedFilter === 'Last 2 Weeks') return 2;
+    if (selectedFilter === 'Last 4 Weeks') return 4;
+    
+    // For all other filters (months, custom ranges), use the calculated week count
+    // Since all ranges are adjusted to complete weeks, this should be accurate
+    const durationMs = dateRange.end.getTime() - dateRange.start.getTime();
+    const durationDays = durationMs / (24 * 60 * 60 * 1000);
+    return Math.round(durationDays / 7);
+  }, [dateRange, selectedFilter]);
+
   // Fetch clients data with their training packages
   const { data: clientsData, isLoading, error } = useQuery({
     ...trpc.clients.getClientsWithPackages.queryOptions({
       startDate: dateRange.start.toISOString(),
       endDate: dateRange.end.toISOString(),
-      weekCount: Math.ceil((dateRange.end.getTime() - dateRange.start.getTime()) / (7 * 24 * 60 * 60 * 1000)),
+      weekCount: weekCount,
     }),
   });
 
@@ -142,8 +158,8 @@ export default function ClientsPage() {
         </div>
 
         {/* Time Filter */}
-        <div className="mb-4 grid grid-cols-5 gap-1.5">
-          {['October', 'November', '2 Weeks', '4 Weeks'].map((filter) => (
+        <div className="mb-4 grid grid-cols-4 gap-1.5">
+          {['Last 2 Weeks', 'Last 4 Weeks', mostRecentCompleteMonth].map((filter) => (
             <button
               key={filter}
               onClick={() => setSelectedFilter(filter)}
@@ -159,7 +175,7 @@ export default function ClientsPage() {
           <button
             onClick={() => setShowCustomPicker(true)}
             className={`px-2 py-2 rounded-lg font-medium text-xs transition-all duration-200 ${
-              !['October', 'November', '2 Weeks', '4 Weeks'].includes(selectedFilter)
+              !['Last 2 Weeks', 'Last 4 Weeks', mostRecentCompleteMonth].includes(selectedFilter)
                 ? 'bg-purple-600 text-white'
                 : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
             }`}
