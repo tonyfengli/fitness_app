@@ -51,6 +51,9 @@ dist/
 # turbo
 .turbo
 
+# node compile cache
+node-compile-cache/
+
 # test output
 test-failures.json
 
