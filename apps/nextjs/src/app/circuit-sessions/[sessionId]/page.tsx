@@ -626,10 +626,10 @@ export default function SessionDetailPage({ params }: SessionDetailPageProps) {
               const isSelected = selectedClients.has(client.id);
 
               return (
-                <button
+                <div
                   key={client.id}
                   onClick={() => handleClientToggle(client.id)}
-                  className={`w-full p-4 h-[75px] rounded-lg border-2 transition-all text-left ${
+                  className={`w-full p-4 h-[75px] rounded-lg border-2 transition-all text-left cursor-pointer ${
                     isSelected
                       ? "border-blue-500 dark:border-blue-400 bg-blue-50 dark:bg-blue-950/20"
                       : "border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-600"
@@ -702,7 +702,7 @@ export default function SessionDetailPage({ params }: SessionDetailPageProps) {
                       </div>
                     </div>
                   </div>
-                </button>
+                </div>
               );
             })}
           </div>

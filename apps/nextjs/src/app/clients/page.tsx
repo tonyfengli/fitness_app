@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '~/trpc/react';
 import { CircuitHeader } from '~/components/CircuitHeader';
@@ -28,15 +28,25 @@ function getInitials(name: string) {
 
 export default function ClientsPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const trpc = api();
   const [searchQuery, setSearchQuery] = useState('');
   
   // Get the most recent complete month as an additional filter option
   const mostRecentCompleteMonth = useMemo(() => getMostRecentCompleteMonth(), []);
-  const [selectedFilter, setSelectedFilter] = useState('Last 2 Weeks');
+  
+  // Get filter from URL params, fallback to 'Last 2 Weeks'
+  const filterFromUrl = searchParams.get('filter');
+  const [selectedFilter, setSelectedFilter] = useState(filterFromUrl || 'Last 2 Weeks');
   const [showCustomPicker, setShowCustomPicker] = useState(false);
   const [customStartMonth, setCustomStartMonth] = useState('');
   const [customEndMonth, setCustomEndMonth] = useState('');
+  
+  // State for the modal - separate from applied state
+  const [modalFilter, setModalFilter] = useState('');
+  const [modalStartMonth, setModalStartMonth] = useState('');
+  const [modalEndMonth, setModalEndMonth] = useState('');
+  const [filterType, setFilterType] = useState<'single' | 'range'>('single');
 
   // Generate available historical months (up to 1 year back)
   const availableMonths = useMemo(() => {
@@ -50,8 +60,9 @@ export default function ClientsPage() {
       'July', 'August', 'September', 'October', 'November', 'December'
     ];
     
-    // Go back 12 months from current month
-    for (let i = 0; i < 12; i++) {
+    // Start from previous month (skip current month since it's not fully historical)
+    // Go back 12 months from previous month
+    for (let i = 1; i <= 12; i++) {
       let monthIndex = currentMonth - i;
       let year = currentYear;
       
@@ -123,11 +134,13 @@ export default function ClientsPage() {
   // All clients returned already have packages and attendance data
   const clientsWithPackages = clientsData || [];
   
-  // Filter clients based on search query
-  const filteredClients = clientsWithPackages.filter(client =>
-    client.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    client.email.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // Filter clients based on search query and sort by attendance percentage (lowest first)
+  const filteredClients = clientsWithPackages
+    .filter(client =>
+      client.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      client.email.toLowerCase().includes(searchQuery.toLowerCase())
+    )
+    .sort((a, b) => a.attendance.attendancePercentage - b.attendance.attendancePercentage);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-purple-50 to-blue-50">
@@ -232,7 +245,7 @@ export default function ClientsPage() {
                 <button
                   key={client.id}
                   onClick={() => {
-                    router.push(`/clients/${client.id}`);
+                    router.push(`/clients/${client.id}?filter=${encodeURIComponent(selectedFilter)}`);
                   }}
                   className="w-full bg-white dark:bg-gray-800 rounded-2xl shadow-sm transition-all duration-200 cursor-pointer hover:shadow-lg active:scale-[0.98] transform overflow-hidden group"
                 >
@@ -294,111 +307,184 @@ export default function ClientsPage() {
       {/* Custom Date Picker Modal */}
       {showCustomPicker && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-4">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-md shadow-xl">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-6">Select Time Period</h3>
+          <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-lg shadow-xl">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-6">Custom Time Period</h3>
             
-            {/* Single Month Selection */}
+            {/* Filter Type Selection */}
             <div className="mb-6">
-              <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Select Month (Historical)</p>
-              <div className="grid grid-cols-2 gap-2 max-h-60 overflow-y-auto">
-                {availableMonths.map((month) => (
-                  <button
-                    key={`${month.name}-${month.year}`}
-                    onClick={() => {
-                      setSelectedFilter(month.value);
-                      setShowCustomPicker(false);
-                    }}
-                    className="py-2.5 px-3 rounded-lg bg-gray-50 dark:bg-gray-700 hover:bg-purple-50 dark:hover:bg-purple-900/20 hover:border-purple-200 dark:hover:border-purple-700 border border-transparent transition-all text-gray-700 dark:text-gray-300 font-medium text-sm"
-                  >
-                    {month.displayName}
-                  </button>
-                ))}
+              <div className="flex gap-2 p-1 bg-gray-100 dark:bg-gray-700 rounded-lg">
+                <button
+                  onClick={() => {
+                    setFilterType('single');
+                    setModalStartMonth('');
+                    setModalEndMonth('');
+                    setModalFilter('');
+                  }}
+                  className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-all ${
+                    filterType === 'single'
+                      ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm'
+                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                  }`}
+                >
+                  Single Month
+                </button>
+                <button
+                  onClick={() => {
+                    setFilterType('range');
+                    setModalFilter('');
+                  }}
+                  className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-all ${
+                    filterType === 'range'
+                      ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm'
+                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                  }`}
+                >
+                  Date Range
+                </button>
               </div>
             </div>
 
-            <div className="border-t border-gray-200 dark:border-gray-700 pt-6 mb-4">
-              <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-4">Select Date Range</p>
-              
-              <div className="grid grid-cols-2 gap-4 mb-6">
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">
-                    From
-                  </label>
-                  <select
-                    value={customStartMonth}
-                    onChange={(e) => setCustomStartMonth(e.target.value)}
-                    className="w-full px-3 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all text-sm"
-                  >
-                    <option value="">Select start month</option>
-                    {availableMonths.map((month) => (
-                      <option key={`start-${month.name}-${month.year}`} value={month.value}>
-                        {month.displayName}
-                      </option>
-                    ))}
-                  </select>
+            {/* Single Month Selection */}
+            {filterType === 'single' && (
+              <div className="mb-6">
+                <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                  Select a historical month to analyze
+                </p>
+                <div className="grid grid-cols-2 gap-2 max-h-60 overflow-y-auto">
+                  {availableMonths.map((month) => (
+                    <button
+                      key={`${month.name}-${month.year}`}
+                      onClick={() => setModalFilter(month.value)}
+                      className={`py-2.5 px-3 rounded-lg border transition-all text-sm font-medium ${
+                        modalFilter === month.value
+                          ? 'bg-purple-600 text-white border-purple-600'
+                          : 'bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-transparent hover:bg-purple-50 dark:hover:bg-purple-900/20 hover:border-purple-200 dark:hover:border-purple-700'
+                      }`}
+                    >
+                      {month.displayName}
+                    </button>
+                  ))}
                 </div>
+              </div>
+            )}
+
+            {/* Date Range Selection */}
+            {filterType === 'range' && (
+              <div className="mb-6">
+                <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-4">
+                  Select start and end months for comparison
+                </p>
                 
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">
-                    To
-                  </label>
-                  <select
-                    value={customEndMonth}
-                    onChange={(e) => setCustomEndMonth(e.target.value)}
-                    disabled={!customStartMonth}
-                    className="w-full px-3 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <option value="">Select end month</option>
-                    {availableMonths
-                      .filter((month) => {
-                        if (!customStartMonth) return false;
-                        // Find the start month in available months
-                        const startMonthIndex = availableMonths.findIndex(m => m.value === customStartMonth);
-                        const currentMonthIndex = availableMonths.findIndex(m => m.value === month.value);
-                        // Only show months that are >= start month (later in the array since we reversed it)
-                        return currentMonthIndex >= startMonthIndex;
-                      })
-                      .map((month) => (
-                        <option key={`end-${month.name}-${month.year}`} value={month.value}>
+                <div className="grid grid-cols-2 gap-4 mb-4">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">
+                      Start Month
+                    </label>
+                    <select
+                      value={modalStartMonth}
+                      onChange={(e) => {
+                        setModalStartMonth(e.target.value);
+                        // Reset end month if it's before the new start month
+                        if (modalEndMonth) {
+                          const startIndex = availableMonths.findIndex(m => m.value === e.target.value);
+                          const endIndex = availableMonths.findIndex(m => m.value === modalEndMonth);
+                          if (endIndex < startIndex) {
+                            setModalEndMonth('');
+                          }
+                        }
+                      }}
+                      className="w-full px-3 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all text-sm"
+                    >
+                      <option value="">Choose start month</option>
+                      {availableMonths.map((month) => (
+                        <option key={`start-${month.name}-${month.year}`} value={month.value}>
                           {month.displayName}
                         </option>
                       ))}
-                  </select>
+                    </select>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">
+                      End Month
+                    </label>
+                    <select
+                      value={modalEndMonth}
+                      onChange={(e) => setModalEndMonth(e.target.value)}
+                      disabled={!modalStartMonth}
+                      className="w-full px-3 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <option value="">Choose end month</option>
+                      {availableMonths
+                        .filter((month) => {
+                          if (!modalStartMonth) return false;
+                          const startMonthIndex = availableMonths.findIndex(m => m.value === modalStartMonth);
+                          const currentMonthIndex = availableMonths.findIndex(m => m.value === month.value);
+                          return currentMonthIndex >= startMonthIndex;
+                        })
+                        .map((month) => (
+                          <option key={`end-${month.name}-${month.year}`} value={month.value}>
+                            {month.displayName}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
                 </div>
+                
+                {modalStartMonth && modalEndMonth && (
+                  <div className="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-3 mb-4">
+                    <div className="flex items-center gap-2 text-sm text-purple-700 dark:text-purple-300">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                      <span>
+                        Selected: {modalStartMonth} {modalStartMonth === modalEndMonth ? '' : `to ${modalEndMonth}`}
+                      </span>
+                    </div>
+                  </div>
+                )}
               </div>
-              
-              {customStartMonth && customEndMonth && (
-                <div className="flex items-center justify-between bg-purple-50 dark:bg-purple-900/20 rounded-lg p-3 mb-4">
-                  <span className="text-sm text-purple-700 dark:text-purple-300">
-                    Range: {customStartMonth} - {customEndMonth}
-                  </span>
-                  <button
-                    onClick={() => {
-                      const customFilter = customEndMonth === customStartMonth ? customStartMonth : `${customStartMonth} - ${customEndMonth}`;
-                      setSelectedFilter(customFilter);
-                      setShowCustomPicker(false);
-                      setCustomStartMonth('');
-                      setCustomEndMonth('');
-                    }}
-                    className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm font-medium"
-                  >
-                    Apply Range
-                  </button>
-                </div>
-              )}
-            </div>
+            )}
 
-            {/* Actions */}
-            <button
-              onClick={() => {
-                setShowCustomPicker(false);
-                setCustomStartMonth('');
-                setCustomEndMonth('');
-              }}
-              className="w-full px-4 py-3 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors font-medium"
-            >
-              Cancel
-            </button>
+            {/* Preview & Actions */}
+            <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setShowCustomPicker(false);
+                    setModalFilter('');
+                    setModalStartMonth('');
+                    setModalEndMonth('');
+                    setFilterType('single');
+                  }}
+                  className="flex-1 px-4 py-3 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    if (filterType === 'single' && modalFilter) {
+                      setSelectedFilter(modalFilter);
+                    } else if (filterType === 'range' && modalStartMonth && modalEndMonth) {
+                      const customFilter = modalEndMonth === modalStartMonth ? modalStartMonth : `${modalStartMonth} - ${modalEndMonth}`;
+                      setSelectedFilter(customFilter);
+                    }
+                    setShowCustomPicker(false);
+                    setModalFilter('');
+                    setModalStartMonth('');
+                    setModalEndMonth('');
+                    setFilterType('single');
+                  }}
+                  disabled={
+                    (filterType === 'single' && !modalFilter) ||
+                    (filterType === 'range' && (!modalStartMonth || !modalEndMonth))
+                  }
+                  className="flex-1 px-4 py-3 rounded-lg bg-purple-600 text-white hover:bg-purple-700 disabled:bg-gray-300 disabled:cursor-not-allowed disabled:hover:bg-gray-300 dark:disabled:bg-gray-600 transition-colors font-medium"
+                >
+                  Apply Filter
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

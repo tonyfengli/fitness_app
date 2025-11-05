@@ -1,4 +1,7 @@
 import { sql } from "drizzle-orm";
+
+// Note: The btree_gist extension must be enabled in PostgreSQL for the overlap constraint
+// Run: CREATE EXTENSION IF NOT EXISTS btree_gist;
 import { pgEnum, pgTable, unique, numeric, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
@@ -584,6 +587,11 @@ export const UserTrainingPackage = pgTable("user_training_package", (t) => ({
   updatedAt: t
     .timestamp({ mode: "date", withTimezone: true })
     .$onUpdateFn(() => sql`now()`),
+}), (table) => ({
+  // Prevent overlapping date ranges for the same user with active status
+  noOverlappingPackages: index("no_overlapping_packages").using(
+    sql`gist (user_id WITH =, daterange(start_date, end_date, '[]') WITH &&) WHERE (status = 'active')`
+  ),
 }));
 
 export const CreateUserTrainingPackageSchema = createInsertSchema(UserTrainingPackage, {
@@ -596,6 +604,17 @@ export const CreateUserTrainingPackageSchema = createInsertSchema(UserTrainingPa
   id: true,
   createdAt: true,
   updatedAt: true,
+});
+
+// Schema for changing a user's package with custom transition date
+export const ChangeUserPackageSchema = z.object({
+  userId: z.string(),
+  newPackageId: z.string().uuid(),
+  transitionDate: z.date(),
+  newEndDate: z.date(),
+}).refine((data) => data.transitionDate < data.newEndDate, {
+  message: "Transition date must be before the new package end date",
+  path: ["transitionDate"],
 });
 
 // Export all relations from the relations file
