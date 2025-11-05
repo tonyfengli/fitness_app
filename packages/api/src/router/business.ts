@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 import { eq } from "@acme/db";
-import { Business, CreateBusinessSchema } from "@acme/db/schema";
+import { Business, CreateBusinessSchema, TrainingPackage } from "@acme/db/schema";
 
 import type { SessionUser } from "../types/auth";
 import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
@@ -33,4 +33,25 @@ export const businessRouter = createTRPCRouter({
       }
       return ctx.db.insert(Business).values(input).returning();
     }),
+
+  getTrainingPackages: protectedProcedure.query(async ({ ctx }) => {
+    const currentUser = ctx.session?.user as SessionUser;
+    const businessId = currentUser.businessId;
+    
+    if (!businessId) {
+      throw new Error("User must be associated with a business");
+    }
+
+    return await ctx.db
+      .select({
+        id: TrainingPackage.id,
+        name: TrainingPackage.name,
+        sessionsPerWeek: TrainingPackage.sessionsPerWeek,
+        monthlyPrice: TrainingPackage.monthlyPrice,
+        isActive: TrainingPackage.isActive,
+      })
+      .from(TrainingPackage)
+      .where(eq(TrainingPackage.businessId, businessId))
+      .orderBy(TrainingPackage.sessionsPerWeek);
+  }),
 });

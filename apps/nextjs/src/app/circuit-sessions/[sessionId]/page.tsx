@@ -622,12 +622,12 @@ export default function SessionDetailPage({ params }: SessionDetailPageProps) {
         {/* Client List */}
         <div className="px-4 py-4">
           <div className="space-y-2">
-            {filteredClients.map((client) => {
+            {filteredClients.map((client, index) => {
               const isSelected = selectedClients.has(client.id);
 
               return (
                 <div
-                  key={client.id}
+                  key={`${client.id}-${index}`}
                   onClick={() => handleClientToggle(client.id)}
                   className={`w-full p-4 h-[75px] rounded-lg border-2 transition-all text-left cursor-pointer ${
                     isSelected

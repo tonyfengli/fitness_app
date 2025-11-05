@@ -385,7 +385,18 @@ export const clientsRouter = {
       throw new Error("Trainer must be associated with a business");
     }
 
-    // Fetch clients with their active training packages
+    // Fetch clients with their most recent active training package
+    // Use a subquery to get the most recent (latest start_date) active package per client
+    const mostRecentPackageSubquery = ctx.db
+      .select({
+        userId: UserTrainingPackage.userId,
+        maxStartDate: sql<string>`MAX(${UserTrainingPackage.startDate})`.as('max_start_date')
+      })
+      .from(UserTrainingPackage)
+      .where(eq(UserTrainingPackage.status, "active"))
+      .groupBy(UserTrainingPackage.userId)
+      .as('most_recent_packages');
+
     const clientsWithActivePackages = await ctx.db
       .select({
         id: user.id,
@@ -410,6 +421,13 @@ export const clientsRouter = {
         and(
           eq(user.id, UserTrainingPackage.userId),
           eq(UserTrainingPackage.status, "active")
+        )
+      )
+      .innerJoin(
+        mostRecentPackageSubquery,
+        and(
+          eq(UserTrainingPackage.userId, mostRecentPackageSubquery.userId),
+          sql`${UserTrainingPackage.startDate} = ${mostRecentPackageSubquery.maxStartDate}`
         )
       )
       .innerJoin(
@@ -555,8 +573,8 @@ export const clientsRouter = {
           .returning();
 
         return {
-          updatedCurrentPackage: updatedCurrentPackage as any,
-          newPackage: newPackage as any,
+          updatedCurrentPackage,
+          newPackage,
         };
       });
 
