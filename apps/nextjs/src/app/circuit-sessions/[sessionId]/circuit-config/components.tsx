@@ -2,21 +2,24 @@
 
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Button, Loader2Icon as Loader2, ChevronRightIcon as ChevronRight, ChevronLeftIcon as ChevronLeft } from "@acme/ui-shared";
+import { Button, Loader2Icon as Loader2, ChevronRightIcon as ChevronRight, ChevronLeftIcon as ChevronLeft, Star, ChevronDownIcon, Input } from "@acme/ui-shared";
 import { cn } from "@acme/ui-shared";
 import type { CircuitConfig, RoundConfig } from "@acme/db";
 import { useTRPC } from "~/trpc/react";
+import { useScrollManager } from "~/hooks/useScrollManager";
+import { OptionsDrawer } from "./OptionsDrawer";
+import { IOSSafariFix } from "./IOSSafariFix";
 
 interface WorkoutTypeStepProps {
   onSelect: (type: 'custom' | 'template') => void;
 }
 
 interface CategorySelectionStepProps {
-  onSelectCategory: (category: string) => void;
+  onSelectCategory: (program: string) => void;
 }
 
 interface TemplateSelectionStepProps {
-  category: string;
+  program: string;
   onSelectTemplate: (template: any) => void;
 }
 
@@ -209,61 +212,241 @@ function DurationInput({
   );
 }
 
-const CATEGORIES = [
-  { id: 'morning_sessions', label: 'Morning Sessions' },
-  { id: 'evening_sessions', label: 'Evening Sessions' },
-  { id: 'mens_fitness_connect', label: "Men's Fitness Connect" },
-  { id: 'other', label: 'Other' }
-];
-
 export function CategorySelectionStep({ onSelectCategory }: CategorySelectionStepProps) {
+  const trpc = useTRPC();
+  
+  // Fetch available programs
+  const { data: programs, isLoading } = useQuery({
+    ...trpc.trainingSession.getAvailablePrograms.queryOptions({
+      businessId: BUSINESS_ID,
+    }),
+  });
+
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-lg font-semibold mb-6 text-gray-900 dark:text-white">Choose a Template Category</h3>
+        <h3 className="text-lg font-semibold mb-6 text-gray-900 dark:text-white">Choose a Program</h3>
         
-        <div className="space-y-4">
-          {CATEGORIES.map((category) => (
-            <button
-              key={category.id}
-              onClick={() => onSelectCategory(category.id)}
-              className="w-full p-6 rounded-xl border-2 border-gray-200 dark:border-gray-700 text-left"
-            >
-              <div className="flex items-center justify-between">
-                <h4 className="text-base font-semibold text-gray-900 dark:text-white">
-                  {category.label}
-                </h4>
-                <ChevronRight className="w-5 h-5 text-gray-400" />
-              </div>
-            </button>
-          ))}
-        </div>
+        {isLoading ? (
+          <div className="flex justify-center py-12">
+            <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+          </div>
+        ) : programs && programs.length > 0 ? (
+          <div className="space-y-4">
+            {programs.map((program) => (
+              <button
+                key={program.id}
+                onClick={() => onSelectCategory(program.id)}
+                className="w-full p-6 rounded-xl border-2 border-gray-200 dark:border-gray-700 text-left hover:border-blue-300 dark:hover:border-blue-600 transition-colors"
+              >
+                <div className="flex items-center justify-between">
+                  <h4 className="text-base font-semibold text-gray-900 dark:text-white">
+                    {program.label}
+                  </h4>
+                  <ChevronRight className="w-5 h-5 text-gray-400" />
+                </div>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-12">
+            <p className="text-gray-500 dark:text-gray-400">
+              No programs available
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-export function TemplateSelectionStep({ category, onSelectTemplate }: TemplateSelectionStepProps) {
+export function TemplateSelectionStep({ program, onSelectTemplate }: TemplateSelectionStepProps) {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
   const [loadingTemplateId, setLoadingTemplateId] = useState<string | null>(null);
+  const [isOtherSessionsExpanded, setIsOtherSessionsExpanded] = useState(false);
+  const [showFavoriteDrawer, setShowFavoriteDrawer] = useState(false);
+  const [selectedSessionForFavorite, setSelectedSessionForFavorite] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [editedName, setEditedName] = useState("");
+
+  // Scroll manager for drawer with high priority (2)
+  useScrollManager({ 
+    isActive: showFavoriteDrawer, 
+    priority: 2 
+  });
   
-  // Fetch favorites for selected category - WITHOUT templateConfig for better performance
-  const { data: favorites, isLoading } = useQuery({
-    ...trpc.trainingSession.getFavoritesByCategory.queryOptions({
-      businessId: BUSINESS_ID,
-      category: category,
-      includeTemplateConfig: false, // Don't fetch heavy templateConfig during listing
-    }),
+  // Fetch sessions for selected program - WITHOUT templateConfig for better performance
+  const sessionsQueryOptions = trpc.trainingSession.getSessionsByProgram.queryOptions({
+    businessId: BUSINESS_ID,
+    program: program as "h4h_5am" | "h4h_5pm" | "saturday_cg" | "monday_cg",
+    includeTemplateConfig: false, // Don't fetch heavy templateConfig during listing
+  });
+  
+  const { data: sessions, isLoading } = useQuery(sessionsQueryOptions);
+
+  // Get session IDs for favorite status checking
+  const sessionIds = sessions?.map(session => session.trainingSession.id) || [];
+  
+  // Check favorite status for all sessions
+  const favoriteStatusQuery = trpc.trainingSession.checkFavoriteStatus.queryOptions({
+    businessId: BUSINESS_ID,
+    trainingSessionIds: sessionIds,
+  });
+  
+  const { data: favoriteStatus } = useQuery({
+    ...favoriteStatusQuery,
+    enabled: sessionIds.length > 0,
   });
 
-  const handleTemplateSelect = async (favoriteId: string, sessionName: string) => {
-    setLoadingTemplateId(favoriteId);
+  // Add to favorites mutation
+  const addToFavorites = useMutation(
+    trpc.trainingSession.addToFavorites.mutationOptions(),
+  );
+
+  // Update training session name mutation
+  const updateSessionName = useMutation(
+    trpc.trainingSession.updateTrainingSessionName.mutationOptions(),
+  );
+
+  // Remove from favorites mutation
+  const removeFromFavorites = useMutation(
+    trpc.trainingSession.removeFromFavorites.mutationOptions({
+      onMutate: async ({ trainingSessionId }) => {
+        // Use the actual TRPC query key
+        const queryKey = favoriteStatusQuery.queryKey;
+        
+        // Cancel outgoing refetches so they don't overwrite our optimistic update
+        await queryClient.cancelQueries({
+          queryKey,
+        });
+
+        // Snapshot the previous value for rollback
+        const previousFavoriteStatus = queryClient.getQueryData(queryKey);
+
+        // Optimistically update the favorite status (only the star, not position)
+        queryClient.setQueryData(queryKey, (old: any) => {
+          if (!old) return old;
+          const updated = {
+            ...old,
+            [trainingSessionId]: false, // Optimistically unfavorite
+          };
+          return updated;
+        });
+
+        // Return context with snapshot for potential rollback
+        return { previousFavoriteStatus, queryKey };
+      },
+      onError: (error, variables, context) => {
+        // Rollback the optimistic update on error
+        if (context?.previousFavoriteStatus && context?.queryKey) {
+          queryClient.setQueryData(
+            context.queryKey,
+            context.previousFavoriteStatus
+          );
+        }
+      },
+    }),
+  );
+
+  const toggleFavorite = (sessionId: string, sessionName: string, isFavorited: boolean) => {
+    if (isFavorited) {
+      // Unfavorite: Direct action with optimistic update
+      removeFromFavorites.mutate({
+        businessId: BUSINESS_ID,
+        trainingSessionId: sessionId,
+      });
+    } else {
+      // Favorite: Open drawer for confirmation/options
+      setSelectedSessionForFavorite({
+        id: sessionId,
+        name: sessionName,
+      });
+      setShowFavoriteDrawer(true);
+    }
+  };
+
+  const handleConfirmFavorite = () => {
+    if (selectedSessionForFavorite) {
+      setEditedName(selectedSessionForFavorite.name); // Initialize with original name
+      setIsEditingName(true);
+    }
+  };
+
+  const handleSaveFavorite = async () => {
+    if (selectedSessionForFavorite && editedName.trim()) {
+      try {
+        // First: Update the training session name (if changed)
+        if (editedName.trim() !== selectedSessionForFavorite.name) {
+          await updateSessionName.mutateAsync({
+            businessId: BUSINESS_ID,
+            trainingSessionId: selectedSessionForFavorite.id,
+            newName: editedName.trim(),
+          });
+        }
+
+        // Second: Add to favorites
+        await addToFavorites.mutateAsync({
+          businessId: BUSINESS_ID,
+          trainingSessionId: selectedSessionForFavorite.id,
+        });
+
+        // Invalidate all relevant queries to update frontend immediately
+        await Promise.all([
+          // Invalidate sessions list using EXACT query key
+          queryClient.invalidateQueries({
+            queryKey: sessionsQueryOptions.queryKey,
+          }).then(() => {
+            // Force refetch immediately
+            return queryClient.refetchQueries({
+              queryKey: sessionsQueryOptions.queryKey,
+            });
+          }),
+          // Invalidate favorite status using EXACT query key
+          queryClient.invalidateQueries({
+            queryKey: favoriteStatusQuery.queryKey,
+          }).then(() => {
+            // Force refetch immediately
+            return queryClient.refetchQueries({
+              queryKey: favoriteStatusQuery.queryKey,
+            });
+          }),
+        ]);
+
+        // Close drawer on success
+        setShowFavoriteDrawer(false);
+        setSelectedSessionForFavorite(null);
+        setIsEditingName(false);
+        setEditedName("");
+
+      } catch (error) {
+        // Keep drawer open on error so user can retry
+      }
+    }
+  };
+
+  const handleCancelFavorite = () => {
+    setShowFavoriteDrawer(false);
+    setSelectedSessionForFavorite(null);
+    setIsEditingName(false);
+    setEditedName("");
+  };
+
+  const handleBackToConfirmation = () => {
+    setIsEditingName(false);
+    setEditedName("");
+  };
+
+  const handleTemplateSelect = async (sessionId: string, sessionName: string) => {
+    setLoadingTemplateId(sessionId);
     try {
-      // Use fetchQuery to fetch data on-demand
+      // Use fetchQuery to fetch data on-demand using the new session-based endpoint
       const data = await queryClient.fetchQuery(
-        trpc.trainingSession.getFavoriteTemplateWithExercises.queryOptions({
-          favoriteId: favoriteId,
+        trpc.trainingSession.getSessionTemplateWithExercises.queryOptions({
+          sessionId: sessionId,
         })
       );
       
@@ -305,52 +488,280 @@ export function TemplateSelectionStep({ category, onSelectTemplate }: TemplateSe
     });
   };
 
-  const categoryLabel = CATEGORIES.find(c => c.id === category)?.label || '';
+  // Program label mapping
+  const PROGRAM_LABELS = {
+    'h4h_5am': 'H4H 5AM Sessions',
+    'h4h_5pm': 'H4H 5PM Sessions',
+    'saturday_cg': 'Saturday CG',
+    'monday_cg': 'Monday CG'
+  };
+  
+  const programLabel = PROGRAM_LABELS[program as keyof typeof PROGRAM_LABELS] || '';
 
   return (
     <div className="space-y-6">
       <div>
         <h3 className="text-lg font-semibold mb-6 text-gray-900 dark:text-white">
-          {categoryLabel}
+          {programLabel}
         </h3>
         
         {isLoading ? (
           <div className="flex justify-center py-12">
             <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
           </div>
-        ) : favorites && favorites.length > 0 ? (
-          <div className="space-y-4">
-            {favorites.map((favorite) => (
-              <button
-                key={favorite.id}
-                onClick={() => handleTemplateSelect(favorite.id, favorite.trainingSession.name)}
-                disabled={loadingTemplateId !== null}
-                className="w-full p-6 rounded-xl border-2 border-gray-200 dark:border-gray-700 text-left disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <div className="flex items-center justify-between">
-                  <div className="space-y-1">
-                    <h4 className="text-base font-semibold text-gray-900 dark:text-white">
-                      {favorite.trainingSession.name}
-                    </h4>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">
-                      Created {formatDate(favorite.trainingSession.createdAt)}
-                    </p>
-                  </div>
-                  {loadingTemplateId === favorite.id && (
-                    <Loader2 className="h-5 w-5 animate-spin text-gray-400" />
+        ) : sessions && sessions.length > 0 ? (
+          <div className="space-y-6">
+            {(() => {
+              // Separate sessions into favorites and others
+              const sortedSessions = sessions.sort((a, b) => {
+                return new Date(b.trainingSession.createdAt).getTime() - new Date(a.trainingSession.createdAt).getTime();
+              });
+              
+              const favoriteSessions = sortedSessions.filter(session => 
+                favoriteStatus?.[session.trainingSession.id] || false
+              );
+              const otherSessions = sortedSessions.filter(session => 
+                !(favoriteStatus?.[session.trainingSession.id] || false)
+              );
+
+              return (
+                <>
+                  {/* Favorite Sessions */}
+                  {favoriteSessions.length > 0 && (
+                    <div className="space-y-4">
+                      <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                        Favorites ({favoriteSessions.length})
+                      </h4>
+                      {favoriteSessions.map((sessionItem) => {
+                        const isFavorited = true; // Always true in this section
+                        
+                        return (
+                          <div key={sessionItem.id} className="relative">
+                            <button
+                              onClick={() => handleTemplateSelect(sessionItem.trainingSession.id, sessionItem.trainingSession.name)}
+                              disabled={loadingTemplateId !== null}
+                              className="w-full p-6 rounded-xl border-2 border-gray-200 dark:border-gray-700 text-left disabled:opacity-50 disabled:cursor-not-allowed hover:border-blue-300 dark:hover:border-blue-600 transition-colors"
+                            >
+                              <div className="flex items-center justify-between">
+                                <div className="space-y-1">
+                                  <h4 className="text-base font-semibold text-gray-900 dark:text-white">
+                                    {sessionItem.trainingSession.name}
+                                  </h4>
+                                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                                    Created {formatDate(sessionItem.trainingSession.createdAt)}
+                                  </p>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  {loadingTemplateId === sessionItem.trainingSession.id && (
+                                    <Loader2 className="h-5 w-5 animate-spin text-gray-400" />
+                                  )}
+                                </div>
+                              </div>
+                            </button>
+                            
+                            {/* Favorite button */}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleFavorite(sessionItem.trainingSession.id, sessionItem.trainingSession.name, isFavorited);
+                              }}
+                              disabled={addToFavorites.isPending || removeFromFavorites.isPending}
+                              className="absolute top-3 right-3 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors disabled:opacity-50"
+                              title="Remove from favorites"
+                            >
+                              <Star className="h-5 w-5 fill-yellow-400 text-yellow-400" />
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
                   )}
-                </div>
-              </button>
-            ))}
+
+                  {/* Other Sessions - Collapsible */}
+                  {otherSessions.length > 0 && (
+                    <div className="space-y-4">
+                      <button
+                        onClick={() => setIsOtherSessionsExpanded(!isOtherSessionsExpanded)}
+                        className="flex items-center justify-between w-full text-left"
+                      >
+                        <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                          Other Sessions ({otherSessions.length})
+                        </h4>
+                        <ChevronDownIcon 
+                          className={cn(
+                            "h-4 w-4 text-gray-500 transition-transform duration-200",
+                            isOtherSessionsExpanded ? "rotate-180" : ""
+                          )}
+                        />
+                      </button>
+                      
+                      {isOtherSessionsExpanded && (
+                        <div className="space-y-4 pl-2">
+                          {otherSessions.map((sessionItem) => {
+                            const isFavorited = false; // Always false in this section
+                            
+                            return (
+                              <div key={sessionItem.id} className="relative">
+                                <button
+                                  onClick={() => handleTemplateSelect(sessionItem.trainingSession.id, sessionItem.trainingSession.name)}
+                                  disabled={loadingTemplateId !== null}
+                                  className="w-full p-6 rounded-xl border-2 border-gray-200 dark:border-gray-700 text-left disabled:opacity-50 disabled:cursor-not-allowed hover:border-blue-300 dark:hover:border-blue-600 transition-colors"
+                                >
+                                  <div className="flex items-center justify-between">
+                                    <div className="space-y-1">
+                                      <h4 className="text-base font-semibold text-gray-900 dark:text-white">
+                                        {sessionItem.trainingSession.name}
+                                      </h4>
+                                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                                        Created {formatDate(sessionItem.trainingSession.createdAt)}
+                                      </p>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      {loadingTemplateId === sessionItem.trainingSession.id && (
+                                        <Loader2 className="h-5 w-5 animate-spin text-gray-400" />
+                                      )}
+                                    </div>
+                                  </div>
+                                </button>
+                                
+                                {/* Favorite button */}
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    toggleFavorite(sessionItem.trainingSession.id, sessionItem.trainingSession.name, isFavorited);
+                                  }}
+                                  disabled={addToFavorites.isPending || removeFromFavorites.isPending}
+                                  className="absolute top-3 right-3 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors disabled:opacity-50"
+                                  title="Add to favorites"
+                                >
+                                  <Star className="h-5 w-5 text-gray-400 hover:text-yellow-400 transition-colors" />
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </>
+              );
+            })()}
           </div>
         ) : (
           <div className="text-center py-12">
             <p className="text-gray-500 dark:text-gray-400">
-              No templates available in this category
+              No sessions available in this program
             </p>
           </div>
         )}
       </div>
+      
+      {/* Favorite Confirmation/Edit Drawer */}
+      <OptionsDrawer
+        isOpen={showFavoriteDrawer}
+        onClose={handleCancelFavorite}
+        title={isEditingName ? "Edit Name" : "Add to Favorites"}
+      >
+        <div className="space-y-4">
+          {!isEditingName ? (
+            // Confirmation Step
+            <>
+              <div className="text-center space-y-2">
+                <div className="w-12 h-12 bg-yellow-100 dark:bg-yellow-900/20 rounded-full flex items-center justify-center mx-auto">
+                  <Star className="w-6 h-6 text-yellow-600 dark:text-yellow-400" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  Add to Favorites?
+                </h3>
+                <p className="text-gray-600 dark:text-gray-400">
+                  Add "{selectedSessionForFavorite?.name}" to your favorites for quick access?
+                </p>
+              </div>
+              
+              <div className="flex gap-3 pt-4">
+                <Button 
+                  variant="outline" 
+                  className="flex-1"
+                  onClick={handleCancelFavorite}
+                  disabled={addToFavorites.isPending}
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  className="flex-1"
+                  onClick={handleConfirmFavorite}
+                  disabled={addToFavorites.isPending}
+                >
+                  Add to Favorites
+                </Button>
+              </div>
+            </>
+          ) : (
+            // Name Editing Step
+            <>
+              <div className="space-y-4">
+                <div className="text-center space-y-2">
+                  <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/20 rounded-full flex items-center justify-center mx-auto">
+                    <Star className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                    Customize Name
+                  </h3>
+                  <p className="text-gray-600 dark:text-gray-400">
+                    Give this favorite a custom name for easy identification
+                  </p>
+                </div>
+                
+                <div className="space-y-3">
+                  <label htmlFor="favorite-name" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Favorite Name
+                  </label>
+                  <Input
+                    id="favorite-name"
+                    type="text"
+                    value={editedName}
+                    onChange={(e) => setEditedName(e.target.value)}
+                    placeholder="Enter a custom name..."
+                    className="w-full"
+                    autoFocus
+                  />
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    Original: {selectedSessionForFavorite?.name}
+                  </p>
+                </div>
+              </div>
+              
+              <div className="flex gap-3 pt-4">
+                <Button 
+                  variant="outline" 
+                  className="flex-1"
+                  onClick={handleBackToConfirmation}
+                >
+                  <ChevronLeft className="w-4 h-4 mr-1" />
+                  Back
+                </Button>
+                <Button 
+                  className="flex-1"
+                  onClick={handleSaveFavorite}
+                  disabled={!editedName.trim() || updateSessionName.isPending || addToFavorites.isPending}
+                >
+                  {(updateSessionName.isPending || addToFavorites.isPending) ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      {updateSessionName.isPending ? 'Updating...' : 'Saving...'}
+                    </>
+                  ) : (
+                    'Save Favorite'
+                  )}
+                </Button>
+              </div>
+            </>
+          )}
+        </div>
+      </OptionsDrawer>
+
+      {/* iOS Safari Fix */}
+      <IOSSafariFix />
     </div>
   );
 }

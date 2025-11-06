@@ -43,7 +43,7 @@ export default function CircuitConfigPage() {
   const [spotifyDeviceId, setSpotifyDeviceId] = useState<string | null>(null);
   const [spotifyDeviceName, setSpotifyDeviceName] = useState<string | null>(null);
   const [workoutType, setWorkoutType] = useState<'custom' | 'template' | null>(initialWorkoutType);
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [selectedProgram, setSelectedProgram] = useState<string | null>(null);
   const [templateData, setTemplateData] = useState<{ rounds: any[], exercises: any[] } | null>(null);
 
   // Get TRPC client
@@ -409,17 +409,17 @@ export default function CircuitConfigPage() {
             {/* Step 2: Category Selection (only for template) */}
             {currentStep === 2 && workoutType === 'template' && (
               <CategorySelectionStep
-                onSelectCategory={(category) => {
-                  setSelectedCategory(category);
+                onSelectCategory={(program) => {
+                  setSelectedProgram(program);
                   handleNext();
                 }}
               />
             )}
 
             {/* Step 3: Template Selection (only for template) */}
-            {currentStep === 3 && workoutType === 'template' && selectedCategory && (
+            {currentStep === 3 && workoutType === 'template' && selectedProgram && (
               <TemplateSelectionStep
-                category={selectedCategory}
+                program={selectedProgram}
                 onSelectTemplate={(template) => {
                   console.log('[CircuitConfig] Template selected - FULL DETAILS:', {
                     templateId: template.id,

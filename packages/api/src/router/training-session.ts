@@ -4401,64 +4401,6 @@ Set your goals and preferences for today's session.`;
       return updatedSession;
     }),
 
-  /**
-   * Get favorite sessions by category for mobile circuit config page (public route)
-   */
-  getFavoritesByCategory: publicProcedure
-    .input(
-      z.object({
-        businessId: z.string().uuid(),
-        category: z.enum(["morning_sessions", "evening_sessions", "mens_fitness_connect", "other"]).optional(),
-        includeTemplateConfig: z.boolean().optional().default(false), // New optional parameter
-      }),
-    )
-    .query(async ({ ctx, input }) => {
-      console.log(`[getFavoritesByCategory] Fetching favorites for business: ${input.businessId}, category: ${input.category || "all"}, includeTemplateConfig: ${input.includeTemplateConfig}`);
-
-      // Build where conditions
-      const whereConditions = [
-        eq(FavoriteSessions.businessId, input.businessId),
-      ];
-      
-      if (input.category) {
-        whereConditions.push(eq(FavoriteSessions.category, input.category));
-      }
-
-      // Query favorite sessions with joined training session data
-      // Conditionally include templateConfig based on the parameter
-      const favoriteSessions = await ctx.db
-        .select({
-          id: FavoriteSessions.id,
-          category: FavoriteSessions.category,
-          trainingSession: {
-            id: TrainingSession.id,
-            businessId: TrainingSession.businessId,
-            trainerId: TrainingSession.trainerId,
-            name: TrainingSession.name,
-            scheduledAt: TrainingSession.scheduledAt,
-            durationMinutes: TrainingSession.durationMinutes,
-            maxParticipants: TrainingSession.maxParticipants,
-            status: TrainingSession.status,
-            templateType: TrainingSession.templateType,
-            // Only include templateConfig if explicitly requested
-            ...(input.includeTemplateConfig && { templateConfig: TrainingSession.templateConfig }),
-            // Never include workoutOrganization for listing - it's also a large JSON field
-            createdAt: TrainingSession.createdAt,
-            updatedAt: TrainingSession.updatedAt,
-          },
-        })
-        .from(FavoriteSessions)
-        .innerJoin(
-          TrainingSession,
-          eq(FavoriteSessions.trainingSessionId, TrainingSession.id),
-        )
-        .where(and(...whereConditions))
-        .orderBy(desc(TrainingSession.createdAt));
-
-      console.log(`[getFavoritesByCategory] Found ${favoriteSessions.length} favorite sessions`);
-
-      return favoriteSessions;
-    }),
 
   // New endpoint specifically for getting a single favorite's template config
   getFavoriteTemplateConfig: publicProcedure
@@ -4552,7 +4494,6 @@ Set your goals and preferences for today's session.`;
         return {
           favorite: {
             id: favorite.id,
-            category: favorite.category,
           },
           session: {
             id: trainingSession.id,
@@ -4635,8 +4576,142 @@ Set your goals and preferences for today's session.`;
       return {
         favorite: {
           id: favorite.id,
-          category: favorite.category,
         },
+        session: {
+          id: trainingSession.id,
+          name: trainingSession.name,
+          scheduledAt: trainingSession.scheduledAt,
+          durationMinutes: trainingSession.durationMinutes,
+        },
+        templateConfig,
+        exercises: exerciseList,
+        rounds,
+        workoutId: workout.id, // Include the workout ID for template creation
+      };
+    }),
+
+  // New endpoint to get training session template with exercises (bypasses favorites)
+  getSessionTemplateWithExercises: publicProcedure
+    .input(
+      z.object({
+        sessionId: z.string().uuid(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      console.log(`[getSessionTemplateWithExercises] Fetching complete template for session: ${input.sessionId}`);
+
+      // Get the training session directly
+      const trainingSession = await ctx.db.query.TrainingSession.findFirst({
+        where: eq(TrainingSession.id, input.sessionId),
+      });
+
+      if (!trainingSession) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Training session not found",
+        });
+      }
+
+      const templateConfig = trainingSession.templateConfig as any;
+      const configData = templateConfig?.config || templateConfig; // Handle nested config structure
+      
+      // Find a workout for this session to get exercises
+      // For templates, we just need ANY workout - they all have the same exercises for circuits
+      const workout = await ctx.db.query.Workout.findFirst({
+        where: and(
+          eq(Workout.trainingSessionId, trainingSession.id),
+          // Accept any status for historical data
+          or(
+            eq(Workout.status, "draft"),
+            eq(Workout.status, "ready"),
+            eq(Workout.status, "completed"),
+          ),
+        ),
+      });
+
+      // If no workout found, return template without exercises
+      if (!workout) {
+        console.log(`[getSessionTemplateWithExercises] No workout found for session ${trainingSession.id}`);
+        return {
+          session: {
+            id: trainingSession.id,
+            name: trainingSession.name,
+            scheduledAt: trainingSession.scheduledAt,
+            durationMinutes: trainingSession.durationMinutes,
+          },
+          templateConfig,
+          exercises: [],
+          rounds: [],
+          workoutId: null, // No workout ID if no workout found
+        };
+      }
+
+      // Get all exercises for this workout
+      const workoutExercises = await ctx.db
+        .select({
+          we: WorkoutExercise,
+          exercise: exercises,
+        })
+        .from(WorkoutExercise)
+        .leftJoin(exercises, eq(WorkoutExercise.exerciseId, exercises.id))
+        .where(eq(WorkoutExercise.workoutId, workout.id))
+        .orderBy(asc(WorkoutExercise.orderIndex));
+
+      // Transform exercises for template display
+      const exerciseList = workoutExercises.map((row) => ({
+        id: row.we.id,
+        exerciseId: row.we.exerciseId,
+        exerciseName: (row.we.custom_exercise as any)?.customName || row.exercise?.name || 'Unknown Exercise',
+        orderIndex: row.we.orderIndex,
+        groupName: row.we.groupName || 'Round 1',
+        stationIndex: row.we.stationIndex,
+        template: row.we.template,
+        repsPlanned: row.we.repsPlanned,
+      }));
+
+      // Group exercises by round for easier display
+      const roundsMap = new Map<string, any[]>();
+      exerciseList.forEach((exercise) => {
+        const round = exercise.groupName;
+        if (!roundsMap.has(round)) {
+          roundsMap.set(round, []);
+        }
+        roundsMap.get(round)!.push(exercise);
+      });
+
+      // Convert to array and sort by round name
+      const rounds = Array.from(roundsMap.entries())
+        .map(([roundName, exercises]) => {
+          const roundNum = parseInt(roundName.replace('Round ', ''));
+          console.log(`[getSessionTemplateWithExercises] Processing ${roundName}:`, {
+            roundNum,
+            roundTemplates: configData?.roundTemplates,
+            matchingTemplate: configData?.roundTemplates?.find((rt: any) => rt.roundNumber === roundNum),
+          });
+          
+          const roundType = configData?.roundTemplates?.find((rt: any) => 
+            rt.roundNumber === roundNum
+          )?.template?.type || 'circuit_round';
+          
+          console.log(`[getSessionTemplateWithExercises] Round ${roundNum} type: ${roundType}`);
+          
+          return {
+            roundName,
+            exercises: exercises.sort((a, b) => a.orderIndex - b.orderIndex),
+            roundType,
+          };
+        })
+        .sort((a, b) => {
+          // Sort by round number
+          const aNum = parseInt(a.roundName.replace('Round ', ''));
+          const bNum = parseInt(b.roundName.replace('Round ', ''));
+          return aNum - bNum;
+        });
+
+      console.log(`[getSessionTemplateWithExercises] Found ${exerciseList.length} exercises in ${rounds.length} rounds`);
+      console.log('[getSessionTemplateWithExercises] Returning workout ID:', workout.id);
+
+      return {
         session: {
           id: trainingSession.id,
           name: trainingSession.name,
@@ -5263,5 +5338,278 @@ Set your goals and preferences for today's session.`;
         program: updatedSession!.program,
         session: updatedSession,
       };
+    }),
+
+  // New endpoint to get available programs (excluding unassigned)
+  getAvailablePrograms: publicProcedure
+    .input(
+      z.object({
+        businessId: z.string().uuid(),
+      }),
+    )
+    .query(({ input }) => {
+      console.log(`[getAvailablePrograms] Fetching available programs for business: ${input.businessId}`);
+
+      // Return all possible program values except 'unassigned'
+      const programs = [
+        { id: 'h4h_5am', label: 'H4H 5AM Sessions' },
+        { id: 'h4h_5pm', label: 'H4H 5PM Sessions' },
+        { id: 'saturday_cg', label: 'Saturday CG' },
+        { id: 'monday_cg', label: 'Monday CG' },
+      ];
+
+      console.log(`[getAvailablePrograms] Returning ${programs.length} programs`);
+      return programs;
+    }),
+
+  // New endpoint to get training sessions by program (replaces getFavoritesByCategory)
+  getSessionsByProgram: publicProcedure
+    .input(
+      z.object({
+        businessId: z.string().uuid(),
+        program: z.enum(["h4h_5am", "h4h_5pm", "saturday_cg", "monday_cg"]),
+        includeTemplateConfig: z.boolean().optional().default(false),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      console.log(`[getSessionsByProgram] Fetching sessions for business: ${input.businessId}, program: ${input.program}, includeTemplateConfig: ${input.includeTemplateConfig}`);
+
+      // Query training sessions directly by program
+      const trainingSessions = await ctx.db
+        .select({
+          id: TrainingSession.id,
+          businessId: TrainingSession.businessId,
+          trainerId: TrainingSession.trainerId,
+          name: TrainingSession.name,
+          scheduledAt: TrainingSession.scheduledAt,
+          durationMinutes: TrainingSession.durationMinutes,
+          maxParticipants: TrainingSession.maxParticipants,
+          status: TrainingSession.status,
+          program: TrainingSession.program,
+          templateType: TrainingSession.templateType,
+          // Only include templateConfig if explicitly requested
+          ...(input.includeTemplateConfig && { templateConfig: TrainingSession.templateConfig as any }),
+          createdAt: TrainingSession.createdAt,
+          updatedAt: TrainingSession.updatedAt,
+        })
+        .from(TrainingSession)
+        .where(
+          and(
+            eq(TrainingSession.businessId, input.businessId),
+            eq(TrainingSession.program, input.program),
+          ),
+        )
+        .orderBy(desc(TrainingSession.createdAt));
+
+      console.log(`[getSessionsByProgram] Found ${trainingSessions.length} training sessions for program: ${input.program}`);
+
+      // Transform to match the expected format from getFavoritesByCategory
+      return trainingSessions.map((session) => ({
+        id: `program-${session.id}`, // Unique ID for the "favorite" concept
+        category: input.program, // Map program to category for compatibility
+        trainingSession: session,
+      }));
+    }),
+
+  // Add training session to business favorites (global)
+  addToFavorites: publicProcedure
+    .input(
+      z.object({
+        businessId: z.string().uuid(),
+        trainingSessionId: z.string().uuid(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      console.log(`[addToFavorites] Adding session ${input.trainingSessionId} to business favorites for business ${input.businessId}`);
+
+      // Check if session is already favorited for this business
+      const existingFavorite = await ctx.db
+        .select()
+        .from(FavoriteSessions)
+        .where(
+          and(
+            eq(FavoriteSessions.businessId, input.businessId),
+            eq(FavoriteSessions.trainingSessionId, input.trainingSessionId),
+          ),
+        )
+        .limit(1);
+
+      if (existingFavorite.length > 0) {
+        console.log(`[addToFavorites] Session is already favorited`);
+        throw new TRPCError({
+          code: "CONFLICT", 
+          message: "Session is already in favorites",
+        });
+      }
+
+      try {
+        const [favorite] = await ctx.db
+          .insert(FavoriteSessions)
+          .values({
+            trainingSessionId: input.trainingSessionId,
+            businessId: input.businessId,
+            category: "other", // Always use "other" for new favorites
+          })
+          .returning();
+
+        console.log(`[addToFavorites] Successfully added favorite: ${favorite?.id}`);
+        return { success: true, favoriteId: favorite?.id };
+      } catch (error) {
+        console.log(`[addToFavorites] Error adding favorite: ${error}`);
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR", 
+          message: "Failed to add favorite",
+        });
+      }
+    }),
+
+  // Remove training session from business favorites (global)
+  removeFromFavorites: publicProcedure
+    .input(
+      z.object({
+        businessId: z.string().uuid(),
+        trainingSessionId: z.string().uuid(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      console.log(`[removeFromFavorites] Removing session ${input.trainingSessionId} from business favorites for business ${input.businessId}`);
+
+      const deleted = await ctx.db
+        .delete(FavoriteSessions)
+        .where(
+          and(
+            eq(FavoriteSessions.trainingSessionId, input.trainingSessionId),
+            eq(FavoriteSessions.businessId, input.businessId),
+          ),
+        )
+        .returning();
+
+      console.log(`[removeFromFavorites] Deleted ${deleted.length} favorite(s)`);
+      return { success: true, removed: deleted.length > 0 };
+    }),
+
+  // Get business favorite training sessions (global)
+  getBusinessFavorites: publicProcedure
+    .input(
+      z.object({
+        businessId: z.string().uuid(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      console.log(`[getBusinessFavorites] Fetching favorites for business ${input.businessId}`);
+
+      const favorites = await ctx.db
+        .select({
+          id: FavoriteSessions.id,
+          trainingSessionId: FavoriteSessions.trainingSessionId,
+          category: FavoriteSessions.category,
+          createdAt: FavoriteSessions.createdAt,
+          trainingSession: {
+            id: TrainingSession.id,
+            name: TrainingSession.name,
+            program: TrainingSession.program,
+            scheduledAt: TrainingSession.scheduledAt,
+            durationMinutes: TrainingSession.durationMinutes,
+            maxParticipants: TrainingSession.maxParticipants,
+            status: TrainingSession.status,
+            templateType: TrainingSession.templateType,
+            createdAt: TrainingSession.createdAt,
+          },
+        })
+        .from(FavoriteSessions)
+        .innerJoin(
+          TrainingSession,
+          eq(FavoriteSessions.trainingSessionId, TrainingSession.id),
+        )
+        .where(eq(FavoriteSessions.businessId, input.businessId))
+        .orderBy(desc(FavoriteSessions.createdAt));
+
+      console.log(`[getBusinessFavorites] Found ${favorites.length} favorites`);
+      return favorites;
+    }),
+
+  // Check if specific sessions are favorited for business (global)
+  checkFavoriteStatus: publicProcedure
+    .input(
+      z.object({
+        businessId: z.string().uuid(),
+        trainingSessionIds: z.array(z.string().uuid()),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      console.log(`[checkFavoriteStatus] Checking favorite status for ${input.trainingSessionIds.length} sessions in business ${input.businessId}`);
+
+      const favorites = await ctx.db
+        .select({
+          trainingSessionId: FavoriteSessions.trainingSessionId,
+        })
+        .from(FavoriteSessions)
+        .where(
+          and(
+            eq(FavoriteSessions.businessId, input.businessId),
+            inArray(FavoriteSessions.trainingSessionId, input.trainingSessionIds),
+          ),
+        );
+
+      // Return a map of sessionId -> boolean
+      const favoriteMap: Record<string, boolean> = {};
+      for (const sessionId of input.trainingSessionIds) {
+        favoriteMap[sessionId] = favorites.some(f => f.trainingSessionId === sessionId);
+      }
+
+      console.log(`[checkFavoriteStatus] Returning status for ${Object.keys(favoriteMap).length} sessions`);
+      return favoriteMap;
+    }),
+
+  // Update training session name
+  updateTrainingSessionName: publicProcedure
+    .input(
+      z.object({
+        businessId: z.string().uuid(),
+        trainingSessionId: z.string().uuid(),
+        newName: z.string().min(1).max(255),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      console.log(`[updateTrainingSessionName] Updating session ${input.trainingSessionId} name to: ${input.newName}`);
+
+      try {
+        const [updatedSession] = await ctx.db
+          .update(TrainingSession)
+          .set({
+            name: input.newName,
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(TrainingSession.id, input.trainingSessionId),
+              eq(TrainingSession.businessId, input.businessId),
+            ),
+          )
+          .returning({
+            id: TrainingSession.id,
+            name: TrainingSession.name,
+            updatedAt: TrainingSession.updatedAt,
+          });
+
+        if (!updatedSession) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Training session not found",
+          });
+        }
+
+        console.log(`[updateTrainingSessionName] Successfully updated session name: ${updatedSession.name}`);
+        return { 
+          success: true, 
+          session: updatedSession 
+        };
+      } catch (error) {
+        console.log(`[updateTrainingSessionName] Error updating session name: ${error}`);
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to update session name",
+        });
+      }
     }),
 } satisfies TRPCRouterRecord;
