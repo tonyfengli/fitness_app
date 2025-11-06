@@ -223,39 +223,33 @@ export function CategorySelectionStep({ onSelectCategory }: CategorySelectionSte
   });
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h3 className="text-lg font-semibold mb-6 text-gray-900 dark:text-white">Choose a Program</h3>
-        
-        {isLoading ? (
-          <div className="flex justify-center py-12">
-            <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
-          </div>
-        ) : programs && programs.length > 0 ? (
-          <div className="space-y-4">
-            {programs.map((program) => (
-              <button
-                key={program.id}
-                onClick={() => onSelectCategory(program.id)}
-                className="w-full p-6 rounded-xl border-2 border-gray-200 dark:border-gray-700 text-left hover:border-blue-300 dark:hover:border-blue-600 transition-colors"
-              >
-                <div className="flex items-center justify-between">
-                  <h4 className="text-base font-semibold text-gray-900 dark:text-white">
-                    {program.label}
-                  </h4>
-                  <ChevronRight className="w-5 h-5 text-gray-400" />
-                </div>
-              </button>
-            ))}
-          </div>
-        ) : (
-          <div className="text-center py-12">
-            <p className="text-gray-500 dark:text-gray-400">
-              No programs available
-            </p>
-          </div>
-        )}
-      </div>
+    <div className="min-h-full">
+      {isLoading ? (
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="h-6 w-6 animate-spin text-gray-300" />
+        </div>
+      ) : programs && programs.length > 0 ? (
+        <div className="space-y-1">
+          {programs.map((program) => (
+            <button
+              key={program.id}
+              onClick={() => onSelectCategory(program.id)}
+              className="w-full p-8 text-left border border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors group"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-lg font-medium text-gray-900 dark:text-white">
+                  {program.label}
+                </span>
+                <ChevronRight className="w-5 h-5 text-gray-300 group-hover:text-gray-500 transition-colors" />
+              </div>
+            </button>
+          ))}
+        </div>
+      ) : (
+        <div className="flex items-center justify-center h-64">
+          <p className="text-gray-400">No programs available</p>
+        </div>
+      )}
     </div>
   );
 }
@@ -499,18 +493,14 @@ export function TemplateSelectionStep({ program, onSelectTemplate }: TemplateSel
   const programLabel = PROGRAM_LABELS[program as keyof typeof PROGRAM_LABELS] || '';
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h3 className="text-lg font-semibold mb-6 text-gray-900 dark:text-white">
-          {programLabel}
-        </h3>
-        
+    <>
+      <div className="min-h-full">
         {isLoading ? (
-          <div className="flex justify-center py-12">
-            <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+          <div className="flex items-center justify-center h-64">
+            <Loader2 className="h-6 w-6 animate-spin text-gray-300" />
           </div>
         ) : sessions && sessions.length > 0 ? (
-          <div className="space-y-6">
+          <div className="space-y-1">
             {(() => {
               // Separate sessions into favorites and others
               const sortedSessions = sessions.sort((a, b) => {
@@ -528,130 +518,121 @@ export function TemplateSelectionStep({ program, onSelectTemplate }: TemplateSel
                 <>
                   {/* Favorite Sessions */}
                   {favoriteSessions.length > 0 && (
-                    <div className="space-y-4">
-                      <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                        Favorites ({favoriteSessions.length})
-                      </h4>
+                    <>
+                      <div className="px-8 py-2">
+                        <p className="text-xs text-gray-500 uppercase tracking-wide">
+                          Favorites
+                        </p>
+                      </div>
                       {favoriteSessions.map((sessionItem) => {
-                        const isFavorited = true; // Always true in this section
+                        const isFavorited = true;
                         
                         return (
-                          <div key={sessionItem.id} className="relative">
+                          <div key={sessionItem.id} className="relative group">
                             <button
                               onClick={() => handleTemplateSelect(sessionItem.trainingSession.id, sessionItem.trainingSession.name)}
                               disabled={loadingTemplateId !== null}
-                              className="w-full p-6 rounded-xl border-2 border-gray-200 dark:border-gray-700 text-left disabled:opacity-50 disabled:cursor-not-allowed hover:border-blue-300 dark:hover:border-blue-600 transition-colors"
+                              className="w-full p-8 text-left border border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors disabled:opacity-50"
                             >
                               <div className="flex items-center justify-between">
-                                <div className="space-y-1">
-                                  <h4 className="text-base font-semibold text-gray-900 dark:text-white">
-                                    {sessionItem.trainingSession.name}
-                                  </h4>
-                                  <p className="text-sm text-gray-600 dark:text-gray-400">
-                                    Created {formatDate(sessionItem.trainingSession.createdAt)}
-                                  </p>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  {loadingTemplateId === sessionItem.trainingSession.id && (
-                                    <Loader2 className="h-5 w-5 animate-spin text-gray-400" />
-                                  )}
-                                </div>
+                                <span className="text-lg font-medium text-gray-900 dark:text-white">
+                                  {sessionItem.trainingSession.name}
+                                </span>
+                                {loadingTemplateId === sessionItem.trainingSession.id ? (
+                                  <Loader2 className="w-5 h-5 animate-spin text-gray-300" />
+                                ) : (
+                                  <ChevronRight className="w-5 h-5 text-gray-300 group-hover:text-gray-500 transition-colors" />
+                                )}
                               </div>
                             </button>
                             
-                            {/* Favorite button */}
+                            {/* Favorite star */}
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
                                 toggleFavorite(sessionItem.trainingSession.id, sessionItem.trainingSession.name, isFavorited);
                               }}
                               disabled={addToFavorites.isPending || removeFromFavorites.isPending}
-                              className="absolute top-3 right-3 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors disabled:opacity-50"
-                              title="Remove from favorites"
+                              className="absolute right-14 top-1/2 -translate-y-1/2 p-3 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
                             >
                               <Star className="h-5 w-5 fill-yellow-400 text-yellow-400" />
                             </button>
                           </div>
                         );
                       })}
-                    </div>
+                    </>
                   )}
 
-                  {/* Other Sessions - Collapsible */}
+                  {/* Other Sessions */}
                   {otherSessions.length > 0 && (
-                    <div className="space-y-4">
-                      <button
-                        onClick={() => setIsOtherSessionsExpanded(!isOtherSessionsExpanded)}
-                        className="flex items-center justify-between w-full text-left"
-                      >
-                        <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                          Other Sessions ({otherSessions.length})
-                        </h4>
-                        <ChevronDownIcon 
-                          className={cn(
-                            "h-4 w-4 text-gray-500 transition-transform duration-200",
-                            isOtherSessionsExpanded ? "rotate-180" : ""
-                          )}
-                        />
-                      </button>
+                    <>
+                      {favoriteSessions.length > 0 && (
+                        <div className="h-4" />
+                      )}
+                      <div className="px-8">
+                        <button
+                          onClick={() => setIsOtherSessionsExpanded(!isOtherSessionsExpanded)}
+                          className="flex items-center gap-2 py-4 -mx-2 px-2 text-xs text-gray-500 uppercase tracking-wide hover:bg-gray-50 dark:hover:bg-gray-900 rounded transition-colors"
+                        >
+                          <span>Others</span>
+                          <ChevronDownIcon 
+                            className={cn(
+                              "h-3 w-3 text-gray-400 transition-transform",
+                              isOtherSessionsExpanded ? "rotate-180" : ""
+                            )}
+                          />
+                        </button>
+                      </div>
                       
                       {isOtherSessionsExpanded && (
-                        <div className="space-y-4 pl-2">
+                        <>
                           {otherSessions.map((sessionItem) => {
-                            const isFavorited = false; // Always false in this section
+                            const isFavorited = false;
                             
                             return (
-                              <div key={sessionItem.id} className="relative">
+                              <div key={sessionItem.id} className="relative group">
                                 <button
                                   onClick={() => handleTemplateSelect(sessionItem.trainingSession.id, sessionItem.trainingSession.name)}
                                   disabled={loadingTemplateId !== null}
-                                  className="w-full p-6 rounded-xl border-2 border-gray-200 dark:border-gray-700 text-left disabled:opacity-50 disabled:cursor-not-allowed hover:border-blue-300 dark:hover:border-blue-600 transition-colors"
+                                  className="w-full p-8 text-left border border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors disabled:opacity-50"
                                 >
                                   <div className="flex items-center justify-between">
-                                    <div className="space-y-1">
-                                      <h4 className="text-base font-semibold text-gray-900 dark:text-white">
-                                        {sessionItem.trainingSession.name}
-                                      </h4>
-                                      <p className="text-sm text-gray-600 dark:text-gray-400">
-                                        Created {formatDate(sessionItem.trainingSession.createdAt)}
-                                      </p>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                      {loadingTemplateId === sessionItem.trainingSession.id && (
-                                        <Loader2 className="h-5 w-5 animate-spin text-gray-400" />
-                                      )}
-                                    </div>
+                                    <span className="text-lg font-medium text-gray-900 dark:text-white">
+                                      {sessionItem.trainingSession.name}
+                                    </span>
+                                    {loadingTemplateId === sessionItem.trainingSession.id ? (
+                                      <Loader2 className="w-5 h-5 animate-spin text-gray-300" />
+                                    ) : (
+                                      <ChevronRight className="w-5 h-5 text-gray-300 group-hover:text-gray-500 transition-colors" />
+                                    )}
                                   </div>
                                 </button>
                                 
-                                {/* Favorite button */}
+                                {/* Favorite star */}
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     toggleFavorite(sessionItem.trainingSession.id, sessionItem.trainingSession.name, isFavorited);
                                   }}
                                   disabled={addToFavorites.isPending || removeFromFavorites.isPending}
-                                  className="absolute top-3 right-3 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors disabled:opacity-50"
-                                  title="Add to favorites"
+                                  className="absolute right-14 top-1/2 -translate-y-1/2 p-3 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
                                 >
                                   <Star className="h-5 w-5 text-gray-400 hover:text-yellow-400 transition-colors" />
                                 </button>
                               </div>
                             );
                           })}
-                        </div>
+                        </>
                       )}
-                    </div>
+                    </>
                   )}
                 </>
               );
             })()}
           </div>
         ) : (
-          <div className="text-center py-12">
-            <p className="text-gray-500 dark:text-gray-400">
-              No sessions available in this program
-            </p>
+          <div className="flex items-center justify-center h-64">
+            <p className="text-gray-400">No templates available</p>
           </div>
         )}
       </div>
@@ -762,7 +743,7 @@ export function TemplateSelectionStep({ program, onSelectTemplate }: TemplateSel
 
       {/* iOS Safari Fix */}
       <IOSSafariFix />
-    </div>
+    </>
   );
 }
 
