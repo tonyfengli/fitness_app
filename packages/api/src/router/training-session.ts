@@ -5612,4 +5612,45 @@ Set your goals and preferences for today's session.`;
         });
       }
     }),
+
+  // Get all favorites across all programs
+  getAllFavorites: publicProcedure
+    .input(
+      z.object({
+        businessId: z.string().uuid(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      try {
+        console.log(`[getAllFavorites] Fetching all favorites for business: ${input.businessId}`);
+
+        // Get all favorites with their training session details
+        const favorites = await ctx.db
+          .select({
+            id: FavoriteSessions.id,
+            trainingSession: TrainingSession,
+          })
+          .from(FavoriteSessions)
+          .innerJoin(
+            TrainingSession,
+            eq(FavoriteSessions.trainingSessionId, TrainingSession.id)
+          )
+          .where(
+            and(
+              eq(TrainingSession.businessId, input.businessId),
+              eq(FavoriteSessions.businessId, input.businessId)
+            )
+          )
+          .orderBy(desc(TrainingSession.createdAt));
+
+        console.log(`[getAllFavorites] Found ${favorites.length} favorite sessions`);
+        return favorites;
+      } catch (error) {
+        console.error("[getAllFavorites] Error:", error);
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to fetch favorites",
+        });
+      }
+    }),
 } satisfies TRPCRouterRecord;

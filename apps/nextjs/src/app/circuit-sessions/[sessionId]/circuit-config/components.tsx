@@ -228,26 +228,50 @@ export function CategorySelectionStep({ onSelectCategory }: CategorySelectionSte
         <div className="flex items-center justify-center h-64">
           <Loader2 className="h-6 w-6 animate-spin text-gray-300" />
         </div>
-      ) : programs && programs.length > 0 ? (
-        <div className="space-y-1">
-          {programs.map((program) => (
+      ) : (
+        <div className="space-y-4">
+          {/* Favorites Section - Higher Hierarchy */}
+          <div>
             <button
-              key={program.id}
-              onClick={() => onSelectCategory(program.id)}
-              className="w-full p-8 text-left border border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors group"
+              onClick={() => onSelectCategory('favorites')}
+              className="w-full p-8 text-left border-2 border-gray-900 dark:border-gray-100 hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors group"
             >
               <div className="flex items-center justify-between">
-                <span className="text-lg font-medium text-gray-900 dark:text-white">
-                  {program.label}
-                </span>
-                <ChevronRight className="w-5 h-5 text-gray-300 group-hover:text-gray-500 transition-colors" />
+                <div className="flex items-center gap-3">
+                  <Star className="h-5 w-5 fill-yellow-400 text-yellow-400" />
+                  <span className="text-lg font-medium text-gray-900 dark:text-white">
+                    Favorites
+                  </span>
+                </div>
+                <ChevronRight className="w-5 h-5 text-gray-900 dark:text-gray-100 group-hover:translate-x-0.5 transition-transform" />
               </div>
             </button>
-          ))}
-        </div>
-      ) : (
-        <div className="flex items-center justify-center h-64">
-          <p className="text-gray-400">No programs available</p>
+          </div>
+          
+          {/* Regular Programs */}
+          {programs && programs.length > 0 && (
+            <div className="space-y-1">
+              <div className="px-8 py-2">
+                <p className="text-xs text-gray-500 uppercase tracking-wide">
+                  Programs
+                </p>
+              </div>
+              {programs.map((program) => (
+                <button
+                  key={program.id}
+                  onClick={() => onSelectCategory(program.id)}
+                  className="w-full p-8 text-left border border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors group"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-lg font-medium text-gray-900 dark:text-white">
+                      {program.label}
+                    </span>
+                    <ChevronRight className="w-5 h-5 text-gray-300 group-hover:text-gray-500 transition-colors" />
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -273,12 +297,19 @@ export function TemplateSelectionStep({ program, onSelectTemplate }: TemplateSel
     priority: 2 
   });
   
-  // Fetch sessions for selected program - WITHOUT templateConfig for better performance
-  const sessionsQueryOptions = trpc.trainingSession.getSessionsByProgram.queryOptions({
-    businessId: BUSINESS_ID,
-    program: program as "h4h_5am" | "h4h_5pm" | "saturday_cg" | "monday_cg",
-    includeTemplateConfig: false, // Don't fetch heavy templateConfig during listing
-  });
+  // Check if we're showing favorites or a specific program
+  const isFavoritesView = program === 'favorites';
+  
+  // Fetch sessions based on whether we're showing favorites or program sessions
+  const sessionsQueryOptions = isFavoritesView 
+    ? trpc.trainingSession.getAllFavorites.queryOptions({
+        businessId: BUSINESS_ID,
+      })
+    : trpc.trainingSession.getSessionsByProgram.queryOptions({
+        businessId: BUSINESS_ID,
+        program: program as "h4h_5am" | "h4h_5pm" | "saturday_cg" | "monday_cg",
+        includeTemplateConfig: false,
+      });
   
   const { data: sessions, isLoading } = useQuery(sessionsQueryOptions);
 
@@ -502,7 +533,56 @@ export function TemplateSelectionStep({ program, onSelectTemplate }: TemplateSel
         ) : sessions && sessions.length > 0 ? (
           <div className="space-y-1">
             {(() => {
-              // Separate sessions into favorites and others
+              // Handle favorites view differently
+              if (isFavoritesView) {
+                // All sessions are already favorites, no need to separate
+                return sessions.map((sessionItem) => {
+                  const isFavorited = true;
+                  
+                  return (
+                    <div key={sessionItem.id} className="relative group">
+                      <button
+                        onClick={() => handleTemplateSelect(sessionItem.trainingSession.id, sessionItem.trainingSession.name)}
+                        disabled={loadingTemplateId !== null}
+                        className="w-full p-8 text-left border border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors disabled:opacity-50"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex flex-col">
+                            <span className="text-lg font-medium text-gray-900 dark:text-white">
+                              {sessionItem.trainingSession.name}
+                            </span>
+                            <span className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                              {sessionItem.trainingSession.program ? 
+                                PROGRAM_LABELS[sessionItem.trainingSession.program as keyof typeof PROGRAM_LABELS] || sessionItem.trainingSession.program
+                                : 'No program'
+                              }
+                            </span>
+                          </div>
+                          {loadingTemplateId === sessionItem.trainingSession.id ? (
+                            <Loader2 className="w-5 h-5 animate-spin text-gray-300" />
+                          ) : (
+                            <ChevronRight className="w-5 h-5 text-gray-300 group-hover:text-gray-500 transition-colors" />
+                          )}
+                        </div>
+                      </button>
+                      
+                      {/* Favorite star */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleFavorite(sessionItem.trainingSession.id, sessionItem.trainingSession.name, isFavorited);
+                        }}
+                        disabled={addToFavorites.isPending || removeFromFavorites.isPending}
+                        className="absolute right-14 top-1/2 -translate-y-1/2 p-3 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
+                      >
+                        <Star className="h-5 w-5 fill-yellow-400 text-yellow-400" />
+                      </button>
+                    </div>
+                  );
+                });
+              }
+              
+              // Regular program view - separate favorites and others
               const sortedSessions = sessions.sort((a, b) => {
                 return new Date(b.trainingSession.createdAt).getTime() - new Date(a.trainingSession.createdAt).getTime();
               });
@@ -535,9 +615,21 @@ export function TemplateSelectionStep({ program, onSelectTemplate }: TemplateSel
                               className="w-full p-8 text-left border border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors disabled:opacity-50"
                             >
                               <div className="flex items-center justify-between">
-                                <span className="text-lg font-medium text-gray-900 dark:text-white">
-                                  {sessionItem.trainingSession.name}
-                                </span>
+                                <div className="flex flex-col">
+                                  <span className="text-lg font-medium text-gray-900 dark:text-white">
+                                    {sessionItem.trainingSession.name}
+                                  </span>
+                                  <span className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                    {sessionItem.trainingSession.scheduledAt ? 
+                                      new Date(sessionItem.trainingSession.scheduledAt).toLocaleDateString('en-US', { 
+                                        weekday: 'long',
+                                        month: 'short',
+                                        day: 'numeric'
+                                      })
+                                      : 'Not scheduled'
+                                    }
+                                  </span>
+                                </div>
                                 {loadingTemplateId === sessionItem.trainingSession.id ? (
                                   <Loader2 className="w-5 h-5 animate-spin text-gray-300" />
                                 ) : (
@@ -597,9 +689,21 @@ export function TemplateSelectionStep({ program, onSelectTemplate }: TemplateSel
                                   className="w-full p-8 text-left border border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors disabled:opacity-50"
                                 >
                                   <div className="flex items-center justify-between">
-                                    <span className="text-lg font-medium text-gray-900 dark:text-white">
-                                      {sessionItem.trainingSession.name}
-                                    </span>
+                                    <div className="flex flex-col">
+                                      <span className="text-lg font-medium text-gray-900 dark:text-white">
+                                        {sessionItem.trainingSession.name}
+                                      </span>
+                                      <span className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                        {sessionItem.trainingSession.scheduledAt ? 
+                                          new Date(sessionItem.trainingSession.scheduledAt).toLocaleDateString('en-US', { 
+                                            weekday: 'long',
+                                            month: 'short',
+                                            day: 'numeric'
+                                          })
+                                          : 'Not scheduled'
+                                        }
+                                      </span>
+                                    </div>
                                     {loadingTemplateId === sessionItem.trainingSession.id ? (
                                       <Loader2 className="w-5 h-5 animate-spin text-gray-300" />
                                     ) : (
@@ -749,49 +853,31 @@ export function TemplateSelectionStep({ program, onSelectTemplate }: TemplateSel
 
 export function WorkoutTypeStep({ onSelect }: WorkoutTypeStepProps) {
   return (
-    <div className="space-y-6">
-      <div>
-        <h3 className="text-lg font-semibold mb-6 text-gray-900 dark:text-white">Choose Your Workout Type</h3>
+    <div className="min-h-full">
+      <div className="space-y-1">
+        <button
+          onClick={() => onSelect('custom')}
+          className="w-full p-8 text-left border border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors group"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-lg font-medium text-gray-900 dark:text-white">
+              Build Custom Workout
+            </span>
+            <ChevronRight className="w-5 h-5 text-gray-300 group-hover:text-gray-500 transition-colors" />
+          </div>
+        </button>
         
-        <div className="space-y-4">
-          <button
-            onClick={() => onSelect('custom')}
-            className="w-full p-6 rounded-xl border-2 border-gray-200 dark:border-gray-700 text-left"
-          >
-            <div className="flex items-center space-x-4">
-              <div className="flex-shrink-0 w-12 h-12 bg-primary/10 dark:bg-primary/20 rounded-full flex items-center justify-center">
-                <svg className="w-6 h-6 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
-                </svg>
-              </div>
-              <div className="flex-1">
-                <h4 className="text-base font-semibold text-gray-900 dark:text-white">
-                  Build Custom Workout
-                </h4>
-              </div>
-              <ChevronRight className="w-5 h-5 text-gray-400 flex-shrink-0" />
-            </div>
-          </button>
-          
-          <button
-            onClick={() => onSelect('template')}
-            className="w-full p-6 rounded-xl border-2 border-gray-200 dark:border-gray-700 text-left"
-          >
-            <div className="flex items-center space-x-4">
-              <div className="flex-shrink-0 w-12 h-12 bg-primary/10 dark:bg-primary/20 rounded-full flex items-center justify-center">
-                <svg className="w-6 h-6 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                </svg>
-              </div>
-              <div className="flex-1">
-                <h4 className="text-base font-semibold text-gray-900 dark:text-white">
-                  Use Workout Template
-                </h4>
-              </div>
-              <ChevronRight className="w-5 h-5 text-gray-400 flex-shrink-0" />
-            </div>
-          </button>
-        </div>
+        <button
+          onClick={() => onSelect('template')}
+          className="w-full p-8 text-left border border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors group"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-lg font-medium text-gray-900 dark:text-white">
+              Use Workout Template
+            </span>
+            <ChevronRight className="w-5 h-5 text-gray-300 group-hover:text-gray-500 transition-colors" />
+          </div>
+        </button>
       </div>
     </div>
   );
