@@ -348,7 +348,7 @@ export default function ClientDetailPage({ params }: ClientDetailPageProps) {
       <div className="min-h-screen bg-gradient-to-br from-gray-50 via-purple-50 to-blue-50">
         <CircuitHeader
           onBack={() => router.push('/clients')}
-          backText="Back to Clients"
+          backText="Back"
           title="Client Details"
           subtitle="Loading client information..."
         />
@@ -364,7 +364,7 @@ export default function ClientDetailPage({ params }: ClientDetailPageProps) {
       <div className="min-h-screen bg-gradient-to-br from-gray-50 via-purple-50 to-blue-50">
         <CircuitHeader
           onBack={() => router.push('/clients')}
-          backText="Back to Clients"
+          backText="Back"
           title="Client Not Found"
           subtitle="The requested client could not be found"
         />
@@ -392,7 +392,7 @@ export default function ClientDetailPage({ params }: ClientDetailPageProps) {
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-purple-50 to-blue-50">
       <CircuitHeader
         onBack={() => router.push(`/clients?filter=${encodeURIComponent(selectedFilter)}`)}
-        backText="Back to Clients"
+        backText="Back"
         title={client.name}
         subtitle={`${attendanceData.attendedSessions}/${attendanceData.expectedSessions} sessions • ${attendanceData.attendancePercentage}% attendance`}
         rightAction={

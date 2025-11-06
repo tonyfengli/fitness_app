@@ -41,9 +41,8 @@ export default function TrainerHomePage() {
                 <p className="text-blue-100 text-sm">
                   Manage circuit and training sessions
                 </p>
-                <div className="mt-6 flex items-center text-white/80 text-sm">
-                  <span>2 active today</span>
-                  <svg className="w-5 h-5 ml-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div className="mt-6 flex items-center justify-end">
+                  <svg className="w-5 h-5 text-white/80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
                   </svg>
                 </div>
@@ -71,9 +70,8 @@ export default function TrainerHomePage() {
                 <p className="text-emerald-100 text-sm">
                   Track client progress and insights
                 </p>
-                <div className="mt-6 flex items-center text-white/80 text-sm">
-                  <span>5 active clients</span>
-                  <svg className="w-5 h-5 ml-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div className="mt-6 flex items-center justify-end">
+                  <svg className="w-5 h-5 text-white/80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
                   </svg>
                 </div>
@@ -82,12 +80,6 @@ export default function TrainerHomePage() {
           </Link>
         </div>
 
-        {/* Mobile-optimized footer */}
-        <div className="mt-auto pt-8">
-          <div className="text-center text-purple-300 text-xs">
-            <p>Fitness Trainer App</p>
-          </div>
-        </div>
       </div>
     </div>
   );

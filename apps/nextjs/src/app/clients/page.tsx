@@ -47,6 +47,9 @@ export default function ClientsPage() {
   const [modalStartMonth, setModalStartMonth] = useState('');
   const [modalEndMonth, setModalEndMonth] = useState('');
   const [filterType, setFilterType] = useState<'single' | 'range'>('single');
+  
+  // Inactive clients expansion state
+  const [showInactiveClients, setShowInactiveClients] = useState(false);
 
   // Generate available historical months (up to 1 year back)
   const availableMonths = useMemo(() => {
@@ -112,6 +115,12 @@ export default function ClientsPage() {
       endDate: dateRange.end.toISOString(),
       weekCount: weekCount,
     }),
+  });
+
+  // Fetch inactive clients data
+  const { data: inactiveClientsData, isLoading: isLoadingInactive } = useQuery({
+    ...trpc.clients.getClientsWithInactivePackages.queryOptions(),
+    enabled: showInactiveClients, // Only fetch when expanded
   });
 
 
@@ -300,6 +309,114 @@ export default function ClientsPage() {
                 </button>
               );
             })}
+          </div>
+        )}
+      </div>
+
+      {/* Inactive Clients Expandable Section */}
+      <div className="px-4 pb-6">
+        <button
+          onClick={() => setShowInactiveClients(!showInactiveClients)}
+          className="w-full flex items-center justify-between p-4 bg-gray-100 dark:bg-gray-800 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 bg-gray-400 dark:bg-gray-600 rounded-full flex items-center justify-center">
+              <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+              </svg>
+            </div>
+            <div className="text-left">
+              <h3 className="font-semibold text-gray-700 dark:text-gray-300">Show Inactive Clients</h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Clients with cancelled or expired packages</p>
+            </div>
+          </div>
+          <svg 
+            className={`w-5 h-5 text-gray-400 transition-transform ${
+              showInactiveClients ? 'rotate-90' : ''
+            }`} 
+            fill="none" 
+            stroke="currentColor" 
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
+          </svg>
+        </button>
+
+        {/* Inactive Clients List */}
+        {showInactiveClients && (
+          <div className="mt-4">
+            {isLoadingInactive ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2Icon className="w-6 h-6 text-gray-400 animate-spin" />
+              </div>
+            ) : !inactiveClientsData || inactiveClientsData.length === 0 ? (
+              <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                <svg className="w-12 h-12 mx-auto mb-4 text-gray-300 dark:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+                <p className="text-sm">No inactive clients found</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {inactiveClientsData
+                  .filter(client =>
+                    client.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                    client.email.toLowerCase().includes(searchQuery.toLowerCase())
+                  )
+                  .map((client) => {
+                    const initials = getInitials(client.name);
+                    const endDate = new Date(client.endDate);
+                    const isRecentlyCancelled = (new Date().getTime() - endDate.getTime()) <= (30 * 24 * 60 * 60 * 1000); // Within 30 days
+                    
+                    return (
+                      <button
+                        key={client.id}
+                        onClick={() => {
+                          router.push(`/clients/${client.id}/packages`, {
+                            state: { client }
+                          });
+                        }}
+                        className="w-full text-left bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-xl hover:border-gray-300 dark:hover:border-gray-600 hover:shadow-sm transition-all opacity-75"
+                      >
+                        <div className="p-4">
+                          <div className="flex items-center gap-4">
+                            {/* Circled initials - grayed out */}
+                            <div className="w-12 h-12 bg-gray-400 dark:bg-gray-600 rounded-full flex items-center justify-center">
+                              <span className="text-white font-bold text-lg">{initials}</span>
+                            </div>
+
+                            {/* Client info */}
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2">
+                                <h3 className="font-semibold text-gray-700 dark:text-gray-300">{client.name}</h3>
+                                <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                  isRecentlyCancelled 
+                                    ? 'bg-orange-100 text-orange-800 dark:bg-orange-900/20 dark:text-orange-400'
+                                    : 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-400'
+                                }`}>
+                                  {isRecentlyCancelled ? 'Recently Cancelled' : 'Inactive'}
+                                </span>
+                              </div>
+                              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                                Last package: {client.packageName} • Ended {endDate.toLocaleDateString('en-US', { 
+                                  month: 'short', 
+                                  day: 'numeric', 
+                                  year: 'numeric' 
+                                })}
+                              </p>
+                            </div>
+
+                            {/* Chevron */}
+                            <svg className="w-5 h-5 text-gray-300 dark:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
+                            </svg>
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
+              </div>
+            )}
           </div>
         )}
       </div>

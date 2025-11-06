@@ -445,6 +445,78 @@ export const clientsRouter = {
     return clientsWithActivePackages;
   }),
 
+  getClientsWithInactivePackages: protectedProcedure.query(async ({ ctx }) => {
+    // Only trainers should be able to see all clients
+    const currentUser = ctx.session?.user as SessionUser;
+    if (currentUser?.role !== "trainer") {
+      throw new Error("Only trainers can view clients with inactive packages");
+    }
+
+    const businessId = currentUser.businessId;
+    if (!businessId) {
+      throw new Error("Trainer must be associated with a business");
+    }
+
+    // Fetch clients with their most recent inactive training package
+    // Use a subquery to get the most recent (latest start_date) inactive package per client
+    const mostRecentInactivePackageSubquery = ctx.db
+      .select({
+        userId: UserTrainingPackage.userId,
+        maxStartDate: sql<string>`MAX(${UserTrainingPackage.startDate})`.as('max_start_date')
+      })
+      .from(UserTrainingPackage)
+      .where(eq(UserTrainingPackage.status, "inactive"))
+      .groupBy(UserTrainingPackage.userId)
+      .as('most_recent_inactive_packages');
+
+    const clientsWithInactivePackages = await ctx.db
+      .select({
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        createdAt: user.createdAt,
+        // Package info
+        packageId: TrainingPackage.id,
+        packageName: TrainingPackage.name,
+        sessionsPerWeek: TrainingPackage.sessionsPerWeek,
+        monthlyPrice: TrainingPackage.monthlyPrice,
+        // Subscription info
+        userPackageId: UserTrainingPackage.id,
+        startDate: UserTrainingPackage.startDate,
+        endDate: UserTrainingPackage.endDate,
+        status: UserTrainingPackage.status,
+      })
+      .from(user)
+      .innerJoin(
+        UserTrainingPackage,
+        and(
+          eq(user.id, UserTrainingPackage.userId),
+          eq(UserTrainingPackage.status, "inactive")
+        )
+      )
+      .innerJoin(
+        mostRecentInactivePackageSubquery,
+        and(
+          eq(UserTrainingPackage.userId, mostRecentInactivePackageSubquery.userId),
+          sql`${UserTrainingPackage.startDate} = ${mostRecentInactivePackageSubquery.maxStartDate}`
+        )
+      )
+      .innerJoin(
+        TrainingPackage,
+        eq(UserTrainingPackage.trainingPackageId, TrainingPackage.id)
+      )
+      .where(
+        and(
+          eq(user.businessId, businessId),
+          eq(user.role, "client")
+        )
+      )
+      .orderBy(user.name);
+
+    return clientsWithInactivePackages;
+  }),
+
   changeUserPackage: protectedProcedure
     .input(ChangeUserPackageSchema)
     .mutation(async ({ ctx, input }) => {
@@ -582,6 +654,129 @@ export const clientsRouter = {
         success: true,
         message: "Package changed successfully",
         data: result,
+      };
+    }),
+
+  cancelUserPackage: protectedProcedure
+    .input(
+      z.object({
+        userId: z.string(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const { userId } = input;
+
+      // Get current user and business
+      const currentUser = ctx.session?.user as SessionUser;
+      const businessId = currentUser.businessId;
+      if (!businessId) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "User must be associated with a business",
+        });
+      }
+
+      // Validate that the user belongs to the same business
+      const userCheck = await ctx.db
+        .select({ id: user.id })
+        .from(user)
+        .where(
+          and(
+            eq(user.id, userId),
+            eq(user.businessId, businessId),
+            eq(user.role, "client")
+          )
+        )
+        .limit(1);
+
+      if (!userCheck.length) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Client not found or does not belong to your business",
+        });
+      }
+
+      // Get all active packages for this user
+      const activePackages = await ctx.db
+        .select({
+          id: UserTrainingPackage.id,
+          startDate: UserTrainingPackage.startDate,
+          endDate: UserTrainingPackage.endDate,
+          trainingPackageId: UserTrainingPackage.trainingPackageId,
+        })
+        .from(UserTrainingPackage)
+        .where(
+          and(
+            eq(UserTrainingPackage.userId, userId),
+            eq(UserTrainingPackage.status, "active")
+          )
+        );
+
+      if (!activePackages.length) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "No active packages found for this client",
+        });
+      }
+
+      // Calculate end of current week (Sunday)
+      const today = new Date();
+      const endOfWeek = getWeekEnd(today);
+      const endOfWeekString = endOfWeek.toISOString().split('T')[0] as string;
+
+      // Update all active packages
+      const packagesToUpdate = activePackages.filter(pkg => {
+        const currentEndDate = new Date(pkg.endDate);
+        // Only update if current end date is in the future
+        return currentEndDate > endOfWeek;
+      });
+
+      const results = [];
+      
+      // Update packages that extend beyond this week
+      if (packagesToUpdate.length > 0) {
+        for (const pkg of packagesToUpdate) {
+          const result = await ctx.db
+            .update(UserTrainingPackage)
+            .set({
+              status: "inactive" as const,
+              endDate: endOfWeekString,
+              updatedAt: sql`now()`,
+            })
+            .where(eq(UserTrainingPackage.id, pkg.id))
+            .returning();
+          results.push(result[0]);
+        }
+      }
+
+      // Set remaining active packages to inactive (those that already end this week or earlier)
+      const packagesToInactivate = activePackages.filter(pkg => {
+        const currentEndDate = new Date(pkg.endDate);
+        return currentEndDate <= endOfWeek;
+      });
+
+      if (packagesToInactivate.length > 0) {
+        for (const pkg of packagesToInactivate) {
+          const result = await ctx.db
+            .update(UserTrainingPackage)
+            .set({
+              status: "inactive" as const,
+              updatedAt: sql`now()`,
+            })
+            .where(eq(UserTrainingPackage.id, pkg.id))
+            .returning();
+          results.push(result[0]);
+        }
+      }
+
+      return {
+        success: true,
+        message: `Cancelled ${results.length} package(s) successfully`,
+        data: {
+          cancelledPackages: results,
+          effectiveCancellationDate: endOfWeekString,
+          totalPackagesCancelled: results.length,
+        },
       };
     }),
 } satisfies TRPCRouterRecord;
