@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { eq, and, sql } from "@acme/db";
+import { eq, and, sql, inArray } from "@acme/db";
 import { TrainingSession, Workout, WorkoutExercise } from "@acme/db/schema";
 import { DEFAULT_CIRCUIT_CONFIG, createDefaultRoundTemplates, migrateToRoundTemplates } from "@acme/db";
 import {
@@ -175,13 +175,58 @@ export const circuitConfigRouter = createTRPCRouter({
             roundNumber: index + 1
           }));
           
+          // Update exercise groupNames to match the new round numbers
+          if (filteredRoundTemplates.length !== session.templateConfig.config?.roundTemplates?.length) {
+            console.log('[BUG TRACE - getBySession] Updating exercise groupNames after renumbering...');
+            
+            // Build mapping of old round names to new round names
+            const roundNameMapping: Record<string, string> = {};
+            filteredRoundTemplates.forEach((rt: any, index: number) => {
+              const oldRoundName = `Round ${rt.roundNumber}`;
+              const newRoundName = `Round ${index + 1}`;
+              if (oldRoundName !== newRoundName) {
+                roundNameMapping[oldRoundName] = newRoundName;
+              }
+            });
+            
+            console.log('[BUG TRACE - getBySession] Round name mapping:', roundNameMapping);
+            
+            // Update all exercises with the new round names
+            for (const [oldName, newName] of Object.entries(roundNameMapping)) {
+              await ctx.db
+                .update(WorkoutExercise)
+                .set({ groupName: newName })
+                .where(
+                  and(
+                    eq(WorkoutExercise.groupName, oldName),
+                    inArray(
+                      WorkoutExercise.workoutId,
+                      ctx.db
+                        .select({ id: Workout.id })
+                        .from(Workout)
+                        .where(eq(Workout.trainingSessionId, input.sessionId))
+                    )
+                  )
+                );
+              
+              console.log(`[BUG TRACE - getBySession] Updated exercises from "${oldName}" to "${newName}"`);
+            }
+          }
+          
           result.config.roundTemplates = renumberedRoundTemplates;
           result.config.rounds = renumberedRoundTemplates.length;
           
           console.log('[BUG TRACE - getBySession] After filtering orphaned rounds:', {
             originalCount: session.templateConfig.config?.roundTemplates?.length || 0,
             filteredCount: renumberedRoundTemplates.length,
-            filteredRounds: renumberedRoundTemplates.map((rt: any) => rt.roundNumber)
+            filteredRounds: renumberedRoundTemplates.map((rt: any) => rt.roundNumber),
+            roundTemplateDetails: renumberedRoundTemplates.map((rt: any) => ({
+              roundNumber: rt.roundNumber,
+              type: rt.template?.type,
+              workDuration: rt.template?.workDuration,
+              restDuration: rt.template?.restDuration,
+              repeatTimes: rt.template?.repeatTimes
+            }))
           });
         }
         
@@ -864,6 +909,13 @@ export const circuitConfigRouter = createTRPCRouter({
         // 1. Create the new round template
         const newRoundNumber = currentConfig.config.roundTemplates.length + 1;
         
+        console.log("[addRound DEBUG] Current round templates before adding:", currentConfig.config.roundTemplates.map((rt: any) => ({
+          roundNumber: rt.roundNumber,
+          type: rt.template?.type
+        })));
+        console.log("[addRound DEBUG] Current rounds count:", currentConfig.config.rounds);
+        console.log("[addRound DEBUG] New round number will be:", newRoundNumber);
+        
         // Build the round template based on type
         let template: any = { type: input.roundConfig.type };
         
@@ -903,6 +955,12 @@ export const circuitConfigRouter = createTRPCRouter({
 
         console.log("[addRound] Built template:", template);
         console.log("[addRound] New round template:", newRoundTemplate);
+        console.log("[addRound DEBUG] Template timing values:", {
+          workDuration: template.workDuration,
+          restDuration: template.restDuration,
+          repeatTimes: template.repeatTimes,
+          restBetweenSets: template.restBetweenSets
+        });
 
         // 2. Update circuit config
         const updatedConfig = {
@@ -915,6 +973,9 @@ export const circuitConfigRouter = createTRPCRouter({
           lastUpdated: new Date().toISOString(),
           updatedBy: "anonymous", // Public endpoint
         };
+        
+        console.log("[addRound DEBUG] Updated config roundTemplates count:", updatedConfig.config.roundTemplates.length);
+        console.log("[addRound DEBUG] Updated config rounds:", updatedConfig.config.rounds);
 
         // Validate the updated config
         const validatedConfig = CircuitConfigSchema.parse(updatedConfig);
@@ -930,6 +991,7 @@ export const circuitConfigRouter = createTRPCRouter({
 
         // 4. Create placeholder exercises for all workouts
         const newRoundName = `Round ${newRoundNumber}`;
+        console.log("[addRound DEBUG] Creating exercises with round name:", newRoundName);
         const workouts = await tx
           .select({ id: Workout.id, userId: Workout.userId })
           .from(Workout)
@@ -986,6 +1048,14 @@ export const circuitConfigRouter = createTRPCRouter({
         }
 
 
+        console.log("[addRound DEBUG] Final result before returning:", {
+          configRoundsCount: validatedConfig.config.rounds,
+          configRoundTemplatesCount: validatedConfig.config.roundTemplates.length,
+          lastRoundTemplate: validatedConfig.config.roundTemplates[validatedConfig.config.roundTemplates.length - 1],
+          totalCreatedExercises,
+          affectedWorkouts: workouts.length
+        });
+
         return {
           config: validatedConfig,
           createdExerciseCount: totalCreatedExercises,
@@ -993,6 +1063,7 @@ export const circuitConfigRouter = createTRPCRouter({
         };
       });
 
+      console.log("[addRound DEBUG] Transaction completed, returning config");
       return result.config;
     }),
 });

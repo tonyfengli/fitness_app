@@ -1084,6 +1084,21 @@ function CircuitWorkoutOverviewContent() {
     enabled: !!sessionId
   });
 
+  // Debug logging for circuit config
+  useEffect(() => {
+    if (circuitConfig) {
+      console.log("[DEBUG] Circuit config received:", circuitConfig);
+      console.log("[DEBUG] Round templates:", circuitConfig.config?.roundTemplates);
+      circuitConfig.config?.roundTemplates?.forEach((round, index) => {
+        console.log(`[DEBUG] Round ${round.roundNumber}:`, {
+          type: round.template.type,
+          exercisesPerRound: round.template.exercisesPerRound,
+          template: round.template
+        });
+      });
+    }
+  }, [circuitConfig]);
+
   // Fetch session data to get templateConfig with setlist
   const { data: sessionData } = useQuery({
     ...trpc.trainingSession.getSession.queryOptions({ id: sessionId || "" }),
@@ -1175,6 +1190,11 @@ function CircuitWorkoutOverviewContent() {
       });
       
       // Sort exercises within each round and create final structure
+      console.log("[DEBUG] RoundsMap entries:", Array.from(roundsMap.entries()).map(([name, exercises]) => ({
+        roundName: name,
+        exerciseCount: exercises.length
+      })));
+      
       let rounds: RoundData[] = Array.from(roundsMap.entries())
         .map(([roundName, exercises]) => {
           // First, sort all exercises by orderIndex
@@ -1219,6 +1239,10 @@ function CircuitWorkoutOverviewContent() {
         : rounds.length;
       
       // Mark which rounds are repeats and get round type
+      console.log("[DEBUG] Actual rounds count:", rounds.length);
+      console.log("[DEBUG] Round templates count:", circuitConfig?.config?.roundTemplates?.length);
+      console.log("[DEBUG] Mismatch?", rounds.length !== circuitConfig?.config?.roundTemplates?.length);
+      
       const roundsWithMetadata = rounds.map((round, index) => {
         const actualRoundIndex = circuitConfig?.config?.repeatRounds && index >= baseRoundCount 
           ? index - baseRoundCount 
@@ -1226,6 +1250,13 @@ function CircuitWorkoutOverviewContent() {
         
         const roundTemplate = circuitConfig?.config?.roundTemplates?.[actualRoundIndex];
         const roundType = roundTemplate?.template?.type || 'circuit_round';
+        
+        console.log(`[DEBUG] Processing round ${index + 1} (actualIndex: ${actualRoundIndex}):`, {
+          roundName: round.roundName,
+          roundTemplate: roundTemplate,
+          roundType: roundType,
+          templateType: roundTemplate?.template?.type
+        });
         
         return {
           ...round,
@@ -1564,7 +1595,25 @@ function CircuitWorkoutOverviewContent() {
                     <div className="mt-3 space-y-3">
                       {(() => {
                         const roundType = round.roundType || 'circuit_round';
-                        const roundTemplate = circuitConfig?.config?.roundTemplates?.find(rt => rt.roundNumber === parseInt(round.roundName.match(/\d+/)?.[0] || '1'));
+                        const roundNumber = parseInt(round.roundName.match(/\d+/)?.[0] || '1');
+                        const roundTemplate = circuitConfig?.config?.roundTemplates?.find(rt => rt.roundNumber === roundNumber);
+                        
+                        console.log("[Round Display DEBUG]", {
+                          roundName: round.roundName,
+                          extractedRoundNumber: roundNumber,
+                          availableRoundTemplates: circuitConfig?.config?.roundTemplates?.map(rt => ({ 
+                            roundNumber: rt.roundNumber, 
+                            type: rt.template?.type,
+                            workDuration: rt.template?.workDuration,
+                            restDuration: rt.template?.restDuration
+                          })),
+                          foundRoundTemplate: roundTemplate,
+                          templateTimingValues: {
+                            workDuration: roundTemplate?.template?.workDuration,
+                            restDuration: roundTemplate?.template?.restDuration,
+                            repeatTimes: roundTemplate?.template?.repeatTimes
+                          }
+                        });
                         
                         return (
                           <>
@@ -3015,6 +3064,24 @@ function CircuitWorkoutOverviewContent() {
                   ...restConfig,
                   repeatTimes: sets
                 };
+                
+                console.log("[AddRound] Creating round with config:", config);
+                console.log("[AddRound] Round type:", config.type);
+                console.log("[AddRound] Mapped roundConfig being sent:", roundConfig);
+                console.log("[AddRound DEBUG] Timing values from config:", {
+                  workDuration: config.workDuration,
+                  restDuration: config.restDuration,
+                  sets: config.sets,
+                  restBetweenSets: config.restBetweenSets,
+                  exercisesPerRound: config.exercisesPerRound
+                });
+                console.log("[AddRound DEBUG] Timing values in roundConfig:", {
+                  workDuration: roundConfig.workDuration,
+                  restDuration: roundConfig.restDuration,
+                  repeatTimes: roundConfig.repeatTimes,
+                  restBetweenSets: roundConfig.restBetweenSets,
+                  exercisesPerRound: roundConfig.exercisesPerRound
+                });
                 
                 addRoundMutation.mutate({
                   sessionId: sessionId!,

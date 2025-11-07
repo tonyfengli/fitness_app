@@ -112,6 +112,9 @@ export function AddRoundDrawer({ isOpen, onClose, onAdd, isAdding = false }: Add
     const defaultPreset = presets[0];
     const defaultExerciseCount = exerciseOptions.primary[0];
     
+    console.log("[AddRoundDrawer] useEffect triggered for type change:", config.type);
+    console.log("[AddRoundDrawer] Setting defaults - preset:", defaultPreset, "exerciseCount:", defaultExerciseCount);
+    
     setConfig(prev => ({
       ...prev,
       workDuration: defaultPreset.work,
@@ -162,6 +165,9 @@ export function AddRoundDrawer({ isOpen, onClose, onAdd, isAdding = false }: Add
   };
 
   const handleAdd = () => {
+    console.log("[AddRoundDrawer] handleAdd called");
+    console.log("[AddRoundDrawer] Final config being submitted:", config);
+    console.log("[AddRoundDrawer] Config type:", config.type);
     onAdd(config);
     // Don't reset here - let the success handler close the drawer and reset
   };
@@ -255,6 +261,7 @@ export function AddRoundDrawer({ isOpen, onClose, onAdd, isAdding = false }: Add
                 <button
                   key={roundType.id}
                   onClick={() => {
+                    console.log("[AddRoundDrawer] Round type selected:", roundType.id, roundType.name);
                     setConfig(prev => ({ ...prev, type: roundType.id }));
                     handleStepChange(2);
                   }}
@@ -291,7 +298,7 @@ export function AddRoundDrawer({ isOpen, onClose, onAdd, isAdding = false }: Add
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Exercises per round
+                    {config.type === 'stations_round' ? 'Number of stations' : 'Exercises per round'}
                   </label>
                   {/* Show selected value if it's not in primary options */}
                   {!(getExerciseOptions().primary.includes(config.exercisesPerRound)) && (
