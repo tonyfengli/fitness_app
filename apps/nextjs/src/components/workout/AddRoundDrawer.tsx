@@ -163,7 +163,7 @@ export function AddRoundDrawer({ isOpen, onClose, onAdd, isAdding = false }: Add
 
   const handleAdd = () => {
     onAdd(config);
-    handleReset();
+    // Don't reset here - let the success handler close the drawer and reset
   };
 
   const scrollToTop = () => {

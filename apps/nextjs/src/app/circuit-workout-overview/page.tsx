@@ -2966,17 +2966,9 @@ function CircuitWorkoutOverviewContent() {
                 if (round) {
                   const exercise = round.exercises.find(ex => ex.id === selectedExerciseForReplace.id);
                   if (exercise) {
-                    console.log('[page.tsx] DEBUG - Found complete exercise data:', {
-                      id: exercise.id,
-                      name: exercise.exerciseName,
-                      orderIndex: exercise.orderIndex,
-                      hasStationExercises: !!exercise.stationExercises,
-                      stationExercisesCount: exercise.stationExercises?.length || 0
-                    });
                     return exercise;
                   }
                 }
-                console.log('[page.tsx] DEBUG - Could not find complete exercise data, using partial data');
                 return {
                   id: selectedExerciseForReplace.id,
                   exerciseName: selectedExerciseForReplace.exerciseName,
