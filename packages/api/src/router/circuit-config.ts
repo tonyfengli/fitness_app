@@ -840,6 +840,7 @@ export const circuitConfigRouter = createTRPCRouter({
             workDuration: input.roundConfig.workDuration || 60,
             restDuration: input.roundConfig.restDuration || 15,
             repeatTimes: input.roundConfig.repeatTimes || 1,
+            restBetweenSets: input.roundConfig.restBetweenSets || 60,
           };
         } else if (input.roundConfig.type === 'amrap_round') {
           template = {

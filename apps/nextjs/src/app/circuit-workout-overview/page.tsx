@@ -3017,9 +3017,16 @@ function CircuitWorkoutOverviewContent() {
                 setShowOptionsDrawer(false);
               }}
               onAdd={(config) => {
+                // Map 'sets' to 'repeatTimes' for backend compatibility
+                const { sets, ...restConfig } = config;
+                const roundConfig = {
+                  ...restConfig,
+                  repeatTimes: sets
+                };
+                
                 addRoundMutation.mutate({
                   sessionId: sessionId!,
-                  roundConfig: config,
+                  roundConfig,
                 });
               }}
               isAdding={addRoundMutation.isPending}

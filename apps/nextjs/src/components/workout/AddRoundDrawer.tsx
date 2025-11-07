@@ -76,8 +76,8 @@ const CIRCUIT_EXERCISE_OPTIONS = {
 };
 
 const STATIONS_EXERCISE_OPTIONS = {
-  primary: [1, 2, 3, 4],
-  expanded: [5, 6, 7, 8, 9, 10, 11, 12]
+  primary: [2, 3, 4, 5],
+  expanded: [1, 6, 7, 8, 9, 10, 11, 12]
 };
 
 
@@ -117,6 +117,9 @@ export function AddRoundDrawer({ isOpen, onClose, onAdd, isAdding = false }: Add
       workDuration: defaultPreset.work,
       restDuration: defaultPreset.rest,
       exercisesPerRound: defaultExerciseCount,
+      // Ensure sets and restBetweenSets are preserved/set properly
+      sets: prev.sets || 1,
+      restBetweenSets: prev.restBetweenSets || 60,
     }));
   }, [config.type]);
 
@@ -421,7 +424,7 @@ export function AddRoundDrawer({ isOpen, onClose, onAdd, isAdding = false }: Add
                         onClick={() => setShowMoreDurationOptions(!showMoreDurationOptions)}
                         className="w-full p-2 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors text-sm flex items-center justify-center gap-2"
                       >
-                        <span>Custom duration</span>
+                        <span>More options</span>
                         <ChevronRightIcon 
                           className={cn(
                             "w-4 h-4 transition-transform duration-200",
@@ -432,36 +435,103 @@ export function AddRoundDrawer({ isOpen, onClose, onAdd, isAdding = false }: Add
                       
                       {showMoreDurationOptions && (
                         <div className="pt-3 border-t border-gray-100 dark:border-gray-700">
-                          <div className="grid grid-cols-2 gap-3">
-                            <div>
-                              <label className="block text-xs text-gray-400 dark:text-gray-500 mb-1 text-center">
-                                {config.type === 'circuit_round' ? 'Work (sec)' : 'Work'}
-                              </label>
-                              <input
-                                type="number"
-                                value={config.workDuration || ''}
-                                onChange={(e) => setConfig(prev => ({ ...prev, workDuration: parseInt(e.target.value) || 0 }))}
-                                className="w-full p-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-center font-medium"
-                                min="1"
-                                max={config.type === 'circuit_round' ? "300" : "3600"}
-                                placeholder={config.type === 'circuit_round' ? "30" : "180"}
-                              />
+                          {config.type === 'circuit_round' ? (
+                            // Circuit: Simple seconds input
+                            <div className="grid grid-cols-2 gap-3">
+                              <div>
+                                <label className="block text-xs text-gray-400 dark:text-gray-500 mb-1 text-center">
+                                  Work (sec)
+                                </label>
+                                <input
+                                  type="number"
+                                  value={config.workDuration || ''}
+                                  onChange={(e) => setConfig(prev => ({ ...prev, workDuration: parseInt(e.target.value) || 0 }))}
+                                  className="w-full p-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-center font-medium"
+                                  min="1"
+                                  max="300"
+                                  placeholder="30"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-xs text-gray-400 dark:text-gray-500 mb-1 text-center">
+                                  Rest (sec)
+                                </label>
+                                <input
+                                  type="number"
+                                  value={config.restDuration || ''}
+                                  onChange={(e) => setConfig(prev => ({ ...prev, restDuration: parseInt(e.target.value) || 0 }))}
+                                  className="w-full p-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-center font-medium"
+                                  min="0"
+                                  max="300"
+                                  placeholder="30"
+                                />
+                              </div>
                             </div>
-                            <div>
-                              <label className="block text-xs text-gray-400 dark:text-gray-500 mb-1 text-center">
-                                {config.type === 'circuit_round' ? 'Rest (sec)' : 'Rest'}
-                              </label>
-                              <input
-                                type="number"
-                                value={config.restDuration || ''}
-                                onChange={(e) => setConfig(prev => ({ ...prev, restDuration: parseInt(e.target.value) || 0 }))}
-                                className="w-full p-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-center font-medium"
-                                min="0"
-                                max={config.type === 'circuit_round' ? "300" : "3600"}
-                                placeholder={config.type === 'circuit_round' ? "30" : "60"}
-                              />
+                          ) : (
+                            // Stations: Compact work (min:sec) and rest (seconds) input
+                            <div className="grid grid-cols-2 gap-3">
+                              {/* Work Duration - Compact minutes:seconds */}
+                              <div>
+                                <label className="block text-xs text-gray-400 dark:text-gray-500 mb-2 text-center">
+                                  Work Duration
+                                </label>
+                                <div className="flex items-center gap-2">
+                                  <div className="flex-1">
+                                    <div className="text-xs text-gray-400 dark:text-gray-500 mb-1 text-center">min</div>
+                                    <input
+                                      type="number"
+                                      value={Math.floor((config.workDuration || 0) / 60) || ''}
+                                      onChange={(e) => {
+                                        const minutes = parseInt(e.target.value) || 0;
+                                        const seconds = (config.workDuration || 0) % 60;
+                                        setConfig(prev => ({ ...prev, workDuration: minutes * 60 + seconds }));
+                                      }}
+                                      className="w-full h-10 p-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-center font-medium"
+                                      min="0"
+                                      max="30"
+                                      placeholder=""
+                                    />
+                                  </div>
+                                  <span className="text-lg text-gray-500 dark:text-gray-400 mt-6">:</span>
+                                  <div className="flex-1">
+                                    <div className="text-xs text-gray-400 dark:text-gray-500 mb-1 text-center">sec</div>
+                                    <input
+                                      type="number"
+                                      value={(config.workDuration || 0) % 60 || ''}
+                                      onChange={(e) => {
+                                        const minutes = Math.floor((config.workDuration || 0) / 60);
+                                        const seconds = parseInt(e.target.value) || 0;
+                                        setConfig(prev => ({ ...prev, workDuration: minutes * 60 + seconds }));
+                                      }}
+                                      className="w-full h-10 p-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-center font-medium"
+                                      min="0"
+                                      max="59"
+                                      placeholder=""
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+                              
+                              {/* Rest Duration - Simple seconds */}
+                              <div>
+                                <label className="block text-xs text-gray-400 dark:text-gray-500 mb-2 text-center">
+                                  Rest Duration
+                                </label>
+                                <div>
+                                  <div className="text-xs text-gray-400 dark:text-gray-500 mb-1 text-center">sec</div>
+                                  <input
+                                    type="number"
+                                    value={config.restDuration || ''}
+                                    onChange={(e) => setConfig(prev => ({ ...prev, restDuration: parseInt(e.target.value) || 0 }))}
+                                    className="w-full h-10 p-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-center font-medium"
+                                    min="0"
+                                    max="600"
+                                    placeholder=""
+                                  />
+                                </div>
+                              </div>
                             </div>
-                          </div>
+                          )}
                         </div>
                       )}
                     </div>
