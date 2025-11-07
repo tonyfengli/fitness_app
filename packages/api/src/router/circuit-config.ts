@@ -142,7 +142,50 @@ export const circuitConfigRouter = createTRPCRouter({
         
         const result = ensureRoundTemplates(session.templateConfig);
         
-        console.log('[BUG TRACE - getBySession] After ensureRoundTemplates:', {
+        // Filter out orphaned round templates (rounds with no exercises in database)
+        if (result.config?.roundTemplates?.length > 0) {
+          // Get all unique round names that have exercises in the database
+          const roundsWithExercises = await ctx.db
+            .selectDistinct({ groupName: WorkoutExercise.groupName })
+            .from(WorkoutExercise)
+            .innerJoin(Workout, eq(Workout.id, WorkoutExercise.workoutId))
+            .where(eq(Workout.trainingSessionId, input.sessionId));
+          
+          const existingRoundNames = new Set(
+            roundsWithExercises
+              .map(r => r.groupName)
+              .filter(name => name?.startsWith('Round '))
+          );
+          
+          console.log('[BUG TRACE - getBySession] Found rounds with exercises:', Array.from(existingRoundNames));
+          
+          // Filter roundTemplates to only include rounds that have exercises
+          const filteredRoundTemplates = result.config.roundTemplates.filter((rt: any) => {
+            const roundName = `Round ${rt.roundNumber}`;
+            const hasExercises = existingRoundNames.has(roundName);
+            if (!hasExercises) {
+              console.log('[BUG TRACE - getBySession] Filtering out orphaned round:', roundName);
+            }
+            return hasExercises;
+          });
+          
+          // Renumber the remaining rounds sequentially
+          const renumberedRoundTemplates = filteredRoundTemplates.map((rt: any, index: number) => ({
+            ...rt,
+            roundNumber: index + 1
+          }));
+          
+          result.config.roundTemplates = renumberedRoundTemplates;
+          result.config.rounds = renumberedRoundTemplates.length;
+          
+          console.log('[BUG TRACE - getBySession] After filtering orphaned rounds:', {
+            originalCount: session.templateConfig.config?.roundTemplates?.length || 0,
+            filteredCount: renumberedRoundTemplates.length,
+            filteredRounds: renumberedRoundTemplates.map((rt: any) => rt.roundNumber)
+          });
+        }
+        
+        console.log('[BUG TRACE - getBySession] After ensureRoundTemplates and filtering:', {
           sessionId: input.sessionId,
           hasRoundTemplates: !!result.config?.roundTemplates,
           roundTemplatesCount: result.config?.roundTemplates?.length || 0,
@@ -824,6 +867,9 @@ export const circuitConfigRouter = createTRPCRouter({
         // Build the round template based on type
         let template: any = { type: input.roundConfig.type };
         
+        console.log("[addRound] Creating round with type:", input.roundConfig.type);
+        console.log("[addRound] Input roundConfig:", input.roundConfig);
+        
         if (input.roundConfig.type === 'circuit_round') {
           template = {
             ...template,
@@ -854,6 +900,9 @@ export const circuitConfigRouter = createTRPCRouter({
           roundNumber: newRoundNumber,
           template,
         };
+
+        console.log("[addRound] Built template:", template);
+        console.log("[addRound] New round template:", newRoundTemplate);
 
         // 2. Update circuit config
         const updatedConfig = {
