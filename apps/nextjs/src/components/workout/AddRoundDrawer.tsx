@@ -81,11 +81,138 @@ const STATIONS_EXERCISE_OPTIONS = {
 };
 
 
+// Circuit Timer Calculator Component (for stations rounds only)
+interface CircuitTimerCalculatorProps {
+  isExpanded: boolean;
+  onApplyToWorkDuration: (seconds: number) => void;
+  onToggle: () => void;
+}
+
+function CircuitTimerCalculator({ isExpanded, onApplyToWorkDuration, onToggle }: CircuitTimerCalculatorProps) {
+  const [circuitWork, setCircuitWork] = useState<number | ''>('');
+  const [circuitRest, setCircuitRest] = useState<number | ''>('');
+  const [circuitSets, setCircuitSets] = useState<number | ''>('');
+
+  // Calculate total circuit time (correct formula: ends on work, no rest after final set)
+  const workValue = typeof circuitWork === 'number' ? circuitWork : 0;
+  const restValue = typeof circuitRest === 'number' ? circuitRest : 0;
+  const setsValue = typeof circuitSets === 'number' ? circuitSets : 0;
+  
+  // Formula: (work × sets) + (rest × (sets - 1))
+  // Example: 3 sets = work + rest + work + rest + work (no final rest)
+  const totalCircuitTime = setsValue > 0 
+    ? (workValue * setsValue) + (restValue * Math.max(0, setsValue - 1))
+    : 0;
+
+  // Format duration for display
+  const formatDuration = (seconds: number): string => {
+    if (seconds === 0) return '0s';
+    if (seconds < 60) return `${seconds}s`;
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    if (secs === 0) return `${mins}m`;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const handleApplyCalculation = () => {
+    onApplyToWorkDuration(totalCircuitTime);
+    onToggle(); // Close the calculator
+  };
+
+  return (
+    <>
+      {/* Expanded Calculator */}
+      {isExpanded && (
+        <div className="space-y-3 p-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50">
+          {/* Circuit Inputs */}
+          <div className="grid grid-cols-3 gap-2">
+            {/* Work Input */}
+            <div>
+              <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1 text-center">
+                Work
+              </label>
+              <input
+                type="number"
+                value={circuitWork}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setCircuitWork(value === '' ? '' : parseInt(value) || 0);
+                }}
+                className="w-full text-center text-sm bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-md px-2 py-1.5 focus:ring-1 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200"
+                min="0"
+                placeholder="0"
+              />
+              <p className="text-xs text-gray-500 mt-0.5 text-center">seconds</p>
+            </div>
+
+            {/* Rest Input */}
+            <div>
+              <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1 text-center">
+                Rest
+              </label>
+              <input
+                type="number"
+                value={circuitRest}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setCircuitRest(value === '' ? '' : parseInt(value) || 0);
+                }}
+                className="w-full text-center text-sm bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-md px-2 py-1.5 focus:ring-1 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200"
+                min="0"
+                placeholder="0"
+              />
+              <p className="text-xs text-gray-500 mt-0.5 text-center">seconds</p>
+            </div>
+
+            {/* Sets Input */}
+            <div>
+              <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1 text-center">
+                Sets
+              </label>
+              <input
+                type="number"
+                value={circuitSets}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setCircuitSets(value === '' ? '' : parseInt(value) || 0);
+                }}
+                className="w-full text-center text-sm bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-md px-2 py-1.5 focus:ring-1 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200"
+                min="1"
+                placeholder="1"
+              />
+              <p className="text-xs text-gray-500 mt-0.5 text-center">rounds</p>
+            </div>
+          </div>
+          
+          {/* Result and Apply */}
+          {totalCircuitTime > 0 && (
+            <div className="flex items-center justify-between pt-2 border-t border-gray-200 dark:border-gray-600">
+              <div>
+                <p className="text-xs text-gray-600 dark:text-gray-300">Total Station Time</p>
+                <p className="text-lg font-bold text-gray-900 dark:text-gray-100">
+                  {formatDuration(totalCircuitTime)}
+                </p>
+              </div>
+              <button
+                onClick={handleApplyCalculation}
+                className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-sm rounded-md transition-colors"
+              >
+                Apply
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </>
+  );
+}
+
 export function AddRoundDrawer({ isOpen, onClose, onAdd, isAdding = false }: AddRoundDrawerProps) {
   const [step, setStep] = useState(1);
   const [showMoreExerciseOptions, setShowMoreExerciseOptions] = useState(false);
   const [showMoreDurationOptions, setShowMoreDurationOptions] = useState(false);
   const [showMoreRestOptions, setShowMoreRestOptions] = useState(false);
+  const [showCalculator, setShowCalculator] = useState(false);
   const [config, setConfig] = useState<RoundConfig>({
     type: 'circuit_round',
     exercisesPerRound: 3, // First option for circuit rounds
@@ -131,6 +258,7 @@ export function AddRoundDrawer({ isOpen, onClose, onAdd, isAdding = false }: Add
     setShowMoreExerciseOptions(false);
     setShowMoreDurationOptions(false);
     setShowMoreRestOptions(false);
+    setShowCalculator(false);
     setConfig({
       type: 'circuit_round',
       exercisesPerRound: 3,
@@ -381,9 +509,24 @@ export function AddRoundDrawer({ isOpen, onClose, onAdd, isAdding = false }: Add
               {(config.type === 'circuit_round' || config.type === 'stations_round') && (
                 <div>
                   <div className="flex items-center justify-between mb-3">
-                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                      {config.type === 'circuit_round' ? 'Work/Rest Duration (seconds)' : 'Work/Rest Duration'}
-                    </label>
+                    <div className="flex items-center gap-3">
+                      <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                        {config.type === 'circuit_round' ? 'Work/Rest Duration (seconds)' : 'Work/Rest Duration'}
+                      </label>
+                      {/* Circuit Timer Calculator icon for stations rounds only */}
+                      {config.type === 'stations_round' && (
+                        <button
+                          onClick={() => setShowCalculator(!showCalculator)}
+                          className="inline-flex items-center gap-1.5 px-2 py-1 text-xs text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
+                          aria-label="Toggle Circuit Timer Calculator"
+                        >
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                          </svg>
+                          <span>Calculator</span>
+                        </button>
+                      )}
+                    </div>
                     {/* Show selected value if it's not in primary options */}
                     {!(getPresetDurations().some(preset => preset.work === config.workDuration && preset.rest === config.restDuration)) && (
                       <button
@@ -400,30 +543,42 @@ export function AddRoundDrawer({ isOpen, onClose, onAdd, isAdding = false }: Add
                   </div>
                   <div className="space-y-3">
 
-                    {/* Primary duration options */}
-                    <div className="grid grid-cols-2 gap-2">
-                      {getPresetDurations().map((preset) => (
-                        <button
-                          key={preset.label}
-                          onClick={() => {
-                            setConfig(prev => ({ 
-                              ...prev, 
-                              workDuration: preset.work, 
-                              restDuration: preset.rest 
-                            }));
-                            setShowMoreDurationOptions(false); // Close expanded options when selecting primary
-                          }}
-                          className={cn(
-                            "p-3 rounded-lg border text-center font-medium transition-all duration-200",
-                            config.workDuration === preset.work && config.restDuration === preset.rest
-                              ? "border-purple-500 bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300 ring-2 ring-purple-200 dark:ring-purple-800"
-                              : "border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:border-purple-300 dark:hover:border-purple-600 hover:bg-purple-50/50 dark:hover:bg-purple-900/10"
-                          )}
-                        >
-                          {preset.label}
-                        </button>
-                      ))}
-                    </div>
+                    {/* Show Calculator OR Primary duration options */}
+                    {config.type === 'stations_round' && showCalculator ? (
+                      /* Circuit Timer Calculator expanded interface */
+                      <CircuitTimerCalculator 
+                        isExpanded={true}
+                        onToggle={() => setShowCalculator(!showCalculator)}
+                        onApplyToWorkDuration={(seconds) => {
+                          setConfig(prev => ({ ...prev, workDuration: seconds }));
+                        }}
+                      />
+                    ) : (
+                      /* Primary duration options */
+                      <div className="grid grid-cols-2 gap-2">
+                        {getPresetDurations().map((preset) => (
+                          <button
+                            key={preset.label}
+                            onClick={() => {
+                              setConfig(prev => ({ 
+                                ...prev, 
+                                workDuration: preset.work, 
+                                restDuration: preset.rest 
+                              }));
+                              setShowMoreDurationOptions(false); // Close expanded options when selecting primary
+                            }}
+                            className={cn(
+                              "p-3 rounded-lg border text-center font-medium transition-all duration-200",
+                              config.workDuration === preset.work && config.restDuration === preset.rest
+                                ? "border-purple-500 bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300 ring-2 ring-purple-200 dark:ring-purple-800"
+                                : "border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:border-purple-300 dark:hover:border-purple-600 hover:bg-purple-50/50 dark:hover:bg-purple-900/10"
+                            )}
+                          >
+                            {preset.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
 
                     {/* More duration options */}
                     <div className="space-y-2">
@@ -545,6 +700,7 @@ export function AddRoundDrawer({ isOpen, onClose, onAdd, isAdding = false }: Add
                   </div>
                 </div>
               )}
+
 
               {/* AMRAP specific settings */}
               {config.type === 'amrap_round' && (
