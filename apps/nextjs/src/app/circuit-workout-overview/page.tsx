@@ -31,6 +31,7 @@ import { OptionsDrawer } from "~/components/workout/OptionsDrawer";
 import { RepsConfiguration } from "~/components/workout/RepsConfiguration";
 import { ExerciseReplacement } from "~/components/workout/ExerciseReplacement";
 import { AddExerciseDrawer } from "~/components/workout/AddExerciseDrawer";
+import { AddRoundDrawer } from "~/components/workout/AddRoundDrawer";
 import { ConfirmDialog } from "~/components/ConfirmDialog";
 import { useScrollManager } from "~/hooks/useScrollManager";
 
@@ -697,6 +698,7 @@ function CircuitWorkoutOverviewContent() {
   const [showRepsInDrawer, setShowRepsInDrawer] = useState(false);
   const [showReplaceInDrawer, setShowReplaceInDrawer] = useState(false);
   const [showAddExerciseInDrawer, setShowAddExerciseInDrawer] = useState(false);
+  const [showAddRoundInDrawer, setShowAddRoundInDrawer] = useState(false);
   const [selectedItemForOptions, setSelectedItemForOptions] = useState<{
     type: 'round' | 'station' | 'exercise';
     id: string;
@@ -743,24 +745,6 @@ function CircuitWorkoutOverviewContent() {
     sets: 3,
   });
 
-  // Add round modal state
-  const [showAddRoundModal, setShowAddRoundModal] = useState(false);
-  const [addRoundStep, setAddRoundStep] = useState(1);
-  const [newRoundConfig, setNewRoundConfig] = useState<{
-    type: 'circuit_round' | 'stations_round' | 'amrap_round';
-    exercisesPerRound: number;
-    workDuration?: number;
-    restDuration?: number;
-    repeatTimes?: number;
-    restBetweenSets?: number;
-    totalDuration?: number;
-  }>({
-    type: 'circuit_round',
-    exercisesPerRound: 6,
-    workDuration: 45,
-    restDuration: 15,
-    repeatTimes: 1,
-  });
 
   // Set up the reorder mutation for circuits
   const reorderExerciseMutation = useMutation({
@@ -1001,15 +985,9 @@ function CircuitWorkoutOverviewContent() {
     onSuccess: () => {
       console.log("[addRoundMutation] Success!");
       
-      // Close modal and reset state
-      setShowAddRoundModal(false);
-      setAddRoundStep(1);
-      setNewRoundConfig({
-        type: 'circuit_round',
-        exercisesPerRound: 6,
-        workDuration: 45,
-        restDuration: 15,
-      });
+      // Close drawer and reset state
+      setShowAddRoundInDrawer(false);
+      setShowOptionsDrawer(false);
       
       // Show success toast
       toast.success("Round added successfully");
@@ -1312,7 +1290,7 @@ function CircuitWorkoutOverviewContent() {
 
   // Unified scroll management for iOS Safari fixes
   useScrollManager({ 
-    isActive: showAddExerciseInDrawer || showOptionsDrawer, 
+    isActive: showAddExerciseInDrawer || showOptionsDrawer || showAddRoundInDrawer, 
     priority: 1 
   });
 
@@ -2277,11 +2255,11 @@ function CircuitWorkoutOverviewContent() {
             }
             
             {/* Add Round Button */}
-            <div className="flex justify-center">
+            <div className="flex justify-center mb-8">
               <button
                 onClick={() => {
-                  setShowAddRoundModal(true);
-                  setAddRoundStep(1);
+                  setShowAddRoundInDrawer(true);
+                  setShowOptionsDrawer(true);
                 }}
                 className="w-[65%] p-4 border border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 transition-all duration-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/30 shadow-sm hover:shadow-md rounded-lg flex flex-col items-center justify-center space-y-2 text-gray-600 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 focus:outline-none focus:ring-0"
               >
@@ -2911,6 +2889,7 @@ function CircuitWorkoutOverviewContent() {
           setShowRepsInDrawer(false);
           setShowReplaceInDrawer(false);
           setShowAddExerciseInDrawer(false);
+          setShowAddRoundInDrawer(false);
         }}
         title={
           showRepsInDrawer 
@@ -2923,6 +2902,8 @@ function CircuitWorkoutOverviewContent() {
               : addExerciseModalConfig?.mode === 'create-station'
               ? `Create Station ${(addExerciseModalConfig?.targetStation || 0) + 1}`
               : `Add Exercise to ${addExerciseModalConfig?.roundName || 'Round'}`
+            : showAddRoundInDrawer
+            ? "Add New Round"
             : selectedItemForOptions?.type === 'round' 
             ? selectedItemForOptions.name 
             : selectedItemForOptions?.type === 'station'
@@ -3027,6 +3008,21 @@ function CircuitWorkoutOverviewContent() {
                 setShowOptionsDrawer(false);
                 setSelectedExerciseForReplace(null);
               }}
+            />
+          ) : showAddRoundInDrawer ? (
+            <AddRoundDrawer
+              isOpen={showAddRoundInDrawer}
+              onClose={() => {
+                setShowAddRoundInDrawer(false);
+                setShowOptionsDrawer(false);
+              }}
+              onAdd={(config) => {
+                addRoundMutation.mutate({
+                  sessionId: sessionId!,
+                  roundConfig: config,
+                });
+              }}
+              isAdding={addRoundMutation.isPending}
             />
           ) : undefined
         }
@@ -3534,180 +3530,6 @@ function CircuitWorkoutOverviewContent() {
         </>
       )}
 
-      {/* Add Round Modal - Full Screen */}
-      {showAddRoundModal && (
-        <>
-          {/* Backdrop */}
-          <div 
-            className="fixed inset-0 z-40 bg-black/50" 
-            onClick={() => {
-              setShowAddRoundModal(false);
-              setAddRoundStep(1);
-            }}
-          />
-
-          {/* Modal - Full Screen */}
-          <div className="fixed inset-0 z-50 flex flex-col bg-white dark:bg-gray-800">
-            {/* Header */}
-            <div className="flex-shrink-0 border-b border-gray-200 dark:border-gray-700 px-6 py-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">
-                    Add New Round
-                  </h2>
-                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                    {addRoundStep === 1 && "Choose the type of round you want to create"}
-                    {addRoundStep === 2 && "Configure your round settings"}
-                    {addRoundStep === 3 && "Review your new round"}
-                  </p>
-                </div>
-                <button
-                  onClick={() => {
-                    setShowAddRoundModal(false);
-                    setAddRoundStep(1);
-                  }}
-                  className="rounded-lg p-2 text-gray-400 dark:text-gray-500 transition-colors hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-600 dark:hover:text-gray-300 focus:outline-none focus:ring-0"
-                >
-                  <XIcon className="w-5 h-5" />
-                </button>
-              </div>
-
-              {/* Progress indicator */}
-              <div className="mt-4">
-                <div className="flex gap-1">
-                  {[1, 2, 3].map((step) => (
-                    <div
-                      key={step}
-                      className={cn(
-                        "h-1 flex-1 rounded-full transition-all duration-300",
-                        addRoundStep >= step ? "bg-primary" : "bg-muted"
-                      )}
-                    />
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Content */}
-            <div className="flex-1 overflow-y-auto">
-              <div className="p-6 space-y-6">
-                {/* Step 1: Round Type Selection */}
-                {addRoundStep === 1 && (
-                  <div className="space-y-6">
-                    <div>
-                      <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Choose Round Type</h3>
-                      <div className="space-y-4">
-                        <button
-                          onClick={() => {
-                            setNewRoundConfig({
-                              ...newRoundConfig,
-                              type: 'circuit_round',
-                              workDuration: 45,
-                              restDuration: 15,
-                              repeatTimes: 1,
-                            });
-                            setAddRoundStep(2);
-                          }}
-                          className="w-full p-6 rounded-xl border-2 border-gray-200 dark:border-gray-700 text-left hover:border-gray-300 dark:hover:border-gray-600 transition-all bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/20"
-                        >
-                          <div className="flex items-center gap-4">
-                            <div className="w-12 h-12 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center">
-                              <svg className="w-6 h-6 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                              </svg>
-                            </div>
-                            <div className="flex-1">
-                              <h4 className="text-base font-semibold text-gray-900 dark:text-white">Circuit Round</h4>
-                              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">Move through exercises with timed work/rest intervals</p>
-                            </div>
-                            <ChevronRightIcon className="w-5 h-5 text-gray-400" />
-                          </div>
-                        </button>
-
-                        <button
-                          onClick={() => {
-                            setNewRoundConfig({
-                              ...newRoundConfig,
-                              type: 'stations_round',
-                              workDuration: 45,
-                              restDuration: 15,
-                              repeatTimes: 1,
-                            });
-                            setAddRoundStep(2);
-                          }}
-                          className="w-full p-6 rounded-xl border-2 border-gray-200 dark:border-gray-700 text-left hover:border-gray-300 dark:hover:border-gray-600 transition-all bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/20"
-                        >
-                          <div className="flex items-center gap-4">
-                            <div className="w-12 h-12 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center">
-                              <svg className="w-6 h-6 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                              </svg>
-                            </div>
-                            <div className="flex-1">
-                              <h4 className="text-base font-semibold text-gray-900 dark:text-white">Stations Round</h4>
-                              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">Teams rotate between stations simultaneously</p>
-                            </div>
-                            <ChevronRightIcon className="w-5 h-5 text-gray-400" />
-                          </div>
-                        </button>
-
-                        <button
-                          onClick={() => {
-                            setNewRoundConfig({
-                              ...newRoundConfig,
-                              type: 'amrap_round',
-                              totalDuration: 300,
-                            });
-                            setAddRoundStep(2);
-                          }}
-                          className="w-full p-6 rounded-xl border-2 border-gray-200 dark:border-gray-700 text-left hover:border-purple-300 dark:hover:border-purple-600 transition-all bg-white dark:bg-gray-800 hover:bg-purple-50 dark:hover:bg-purple-950/20"
-                        >
-                          <div className="flex items-center gap-4">
-                            <div className="w-12 h-12 bg-purple-100 dark:bg-purple-900/30 rounded-full flex items-center justify-center">
-                              <svg className="w-6 h-6 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                              </svg>
-                            </div>
-                            <div className="flex-1">
-                              <h4 className="text-base font-semibold text-gray-900 dark:text-white">AMRAP Round</h4>
-                              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">Complete as many rounds as possible in the time limit</p>
-                            </div>
-                            <ChevronRightIcon className="w-5 h-5 text-gray-400" />
-                          </div>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Step 2: Round Configuration */}
-                {addRoundStep === 2 && (
-                  <AddRoundConfigStep
-                    config={newRoundConfig}
-                    onConfigChange={setNewRoundConfig}
-                    onNext={() => setAddRoundStep(3)}
-                    onBack={() => setAddRoundStep(1)}
-                  />
-                )}
-
-                {/* Step 3: Review */}
-                {addRoundStep === 3 && (
-                  <AddRoundReviewStep
-                    config={newRoundConfig}
-                    onConfirm={() => {
-                      addRoundMutation.mutate({
-                        sessionId: sessionId!,
-                        roundConfig: newRoundConfig,
-                      });
-                    }}
-                    onBack={() => setAddRoundStep(2)}
-                  />
-                )}
-              </div>
-            </div>
-          </div>
-        </>
-      )}
 
       {/* Delete Exercise Confirmation Dialog */}
       <ConfirmDialog
@@ -3763,426 +3585,6 @@ function CircuitWorkoutOverviewContent() {
   );
 }
 
-// Add Round Config Step Component
-function AddRoundConfigStep({
-  config,
-  onConfigChange,
-  onNext,
-  onBack,
-}: {
-  config: any;
-  onConfigChange: (config: any) => void;
-  onNext: () => void;
-  onBack: () => void;
-}) {
-  const isCircuit = config.type === 'circuit_round';
-  const isStations = config.type === 'stations_round';
-  const isAMRAP = config.type === 'amrap_round';
-
-  const getExerciseOptions = () => {
-    switch (config.type) {
-      case 'circuit_round':
-      case 'amrap_round':
-        return [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
-      case 'stations_round':
-        return [2, 3, 4, 5, 6, 7, 8, 9, 10];
-      default:
-        return [2, 3, 4, 5, 6, 7, 8, 9, 10];
-    }
-  };
-
-  return (
-    <div className="space-y-6">
-      <div>
-        <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Configure Round</h3>
-        
-        {/* Round Type Badge */}
-        <div className="flex items-center gap-2 mb-6">
-          <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Round Type:</span>
-          <span className={cn(
-            "px-3 py-1 rounded-full text-sm font-medium",
-            isCircuit && "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
-            isStations && "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
-            isAMRAP && "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300"
-          )}>
-            {isCircuit && 'Circuit'}
-            {isStations && 'Stations'}
-            {isAMRAP && 'AMRAP'}
-          </span>
-        </div>
-
-        {/* Exercise Count */}
-        <div className="space-y-3 mb-6">
-          <span className="text-sm font-medium text-gray-600 dark:text-white">
-            {isStations ? 'STATIONS' : 'EXERCISES'}
-          </span>
-          <div className="grid grid-cols-5 gap-2">
-            {getExerciseOptions().map((option) => (
-              <Button
-                key={option}
-                variant={config.exercisesPerRound === option ? "primary" : "outline"}
-                className={cn(
-                  "h-10 min-w-0 text-sm",
-                  config.exercisesPerRound !== option && "dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:hover:bg-gray-600"
-                )}
-                onClick={() => onConfigChange({ ...config, exercisesPerRound: option })}
-                size="sm"
-              >
-                {option}
-              </Button>
-            ))}
-          </div>
-        </div>
-
-        {/* Circuit/Stations Configuration */}
-        {(isCircuit || isStations) && (
-          <div className="space-y-6">
-            {/* Work Duration */}
-            <div className="space-y-3">
-              <span className="text-sm font-medium text-gray-600 dark:text-white">WORK TIME</span>
-              <div className="grid grid-cols-5 gap-2">
-                {[20, 30, 40, 45, 60, 90, 120, 150, 180, 210, 240].map((option) => (
-                  <Button
-                    key={option}
-                    variant={config.workDuration === option ? "primary" : "outline"}
-                    className={cn(
-                      "h-9 min-w-0 text-xs",
-                      config.workDuration !== option && "dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:hover:bg-gray-600"
-                    )}
-                    onClick={() => onConfigChange({ ...config, workDuration: option })}
-                    size="sm"
-                  >
-                    {option >= 60 ? `${option / 60}m` : `${option}s`}
-                  </Button>
-                ))}
-              </div>
-            </div>
-
-            {/* Rest Duration */}
-            <div className="space-y-3">
-              <span className="text-sm font-medium text-gray-600 dark:text-white">REST TIME</span>
-              <div className="grid grid-cols-7 gap-2">
-                {[0, 10, 15, 20, 30, 45, 60].map((option) => (
-                  <Button
-                    key={option}
-                    variant={config.restDuration === option ? "primary" : "outline"}
-                    className={cn(
-                      "h-9 min-w-0 text-xs",
-                      config.restDuration !== option && "dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:hover:bg-gray-600"
-                    )}
-                    onClick={() => onConfigChange({ ...config, restDuration: option })}
-                    size="sm"
-                  >
-                    {option === 0 ? 'None' : option >= 60 ? `${option / 60}m` : `${option}s`}
-                  </Button>
-                ))}
-              </div>
-            </div>
-
-            {/* Repeat Times */}
-            <div className="space-y-3">
-              <span className="text-sm font-medium text-gray-600 dark:text-white">REPEAT</span>
-              <div className="grid grid-cols-5 gap-2">
-                {[1, 2, 3, 4, 5].map((option) => (
-                  <Button
-                    key={option}
-                    variant={(config.repeatTimes || 1) === option ? "primary" : "outline"}
-                    className={cn(
-                      "h-9 min-w-0 text-xs",
-                      (config.repeatTimes || 1) !== option && "dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:hover:bg-gray-600"
-                    )}
-                    onClick={() => onConfigChange({ ...config, repeatTimes: option })}
-                    size="sm"
-                  >
-                    {option}x
-                  </Button>
-                ))}
-              </div>
-            </div>
-
-            {/* Rest Between Sets */}
-            {(config.repeatTimes || 1) > 1 && (
-              <div className="space-y-3">
-                <span className="text-sm font-medium text-gray-600 dark:text-white">REST BETWEEN SETS</span>
-                <div className="grid grid-cols-6 gap-2">
-                  {[15, 30, 45, 60, 90, 120].map((option) => (
-                    <Button
-                      key={option}
-                      variant={(config.restBetweenSets || 30) === option ? "primary" : "outline"}
-                      className={cn(
-                        "h-9 min-w-0 text-xs",
-                        (config.restBetweenSets || 30) !== option && "dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:hover:bg-gray-600"
-                      )}
-                      onClick={() => onConfigChange({ ...config, restBetweenSets: option })}
-                      size="sm"
-                    >
-                      {option}s
-                    </Button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* AMRAP Configuration */}
-        {isAMRAP && (
-          <div className="space-y-3">
-            <span className="text-sm font-medium text-gray-600 dark:text-white">TOTAL TIME</span>
-            <div className="grid grid-cols-5 gap-2">
-              {[120, 180, 240, 300, 360].map((option) => (
-                <Button
-                  key={option}
-                  variant={config.totalDuration === option ? "primary" : "outline"}
-                  className={cn(
-                    "h-9 min-w-0 text-xs",
-                    config.totalDuration !== option && "dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:hover:bg-gray-600"
-                  )}
-                  onClick={() => onConfigChange({ ...config, totalDuration: option })}
-                  size="sm"
-                >
-                  {Math.floor(option / 60)}m
-                </Button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Navigation Buttons */}
-        <div className="flex gap-3 pt-6">
-          <Button
-            variant="outline"
-            onClick={onBack}
-            className="flex-1 h-12"
-          >
-            Back
-          </Button>
-          <Button
-            onClick={onNext}
-            className="flex-1 h-12 bg-blue-600 hover:bg-blue-700 text-white"
-          >
-            Continue
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// Add Round Review Step Component
-function AddRoundReviewStep({
-  config,
-  onConfirm,
-  onBack,
-}: {
-  config: any;
-  onConfirm: () => void;
-  onBack: () => void;
-}) {
-  const isCircuit = config.type === 'circuit_round';
-  const isStations = config.type === 'stations_round';
-  const isAMRAP = config.type === 'amrap_round';
-
-  // Calculate total time for this round
-  const calculateRoundTime = () => {
-    if (isAMRAP) {
-      return config.totalDuration || 300;
-    }
-    
-    if (isCircuit || isStations) {
-      const workTime = config.workDuration || 0;
-      const restTime = config.restDuration || 0;
-      const exercises = config.exercisesPerRound || 1;
-      const sets = config.repeatTimes || 1;
-      const restBetweenSets = config.restBetweenSets || 0;
-      
-      // Time for one set: exercises * (work + rest) - last rest
-      const timePerSet = exercises * (workTime + restTime) - restTime;
-      // Total time: (timePerSet * sets) + (restBetweenSets * (sets - 1))
-      return (timePerSet * sets) + (restBetweenSets * (sets - 1));
-    }
-    
-    return 0;
-  };
-
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
-
-  const totalTime = calculateRoundTime();
-
-  return (
-    <div className="space-y-6">
-      <div>
-        <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Review New Round</h3>
-        
-        {/* Summary Card */}
-        <div className="rounded-xl bg-primary/10 p-4 text-center mb-6">
-          <p className="text-sm text-muted-foreground">Estimated Time</p>
-          <p className="text-2xl font-bold text-primary">{formatTime(totalTime)}</p>
-        </div>
-
-        {/* Round Preview */}
-        <div className={cn(
-          "rounded-2xl border-2 overflow-hidden shadow-sm",
-          isCircuit && "border-blue-200 dark:border-blue-800 bg-blue-50/30 dark:bg-blue-950/20",
-          isStations && "border-green-200 dark:border-green-800 bg-green-50/30 dark:bg-green-950/20",
-          isAMRAP && "border-purple-200 dark:border-purple-800 bg-purple-50/30 dark:bg-purple-950/20"
-        )}>
-          {/* Card Header */}
-          <div className={cn(
-            "px-5 py-4 border-b",
-            isCircuit && "bg-blue-100/50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-800",
-            isStations && "bg-green-100/50 dark:bg-green-900/30 border-green-200 dark:border-green-800",
-            isAMRAP && "bg-purple-100/50 dark:bg-purple-900/30 border-purple-200 dark:border-purple-800"
-          )}>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className={cn(
-                  "w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg",
-                  isCircuit && "bg-blue-600 text-white",
-                  isStations && "bg-green-600 text-white",
-                  isAMRAP && "bg-purple-600 text-white"
-                )}>
-                  +
-                </div>
-                
-                <div>
-                  <h4 className="font-semibold text-base text-gray-900 dark:text-white">
-                    New Round
-                  </h4>
-                  
-                  <div className="flex items-center gap-3 mt-0.5">
-                    <span className={cn(
-                      "text-xs font-medium px-2 py-0.5 rounded-full",
-                      isCircuit && "bg-blue-200 text-blue-800 dark:bg-blue-800/50 dark:text-blue-200",
-                      isStations && "bg-green-200 text-green-800 dark:bg-green-800/50 dark:text-green-200",
-                      isAMRAP && "bg-purple-200 text-purple-800 dark:bg-purple-800/50 dark:text-purple-200"
-                    )}>
-                      {isCircuit && 'Circuit'}
-                      {isStations && 'Stations'}
-                      {isAMRAP && 'AMRAP'}
-                    </span>
-                    
-                    <span className="text-xs text-gray-600 dark:text-gray-400">
-                      {formatTime(totalTime)}
-                    </span>
-                  </div>
-                </div>
-              </div>
-              
-              {config.repeatTimes > 1 && (
-                <div className={cn(
-                  "px-3 py-1.5 rounded-lg font-bold text-sm",
-                  isCircuit && "bg-blue-200 text-blue-800 dark:bg-blue-800/50 dark:text-blue-200",
-                  isStations && "bg-green-200 text-green-800 dark:bg-green-800/50 dark:text-green-200",
-                  isAMRAP && "bg-purple-200 text-purple-800 dark:bg-purple-800/50 dark:text-purple-200"
-                )}>
-                  {config.repeatTimes}×
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Configuration Details */}
-          <div className="p-5 space-y-3">
-            <div className={cn(
-              "rounded-lg p-3 border",
-              isCircuit && "bg-blue-50/50 dark:bg-blue-950/30 border-blue-200/50 dark:border-blue-800/50",
-              isStations && "bg-green-50/50 dark:bg-green-950/30 border-green-200/50 dark:border-green-800/50",
-              isAMRAP && "bg-purple-50/50 dark:bg-purple-950/30 border-purple-200/50 dark:border-purple-800/50"
-            )}>
-              <div className="flex items-center justify-between text-sm">
-                <div className="flex items-center gap-4">
-                  <div className="flex items-center gap-1.5">
-                    <svg className="w-4 h-4 text-gray-500 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
-                    </svg>
-                    <span className="font-medium text-gray-700 dark:text-gray-300">
-                      {config.exercisesPerRound} {isStations ? 'stations' : 'exercises'}
-                    </span>
-                  </div>
-                  
-                  {(isCircuit || isStations) && (
-                    <>
-                      <div className="flex items-center gap-1.5">
-                        <svg className="w-4 h-4 text-gray-500 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                        </svg>
-                        <span className="font-medium text-gray-700 dark:text-gray-300">
-                          {config.workDuration}s work
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <svg className="w-4 h-4 text-gray-500 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        <span className="font-medium text-gray-700 dark:text-gray-300">
-                          {config.restDuration}s rest
-                        </span>
-                      </div>
-                    </>
-                  )}
-                  
-                  {isAMRAP && (
-                    <div className="flex items-center gap-1.5">
-                      <svg className="w-4 h-4 text-gray-500 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      <span className="font-medium text-gray-700 dark:text-gray-300">
-                        {formatTime(config.totalDuration)} total
-                      </span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Placeholder exercises */}
-            <div className="space-y-2">
-              {Array.from({ length: config.exercisesPerRound }, (_, i) => (
-                <div key={i} className="flex items-center gap-3 p-3 bg-white/60 dark:bg-gray-800/60 rounded-lg border border-gray-200/50 dark:border-gray-700/50">
-                  <div className={cn(
-                    "flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold",
-                    isCircuit && "bg-blue-100 text-blue-700 dark:bg-blue-800/50 dark:text-blue-300",
-                    isStations && "bg-green-100 text-green-700 dark:bg-green-800/50 dark:text-green-300",
-                    isAMRAP && "bg-purple-100 text-purple-700 dark:bg-purple-800/50 dark:text-purple-300"
-                  )}>
-                    {i + 1}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                      {isStations ? `Station ${i + 1}` : `Exercise ${i + 1}`}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Navigation Buttons */}
-        <div className="flex gap-3 pt-6">
-          <Button
-            variant="outline"
-            onClick={onBack}
-            className="flex-1 h-12"
-          >
-            Back
-          </Button>
-          <Button
-            onClick={onConfirm}
-            className="flex-1 h-12 bg-green-600 hover:bg-green-700 text-white"
-          >
-            Add Round
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // Round Edit Content Component
 function RoundEditContent({
