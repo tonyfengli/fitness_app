@@ -342,7 +342,7 @@ export default function CircuitConfigPage() {
   };
 
   return (
-    <div className="min-h-screen bg-white dark:bg-gray-900">
+    <div className="h-screen bg-white dark:bg-gray-900 flex flex-col">
       <CircuitHeader
         onBack={currentStep > 1 ? handleBack : () => router.push(`/circuit-sessions/${sessionId}`)}
         backText={currentStep > 1 ? "Back" : "Session"}
@@ -390,12 +390,12 @@ export default function CircuitConfigPage() {
       )}
 
       {/* Content */}
-      <div className="p-4 pb-8">
+      <div className="flex-1 overflow-y-auto p-4 pb-8">
         <div className="mx-auto max-w-md">
 
         {/* Step content */}
-        <Card className="p-0 shadow-sm bg-white dark:bg-gray-800">
-          <div className="p-6 space-y-6">
+        <Card className="p-0 shadow-sm bg-white dark:bg-gray-800 overflow-visible">
+          <div className="p-6 space-y-6 overflow-visible">
             {/* Step 1: Workout Type Selection */}
             {currentStep === 1 && (
               <WorkoutTypeStep

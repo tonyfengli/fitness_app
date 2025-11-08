@@ -234,7 +234,7 @@ export function CategorySelectionStep({ onSelectCategory }: CategorySelectionSte
           <div>
             <button
               onClick={() => onSelectCategory('favorites')}
-              className="w-full p-8 text-left border-2 border-gray-900 dark:border-gray-100 hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors group"
+              className="w-full p-8 text-left border-2 border-gray-900 dark:border-gray-100 transition-colors group"
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -260,7 +260,7 @@ export function CategorySelectionStep({ onSelectCategory }: CategorySelectionSte
                 <button
                   key={program.id}
                   onClick={() => onSelectCategory(program.id)}
-                  className="w-full p-8 text-left border border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors group"
+                  className="w-full p-8 text-left border border-gray-200 dark:border-gray-800 transition-colors group"
                 >
                   <div className="flex items-center justify-between">
                     <span className="text-lg font-medium text-gray-900 dark:text-white">
@@ -282,7 +282,6 @@ export function TemplateSelectionStep({ program, onSelectTemplate }: TemplateSel
   const trpc = useTRPC();
   const queryClient = useQueryClient();
   const [loadingTemplateId, setLoadingTemplateId] = useState<string | null>(null);
-  const [isOtherSessionsExpanded, setIsOtherSessionsExpanded] = useState(false);
   const [showFavoriteDrawer, setShowFavoriteDrawer] = useState(false);
   const [selectedSessionForFavorite, setSelectedSessionForFavorite] = useState<{
     id: string;
@@ -291,11 +290,7 @@ export function TemplateSelectionStep({ program, onSelectTemplate }: TemplateSel
   const [isEditingName, setIsEditingName] = useState(false);
   const [editedName, setEditedName] = useState("");
 
-  // Scroll manager for drawer with high priority (2)
-  useScrollManager({ 
-    isActive: showFavoriteDrawer, 
-    priority: 2 
-  });
+  // Removed scroll manager - was interfering with native iOS scrolling
   
   // Check if we're showing favorites or a specific program
   const isFavoritesView = program === 'favorites';
@@ -540,14 +535,13 @@ export function TemplateSelectionStep({ program, onSelectTemplate }: TemplateSel
                   const isFavorited = true;
                   
                   return (
-                    <div key={sessionItem.id} className="relative group">
+                    <div key={sessionItem.id} className="group border border-gray-200 dark:border-gray-800 transition-colors">
                       <button
                         onClick={() => handleTemplateSelect(sessionItem.trainingSession.id, sessionItem.trainingSession.name)}
                         disabled={loadingTemplateId !== null}
-                        className="w-full p-8 text-left border border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors disabled:opacity-50"
+                        className="w-full p-8 text-left transition-colors disabled:opacity-50 flex items-center justify-between"
                       >
-                        <div className="flex items-center justify-between">
-                          <div className="flex flex-col">
+                          <div className="flex flex-col flex-1">
                             <span className="text-lg font-medium text-gray-900 dark:text-white">
                               {sessionItem.trainingSession.name}
                             </span>
@@ -558,24 +552,23 @@ export function TemplateSelectionStep({ program, onSelectTemplate }: TemplateSel
                               }
                             </span>
                           </div>
-                          {loadingTemplateId === sessionItem.trainingSession.id ? (
-                            <Loader2 className="w-5 h-5 animate-spin text-gray-300" />
-                          ) : (
-                            <ChevronRight className="w-5 h-5 text-gray-300 group-hover:text-gray-500 transition-colors" />
-                          )}
-                        </div>
-                      </button>
-                      
-                      {/* Favorite star */}
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleFavorite(sessionItem.trainingSession.id, sessionItem.trainingSession.name, isFavorited);
-                        }}
-                        disabled={addToFavorites.isPending || removeFromFavorites.isPending}
-                        className="absolute right-14 top-1/2 -translate-y-1/2 p-3 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
-                      >
-                        <Star className="h-5 w-5 fill-yellow-400 text-yellow-400" />
+                          <div className="flex items-center gap-2 ml-4">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleFavorite(sessionItem.trainingSession.id, sessionItem.trainingSession.name, isFavorited);
+                              }}
+                              disabled={addToFavorites.isPending || removeFromFavorites.isPending}
+                              className="min-h-[44px] min-w-[44px] p-2 rounded-full transition-colors flex items-center justify-center"
+                            >
+                              <Star className="h-5 w-5 fill-yellow-400 text-yellow-400" />
+                            </button>
+                            {loadingTemplateId === sessionItem.trainingSession.id ? (
+                              <Loader2 className="w-5 h-5 animate-spin text-gray-300" />
+                            ) : (
+                              <ChevronRight className="w-5 h-5 text-gray-300 transition-colors" />
+                            )}
+                          </div>
                       </button>
                     </div>
                   );
@@ -584,7 +577,10 @@ export function TemplateSelectionStep({ program, onSelectTemplate }: TemplateSel
               
               // Regular program view - separate favorites and others
               const sortedSessions = sessions.sort((a, b) => {
-                return new Date(b.trainingSession.createdAt).getTime() - new Date(a.trainingSession.createdAt).getTime();
+                // Sort by scheduledAt date - most recent first
+                const dateA = a.trainingSession.scheduledAt ? new Date(a.trainingSession.scheduledAt).getTime() : 0;
+                const dateB = b.trainingSession.scheduledAt ? new Date(b.trainingSession.scheduledAt).getTime() : 0;
+                return dateB - dateA;
               });
               
               const favoriteSessions = sortedSessions.filter(session => 
@@ -608,14 +604,14 @@ export function TemplateSelectionStep({ program, onSelectTemplate }: TemplateSel
                         const isFavorited = true;
                         
                         return (
-                          <div key={sessionItem.id} className="relative group">
+                          <div key={sessionItem.id} className="group border border-gray-200 dark:border-gray-800 transition-colors">
                             <button
                               onClick={() => handleTemplateSelect(sessionItem.trainingSession.id, sessionItem.trainingSession.name)}
                               disabled={loadingTemplateId !== null}
-                              className="w-full p-8 text-left border border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors disabled:opacity-50"
+                              className="w-full p-8 text-left transition-colors disabled:opacity-50 flex items-center justify-between"
+                              style={{ touchAction: 'manipulation' }}
                             >
-                              <div className="flex items-center justify-between">
-                                <div className="flex flex-col">
+                                <div className="flex flex-col flex-1">
                                   <span className="text-lg font-medium text-gray-900 dark:text-white">
                                     {sessionItem.trainingSession.name}
                                   </span>
@@ -630,24 +626,24 @@ export function TemplateSelectionStep({ program, onSelectTemplate }: TemplateSel
                                     }
                                   </span>
                                 </div>
-                                {loadingTemplateId === sessionItem.trainingSession.id ? (
-                                  <Loader2 className="w-5 h-5 animate-spin text-gray-300" />
-                                ) : (
-                                  <ChevronRight className="w-5 h-5 text-gray-300 group-hover:text-gray-500 transition-colors" />
-                                )}
-                              </div>
-                            </button>
-                            
-                            {/* Favorite star */}
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                toggleFavorite(sessionItem.trainingSession.id, sessionItem.trainingSession.name, isFavorited);
-                              }}
-                              disabled={addToFavorites.isPending || removeFromFavorites.isPending}
-                              className="absolute right-14 top-1/2 -translate-y-1/2 p-3 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
-                            >
-                              <Star className="h-5 w-5 fill-yellow-400 text-yellow-400" />
+                                <div className="flex items-center gap-2 ml-4">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      toggleFavorite(sessionItem.trainingSession.id, sessionItem.trainingSession.name, isFavorited);
+                                    }}
+                                    disabled={addToFavorites.isPending || removeFromFavorites.isPending}
+                                    className="min-h-[44px] min-w-[44px] p-2 rounded-full transition-colors flex items-center justify-center"
+                                    style={{ touchAction: 'manipulation' }}
+                                  >
+                                    <Star className="h-5 w-5 fill-yellow-400 text-yellow-400" />
+                                  </button>
+                                  {loadingTemplateId === sessionItem.trainingSession.id ? (
+                                    <Loader2 className="w-5 h-5 animate-spin text-gray-300" />
+                                  ) : (
+                                    <ChevronRight className="w-5 h-5 text-gray-300 transition-colors" />
+                                  )}
+                                </div>
                             </button>
                           </div>
                         );
@@ -661,35 +657,24 @@ export function TemplateSelectionStep({ program, onSelectTemplate }: TemplateSel
                       {favoriteSessions.length > 0 && (
                         <div className="h-4" />
                       )}
-                      <div className="px-8">
-                        <button
-                          onClick={() => setIsOtherSessionsExpanded(!isOtherSessionsExpanded)}
-                          className="flex items-center gap-2 py-4 -mx-2 px-2 text-xs text-gray-500 uppercase tracking-wide hover:bg-gray-50 dark:hover:bg-gray-900 rounded transition-colors"
-                        >
-                          <span>Others</span>
-                          <ChevronDownIcon 
-                            className={cn(
-                              "h-3 w-3 text-gray-400 transition-transform",
-                              isOtherSessionsExpanded ? "rotate-180" : ""
-                            )}
-                          />
-                        </button>
+                      <div className="px-8 py-2">
+                        <p className="text-xs text-gray-500 uppercase tracking-wide">
+                          Others
+                        </p>
                       </div>
                       
-                      {isOtherSessionsExpanded && (
-                        <>
-                          {otherSessions.map((sessionItem) => {
+                      {otherSessions.map((sessionItem) => {
                             const isFavorited = false;
                             
                             return (
-                              <div key={sessionItem.id} className="relative group">
+                              <div key={sessionItem.id} className="group border border-gray-200 dark:border-gray-800 transition-colors">
                                 <button
                                   onClick={() => handleTemplateSelect(sessionItem.trainingSession.id, sessionItem.trainingSession.name)}
                                   disabled={loadingTemplateId !== null}
-                                  className="w-full p-8 text-left border border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors disabled:opacity-50"
+                                  className="w-full p-8 text-left transition-colors disabled:opacity-50 flex items-center justify-between"
+                                  style={{ touchAction: 'manipulation' }}
                                 >
-                                  <div className="flex items-center justify-between">
-                                    <div className="flex flex-col">
+                                    <div className="flex flex-col flex-1">
                                       <span className="text-lg font-medium text-gray-900 dark:text-white">
                                         {sessionItem.trainingSession.name}
                                       </span>
@@ -704,30 +689,28 @@ export function TemplateSelectionStep({ program, onSelectTemplate }: TemplateSel
                                         }
                                       </span>
                                     </div>
-                                    {loadingTemplateId === sessionItem.trainingSession.id ? (
-                                      <Loader2 className="w-5 h-5 animate-spin text-gray-300" />
-                                    ) : (
-                                      <ChevronRight className="w-5 h-5 text-gray-300 group-hover:text-gray-500 transition-colors" />
-                                    )}
-                                  </div>
-                                </button>
-                                
-                                {/* Favorite star */}
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    toggleFavorite(sessionItem.trainingSession.id, sessionItem.trainingSession.name, isFavorited);
-                                  }}
-                                  disabled={addToFavorites.isPending || removeFromFavorites.isPending}
-                                  className="absolute right-14 top-1/2 -translate-y-1/2 p-3 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
-                                >
-                                  <Star className="h-5 w-5 text-gray-400 hover:text-yellow-400 transition-colors" />
+                                    <div className="flex items-center gap-2 ml-4">
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          toggleFavorite(sessionItem.trainingSession.id, sessionItem.trainingSession.name, isFavorited);
+                                        }}
+                                        disabled={addToFavorites.isPending || removeFromFavorites.isPending}
+                                        className="min-h-[44px] min-w-[44px] p-2 rounded-full transition-colors flex items-center justify-center"
+                                        style={{ touchAction: 'manipulation' }}
+                                      >
+                                        <Star className="h-5 w-5 text-gray-400 transition-colors" />
+                                      </button>
+                                      {loadingTemplateId === sessionItem.trainingSession.id ? (
+                                        <Loader2 className="w-5 h-5 animate-spin text-gray-300" />
+                                      ) : (
+                                        <ChevronRight className="w-5 h-5 text-gray-300 transition-colors" />
+                                      )}
+                                    </div>
                                 </button>
                               </div>
                             );
                           })}
-                        </>
-                      )}
                     </>
                   )}
                 </>
@@ -740,6 +723,9 @@ export function TemplateSelectionStep({ program, onSelectTemplate }: TemplateSel
           </div>
         )}
       </div>
+      
+      {/* Bottom margin for better scroll experience */}
+      <div className="h-20" />
       
       {/* Favorite Confirmation/Edit Drawer */}
       <OptionsDrawer
