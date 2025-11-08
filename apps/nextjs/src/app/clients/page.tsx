@@ -35,6 +35,9 @@ export default function ClientsPage() {
   useEffect(() => {
     const checkAuth = async () => {
       try {
+        // Only run auth check on client side
+        if (typeof window === 'undefined') return;
+        
         const response = await fetch('/api/auth/get-session', {
           credentials: 'include',
           cache: 'no-store',
