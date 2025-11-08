@@ -721,6 +721,21 @@ function CircuitWorkoutOverviewContent() {
   const [showRoundOptionsModal, setShowRoundOptionsModal] = useState(false);
   const [selectedRoundForOptions, setSelectedRoundForOptions] = useState<RoundData | null>(null);
 
+  // AddRoundDrawer edit mode state
+  const [addRoundDrawerEditMode, setAddRoundDrawerEditMode] = useState<{
+    roundNumber: number;
+    roundData: {
+      type: 'circuit_round' | 'stations_round' | 'amrap_round';
+      exercisesPerRound: number;
+      workDuration?: number;
+      restDuration?: number;
+      repeatTimes?: number;
+      restBetweenSets?: number;
+      totalDuration?: number;
+    };
+    onSave: (config: any) => void;
+  } | null>(null);
+
   // Confirmation dialog state
   const [showDeleteExerciseConfirm, setShowDeleteExerciseConfirm] = useState(false);
   const [showDeleteRoundConfirm, setShowDeleteRoundConfirm] = useState(false);
@@ -1016,6 +1031,47 @@ function CircuitWorkoutOverviewContent() {
     onError: (error) => {
       console.error("Failed to add round:", error);
       toast.error("Failed to add round. Please try again.");
+    },
+  });
+
+  // Update round mutation
+  const updateRoundMutation = useMutation({
+    ...trpc.circuitConfig.updatePublic.mutationOptions(),
+    onSuccess: () => {
+      console.log("[updateRoundMutation] Success!");
+      
+      // Close drawer and reset edit mode
+      setShowAddRoundInDrawer(false);
+      setAddRoundDrawerEditMode(null);
+      setShowOptionsDrawer(false);
+      
+      // Show success toast
+      toast.success("Round settings updated successfully");
+      
+      // Invalidate queries to refresh data
+      queryClient.invalidateQueries({
+        queryKey: trpc.circuitConfig.getBySession.queryOptions({ 
+          sessionId: sessionId || "" 
+        }).queryKey,
+      });
+      
+      // Also invalidate workout selections to trigger full UI refresh
+      queryClient.invalidateQueries({
+        queryKey: trpc.workoutSelections.getSelections.queryOptions({ 
+          sessionId: sessionId || "" 
+        }).queryKey,
+      });
+      
+      // Invalidate session query as well since it contains templateConfig
+      queryClient.invalidateQueries({
+        queryKey: trpc.trainingSession.getSession.queryOptions({ 
+          id: sessionId || "" 
+        }).queryKey,
+      });
+    },
+    onError: (error) => {
+      console.error("Failed to update round:", error);
+      toast.error("Failed to update round. Please try again.");
     },
   });
 
@@ -1598,22 +1654,6 @@ function CircuitWorkoutOverviewContent() {
                         const roundNumber = parseInt(round.roundName.match(/\d+/)?.[0] || '1');
                         const roundTemplate = circuitConfig?.config?.roundTemplates?.find(rt => rt.roundNumber === roundNumber);
                         
-                        console.log("[Round Display DEBUG]", {
-                          roundName: round.roundName,
-                          extractedRoundNumber: roundNumber,
-                          availableRoundTemplates: circuitConfig?.config?.roundTemplates?.map(rt => ({ 
-                            roundNumber: rt.roundNumber, 
-                            type: rt.template?.type,
-                            workDuration: rt.template?.workDuration,
-                            restDuration: rt.template?.restDuration
-                          })),
-                          foundRoundTemplate: roundTemplate,
-                          templateTimingValues: {
-                            workDuration: roundTemplate?.template?.workDuration,
-                            restDuration: roundTemplate?.template?.restDuration,
-                            repeatTimes: roundTemplate?.template?.repeatTimes
-                          }
-                        });
                         
                         return (
                           <>
@@ -2307,6 +2347,7 @@ function CircuitWorkoutOverviewContent() {
             <div className="flex justify-center mb-8">
               <button
                 onClick={() => {
+                  setAddRoundDrawerEditMode(null); // Reset edit mode for add operation
                   setShowAddRoundInDrawer(true);
                   setShowOptionsDrawer(true);
                 }}
@@ -2952,7 +2993,7 @@ function CircuitWorkoutOverviewContent() {
               ? `Create Station ${(addExerciseModalConfig?.targetStation || 0) + 1}`
               : `Add Exercise to ${addExerciseModalConfig?.roundName || 'Round'}`
             : showAddRoundInDrawer
-            ? "Add New Round"
+            ? (addRoundDrawerEditMode ? `Edit ${selectedItemForOptions?.name || 'Round'}` : "Add New Round")
             : selectedItemForOptions?.type === 'round' 
             ? selectedItemForOptions.name 
             : selectedItemForOptions?.type === 'station'
@@ -2960,7 +3001,21 @@ function CircuitWorkoutOverviewContent() {
             : selectedItemForOptions?.name || "Options"
         }
         customContent={
-          showRepsInDrawer && selectedExerciseForSets ? (
+          (() => {
+            console.log("[OptionsDrawer] Rendering customContent, state check:", {
+              showRepsInDrawer,
+              selectedExerciseForSets: !!selectedExerciseForSets,
+              showAddExerciseInDrawer,
+              addExerciseModalConfig: !!addExerciseModalConfig,
+              showReplaceInDrawer,
+              selectedExerciseForReplace: !!selectedExerciseForReplace,
+              showAddRoundInDrawer,
+              addRoundDrawerEditMode: !!addRoundDrawerEditMode
+            });
+            
+            if (showRepsInDrawer && selectedExerciseForSets) {
+              console.log("[OptionsDrawer] Rendering RepsConfiguration");
+              return (
             <RepsConfiguration
               exerciseName={selectedExerciseForSets.exerciseName}
               exerciseId={selectedExerciseForSets.exerciseId}
@@ -2987,7 +3042,10 @@ function CircuitWorkoutOverviewContent() {
               }}
               isSaving={updateRepsPlannedMutation.isPending}
             />
-          ) : showAddExerciseInDrawer && addExerciseModalConfig ? (
+              );
+            } else if (showAddExerciseInDrawer && addExerciseModalConfig) {
+              console.log("[OptionsDrawer] Rendering AddExerciseDrawer");
+              return (
             <AddExerciseDrawer
               isOpen={showAddExerciseInDrawer}
               onClose={() => {
@@ -3007,7 +3065,10 @@ function CircuitWorkoutOverviewContent() {
               sessionId={sessionId || ""}
               userId={dummyUserId || ""}
             />
-          ) : showReplaceInDrawer && selectedExerciseForReplace ? (
+              );
+            } else if (showReplaceInDrawer && selectedExerciseForReplace) {
+              console.log("[OptionsDrawer] Rendering ExerciseReplacement");
+              return (
             <ExerciseReplacement
               exercise={(() => {
                 // Find the actual exercise from roundsData to get complete data including stationExercises
@@ -3050,11 +3111,15 @@ function CircuitWorkoutOverviewContent() {
                 setSelectedExerciseForReplace(null);
               }}
             />
-          ) : showAddRoundInDrawer ? (
+              );
+            } else if (showAddRoundInDrawer) {
+              console.log("[OptionsDrawer] Rendering AddRoundDrawer");
+              return (
             <AddRoundDrawer
               isOpen={showAddRoundInDrawer}
               onClose={() => {
                 setShowAddRoundInDrawer(false);
+                setAddRoundDrawerEditMode(null); // Reset edit mode when closing
                 setShowOptionsDrawer(false);
               }}
               onAdd={(config) => {
@@ -3089,8 +3154,14 @@ function CircuitWorkoutOverviewContent() {
                 });
               }}
               isAdding={addRoundMutation.isPending}
+              editMode={addRoundDrawerEditMode || undefined}
             />
-          ) : undefined
+              );
+            } else {
+              console.log("[OptionsDrawer] No specific drawer selected, returning undefined");
+              return undefined;
+            }
+          })()
         }
         items={
           showRepsInDrawer || showReplaceInDrawer ? undefined :
@@ -3098,7 +3169,7 @@ function CircuitWorkoutOverviewContent() {
             ? [
                 {
                   id: "settings",
-                  label: "Round Settings",
+                  label: "Edit Round",
                   icon: (
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                       <path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
@@ -3106,12 +3177,101 @@ function CircuitWorkoutOverviewContent() {
                     </svg>
                   ),
                   onClick: () => {
+                    console.log("[Round Settings] Click handler triggered");
+                    console.log("[Round Settings] selectedItemForOptions:", selectedItemForOptions);
+                    
                     const round = roundsData.find(r => r.roundName === selectedItemForOptions?.name);
-                    if (round) {
-                      setSelectedRoundForOptions(round);
-                      setShowRoundOptionsModal(true);
+                    console.log("[Round Settings] Found round:", round);
+                    console.log("[Round Settings] circuitConfig exists:", !!circuitConfig);
+                    
+                    if (round && circuitConfig) {
+                      // Extract round number from round name (e.g., "Round 1" -> 1)
+                      const roundNumber = parseInt(round.roundName.match(/\d+/)?.[0] || '1');
+                      console.log("[Round Settings] Extracted roundNumber:", roundNumber);
+                      
+                      // Find the round template for this round
+                      const roundTemplate = circuitConfig.config.roundTemplates?.find(
+                        rt => rt.roundNumber === roundNumber
+                      );
+                      console.log("[Round Settings] Found roundTemplate:", roundTemplate);
+                      
+                      if (roundTemplate) {
+                        // Prepare edit mode data for AddRoundDrawer
+                        const editModeData = {
+                          roundNumber,
+                          roundData: {
+                            type: roundTemplate.template.type,
+                            exercisesPerRound: roundTemplate.template.exercisesPerRound,
+                            workDuration: roundTemplate.template.workDuration,
+                            restDuration: roundTemplate.template.restDuration,
+                            repeatTimes: roundTemplate.template.repeatTimes,
+                            restBetweenSets: roundTemplate.template.restBetweenSets,
+                            totalDuration: roundTemplate.template.totalDuration,
+                          },
+                          onSave: (config: any) => {
+                            // Convert frontend config to backend format
+                            const { sets, ...restConfig } = config;
+                            const roundConfig = {
+                              ...restConfig,
+                              repeatTimes: sets || config.repeatTimes || 1, // Frontend uses 'sets', backend uses 'repeatTimes'
+                            };
+
+                            // Find current round templates
+                            const currentRoundTemplates = circuitConfig.config.roundTemplates || [];
+                            
+                            // Update the specific round template
+                            const updatedRoundTemplates = currentRoundTemplates.map(rt => {
+                              if (rt.roundNumber === roundNumber) {
+                                return {
+                                  ...rt,
+                                  template: {
+                                    ...rt.template,
+                                    ...roundConfig,
+                                  }
+                                };
+                              }
+                              return rt;
+                            });
+
+                            // Call the update mutation
+                            updateRoundMutation.mutate({
+                              sessionId: sessionId!,
+                              config: {
+                                ...circuitConfig.config,
+                                roundTemplates: updatedRoundTemplates,
+                              }
+                            });
+                          }
+                        };
+
+                        console.log("[Round Settings] Prepared editModeData:", editModeData);
+                        
+                        // Reset other drawer states first to ensure proper conditional rendering
+                        setShowRepsInDrawer(false);
+                        setShowReplaceInDrawer(false);
+                        setShowAddExerciseInDrawer(false);
+                        
+                        // Open AddRoundDrawer in edit mode
+                        console.log("[Round Settings] Setting edit mode and opening drawer");
+                        setAddRoundDrawerEditMode(editModeData);
+                        setShowAddRoundInDrawer(true);
+                        console.log("[Round Settings] Drawer should be opening now");
+                        
+                        // Debug: Check state immediately after setting
+                        setTimeout(() => {
+                          console.log("[Round Settings] State check after timeout:", {
+                            showAddRoundInDrawer,
+                            addRoundDrawerEditMode: !!addRoundDrawerEditMode
+                          });
+                        }, 0);
+                      } else {
+                        console.log("[Round Settings] ERROR: No roundTemplate found for roundNumber:", roundNumber);
+                      }
+                    } else {
+                      console.log("[Round Settings] ERROR: Missing round or circuitConfig", { round: !!round, circuitConfig: !!circuitConfig });
                     }
                   },
+                  preventAutoClose: true, // Prevent auto-closing when transitioning to AddRoundDrawer
                 },
                 {
                   id: "delete-round",

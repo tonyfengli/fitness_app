@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '~/trpc/react';
@@ -28,6 +28,35 @@ function getInitials(name: string) {
 
 export default function ClientsPage() {
   const router = useRouter();
+  const [user, setUser] = useState<any>(null);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+
+  // Check authentication on component mount
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const response = await fetch('/api/auth/get-session', {
+          credentials: 'include',
+          cache: 'no-store',
+        });
+        const sessionData = await response.json();
+        if (sessionData?.user) {
+          setUser(sessionData.user);
+        } else {
+          router.push('/login');
+          return;
+        }
+      } catch (error) {
+        console.error('Authentication check failed:', error);
+        router.push('/login');
+        return;
+      } finally {
+        setIsCheckingAuth(false);
+      }
+    };
+
+    checkAuth();
+  }, [router]);
   const searchParams = useSearchParams();
   const trpc = api();
   const [searchQuery, setSearchQuery] = useState('');
@@ -150,6 +179,23 @@ export default function ClientsPage() {
       client.email.toLowerCase().includes(searchQuery.toLowerCase())
     )
     .sort((a, b) => a.attendance.attendancePercentage - b.attendance.attendancePercentage);
+
+  // Show loading state while checking authentication
+  if (isCheckingAuth) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-purple-50 to-blue-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="mx-auto h-12 w-12 animate-spin rounded-full border-2 border-gray-200 border-t-purple-600 dark:border-gray-700 dark:border-t-purple-400"></div>
+          <p className="mt-4 text-gray-600 dark:text-gray-400">Verifying access...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // If not authenticated, user will be redirected by useEffect
+  if (!user) {
+    return null;
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-purple-50 to-blue-50">

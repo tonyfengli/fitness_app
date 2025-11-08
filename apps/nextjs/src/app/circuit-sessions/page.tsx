@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -151,9 +151,38 @@ const formatCreatedDate = (dateString: string) => {
 
 export default function SessionsPage() {
   const router = useRouter();
+  const [user, setUser] = useState<any>(null);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const [showCompletedSessions, setShowCompletedSessions] = useState(false);
   const [navigatingToSession, setNavigatingToSession] = useState<string | null>(null);
+
+  // Check authentication on component mount
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const response = await fetch('/api/auth/get-session', {
+          credentials: 'include',
+          cache: 'no-store',
+        });
+        const sessionData = await response.json();
+        if (sessionData?.user) {
+          setUser(sessionData.user);
+        } else {
+          router.push('/login');
+          return;
+        }
+      } catch (error) {
+        console.error('Authentication check failed:', error);
+        router.push('/login');
+        return;
+      } finally {
+        setIsCheckingAuth(false);
+      }
+    };
+
+    checkAuth();
+  }, [router]);
   
   // Load active circuit sessions immediately
   const { data: activeSessions, isLoading: activeLoading, error: activeError } = useActiveCircuitSessions();
@@ -187,6 +216,23 @@ export default function SessionsPage() {
       trpc.trainingSession.hasWorkoutForSession.queryOptions({ sessionId })
     );
   };
+
+  // Show loading state while checking authentication
+  if (isCheckingAuth) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="mx-auto h-12 w-12 animate-spin rounded-full border-2 border-gray-200 border-t-purple-600 dark:border-gray-700 dark:border-t-purple-400"></div>
+          <p className="mt-4 text-gray-600 dark:text-gray-400">Verifying access...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // If not authenticated, user will be redirected by useEffect
+  if (!user) {
+    return null;
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">

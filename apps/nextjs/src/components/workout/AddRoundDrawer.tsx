@@ -8,6 +8,20 @@ interface AddRoundDrawerProps {
   onClose: () => void;
   onAdd: (config: RoundConfig) => void;
   isAdding?: boolean;
+  // Edit mode support
+  editMode?: {
+    roundNumber: number;
+    roundData: {
+      type: 'circuit_round' | 'stations_round' | 'amrap_round';
+      exercisesPerRound: number;
+      workDuration?: number;
+      restDuration?: number;
+      repeatTimes?: number;
+      restBetweenSets?: number;
+      totalDuration?: number;
+    };
+    onSave: (config: RoundConfig) => void;
+  };
 }
 
 interface RoundConfig {
@@ -207,19 +221,43 @@ function CircuitTimerCalculator({ isExpanded, onApplyToWorkDuration, onToggle }:
   );
 }
 
-export function AddRoundDrawer({ isOpen, onClose, onAdd, isAdding = false }: AddRoundDrawerProps) {
-  const [step, setStep] = useState(1);
+export function AddRoundDrawer({ isOpen, onClose, onAdd, isAdding = false, editMode }: AddRoundDrawerProps) {
+  const [step, setStep] = useState(editMode ? 2 : 1); // Skip type selection in edit mode
   const [showMoreExerciseOptions, setShowMoreExerciseOptions] = useState(false);
   const [showMoreDurationOptions, setShowMoreDurationOptions] = useState(false);
   const [showMoreRestOptions, setShowMoreRestOptions] = useState(false);
   const [showCalculator, setShowCalculator] = useState(false);
-  const [config, setConfig] = useState<RoundConfig>({
-    type: 'circuit_round',
-    exercisesPerRound: 3, // First option for circuit rounds
-    workDuration: 30,
-    restDuration: 30,
-    sets: 1,
-    restBetweenSets: 60,
+  const [isInitialSetup, setIsInitialSetup] = useState(true); // Track initial setup for edit mode
+  
+  // Initialize config based on mode
+  const [config, setConfig] = useState<RoundConfig>(() => {
+    if (editMode) {
+      console.log("[AddRoundDrawer] Edit mode detected, initializing with data:", editMode);
+      
+      // Convert backend data to frontend format
+      const frontendConfig = {
+        type: editMode.roundData.type,
+        exercisesPerRound: editMode.roundData.exercisesPerRound,
+        workDuration: editMode.roundData.workDuration !== undefined ? editMode.roundData.workDuration : 30,
+        restDuration: editMode.roundData.restDuration !== undefined ? editMode.roundData.restDuration : 30,
+        sets: editMode.roundData.repeatTimes || 1, // Backend uses repeatTimes, frontend uses sets
+        restBetweenSets: editMode.roundData.restBetweenSets || 60,
+        totalDuration: editMode.roundData.totalDuration,
+      };
+      
+      console.log("[AddRoundDrawer] Converted frontend config:", frontendConfig);
+      return frontendConfig;
+    } else {
+      // Default for new rounds
+      return {
+        type: 'circuit_round',
+        exercisesPerRound: 3,
+        workDuration: 30,
+        restDuration: 30,
+        sets: 1,
+        restBetweenSets: 60,
+      };
+    }
   });
 
   // Get appropriate presets based on round type
@@ -232,8 +270,32 @@ export function AddRoundDrawer({ isOpen, onClose, onAdd, isAdding = false }: Add
     return config.type === 'stations_round' ? STATIONS_EXERCISE_OPTIONS : CIRCUIT_EXERCISE_OPTIONS;
   };
 
-  // Update duration and exercise count when round type changes
+  // Mark initial setup as complete after first render
   useEffect(() => {
+    if (isInitialSetup) {
+      // Delay the reset to ensure initial config is preserved
+      const timer = setTimeout(() => {
+        setIsInitialSetup(false);
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [isInitialSetup]);
+
+  // Update duration and exercise count when round type changes (but skip during initial setup for edit mode)
+  useEffect(() => {
+    console.log("[AddRoundDrawer] useEffect debug:", {
+      editMode: !!editMode,
+      isInitialSetup,
+      configValues: { work: config.workDuration, rest: config.restDuration, exercises: config.exercisesPerRound },
+      editModeValues: editMode ? { work: editMode.roundData.workDuration, rest: editMode.roundData.restDuration, exercises: editMode.roundData.exercisesPerRound } : null
+    });
+    
+    // Skip setting defaults in edit mode entirely - let the initial state handle it
+    if (editMode) {
+      console.log("[AddRoundDrawer] Skipping defaults for edit mode - preserving existing values");
+      return;
+    }
+    
     const presets = getPresetDurations();
     const exerciseOptions = getExerciseOptions();
     const defaultPreset = presets[0];
@@ -251,22 +313,37 @@ export function AddRoundDrawer({ isOpen, onClose, onAdd, isAdding = false }: Add
       sets: prev.sets || 1,
       restBetweenSets: prev.restBetweenSets || 60,
     }));
-  }, [config.type]);
+  }, [config.type, editMode, isInitialSetup]);
 
   const handleReset = () => {
-    setStep(1);
+    setStep(editMode ? 2 : 1); // Skip type selection in edit mode
     setShowMoreExerciseOptions(false);
     setShowMoreDurationOptions(false);
     setShowMoreRestOptions(false);
     setShowCalculator(false);
-    setConfig({
-      type: 'circuit_round',
-      exercisesPerRound: 3,
-      workDuration: 30,
-      restDuration: 30,
-      sets: 1,
-      restBetweenSets: 60,
-    });
+    
+    if (editMode) {
+      // Reset to original edit data
+      setConfig({
+        type: editMode.roundData.type,
+        exercisesPerRound: editMode.roundData.exercisesPerRound,
+        workDuration: editMode.roundData.workDuration || 30,
+        restDuration: editMode.roundData.restDuration || 30,
+        sets: editMode.roundData.repeatTimes || 1,
+        restBetweenSets: editMode.roundData.restBetweenSets || 60,
+        totalDuration: editMode.roundData.totalDuration,
+      });
+    } else {
+      // Reset to defaults for new round
+      setConfig({
+        type: 'circuit_round',
+        exercisesPerRound: 3,
+        workDuration: 30,
+        restDuration: 30,
+        sets: 1,
+        restBetweenSets: 60,
+      });
+    }
   };
 
   const handleClose = () => {
@@ -275,8 +352,12 @@ export function AddRoundDrawer({ isOpen, onClose, onAdd, isAdding = false }: Add
   };
 
   const handleNext = () => {
-    // For AMRAP, skip sets step (3) and go directly to review (4)
-    if (config.type === 'amrap_round' && step === 2) {
+    // In edit mode, there's only step 2, so next should save
+    if (editMode && step === 2) {
+      handleAdd(); // This will call editMode.onSave
+      return;
+    } else if (config.type === 'amrap_round' && step === 2) {
+      // For AMRAP, skip sets step (3) and go directly to review (4)
       setStep(4);
     } else if (step < 4) {
       setStep(step + 1);
@@ -284,8 +365,12 @@ export function AddRoundDrawer({ isOpen, onClose, onAdd, isAdding = false }: Add
   };
 
   const handleBack = () => {
-    // For AMRAP, skip sets step (3) when going back from review (4)
-    if (config.type === 'amrap_round' && step === 4) {
+    // In edit mode, back from step 2 should close
+    if (editMode && step === 2) {
+      handleClose();
+      return;
+    } else if (config.type === 'amrap_round' && step === 4) {
+      // For AMRAP, skip sets step (3) when going back from review (4)
       setStep(2);
     } else if (step > 1) {
       setStep(step - 1);
@@ -293,10 +378,15 @@ export function AddRoundDrawer({ isOpen, onClose, onAdd, isAdding = false }: Add
   };
 
   const handleAdd = () => {
-    console.log("[AddRoundDrawer] handleAdd called");
+    console.log(`[AddRoundDrawer] ${editMode ? 'handleSave' : 'handleAdd'} called`);
     console.log("[AddRoundDrawer] Final config being submitted:", config);
     console.log("[AddRoundDrawer] Config type:", config.type);
-    onAdd(config);
+    
+    if (editMode) {
+      editMode.onSave(config);
+    } else {
+      onAdd(config);
+    }
     // Don't reset here - let the success handler close the drawer and reset
   };
 
@@ -333,13 +423,13 @@ export function AddRoundDrawer({ isOpen, onClose, onAdd, isAdding = false }: Add
             )}
             <div className="min-w-0 flex-1">
               <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100 leading-tight">
-                Add New Round
+                {editMode ? `Edit Round ${editMode.roundNumber}` : "Add New Round"}
               </h3>
               <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 leading-relaxed">
                 {step === 1 && "Choose the type of round"}
                 {step === 2 && "Configure round settings"}
                 {step === 3 && "Configure sets and rest"}
-                {step === 4 && "Review your round"}
+                {step === 4 && (editMode ? "Review your changes" : "Review your round")}
               </p>
             </div>
           </div>
@@ -364,17 +454,29 @@ export function AddRoundDrawer({ isOpen, onClose, onAdd, isAdding = false }: Add
         {/* Progress indicator */}
         <div className="mt-3">
           <div className="flex gap-1">
-            {(config.type === 'amrap_round' ? [1, 2, 4] : [1, 2, 3, 4]).map((stepNum, index) => (
-              <div
-                key={stepNum}
-                className={cn(
-                  "h-1 flex-1 rounded-full transition-all duration-300",
-                  step >= stepNum 
-                    ? "bg-purple-500 dark:bg-purple-400" 
-                    : "bg-gray-200 dark:bg-gray-700"
-                )}
-              />
-            ))}
+            {(() => {
+              // Determine steps based on mode and round type
+              let steps;
+              if (editMode) {
+                // Edit mode: only show step 2 (configuration), skip type selection, sets, and review
+                steps = [2];
+              } else {
+                // Add mode: include all steps
+                steps = config.type === 'amrap_round' ? [1, 2, 4] : [1, 2, 3, 4];
+              }
+              
+              return steps.map((stepNum, index) => (
+                <div
+                  key={stepNum}
+                  className={cn(
+                    "h-1 flex-1 rounded-full transition-all duration-300",
+                    step >= stepNum 
+                      ? "bg-purple-500 dark:bg-purple-400" 
+                      : "bg-gray-200 dark:bg-gray-700"
+                  )}
+                />
+              ));
+            })()}
           </div>
         </div>
       </div>
@@ -422,7 +524,8 @@ export function AddRoundDrawer({ isOpen, onClose, onAdd, isAdding = false }: Add
           {/* Step 2: Configuration */}
           {step === 2 && (
             <div className="space-y-6">
-              {/* Exercises per round */}
+              {/* Exercises per round - Hide in edit mode */}
+              {!editMode && (
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -504,6 +607,7 @@ export function AddRoundDrawer({ isOpen, onClose, onAdd, isAdding = false }: Add
                   </div>
                 </div>
               </div>
+              )}
 
               {/* Duration settings for circuit and stations */}
               {(config.type === 'circuit_round' || config.type === 'stations_round') && (
@@ -556,7 +660,10 @@ export function AddRoundDrawer({ isOpen, onClose, onAdd, isAdding = false }: Add
                     ) : (
                       /* Primary duration options */
                       <div className="grid grid-cols-2 gap-2">
-                        {getPresetDurations().map((preset) => (
+                        {getPresetDurations().map((preset) => {
+                          const isSelected = config.workDuration === preset.work && config.restDuration === preset.rest;
+                          
+                          return (
                           <button
                             key={preset.label}
                             onClick={() => {
@@ -569,14 +676,15 @@ export function AddRoundDrawer({ isOpen, onClose, onAdd, isAdding = false }: Add
                             }}
                             className={cn(
                               "p-3 rounded-lg border text-center font-medium transition-all duration-200",
-                              config.workDuration === preset.work && config.restDuration === preset.rest
+                              isSelected
                                 ? "border-purple-500 bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300 ring-2 ring-purple-200 dark:ring-purple-800"
                                 : "border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:border-purple-300 dark:hover:border-purple-600 hover:bg-purple-50/50 dark:hover:bg-purple-900/10"
                             )}
                           >
                             {preset.label}
                           </button>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
 
@@ -726,13 +834,13 @@ export function AddRoundDrawer({ isOpen, onClose, onAdd, isAdding = false }: Add
                   onClick={handleBack}
                   className="flex-1 p-3 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors"
                 >
-                  Back
+                  {editMode ? 'Cancel' : 'Back'}
                 </button>
                 <button
                   onClick={handleNext}
                   className="flex-1 p-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors"
                 >
-                  {config.type === 'amrap_round' ? 'Review' : 'Next'}
+                  {editMode ? 'Save Changes' : (config.type === 'amrap_round' ? 'Review' : 'Next')}
                 </button>
               </div>
             </div>
@@ -957,7 +1065,7 @@ export function AddRoundDrawer({ isOpen, onClose, onAdd, isAdding = false }: Add
                   {isAdding && (
                     <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                   )}
-                  Add Round
+                  {editMode ? 'Save Changes' : 'Add Round'}
                 </button>
               </div>
             </div>
