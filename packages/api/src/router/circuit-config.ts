@@ -176,7 +176,7 @@ export const circuitConfigRouter = createTRPCRouter({
           }));
           
           // Update exercise groupNames to match the new round numbers
-          if (filteredRoundTemplates.length !== session.templateConfig.config?.roundTemplates?.length) {
+          if (filteredRoundTemplates.length !== (session.templateConfig as any).config?.roundTemplates?.length) {
             console.log('[BUG TRACE - getBySession] Updating exercise groupNames after renumbering...');
             
             // Build mapping of old round names to new round names
@@ -217,7 +217,7 @@ export const circuitConfigRouter = createTRPCRouter({
           result.config.rounds = renumberedRoundTemplates.length;
           
           console.log('[BUG TRACE - getBySession] After filtering orphaned rounds:', {
-            originalCount: session.templateConfig.config?.roundTemplates?.length || 0,
+            originalCount: (session.templateConfig as any).config?.roundTemplates?.length || 0,
             filteredCount: renumberedRoundTemplates.length,
             filteredRounds: renumberedRoundTemplates.map((rt: any) => rt.roundNumber),
             roundTemplateDetails: renumberedRoundTemplates.map((rt: any) => ({

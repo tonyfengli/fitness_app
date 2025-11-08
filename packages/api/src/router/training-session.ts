@@ -686,13 +686,15 @@ export const trainingSessionRouter = {
             .where(eq(UserTrainingSession.id, existing.id))
             .returning();
 
-          console.log(`[addParticipant] Updated registration:`, {
-            id: updatedRegistration.id,
-            userId: updatedRegistration.userId,
-            sessionId: updatedRegistration.trainingSessionId,
-            status: updatedRegistration.status,
-            checkedInAt: updatedRegistration.checkedInAt,
-          });
+          if (updatedRegistration) {
+            console.log(`[addParticipant] Updated registration:`, {
+              id: updatedRegistration.id,
+              userId: updatedRegistration.userId,
+              sessionId: updatedRegistration.trainingSessionId,
+              status: updatedRegistration.status,
+              checkedInAt: updatedRegistration.checkedInAt,
+            });
+          }
 
           return updatedRegistration;
         }
@@ -716,7 +718,7 @@ export const trainingSessionRouter = {
       // Create new checked-in registration
       console.log(`[addParticipant] Creating new checked-in registration`);
       
-      const [registration] = await ctx.db
+      const insertResult = await ctx.db
         .insert(UserTrainingSession)
         .values({
           userId: targetUserId,
@@ -726,13 +728,16 @@ export const trainingSessionRouter = {
         })
         .returning();
 
-      console.log(`[addParticipant] Created new registration:`, {
-        id: registration.id,
-        userId: registration.userId,
-        sessionId: registration.trainingSessionId,
-        status: registration.status,
-        checkedInAt: registration.checkedInAt,
-      });
+      const [registration] = insertResult;
+      if (registration) {
+        console.log(`[addParticipant] Created new registration:`, {
+          id: registration.id,
+          userId: registration.userId,
+          sessionId: registration.trainingSessionId,
+          status: registration.status,
+          checkedInAt: registration.checkedInAt,
+        });
+      }
 
       return registration;
     }),
