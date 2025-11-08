@@ -589,9 +589,9 @@ export const UserTrainingPackage = pgTable("user_training_package", (t) => ({
     .$onUpdateFn(() => sql`now()`),
 }), (table) => ({
   // Prevent overlapping date ranges for the same user with active status
-  noOverlappingPackages: index("no_overlapping_packages").using(
-    sql`gist (user_id WITH =, daterange(start_date, end_date, '[]') WITH &&) WHERE (status = 'active')`
-  ),
+  noOverlappingPackages: index("no_overlapping_packages").using("gist", 
+    sql`user_id WITH =, daterange(start_date, end_date, '[]') WITH &&`
+  ).where(sql`status = 'active'`),
 }));
 
 export const CreateUserTrainingPackageSchema = createInsertSchema(UserTrainingPackage, {
