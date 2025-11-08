@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '~/trpc/react';
@@ -26,7 +26,7 @@ function getInitials(name: string) {
     .join('');
 }
 
-export default function ClientsPage() {
+function ClientsPageContent() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
@@ -655,5 +655,25 @@ export default function ClientsPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function ClientsPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-purple-50 to-blue-50">
+        <CircuitHeader
+          onBack={() => {}}
+          backText="Back"
+          title="Clients"
+          subtitle="Track client progress and insights"
+        />
+        <div className="flex items-center justify-center h-64">
+          <Loader2Icon className="w-8 h-8 text-purple-600 animate-spin" />
+        </div>
+      </div>
+    }>
+      <ClientsPageContent />
+    </Suspense>
   );
 }
