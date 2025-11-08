@@ -444,20 +444,21 @@ export function CircuitWorkoutLiveScreen() {
                 shadowRadius: 8,
                 elevation: 4,
               }}>
-                {/* Teams Button */}
-                <Pressable
-                  ref={teamsButtonRef}
-                  onPress={() => {
-                    setShouldRestoreFocusToTeams(true);
-                    // Calculate team distribution when opening modal
-                    const stationCount = currentRound?.exercises 
-                      ? [...new Set(currentRound.exercises.map((ex: any) => ex.orderIndex))].length 
-                      : 0;
-                    setTeamsDistribution(distributeClientsToTeams(checkedInClients || [], stationCount));
-                    setIsTeamsModalVisible(true);
-                  }}
-                  focusable
-                >
+                {/* Teams Button - Only show for stations rounds */}
+                {currentRoundType === 'stations_round' && (
+                  <Pressable
+                    ref={teamsButtonRef}
+                    onPress={() => {
+                      setShouldRestoreFocusToTeams(true);
+                      // Calculate team distribution when opening modal
+                      const stationCount = currentRound?.exercises 
+                        ? [...new Set(currentRound.exercises.map((ex: any) => ex.orderIndex))].length 
+                        : 0;
+                      setTeamsDistribution(distributeClientsToTeams(checkedInClients || [], stationCount));
+                      setIsTeamsModalVisible(true);
+                    }}
+                    focusable
+                  >
                   {({ focused }) => (
                     <MattePanel 
                       focused={focused}
@@ -488,7 +489,8 @@ export function CircuitWorkoutLiveScreen() {
                       </View>
                     </MattePanel>
                   )}
-                </Pressable>
+                  </Pressable>
+                )}
 
                 {/* Start Button */}
                 <Pressable
@@ -545,19 +547,20 @@ export function CircuitWorkoutLiveScreen() {
                 shadowRadius: 4,
                 elevation: 2,
               }}>
-                {/* Teams Button */}
-                <Pressable 
-                  onPress={() => {
-                    setShouldRestoreFocusToTeams(true);
-                    // Calculate team distribution when opening modal
-                    const stationCount = currentRound?.exercises 
-                      ? [...new Set(currentRound.exercises.map((ex: any) => ex.orderIndex))].length 
-                      : 0;
-                    setTeamsDistribution(distributeClientsToTeams(checkedInClients || [], stationCount));
-                    setIsTeamsModalVisible(true);
-                  }} 
-                  focusable
-                >
+                {/* Teams Button - Only show for stations rounds */}
+                {currentRoundType === 'stations_round' && (
+                  <Pressable 
+                    onPress={() => {
+                      setShouldRestoreFocusToTeams(true);
+                      // Calculate team distribution when opening modal
+                      const stationCount = currentRound?.exercises 
+                        ? [...new Set(currentRound.exercises.map((ex: any) => ex.orderIndex))].length 
+                        : 0;
+                      setTeamsDistribution(distributeClientsToTeams(checkedInClients || [], stationCount));
+                      setIsTeamsModalVisible(true);
+                    }} 
+                    focusable
+                  >
                   {({ focused }) => (
                     <MattePanel 
                       focused={focused}
@@ -579,7 +582,8 @@ export function CircuitWorkoutLiveScreen() {
                       />
                     </MattePanel>
                   )}
-                </Pressable>
+                  </Pressable>
+                )}
                 
                 {/* Pause/Play */}
                 <Pressable onPress={() => send(state.context.isPaused ? { type: 'RESUME' } : { type: 'PAUSE' })} focusable>
