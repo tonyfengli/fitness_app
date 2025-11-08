@@ -158,7 +158,7 @@ function ClientsPageContent() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-purple-50 to-blue-50">
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-purple-50 to-blue-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
         <CircuitHeader
           onBack={() => router.push('/trainer-home')}
           backText="Back"
@@ -166,7 +166,7 @@ function ClientsPageContent() {
           subtitle="Track client progress and insights"
         />
         <div className="flex items-center justify-center h-64">
-          <Loader2Icon className="w-8 h-8 text-purple-600 animate-spin" />
+          <Loader2Icon className="w-8 h-8 text-purple-600 dark:text-purple-400 animate-spin" />
         </div>
       </div>
     );
@@ -186,7 +186,7 @@ function ClientsPageContent() {
   // Show loading state while checking authentication
   if (isCheckingAuth) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-purple-50 to-blue-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-purple-50 to-blue-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 flex items-center justify-center">
         <div className="text-center">
           <div className="mx-auto h-12 w-12 animate-spin rounded-full border-2 border-gray-200 border-t-purple-600 dark:border-gray-700 dark:border-t-purple-400"></div>
           <p className="mt-4 text-gray-600 dark:text-gray-400">Verifying access...</p>
@@ -201,7 +201,7 @@ function ClientsPageContent() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-purple-50 to-blue-50">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-purple-50 to-blue-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
       <CircuitHeader
         onBack={() => router.push('/trainer-home')}
         backText="Back"
@@ -661,7 +661,7 @@ function ClientsPageContent() {
 export default function ClientsPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-purple-50 to-blue-50">
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-purple-50 to-blue-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
         <CircuitHeader
           onBack={() => {}}
           backText="Back"
@@ -669,7 +669,7 @@ export default function ClientsPage() {
           subtitle="Track client progress and insights"
         />
         <div className="flex items-center justify-center h-64">
-          <Loader2Icon className="w-8 h-8 text-purple-600 animate-spin" />
+          <Loader2Icon className="w-8 h-8 text-purple-600 dark:text-purple-400 animate-spin" />
         </div>
       </div>
     }>

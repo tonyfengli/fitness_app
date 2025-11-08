@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '~/trpc/react';
@@ -33,7 +33,7 @@ function getProgressColor(percentage: number) {
   return 'bg-red-500';
 }
 
-export default function ClientDetailPage({ params }: ClientDetailPageProps) {
+function ClientDetailPageContent({ params }: ClientDetailPageProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const trpc = api();
@@ -345,7 +345,7 @@ export default function ClientDetailPage({ params }: ClientDetailPageProps) {
 
   if (clientLoading || historyLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-purple-50 to-blue-50">
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-purple-50 to-blue-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
         <CircuitHeader
           onBack={() => router.push('/clients')}
           backText="Back"
@@ -353,7 +353,7 @@ export default function ClientDetailPage({ params }: ClientDetailPageProps) {
           subtitle="Loading client information..."
         />
         <div className="flex items-center justify-center h-64">
-          <Loader2Icon className="w-8 h-8 text-purple-600 animate-spin" />
+          <Loader2Icon className="w-8 h-8 text-purple-600 dark:text-purple-400 animate-spin" />
         </div>
       </div>
     );
@@ -361,7 +361,7 @@ export default function ClientDetailPage({ params }: ClientDetailPageProps) {
 
   if (!client) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-purple-50 to-blue-50">
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-purple-50 to-blue-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
         <CircuitHeader
           onBack={() => router.push('/clients')}
           backText="Back"
@@ -389,7 +389,7 @@ export default function ClientDetailPage({ params }: ClientDetailPageProps) {
   const progressColor = getProgressColor(attendanceData.attendancePercentage);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-purple-50 to-blue-50">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-purple-50 to-blue-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
       <CircuitHeader
         onBack={() => router.push(`/clients?filter=${encodeURIComponent(selectedFilter)}`)}
         backText="Back"
@@ -924,5 +924,25 @@ export default function ClientDetailPage({ params }: ClientDetailPageProps) {
         ]}
       />
     </div>
+  );
+}
+
+export default function ClientDetailPage({ params }: ClientDetailPageProps) {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-purple-50 to-blue-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
+        <CircuitHeader
+          onBack={() => {}}
+          backText="Back"
+          title="Client Details"
+          subtitle="Loading client information..."
+        />
+        <div className="flex items-center justify-center h-64">
+          <Loader2Icon className="w-8 h-8 text-purple-600 dark:text-purple-400 animate-spin" />
+        </div>
+      </div>
+    }>
+      <ClientDetailPageContent params={params} />
+    </Suspense>
   );
 }

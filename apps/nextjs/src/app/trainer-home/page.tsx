@@ -117,8 +117,8 @@ export default function TrainerHomePage() {
         </div>
       </div>
 
-      {/* Main content - full height mobile layout */}
-      <div className="px-6 pb-6 flex flex-col justify-center" style={{ minHeight: 'calc(100vh - 140px)' }}>
+      {/* Main content - reduced spacing */}
+      <div className="px-6 pb-6">
         <div className="space-y-4 max-w-md mx-auto w-full">
           {/* Sessions Button */}
           <Link href="/circuit-sessions" className="block">

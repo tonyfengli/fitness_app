@@ -3153,7 +3153,7 @@ function CircuitWorkoutOverviewContent() {
                   roundConfig,
                 });
               }}
-              isAdding={addRoundMutation.isPending}
+              isAdding={addRoundDrawerEditMode ? updateRoundMutation.isPending : addRoundMutation.isPending}
               editMode={addRoundDrawerEditMode || undefined}
             />
               );

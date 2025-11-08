@@ -352,9 +352,20 @@ export function AddRoundDrawer({ isOpen, onClose, onAdd, isAdding = false, editM
   };
 
   const handleNext = () => {
-    // In edit mode, there's only step 2, so next should save
+    // In edit mode, handle progression based on round type
     if (editMode && step === 2) {
-      handleAdd(); // This will call editMode.onSave
+      // For AMRAP rounds in edit mode, save immediately
+      if (config.type === 'amrap_round') {
+        handleAdd(); // This will call editMode.onSave
+        return;
+      } else {
+        // For circuit/stations, proceed to step 3
+        setStep(3);
+        return;
+      }
+    } else if (editMode && step === 3) {
+      // In edit mode step 3, this is handled by the Save Changes button
+      // No automatic progression needed
       return;
     } else if (config.type === 'amrap_round' && step === 2) {
       // For AMRAP, skip sets step (3) and go directly to review (4)
@@ -365,9 +376,13 @@ export function AddRoundDrawer({ isOpen, onClose, onAdd, isAdding = false, editM
   };
 
   const handleBack = () => {
-    // In edit mode, back from step 2 should close
+    // In edit mode, handle back navigation based on step and round type
     if (editMode && step === 2) {
       handleClose();
+      return;
+    } else if (editMode && step === 3) {
+      // In edit mode step 3, go back to step 2
+      setStep(2);
       return;
     } else if (config.type === 'amrap_round' && step === 4) {
       // For AMRAP, skip sets step (3) when going back from review (4)
@@ -458,8 +473,8 @@ export function AddRoundDrawer({ isOpen, onClose, onAdd, isAdding = false, editM
               // Determine steps based on mode and round type
               let steps;
               if (editMode) {
-                // Edit mode: only show step 2 (configuration), skip type selection, sets, and review
-                steps = [2];
+                // Edit mode: show configuration and sets for circuit/stations, skip for AMRAP
+                steps = config.type === 'amrap_round' ? [2] : [2, 3];
               } else {
                 // Add mode: include all steps
                 steps = config.type === 'amrap_round' ? [1, 2, 4] : [1, 2, 3, 4];
@@ -840,7 +855,7 @@ export function AddRoundDrawer({ isOpen, onClose, onAdd, isAdding = false, editM
                   onClick={handleNext}
                   className="flex-1 p-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors"
                 >
-                  {editMode ? 'Save Changes' : (config.type === 'amrap_round' ? 'Review' : 'Next')}
+                  {editMode ? (config.type === 'amrap_round' ? 'Save Changes' : 'Next') : (config.type === 'amrap_round' ? 'Review' : 'Next')}
                 </button>
               </div>
             </div>
@@ -977,10 +992,14 @@ export function AddRoundDrawer({ isOpen, onClose, onAdd, isAdding = false, editM
                   Back
                 </button>
                 <button
-                  onClick={() => handleStepChange(4)}
-                  className="flex-1 p-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors"
+                  onClick={editMode ? handleAdd : () => handleStepChange(4)}
+                  disabled={editMode ? isAdding : false}
+                  className="flex-1 p-3 bg-purple-600 hover:bg-purple-700 disabled:bg-purple-400 text-white rounded-lg transition-colors flex items-center justify-center gap-2"
                 >
-                  Review
+                  {editMode && isAdding && (
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  )}
+                  {editMode ? 'Save Changes' : 'Review'}
                 </button>
               </div>
             </div>
