@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button, Loader2Icon as Loader2, ChevronRightIcon as ChevronRight, ChevronLeftIcon as ChevronLeft, Star, ChevronDownIcon, Input } from "@acme/ui-shared";
 import { cn } from "@acme/ui-shared";
@@ -322,6 +322,7 @@ export function TemplateSelectionStep({ program, onSelectTemplate }: TemplateSel
     enabled: sessionIds.length > 0,
   });
 
+
   // Add to favorites mutation
   const addToFavorites = useMutation(
     trpc.trainingSession.addToFavorites.mutationOptions(),
@@ -367,6 +368,22 @@ export function TemplateSelectionStep({ program, onSelectTemplate }: TemplateSel
             context.queryKey,
             context.previousFavoriteStatus
           );
+        }
+      },
+      onSettled: async (data, error, variables, context) => {
+        // Always invalidate favorite status to sync with server
+        if (context?.queryKey) {
+          await queryClient.invalidateQueries({ queryKey: context.queryKey });
+        }
+        
+        // Also invalidate the sessions list if in favorites view to update the list
+        if (isFavoritesView) {
+          const favoritesQueryKey = trpc.trainingSession.getAllFavorites.queryOptions({
+            businessId: BUSINESS_ID,
+          }).queryKey;
+          await queryClient.invalidateQueries({
+            queryKey: favoritesQueryKey,
+          });
         }
       },
     }),
@@ -553,16 +570,23 @@ export function TemplateSelectionStep({ program, onSelectTemplate }: TemplateSel
                             </span>
                           </div>
                           <div className="flex items-center gap-2 ml-4">
-                            <button
+                            <div
                               onClick={(e) => {
                                 e.stopPropagation();
                                 toggleFavorite(sessionItem.trainingSession.id, sessionItem.trainingSession.name, isFavorited);
                               }}
-                              disabled={addToFavorites.isPending || removeFromFavorites.isPending}
-                              className="min-h-[44px] min-w-[44px] p-2 rounded-full transition-colors flex items-center justify-center"
+                              className="min-h-[44px] min-w-[44px] p-2 rounded-full transition-colors flex items-center justify-center cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50"
+                              style={{ 
+                                opacity: (addToFavorites.isPending || removeFromFavorites.isPending) ? 0.5 : 1,
+                                pointerEvents: (addToFavorites.isPending || removeFromFavorites.isPending) ? 'none' : 'auto'
+                              }}
                             >
-                              <Star className="h-5 w-5 fill-yellow-400 text-yellow-400" />
-                            </button>
+                              {(addToFavorites.isPending || removeFromFavorites.isPending) ? (
+                                <Loader2 className="h-5 w-5 animate-spin text-gray-400" />
+                              ) : (
+                                <Star className="h-5 w-5 fill-yellow-400 text-yellow-400" />
+                              )}
+                            </div>
                             {loadingTemplateId === sessionItem.trainingSession.id ? (
                               <Loader2 className="w-5 h-5 animate-spin text-gray-300" />
                             ) : (
@@ -627,17 +651,24 @@ export function TemplateSelectionStep({ program, onSelectTemplate }: TemplateSel
                                   </span>
                                 </div>
                                 <div className="flex items-center gap-2 ml-4">
-                                  <button
+                                  <div
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       toggleFavorite(sessionItem.trainingSession.id, sessionItem.trainingSession.name, isFavorited);
                                     }}
-                                    disabled={addToFavorites.isPending || removeFromFavorites.isPending}
-                                    className="min-h-[44px] min-w-[44px] p-2 rounded-full transition-colors flex items-center justify-center"
-                                    style={{ touchAction: 'manipulation' }}
+                                    className="min-h-[44px] min-w-[44px] p-2 rounded-full transition-colors flex items-center justify-center cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
+                                    style={{ 
+                                      touchAction: 'manipulation',
+                                      opacity: (addToFavorites.isPending || removeFromFavorites.isPending) ? 0.5 : 1,
+                                      pointerEvents: (addToFavorites.isPending || removeFromFavorites.isPending) ? 'none' : 'auto'
+                                    }}
                                   >
-                                    <Star className="h-5 w-5 fill-yellow-400 text-yellow-400" />
-                                  </button>
+                                    {(addToFavorites.isPending || removeFromFavorites.isPending) ? (
+                                      <Loader2 className="h-5 w-5 animate-spin text-gray-400" />
+                                    ) : (
+                                      <Star className="h-5 w-5 fill-yellow-400 text-yellow-400" />
+                                    )}
+                                  </div>
                                   {loadingTemplateId === sessionItem.trainingSession.id ? (
                                     <Loader2 className="w-5 h-5 animate-spin text-gray-300" />
                                   ) : (
@@ -690,17 +721,24 @@ export function TemplateSelectionStep({ program, onSelectTemplate }: TemplateSel
                                       </span>
                                     </div>
                                     <div className="flex items-center gap-2 ml-4">
-                                      <button
+                                      <div
                                         onClick={(e) => {
                                           e.stopPropagation();
                                           toggleFavorite(sessionItem.trainingSession.id, sessionItem.trainingSession.name, isFavorited);
                                         }}
-                                        disabled={addToFavorites.isPending || removeFromFavorites.isPending}
-                                        className="min-h-[44px] min-w-[44px] p-2 rounded-full transition-colors flex items-center justify-center"
-                                        style={{ touchAction: 'manipulation' }}
+                                        className="min-h-[44px] min-w-[44px] p-2 rounded-full transition-colors flex items-center justify-center cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
+                                        style={{ 
+                                          touchAction: 'manipulation',
+                                          opacity: (addToFavorites.isPending || removeFromFavorites.isPending) ? 0.5 : 1,
+                                          pointerEvents: (addToFavorites.isPending || removeFromFavorites.isPending) ? 'none' : 'auto'
+                                        }}
                                       >
-                                        <Star className="h-5 w-5 text-gray-400 transition-colors" />
-                                      </button>
+                                        {(addToFavorites.isPending || removeFromFavorites.isPending) ? (
+                                          <Loader2 className="h-5 w-5 animate-spin text-gray-400" />
+                                        ) : (
+                                          <Star className="h-5 w-5 text-gray-400 transition-colors" />
+                                        )}
+                                      </div>
                                       {loadingTemplateId === sessionItem.trainingSession.id ? (
                                         <Loader2 className="w-5 h-5 animate-spin text-gray-300" />
                                       ) : (

@@ -828,18 +828,62 @@ export function AddRoundDrawer({ isOpen, onClose, onAdd, isAdding = false, editM
               {/* AMRAP specific settings */}
               {config.type === 'amrap_round' && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Total Duration (minutes)
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                    Total Duration
                   </label>
-                  <input
-                    type="number"
-                    value={config.totalDuration || ''}
-                    onChange={(e) => setConfig(prev => ({ ...prev, totalDuration: parseInt(e.target.value) || 0 }))}
-                    className="w-full p-3 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
-                    min="1"
-                    max="60"
-                    placeholder="Enter duration in minutes"
-                  />
+                  
+                  {/* AMRAP Duration - Minutes:Seconds input */}
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-3 justify-center">
+                      <div className="flex-1 max-w-[120px]">
+                        <div className="text-xs text-gray-400 dark:text-gray-500 mb-1 text-center">min</div>
+                        <input
+                          type="number"
+                          value={Math.floor((config.totalDuration || 0) / 60) || ''}
+                          onChange={(e) => {
+                            const minutes = parseInt(e.target.value) || 0;
+                            const seconds = (config.totalDuration || 0) % 60;
+                            setConfig(prev => ({ ...prev, totalDuration: minutes * 60 + seconds }));
+                          }}
+                          className="w-full h-12 p-3 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-center font-medium text-lg"
+                          min="0"
+                          max="60"
+                          placeholder=""
+                        />
+                      </div>
+                      <span className="text-2xl text-gray-500 dark:text-gray-400 mt-6 font-bold">:</span>
+                      <div className="flex-1 max-w-[120px]">
+                        <div className="text-xs text-gray-400 dark:text-gray-500 mb-1 text-center">sec</div>
+                        <input
+                          type="number"
+                          value={(config.totalDuration || 0) % 60 || ''}
+                          onChange={(e) => {
+                            const minutes = Math.floor((config.totalDuration || 0) / 60);
+                            const seconds = parseInt(e.target.value) || 0;
+                            setConfig(prev => ({ ...prev, totalDuration: minutes * 60 + seconds }));
+                          }}
+                          className="w-full h-12 p-3 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-center font-medium text-lg"
+                          min="0"
+                          max="59"
+                          placeholder=""
+                        />
+                      </div>
+                    </div>
+                    
+                    {/* Show total duration summary */}
+                    {(config.totalDuration && config.totalDuration > 0) && (
+                      <div className="text-center">
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                          Total: <span className="font-medium text-gray-900 dark:text-gray-100">
+                            {config.totalDuration < 60 
+                              ? `${config.totalDuration}s`
+                              : `${Math.floor(config.totalDuration / 60)}:${(config.totalDuration % 60).toString().padStart(2, '0')}`
+                            }
+                          </span>
+                        </p>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 
