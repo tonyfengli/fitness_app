@@ -18,6 +18,7 @@ export * from "./components/modals";
 export * from "./components/UserAvatar";
 export * from "./components/OnlineStatusBadge";
 export * from "./components/FeedbackSection";
+export * from "./components/Tabs";
 
 // Design System
 export * from "./styles";
@@ -48,6 +49,9 @@ export * from "./utils/responsive";
 
 // Responsive components
 export * from "./components/ResponsiveView";
+
+// Tab components
+export * from "./components/Tabs";
 
 // Types
 export * from "./types";

@@ -33,237 +33,14 @@ import { ExerciseReplacement } from "~/components/workout/ExerciseReplacement";
 import { AddExerciseDrawer } from "~/components/workout/AddExerciseDrawer";
 import { AddRoundDrawer } from "~/components/workout/AddRoundDrawer";
 import { ConfirmDialog } from "~/components/ConfirmDialog";
+import { DurationInput } from "~/components/workout/DurationInput";
+import { SessionNameEditor } from "~/components/workout/SessionNameEditor";
+import { TimerBadge } from "~/components/workout/TimerBadge";
 import { useScrollManager } from "~/hooks/useScrollManager";
+import { TabNavigation } from "@acme/ui-shared";
+import { WorkoutTab } from "~/components/workout/WorkoutTab";
+import { LightingTab } from "~/components/workout/LightingTab";
 
-// World-class Duration Input Component
-interface DurationInputProps {
-  value: number; // Duration in seconds
-  onChange: (seconds: number) => void;
-  label?: string;
-  presets?: { label: string; value: number; description?: string }[];
-  allowCustom?: boolean;
-  className?: string;
-  disabled?: boolean;
-  min?: number;
-  max?: number;
-}
-
-function DurationInput({ 
-  value, 
-  onChange, 
-  label,
-  presets,
-  allowCustom = true,
-  className,
-  disabled = false,
-  min,
-  max
-}: DurationInputProps) {
-  const [isCustomMode, setIsCustomMode] = useState(!presets || presets.length === 0);
-  const [customMinutes, setCustomMinutes] = useState(() => {
-    const mins = Math.floor(value / 60);
-    return mins > 0 ? mins : '';
-  });
-  const [customSeconds, setCustomSeconds] = useState(() => {
-    const secs = value % 60;
-    return secs > 0 ? secs : '';
-  });
-
-  // Sync internal state when value prop changes externally
-  useEffect(() => {
-    const mins = Math.floor(value / 60);
-    const secs = value % 60;
-    setCustomMinutes(mins > 0 ? mins : '');
-    setCustomSeconds(secs > 0 ? secs : '');
-  }, [value]);
-
-  // Format duration for display
-  const formatDuration = (seconds: number): string => {
-    if (seconds === 0) return '0s';
-    if (seconds < 60) return `${seconds}s`;
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    if (secs === 0) return `${mins}m`;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
-
-  // Handle preset selection
-  const handlePresetSelect = (presetValue: number) => {
-    onChange(presetValue);
-    setIsCustomMode(false);
-    setCustomMinutes(Math.floor(presetValue / 60));
-    setCustomSeconds(presetValue % 60);
-  };
-
-  // Handle custom time changes
-  const handleCustomChange = (minutes: number | string, seconds: number | string) => {
-    const numMinutes = typeof minutes === 'string' ? (parseInt(minutes) || 0) : minutes;
-    const numSeconds = typeof seconds === 'string' ? (parseInt(seconds) || 0) : seconds;
-    
-    const maxMinutes = max ? Math.floor(max / 60) : 999;
-    const clampedMinutes = Math.max(0, Math.min(maxMinutes, numMinutes));
-    const clampedSeconds = Math.max(0, Math.min(59, numSeconds));
-    
-    setCustomMinutes(minutes === '' ? '' : clampedMinutes);
-    setCustomSeconds(seconds === '' ? '' : clampedSeconds);
-    
-    const totalSeconds = clampedMinutes * 60 + clampedSeconds;
-    let constrainedSeconds = totalSeconds;
-    
-    if (min !== undefined) {
-      constrainedSeconds = Math.max(min, constrainedSeconds);
-    }
-    if (max !== undefined) {
-      constrainedSeconds = Math.min(max, constrainedSeconds);
-    }
-    
-    onChange(constrainedSeconds);
-  };
-
-  // Check if current value matches any preset
-  const matchingPreset = presets?.find(p => p.value === value);
-  const isPresetValue = !!matchingPreset && !isCustomMode;
-
-  return (
-    <div className={cn("space-y-3", className)}>
-      {label && (
-        <div className="flex items-center justify-between">
-          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-            {label}
-          </span>
-        </div>
-      )}
-      
-      {/* Preset Options */}
-      {presets && presets.length > 0 && (
-        <div className="grid grid-cols-4 gap-2">
-          {presets.map((preset) => {
-            const isSelected = value === preset.value && !isCustomMode;
-            const isDisabled = preset.value < min || preset.value > max;
-            return (
-              <Button
-                key={preset.value}
-                variant={isSelected ? "default" : "outline"}
-                className={cn(
-                  "relative h-12 text-sm transition-all duration-200",
-                  "hover:scale-[1.02] active:scale-[0.98]",
-                  isSelected && "ring-2 ring-offset-1 ring-blue-500 shadow-lg bg-blue-600 text-white",
-                  !isSelected && !isDisabled && "hover:border-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20",
-                  isDisabled && "opacity-40 cursor-not-allowed",
-                  disabled && "opacity-50 cursor-not-allowed"
-                )}
-                onClick={() => !isDisabled && handlePresetSelect(preset.value)}
-                disabled={disabled || isDisabled}
-                size="sm"
-                title={preset.description}
-              >
-                <div className="flex flex-col items-center">
-                  <span className={cn(
-                    "font-semibold transition-all duration-200",
-                    isSelected && "scale-105"
-                  )}>
-                    {preset.label}
-                  </span>
-                  {preset.description && (
-                    <span className="text-xs opacity-75 mt-0.5 leading-3">
-                      {preset.description.split(' - ')[0]}
-                    </span>
-                  )}
-                </div>
-                {isSelected && (
-                  <div className="absolute -top-1 -right-1 w-3 h-3 bg-blue-400 rounded-full animate-pulse" />
-                )}
-              </Button>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Custom Time Input */}
-      {allowCustom && (
-        <div className="space-y-3">
-          {presets && presets.length > 0 && (
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                Custom Time
-              </span>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-8 px-3 text-sm"
-                onClick={() => setIsCustomMode(!isCustomMode)}
-                disabled={disabled}
-              >
-                {isCustomMode ? "Hide" : "Show"}
-              </Button>
-            </div>
-          )}
-          
-          {isCustomMode && (
-            <div className="flex items-center gap-3 p-4 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 bg-gray-50/50 dark:bg-gray-800/50">
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  value={customMinutes}
-                  onChange={(e) => handleCustomChange(e.target.value, customSeconds)}
-                  className={cn(
-                    "w-16 text-center text-lg font-mono bg-white dark:bg-gray-700",
-                    "border-2 rounded-lg px-2 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500",
-                    "transition-all duration-200"
-                  )}
-                  min="0"
-                  max={max ? Math.floor(max / 60) : undefined}
-                  disabled={disabled}
-                  placeholder="0"
-                />
-                <span className="text-sm text-gray-600 dark:text-gray-400 font-semibold">min</span>
-              </div>
-              
-              <div className="text-gray-400 font-bold text-xl">:</div>
-              
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  value={customSeconds}
-                  onChange={(e) => handleCustomChange(customMinutes, e.target.value)}
-                  className={cn(
-                    "w-16 text-center text-lg font-mono bg-white dark:bg-gray-700",
-                    "border-2 rounded-lg px-2 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500",
-                    "transition-all duration-200"
-                  )}
-                  min="0"
-                  max="59"
-                  disabled={disabled}
-                  placeholder="0"
-                />
-                <span className="text-sm text-gray-600 dark:text-gray-400 font-semibold">sec</span>
-              </div>
-              
-              {((customMinutes !== '' && customMinutes > 0) || (customSeconds !== '' && customSeconds > 0)) && (
-                <div className="ml-auto bg-blue-100 dark:bg-blue-900/30 px-3 py-2 rounded-lg">
-                  <div className="text-sm text-blue-700 dark:text-blue-300 font-mono font-semibold">
-                    = {formatDuration((parseInt(customMinutes.toString()) || 0) * 60 + (parseInt(customSeconds.toString()) || 0))}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-      
-      {/* Constraint Indicator */}
-      {(min !== undefined || max !== undefined) && (
-        <div className="text-xs text-gray-500 dark:text-gray-400">
-          <span>
-            {min !== undefined && `Min: ${formatDuration(min)}`}
-            {min !== undefined && max !== undefined && ', '}
-            {max !== undefined && `Max: ${formatDuration(max)}`}
-          </span>
-        </div>
-      )}
-    </div>
-  );
-}
 
 // World-class Circuit Timer Calculator Component
 interface CircuitTimerCalculatorProps {
@@ -1381,6 +1158,15 @@ function CircuitWorkoutOverviewContent() {
     priority: 1 
   });
 
+  // Tab state
+  const [activeTab, setActiveTab] = useState('workout');
+  
+  // Tab configuration
+  const tabs = [
+    { id: 'workout', label: 'Workout' },
+    { id: 'lighting', label: 'Lighting' },
+  ];
+
 
   if (isLoadingSelections) {
     return (
@@ -1422,132 +1208,41 @@ function CircuitWorkoutOverviewContent() {
             <div className="flex-1 flex justify-center items-center min-w-0">
             {/* Editable Session Name - Primary info hierarchy */}
             {sessionData?.name && (
-              <div className="flex items-center justify-center">
-                {isEditingSessionName ? (
-                  <div className="flex items-center gap-3">
-                    <input
-                      ref={nameInputRef}
-                      type="text"
-                      value={editingSessionName}
-                      onChange={(e) => setEditingSessionName(e.target.value)}
-                      onBlur={handleSaveSessionName}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          handleSaveSessionName();
-                        } else if (e.key === 'Escape') {
-                          setIsEditingSessionName(false);
-                          setEditingSessionName(sessionData.name);
-                        }
-                      }}
-                      className="text-lg font-bold text-white bg-white/10 dark:bg-gray-700/30 backdrop-blur-sm border-2 border-white/30 dark:border-gray-500/50 focus:border-white dark:focus:border-gray-400 rounded-lg px-3 py-1.5 min-w-0 max-w-48 text-center focus:outline-none focus:ring-2 focus:ring-white/50 dark:focus:ring-gray-400/50 transition-all"
-                      placeholder="Session name"
-                      autoCapitalize="words"
-                      autoFocus
-                    />
-                    <button
-                      onClick={handleSaveSessionName}
-                      className="p-2 bg-white/20 hover:bg-white/30 dark:bg-gray-700/50 dark:hover:bg-gray-600/50 rounded-lg transition-colors"
-                      title="Save"
-                    >
-                      <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                      </svg>
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => {
-                      setIsEditingSessionName(true);
-                      setEditingSessionName(sessionData.name);
-                      setTimeout(() => nameInputRef.current?.select(), 100);
-                    }}
-                    className="group relative px-4 py-2.5 bg-white/25 dark:bg-gray-700/50 backdrop-blur-md rounded-lg flex items-center gap-3 shadow-lg border border-white/20 dark:border-gray-600/30 hover:bg-white/35 dark:hover:bg-gray-600/60 transition-all duration-200"
-                  >
-                    <span className="text-lg font-bold text-white tracking-wide truncate max-w-44">
-                      {sessionData.name}
-                    </span>
-                    <svg 
-                      className="w-4 h-4 text-white/60 group-hover:text-white transition-colors" 
-                      fill="none" 
-                      stroke="currentColor" 
-                      viewBox="0 0 24 24" 
-                      strokeWidth="2"
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                    </svg>
-                  </button>
-                )}
-              </div>
+              <SessionNameEditor
+                sessionId={sessionId!}
+                sessionName={sessionData.name}
+              />
             )}
           </div>
           
           {/* Timer badge moved to top right */}
-          {(() => {
-            let totalWorkoutTime = 0;
-            
-            if (circuitConfig?.config?.roundTemplates) {
-              circuitConfig.config.roundTemplates.forEach((rt, index) => {
-                const roundTemplate = rt.template;
-                const round = roundsData[index];
-                
-                if (roundTemplate.type === 'amrap_round') {
-                  totalWorkoutTime += (roundTemplate as any).totalDuration || 300;
-                } else if (roundTemplate.type === 'circuit_round' || roundTemplate.type === 'stations_round') {
-                  let unitsCount = roundTemplate.exercisesPerRound;
-                  
-                  if (roundTemplate.type === 'stations_round' && round?.exercises) {
-                    const uniqueStations = new Set(round.exercises.map((ex: any) => ex.orderIndex));
-                    unitsCount = uniqueStations.size || roundTemplate.exercisesPerRound;
-                  }
-                  
-                  const workTime = (roundTemplate as any).workDuration || 0;
-                  const restTime = (roundTemplate as any).restDuration || 0;
-                  const sets = (roundTemplate as any).repeatTimes || 1;
-                  const restBetweenSets = (roundTemplate as any).restBetweenSets || 0;
-                  
-                  // Time for one set: (units * work) + (rest between units)
-                  const timePerSet = (unitsCount * workTime) + ((unitsCount - 1) * restTime);
-                  const roundDuration = (timePerSet * sets) + (restBetweenSets * (sets - 1));
-                  
-                  totalWorkoutTime += roundDuration;
-                }
-                
-                // Add rest between rounds (except after last round)
-                if (index < circuitConfig.config.roundTemplates.length - 1 && circuitConfig.config.restBetweenRounds > 0) {
-                  totalWorkoutTime += circuitConfig.config.restBetweenRounds;
-                }
-              });
-            }
-            
-            const formatDuration = (seconds: number): string => {
-              if (seconds < 60) return `${seconds}s`;
-              const mins = Math.floor(seconds / 60);
-              const secs = seconds % 60;
-              return secs === 0 ? `${mins}m` : `${mins}:${secs.toString().padStart(2, '0')}`;
-            };
-            
-            return totalWorkoutTime > 0 ? (
-              <div className="relative px-3 py-2 bg-white/25 dark:bg-gray-700/50 backdrop-blur-md rounded-lg inline-flex items-center shadow-lg border border-white/20 dark:border-gray-600/30">
-                <div className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-gray-600 dark:bg-gray-400 rounded-full flex items-center justify-center shadow-md border border-white/30">
-                  <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </div>
-                <span className="text-sm font-semibold text-white tracking-wide">
-                  {formatDuration(totalWorkoutTime)}
-                </span>
-              </div>
-            ) : null;
-          })()}
+          <TimerBadge 
+            circuitConfig={circuitConfig} 
+            roundsData={roundsData} 
+          />
         </div>
       </div>
 
-      {/* Content with top padding */}
-      <div className="pt-16 px-4 pb-8">
+      {/* Tab Navigation - Mobile Optimized */}
+      <div className="fixed top-0 left-0 right-0 z-40 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 mt-16">
+        <div className="mx-auto max-w-2xl px-4">
+          <TabNavigation
+            tabs={tabs}
+            activeTab={activeTab}
+            onChange={setActiveTab}
+          />
+        </div>
+      </div>
+
+      {/* Content with top padding for header + tabs */}
+      <div className="pt-28 px-4 pb-8">
         <div className="mx-auto max-w-2xl">
 
 
-        {/* Warm-up Section */}
+        {/* Tab Content */}
+        {activeTab === 'workout' ? (
+          <WorkoutTab>
+            {/* Warm-up Section */}
         {circuitConfig?.config?.warmup?.enabled && (
           <Card className="mt-8 mb-6 p-0 shadow-sm bg-white dark:bg-gray-800">
             <div className="p-6 space-y-4">
@@ -1712,10 +1407,22 @@ function CircuitWorkoutOverviewContent() {
                                       const restTime = roundTemplate?.template?.restDuration || 0;
                                       const sets = roundTemplate?.template?.repeatTimes || 1;
                                       const restBetweenSets = roundTemplate?.template?.restBetweenSets || 0;
+                                      // For stations rounds, use actual station count
                                       const uniqueStations = new Set(round.exercises.map((ex: any) => ex.orderIndex));
                                       const unitsCount = uniqueStations.size || 1;
+                                      // Each set: (stations × work) + (rest after each station except last)
                                       const timePerSet = (unitsCount * workTime) + ((unitsCount - 1) * restTime);
                                       totalDuration = (timePerSet * sets) + (restBetweenSets * (sets - 1));
+                                      
+                                      console.log(`[Round Time Display] Stations calculation:`, {
+                                        workTime,
+                                        restTime, 
+                                        sets,
+                                        restBetweenSets,
+                                        unitsCount,
+                                        timePerSet,
+                                        totalDuration
+                                      });
                                     } else {
                                       const workTime = roundTemplate?.template?.workDuration || 0;
                                       const restTime = roundTemplate?.template?.restDuration || 0;
@@ -1727,7 +1434,12 @@ function CircuitWorkoutOverviewContent() {
                                     }
                                     
                                     const mins = Math.floor(totalDuration / 60);
-                                    return `${mins} min`;
+                                    const secs = totalDuration % 60;
+                                    if (mins === 0) {
+                                      return `${secs}s`;
+                                    } else {
+                                      return `${mins}:${secs.toString().padStart(2, '0')}`;
+                                    }
                                   })()}
                                 </span>
                               </div>
@@ -2405,10 +2117,12 @@ function CircuitWorkoutOverviewContent() {
           </div>
         )}
 
+          </WorkoutTab>
+        ) : (
+          <LightingTab />
+        )}
         </div>
       </div>
-
-      {/* PHASE 2: Exercise Selection Modal UI components removed */}
 
       {/* Inline Exercise Replacement Modal */}
       {editingExerciseId && (() => {
