@@ -2,7 +2,7 @@ import { z } from "zod/v4";
 
 // Define validation limits locally to avoid circular dependencies
 const CIRCUIT_CONFIG_LIMITS = {
-  rounds: { min: 1, max: 10 },
+  rounds: { min: 0, max: 10 },
   exercisesPerRound: { min: 2, max: 10 },   // Default minimum for backwards compatibility
   workDuration: { min: 1 },                 // Minimum 1 second, no maximum
   restDuration: { min: 5, max: 120 },       // 5 seconds to 2 minutes  
@@ -64,7 +64,7 @@ export const RoundConfigSchema = z.object({
 export const CircuitRoundsSchema = z
   .number()
   .int()
-  .min(CIRCUIT_CONFIG_LIMITS.rounds.min)
+  .min(0)
   .max(CIRCUIT_CONFIG_LIMITS.rounds.max);
 
 export const CircuitExercisesSchema = z

@@ -63,7 +63,10 @@ export default function CircuitConfigPage() {
     setIsCreating(true);
     
     // Create the session with the selected workout type
-    createSessionMutation.mutate({ workoutType: type });
+    createSessionMutation.mutate({ 
+      workoutType: type,
+      startFromScratch: type === 'custom'
+    });
   };
 
   const handleBack = () => {

@@ -2389,3 +2389,214 @@ export function SpotifyStep({ deviceId, deviceName, onDeviceSelect }: SpotifySte
     </div>
   );
 }
+
+interface SessionSetupStepProps {
+  sessionDetails: {
+    name: string;
+    program: 'h4h_5am' | 'h4h_5pm' | 'saturday_cg' | 'monday_cg' | 'unassigned';
+    scheduledAt: Date;
+  };
+  onUpdateSessionDetails: (details: any) => void;
+  templateData: { rounds: any[]; exercises: any[]; name?: string; id?: string; workoutId?: string } | null;
+  onConfirm: () => void;
+}
+
+export function SessionSetupStep({
+  sessionDetails,
+  onUpdateSessionDetails,
+  templateData,
+  onConfirm,
+}: SessionSetupStepProps) {
+  // Track if user has manually edited the description
+  const [hasUserEdited, setHasUserEdited] = React.useState(false);
+
+  // Auto-populate description from template if empty (only on initial load)
+  React.useEffect(() => {
+    if (!sessionDetails.name && templateData && !hasUserEdited) {
+      const templateName = templateData.name || templateData.rounds?.[0]?.roundName || 'Template Session';
+      
+      onUpdateSessionDetails({
+        ...sessionDetails,
+        name: `${templateName} (Copy)`
+      });
+    }
+  }, [templateData, sessionDetails, onUpdateSessionDetails, hasUserEdited]);
+
+  const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // Mark as user edited when they interact with the field
+    setHasUserEdited(true);
+    
+    onUpdateSessionDetails({
+      ...sessionDetails,
+      name: e.target.value
+    });
+  };
+
+  const handleProgramChange = (program: string) => {
+    onUpdateSessionDetails({
+      ...sessionDetails,
+      program: program as any
+    });
+  };
+
+  const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // Create date in local timezone to avoid UTC conversion issues
+    const dateString = e.target.value; // YYYY-MM-DD format
+    const [year, month, day] = dateString.split('-').map(Number);
+    const localDate = new Date(year, month - 1, day); // month is 0-indexed
+    
+    onUpdateSessionDetails({
+      ...sessionDetails,
+      scheduledAt: localDate
+    });
+  };
+
+  const programOptions = [
+    { value: 'h4h_5am', label: 'H4H 5AM' },
+    { value: 'h4h_5pm', label: 'H4H 5PM' },
+    { value: 'saturday_cg', label: 'Saturday CG' },
+    { value: 'monday_cg', label: 'Monday CG' },
+    { value: 'unassigned', label: 'Unassigned' }
+  ];
+
+  return (
+    <div className="space-y-6">
+      {/* Session Details Form */}
+      <div className="space-y-4">
+        {/* Program Selection */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+            Program Category
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            {programOptions.map((option) => (
+              <button
+                key={option.value}
+                onClick={() => handleProgramChange(option.value)}
+                className={cn(
+                  "w-full p-3 text-left rounded-lg border transition-colors",
+                  sessionDetails.program === option.value
+                    ? "bg-blue-50 dark:bg-blue-900/20 border-blue-500 text-blue-700 dark:text-blue-400"
+                    : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700"
+                )}
+              >
+                <span className="font-medium">{option.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Description */}
+        <div>
+          <label htmlFor="session-description" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            Description <span className="text-red-500">*</span>
+          </label>
+          <Input
+            id="session-description"
+            type="text"
+            value={sessionDetails.name}
+            onChange={handleNameChange}
+            placeholder="Enter session description..."
+            className="w-full py-3 px-4 text-base"
+          />
+        </div>
+
+        {/* Scheduled Date - Mobile Optimized */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+            When is this session?
+          </label>
+          
+          {/* Quick Date Options */}
+          <div className="space-y-3">
+            {/* Quick Select Buttons */}
+            <div className="grid grid-cols-3 gap-2">
+              {[
+                { label: 'Today', offset: 0 },
+                { label: 'Tomorrow', offset: 1 },
+                { label: 'In 2 Days', offset: 2 }
+              ].map((option) => {
+                const today = new Date();
+                const optionDate = new Date(today.getFullYear(), today.getMonth(), today.getDate() + option.offset);
+                const isSelected = sessionDetails.scheduledAt.toDateString() === optionDate.toDateString();
+                
+                return (
+                  <button
+                    key={option.label}
+                    type="button"
+                    onClick={() => {
+                      onUpdateSessionDetails({
+                        ...sessionDetails,
+                        scheduledAt: optionDate
+                      });
+                    }}
+                    className={cn(
+                      "py-3 px-3 text-sm font-medium rounded-lg border transition-colors",
+                      isSelected
+                        ? "bg-blue-50 dark:bg-blue-900/20 border-blue-500 text-blue-700 dark:text-blue-400"
+                        : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700"
+                    )}
+                  >
+                    {option.label}
+                  </button>
+                );
+              })}
+            </div>
+            
+            {/* Custom Date Picker - Safari iOS Optimized */}
+            <div className="relative">
+              <input
+                id="scheduled-date"
+                type="date"
+                value={sessionDetails.scheduledAt.getFullYear() + '-' + 
+                       String(sessionDetails.scheduledAt.getMonth() + 1).padStart(2, '0') + '-' +
+                       String(sessionDetails.scheduledAt.getDate()).padStart(2, '0')}
+                onChange={handleDateChange}
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+              />
+              <div className="w-full py-4 px-4 text-left border-2 rounded-lg bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-600 hover:border-blue-400 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/20 transition-all duration-200 shadow-sm hover:shadow-md pointer-events-none">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <div className="p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                      <svg className="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 002 2z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <div className="text-sm font-medium text-gray-900 dark:text-white">
+                        {sessionDetails.scheduledAt.toLocaleDateString('en-US', { 
+                          weekday: 'long', 
+                          month: 'long', 
+                          day: 'numeric'
+                        })}
+                      </div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                        Tap to change date
+                      </div>
+                    </div>
+                  </div>
+                  <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+
+      {/* Generate Workout Button */}
+      <Button
+        onClick={onConfirm}
+        className="w-full py-3 bg-green-600 hover:bg-green-700"
+        disabled={!sessionDetails.name.trim()}
+      >
+        <div className="flex items-center justify-center gap-2">
+          <span>Generate Workout</span>
+        </div>
+      </Button>
+    </div>
+  );
+}
+

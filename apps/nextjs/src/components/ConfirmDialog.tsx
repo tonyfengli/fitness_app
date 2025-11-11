@@ -32,20 +32,20 @@ export function ConfirmDialog({
   const variantStyles = {
     danger: {
       icon: icon || "warning",
-      iconBg: "bg-red-100",
-      iconColor: "text-red-600",
+      iconBg: "bg-red-100 dark:bg-red-900/20",
+      iconColor: "text-red-600 dark:text-red-400",
       confirmButton: "bg-red-600 hover:bg-red-700 focus:ring-red-500",
     },
     warning: {
       icon: icon || "info",
-      iconBg: "bg-yellow-100",
-      iconColor: "text-yellow-600",
+      iconBg: "bg-yellow-100 dark:bg-yellow-900/20",
+      iconColor: "text-yellow-600 dark:text-yellow-400",
       confirmButton: "bg-yellow-600 hover:bg-yellow-700 focus:ring-yellow-500",
     },
     info: {
       icon: icon || "info",
-      iconBg: "bg-blue-100",
-      iconColor: "text-blue-600",
+      iconBg: "bg-blue-100 dark:bg-blue-900/20",
+      iconColor: "text-blue-600 dark:text-blue-400",
       confirmButton: "bg-blue-600 hover:bg-blue-700 focus:ring-blue-500",
     },
   };

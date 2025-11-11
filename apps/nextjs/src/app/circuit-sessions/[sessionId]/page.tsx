@@ -782,25 +782,22 @@ export default function SessionDetailPage({ params }: SessionDetailPageProps) {
           {/* Date Display & Quick Actions */}
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
             {/* Scheduled Date Header */}
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <CalendarIcon className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                <div>
-                  <h3 className="text-sm font-medium text-gray-900 dark:text-white">Scheduled</h3>
-                  <p className="text-lg font-semibold text-gray-900 dark:text-white">
-                    {session?.scheduledAt 
-                      ? new Date(session.scheduledAt).toLocaleDateString('en-US', {
-                          weekday: 'short',
-                          month: 'short',
-                          day: 'numeric',
-                          year: 'numeric'
-                        })
-                      : "No date set"
-                    }
-                  </p>
-                </div>
+            <div className="flex items-center gap-2 mb-4">
+              <CalendarIcon className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+              <div>
+                <h3 className="text-sm font-medium text-gray-900 dark:text-white">Scheduled</h3>
+                <p className="text-lg font-semibold text-gray-900 dark:text-white">
+                  {session?.scheduledAt 
+                    ? new Date(session.scheduledAt).toLocaleDateString('en-US', {
+                        weekday: 'short',
+                        month: 'short',
+                        day: 'numeric',
+                        year: 'numeric'
+                      })
+                    : "No date set"
+                  }
+                </p>
               </div>
-              <SettingsIcon className="w-5 h-5 text-gray-400" />
             </div>
             
             {/* Action Buttons Grid */}
@@ -826,7 +823,7 @@ export default function SessionDetailPage({ params }: SessionDetailPageProps) {
                 className="flex flex-col items-center gap-2 p-3 rounded-xl bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-600 transition-all duration-200 active:scale-95"
               >
                 <UsersIcon className="w-5 h-5 text-gray-600 dark:text-gray-400" />
-                <span className="text-xs font-medium text-gray-700 dark:text-gray-300">Edit Program</span>
+                <span className="text-xs font-medium text-gray-700 dark:text-gray-300">Edit Name</span>
               </button>
             </div>
           </div>
@@ -985,7 +982,7 @@ export default function SessionDetailPage({ params }: SessionDetailPageProps) {
               Update Status
             </h3>
             <div className="space-y-2 mb-6">
-              {["open", "completed", "cancelled"].map((status) => (
+              {["open", "in_progress", "completed", "cancelled"].map((status) => (
                 <button
                   key={status}
                   onClick={() => updateStatusMutation.mutate({ sessionId, status: status as "open" | "in_progress" | "completed" | "cancelled" })}
@@ -1024,18 +1021,93 @@ export default function SessionDetailPage({ params }: SessionDetailPageProps) {
             </h3>
             
             <div className="mb-6">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Date
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                When is this session?
               </label>
-              <input
-                type="date"
-                value={selectedDate ? selectedDate.toISOString().slice(0, 10) : ''}
-                onChange={(e) => setSelectedDate(e.target.value ? new Date(e.target.value + 'T12:00:00') : null)}
-                className="w-full px-3 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-              />
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                Select the date when this session is scheduled to take place
-              </p>
+              
+              {/* Quick Date Options */}
+              <div className="space-y-3">
+                {/* Quick Select Buttons */}
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { label: 'Today', offset: 0 },
+                    { label: 'Tomorrow', offset: 1 },
+                    { label: 'In 2 Days', offset: 2 }
+                  ].map((option) => {
+                    const today = new Date();
+                    const optionDate = new Date(today.getFullYear(), today.getMonth(), today.getDate() + option.offset);
+                    const isSelected = selectedDate && selectedDate.toDateString() === optionDate.toDateString();
+                    
+                    return (
+                      <button
+                        key={option.label}
+                        type="button"
+                        onClick={() => setSelectedDate(optionDate)}
+                        className={`py-3 px-3 text-sm font-medium rounded-lg border transition-colors ${
+                          isSelected
+                            ? "bg-blue-50 dark:bg-blue-900/20 border-blue-500 text-blue-700 dark:text-blue-400"
+                            : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700"
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                
+                {/* Custom Date Picker - Safari iOS Optimized */}
+                <div className="relative">
+                  <input
+                    type="date"
+                    value={selectedDate ? (
+                      selectedDate.getFullYear() + '-' + 
+                      String(selectedDate.getMonth() + 1).padStart(2, '0') + '-' +
+                      String(selectedDate.getDate()).padStart(2, '0')
+                    ) : ''}
+                    onChange={(e) => {
+                      if (e.target.value) {
+                        // Create date in local timezone to avoid UTC conversion issues
+                        const dateString = e.target.value; // YYYY-MM-DD format
+                        const dateParts = dateString.split('-').map(Number);
+                        if (dateParts.length === 3 && dateParts[0] && dateParts[1] && dateParts[2]) {
+                          const year = dateParts[0];
+                          const month = dateParts[1];
+                          const day = dateParts[2];
+                          const localDate = new Date(year, month - 1, day); // month is 0-indexed
+                          setSelectedDate(localDate);
+                        }
+                      } else {
+                        setSelectedDate(null);
+                      }
+                    }}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                  />
+                  <div className="w-full py-4 px-4 text-left border-2 rounded-lg bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-600 hover:border-emerald-400 focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20 transition-all duration-200 shadow-sm hover:shadow-md pointer-events-none">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-3">
+                        <div className="p-2 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg">
+                          <CalendarIcon className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                        </div>
+                        <div>
+                          <div className="text-sm font-medium text-gray-900 dark:text-white">
+                            {selectedDate ? selectedDate.toLocaleDateString('en-US', { 
+                              weekday: 'long', 
+                              month: 'long', 
+                              day: 'numeric'
+                            }) : 'Select a date'}
+                          </div>
+                          <div className="text-xs text-gray-500 dark:text-gray-400">
+                            Tap to change date
+                          </div>
+                        </div>
+                      </div>
+                      <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div className="flex gap-3">
@@ -1062,13 +1134,13 @@ export default function SessionDetailPage({ params }: SessionDetailPageProps) {
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setShowProgramModal(false)}>
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-6">
-              Session Configuration
+              Edit Session Name
             </h3>
             
             {/* Description Section */}
             <div className="mb-6">
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Description
+                Session Name
               </label>
               <input
                 type="text"

@@ -4733,7 +4733,12 @@ Set your goals and preferences for today's session.`;
   // Generate circuit workout without checked-in users
   generateCircuitWorkoutPublic: publicProcedure
     .input(z.object({ 
-      sessionId: z.string().uuid() 
+      sessionId: z.string().uuid(),
+      sessionDetails: z.object({
+        name: z.string().optional(),
+        scheduledAt: z.date().optional(),
+        program: z.enum(["h4h_5am", "h4h_5pm", "saturday_cg", "monday_cg", "unassigned"]).optional(),
+      }).optional()
     }))
     .mutation(async ({ ctx, input }) => {
       // Get session with circuit config
@@ -4755,6 +4760,36 @@ Set your goals and preferences for today's session.`;
         });
       }
 
+      // Update session details if provided
+      if (input.sessionDetails) {
+        const updateData: Partial<{
+          name: string;
+          scheduledAt: Date;
+          program: "h4h_5am" | "h4h_5pm" | "saturday_cg" | "monday_cg" | "unassigned";
+          updatedAt: Date;
+        }> = {
+          updatedAt: new Date(),
+        };
+
+        if (input.sessionDetails.name !== undefined) {
+          updateData.name = input.sessionDetails.name;
+        }
+        if (input.sessionDetails.scheduledAt !== undefined) {
+          updateData.scheduledAt = input.sessionDetails.scheduledAt;
+        }
+        if (input.sessionDetails.program !== undefined) {
+          updateData.program = input.sessionDetails.program;
+        }
+
+        // Only update if there are actual fields to update (beyond updatedAt)
+        if (Object.keys(updateData).length > 1) {
+          await ctx.db
+            .update(TrainingSession)
+            .set(updateData)
+            .where(eq(TrainingSession.id, input.sessionId));
+        }
+      }
+
       // Check if workout already exists
       const existingWorkout = await ctx.db.query.Workout.findFirst({
         where: eq(Workout.trainingSessionId, input.sessionId),
@@ -4769,6 +4804,9 @@ Set your goals and preferences for today's session.`;
 
       // Get circuit configuration
       const circuitConfig = session.templateConfig as any;
+      // Allow empty configurations for custom "start from scratch" workflows
+      const hasRounds = circuitConfig?.config?.roundTemplates && circuitConfig.config.roundTemplates.length > 0;
+      
       if (!circuitConfig?.config?.roundTemplates) {
         throw new TRPCError({
           code: "BAD_REQUEST",
@@ -5000,8 +5038,10 @@ Set your goals and preferences for today's session.`;
           }
         }
 
-        // Insert all workout exercises
-        await tx.insert(WorkoutExercise).values(workoutExercises);
+        // Insert all workout exercises (only if there are any)
+        if (workoutExercises.length > 0) {
+          await tx.insert(WorkoutExercise).values(workoutExercises);
+        }
 
         return {
           workoutId: workout!.id,
@@ -5022,6 +5062,7 @@ Set your goals and preferences for today's session.`;
     .input(
       z.object({
         workoutType: z.enum(['custom', 'template']).optional(),
+        startFromScratch: z.boolean().optional().default(false),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -5038,8 +5079,9 @@ Set your goals and preferences for today's session.`;
         hour12: true
       })}`;
 
-      // Import DEFAULT_CIRCUIT_CONFIG
-      const { DEFAULT_CIRCUIT_CONFIG } = await import("@acme/db");
+      // Import circuit configs based on startFromScratch parameter
+      const { DEFAULT_CIRCUIT_CONFIG, EMPTY_CIRCUIT_CONFIG } = await import("@acme/db");
+      const selectedConfig = input.startFromScratch ? EMPTY_CIRCUIT_CONFIG : DEFAULT_CIRCUIT_CONFIG;
 
       // Create the session data
       const sessionData = {
@@ -5052,7 +5094,7 @@ Set your goals and preferences for today's session.`;
         status: "open" as const,
         templateType: "circuit" as const,
         templateConfig: {
-          ...DEFAULT_CIRCUIT_CONFIG,
+          ...selectedConfig,
           lastUpdated: new Date(),
           updatedBy: HARDCODED_TRAINER_ID,
         }
@@ -5200,6 +5242,26 @@ Set your goals and preferences for today's session.`;
           code: "NOT_FOUND",
           message: "Session not found",
         });
+      }
+
+      // If setting to in_progress, first update any other in_progress sessions to open
+      if (input.status === "in_progress") {
+        await ctx.db
+          .update(TrainingSession)
+          .set({
+            status: "open",
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(TrainingSession.businessId, HARDCODED_BUSINESS_ID),
+              eq(TrainingSession.status, "in_progress"),
+              // Exclude the current session
+              sql`${TrainingSession.id} != ${input.sessionId}`,
+            ),
+          );
+
+        console.log(`[updateSessionStatusPublic] Updated other in_progress sessions to open before setting ${input.sessionId} to in_progress`);
       }
 
       // Update the session status

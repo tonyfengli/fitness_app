@@ -768,13 +768,8 @@ export const circuitConfigRouter = createTRPCRouter({
         });
       }
 
-      // Prevent deletion if only one round remains
-      if (currentConfig.config.roundTemplates.length <= 1) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "Cannot delete the last remaining round",
-        });
-      }
+      // Allow deletion of any round, including the last one
+      // Users can now have empty round configurations and build from scratch
 
       // Start transaction to update both config and exercises
       const result = await ctx.db.transaction(async (tx) => {

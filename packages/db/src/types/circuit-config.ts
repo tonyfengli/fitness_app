@@ -90,6 +90,21 @@ export const DEFAULT_CIRCUIT_CONFIG: CircuitConfig = {
   }
 };
 
+// Empty circuit configuration for "start from scratch" workflow
+export const EMPTY_CIRCUIT_CONFIG: CircuitConfig = {
+  type: 'circuit',
+  config: {
+    rounds: 0,
+    restBetweenRounds: 60,
+    repeatRounds: false,
+    roundTemplates: [],
+    // Legacy fields for backward compatibility
+    exercisesPerRound: 6,
+    workDuration: 45,
+    restDuration: 15,
+  }
+};
+
 // Helper to migrate from legacy to new format
 export function migrateToRoundTemplates(config: LegacyCircuitConfig | CircuitConfig): CircuitConfig {
   // If already has roundTemplates, return as-is

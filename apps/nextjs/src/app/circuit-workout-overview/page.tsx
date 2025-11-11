@@ -2371,8 +2371,37 @@ function CircuitWorkoutOverviewContent() {
             </div>
           </>
         ) : (
-          <div className="flex items-center justify-center py-16">
-            <Loader2 className="h-8 w-8 animate-spin text-gray-500 dark:text-gray-400" />
+          // Empty state - Bold & Action-Focused
+          <div className="flex flex-col items-center justify-center min-h-[65vh] px-6 py-12">
+            {/* Large, impactful button first - no distractions */}
+            <button
+              onClick={() => {
+                setAddRoundDrawerEditMode(null);
+                setShowAddRoundInDrawer(true);
+                setShowOptionsDrawer(true);
+              }}
+              className="group relative bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 hover:border-purple-400 dark:hover:border-purple-500 rounded-3xl p-8 w-full max-w-xs shadow-sm hover:shadow-xl transition-all duration-300 active:scale-95 focus:outline-none focus:ring-4 focus:ring-purple-500/20"
+            >
+              {/* Animated plus icon */}
+              <div className="w-20 h-20 mx-auto mb-6 bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shadow-lg group-hover:shadow-purple-500/25">
+                <svg className="w-8 h-8 text-white group-hover:rotate-90 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" />
+                </svg>
+              </div>
+              
+              <div className="text-center">
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2 group-hover:text-purple-700 dark:group-hover:text-purple-300 transition-colors">
+                  Add Round
+                </h2>
+                <p className="text-gray-600 dark:text-gray-400 text-sm font-medium">
+                  Tap to get started
+                </p>
+              </div>
+
+              {/* Hover glow effect */}
+              <div className="absolute inset-0 rounded-3xl bg-gradient-to-br from-purple-500/5 to-purple-600/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"></div>
+            </button>
+
           </div>
         )}
 

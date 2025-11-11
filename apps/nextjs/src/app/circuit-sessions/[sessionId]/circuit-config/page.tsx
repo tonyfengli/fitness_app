@@ -11,7 +11,7 @@ import { supabase } from "~/lib/supabase/client";
 import { useRealtimeCircuitConfig } from "@acme/ui-shared";
 import type { CircuitConfig } from "@acme/db";
 import { cn } from "@acme/ui-shared";
-import { WorkoutTypeStep, CategorySelectionStep, TemplateSelectionStep, RoundsStep, RoundTypesStep, PerRoundConfigStep, ExercisesStep, TimingStep, ReviewStep, SpotifyStep } from "./components";
+import { WorkoutTypeStep, CategorySelectionStep, TemplateSelectionStep, SessionSetupStep, RoundsStep, RoundTypesStep, PerRoundConfigStep, ExercisesStep, TimingStep, ReviewStep, SpotifyStep } from "./components";
 
 // TOTAL_STEPS is now dynamic based on workflow type
 
@@ -28,7 +28,7 @@ export default function CircuitConfigPage() {
   // If coming from new flow with workout type, start at appropriate step
   const getInitialStep = () => {
     if (fromNew && initialWorkoutType) {
-      return initialWorkoutType === 'template' ? 2 : 4; // Skip workout type selection
+      return initialWorkoutType === 'template' ? 2 : 2; // Skip workout type selection for both workflows
     }
     return 1;
   };
@@ -44,7 +44,14 @@ export default function CircuitConfigPage() {
   const [spotifyDeviceName, setSpotifyDeviceName] = useState<string | null>(null);
   const [workoutType, setWorkoutType] = useState<'custom' | 'template' | null>(initialWorkoutType);
   const [selectedProgram, setSelectedProgram] = useState<string | null>(null);
-  const [templateData, setTemplateData] = useState<{ rounds: any[], exercises: any[] } | null>(null);
+  const [templateData, setTemplateData] = useState<{ rounds: any[], exercises: any[], name?: string, id?: string, workoutId?: string, originalTemplate?: any } | null>(null);
+  
+  // Session details state
+  const [sessionDetails, setSessionDetails] = useState({
+    name: '',
+    program: 'unassigned' as 'h4h_5am' | 'h4h_5pm' | 'saturday_cg' | 'monday_cg' | 'unassigned',
+    scheduledAt: new Date()
+  });
 
   // Get TRPC client
   const trpc = useTRPC();
@@ -156,23 +163,21 @@ export default function CircuitConfigPage() {
     // Use the passed workout type or fall back to state
     const currentWorkoutType = selectedWorkoutType || workoutType;
     
-    // Handle template flow navigation differently
+    // Handle template flow navigation
     if (currentWorkoutType === 'template') {
       if (currentStep === 1) {
         setCurrentStep(2); // Go to category selection
       } else if (currentStep === 2) {
         setCurrentStep(3); // Go to template selection
       } else if (currentStep === 3) {
-        setCurrentStep(5); // Skip to review after template selection - this is now the final step
-      // } else if (currentStep === 5) {
-      //   setCurrentStep(6); // Go to music (COMMENTED OUT)
+        setCurrentStep(4); // Go to review
+      } else if (currentStep === 4) {
+        setCurrentStep(5); // Go to session setup (final step)
       }
     } else {
-      // Normal flow for custom workout - skip step 2 and 3
+      // Simplified custom workflow: Step 1 → Step 2 (session setup)
       if (currentStep === 1) {
-        setCurrentStep(4); // Skip to rounds (skip category/template steps)
-      } else if (currentStep < (workoutType === 'custom' ? 7 : 6)) {
-        setCurrentStep(currentStep + 1);
+        setCurrentStep(2); // Go directly to session setup
       }
     }
   };
@@ -184,17 +189,15 @@ export default function CircuitConfigPage() {
         setCurrentStep(1); // Back to workout type selection
       } else if (currentStep === 3) {
         setCurrentStep(2); // Back to category selection
-      } else if (currentStep === 5) {
+      } else if (currentStep === 4) {
         setCurrentStep(3); // Back to template selection
-      // } else if (currentStep === 6) {
-      //   setCurrentStep(5); // Back to review (COMMENTED OUT)
+      } else if (currentStep === 5) {
+        setCurrentStep(4); // Back to review
       }
     } else {
-      // Normal back navigation for custom
-      if (currentStep === 4) {
-        setCurrentStep(1); // Back to workout type from rounds
-      } else if (currentStep > 1) {
-        setCurrentStep(currentStep - 1);
+      // Simplified custom workflow back navigation
+      if (currentStep === 2) {
+        setCurrentStep(1); // Back to workout type selection
       }
     }
   };
@@ -203,27 +206,17 @@ export default function CircuitConfigPage() {
   const generateWorkoutMutation = useMutation(
     trpc.trainingSession.generateCircuitWorkoutPublic.mutationOptions({
       onSuccess: (data) => {
-        console.log('[CircuitConfig] generateWorkoutMutation success:', data);
-        toast.success("Circuit workout generated successfully!");
-        // Navigate to circuit workout overview
+        toast.success("Session details saved and workout generated successfully!");
         router.push(`/circuit-workout-overview?sessionId=${sessionId}`);
       },
       onError: (error: any) => {
-        console.error('[CircuitConfig] generateWorkoutMutation error:', error);
-        toast.error(error.message || "Failed to generate workout");
+        toast.error(error.message || "Failed to save session details and generate workout");
       },
     })
   );
 
   const handleComplete = async () => {
     if (!sessionId) return;
-    
-    console.log('[CircuitConfig] handleComplete called', {
-      hasWorkout,
-      workoutType,
-      currentStep,
-      sessionId
-    });
     
     // Save any pending configuration changes
     if (isSaving) {
@@ -232,14 +225,33 @@ export default function CircuitConfigPage() {
     
     // If workout already exists, just navigate
     if (hasWorkout) {
-      console.log('[CircuitConfig] Workout already exists, navigating to overview');
       router.push(`/circuit-workout-overview?sessionId=${sessionId}`);
       return;
     }
     
-    // Generate the circuit workout
-    console.log('[CircuitConfig] Calling generateWorkoutMutation with sessionId:', sessionId);
-    generateWorkoutMutation.mutate({ sessionId });
+    // Validate sessionId exists before calling mutation
+    if (!sessionId || sessionId.length !== 36) {
+      toast.error("Invalid session ID");
+      return;
+    }
+    
+    // Check if we have initial config data (means session exists in circuit config)
+    if (!initialConfig) {
+      toast.error("Session configuration not found");
+      return;
+    }
+    
+    const sessionDetailsToSave = {
+      name: sessionDetails.name.trim() || undefined,
+      scheduledAt: sessionDetails.scheduledAt,
+      program: sessionDetails.program
+    };
+    
+    // Generate workout for both custom and template workflows
+    generateWorkoutMutation.mutate({ 
+      sessionId,
+      sessionDetails: sessionDetailsToSave
+    });
   };
 
   if (isLoading || isLoadingConfig) {
@@ -278,26 +290,24 @@ export default function CircuitConfigPage() {
   const getStepInfo = () => {
     const stepProgress = (() => {
       if (workoutType === 'template') {
-        if (currentStep === 2) return "Step 1 of 3";
-        if (currentStep === 3) return "Step 2 of 3";
-        if (currentStep === 5) return "Step 3 of 3";
+        if (currentStep === 2) return "Step 1 of 4";
+        if (currentStep === 3) return "Step 2 of 4";
+        if (currentStep === 4) return "Step 3 of 4";
+        if (currentStep === 5) return "Step 4 of 4";
       } else if (workoutType === 'custom') {
-        if (currentStep === 4) return "Step 1 of 4";
-        if (currentStep === 5) return "Step 2 of 4";
-        if (currentStep === 6) return "Step 3 of 4";
-        if (currentStep === 7) return "Step 4 of 4";
+        // Simplified custom workflow: only 2 steps
+        if (currentStep === 2) return "Step 2 of 2";
       }
       return "";
     })();
 
     const stepTitle = (() => {
       if (currentStep === 1) return "Choose Your Workout Type";
-      if (currentStep === 2) return "Category";
+      if (currentStep === 2 && workoutType === 'template') return "Category";
+      if (currentStep === 2 && workoutType === 'custom') return "Session Setup";
       if (currentStep === 3) return "Templates";
-      if (currentStep === 4) return "Rounds";
-      if (currentStep === 5) return workoutType === 'custom' ? "Round Types" : "Review";
-      if (currentStep === 6 && workoutType === 'custom') return "Per-Round Config";
-      if (currentStep === 7 && workoutType === 'custom') return "Review";
+      if (currentStep === 4) return "Review";
+      if (currentStep === 5) return "Session Setup";
       return "Configure Session";
     })();
 
@@ -308,11 +318,31 @@ export default function CircuitConfigPage() {
 
   // Get right action for header
   const getRightAction = () => {
+    // No right action for step 1 or template steps 2 and 3
     if (currentStep === 1 || (currentStep === 2 && workoutType === 'template') || (currentStep === 3 && workoutType === 'template')) {
       return null;
     }
     
-    if (currentStep < (workoutType === 'custom' ? 7 : 5)) {
+    // Show Next button for intermediate steps
+    if ((workoutType === 'template' && currentStep === 4) || (workoutType === 'custom' && currentStep === 2)) {
+      return (
+        <Button
+          size="sm"
+          onClick={handleComplete}
+          disabled={generateWorkoutMutation.isPending || !sessionDetails.name.trim()}
+          className="bg-green-600 hover:bg-green-700 disabled:opacity-50"
+        >
+          {generateWorkoutMutation.isPending 
+            ? "Generating..." 
+            : hasWorkout 
+              ? "View Workout" 
+              : "Generate Workout"}
+        </Button>
+      );
+    }
+    
+    // Show Next button for template steps that aren't final
+    if (workoutType === 'template' && currentStep < 4) {
       return (
         <Button
           size="sm"
@@ -325,20 +355,7 @@ export default function CircuitConfigPage() {
       );
     }
     
-    return (
-      <Button
-        size="sm"
-        onClick={handleComplete}
-        disabled={generateWorkoutMutation.isPending}
-        className="bg-green-600 hover:bg-green-700 disabled:opacity-50"
-      >
-        {generateWorkoutMutation.isPending 
-          ? "Generating..." 
-          : hasWorkout 
-            ? "View Workout" 
-            : "Generate Workout"}
-      </Button>
-    );
+    return null;
   };
 
   return (
@@ -359,20 +376,18 @@ export default function CircuitConfigPage() {
               let isActive = false;
               
               if (workoutType === 'template') {
-                // Template flow: 2, 3, 5 (3 steps total)
+                // Template flow: 2, 3, 4, 5 (4 steps total)
                 if (step === 1 && currentStep >= 2) isActive = true;
                 if (step === 2 && currentStep >= 3) isActive = true;
-                if (step === 3 && currentStep >= 5) isActive = true;
-                // Hide steps 4 and 5 for template workflow (only 3 steps now)
-                if (step === 4 || step === 5) return null;
-              } else if (workoutType === 'custom') {
-                // Custom flow: 4, 5, 6, 7 (4 steps total)
-                if (step === 1 && currentStep >= 4) isActive = true;
-                if (step === 2 && currentStep >= 5) isActive = true;
-                if (step === 3 && currentStep >= 6) isActive = true;
-                if (step === 4 && currentStep >= 7) isActive = true;
-                // Hide step 5 for custom workflow (music step removed)
+                if (step === 3 && currentStep >= 4) isActive = true;
+                if (step === 4 && currentStep >= 5) isActive = true;
+                // Hide step 5 for template workflow (only 4 steps now)
                 if (step === 5) return null;
+              } else if (workoutType === 'custom') {
+                // Simplified custom flow: just step 2 (1 step total after workout type)
+                if (step === 1 && currentStep >= 2) isActive = true;
+                // Hide steps 2-5 for simplified custom workflow (only 1 step shown)
+                if (step >= 2) return null;
               }
               
               return (
@@ -396,6 +411,16 @@ export default function CircuitConfigPage() {
         {/* Step content */}
         <Card className="p-0 shadow-sm bg-white dark:bg-gray-800 overflow-visible">
           <div className="p-6 space-y-6 overflow-visible">
+            
+            {/* DEBUG LOGS */}
+            {console.log('[Circuit Config Debug]', {
+              currentStep,
+              workoutType,
+              hasConfig: !!config,
+              sessionId,
+              templateData: templateData?.name || 'none',
+              sessionDetailsName: sessionDetails.name
+            })}
             {/* Step 1: Workout Type Selection */}
             {currentStep === 1 && (
               <WorkoutTypeStep
@@ -408,117 +433,157 @@ export default function CircuitConfigPage() {
 
             {/* Step 2: Category Selection (only for template) */}
             {currentStep === 2 && workoutType === 'template' && (
-              <CategorySelectionStep
-                onSelectCategory={(program) => {
-                  setSelectedProgram(program);
-                  handleNext();
-                }}
-              />
+              <>
+                {console.log('[DEBUG] Rendering CategorySelectionStep')}
+                <CategorySelectionStep
+                  onSelectCategory={(program) => {
+                    setSelectedProgram(program);
+                    handleNext();
+                  }}
+                />
+              </>
             )}
 
             {/* Step 3: Template Selection (only for template) */}
             {currentStep === 3 && workoutType === 'template' && selectedProgram && (
-              <TemplateSelectionStep
-                program={selectedProgram}
-                onSelectTemplate={(template) => {
-                  console.log('[CircuitConfig] Template selected - FULL DETAILS:', {
-                    templateId: template.id,
-                    workoutId: template.workoutId,
-                    hasWorkoutId: !!template.workoutId,
-                    sourceToStore: template.workoutId || template.id,
-                    config: template.config,
-                    roundTemplates: template.config.roundTemplates,
-                    rounds: template.rounds?.map((round: any, idx: number) => ({
-                      index: idx,
-                      roundName: round.roundName,
-                      roundType: round.roundType,
-                      exerciseCount: round.exercises?.length || 0,
-                      exercises: round.exercises?.map((ex: any) => ({
+              <>
+                {console.log('[DEBUG] Rendering TemplateSelectionStep')}
+                <TemplateSelectionStep
+                  program={selectedProgram}
+                  onSelectTemplate={(template) => {
+                    console.log('[CircuitConfig] Template selected - FULL DETAILS:', {
+                      templateId: template.id,
+                      workoutId: template.workoutId,
+                      hasWorkoutId: !!template.workoutId,
+                      sourceToStore: template.workoutId || template.id,
+                      config: template.config,
+                      roundTemplates: template.config.roundTemplates,
+                      // Look for all possible name properties
+                      templateName: template.name,
+                      sessionName: template.sessionName,
+                      workoutName: template.workoutName,
+                      title: template.title,
+                      label: template.label,
+                      description: template.description,
+                      allTemplateProps: Object.keys(template),
+                      rounds: template.rounds?.map((round: any, idx: number) => ({
+                        index: idx,
+                        roundName: round.roundName,
+                        roundType: round.roundType,
+                        exerciseCount: round.exercises?.length || 0,
+                        exercises: round.exercises?.map((ex: any) => ({
+                          name: ex.exerciseName,
+                          orderIndex: ex.orderIndex,
+                          stationIndex: ex.stationIndex,
+                          exerciseId: ex.exerciseId,
+                        }))
+                      })),
+                      allExercises: template.exercises?.map((ex: any) => ({
+                        id: ex.id,
                         name: ex.exerciseName,
                         orderIndex: ex.orderIndex,
                         stationIndex: ex.stationIndex,
-                        exerciseId: ex.exerciseId,
-                      }))
-                    })),
-                    allExercises: template.exercises?.map((ex: any) => ({
-                      id: ex.id,
-                      name: ex.exerciseName,
-                      orderIndex: ex.orderIndex,
-                      stationIndex: ex.stationIndex,
-                      roundName: ex.roundName || ex.groupName,
-                      selectionId: ex.selectionId,
-                    })),
-                    exerciseCount: template.exercises?.length || 0,
-                  });
-                  
-                  // Apply template configuration and store source workout ID
-                  updateConfig({
-                    ...template.config,
-                    roundTemplates: template.config.roundTemplates,
-                    sourceWorkoutId: template.workoutId || template.id, // Store the source workout ID
-                  });
-                  // Store template data for review
-                  setTemplateData({
-                    rounds: template.rounds || [],
-                    exercises: template.exercises || [],
-                  });
-                  handleNext();
-                }}
-              />
+                        roundName: ex.roundName || ex.groupName,
+                        selectionId: ex.selectionId,
+                      })),
+                      exerciseCount: template.exercises?.length || 0,
+                    });
+                    
+                    // Apply template configuration and store source workout ID
+                    updateConfig({
+                      ...template.config,
+                      roundTemplates: template.config.roundTemplates,
+                      sourceWorkoutId: template.workoutId || template.id, // Store the source workout ID
+                    });
+                    // Store template data for review
+                    const templateName = template.name || template.sessionName || template.workoutName || template.title || template.label || template.description || 'Template Session';
+                    setTemplateData({
+                      rounds: template.rounds || [],
+                      exercises: template.exercises || [],
+                      name: templateName,
+                      id: template.id,
+                      workoutId: template.workoutId,
+                      originalTemplate: template // Store full template for debugging
+                    });
+                    handleNext();
+                  }}
+                />
+              </>
             )}
 
-            {/* Step 4: Rounds (only for custom) */}
-            {currentStep === 4 && workoutType === 'custom' && (
-              <RoundsStep
-                rounds={config.config.rounds}
-                repeatRounds={repeatRounds}
-                restBetweenRounds={config.config.restBetweenRounds}
-                onRoundsChange={(rounds) => updateConfig({ rounds })}
-                onRepeatToggle={(value) => {
-                  setRepeatRounds(value);
-                  updateConfig({ repeatRounds: value });
-                }}
-                onRoundRestChange={(restBetweenRounds) => updateConfig({ restBetweenRounds })}
-                isSaving={isSaving}
-              />
+            {/* Step 4: Review (for template workflow) */}
+            {currentStep === 4 && workoutType === 'template' && (
+              <>
+                {console.log('[DEBUG] Rendering Template ReviewStep')}
+                <ReviewStep
+                  config={config}
+                  repeatRounds={repeatRounds}
+                  templateData={templateData}
+                />
+              </>
             )}
 
-            {/* Step 5: Round Types (only for custom) */}
-            {currentStep === 5 && workoutType === 'custom' && (
-              <RoundTypesStep
-                rounds={config.config.rounds}
-                roundTemplates={config.config.roundTemplates || []}
-                onRoundTemplatesChange={(roundTemplates) => updateConfig({ roundTemplates })}
-                isSaving={isSaving}
-              />
+            {/* Step 2: Session Setup (for custom workflow) */}
+            {currentStep === 2 && workoutType === 'custom' && (
+              <>
+                {console.log('[DEBUG] Rendering Custom SessionSetupStep')}
+                <SessionSetupStep
+                  sessionDetails={sessionDetails}
+                  onUpdateSessionDetails={setSessionDetails}
+                  templateData={null}
+                  onConfirm={handleComplete}
+                />
+              </>
             )}
 
-            {/* Step 6: Per-Round Configuration (only for custom) */}
-            {currentStep === 6 && workoutType === 'custom' && (
-              <PerRoundConfigStep
-                rounds={config.config.rounds}
-                roundTemplates={config.config.roundTemplates || []}
-                onRoundTemplatesChange={(roundTemplates) => updateConfig({ roundTemplates })}
-                isSaving={isSaving}
-              />
-            )}
-
-            {/* Step 5: Review (for template workflow) */}
+            {/* Step 5: Session Setup (final step for template workflow) */}
             {currentStep === 5 && workoutType === 'template' && (
-              <ReviewStep
-                config={config}
-                repeatRounds={repeatRounds}
-                templateData={templateData}
-              />
+              <>
+                {console.log('[DEBUG] Rendering Template SessionSetupStep')}
+                <SessionSetupStep
+                  sessionDetails={sessionDetails}
+                  onUpdateSessionDetails={setSessionDetails}
+                  templateData={templateData}
+                  onConfirm={handleComplete}
+                />
+              </>
             )}
 
-            {/* Step 7: Review (for custom workflow) */}
-            {currentStep === 7 && workoutType === 'custom' && (
-              <ReviewStep
-                config={config}
-                repeatRounds={repeatRounds}
-                templateData={null}
-              />
+            {/* FALLBACK: Show if no step is matched */}
+            {!((currentStep === 1) || 
+               (currentStep === 2 && workoutType === 'template') || 
+               (currentStep === 2 && workoutType === 'custom') ||
+               (currentStep === 3 && workoutType === 'template' && selectedProgram) ||
+               (currentStep === 4 && workoutType === 'template') ||
+               (currentStep === 5 && workoutType === 'template')) && (
+              <>
+                {console.log('[DEBUG] NO STEP MATCHED - Fallback content', {
+                  currentStep,
+                  workoutType,
+                  selectedProgram,
+                  hasTemplateData: !!templateData
+                })}
+                <div className="text-center py-8">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                    Configuration Error
+                  </h3>
+                  <p className="text-gray-600 dark:text-gray-400 text-sm mb-4">
+                    No matching step found for current state
+                  </p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    Step: {currentStep}, Type: {workoutType || 'none'}
+                  </p>
+                  <button 
+                    onClick={() => {
+                      setCurrentStep(1);
+                      setWorkoutType(null);
+                    }}
+                    className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg"
+                  >
+                    Reset to Start
+                  </button>
+                </div>
+              </>
             )}
 
             {/* COMMENTED OUT: Step 6: Music (template) / Step 8: Music (custom) */}

@@ -78,10 +78,10 @@ const CIRCUIT_PRESET_DURATIONS = [
 ];
 
 const STATIONS_PRESET_DURATIONS = [
-  { work: 180, rest: 60, label: '3m/1m' },
-  { work: 120, rest: 60, label: '2m/1m' },
-  { work: 460, rest: 60, label: '460s/1m' },
-  { work: 450, rest: 60, label: '450s/1m' }
+  { work: 180, rest: 60, label: '3:00 / 1:00' },
+  { work: 120, rest: 60, label: '2:00 / 1:00' },
+  { work: 460, rest: 60, label: '7:40 / 1:00' },
+  { work: 450, rest: 60, label: '7:30 / 1:00' }
 ];
 
 const CIRCUIT_EXERCISE_OPTIONS = {
@@ -653,7 +653,9 @@ export function AddRoundDrawer({ isOpen, onClose, onAdd, isAdding = false, editM
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-full border border-purple-200 dark:border-purple-700 hover:bg-purple-200 dark:hover:bg-purple-900/50 transition-colors text-sm font-medium"
                         aria-label="Change duration"
                       >
-                        <span className="text-base font-semibold">{config.workDuration}/{config.restDuration}</span>
+                        <span className="text-base font-semibold">
+                          {Math.floor((config.workDuration || 0) / 60)}:{((config.workDuration || 0) % 60).toString().padStart(2, '0')} / {Math.floor((config.restDuration || 0) / 60)}:{((config.restDuration || 0) % 60).toString().padStart(2, '0')}
+                        </span>
                         <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                           <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                         </svg>
