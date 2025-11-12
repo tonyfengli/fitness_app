@@ -9,6 +9,13 @@ interface LightingTabProps {
 }
 
 export function LightingTab({ circuitConfig, roundsData }: LightingTabProps) {
+  // State for controlling round view modes (global vs detailed)
+  const [detailedRounds, setDetailedRounds] = React.useState<Record<number, boolean>>({});
+  
+  const toggleRoundMode = (roundId: number) => {
+    setDetailedRounds(prev => ({ ...prev, [roundId]: !prev[roundId] }));
+  };
+
   // Generate lighting configurations from actual workout data
   const roundsWithLighting = React.useMemo(() => {
     if (!circuitConfig?.config?.roundTemplates || !roundsData) {
@@ -39,95 +46,101 @@ export function LightingTab({ circuitConfig, roundsData }: LightingTabProps) {
         duration = `${mins}:${secs.toString().padStart(2, '0')}`;
       }
 
-      // Generate granular lighting configuration based on actual structure
-      let phases: any[] = [];
+      // Generate both global and detailed timeline configurations
+      let globalPhases: any[] = [];
+      let detailedPhases: any[] = [];
       
       if (roundType === 'stations_round') {
-        // Get unique stations from exercises
         const stations = Array.from(new Set(round.exercises?.map((ex: any) => ex.orderIndex) || [])).sort();
         
-        phases = [
-          { type: "preview", label: "Round Preview", config: { global: { color: "#4F46E5", brightness: 40, active: true } } },
+        // Global view - simplified timeline
+        globalPhases = [
+          { type: "preview", label: "Round Preview", config: { color: "#4F46E5", brightness: 40, active: true } },
+          { type: "work", label: "Station Work", config: { color: "#FFB366", brightness: 95, active: true } },
+          { type: "rest", label: "Exercise Rest", config: { color: "#5DE1FF", brightness: 60, active: true } },
+          { type: "setBreak", label: "Set Break", config: { color: "#8B5CF6", brightness: 40, active: true } }
         ];
         
-        // Add phase for each station
+        // Detailed view - complete station-by-station breakdown
+        detailedPhases = [
+          { type: "preview", label: "Round Preview", config: { color: "#4F46E5", brightness: 40, active: true } }
+        ];
+        
+        // Add each station as individual phases
         stations.forEach((stationIndex) => {
           const stationExercises = round.exercises?.filter((ex: any) => ex.orderIndex === stationIndex) || [];
           const exerciseNames = stationExercises.map((ex: any) => ex.exerciseName).join(", ");
           
-          phases.push({
+          detailedPhases.push({
             type: "work",
             label: `Station ${stationIndex + 1}: ${exerciseNames}`,
-            stationIndex,
-            config: {
-              [`station_${stationIndex + 1}`]: { 
-                color: `hsl(${(stationIndex * 60) % 360}, 70%, 55%)`, // Generate distinct colors
-                brightness: 95, 
-                active: true 
-              },
-              global: { color: "#2D1508", brightness: 20, active: true }
-            }
-          });
-        });
-        
-        phases.push(
-          { type: "rest", label: "Exercise Rest", config: { global: { color: "#5DE1FF", brightness: 60, active: true } } },
-          { type: "setBreak", label: "Set Break", config: { global: { color: "#8B5CF6", brightness: 40, active: true } } }
-        );
-        
-      } else if (roundType === 'circuit_round') {
-        phases = [
-          { type: "preview", label: "Round Preview", config: { global: { color: "#4F46E5", brightness: 40, active: true } } },
-        ];
-        
-        // Add phase for each exercise
-        round.exercises?.forEach((exercise: any, index: number) => {
-          phases.push({
-            type: "work",
-            label: `${exercise.exerciseName}`,
-            exerciseIndex: index,
-            config: {
-              [`exercise_${index + 1}`]: { 
-                color: `hsl(${(index * 45) % 360}, 75%, 60%)`, // Generate distinct colors
-                brightness: 90, 
-                active: true 
-              },
-              global: { color: "#1F2937", brightness: 15, active: true }
-            }
+            config: { color: `hsl(${(stationIndex * 60) % 360}, 70%, 55%)`, brightness: 95, active: true }
           });
           
-          // Add rest phase between exercises (except after last)
-          if (index < (round.exercises?.length || 0) - 1) {
-            phases.push({
+          // Add rest after each station (except last)
+          if (stationIndex < stations[stations.length - 1]) {
+            detailedPhases.push({
               type: "rest",
-              label: "Exercise Rest",
-              config: { global: { color: "#5DE1FF", brightness: 50, active: true } }
+              label: "Station Transition",
+              config: { color: "#5DE1FF", brightness: 40, active: true }
             });
           }
         });
         
-      } else if (roundType === 'amrap_round') {
-        phases = [
-          { type: "preview", label: "Round Preview", config: { global: { color: "#4F46E5", brightness: 40, active: true } } },
-          { 
-            type: "work", 
-            label: "AMRAP Work", 
-            exercises: round.exercises?.map((ex: any, i: number) => ({
-              name: ex.exerciseName,
-              color: `hsl(${(i * 40) % 360}, 65%, 58%)` // Different color per exercise
-            })),
-            config: { 
-              main: { color: "#EF4444", brightness: 95, active: true },
-              ...Object.fromEntries(
-                (round.exercises || []).map((ex: any, i: number) => [
-                  `exercise_${i + 1}`,
-                  { color: `hsl(${(i * 40) % 360}, 65%, 58%)`, brightness: 80, active: true }
-                ])
-              )
-            } 
-          },
-          { type: "warning", label: "Final Warning", config: { global: { color: "#F59E0B", brightness: 100, active: true } } }
+        
+      } else if (roundType === 'circuit_round') {
+        // Global view
+        globalPhases = [
+          { type: "preview", label: "Round Preview", config: { color: "#4F46E5", brightness: 40, active: true } },
+          { type: "work", label: "Exercise Work", config: { color: "#EF4444", brightness: 90, active: true } },
+          { type: "rest", label: "Exercise Rest", config: { color: "#5DE1FF", brightness: 50, active: true } }
         ];
+        
+        // Detailed view - exercise by exercise
+        detailedPhases = [
+          { type: "preview", label: "Round Preview", config: { color: "#4F46E5", brightness: 40, active: true } }
+        ];
+        
+        round.exercises?.forEach((exercise: any, index: number) => {
+          detailedPhases.push({
+            type: "work",
+            label: exercise.exerciseName,
+            config: { color: `hsl(${(index * 45) % 360}, 75%, 60%)`, brightness: 90, active: true }
+          });
+          
+          // Add rest between exercises (except after last)
+          if (index < (round.exercises?.length || 0) - 1) {
+            detailedPhases.push({
+              type: "rest",
+              label: "Exercise Transition",
+              config: { color: "#5DE1FF", brightness: 35, active: true }
+            });
+          }
+        });
+        
+        
+      } else if (roundType === 'amrap_round') {
+        // Global view
+        globalPhases = [
+          { type: "preview", label: "Round Preview", config: { color: "#4F46E5", brightness: 40, active: true } },
+          { type: "work", label: "AMRAP Work", config: { color: "#EF4444", brightness: 95, active: true } },
+          { type: "warning", label: "Final Warning", config: { color: "#F59E0B", brightness: 100, active: true } }
+        ];
+        
+        // Detailed view - exercise zones + alerts
+        detailedPhases = [
+          { type: "preview", label: "Round Preview", config: { color: "#4F46E5", brightness: 40, active: true } }
+        ];
+        
+        // Add exercise zones
+        round.exercises?.forEach((ex: any, i: number) => {
+          detailedPhases.push({
+            type: "work",
+            label: `${ex.exerciseName} Zone`,
+            config: { color: `hsl(${(i * 40) % 360}, 65%, 58%)`, brightness: 80, active: true }
+          });
+        });
+        
       }
 
       return {
@@ -136,7 +149,8 @@ export function LightingTab({ circuitConfig, roundsData }: LightingTabProps) {
         type: roundType,
         duration,
         lightingConfigured: true, // Default to configured for demo
-        phases
+        globalPhases,
+        detailedPhases
       };
     }).filter(Boolean);
   }, [circuitConfig, roundsData]);
@@ -206,74 +220,200 @@ export function LightingTab({ circuitConfig, roundsData }: LightingTabProps) {
                 </span>
               </div>
               
-              <button className={`px-3 py-1.5 rounded text-sm font-medium ${
-                round.lightingConfigured 
-                  ? 'bg-purple-100 text-purple-700 hover:bg-purple-200' 
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}>
-                {round.lightingConfigured ? 'Edit Lights' : 'Configure'}
-              </button>
+              <div className="flex items-center gap-2">
+                {/* View Mode Toggle */}
+                <button
+                  onClick={() => toggleRoundMode(round.id)}
+                  className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
+                    detailedRounds[round.id]
+                      ? 'bg-blue-100 text-blue-700 hover:bg-blue-200' 
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                  title={detailedRounds[round.id] ? "Switch to global view" : "Switch to detailed view"}
+                >
+                  {detailedRounds[round.id] ? 'Global View' : 'Detailed View'}
+                </button>
+                
+                <button className={`px-3 py-1.5 rounded text-sm font-medium ${
+                  round.lightingConfigured 
+                    ? 'bg-purple-100 text-purple-700 hover:bg-purple-200' 
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}>
+                  {round.lightingConfigured ? 'Edit Lights' : 'Configure'}
+                </button>
+              </div>
             </div>
 
             {/* Clean Lighting Timeline */}
             <div className="space-y-6 p-1">
               
-              {round.lightingConfigured && round.phases ? (
+              {round.lightingConfigured ? (
                 <div className="space-y-6">
-                  {/* Workout Phases */}
-                  {round.phases.map((phase, i) => (
-                    <div key={i} className="relative flex items-center justify-center">
-                      {/* Timeline connector - connects circle to circle */}
-                      {i < round.phases.length - 1 && (
-                        <div className="absolute top-20 w-0.5 h-12 bg-gray-300 dark:bg-gray-600 z-0" />
+                  {/* Mode Indicator */}
+                  <div className="text-center">
+                    <span className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium ${
+                      detailedRounds[round.id] 
+                        ? 'bg-blue-50 text-blue-700 border border-blue-200' 
+                        : 'bg-gray-50 text-gray-700 border border-gray-200'
+                    }`}>
+                      {detailedRounds[round.id] ? (
+                        <>
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                          </svg>
+                          Individual Station/Exercise Control
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
+                          </svg>
+                          Global Phase Control
+                        </>
                       )}
+                    </span>
+                  </div>
+                  
+                  {/* Workout Phases Timeline */}
+                  {(() => {
+                    const currentPhases = detailedRounds[round.id] ? round.detailedPhases : round.globalPhases;
+                    const useColumns = detailedRounds[round.id] && currentPhases.length > 6;
+                    
+                    if (useColumns) {
+                      // Two-column layout for detailed views with many phases
+                      const midPoint = Math.ceil(currentPhases.length / 2);
+                      const leftColumn = currentPhases.slice(0, midPoint);
+                      const rightColumn = currentPhases.slice(midPoint);
                       
-                      <div className="flex flex-col items-center space-y-3 relative z-10">
-                        {/* Large Interactive Light Circle - FOCAL POINT */}
-                        <button 
-                          className="group relative w-20 h-20 rounded-full flex items-center justify-center border-4 border-white shadow-xl hover:shadow-2xl transition-all duration-200 hover:scale-105 focus:outline-none focus:ring-4 focus:ring-purple-500/30"
-                          style={{ 
-                            backgroundColor: Object.values(phase.config)[0]?.color || '#6B7280',
-                            opacity: Object.values(phase.config)[0]?.active ? Math.max(0.8, Object.values(phase.config)[0]?.brightness / 100) : 0.4,
-                            boxShadow: Object.values(phase.config)[0]?.active ? `0 0 30px ${Object.values(phase.config)[0]?.color}50, 0 8px 25px rgba(0,0,0,0.15)` : '0 8px 25px rgba(0,0,0,0.15)'
-                          }}
-                        >
-                          <div className="text-xs font-extrabold uppercase tracking-wider text-center leading-tight text-white drop-shadow-lg">
-                            {phase.type === 'setBreak' ? 'SET\nBREAK' : phase.type}
-                          </div>
-                          
-                          {/* Edit indicator on hover */}
-                          <div className="absolute inset-0 rounded-full bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center">
-                            <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                            </svg>
-                          </div>
-                        </button>
-                        
-                        {/* Minimal Phase Label - Secondary */}
-                        <div className="text-center">
-                          <div className="text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-900 px-3 py-1 rounded-lg">
-                            {phase.label}
-                          </div>
-                          
-                          {/* Exercise list for AMRAP rounds */}
-                          {phase.type === 'work' && phase.exercises && (
-                            <div className="text-xs text-gray-500 dark:text-gray-400 space-y-1 mt-2">
-                              {phase.exercises.map((exercise: any, i: number) => (
-                                <div key={i} className="flex items-center justify-center gap-2">
-                                  <div 
-                                    className="w-3 h-3 rounded-full"
-                                    style={{ backgroundColor: exercise.color }}
-                                  />
-                                  <span>{exercise.name}</span>
+                      return (
+                        <div className="grid grid-cols-2 gap-8">
+                          {/* Left Column */}
+                          <div className="space-y-6">
+                            {leftColumn.map((phase, i) => (
+                              <div key={`left-${i}`} className="relative flex items-center justify-center">
+                                {/* Timeline connector */}
+                                {i < leftColumn.length - 1 && (
+                                  <div className="absolute top-20 w-0.5 h-12 bg-gray-300 dark:bg-gray-600 z-0" />
+                                )}
+                                
+                                <div className="flex flex-col items-center space-y-3 relative z-10">
+                                  {/* Phase Circle */}
+                                  <button 
+                                    className="group relative w-16 h-16 rounded-full flex items-center justify-center border-3 border-white shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105 focus:outline-none focus:ring-4 focus:ring-purple-500/30"
+                                    style={{ 
+                                      backgroundColor: phase.config?.color || '#6B7280',
+                                      opacity: phase.config?.active ? Math.max(0.8, phase.config?.brightness / 100) : 0.4,
+                                      boxShadow: phase.config?.active ? `0 0 20px ${phase.config?.color}40, 0 6px 20px rgba(0,0,0,0.15)` : '0 6px 20px rgba(0,0,0,0.15)'
+                                    }}
+                                  >
+                                    <div className="text-xs font-bold uppercase tracking-wide text-center leading-tight text-white drop-shadow-lg">
+                                      {phase.type === 'setBreak' ? 'SET\nBREAK' : phase.type}
+                                    </div>
+                                    
+                                    {/* Edit indicator on hover */}
+                                    <div className="absolute inset-0 rounded-full bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center">
+                                      <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                      </svg>
+                                    </div>
+                                  </button>
+                                  
+                                  {/* Phase Label */}
+                                  <div className="text-center">
+                                    <div className="text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-900 px-2 py-1 rounded text-center max-w-[120px] leading-tight">
+                                      {phase.label}
+                                    </div>
+                                  </div>
                                 </div>
-                              ))}
-                            </div>
-                          )}
+                              </div>
+                            ))}
+                          </div>
+                          
+                          {/* Right Column */}
+                          <div className="space-y-6">
+                            {rightColumn.map((phase, i) => (
+                              <div key={`right-${i}`} className="relative flex items-center justify-center">
+                                {/* Timeline connector */}
+                                {i < rightColumn.length - 1 && (
+                                  <div className="absolute top-20 w-0.5 h-12 bg-gray-300 dark:bg-gray-600 z-0" />
+                                )}
+                                
+                                <div className="flex flex-col items-center space-y-3 relative z-10">
+                                  {/* Phase Circle */}
+                                  <button 
+                                    className="group relative w-16 h-16 rounded-full flex items-center justify-center border-3 border-white shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105 focus:outline-none focus:ring-4 focus:ring-purple-500/30"
+                                    style={{ 
+                                      backgroundColor: phase.config?.color || '#6B7280',
+                                      opacity: phase.config?.active ? Math.max(0.8, phase.config?.brightness / 100) : 0.4,
+                                      boxShadow: phase.config?.active ? `0 0 20px ${phase.config?.color}40, 0 6px 20px rgba(0,0,0,0.15)` : '0 6px 20px rgba(0,0,0,0.15)'
+                                    }}
+                                  >
+                                    <div className="text-xs font-bold uppercase tracking-wide text-center leading-tight text-white drop-shadow-lg">
+                                      {phase.type === 'setBreak' ? 'SET\nBREAK' : phase.type}
+                                    </div>
+                                    
+                                    {/* Edit indicator on hover */}
+                                    <div className="absolute inset-0 rounded-full bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center">
+                                      <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                      </svg>
+                                    </div>
+                                  </button>
+                                  
+                                  {/* Phase Label */}
+                                  <div className="text-center">
+                                    <div className="text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-900 px-2 py-1 rounded text-center max-w-[120px] leading-tight">
+                                      {phase.label}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
                         </div>
-                      </div>
-                    </div>
-                  ))}
+                      );
+                    } else {
+                      // Single column layout for global view or shorter detailed views
+                      return currentPhases.map((phase, i) => (
+                        <div key={i} className="relative flex items-center justify-center">
+                          {/* Timeline connector - connects circle to circle */}
+                          {i < currentPhases.length - 1 && (
+                            <div className="absolute top-20 w-0.5 h-12 bg-gray-300 dark:bg-gray-600 z-0" />
+                          )}
+                          
+                          <div className="flex flex-col items-center space-y-3 relative z-10">
+                            {/* Phase Circle */}
+                            <button 
+                              className="group relative w-20 h-20 rounded-full flex items-center justify-center border-4 border-white shadow-xl hover:shadow-2xl transition-all duration-200 hover:scale-105 focus:outline-none focus:ring-4 focus:ring-purple-500/30"
+                              style={{ 
+                                backgroundColor: phase.config?.color || '#6B7280',
+                                opacity: phase.config?.active ? Math.max(0.8, phase.config?.brightness / 100) : 0.4,
+                                boxShadow: phase.config?.active ? `0 0 30px ${phase.config?.color}50, 0 8px 25px rgba(0,0,0,0.15)` : '0 8px 25px rgba(0,0,0,0.15)'
+                              }}
+                            >
+                              <div className="text-xs font-extrabold uppercase tracking-wider text-center leading-tight text-white drop-shadow-lg">
+                                {phase.type === 'setBreak' ? 'SET\nBREAK' : phase.type}
+                              </div>
+                              
+                              {/* Edit indicator on hover */}
+                              <div className="absolute inset-0 rounded-full bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center">
+                                <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                </svg>
+                              </div>
+                            </button>
+                            
+                            {/* Phase Label */}
+                            <div className="text-center">
+                              <div className="text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-900 px-3 py-1 rounded-lg">
+                                {phase.label}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ));
+                    }
+                  })()}
                 </div>
               ) : (
                 <div className="text-center text-sm text-gray-500 dark:text-gray-400 py-8">
