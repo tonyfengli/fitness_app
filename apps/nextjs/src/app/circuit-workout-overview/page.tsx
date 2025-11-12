@@ -917,20 +917,6 @@ function CircuitWorkoutOverviewContent() {
     enabled: !!sessionId
   });
 
-  // Debug logging for circuit config
-  useEffect(() => {
-    if (circuitConfig) {
-      console.log("[DEBUG] Circuit config received:", circuitConfig);
-      console.log("[DEBUG] Round templates:", circuitConfig.config?.roundTemplates);
-      circuitConfig.config?.roundTemplates?.forEach((round, index) => {
-        console.log(`[DEBUG] Round ${round.roundNumber}:`, {
-          type: round.template.type,
-          exercisesPerRound: round.template.exercisesPerRound,
-          template: round.template
-        });
-      });
-    }
-  }, [circuitConfig]);
 
   // Fetch session data to get templateConfig with setlist
   const { data: sessionData } = useQuery({
@@ -1023,10 +1009,6 @@ function CircuitWorkoutOverviewContent() {
       });
       
       // Sort exercises within each round and create final structure
-      console.log("[DEBUG] RoundsMap entries:", Array.from(roundsMap.entries()).map(([name, exercises]) => ({
-        roundName: name,
-        exerciseCount: exercises.length
-      })));
       
       let rounds: RoundData[] = Array.from(roundsMap.entries())
         .map(([roundName, exercises]) => {
@@ -1072,9 +1054,6 @@ function CircuitWorkoutOverviewContent() {
         : rounds.length;
       
       // Mark which rounds are repeats and get round type
-      console.log("[DEBUG] Actual rounds count:", rounds.length);
-      console.log("[DEBUG] Round templates count:", circuitConfig?.config?.roundTemplates?.length);
-      console.log("[DEBUG] Mismatch?", rounds.length !== circuitConfig?.config?.roundTemplates?.length);
       
       const roundsWithMetadata = rounds.map((round, index) => {
         const actualRoundIndex = circuitConfig?.config?.repeatRounds && index >= baseRoundCount 
@@ -1084,12 +1063,6 @@ function CircuitWorkoutOverviewContent() {
         const roundTemplate = circuitConfig?.config?.roundTemplates?.[actualRoundIndex];
         const roundType = roundTemplate?.template?.type || 'circuit_round';
         
-        console.log(`[DEBUG] Processing round ${index + 1} (actualIndex: ${actualRoundIndex}):`, {
-          roundName: round.roundName,
-          roundTemplate: roundTemplate,
-          roundType: roundType,
-          templateType: roundTemplate?.template?.type
-        });
         
         return {
           ...round,
@@ -1223,20 +1196,19 @@ function CircuitWorkoutOverviewContent() {
         </div>
       </div>
 
-      {/* Tab Navigation - Mobile Optimized */}
-      <div className="fixed top-0 left-0 right-0 z-40 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 mt-16">
-        <div className="mx-auto max-w-2xl px-4">
-          <TabNavigation
-            tabs={tabs}
-            activeTab={activeTab}
-            onChange={setActiveTab}
-          />
-        </div>
-      </div>
-
-      {/* Content with top padding for header + tabs */}
-      <div className="pt-28 px-4 pb-8">
+      {/* Content with top padding for header */}
+      <div className="pt-16 px-4 pb-8">
         <div className="mx-auto max-w-2xl">
+          {/* Tab Navigation */}
+          <div className="bg-white dark:bg-gray-900 mb-4 -mx-4 pt-4">
+            <div className="px-4">
+              <TabNavigation
+                tabs={tabs}
+                activeTab={activeTab}
+                onChange={setActiveTab}
+              />
+            </div>
+          </div>
 
 
         {/* Tab Content */}
@@ -1414,15 +1386,6 @@ function CircuitWorkoutOverviewContent() {
                                       const timePerSet = (unitsCount * workTime) + ((unitsCount - 1) * restTime);
                                       totalDuration = (timePerSet * sets) + (restBetweenSets * (sets - 1));
                                       
-                                      console.log(`[Round Time Display] Stations calculation:`, {
-                                        workTime,
-                                        restTime, 
-                                        sets,
-                                        restBetweenSets,
-                                        unitsCount,
-                                        timePerSet,
-                                        totalDuration
-                                      });
                                     } else {
                                       const workTime = roundTemplate?.template?.workDuration || 0;
                                       const restTime = roundTemplate?.template?.restDuration || 0;
@@ -2119,7 +2082,10 @@ function CircuitWorkoutOverviewContent() {
 
           </WorkoutTab>
         ) : (
-          <LightingTab />
+          <LightingTab 
+            circuitConfig={circuitConfig as any}
+            roundsData={roundsData as any}
+          />
         )}
         </div>
       </div>
@@ -2745,19 +2711,8 @@ function CircuitWorkoutOverviewContent() {
         }
         customContent={
           (() => {
-            console.log("[OptionsDrawer] Rendering customContent, state check:", {
-              showRepsInDrawer,
-              selectedExerciseForSets: !!selectedExerciseForSets,
-              showAddExerciseInDrawer,
-              addExerciseModalConfig: !!addExerciseModalConfig,
-              showReplaceInDrawer,
-              selectedExerciseForReplace: !!selectedExerciseForReplace,
-              showAddRoundInDrawer,
-              addRoundDrawerEditMode: !!addRoundDrawerEditMode
-            });
             
             if (showRepsInDrawer && selectedExerciseForSets) {
-              console.log("[OptionsDrawer] Rendering RepsConfiguration");
               return (
             <RepsConfiguration
               exerciseName={selectedExerciseForSets.exerciseName}
@@ -2787,7 +2742,6 @@ function CircuitWorkoutOverviewContent() {
             />
               );
             } else if (showAddExerciseInDrawer && addExerciseModalConfig) {
-              console.log("[OptionsDrawer] Rendering AddExerciseDrawer");
               return (
             <AddExerciseDrawer
               isOpen={showAddExerciseInDrawer}
@@ -2810,7 +2764,6 @@ function CircuitWorkoutOverviewContent() {
             />
               );
             } else if (showReplaceInDrawer && selectedExerciseForReplace) {
-              console.log("[OptionsDrawer] Rendering ExerciseReplacement");
               return (
             <ExerciseReplacement
               exercise={(() => {
@@ -2856,7 +2809,6 @@ function CircuitWorkoutOverviewContent() {
             />
               );
             } else if (showAddRoundInDrawer) {
-              console.log("[OptionsDrawer] Rendering AddRoundDrawer");
               return (
             <AddRoundDrawer
               isOpen={showAddRoundInDrawer}
@@ -2901,7 +2853,6 @@ function CircuitWorkoutOverviewContent() {
             />
               );
             } else {
-              console.log("[OptionsDrawer] No specific drawer selected, returning undefined");
               return undefined;
             }
           })()

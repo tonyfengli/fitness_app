@@ -412,15 +412,6 @@ export default function CircuitConfigPage() {
         <Card className="p-0 shadow-sm bg-white dark:bg-gray-800 overflow-visible">
           <div className="p-6 space-y-6 overflow-visible">
             
-            {/* DEBUG LOGS */}
-            {console.log('[Circuit Config Debug]', {
-              currentStep,
-              workoutType,
-              hasConfig: !!config,
-              sessionId,
-              templateData: templateData?.name || 'none',
-              sessionDetailsName: sessionDetails.name
-            })}
             {/* Step 1: Workout Type Selection */}
             {currentStep === 1 && (
               <WorkoutTypeStep
@@ -434,7 +425,6 @@ export default function CircuitConfigPage() {
             {/* Step 2: Category Selection (only for template) */}
             {currentStep === 2 && workoutType === 'template' && (
               <>
-                {console.log('[DEBUG] Rendering CategorySelectionStep')}
                 <CategorySelectionStep
                   onSelectCategory={(program) => {
                     setSelectedProgram(program);
@@ -447,7 +437,6 @@ export default function CircuitConfigPage() {
             {/* Step 3: Template Selection (only for template) */}
             {currentStep === 3 && workoutType === 'template' && selectedProgram && (
               <>
-                {console.log('[DEBUG] Rendering TemplateSelectionStep')}
                 <TemplateSelectionStep
                   program={selectedProgram}
                   onSelectTemplate={(template) => {
@@ -514,7 +503,6 @@ export default function CircuitConfigPage() {
             {/* Step 4: Review (for template workflow) */}
             {currentStep === 4 && workoutType === 'template' && (
               <>
-                {console.log('[DEBUG] Rendering Template ReviewStep')}
                 <ReviewStep
                   config={config}
                   repeatRounds={repeatRounds}
@@ -526,7 +514,6 @@ export default function CircuitConfigPage() {
             {/* Step 2: Session Setup (for custom workflow) */}
             {currentStep === 2 && workoutType === 'custom' && (
               <>
-                {console.log('[DEBUG] Rendering Custom SessionSetupStep')}
                 <SessionSetupStep
                   sessionDetails={sessionDetails}
                   onUpdateSessionDetails={setSessionDetails}
@@ -539,7 +526,6 @@ export default function CircuitConfigPage() {
             {/* Step 5: Session Setup (final step for template workflow) */}
             {currentStep === 5 && workoutType === 'template' && (
               <>
-                {console.log('[DEBUG] Rendering Template SessionSetupStep')}
                 <SessionSetupStep
                   sessionDetails={sessionDetails}
                   onUpdateSessionDetails={setSessionDetails}
@@ -557,12 +543,6 @@ export default function CircuitConfigPage() {
                (currentStep === 4 && workoutType === 'template') ||
                (currentStep === 5 && workoutType === 'template')) && (
               <>
-                {console.log('[DEBUG] NO STEP MATCHED - Fallback content', {
-                  currentStep,
-                  workoutType,
-                  selectedProgram,
-                  hasTemplateData: !!templateData
-                })}
                 <div className="text-center py-8">
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
                     Configuration Error

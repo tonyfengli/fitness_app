@@ -14,7 +14,6 @@ export function TimerBadge({ circuitConfig, roundsData, className = "" }: TimerB
   let totalWorkoutTime = 0;
   
   if (circuitConfig?.config?.roundTemplates) {
-    console.log('[TimerBadge] Starting calculation, rest between rounds:', circuitConfig.config.restBetweenRounds);
     
     circuitConfig.config.roundTemplates.forEach((rt, index) => {
       const roundTemplate = rt.template;
@@ -47,28 +46,16 @@ export function TimerBadge({ circuitConfig, roundsData, className = "" }: TimerB
         const timePerSet = (unitsCount * workTime) + ((unitsCount - 1) * restTime);
         roundDuration = (timePerSet * sets) + (restBetweenSets * (sets - 1));
         
-        console.log(`[TimerBadge] Round ${index + 1}:`, {
-          type: roundTemplate.type,
-          unitsCount,
-          workTime,
-          restTime,
-          sets,
-          restBetweenSets,
-          timePerSet,
-          roundDuration
-        });
         
         totalWorkoutTime += roundDuration;
       }
       
       // Add rest between rounds (except after last round)
       if (index < circuitConfig.config.roundTemplates.length - 1 && circuitConfig.config.restBetweenRounds > 0) {
-        console.log(`[TimerBadge] Adding rest after round ${index + 1}:`, circuitConfig.config.restBetweenRounds);
         totalWorkoutTime += circuitConfig.config.restBetweenRounds;
       }
     });
     
-    console.log('[TimerBadge] Total workout time:', totalWorkoutTime);
   }
   
   const formatDuration = (seconds: number): string => {

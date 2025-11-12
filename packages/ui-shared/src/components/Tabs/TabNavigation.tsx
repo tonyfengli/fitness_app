@@ -14,16 +14,16 @@ export function TabNavigation({
 }: TabNavigationProps) {
   const { isMobileView } = useResponsive();
   
-  // Auto-switch to bottom navigation on mobile
-  const effectiveVariant = isMobileView ? "bottom" : variant;
+  // Keep tabs at top regardless of screen size
+  const effectiveVariant = variant;
 
   return (
     <div
       className={cn(
-        "bg-white border-gray-200 z-40",
+        "bg-white z-40 relative",
         effectiveVariant === "bottom" 
-          ? "fixed bottom-0 left-0 right-0 border-t safe-area-padding-bottom" 
-          : "sticky top-16 border-b",
+          ? "fixed bottom-0 left-0 right-0 safe-area-padding-bottom shadow-lg" 
+          : "",
         className
       )}
     >
@@ -35,10 +35,10 @@ export function TabNavigation({
               key={tab.id}
               onClick={() => onChange(tab.id)}
               className={cn(
-                "flex-1 flex items-center justify-center gap-2 py-3 px-4 text-sm font-medium transition-colors",
-                "focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-inset",
+                "flex-1 flex items-center justify-center gap-2 py-3.5 px-4 text-base font-medium transition-colors relative",
+                "focus:outline-none",
                 isActive
-                  ? "text-purple-600 border-b-2 border-purple-600"
+                  ? "text-purple-600"
                   : "text-gray-500 hover:text-gray-700 hover:bg-gray-50",
                 effectiveVariant === "bottom" && isActive && "bg-purple-50",
                 effectiveVariant === "bottom" && "py-2" // Slightly smaller on mobile
@@ -46,10 +46,16 @@ export function TabNavigation({
             >
               {tab.icon && <span className="text-lg">{tab.icon}</span>}
               <span>{tab.label}</span>
+              {/* Clean active indicator - extends to match border */}
+              {isActive && (
+                <div className="absolute bottom-0 -left-4 -right-4 h-0.5 bg-purple-600" />
+              )}
             </button>
           );
         })}
       </div>
+      {/* Unified bottom border - extends beyond container */}
+      <div className="absolute bottom-0 -left-4 -right-4 h-px bg-gray-200" />
     </div>
   );
 }
