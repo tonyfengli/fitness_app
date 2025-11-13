@@ -1142,10 +1142,28 @@ function CircuitWorkoutOverviewContent() {
   // Tab state
   const [activeTab, setActiveTab] = useState('workout');
   
-  // Tab configuration
+  // Lighting state for tab styling
+  const [isLightingEnabled, setIsLightingEnabled] = useState(true);
+  
+  // Tab configuration with lighting indicator
   const tabs = [
     { id: 'workout', label: 'Workout' },
-    { id: 'lighting', label: 'Lighting' },
+    { 
+      id: 'lighting', 
+      label: 'Lighting',
+      icon: isLightingEnabled ? (
+        <div className="relative">
+          {/* Glowing light bulb indicator */}
+          <svg className="w-4 h-4 text-amber-500" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M9 21c0 .5.4 1 1 1h4c.6 0 1-.5 1-1v-1H9v1zm3-19C8.1 2 5 5.1 5 9c0 2.4 1.2 4.5 3 5.7V17c0 .5.4 1 1 1h6c.6 0 1-.5 1-1v-2.3c1.8-1.2 3-3.3 3-5.7 0-3.9-3.1-7-7-7z"/>
+          </svg>
+          {/* Subtle glow effect */}
+          <div className="absolute inset-0 rounded-full bg-amber-400/30 animate-pulse" />
+          {/* Small dot indicator */}
+          <div className="absolute -top-1 -right-1 w-2 h-2 bg-orange-500 rounded-full shadow-lg animate-pulse" />
+        </div>
+      ) : null
+    },
   ];
 
 
@@ -2103,6 +2121,7 @@ function CircuitWorkoutOverviewContent() {
               setShowLightingConfigInDrawer(true);
               setShowOptionsDrawer(true);
             }}
+            onLightingStateChange={setIsLightingEnabled}
           />
         )}
         </div>

@@ -7,11 +7,22 @@ interface LightingTabProps {
   circuitConfig?: CircuitConfig | null;
   roundsData?: RoundData[];
   onConfigureLight?: (config: { roundId: number; phaseType: string }) => void;
+  onLightingStateChange?: (isEnabled: boolean) => void;
 }
 
-export function LightingTab({ circuitConfig, roundsData, onConfigureLight }: LightingTabProps) {
+export function LightingTab({ circuitConfig, roundsData, onConfigureLight, onLightingStateChange }: LightingTabProps) {
   // State for controlling round view modes (global vs detailed)
   const [detailedRounds, setDetailedRounds] = React.useState<Record<number, boolean>>({});
+  
+  // State for global lighting on/off
+  const [isLightingEnabled, setIsLightingEnabled] = React.useState(true);
+  
+  // Notify parent when lighting state changes
+  React.useEffect(() => {
+    if (onLightingStateChange) {
+      onLightingStateChange(isLightingEnabled);
+    }
+  }, [isLightingEnabled, onLightingStateChange]);
   
   const toggleRoundMode = (roundId: number) => {
     setDetailedRounds(prev => ({ ...prev, [roundId]: !prev[roundId] }));
@@ -191,31 +202,71 @@ export function LightingTab({ circuitConfig, roundsData, onConfigureLight }: Lig
   }
 
   return (
-    <div className="space-y-6">
-      {/* Global Controls */}
-      <div className="flex justify-between items-center py-4 px-1">
-        <div className="flex items-center gap-3">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-            Lighting Setup
-          </h2>
-          <span className="text-sm text-gray-500 dark:text-gray-400">
-            {roundsWithLighting.length} rounds
-          </span>
+    <div className={`space-y-6 transition-all duration-500 ${
+      isLightingEnabled 
+        ? 'bg-gradient-to-br from-purple-50/80 via-amber-50/80 to-orange-50/80 dark:from-purple-900/30 dark:via-amber-900/30 dark:to-orange-900/30 rounded-2xl -mx-4 px-4 -mt-4 pt-4 -mb-6 pb-6' 
+        : ''
+    }`}>
+      {/* Enhanced Header Section with Dynamic Background */}
+      <div className={`relative rounded-2xl transition-all duration-300 ${
+        isLightingEnabled 
+          ? 'bg-gradient-to-br from-purple-50 via-amber-50 to-orange-50 dark:from-purple-900/20 dark:via-amber-900/20 dark:to-orange-900/20 border border-purple-200/50 dark:border-purple-700/50 shadow-lg' 
+          : 'bg-gray-50/40 dark:bg-gray-800/30 border border-gray-200/60 dark:border-gray-700/50 opacity-75'
+      }`}>
+        <div className="flex justify-between items-center py-6 px-6">
+          {/* Global Power Toggle - Left */}
+          <button 
+            onClick={() => setIsLightingEnabled(!isLightingEnabled)}
+            className={`relative flex items-center gap-3 px-6 py-3 rounded-2xl font-semibold text-sm transition-all duration-300 shadow-lg active:scale-95 ${
+              isLightingEnabled
+                ? 'bg-gradient-to-r from-purple-500 to-orange-500 hover:from-purple-600 hover:to-orange-600 text-white shadow-purple-500/25 hover:shadow-purple-500/40'
+                : 'bg-gray-200 hover:bg-gray-300 dark:bg-gray-600/70 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-400 shadow-gray-500/15'
+            }`}
+          >
+            {/* Toggle Switch */}
+            <div className={`w-10 h-5 rounded-full relative transition-all duration-300 ${
+              isLightingEnabled 
+                ? 'bg-white/30' 
+                : 'bg-gray-400/50 dark:bg-gray-500/50'
+            }`}>
+              <div className={`w-4 h-4 rounded-full absolute top-0.5 transition-all duration-300 ${
+                isLightingEnabled 
+                  ? 'left-5 bg-white shadow-sm' 
+                  : 'left-0.5 bg-gray-500 dark:bg-gray-400'
+              }`} />
+            </div>
+            
+            {/* Dynamic Text */}
+            <span className="font-bold">
+              {isLightingEnabled ? 'LIGHTS ON' : 'LIGHTS OFF'}
+            </span>
+          </button>
+          
+          {/* All Rounds Button - Right */}
+          <button className={`flex items-center gap-2 px-5 py-3 rounded-xl font-semibold text-sm transition-all duration-150 shadow-lg hover:shadow-xl active:scale-95 group ${
+            isLightingEnabled
+              ? 'bg-purple-500 hover:bg-purple-600 active:bg-purple-700 text-white'
+              : 'bg-gray-200 hover:bg-gray-300 active:bg-gray-400 dark:bg-gray-600/70 dark:hover:bg-gray-600 dark:active:bg-gray-500 text-gray-600 dark:text-gray-400 shadow-gray-500/15'
+          }`}>
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+            <span>All Rounds</span>
+          </button>
         </div>
         
-        {/* Global Lighting Control */}
-        <button className="flex items-center gap-2 px-5 py-3 bg-purple-500 hover:bg-purple-600 active:bg-purple-700 text-white rounded-xl font-semibold text-sm transition-all duration-150 shadow-lg hover:shadow-xl active:scale-95 group">
-          <svg className="w-4 h-4 group-hover:animate-pulse" fill="currentColor" viewBox="0 0 24 24">
-            <path d="M9 21c0 .5.4 1 1 1h4c.6 0 1-.5 1-1v-1H9v1zm3-19C8.1 2 5 5.1 5 9c0 2.4 1.2 4.5 3 5.7V17c0 .5.4 1 1 1h6c.6 0 1-.5 1-1v-2.3c1.8-1.2 3-3.3 3-5.7 0-3.9-3.1-7-7-7z"/>
-          </svg>
-          <span>All Rounds</span>
-        </button>
+        {/* Enhanced Status Bar */}
+        {isLightingEnabled && (
+          <div className="absolute bottom-0 left-1 right-1 h-1 bg-gradient-to-r from-purple-400 via-amber-400 to-orange-400 opacity-60 rounded-b-2xl"></div>
+        )}
       </div>
+
 
       {/* Rounds Visual Layout */}
       <div className="space-y-6">
         {roundsWithLighting.map((round) => (
-          <div key={round.id} className="border border-gray-200 dark:border-gray-700 rounded-lg p-6 bg-white dark:bg-gray-800">
+          <div key={round.id} className="border border-gray-200 dark:border-gray-700 rounded-lg p-6 bg-white dark:bg-gray-800 relative transition-all duration-300">
             
             {/* Round Header */}
             <div className="flex items-center justify-between mb-8">
@@ -366,11 +417,15 @@ export function LightingTab({ circuitConfig, roundsData, onConfigureLight }: Lig
                                       <div className="text-center group/light">
                                         <button 
                                           onClick={() => onConfigureLight?.({ roundId: round.id, phaseType: 'work' })}
-                                          className="relative w-20 h-20 rounded-full border-4 border-white shadow-lg active:scale-95 transition-transform duration-150 active:shadow-xl"
+                                          className="relative w-20 h-20 rounded-full border-4 border-white shadow-lg active:scale-95 transition-all duration-150 active:shadow-xl"
                                           style={{ 
                                             backgroundColor: item.workPhase.config?.color || '#6B7280',
                                             opacity: item.workPhase.config?.active ? Math.max(0.9, item.workPhase.config?.brightness / 100) : 0.5,
-                                            boxShadow: item.workPhase.config?.active ? `0 0 32px ${item.workPhase.config?.color}40, 0 8px 25px rgba(0,0,0,0.15)` : '0 8px 25px rgba(0,0,0,0.15)'
+                                            boxShadow: isLightingEnabled && item.workPhase.config?.active 
+                                              ? `0 0 32px ${item.workPhase.config?.color}40, 0 8px 25px rgba(0,0,0,0.15), 0 0 8px ${item.workPhase.config?.color}60` 
+                                              : item.workPhase.config?.active 
+                                              ? `0 0 16px ${item.workPhase.config?.color}30, 0 8px 25px rgba(0,0,0,0.15)` 
+                                              : '0 8px 25px rgba(0,0,0,0.15)'
                                           }}
                                         >
                                           <div className="text-xs font-black uppercase tracking-wider text-center leading-tight text-white drop-shadow-lg">
@@ -390,11 +445,15 @@ export function LightingTab({ circuitConfig, roundsData, onConfigureLight }: Lig
                                       <div className="text-center group/light">
                                         <button 
                                           onClick={() => onConfigureLight?.({ roundId: round.id, phaseType: 'rest' })}
-                                          className="relative w-20 h-20 rounded-full border-4 border-white shadow-lg active:scale-95 transition-transform duration-150 active:shadow-xl"
+                                          className="relative w-20 h-20 rounded-full border-4 border-white shadow-lg active:scale-95 transition-all duration-150 active:shadow-xl"
                                           style={{ 
                                             backgroundColor: item.restPhase.config?.color || '#6B7280',
                                             opacity: item.restPhase.config?.active ? Math.max(0.9, item.restPhase.config?.brightness / 100) : 0.5,
-                                            boxShadow: item.restPhase.config?.active ? `0 0 32px ${item.restPhase.config?.color}40, 0 8px 25px rgba(0,0,0,0.15)` : '0 8px 25px rgba(0,0,0,0.15)'
+                                            boxShadow: isLightingEnabled && item.restPhase.config?.active 
+                                              ? `0 0 32px ${item.restPhase.config?.color}40, 0 8px 25px rgba(0,0,0,0.15), 0 0 8px ${item.restPhase.config?.color}60` 
+                                              : item.restPhase.config?.active 
+                                              ? `0 0 16px ${item.restPhase.config?.color}30, 0 8px 25px rgba(0,0,0,0.15)` 
+                                              : '0 8px 25px rgba(0,0,0,0.15)'
                                           }}
                                         >
                                           <div className="text-xs font-black uppercase tracking-wider text-center leading-tight text-white drop-shadow-lg">
@@ -427,11 +486,15 @@ export function LightingTab({ circuitConfig, roundsData, onConfigureLight }: Lig
                                       <div className="text-center group/light">
                                         <button 
                                           onClick={() => onConfigureLight?.({ roundId: round.id, phaseType: item.phase.type })}
-                                          className="relative w-20 h-20 rounded-full border-4 border-white shadow-lg active:scale-95 transition-transform duration-150 active:shadow-xl"
+                                          className="relative w-20 h-20 rounded-full border-4 border-white shadow-lg active:scale-95 transition-all duration-150 active:shadow-xl"
                                           style={{ 
                                             backgroundColor: item.phase.config?.color || '#6B7280',
                                             opacity: item.phase.config?.active ? Math.max(0.9, item.phase.config?.brightness / 100) : 0.5,
-                                            boxShadow: item.phase.config?.active ? `0 0 32px ${item.phase.config?.color}40, 0 8px 25px rgba(0,0,0,0.15)` : '0 8px 25px rgba(0,0,0,0.15)'
+                                            boxShadow: isLightingEnabled && item.phase.config?.active 
+                                              ? `0 0 32px ${item.phase.config?.color}40, 0 8px 25px rgba(0,0,0,0.15), 0 0 8px ${item.phase.config?.color}60` 
+                                              : item.phase.config?.active 
+                                              ? `0 0 16px ${item.phase.config?.color}30, 0 8px 25px rgba(0,0,0,0.15)` 
+                                              : '0 8px 25px rgba(0,0,0,0.15)'
                                           }}
                                         >
                                           <div className="text-xs font-black uppercase tracking-wider text-center leading-tight text-white drop-shadow-lg">
@@ -471,11 +534,15 @@ export function LightingTab({ circuitConfig, roundsData, onConfigureLight }: Lig
                                   {/* Light Preview */}
                                   <button 
                                     onClick={() => onConfigureLight?.({ roundId: round.id, phaseType: phase.type })}
-                                    className="relative w-20 h-20 rounded-full flex items-center justify-center border-4 border-white shadow-lg active:scale-95 transition-transform duration-150 active:shadow-xl"
+                                    className="relative w-20 h-20 rounded-full flex items-center justify-center border-4 border-white shadow-lg active:scale-95 transition-all duration-150 active:shadow-xl"
                                     style={{ 
                                       backgroundColor: phase.config?.color || '#6B7280',
                                       opacity: phase.config?.active ? Math.max(0.85, phase.config?.brightness / 100) : 0.4,
-                                      boxShadow: phase.config?.active ? `0 0 24px ${phase.config?.color}50, 0 8px 25px rgba(0,0,0,0.15)` : '0 8px 25px rgba(0,0,0,0.15)'
+                                      boxShadow: isLightingEnabled && phase.config?.active 
+                                        ? `0 0 24px ${phase.config?.color}50, 0 8px 25px rgba(0,0,0,0.15), 0 0 6px ${phase.config?.color}70` 
+                                        : phase.config?.active 
+                                        ? `0 0 12px ${phase.config?.color}40, 0 8px 25px rgba(0,0,0,0.15)` 
+                                        : '0 8px 25px rgba(0,0,0,0.15)'
                                     }}
                                   >
                                     <div className="text-xs font-extrabold uppercase tracking-wider text-center leading-tight text-white drop-shadow-lg">
