@@ -323,8 +323,22 @@ export default function CircuitConfigPage() {
       return null;
     }
     
-    // Show Next button for intermediate steps
-    if ((workoutType === 'template' && currentStep === 4) || (workoutType === 'custom' && currentStep === 2)) {
+    // Show Continue button for template review step
+    if (workoutType === 'template' && currentStep === 4) {
+      return (
+        <Button
+          size="sm"
+          onClick={() => handleNext()}
+          className="flex items-center gap-1"
+        >
+          <span className="text-sm">Continue</span>
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+      );
+    }
+
+    // Show Generate Workout button for final steps
+    if ((workoutType === 'template' && currentStep === 5) || (workoutType === 'custom' && currentStep === 2)) {
       return (
         <Button
           size="sm"
@@ -346,7 +360,7 @@ export default function CircuitConfigPage() {
       return (
         <Button
           size="sm"
-          onClick={handleNext}
+          onClick={() => handleNext()}
           className="flex items-center gap-1"
         >
           <span className="text-sm">Next</span>

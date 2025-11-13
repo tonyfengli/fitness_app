@@ -1107,7 +1107,16 @@ export function AddRoundDrawer({ isOpen, onClose, onAdd, isAdding = false, editM
                     <div>
                       <p className="text-xs text-gray-500 dark:text-gray-400">Duration</p>
                       <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                        {config.totalDuration} min
+                        {(() => {
+                          const totalDuration = config.totalDuration || 0;
+                          const mins = Math.floor(totalDuration / 60);
+                          const secs = totalDuration % 60;
+                          if (mins === 0) {
+                            return `${secs}s`;
+                          } else {
+                            return `${mins}:${secs.toString().padStart(2, '0')}`;
+                          }
+                        })()}
                       </p>
                     </div>
                   )}
