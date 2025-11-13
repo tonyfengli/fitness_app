@@ -175,6 +175,31 @@ function ClientsPageContent() {
   // All clients returned already have packages and attendance data
   const clientsWithPackages = clientsData || [];
   
+  // Log trainer package data for debugging
+  console.log('🔍 All clients data:', clientsWithPackages.map(client => ({
+    name: client.name,
+    role: client.role,
+    hasCurrentPackage: !!client.currentPackage,
+    hasAttendance: !!client.attendance,
+    packageCount: client.packages?.length || 0,
+    packages: client.packages
+  })));
+
+  // Specifically check for trainers with packages
+  const trainersWithPackages = clientsWithPackages.filter(client => 
+    client.role === 'trainer' && client.packages && client.packages.length > 0
+  );
+  
+  if (trainersWithPackages.length > 0) {
+    console.log('⚠️ Found trainers with packages:', trainersWithPackages.map(trainer => ({
+      name: trainer.name,
+      email: trainer.email,
+      packageCount: trainer.packages.length,
+      packages: trainer.packages,
+      currentPackage: trainer.currentPackage
+    })));
+  }
+
   // Filter clients based on search query and sort by attendance percentage (lowest first)
   const filteredClients = clientsWithPackages
     .filter(client =>
@@ -286,9 +311,65 @@ function ClientsPageContent() {
           <div className="space-y-4">
             {filteredClients.map((client) => {
               const initials = getInitials(client.name);
+              const isTrainer = client.role === 'trainer';
               
-              // Use real package data and attendance (all clients here have packages and attendance)
-              const packageData = client.currentPackage!; // Non-null assertion safe here
+              // Handle trainer vs client display differently
+              if (isTrainer) {
+                return (
+                  <button
+                    key={client.id}
+                    onClick={() => {
+                      router.push(`/clients/${client.id}?filter=${encodeURIComponent(selectedFilter)}`);
+                    }}
+                    className="w-full bg-white dark:bg-gray-800 rounded-2xl shadow-sm transition-all duration-200 cursor-pointer hover:shadow-lg active:scale-[0.98] transform overflow-hidden group"
+                  >
+                    <div className="p-5">
+                      <div className="flex items-center gap-4">
+                        {/* Circled initials - different color for trainers */}
+                        <div className="relative">
+                          <div className="w-14 h-14 bg-gradient-to-br from-purple-500 to-indigo-500 rounded-full flex items-center justify-center shadow-md">
+                            <span className="text-white font-bold text-xl">{initials}</span>
+                          </div>
+                          {/* Trainer badge */}
+                          <div className="absolute -bottom-1 -right-1 bg-white dark:bg-gray-800 rounded-full p-0.5">
+                            <div className="bg-purple-600 dark:bg-purple-500 text-white text-[8px] font-bold w-6 h-6 rounded-full flex items-center justify-center">
+                              T
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Trainer info */}
+                        <div className="flex-1 text-left">
+                          <div className="flex items-center gap-2">
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white leading-tight">{client.name}</h3>
+                            <span className="px-2 py-1 bg-purple-100 text-purple-800 dark:bg-purple-900/20 dark:text-purple-400 text-xs font-medium rounded-full">
+                              Trainer
+                            </span>
+                          </div>
+                          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                            {client.email}
+                          </p>
+                        </div>
+
+                        {/* Chevron */}
+                        <div className="flex items-center gap-3">
+                          <svg className="w-5 h-5 text-gray-300 dark:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
+                          </svg>
+                        </div>
+                      </div>
+                    </div>
+                  </button>
+                );
+              }
+
+              // Client display logic (existing) - check if client has packages
+              if (!client.currentPackage || !client.attendance) {
+                // Client without package data - shouldn't happen but handle gracefully
+                return null;
+              }
+              
+              const packageData = client.currentPackage;
               const attendanceData = client.attendance;
               const stats = {
                 commitment: packageData.sessionsPerWeek,

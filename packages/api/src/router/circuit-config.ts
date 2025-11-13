@@ -38,14 +38,6 @@ function ensureRoundTemplates(config: any) {
               }
             };
           } else if (rt.template.type === 'stations_round') {
-            console.log('[BUG TRACE - ensureRoundTemplates] Processing stations_round:', {
-              roundNumber: rt.roundNumber,
-              hasStationCircuits: !!rt.template.stationCircuits,
-              stationCircuitsKeys: rt.template.stationCircuits ? Object.keys(rt.template.stationCircuits) : [],
-              stationCircuitsData: rt.template.stationCircuits,
-              workDuration: rt.template.workDuration,
-              restDuration: rt.template.restDuration
-            });
             
             const processedTemplate = {
               ...rt,
@@ -61,11 +53,6 @@ function ensureRoundTemplates(config: any) {
               }
             };
             
-            console.log('[BUG TRACE - ensureRoundTemplates] Processed stations_round result:', {
-              roundNumber: processedTemplate.roundNumber,
-              hasStationCircuits: !!processedTemplate.template.stationCircuits,
-              stationCircuitsData: processedTemplate.template.stationCircuits
-            });
             
             return processedTemplate;
           } else if (rt.template.type === 'amrap_round') {
@@ -133,12 +120,6 @@ export const circuitConfigRouter = createTRPCRouter({
         "type" in session.templateConfig &&
         session.templateConfig.type === "circuit"
       ) {
-        console.log('[BUG TRACE - getBySession] Processing circuit config:', {
-          sessionId: input.sessionId,
-          templateType: session.templateType,
-          hasTemplateConfig: !!session.templateConfig,
-          templateConfigType: (session.templateConfig as any)?.type
-        });
         
         const result = ensureRoundTemplates(session.templateConfig);
         
@@ -157,14 +138,12 @@ export const circuitConfigRouter = createTRPCRouter({
               .filter(name => name?.startsWith('Round '))
           );
           
-          console.log('[BUG TRACE - getBySession] Found rounds with exercises:', Array.from(existingRoundNames));
           
           // Filter roundTemplates to only include rounds that have exercises
           const filteredRoundTemplates = result.config.roundTemplates.filter((rt: any) => {
             const roundName = `Round ${rt.roundNumber}`;
             const hasExercises = existingRoundNames.has(roundName);
             if (!hasExercises) {
-              console.log('[BUG TRACE - getBySession] Filtering out orphaned round:', roundName);
             }
             return hasExercises;
           });
@@ -177,7 +156,6 @@ export const circuitConfigRouter = createTRPCRouter({
           
           // Update exercise groupNames to match the new round numbers
           if (filteredRoundTemplates.length !== (session.templateConfig as any).config?.roundTemplates?.length) {
-            console.log('[BUG TRACE - getBySession] Updating exercise groupNames after renumbering...');
             
             // Build mapping of old round names to new round names
             const roundNameMapping: Record<string, string> = {};
@@ -189,7 +167,6 @@ export const circuitConfigRouter = createTRPCRouter({
               }
             });
             
-            console.log('[BUG TRACE - getBySession] Round name mapping:', roundNameMapping);
             
             // Update all exercises with the new round names
             for (const [oldName, newName] of Object.entries(roundNameMapping)) {
@@ -216,31 +193,8 @@ export const circuitConfigRouter = createTRPCRouter({
           result.config.roundTemplates = renumberedRoundTemplates;
           result.config.rounds = renumberedRoundTemplates.length;
           
-          console.log('[BUG TRACE - getBySession] After filtering orphaned rounds:', {
-            originalCount: (session.templateConfig as any).config?.roundTemplates?.length || 0,
-            filteredCount: renumberedRoundTemplates.length,
-            filteredRounds: renumberedRoundTemplates.map((rt: any) => rt.roundNumber),
-            roundTemplateDetails: renumberedRoundTemplates.map((rt: any) => ({
-              roundNumber: rt.roundNumber,
-              type: rt.template?.type,
-              workDuration: rt.template?.workDuration,
-              restDuration: rt.template?.restDuration,
-              repeatTimes: rt.template?.repeatTimes
-            }))
-          });
         }
         
-        console.log('[BUG TRACE - getBySession] After ensureRoundTemplates and filtering:', {
-          sessionId: input.sessionId,
-          hasRoundTemplates: !!result.config?.roundTemplates,
-          roundTemplatesCount: result.config?.roundTemplates?.length || 0,
-          roundTemplatesWithStationCircuits: result.config?.roundTemplates?.filter((rt: any) => 
-            rt.template.type === 'stations_round' && rt.template.stationCircuits
-          ).map((rt: any) => ({
-            roundNumber: rt.roundNumber,
-            stationCircuitsKeys: Object.keys(rt.template.stationCircuits)
-          })) || []
-        });
         
         return result;
       }
@@ -448,7 +402,6 @@ export const circuitConfigRouter = createTRPCRouter({
     .input(CircuitConfigInputSchema)
     .mutation(async ({ ctx, input }) => {
       console.log('[CircuitConfig API] updatePublic called with input:', JSON.stringify(input, null, 2));
-      console.log('[BUG TRACE] Circuit config update - sourceWorkoutId:', input.config.sourceWorkoutId);
       
       // Get the session to verify it exists and is a circuit session
       const session = await ctx.db
@@ -458,11 +411,6 @@ export const circuitConfigRouter = createTRPCRouter({
         .limit(1)
         .then((res) => res[0]);
       
-      console.log('[BUG TRACE] Session before update:', {
-        sessionId: session?.id,
-        hasTemplateConfig: !!session?.templateConfig,
-        currentSourceWorkoutId: (session?.templateConfig as any)?.config?.sourceWorkoutId,
-      });
 
       if (!session) {
         throw new TRPCError({
@@ -506,35 +454,15 @@ export const circuitConfigRouter = createTRPCRouter({
       
       // Validate station circuit configurations if they exist
       if (input.config.roundTemplates) {
-        console.log('[BUG TRACE - updatePublic] Processing roundTemplates for validation:', {
-          roundTemplatesCount: input.config.roundTemplates.length,
-          roundTemplates: input.config.roundTemplates.map(rt => ({
-            roundNumber: rt.roundNumber,
-            type: rt.template.type,
-            hasStationCircuits: rt.template.type === 'stations_round' ? !!(rt.template as any).stationCircuits : false,
-            stationCircuitsKeys: rt.template.type === 'stations_round' && (rt.template as any).stationCircuits ? Object.keys((rt.template as any).stationCircuits) : []
-          }))
-        });
         
         for (const roundTemplate of input.config.roundTemplates) {
           if (roundTemplate.template.type === 'stations_round' && 
               roundTemplate.template.stationCircuits) {
-            console.log('[BUG TRACE - updatePublic] Validating stations_round with stationCircuits:', {
-              roundNumber: roundTemplate.roundNumber,
-              stationWorkDuration: roundTemplate.template.workDuration,
-              stationCircuits: roundTemplate.template.stationCircuits,
-              stationCircuitsKeys: Object.keys(roundTemplate.template.stationCircuits)
-            });
             
             const stationWorkDuration = roundTemplate.template.workDuration;
             
             // Validate each station circuit configuration
             for (const [stationIndex, circuitConfig] of Object.entries(roundTemplate.template.stationCircuits)) {
-              console.log('[BUG TRACE - updatePublic] Validating station circuit:', {
-                stationIndex,
-                circuitConfig,
-                stationWorkDuration
-              });
               
               const { workDuration, restDuration, sets } = circuitConfig;
               const totalConfiguredTime = (workDuration * sets) + (restDuration * (sets - 1));

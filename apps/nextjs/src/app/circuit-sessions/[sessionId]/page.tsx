@@ -53,7 +53,7 @@ interface SessionDetailPageProps {
   }>;
 }
 
-// Client interface to match API response structure
+// Client interface to match API response structure (includes both clients and trainers)
 interface Client {
   id: string;
   name: string;
@@ -64,6 +64,8 @@ interface Client {
     skillLevel: string;
     notes?: string;
   } | null;
+  role?: "client" | "trainer"; // User role
+  packageName?: string; // Training package name
   status: "new" | "regular" | "returning"; // Derived status for UI
   lastSeen: string; // Will be derived from session attendance or profile data
   isCheckedIn: boolean; // Whether user is checked into this session
@@ -432,15 +434,16 @@ export default function SessionDetailPage({ params }: SessionDetailPageProps) {
   // Create a map of checked-in user IDs for quick lookup
   const checkedInUserIds = new Set(checkedInClients?.map(client => client.userId) || []);
 
-  // Transform API clients data to match UI interface
-  const clients: Client[] = clientsData?.map((client) => {
-    // Determine client status based on profile and activity
-    // This is a simplified logic - you might want more sophisticated status determination
-    const getClientStatus = (): "new" | "regular" | "returning" => {
-      if (!client.profile) return "new";
-      // You could check session attendance history here
-      // For now, using creation date as heuristic
-      const profileAge = client.createdAt ? new Date().getTime() - new Date(client.createdAt).getTime() : 0;
+  // Transform API users data (clients and trainers) to match UI interface
+  const clients: Client[] = clientsData?.map((user) => {
+    // Determine user status based on role and profile
+    const getUserStatus = (): "new" | "regular" | "returning" => {
+      // Trainers are always considered "regular"
+      if (user.role === "trainer") return "regular";
+      
+      if (!user.profile) return "new";
+      // For clients, use creation date as heuristic
+      const profileAge = user.createdAt ? new Date().getTime() - new Date(user.createdAt).getTime() : 0;
       const daysOld = profileAge / (1000 * 60 * 60 * 24);
       
       if (daysOld < 7) return "new";
@@ -448,18 +451,20 @@ export default function SessionDetailPage({ params }: SessionDetailPageProps) {
       return "regular";
     };
 
-    // Check if this client is already checked in
-    const isCheckedIn = checkedInUserIds.has(client.id);
-    const checkedInData = checkedInClients?.find(c => c.userId === client.id);
+    // Check if this user is already checked in
+    const isCheckedIn = checkedInUserIds.has(user.id);
+    const checkedInData = checkedInClients?.find(c => c.userId === user.id);
 
     return {
-      id: client.id,
-      name: client.name || client.email.split("@")[0], // Fallback to email username if no name
-      email: client.email,
-      phone: client.phone,
-      profile: client.profile,
-      status: getClientStatus(),
-      lastSeen: client.createdAt || new Date().toISOString(), // TODO: Replace with actual last session attendance
+      id: user.id,
+      name: user.name || user.email.split("@")[0], // Fallback to email username if no name
+      email: user.email,
+      phone: user.phone,
+      profile: user.profile,
+      role: user.role, // Add role to client interface
+      packageName: user.packageName, // Add package info
+      status: getUserStatus(),
+      lastSeen: user.createdAt || new Date().toISOString(),
       isCheckedIn,
       checkedInAt: checkedInData?.checkedInAt || null,
     };
@@ -646,19 +651,32 @@ export default function SessionDetailPage({ params }: SessionDetailPageProps) {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between">
                         <div className="flex-1 min-w-0">
-                          <h3 className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                            {client.name}
-                          </h3>
-                          {allSessionUserIds.has(client.id) && (
-                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                              {client.isCheckedIn 
-                                ? client.checkedInAt 
-                                  ? `Checked in at ${new Date(client.checkedInAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
-                                  : "Checked in"
-                                : "Registered • Not checked in"
-                              }
-                            </p>
-                          )}
+                          <div className="flex items-center gap-2">
+                            <h3 className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                              {client.name}
+                            </h3>
+                            {client.role === "trainer" && (
+                              <span className="px-1.5 py-0.5 bg-purple-100 text-purple-800 dark:bg-purple-900/20 dark:text-purple-400 text-xs font-medium rounded-full">
+                                T
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                            {client.packageName && (
+                              <span className="font-medium">{client.packageName}</span>
+                            )}
+                            {allSessionUserIds.has(client.id) && (
+                              <>
+                                {client.packageName && " • "}
+                                {client.isCheckedIn 
+                                  ? client.checkedInAt 
+                                    ? `Checked in at ${new Date(client.checkedInAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+                                    : "Checked in"
+                                  : "Registered • Not checked in"
+                                }
+                              </>
+                            )}
+                          </div>
                         </div>
                         <div className="flex flex-col items-end gap-1 min-w-[80px]">
                           <span className={`w-full px-2.5 py-1 rounded-lg text-xs font-medium text-center transition-all ${

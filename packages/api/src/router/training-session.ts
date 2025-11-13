@@ -5415,7 +5415,6 @@ Set your goals and preferences for today's session.`;
       }),
     )
     .query(({ input }) => {
-      console.log(`[getAvailablePrograms] Fetching available programs for business: ${input.businessId}`);
 
       // Return all possible program values except 'unassigned'
       const programs = [
@@ -5425,7 +5424,6 @@ Set your goals and preferences for today's session.`;
         { id: 'monday_cg', label: 'Monday CG' },
       ];
 
-      console.log(`[getAvailablePrograms] Returning ${programs.length} programs`);
       return programs;
     }),
 

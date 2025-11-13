@@ -2,7 +2,7 @@ import type { TRPCRouterRecord } from "@trpc/server";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
-import { and, eq, gte, lte, ne, count, sql } from "@acme/db";
+import { and, eq, gte, lte, ne, count, sql, or } from "@acme/db";
 import { user, UserTrainingPackage, TrainingPackage, UserTrainingSession, TrainingSession, ChangeUserPackageSchema } from "@acme/db/schema";
 
 // Import week utility functions for package date alignment
@@ -98,31 +98,6 @@ export const clientsRouter = {
         )
         .orderBy(TrainingSession.scheduledAt);
 
-      // Debug logging for specific client
-      if (clientId === '4wnrsk1032vmhjxn5wl' || clientId === '4263bc69-f06c-4cf1-83ec-4756ea5bf94c') {
-        console.log(`🔍 [Client ${clientId}] Attendance History Query:`, {
-          clientId,
-          dateRange: { 
-            startDate, 
-            endDate,
-            startFormatted: new Date(startDate).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }),
-            endFormatted: new Date(endDate).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
-          },
-          foundSessions: attendanceHistory.length
-        });
-        attendanceHistory.forEach((session, index) => {
-          console.log(`📅 [Session ${index + 1}]`, {
-            date: session.scheduledAt?.toISOString(),
-            dateFormatted: session.scheduledAt?.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
-            name: session.sessionName,
-            status: session.status,
-            sessionStatus: session.sessionStatus,
-            withinRange: session.scheduledAt && 
-              session.scheduledAt >= new Date(startDate) && 
-              session.scheduledAt <= new Date(endDate)
-          });
-        });
-      }
 
       return attendanceHistory;
     }),
@@ -148,7 +123,7 @@ export const clientsRouter = {
       throw new Error("Trainer must be associated with a business");
     }
 
-    // Fetch all clients
+    // Fetch all clients and trainers
     const allClients = await ctx.db
       .select({
         id: user.id,
@@ -156,20 +131,22 @@ export const clientsRouter = {
         email: user.email,
         phone: user.phone,
         createdAt: user.createdAt,
+        role: user.role,
       })
       .from(user)
       .where(
         and(
           eq(user.businessId, businessId),
-          eq(user.role, "client")
+          or(eq(user.role, "client"), eq(user.role, "trainer"))
         )
       )
       .orderBy(user.name);
 
-    // For each client, fetch ALL their packages that overlap with the date range
+
+    // For each client/trainer, fetch their packages (both clients and trainers can have packages)
     const clientsWithPackages = await Promise.all(
       allClients.map(async (client) => {
-        // Fetch all packages for this user that overlap with the filter date range
+        // Fetch packages for all users (clients AND trainers) that overlap with the filter date range
         const userPackages = await ctx.db
           .select({
             packageId: TrainingPackage.id,
@@ -197,7 +174,7 @@ export const clientsRouter = {
           )
           .orderBy(UserTrainingPackage.startDate);
 
-        // If no packages, return null to filter out later
+        // If no packages for this user, return null to filter out later
         if (userPackages.length === 0) {
           return null;
         }
@@ -209,12 +186,12 @@ export const clientsRouter = {
       })
     );
 
-    // Filter out clients without packages
+    // Filter out users without packages (both clients and trainers)
     const clientsWithPackagesFiltered = clientsWithPackages.filter(
       (client): client is NonNullable<typeof client> => client !== null
     );
 
-    // Calculate attendance for each client with their package transitions
+    // Calculate attendance for each client and trainer with their package transitions
     const clientsWithAttendance = await Promise.all(
       clientsWithPackagesFiltered.map(async (client) => {
         // Get all complete weeks in the filter date range
@@ -278,61 +255,6 @@ export const clientsRouter = {
           ? Math.round((attendedSessions / totalExpectedSessions) * 100)
           : 0;
 
-        // Debug specific client - both the original debug client and the new one
-        if (client.id === '4wnrsk1032vmhjxn5wl' || client.id === '4263bc69-f06c-4cf1-83ec-4756ea5bf94c') {
-          console.log(`🔍 [Client ${client.id}] Backend calculation with PACKAGE TRANSITIONS:`, {
-            clientName: client.name,
-            clientId: client.id,
-            numberOfPackagesInRange: client.packages.length,
-            packages: client.packages.map(pkg => ({
-              name: pkg.packageName,
-              sessionsPerWeek: pkg.sessionsPerWeek,
-              startDate: new Date(pkg.startDate!).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }),
-              endDate: new Date(pkg.endDate!).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }),
-            })),
-            filterDates: { 
-              start: startDate, 
-              end: endDate,
-              startFormatted: new Date(startDate).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }),
-              endFormatted: new Date(endDate).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
-            },
-            weekByWeekBreakdown: allWeeksInRange.map((week, index) => {
-              const weekKey = `${week.start.toISOString()}-${week.end.toISOString()}`;
-              const packageInfo = weekPackageMap.get(weekKey);
-              return {
-                weekNumber: index + 1,
-                start: week.start.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
-                end: week.end.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
-                activePackage: packageInfo ? packageInfo.packageName : 'NO PACKAGE',
-                sessionsExpected: packageInfo ? packageInfo.sessionsPerWeek : 0,
-                reason: packageInfo ? 'Package active for entire week' : 'No package covers entire week'
-              };
-            }),
-            calculations: {
-              attendedSessions,
-              totalExpectedSessions,
-              attendancePercentage,
-              calculation: `${attendedSessions} attended / ${totalExpectedSessions} expected = ${attendancePercentage}%`
-            },
-            packageTransitions: (() => {
-              const transitions = [];
-              for (let i = 0; i < client.packages.length - 1; i++) {
-                const current = client.packages[i];
-                const next = client.packages[i + 1];
-                if (current && next) {
-                  transitions.push({
-                    from: `${current.packageName} (${current.sessionsPerWeek}x)`,
-                    to: `${next.packageName} (${next.sessionsPerWeek}x)`,
-                    transitionDate: new Date(next.startDate!).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }),
-                    type: next.sessionsPerWeek! > current.sessionsPerWeek! ? 'UPGRADE' : 
-                          next.sessionsPerWeek! < current.sessionsPerWeek! ? 'DOWNGRADE' : 'RENEWAL'
-                  });
-                }
-              }
-              return transitions;
-            })()
-          });
-        }
 
         // For frontend compatibility, we need to return the "current" package
         // This will be the package active today, or the most recent package
@@ -374,10 +296,10 @@ export const clientsRouter = {
   }),
 
   getClientsWithActivePackages: protectedProcedure.query(async ({ ctx }) => {
-    // Only trainers should be able to see all clients
+    // Only trainers should be able to see all clients and trainers with packages
     const currentUser = ctx.session?.user as SessionUser;
     if (currentUser?.role !== "trainer") {
-      throw new Error("Only trainers can view clients with active packages");
+      throw new Error("Only trainers can view users with active packages");
     }
 
     const businessId = currentUser.businessId;
@@ -385,8 +307,8 @@ export const clientsRouter = {
       throw new Error("Trainer must be associated with a business");
     }
 
-    // Fetch clients with their most recent active training package
-    // Use a subquery to get the most recent (latest start_date) active package per client
+    // Fetch clients and trainers with their most recent active training package
+    // Use a subquery to get the most recent (latest start_date) active package per user
     const mostRecentPackageSubquery = ctx.db
       .select({
         userId: UserTrainingPackage.userId,
@@ -397,13 +319,14 @@ export const clientsRouter = {
       .groupBy(UserTrainingPackage.userId)
       .as('most_recent_packages');
 
-    const clientsWithActivePackages = await ctx.db
+    const usersWithActivePackages = await ctx.db
       .select({
         id: user.id,
         name: user.name,
         email: user.email,
         phone: user.phone,
         createdAt: user.createdAt,
+        role: user.role,
         // Package info
         packageId: TrainingPackage.id,
         packageName: TrainingPackage.name,
@@ -437,12 +360,12 @@ export const clientsRouter = {
       .where(
         and(
           eq(user.businessId, businessId),
-          eq(user.role, "client")
+          or(eq(user.role, "client"), eq(user.role, "trainer"))
         )
       )
       .orderBy(user.name);
 
-    return clientsWithActivePackages;
+    return usersWithActivePackages;
   }),
 
   getClientsWithInactivePackages: protectedProcedure.query(async ({ ctx }) => {
