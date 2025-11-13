@@ -6,9 +6,10 @@ import type { CircuitConfig, RoundData } from "@acme/ui-shared";
 interface LightingTabProps {
   circuitConfig?: CircuitConfig | null;
   roundsData?: RoundData[];
+  onConfigureLight?: (config: { roundId: number; phaseType: string }) => void;
 }
 
-export function LightingTab({ circuitConfig, roundsData }: LightingTabProps) {
+export function LightingTab({ circuitConfig, roundsData, onConfigureLight }: LightingTabProps) {
   // State for controlling round view modes (global vs detailed)
   const [detailedRounds, setDetailedRounds] = React.useState<Record<number, boolean>>({});
   
@@ -364,6 +365,7 @@ export function LightingTab({ circuitConfig, roundsData }: LightingTabProps) {
                                       {/* Work Light */}
                                       <div className="text-center group/light">
                                         <button 
+                                          onClick={() => onConfigureLight?.({ roundId: round.id, phaseType: 'work' })}
                                           className="relative w-20 h-20 rounded-full border-4 border-white shadow-lg active:scale-95 transition-transform duration-150 active:shadow-xl"
                                           style={{ 
                                             backgroundColor: item.workPhase.config?.color || '#6B7280',
@@ -387,6 +389,7 @@ export function LightingTab({ circuitConfig, roundsData }: LightingTabProps) {
                                       {/* Rest Light */}
                                       <div className="text-center group/light">
                                         <button 
+                                          onClick={() => onConfigureLight?.({ roundId: round.id, phaseType: 'rest' })}
                                           className="relative w-20 h-20 rounded-full border-4 border-white shadow-lg active:scale-95 transition-transform duration-150 active:shadow-xl"
                                           style={{ 
                                             backgroundColor: item.restPhase.config?.color || '#6B7280',
@@ -423,6 +426,7 @@ export function LightingTab({ circuitConfig, roundsData }: LightingTabProps) {
                                     <div className="flex justify-center">
                                       <div className="text-center group/light">
                                         <button 
+                                          onClick={() => onConfigureLight?.({ roundId: round.id, phaseType: item.phase.type })}
                                           className="relative w-20 h-20 rounded-full border-4 border-white shadow-lg active:scale-95 transition-transform duration-150 active:shadow-xl"
                                           style={{ 
                                             backgroundColor: item.phase.config?.color || '#6B7280',
@@ -466,6 +470,7 @@ export function LightingTab({ circuitConfig, roundsData }: LightingTabProps) {
                                 <div className="flex-1 flex items-center gap-6">
                                   {/* Light Preview */}
                                   <button 
+                                    onClick={() => onConfigureLight?.({ roundId: round.id, phaseType: phase.type })}
                                     className="relative w-20 h-20 rounded-full flex items-center justify-center border-4 border-white shadow-lg active:scale-95 transition-transform duration-150 active:shadow-xl"
                                     style={{ 
                                       backgroundColor: phase.config?.color || '#6B7280',

@@ -40,6 +40,7 @@ import { useScrollManager } from "~/hooks/useScrollManager";
 import { TabNavigation } from "@acme/ui-shared";
 import { WorkoutTab } from "~/components/workout/WorkoutTab";
 import { LightingTab } from "~/components/workout/LightingTab";
+import { LightingConfigDrawer } from "~/components/workout/LightingConfigDrawer";
 
 
 // World-class Circuit Timer Calculator Component
@@ -476,6 +477,13 @@ function CircuitWorkoutOverviewContent() {
   const [showReplaceInDrawer, setShowReplaceInDrawer] = useState(false);
   const [showAddExerciseInDrawer, setShowAddExerciseInDrawer] = useState(false);
   const [showAddRoundInDrawer, setShowAddRoundInDrawer] = useState(false);
+  const [showLightingConfigInDrawer, setShowLightingConfigInDrawer] = useState(false);
+  const [selectedLightForConfig, setSelectedLightForConfig] = useState<{
+    roundId: number;
+    phaseType: string;
+    phaseLabel: string;
+    currentConfig: any;
+  } | null>(null);
   const [selectedItemForOptions, setSelectedItemForOptions] = useState<{
     type: 'round' | 'station' | 'exercise';
     id: string;
@@ -2085,6 +2093,16 @@ function CircuitWorkoutOverviewContent() {
           <LightingTab 
             circuitConfig={circuitConfig as any}
             roundsData={roundsData as any}
+            onConfigureLight={({ roundId, phaseType }) => {
+              setSelectedLightForConfig({ 
+                roundId, 
+                phaseType, 
+                phaseLabel: phaseType === 'work' ? 'WORK' : phaseType === 'rest' ? 'REST' : phaseType.toUpperCase(),
+                currentConfig: null 
+              });
+              setShowLightingConfigInDrawer(true);
+              setShowOptionsDrawer(true);
+            }}
           />
         )}
         </div>
@@ -2689,6 +2707,8 @@ function CircuitWorkoutOverviewContent() {
           setShowReplaceInDrawer(false);
           setShowAddExerciseInDrawer(false);
           setShowAddRoundInDrawer(false);
+          setShowLightingConfigInDrawer(false);
+          setSelectedLightForConfig(null);
         }}
         title={
           showRepsInDrawer 
@@ -2701,6 +2721,8 @@ function CircuitWorkoutOverviewContent() {
               : addExerciseModalConfig?.mode === 'create-station'
               ? `Create Station ${(addExerciseModalConfig?.targetStation || 0) + 1}`
               : `Add Exercise to ${addExerciseModalConfig?.roundName || 'Round'}`
+            : showLightingConfigInDrawer
+            ? "Configure Light"
             : showAddRoundInDrawer
             ? (addRoundDrawerEditMode ? `Edit ${selectedItemForOptions?.name || 'Round'}` : "Add New Round")
             : selectedItemForOptions?.type === 'round' 
@@ -2852,13 +2874,32 @@ function CircuitWorkoutOverviewContent() {
               editMode={addRoundDrawerEditMode || undefined}
             />
               );
+            } else if (showLightingConfigInDrawer && selectedLightForConfig) {
+              return (
+                <LightingConfigDrawer
+                  roundId={selectedLightForConfig.roundId}
+                  phaseType={selectedLightForConfig.phaseType}
+                  phaseLabel={selectedLightForConfig.phaseType === 'work' ? 'WORK' : 'REST'}
+                  onSave={() => {
+                    // TODO: Implement lighting configuration save logic
+                    setShowLightingConfigInDrawer(false);
+                    setShowOptionsDrawer(false);
+                    setSelectedLightForConfig(null);
+                  }}
+                  onClose={() => {
+                    setShowLightingConfigInDrawer(false);
+                    setShowOptionsDrawer(false);
+                    setSelectedLightForConfig(null);
+                  }}
+                />
+              );
             } else {
               return undefined;
             }
           })()
         }
         items={
-          showRepsInDrawer || showReplaceInDrawer ? undefined :
+          showRepsInDrawer || showReplaceInDrawer || showLightingConfigInDrawer ? undefined :
           selectedItemForOptions?.type === 'round' 
             ? [
                 {
