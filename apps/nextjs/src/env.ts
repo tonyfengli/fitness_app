@@ -17,11 +17,24 @@ export const env = createEnv({
    */
   server: {
     POSTGRES_URL: z.string().url(),
-    // Philips Hue Configuration
+    // Philips Hue Configuration - Local Bridge
     HUE_BRIDGE_IP: z.string().optional(),
     HUE_APP_KEY: z.string().optional(),
     HUE_GROUP_ID: z.string().default("1"),
     HUE_ENABLED: z.string().transform((val) => val === "true").default("false"),
+    
+    // Philips Hue Configuration - Remote API
+    HUE_OAUTH_CLIENT_ID: z.string().optional(),
+    HUE_OAUTH_CLIENT_SECRET: z.string().optional(),
+    HUE_OAUTH_REDIRECT_URL: z.string().optional(),
+    HUE_REMOTE_ENABLED: z.string().transform((val) => val === "true").default("false"),
+    HUE_REMOTE_API_URL: z.string().default("https://api.meethue.com"),
+    
+    // Remote API Tokens (generated via OAuth script)
+    HUE_REMOTE_ACCESS_TOKEN: z.string().optional(),
+    HUE_REMOTE_REFRESH_TOKEN: z.string().optional(),
+    HUE_REMOTE_USERNAME: z.string().optional(),
+    HUE_REMOTE_EXPIRES_AT: z.string().optional(),
   },
 
   /**

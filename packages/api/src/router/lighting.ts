@@ -5,6 +5,7 @@
 import { z } from "zod/v4";
 import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
 import { getLightingService } from "../services/lighting/lighting-service";
+import { HueRemoteClient } from "../services/lighting/hue-remote-client";
 import type { WorkoutTemplate } from "../services/lighting/types";
 import { CIRCUIT_EVENTS, STRENGTH_EVENTS } from "../services/lighting/types";
 
@@ -155,4 +156,69 @@ export const lightingRouter = createTRPCRouter({
     const lightingService = getLightingService();
     return lightingService.getAnimationStatus();
   }),
+
+  // Remote Hue API endpoints
+  
+  /**
+   * Test Remote Hue API connection
+   */
+  testRemoteConnection: protectedProcedure.query(async ({ ctx }) => {
+    const remoteClient = HueRemoteClient.fromEnv();
+    
+    if (!remoteClient) {
+      return {
+        success: false,
+        error: 'Remote Hue API not configured. Run OAuth setup script first.',
+        configured: false
+      };
+    }
+
+    const result = await remoteClient.testConnection();
+    return {
+      ...result,
+      configured: true
+    };
+  }),
+
+  /**
+   * Get scenes from Remote Hue API
+   */
+  getRemoteScenes: protectedProcedure.query(async ({ ctx }) => {
+    const remoteClient = HueRemoteClient.fromEnv();
+    
+    if (!remoteClient) {
+      throw new Error('Remote Hue API not configured. Run OAuth setup script first.');
+    }
+
+    const scenes = await remoteClient.getScenes();
+    
+    // Convert to array format for easier consumption
+    return Object.entries(scenes).map(([id, scene]) => ({
+      id,
+      name: scene.name,
+      lastUpdated: scene.lastupdated,
+      lights: scene.lights,
+      owner: scene.owner,
+    }));
+  }),
+
+  /**
+   * Activate a scene via Remote Hue API
+   */
+  activateRemoteScene: protectedProcedure
+    .input(z.object({
+      sceneId: z.string(),
+      groupId: z.string().default("0"),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const remoteClient = HueRemoteClient.fromEnv();
+      
+      if (!remoteClient) {
+        throw new Error('Remote Hue API not configured. Run OAuth setup script first.');
+      }
+
+      await remoteClient.activateScene(input.sceneId, input.groupId);
+      
+      return { success: true };
+    }),
 });

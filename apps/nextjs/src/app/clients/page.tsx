@@ -175,15 +175,6 @@ function ClientsPageContent() {
   // All clients returned already have packages and attendance data
   const clientsWithPackages = clientsData || [];
   
-  // Log trainer package data for debugging
-  console.log('🔍 All clients data:', clientsWithPackages.map(client => ({
-    name: client.name,
-    role: client.role,
-    hasCurrentPackage: !!client.currentPackage,
-    hasAttendance: !!client.attendance,
-    packageCount: client.packages?.length || 0,
-    packages: client.packages
-  })));
 
   // Specifically check for trainers with packages
   const trainersWithPackages = clientsWithPackages.filter(client => 
