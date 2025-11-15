@@ -13,6 +13,7 @@ export * from "./auth-schema";
 export * from "./exercise";
 export * from "./schema/messages";
 export * from "./schema/conversation-state";
+export * from "./schema/oauth-tokens";
 export * from "./schema/workout-selections";
 export * from "./types/exerciseRatings";
 export * from "./schema/spotify-tracks";
@@ -587,11 +588,6 @@ export const UserTrainingPackage = pgTable("user_training_package", (t) => ({
   updatedAt: t
     .timestamp({ mode: "date", withTimezone: true })
     .$onUpdateFn(() => sql`now()`),
-}), (table) => ({
-  // Prevent overlapping date ranges for the same user with active status
-  noOverlappingPackages: index("no_overlapping_packages").using("gist", 
-    sql`user_id WITH =, daterange(start_date, end_date, '[]') WITH &&`
-  ).where(sql`status = 'active'`),
 }));
 
 export const CreateUserTrainingPackageSchema = createInsertSchema(UserTrainingPackage, {

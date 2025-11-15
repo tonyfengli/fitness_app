@@ -2,6 +2,8 @@
 
 import React from "react";
 import type { CircuitConfig, RoundData } from "@acme/ui-shared";
+import { api } from "~/trpc/react";
+import { useQuery } from "@tanstack/react-query";
 
 interface LightingTabProps {
   circuitConfig?: CircuitConfig | null;
@@ -589,6 +591,86 @@ export function LightingTab({ circuitConfig, roundsData, onConfigureLight, onLig
           </div>
         ))}
       </div>
+      
+      {/* Hue Scenes Section (Temporary Test) */}
+      <HueScenesSection />
+    </div>
+  );
+}
+
+// Temporary Hue Scenes Test Component
+function HueScenesSection() {
+  const trpc = api();
+  const { data: scenes, isLoading, error } = useQuery({
+    ...trpc.lighting.getRemoteScenes.queryOptions(),
+  });
+
+  // Log every time this component renders to see API calls
+  React.useEffect(() => {
+    console.log('🔍 [HueScenesSection] Component mounted - fetching scenes...');
+  }, []);
+
+  React.useEffect(() => {
+    if (isLoading) {
+      console.log('⏳ [HueScenesSection] Loading scenes from Remote API...');
+    }
+  }, [isLoading]);
+
+  React.useEffect(() => {
+    if (error) {
+      console.log('❌ [HueScenesSection] Error fetching scenes:', error.message);
+    }
+  }, [error]);
+
+  React.useEffect(() => {
+    if (scenes) {
+      console.log('✅ [HueScenesSection] Successfully loaded scenes:', {
+        count: scenes.length,
+        sceneNames: scenes.map(s => s.name),
+        firstSceneId: scenes[0]?.id,
+      });
+    }
+  }, [scenes]);
+
+
+  return (
+    <div className="mt-8 p-6 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+      <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+        Hue Scenes (Remote API - Test)
+      </h3>
+      
+      {isLoading && (
+        <p className="text-gray-600 dark:text-gray-300">Loading scenes...</p>
+      )}
+      
+      {error && (
+        <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded">
+          <p className="text-red-600 dark:text-red-400 font-medium">Connection Error</p>
+          <p className="text-sm text-red-500 dark:text-red-300 mt-1">{error.message}</p>
+          {error.message.includes('unauthorized') && (
+            <p className="text-xs text-red-500 dark:text-red-400 mt-2">
+              The Hue access token may have expired or the username is missing. Check the Remote API configuration.
+            </p>
+          )}
+        </div>
+      )}
+      
+      {scenes && scenes.length > 0 && (
+        <div className="space-y-2">
+          {scenes.map((scene) => (
+            <div key={scene.id} className="p-3 bg-white dark:bg-gray-700 rounded border">
+              <div className="font-medium text-gray-900 dark:text-white">{scene.name}</div>
+              <div className="text-sm text-gray-500 dark:text-gray-400">
+                ID: {scene.id} • Lights: {scene.lights?.join(', ') || 'None'} • Owner: {scene.owner || 'Unknown'}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      
+      {scenes && scenes.length === 0 && (
+        <p className="text-gray-600 dark:text-gray-300">No scenes found.</p>
+      )}
     </div>
   );
 }

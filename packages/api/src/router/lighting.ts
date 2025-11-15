@@ -163,7 +163,7 @@ export const lightingRouter = createTRPCRouter({
    * Test Remote Hue API connection
    */
   testRemoteConnection: protectedProcedure.query(async ({ ctx }) => {
-    const remoteClient = HueRemoteClient.fromEnv();
+    const remoteClient = await HueRemoteClient.fromEnv();
     
     if (!remoteClient) {
       return {
@@ -184,13 +184,19 @@ export const lightingRouter = createTRPCRouter({
    * Get scenes from Remote Hue API
    */
   getRemoteScenes: protectedProcedure.query(async ({ ctx }) => {
-    const remoteClient = HueRemoteClient.fromEnv();
+    const remoteClient = await HueRemoteClient.fromEnv();
     
     if (!remoteClient) {
       throw new Error('Remote Hue API not configured. Run OAuth setup script first.');
     }
 
     const scenes = await remoteClient.getScenes();
+    
+    // Check if the response is an error array instead of scenes object
+    if (Array.isArray(scenes) && scenes[0]?.error) {
+      const error = scenes[0].error;
+      throw new Error(`Hue API Error: ${error.description} (type: ${error.type})`);
+    }
     
     // Convert to array format for easier consumption
     return Object.entries(scenes).map(([id, scene]) => ({
@@ -199,6 +205,11 @@ export const lightingRouter = createTRPCRouter({
       lastUpdated: scene.lastupdated,
       lights: scene.lights,
       owner: scene.owner,
+      picture: scene.picture,
+      image: scene.image,
+      version: scene.version,
+      recycle: scene.recycle,
+      locked: scene.locked,
     }));
   }),
 
@@ -211,7 +222,7 @@ export const lightingRouter = createTRPCRouter({
       groupId: z.string().default("0"),
     }))
     .mutation(async ({ ctx, input }) => {
-      const remoteClient = HueRemoteClient.fromEnv();
+      const remoteClient = await HueRemoteClient.fromEnv();
       
       if (!remoteClient) {
         throw new Error('Remote Hue API not configured. Run OAuth setup script first.');
