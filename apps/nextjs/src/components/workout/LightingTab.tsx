@@ -22,11 +22,31 @@ export function LightingTab({ sessionId, circuitConfig, roundsData, onConfigureL
   
   const trpc = api();
   
+  // Debug: Log component mount and sessionId
+  console.log('[LightingTab] Component rendered with sessionId:', sessionId);
+  
   // Get current lighting configuration from backend
-  const { data: lightingConfig } = useQuery({
+  const { data: lightingConfig, isLoading: isLoadingLightingConfig, dataUpdatedAt } = useQuery({
     ...trpc.lightingConfig.get.queryOptions({ sessionId: sessionId! }),
     enabled: !!sessionId
   });
+  
+  // Debug: Log query state and data changes
+  console.log('[LightingTab] Query state:', { 
+    hasLightingConfig: !!lightingConfig, 
+    isLoadingLightingConfig, 
+    dataUpdatedAt: new Date(dataUpdatedAt || 0).toISOString(),
+    sessionId 
+  });
+  
+  // Debug: Log when lightingConfig changes
+  React.useEffect(() => {
+    console.log('[LightingTab] Lighting config updated:', lightingConfig);
+    console.log('[LightingTab] Using sessionId:', sessionId);
+    console.log('[LightingTab] Data updated at:', new Date(dataUpdatedAt || 0).toISOString());
+    const queryKey = trpc.lightingConfig.get.queryOptions({ sessionId: sessionId! }).queryKey;
+    console.log('[LightingTab] Listening to query key:', queryKey);
+  }, [lightingConfig, sessionId, trpc, dataUpdatedAt]);
   
   // Get scenes data to extract colors from scene names
   const { data: rawScenes } = useQuery({
@@ -295,7 +315,7 @@ export function LightingTab({ sessionId, circuitConfig, roundsData, onConfigureL
         detailedPhases
       };
     }).filter(Boolean);
-  }, [circuitConfig, roundsData, generatePhaseConfig, isRoundConfigured, lightingConfig, rawScenes]);
+  }, [circuitConfig, roundsData, generatePhaseConfig, isRoundConfigured, lightingConfig, rawScenes, dataUpdatedAt]);
 
   // Helper function to render light bulb with color and state
   const LightBulb = ({ color, brightness, active, size = "w-8 h-8" }: { color: string, brightness: number, active: boolean, size?: string }) => (

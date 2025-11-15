@@ -109,9 +109,21 @@ export function LightingConfigDrawer({
   const updateLightingConfig = useMutation({
     ...trpc.lightingConfig.update.mutationOptions(),
     onSuccess: () => {
+      console.log('[LightingConfigDrawer] Mutation successful, invalidating lighting config query');
+      const queryKey = trpc.lightingConfig.get.queryOptions({ sessionId: sessionId! }).queryKey;
+      console.log('[LightingConfigDrawer] Invalidating query with key:', queryKey);
+      
       queryClient.invalidateQueries({
-        queryKey: trpc.lightingConfig.get.queryOptions({ sessionId: sessionId! }).queryKey,
+        queryKey: queryKey,
       });
+      
+      // Also invalidate scenes query in case it affects color extraction
+      console.log('[LightingConfigDrawer] Also invalidating scenes query for good measure');
+      queryClient.invalidateQueries({
+        queryKey: trpc.lighting.getRemoteScenes.queryOptions().queryKey,
+      });
+      
+      console.log('[LightingConfigDrawer] All query invalidations completed');
       onSave?.();
     },
   });
