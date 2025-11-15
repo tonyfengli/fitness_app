@@ -6,18 +6,147 @@ import { api } from "~/trpc/react";
 import { useQuery } from "@tanstack/react-query";
 
 interface LightingTabProps {
+  sessionId?: string | null;
   circuitConfig?: CircuitConfig | null;
   roundsData?: RoundData[];
-  onConfigureLight?: (config: { roundId: number; phaseType: string }) => void;
+  onConfigureLight?: (config: { roundId: number; phaseType: string; isDetailedView?: boolean }) => void;
   onLightingStateChange?: (isEnabled: boolean) => void;
 }
 
-export function LightingTab({ circuitConfig, roundsData, onConfigureLight, onLightingStateChange }: LightingTabProps) {
+export function LightingTab({ sessionId, circuitConfig, roundsData, onConfigureLight, onLightingStateChange }: LightingTabProps) {
   // State for controlling round view modes (global vs detailed)
   const [detailedRounds, setDetailedRounds] = React.useState<Record<number, boolean>>({});
   
   // State for global lighting on/off
   const [isLightingEnabled, setIsLightingEnabled] = React.useState(true);
+  
+  const trpc = api();
+  
+  // Get current lighting configuration from backend
+  const { data: lightingConfig } = useQuery({
+    ...trpc.lightingConfig.get.queryOptions({ sessionId: sessionId! }),
+    enabled: !!sessionId
+  });
+  
+  // Get scenes data to extract colors from scene names
+  const { data: rawScenes } = useQuery({
+    ...trpc.lighting.getRemoteScenes.queryOptions(),
+  });
+  
+  // Helper function to extract color from scene name
+  const getSceneColor = React.useCallback((sceneId: string): string | null => {
+    if (!rawScenes) return null;
+    const scene = rawScenes.find(s => s.id === sceneId);
+    if (!scene) return null;
+    
+    // Extract color from name if present (e.g., "Pink Special Effects 1 (#d36972)")
+    const colorMatch = scene.name.match(/#([a-fA-F0-9]{6})/);
+    return colorMatch ? `#${colorMatch[1]}` : null;
+  }, [rawScenes]);
+  
+  // Helper function to get effective scene for a phase (3-level hierarchy)
+  const getEffectiveScene = React.useCallback((roundId: number, phaseType: string, isDetailedView: boolean) => {
+    if (!lightingConfig) return null;
+    
+    const roundKey = `round-${roundId}`;
+    
+    // 1. Check specific custom override first (e.g., work-station-0)
+    const customOverride = lightingConfig.roundOverrides?.[roundKey]?.[phaseType];
+    if (customOverride) {
+      console.log(`[LightingTab] Found custom override for ${roundKey} ${phaseType}:`, customOverride);
+      return customOverride;
+    }
+    
+    // 2. Check round master default (e.g., round-1.work for work-station-0)
+    const basePhaseType = phaseType.split('-')[0]; // work-station-0 → work, rest-after-exercise-1 → rest
+    const roundMaster = lightingConfig.roundOverrides?.[roundKey]?.[basePhaseType];
+    if (roundMaster) {
+      console.log(`[LightingTab] Found round master for ${roundKey} ${basePhaseType}:`, roundMaster);
+      return roundMaster;
+    }
+    
+    // 3. Fallback to global default
+    const globalDefault = lightingConfig.globalDefaults[basePhaseType as keyof typeof lightingConfig.globalDefaults];
+    if (globalDefault) {
+      console.log(`[LightingTab] Using global default for ${roundKey} ${phaseType}:`, globalDefault);
+    } else {
+      console.log(`[LightingTab] No configuration found for ${roundKey} ${phaseType}`);
+    }
+    return globalDefault || null;
+  }, [lightingConfig]);
+  
+  // Helper function to determine if a round has any lighting configured
+  const isRoundConfigured = React.useCallback((roundId: number): boolean => {
+    if (!lightingConfig) return false;
+    
+    // Check if any global defaults are set
+    const hasGlobalDefaults = Object.values(lightingConfig.globalDefaults).some(config => config);
+    
+    // Check if this specific round has overrides
+    const roundKey = `round-${roundId}`;
+    const hasRoundOverrides = lightingConfig.roundOverrides?.[roundKey] && 
+      Object.values(lightingConfig.roundOverrides[roundKey]).some(config => config);
+    
+    return hasGlobalDefaults || hasRoundOverrides;
+  }, [lightingConfig]);
+  
+  // Helper function to detect mixed state (master + custom overrides exist)
+  const hasCustomOverrides = React.useCallback((roundId: number, basePhaseType: string): boolean => {
+    if (!lightingConfig) return false;
+    
+    const roundKey = `round-${roundId}`;
+    const roundConfig = lightingConfig.roundOverrides?.[roundKey];
+    if (!roundConfig) return false;
+    
+    // Check if any keys start with basePhaseType- (e.g., work-station-, work-exercise-)
+    return Object.keys(roundConfig).some(key => key.startsWith(`${basePhaseType}-`));
+  }, [lightingConfig]);
+  
+  // Helper function to generate phase config based on saved scene or fallback
+  const generatePhaseConfig = React.useCallback((roundId: number, phaseType: string, isDetailedView: boolean, fallbackColor?: string) => {
+    console.log(`[LightingTab] Generating config for round-${roundId} phase: ${phaseType} (detailed: ${isDetailedView})`);
+    
+    // If lighting config or scenes are still loading, show grey to prevent flash
+    if (!lightingConfig || !rawScenes) {
+      console.log(`[LightingTab] Data still loading for round-${roundId} phase: ${phaseType}, showing loading grey`);
+      return {
+        color: '#E5E7EB', // Grey while loading
+        brightness: 30, // Low opacity
+        active: false,
+        isMixed: false
+      };
+    }
+    
+    const effectiveScene = getEffectiveScene(roundId, phaseType, isDetailedView);
+    
+    // Check for mixed state in Master view (when master exists but custom overrides also exist)
+    const basePhaseType = phaseType.split('-')[0];
+    const isMasterView = !isDetailedView && !phaseType.includes('-');
+    const hasMixed = isMasterView && hasCustomOverrides(roundId, basePhaseType);
+    
+    if (effectiveScene) {
+      const sceneColor = getSceneColor(effectiveScene.sceneId);
+      // Only use fallback color if scene has no hex code AND data is loaded
+      const finalColor = sceneColor || fallbackColor || '#6B7280';
+      console.log(`[LightingTab] Using scene ${effectiveScene.sceneName} with color: ${finalColor}${hasMixed ? ' (MIXED STATE)' : ''}`);
+      
+      return {
+        color: finalColor,
+        brightness: hasMixed ? 70 : 90, // Dimmer brightness for mixed state
+        active: true,
+        isMixed: hasMixed // Flag for special styling
+      };
+    }
+    
+    // No scene configured - show as disabled/grey
+    console.log(`[LightingTab] No scene configured for round-${roundId} phase: ${phaseType}, using grey`);
+    return {
+      color: '#E5E7EB', // Grey for unconfigured
+      brightness: 30, // Low opacity
+      active: false,
+      isMixed: false
+    };
+  }, [getEffectiveScene, getSceneColor, hasCustomOverrides, lightingConfig, rawScenes]);
   
   // Notify parent when lighting state changes
   React.useEffect(() => {
@@ -69,34 +198,34 @@ export function LightingTab({ circuitConfig, roundsData, onConfigureLight, onLig
         
         // Global view - simplified timeline
         globalPhases = [
-          { type: "preview", label: "Round Preview", config: { color: "#4F46E5", brightness: 40, active: true } },
-          { type: "work", label: "Station Work", config: { color: "#FFB366", brightness: 95, active: true } },
-          { type: "rest", label: "Exercise Rest", config: { color: "#5DE1FF", brightness: 60, active: true } },
-          { type: "setBreak", label: "Set Break", config: { color: "#8B5CF6", brightness: 40, active: true } }
+          { type: "preview", label: "Round Preview", config: generatePhaseConfig(index + 1, "preview", false, "#4F46E5") },
+          { type: "work", label: "Station Work", config: generatePhaseConfig(index + 1, "work", false, "#FFB366") },
+          { type: "rest", label: "Exercise Rest", config: generatePhaseConfig(index + 1, "rest", false, "#5DE1FF") },
+          { type: "setBreak", label: "Set Break", config: generatePhaseConfig(index + 1, "setBreak", false, "#8B5CF6") }
         ];
         
         // Detailed view - complete station-by-station breakdown
         detailedPhases = [
-          { type: "preview", label: "Round Preview", config: { color: "#4F46E5", brightness: 40, active: true } }
+          { type: "preview", label: "Round Preview", config: generatePhaseConfig(index + 1, "preview", true, "#4F46E5") }
         ];
         
         // Add each station as individual phases
-        stations.forEach((stationIndex) => {
-          const stationExercises = round.exercises?.filter((ex: any) => ex.orderIndex === stationIndex) || [];
+        stations.forEach((stationOrderIndex, sequentialIndex) => {
+          const stationExercises = round.exercises?.filter((ex: any) => ex.orderIndex === stationOrderIndex) || [];
           const exerciseNames = stationExercises.map((ex: any) => ex.exerciseName).join(", ");
           
           detailedPhases.push({
-            type: "work",
-            label: `Station ${stationIndex + 1}: ${exerciseNames}`,
-            config: { color: `hsl(${(stationIndex * 60) % 360}, 70%, 55%)`, brightness: 95, active: true }
+            type: `work-station-${sequentialIndex}`,
+            label: `Station ${stationOrderIndex + 1}: ${exerciseNames}`,
+            config: generatePhaseConfig(index + 1, `work-station-${sequentialIndex}`, true, `hsl(${(sequentialIndex * 60) % 360}, 70%, 55%)`)
           });
           
           // Add rest after each station (except last)
-          if (stationIndex < stations[stations.length - 1]) {
+          if (sequentialIndex < stations.length - 1) {
             detailedPhases.push({
-              type: "rest",
+              type: `rest-after-station-${sequentialIndex}`,
               label: "Rest",
-              config: { color: "#5DE1FF", brightness: 40, active: true }
+              config: generatePhaseConfig(index + 1, `rest-after-station-${sequentialIndex}`, true, "#5DE1FF")
             });
           }
         });
@@ -105,29 +234,29 @@ export function LightingTab({ circuitConfig, roundsData, onConfigureLight, onLig
       } else if (roundType === 'circuit_round') {
         // Global view
         globalPhases = [
-          { type: "preview", label: "Round Preview", config: { color: "#4F46E5", brightness: 40, active: true } },
-          { type: "work", label: "Exercise Work", config: { color: "#EF4444", brightness: 90, active: true } },
-          { type: "rest", label: "Exercise Rest", config: { color: "#5DE1FF", brightness: 50, active: true } }
+          { type: "preview", label: "Round Preview", config: generatePhaseConfig(index + 1, "preview", false, "#4F46E5") },
+          { type: "work", label: "Exercise Work", config: generatePhaseConfig(index + 1, "work", false, "#EF4444") },
+          { type: "rest", label: "Exercise Rest", config: generatePhaseConfig(index + 1, "rest", false, "#5DE1FF") }
         ];
         
         // Detailed view - exercise by exercise
         detailedPhases = [
-          { type: "preview", label: "Round Preview", config: { color: "#4F46E5", brightness: 40, active: true } }
+          { type: "preview", label: "Round Preview", config: generatePhaseConfig(index + 1, "preview", true, "#4F46E5") }
         ];
         
-        round.exercises?.forEach((exercise: any, index: number) => {
+        round.exercises?.forEach((exercise: any, exerciseIndex: number) => {
           detailedPhases.push({
-            type: "work",
+            type: `work-exercise-${exerciseIndex}`,
             label: exercise.exerciseName,
-            config: { color: `hsl(${(index * 45) % 360}, 75%, 60%)`, brightness: 90, active: true }
+            config: generatePhaseConfig(index + 1, `work-exercise-${exerciseIndex}`, true, `hsl(${(exerciseIndex * 45) % 360}, 75%, 60%)`)
           });
           
           // Add rest between exercises (except after last)
-          if (index < (round.exercises?.length || 0) - 1) {
+          if (exerciseIndex < (round.exercises?.length || 0) - 1) {
             detailedPhases.push({
-              type: "rest",
+              type: `rest-after-exercise-${exerciseIndex}`,
               label: "Rest",
-              config: { color: "#5DE1FF", brightness: 35, active: true }
+              config: generatePhaseConfig(index + 1, `rest-after-exercise-${exerciseIndex}`, true, "#5DE1FF")
             });
           }
         });
@@ -136,22 +265,21 @@ export function LightingTab({ circuitConfig, roundsData, onConfigureLight, onLig
       } else if (roundType === 'amrap_round') {
         // Global view
         globalPhases = [
-          { type: "preview", label: "Round Preview", config: { color: "#4F46E5", brightness: 40, active: true } },
-          { type: "work", label: "AMRAP Work", config: { color: "#EF4444", brightness: 95, active: true } },
-          { type: "warning", label: "Final Warning", config: { color: "#F59E0B", brightness: 100, active: true } }
+          { type: "preview", label: "Round Preview", config: generatePhaseConfig(index + 1, "preview", false, "#4F46E5") },
+          { type: "work", label: "AMRAP Work", config: generatePhaseConfig(index + 1, "work", false, "#EF4444") }
         ];
         
-        // Detailed view - exercise zones + alerts
+        // Detailed view - exercise zones
         detailedPhases = [
-          { type: "preview", label: "Round Preview", config: { color: "#4F46E5", brightness: 40, active: true } }
+          { type: "preview", label: "Round Preview", config: generatePhaseConfig(index + 1, "preview", true, "#4F46E5") }
         ];
         
         // Add exercise zones
-        round.exercises?.forEach((ex: any, i: number) => {
+        round.exercises?.forEach((ex: any, exerciseIndex: number) => {
           detailedPhases.push({
             type: "work",
             label: `${ex.exerciseName} Zone`,
-            config: { color: `hsl(${(i * 40) % 360}, 65%, 58%)`, brightness: 80, active: true }
+            config: generatePhaseConfig(index + 1, "work", true, `hsl(${(exerciseIndex * 40) % 360}, 65%, 58%)`)
           });
         });
         
@@ -162,12 +290,12 @@ export function LightingTab({ circuitConfig, roundsData, onConfigureLight, onLig
         name: round.roundName,
         type: roundType,
         duration,
-        lightingConfigured: true, // Default to configured for demo
+        lightingConfigured: isRoundConfigured(index + 1),
         globalPhases,
         detailedPhases
       };
     }).filter(Boolean);
-  }, [circuitConfig, roundsData]);
+  }, [circuitConfig, roundsData, generatePhaseConfig, isRoundConfigured, lightingConfig, rawScenes]);
 
   // Helper function to render light bulb with color and state
   const LightBulb = ({ color, brightness, active, size = "w-8 h-8" }: { color: string, brightness: number, active: boolean, size?: string }) => (
@@ -320,11 +448,10 @@ export function LightingTab({ circuitConfig, roundsData, onConfigureLight, onLig
             {/* Clean Lighting Timeline */}
             <div className="space-y-6 p-1">
               
-              {round.lightingConfigured ? (
-                <div className="space-y-6">
-                  
-                  {/* Workout Phases Timeline */}
-                  {(() => {
+              <div className="space-y-6">
+                
+                {/* Workout Phases Timeline */}
+                {(() => {
                     // Force global view for AMRAP rounds
                     const currentPhases = (detailedRounds[round.id] && round.type !== 'amrap_round') ? round.detailedPhases : round.globalPhases;
                     const isDetailed = detailedRounds[round.id] && round.type !== 'amrap_round';
@@ -348,11 +475,6 @@ export function LightingTab({ circuitConfig, roundsData, onConfigureLight, onLig
                           title: "Setup & Preview", 
                           description: "Round preparation lighting",
                           icon: "👁️"
-                        },
-                        warning: { 
-                          title: "Alert System", 
-                          description: "Time warnings and alerts",
-                          icon: "⚠️"
                         },
                         setBreak: { 
                           title: "Set Breaks", 
@@ -418,8 +540,10 @@ export function LightingTab({ circuitConfig, roundsData, onConfigureLight, onLig
                                       {/* Work Light */}
                                       <div className="text-center group/light">
                                         <button 
-                                          onClick={() => onConfigureLight?.({ roundId: round.id, phaseType: 'work' })}
-                                          className="relative w-20 h-20 rounded-full border-4 border-white shadow-lg active:scale-95 transition-all duration-150 active:shadow-xl"
+                                          onClick={() => onConfigureLight?.({ roundId: round.id, phaseType: 'work', isDetailedView: true })}
+                                          className={`relative w-20 h-20 rounded-full border-4 shadow-lg active:scale-95 transition-all duration-150 active:shadow-xl ${
+                                            item.workPhase.config?.isMixed ? 'border-yellow-400' : 'border-white'
+                                          }`}
                                           style={{ 
                                             backgroundColor: item.workPhase.config?.color || '#6B7280',
                                             opacity: item.workPhase.config?.active ? Math.max(0.9, item.workPhase.config?.brightness / 100) : 0.5,
@@ -430,6 +554,10 @@ export function LightingTab({ circuitConfig, roundsData, onConfigureLight, onLig
                                               : '0 8px 25px rgba(0,0,0,0.15)'
                                           }}
                                         >
+                                          {/* Mixed state indicator */}
+                                          {item.workPhase.config?.isMixed && (
+                                            <div className="absolute -top-1 -right-1 w-3 h-3 bg-yellow-400 rounded-full border-2 border-white"></div>
+                                          )}
                                           <div className="text-xs font-black uppercase tracking-wider text-center leading-tight text-white drop-shadow-lg">
                                             WORK
                                           </div>
@@ -446,7 +574,7 @@ export function LightingTab({ circuitConfig, roundsData, onConfigureLight, onLig
                                       {/* Rest Light */}
                                       <div className="text-center group/light">
                                         <button 
-                                          onClick={() => onConfigureLight?.({ roundId: round.id, phaseType: 'rest' })}
+                                          onClick={() => onConfigureLight?.({ roundId: round.id, phaseType: 'rest', isDetailedView: true })}
                                           className="relative w-20 h-20 rounded-full border-4 border-white shadow-lg active:scale-95 transition-all duration-150 active:shadow-xl"
                                           style={{ 
                                             backgroundColor: item.restPhase.config?.color || '#6B7280',
@@ -487,7 +615,7 @@ export function LightingTab({ circuitConfig, roundsData, onConfigureLight, onLig
                                     <div className="flex justify-center">
                                       <div className="text-center group/light">
                                         <button 
-                                          onClick={() => onConfigureLight?.({ roundId: round.id, phaseType: item.phase.type })}
+                                          onClick={() => onConfigureLight?.({ roundId: round.id, phaseType: item.phase.type, isDetailedView: true })}
                                           className="relative w-20 h-20 rounded-full border-4 border-white shadow-lg active:scale-95 transition-all duration-150 active:shadow-xl"
                                           style={{ 
                                             backgroundColor: item.phase.config?.color || '#6B7280',
@@ -503,7 +631,6 @@ export function LightingTab({ circuitConfig, roundsData, onConfigureLight, onLig
                                             {item.phase.type === 'setBreak' ? 'SET' : 
                                              item.phase.type === 'work' ? 'WORK' :
                                              item.phase.type === 'preview' ? 'PRE' :
-                                             item.phase.type === 'warning' ? 'WARN' :
                                              item.phase.type.slice(0,3)}
                                           </div>
                                         </button>
@@ -535,7 +662,7 @@ export function LightingTab({ circuitConfig, roundsData, onConfigureLight, onLig
                                 <div className="flex-1 flex items-center gap-6">
                                   {/* Light Preview */}
                                   <button 
-                                    onClick={() => onConfigureLight?.({ roundId: round.id, phaseType: phase.type })}
+                                    onClick={() => onConfigureLight?.({ roundId: round.id, phaseType: phase.type, isDetailedView: false })}
                                     className="relative w-20 h-20 rounded-full flex items-center justify-center border-4 border-white shadow-lg active:scale-95 transition-all duration-150 active:shadow-xl"
                                     style={{ 
                                       backgroundColor: phase.config?.color || '#6B7280',
@@ -582,95 +709,12 @@ export function LightingTab({ circuitConfig, roundsData, onConfigureLight, onLig
                     }
                   })()}
                 </div>
-              ) : (
-                <div className="text-center text-sm text-gray-500 dark:text-gray-400 py-8">
-                  No timeline configuration set up
-                </div>
-              )}
             </div>
           </div>
         ))}
       </div>
       
-      {/* Hue Scenes Section (Temporary Test) */}
-      <HueScenesSection />
     </div>
   );
 }
 
-// Temporary Hue Scenes Test Component
-function HueScenesSection() {
-  const trpc = api();
-  const { data: scenes, isLoading, error } = useQuery({
-    ...trpc.lighting.getRemoteScenes.queryOptions(),
-  });
-
-  // Log every time this component renders to see API calls
-  React.useEffect(() => {
-    console.log('🔍 [HueScenesSection] Component mounted - fetching scenes...');
-  }, []);
-
-  React.useEffect(() => {
-    if (isLoading) {
-      console.log('⏳ [HueScenesSection] Loading scenes from Remote API...');
-    }
-  }, [isLoading]);
-
-  React.useEffect(() => {
-    if (error) {
-      console.log('❌ [HueScenesSection] Error fetching scenes:', error.message);
-    }
-  }, [error]);
-
-  React.useEffect(() => {
-    if (scenes) {
-      console.log('✅ [HueScenesSection] Successfully loaded scenes:', {
-        count: scenes.length,
-        sceneNames: scenes.map(s => s.name),
-        firstSceneId: scenes[0]?.id,
-      });
-    }
-  }, [scenes]);
-
-
-  return (
-    <div className="mt-8 p-6 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-      <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-        Hue Scenes (Remote API - Test)
-      </h3>
-      
-      {isLoading && (
-        <p className="text-gray-600 dark:text-gray-300">Loading scenes...</p>
-      )}
-      
-      {error && (
-        <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded">
-          <p className="text-red-600 dark:text-red-400 font-medium">Connection Error</p>
-          <p className="text-sm text-red-500 dark:text-red-300 mt-1">{error.message}</p>
-          {error.message.includes('unauthorized') && (
-            <p className="text-xs text-red-500 dark:text-red-400 mt-2">
-              The Hue access token may have expired or the username is missing. Check the Remote API configuration.
-            </p>
-          )}
-        </div>
-      )}
-      
-      {scenes && scenes.length > 0 && (
-        <div className="space-y-2">
-          {scenes.map((scene) => (
-            <div key={scene.id} className="p-3 bg-white dark:bg-gray-700 rounded border">
-              <div className="font-medium text-gray-900 dark:text-white">{scene.name}</div>
-              <div className="text-sm text-gray-500 dark:text-gray-400">
-                ID: {scene.id} • Lights: {scene.lights?.join(', ') || 'None'} • Owner: {scene.owner || 'Unknown'}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-      
-      {scenes && scenes.length === 0 && (
-        <p className="text-gray-600 dark:text-gray-300">No scenes found.</p>
-      )}
-    </div>
-  );
-}

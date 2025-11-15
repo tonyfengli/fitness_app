@@ -19,6 +19,10 @@ export interface HueScene {
   picture: string;
   image: string;
   version: number;
+  type: string; // "LightScene" | "GroupScene"
+  lightstates?: Record<string, any>; // Light ID -> desired state
+  group?: string; // Group ID for GroupScene types
+  transitiontime?: number; // Default transition time in deciseconds
 }
 
 export class HueRemoteClient {

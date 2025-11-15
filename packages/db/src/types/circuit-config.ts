@@ -30,6 +30,28 @@ export interface CircuitConfig {
     restBetweenRounds: number;   // Rest duration between rounds in seconds
     repeatRounds?: boolean;      // Whether to repeat the entire circuit
     roundTemplates: RoundConfig[]; // Array of round configurations
+    
+    // Lighting configuration
+    lighting?: {
+      enabled: boolean;
+      globalDefaults: {
+        work?: { sceneId: string; sceneName: string; };
+        rest?: { sceneId: string; sceneName: string; };
+        preview?: { sceneId: string; sceneName: string; };
+        warning?: { sceneId: string; sceneName: string; };
+        roundBreak?: { sceneId: string; sceneName: string; };
+      };
+      roundOverrides?: {
+        [roundId: string]: {
+          [phaseType: string]: {
+            sceneId: string;
+            sceneName: string;
+          }
+        }
+      };
+      targetGroup?: string; // default "0" for all lights
+    };
+    
     // Spotify integration
     spotifyDeviceId?: string;
     spotifyDeviceName?: string;

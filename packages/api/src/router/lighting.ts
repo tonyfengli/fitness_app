@@ -210,6 +210,10 @@ export const lightingRouter = createTRPCRouter({
       version: scene.version,
       recycle: scene.recycle,
       locked: scene.locked,
+      type: scene.type,
+      lightstates: scene.lightstates,
+      group: scene.group,
+      transitiontime: scene.transitiontime,
     }));
   }),
 

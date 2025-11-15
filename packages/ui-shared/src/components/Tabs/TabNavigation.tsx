@@ -20,7 +20,7 @@ export function TabNavigation({
   return (
     <div
       className={cn(
-        "bg-white z-40 relative",
+        "bg-white dark:bg-gray-900 z-40 relative",
         effectiveVariant === "bottom" 
           ? "fixed bottom-0 left-0 right-0 safe-area-padding-bottom shadow-lg" 
           : "",
@@ -38,9 +38,9 @@ export function TabNavigation({
                 "flex-1 flex items-center justify-center gap-2 py-3.5 px-4 text-base font-medium transition-colors relative",
                 "focus:outline-none",
                 isActive
-                  ? "text-purple-600"
-                  : "text-gray-500 hover:text-gray-700 hover:bg-gray-50",
-                effectiveVariant === "bottom" && isActive && "bg-purple-50",
+                  ? "text-purple-600 dark:text-purple-400"
+                  : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800",
+                effectiveVariant === "bottom" && isActive && "bg-purple-50 dark:bg-purple-900/30",
                 effectiveVariant === "bottom" && "py-2" // Slightly smaller on mobile
               )}
             >
@@ -48,14 +48,14 @@ export function TabNavigation({
               <span>{tab.label}</span>
               {/* Clean active indicator - extends to match border */}
               {isActive && (
-                <div className="absolute bottom-0 -left-4 -right-4 h-0.5 bg-purple-600" />
+                <div className="absolute bottom-0 -left-4 -right-4 h-0.5 bg-purple-600 dark:bg-purple-400" />
               )}
             </button>
           );
         })}
       </div>
       {/* Unified bottom border - extends beyond container */}
-      <div className="absolute bottom-0 -left-4 -right-4 h-px bg-gray-200" />
+      <div className="absolute bottom-0 -left-4 -right-4 h-px bg-gray-200 dark:bg-gray-700" />
     </div>
   );
 }

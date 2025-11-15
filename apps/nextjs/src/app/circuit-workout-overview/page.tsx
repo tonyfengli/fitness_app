@@ -483,6 +483,7 @@ function CircuitWorkoutOverviewContent() {
     phaseType: string;
     phaseLabel: string;
     currentConfig: any;
+    isDetailedView?: boolean;
   } | null>(null);
   const [selectedItemForOptions, setSelectedItemForOptions] = useState<{
     type: 'round' | 'station' | 'exercise';
@@ -2109,14 +2110,16 @@ function CircuitWorkoutOverviewContent() {
           </WorkoutTab>
         ) : (
           <LightingTab 
+            sessionId={sessionId}
             circuitConfig={circuitConfig as any}
             roundsData={roundsData as any}
-            onConfigureLight={({ roundId, phaseType }) => {
+            onConfigureLight={({ roundId, phaseType, isDetailedView }) => {
               setSelectedLightForConfig({ 
                 roundId, 
                 phaseType, 
                 phaseLabel: phaseType === 'work' ? 'WORK' : phaseType === 'rest' ? 'REST' : phaseType.toUpperCase(),
-                currentConfig: null 
+                currentConfig: null,
+                isDetailedView
               });
               setShowLightingConfigInDrawer(true);
               setShowOptionsDrawer(true);
@@ -2896,11 +2899,12 @@ function CircuitWorkoutOverviewContent() {
             } else if (showLightingConfigInDrawer && selectedLightForConfig) {
               return (
                 <LightingConfigDrawer
+                  sessionId={sessionId}
                   roundId={selectedLightForConfig.roundId}
                   phaseType={selectedLightForConfig.phaseType}
                   phaseLabel={selectedLightForConfig.phaseType === 'work' ? 'WORK' : 'REST'}
+                  isDetailedView={selectedLightForConfig.isDetailedView}
                   onSave={() => {
-                    // TODO: Implement lighting configuration save logic
                     setShowLightingConfigInDrawer(false);
                     setShowOptionsDrawer(false);
                     setSelectedLightForConfig(null);

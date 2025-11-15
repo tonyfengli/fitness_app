@@ -13,3 +13,5 @@ export * from "./schema";
 export type { CircuitConfig, LegacyCircuitConfig } from "./types/circuit-config";
 export { DEFAULT_CIRCUIT_CONFIG, EMPTY_CIRCUIT_CONFIG, createDefaultRoundTemplates, migrateToRoundTemplates } from "./types/circuit-config";
 export type { RoundTemplate, CircuitRoundTemplate, StationsRoundTemplate, RoundConfig } from "./types/round-templates";
+export type { LightingConfig, LightingScene, LightingPhaseType, GlobalLightingDefaults, RoundLightingOverrides } from "./types/lighting-config";
+export { createDefaultLightingConfig, getLightingScene } from "./types/lighting-config";
