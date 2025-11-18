@@ -109,22 +109,13 @@ export function LightingConfigDrawer({
   const updateLightingConfig = useMutation({
     ...trpc.lightingConfig.update.mutationOptions(),
     onSuccess: () => {
-      console.log('[LightingConfigDrawer] Mutation successful, invalidating lighting config query');
-      const queryKey = trpc.lightingConfig.get.queryOptions({ sessionId: sessionId! }).queryKey;
-      console.log('[LightingConfigDrawer] Invalidating query with key:', queryKey);
-      
       queryClient.invalidateQueries({
-        queryKey: queryKey,
+        queryKey: trpc.lightingConfig.get.queryOptions({ sessionId: sessionId! }).queryKey,
       });
-      
-      // Also invalidate scenes query in case it affects color extraction
-      console.log('[LightingConfigDrawer] Also invalidating scenes query for good measure');
-      queryClient.invalidateQueries({
-        queryKey: trpc.lighting.getRemoteScenes.queryOptions().queryKey,
-      });
-      
-      console.log('[LightingConfigDrawer] All query invalidations completed');
       onSave?.();
+    },
+    onError: (error) => {
+      console.error('Failed to save lighting configuration:', error);
     },
   });
 
@@ -232,26 +223,7 @@ export function LightingConfigDrawer({
   }, [lightingConfig, roundId, phaseType, isDetailedView]);
 
   const handleApply = async () => {
-    console.log('[LightingConfigDrawer] Apply Scene button clicked');
-    console.log('[LightingConfigDrawer] Scene application initiated:', {
-      sessionId,
-      roundId,
-      phaseType,
-      phaseLabel,
-      isDetailedView,
-      selectedSceneId,
-      selectedSceneName,
-      viewType: roundId ? `Round ${roundId} Override` : 'Global Default'
-    });
-
-    if (!selectedSceneId || !selectedSceneName || !sessionId) {
-      console.error('[LightingConfigDrawer] Missing required data for scene application:', {
-        hasSelectedSceneId: !!selectedSceneId,
-        hasSelectedSceneName: !!selectedSceneName,
-        hasSessionId: !!sessionId
-      });
-      return;
-    }
+    if (!selectedSceneId || !selectedSceneName || !sessionId) return;
 
     const currentConfig = lightingConfig || {
       enabled: true,
@@ -260,13 +232,10 @@ export function LightingConfigDrawer({
       targetGroup: "0"
     };
 
-    console.log('[LightingConfigDrawer] Current lighting config before update:', currentConfig);
-
     let updatedConfig = { ...currentConfig };
 
     if (roundId) {
       // Save as round override (since we're configuring a specific round)
-      console.log('[LightingConfigDrawer] Saving as round override (specific round configuration)');
       if (!updatedConfig.roundOverrides) {
         updatedConfig.roundOverrides = {};
       }
@@ -276,39 +245,23 @@ export function LightingConfigDrawer({
       }
       updatedConfig.roundOverrides[roundKey][phaseType!] = {
         sceneId: selectedSceneId,
-        sceneName: selectedSceneName
+        sceneName: selectedSceneName,
       };
-      console.log('[LightingConfigDrawer] Round override saved:', {
-        roundKey,
-        phaseType,
-        sceneId: selectedSceneId,
-        sceneName: selectedSceneName
-      });
     } else {
       // Save as global default (only when no specific round is provided)
-      console.log('[LightingConfigDrawer] Saving as global default (no specific round)');
       updatedConfig.globalDefaults[phaseType as keyof typeof updatedConfig.globalDefaults] = {
         sceneId: selectedSceneId,
-        sceneName: selectedSceneName
+        sceneName: selectedSceneName,
       };
-      console.log('[LightingConfigDrawer] Global default saved:', {
-        phaseType,
-        sceneId: selectedSceneId,
-        sceneName: selectedSceneName
-      });
     }
 
-    console.log('[LightingConfigDrawer] Updated config to be saved:', updatedConfig);
-
     try {
-      console.log('[LightingConfigDrawer] Calling mutation to save config...');
       await updateLightingConfig.mutateAsync({
         sessionId,
         lighting: updatedConfig
       });
-      console.log('[LightingConfigDrawer] Scene configuration saved successfully!');
     } catch (error) {
-      console.error('[LightingConfigDrawer] Failed to save scene configuration:', error);
+      console.error('Failed to save scene configuration:', error);
     }
   };
 
@@ -339,19 +292,8 @@ export function LightingConfigDrawer({
         )}
         
         {!isLoading && !error && (
-          <div className="space-y-6">
-            {Object.entries(processedScenes.categorized).map(([category, scenes]) => (
-              <div key={category}>
-                <div className="flex items-center gap-2 mb-3">
-                  <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    {category}
-                  </h4>
-                  <span className="text-xs text-gray-400 dark:text-gray-500">
-                    ({scenes.length})
-                  </span>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  {scenes.map((scene) => (
+          <div className="grid grid-cols-4 gap-3">
+            {processedScenes.all.map((scene) => (
                     <button
                       key={scene.id}
                       onClick={() => {
@@ -359,52 +301,62 @@ export function LightingConfigDrawer({
                         setSelectedSceneName(scene.name);
                       }}
                       className={`
-                        relative group p-3 rounded-xl border-2 transition-all duration-200 text-left
+                        relative group p-3 rounded-xl border-2 transition-all duration-200 text-center
                         ${selectedSceneId === scene.id 
-                          ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20 shadow-lg scale-[1.02]' 
-                          : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+                          ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20 shadow-lg' 
+                          : 'border-gray-200 dark:border-gray-700 hover:border-purple-300 dark:hover:border-purple-600'
                         }
                       `}
                     >
-                      {/* Color preview or effect indicator */}
-                      <div className="flex items-center gap-3">
-                        {scene.color ? (
-                          <div 
-                            className="w-10 h-10 rounded-full border-2 border-white dark:border-gray-700 shadow-sm flex-shrink-0"
-                            style={{ 
-                              backgroundColor: scene.color,
-                              boxShadow: `0 0 8px ${scene.color}40`
-                            }}
-                          />
-                        ) : scene.isSpecialEffect ? (
-                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-400 via-pink-400 to-blue-400 flex items-center justify-center flex-shrink-0">
-                            <span className="text-white text-xs font-bold">FX</span>
-                          </div>
-                        ) : (
-                          <div className="w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-700 flex-shrink-0" />
-                        )}
-                        
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                            {scene.name}
-                          </p>
+                      {/* Color preview centered */}
+                      {scene.color ? (
+                        <div 
+                          className="w-8 h-8 rounded-full mx-auto mb-2 border border-white shadow-sm relative"
+                          style={{ 
+                            backgroundColor: scene.color,
+                            boxShadow: `0 0 6px ${scene.color}40`
+                          }}
+                        >
+                          {selectedSceneId === scene.id && (
+                            <div className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 rounded-full flex items-center justify-center">
+                              <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={4}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                              </svg>
+                            </div>
+                          )}
                         </div>
-                      </div>
-                      
-                      {/* Selected indicator */}
-                      {selectedSceneId === scene.id && (
-                        <div className="absolute top-2 right-2">
-                          <div className="w-5 h-5 rounded-full bg-purple-500 flex items-center justify-center">
-                            <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                            </svg>
-                          </div>
+                      ) : scene.isSpecialEffect ? (
+                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-400 via-pink-400 to-blue-400 mx-auto mb-2 flex items-center justify-center relative">
+                          <span className="text-white text-[8px] font-bold">FX</span>
+                          {selectedSceneId === scene.id && (
+                            <div className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 rounded-full flex items-center justify-center">
+                              <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={4}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                              </svg>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 mx-auto mb-2 relative">
+                          {selectedSceneId === scene.id && (
+                            <div className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 rounded-full flex items-center justify-center">
+                              <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={4}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                              </svg>
+                            </div>
+                          )}
                         </div>
                       )}
+                      
+                      {/* Scene name with two lines */}
+                      <p className={`text-[10px] font-medium leading-tight h-6 line-clamp-2 ${
+                        selectedSceneId === scene.id 
+                          ? 'text-purple-900 dark:text-purple-100' 
+                          : 'text-gray-700 dark:text-gray-300'
+                      }`}>
+                        {scene.name}
+                      </p>
                     </button>
-                  ))}
-                </div>
-              </div>
             ))}
           </div>
         )}

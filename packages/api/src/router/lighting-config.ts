@@ -38,6 +38,17 @@ const LightingConfigUpdateSchema = z.object({
   }),
 });
 
+// New schema for batch round configuration
+const BatchRoundConfigSchema = z.object({
+  sessionId: z.string().uuid(),
+  roundId: z.number(),
+  masterConfig: z.object({
+    preview: LightingSceneSchema.optional(),
+    work: LightingSceneSchema.optional(),
+    rest: LightingSceneSchema.optional(),
+  }),
+});
+
 export const lightingConfigRouter = createTRPCRouter({
   /**
    * Get lighting configuration for a session
@@ -134,6 +145,9 @@ export const lightingConfigRouter = createTRPCRouter({
       }
 
       // Update the config with lighting
+      console.log(`[LIGHTING] Standard update endpoint called for session ${input.sessionId}`);
+      console.log(`[LIGHTING] Input lighting config:`, JSON.stringify(input.lighting, null, 2));
+      
       const updatedConfig: CircuitConfig = {
         ...existingConfig,
         config: {
@@ -219,5 +233,149 @@ export const lightingConfigRouter = createTRPCRouter({
         .where(eq(TrainingSession.id, input.sessionId));
 
       return { success: true };
+    }),
+
+  /**
+   * Update round configuration with batch master settings
+   */
+  updateRoundConfig: protectedProcedure
+    .input(BatchRoundConfigSchema)
+    .mutation(async ({ ctx, input }) => {
+      const user = await getSessionUserWithBusiness(ctx);
+
+      // Only trainers can update lighting config
+      if (user.role !== "trainer") {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Only trainers can update lighting configuration",
+        });
+      }
+
+      // Get the session
+      const session = await ctx.db
+        .select()
+        .from(TrainingSession)
+        .where(
+          and(
+            eq(TrainingSession.id, input.sessionId),
+            eq(TrainingSession.businessId, user.businessId)
+          )
+        )
+        .limit(1)
+        .then((res) => res[0]);
+
+      if (!session) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Session not found",
+        });
+      }
+
+      if (session.templateType !== "circuit") {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Lighting configuration is only available for circuit training sessions",
+        });
+      }
+
+      // Get existing config
+      const existingConfig = session.templateConfig as CircuitConfig | null;
+      
+      if (!existingConfig || existingConfig.type !== "circuit") {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Invalid session configuration",
+        });
+      }
+
+      // Get current lighting config or create default
+      const currentLighting: LightingConfig = existingConfig.config.lighting || {
+        enabled: true,
+        globalDefaults: {},
+        roundOverrides: {},
+        targetGroup: "0",
+      };
+
+      const roundKey = `round-${input.roundId}`;
+      const updatedOverrides = { ...currentLighting.roundOverrides };
+
+      // Ensure round override object exists
+      if (!updatedOverrides[roundKey]) {
+        updatedOverrides[roundKey] = {};
+      }
+
+      // Helper function to clear detailed overrides for a specific phase type
+      // Intent-based clearing: only clear if master phase is being explicitly set
+      const clearDetailedOverrides = (phaseType: string) => {
+        const roundConfig = updatedOverrides[roundKey];
+        if (!roundConfig) return;
+        
+        const phasePrefix = `${phaseType}-`;
+        console.log(`[LIGHTING] Clearing detailed overrides for phase: ${phaseType} (master being set)`);
+        
+        Object.keys(roundConfig).forEach(key => {
+          if (key.startsWith(phasePrefix)) {
+            console.log(`[LIGHTING] CLEARING detailed override: ${key} (master ${phaseType} overrides it)`);
+            delete roundConfig[key];
+          }
+        });
+      };
+
+      // Process each master configuration and clear corresponding detailed overrides
+      console.log(`[LIGHTING] Processing batch round config for ${roundKey}`);
+      console.log(`[LIGHTING] Master config:`, JSON.stringify(input.masterConfig, null, 2));
+      console.log(`[LIGHTING] Current round overrides BEFORE processing:`, JSON.stringify(updatedOverrides[roundKey], null, 2));
+      
+      Object.entries(input.masterConfig).forEach(([phaseType, sceneConfig]) => {
+        console.log(`[LIGHTING] Processing phase: ${phaseType}, config:`, JSON.stringify(sceneConfig, null, 2));
+        
+        if (sceneConfig) {
+          console.log(`[LIGHTING] ✓ Setting master ${phaseType}: ${sceneConfig.sceneName}`);
+          
+          // Clear detailed overrides for this phase type (intent-based)
+          // Only clear if master phase is being explicitly set
+          clearDetailedOverrides(phaseType);
+          
+          // Set the master configuration (no timestamp needed)
+          updatedOverrides[roundKey]![phaseType] = sceneConfig;
+        } else {
+          console.log(`[LIGHTING] ✗ Skipping ${phaseType}: not configured (detailed overrides preserved)`);
+        }
+      });
+      
+      console.log(`[LIGHTING] Current round overrides AFTER processing:`, JSON.stringify(updatedOverrides[roundKey], null, 2));
+
+      // Clean up empty round entries
+      if (updatedOverrides[roundKey] && Object.keys(updatedOverrides[roundKey]).length === 0) {
+        delete updatedOverrides[roundKey];
+      }
+
+      // Update the config with new lighting configuration
+      const updatedConfig: CircuitConfig = {
+        ...existingConfig,
+        config: {
+          ...existingConfig.config,
+          lighting: {
+            ...currentLighting,
+            roundOverrides: updatedOverrides,
+          },
+        },
+        lastUpdated: new Date().toISOString(),
+        updatedBy: user.id,
+      };
+
+      // Update the session
+      await ctx.db
+        .update(TrainingSession)
+        .set({
+          templateConfig: updatedConfig,
+          updatedAt: new Date(),
+        })
+        .where(eq(TrainingSession.id, input.sessionId));
+
+      return {
+        success: true,
+        updatedRoundConfig: updatedOverrides[roundKey],
+      };
     }),
 });
