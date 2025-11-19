@@ -1,0 +1,910 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Equity Structure Overview - Fitness App</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        :root {
+            --primary-blue: #2563eb;
+            --primary-green: #10b981;
+            --primary-amber: #f59e0b;
+            --neutral-50: #fafafa;
+            --neutral-100: #f5f5f5;
+            --neutral-200: #e5e5e5;
+            --neutral-300: #d4d4d4;
+            --neutral-400: #a3a3a3;
+            --neutral-500: #737373;
+            --neutral-600: #525252;
+            --neutral-700: #404040;
+            --neutral-800: #262626;
+            --neutral-900: #171717;
+            --red-500: #ef4444;
+            --red-600: #dc2626;
+            --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+            --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+            --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+            --shadow-2xl: 0 25px 50px -12px rgb(0 0 0 / 0.25);
+        }
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: linear-gradient(135deg, var(--neutral-50) 0%, #ffffff 100%);
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            line-height: 1.6;
+            color: var(--neutral-800);
+            font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            min-height: 100vh;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #ffffff 0%, var(--neutral-50) 100%);
+            border-bottom: 1px solid var(--neutral-200);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23f5f5f5' fill-opacity='0.4'%3E%3Ccircle cx='7' cy='7' r='1'/%3E%3Ccircle cx='27' cy='7' r='1'/%3E%3Ccircle cx='47' cy='7' r='1'/%3E%3Ccircle cx='7' cy='27' r='1'/%3E%3Ccircle cx='27' cy='27' r='1'/%3E%3Ccircle cx='47' cy='27' r='1'/%3E%3Ccircle cx='7' cy='47' r='1'/%3E%3Ccircle cx='27' cy='47' r='1'/%3E%3Ccircle cx='47' cy='47' r='1'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E") repeat;
+        }
+        
+        .header-content {
+            position: relative;
+            z-index: 2;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 64px 40px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: clamp(36px, 5vw, 64px);
+            font-weight: 900;
+            letter-spacing: -0.02em;
+            color: var(--neutral-900);
+            margin-bottom: 24px;
+            background: linear-gradient(135deg, var(--neutral-900) 0%, var(--neutral-600) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .header-subtitle {
+            font-size: 20px;
+            font-weight: 400;
+            color: var(--neutral-600);
+            margin-bottom: 32px;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        
+        .disclaimer {
+            background: linear-gradient(135deg, var(--red-500), var(--red-600));
+            color: white;
+            padding: 20px 32px;
+            border-radius: 16px;
+            font-weight: 600;
+            font-size: 16px;
+            box-shadow: var(--shadow-lg);
+            max-width: 800px;
+            margin: 0 auto;
+            border: 1px solid rgba(239, 68, 68, 0.2);
+        }
+        
+        .content {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 64px 40px;
+        }
+        
+        .section {
+            margin-bottom: 96px;
+        }
+        
+        .section-title {
+            font-size: clamp(32px, 4vw, 48px);
+            font-weight: 800;
+            letter-spacing: -0.02em;
+            text-align: center;
+            margin-bottom: 16px;
+            color: var(--neutral-900);
+        }
+        
+        .section-subtitle {
+            text-align: center;
+            font-size: 18px;
+            color: var(--neutral-600);
+            margin-bottom: 48px;
+            max-width: 700px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        
+        .overview-visual {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-bottom: 64px;
+        }
+        
+        .pie-chart {
+            width: 280px;
+            height: 280px;
+            border-radius: 50%;
+            background: conic-gradient(
+                var(--primary-blue) 0% 15%,
+                var(--primary-green) 15% 50%,
+                var(--primary-amber) 50% 100%
+            );
+            box-shadow: var(--shadow-2xl);
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            margin-bottom: 40px;
+        }
+        
+        .pie-chart::before {
+            content: '';
+            position: absolute;
+            inset: -2px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, rgba(255,255,255,0.8), rgba(0,0,0,0.05));
+            z-index: -1;
+        }
+        
+        .pie-chart:hover {
+            transform: scale(1.02);
+            box-shadow: var(--shadow-2xl), 0 0 0 1px rgba(37, 99, 235, 0.1);
+        }
+        
+        .legend {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 20px;
+            max-width: 700px;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            background: white;
+            padding: 16px 20px;
+            border-radius: 12px;
+            font-weight: 500;
+            box-shadow: var(--shadow-md);
+            border: 1px solid var(--neutral-200);
+            transition: all 0.2s ease;
+        }
+        
+        .legend-item:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+            border-color: var(--neutral-300);
+        }
+        
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 8px;
+            border: 2px solid white;
+            box-shadow: var(--shadow-sm);
+        }
+        
+        .equity-breakdown {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 24px;
+        }
+        
+        .equity-card {
+            background: white;
+            border-radius: 20px;
+            padding: 36px;
+            box-shadow: var(--shadow-lg);
+            border: 1px solid var(--neutral-200);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .equity-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            transition: all 0.3s ease;
+        }
+        
+        .equity-card.founders-base::before {
+            background: linear-gradient(90deg, var(--primary-blue), #3b82f6);
+        }
+        
+        .equity-card.sweat-equity::before {
+            background: linear-gradient(90deg, var(--primary-green), #34d399);
+        }
+        
+        .equity-card.cash-contributions::before {
+            background: linear-gradient(90deg, var(--primary-amber), #fbbf24);
+        }
+        
+        .equity-card:hover {
+            transform: translateY(-8px);
+            box-shadow: var(--shadow-2xl);
+            border-color: var(--neutral-300);
+        }
+        
+        .equity-card:hover::before {
+            height: 6px;
+        }
+        
+        .equity-card h3 {
+            font-size: 22px;
+            font-weight: 700;
+            margin-bottom: 20px;
+            color: var(--neutral-900);
+        }
+        
+        .equity-card ul {
+            list-style: none;
+            padding: 0;
+        }
+        
+        .equity-card li {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            margin-bottom: 16px;
+            font-size: 15px;
+            line-height: 1.6;
+            color: var(--neutral-700);
+        }
+        
+        .equity-card li:last-child {
+            margin-bottom: 0;
+        }
+        
+        .equity-card li::before {
+            content: '✓';
+            background: var(--neutral-900);
+            color: white;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 12px;
+            flex-shrink: 0;
+            margin-top: 2px;
+        }
+        
+        .divider {
+            height: 1px;
+            background: linear-gradient(90deg, transparent, var(--neutral-200), transparent);
+            margin: 80px 0;
+        }
+        
+        .pathways-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 24px;
+        }
+        
+        .pathway-card {
+            background: white;
+            border-radius: 20px;
+            padding: 36px;
+            border: 1px solid var(--neutral-200);
+            box-shadow: var(--shadow-md);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .pathway-card:hover {
+            transform: translateY(-8px);
+            box-shadow: var(--shadow-2xl);
+            border-color: var(--neutral-300);
+        }
+        
+        .pathway-icon {
+            width: 64px;
+            height: 64px;
+            border-radius: 16px;
+            background: linear-gradient(135deg, var(--neutral-900), var(--neutral-700));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            margin: 0 auto 20px;
+            box-shadow: var(--shadow-lg);
+        }
+        
+        .pathway-title {
+            font-size: 22px;
+            font-weight: 700;
+            margin-bottom: 10px;
+            color: var(--neutral-900);
+            text-align: center;
+        }
+        
+        .pathway-subtitle {
+            font-size: 15px;
+            color: var(--neutral-600);
+            margin-bottom: 24px;
+            text-align: center;
+            font-weight: 500;
+        }
+        
+        .pathway-description {
+            font-size: 15px;
+            line-height: 1.7;
+            color: var(--neutral-700);
+        }
+        
+        .investment-section {
+            background: linear-gradient(135deg, #fffbeb, #fef3c7);
+            border: 2px solid #f59e0b;
+            border-radius: 20px;
+            padding: 40px;
+            margin-bottom: 64px;
+        }
+        
+        .investment-section h3 {
+            color: #92400e;
+            font-size: 28px;
+            font-weight: 800;
+            margin-bottom: 24px;
+            text-align: center;
+        }
+        
+        .investment-content {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 32px;
+            align-items: start;
+        }
+        
+        .investment-details p {
+            font-size: 16px;
+            margin-bottom: 24px;
+            color: #92400e;
+            font-weight: 500;
+        }
+        
+        .investment-details ul {
+            list-style: none;
+            padding: 0;
+        }
+        
+        .investment-details li {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            margin-bottom: 16px;
+            font-size: 15px;
+            line-height: 1.6;
+            color: #92400e;
+        }
+        
+        .investment-details li::before {
+            content: '💰';
+            font-size: 20px;
+            flex-shrink: 0;
+            margin-top: 2px;
+        }
+        
+        .investment-example {
+            background: white;
+            border: 2px solid #f59e0b;
+            border-radius: 16px;
+            padding: 24px;
+            text-align: center;
+        }
+        
+        .investment-example strong {
+            color: #92400e;
+            font-size: 18px;
+            display: block;
+            margin-bottom: 12px;
+            font-weight: 700;
+        }
+        
+        .investment-example .example-text {
+            color: #92400e;
+            font-size: 15px;
+            line-height: 1.6;
+            font-weight: 500;
+        }
+        
+        .questions-section {
+            background: linear-gradient(135deg, var(--neutral-50), #ffffff);
+            border: 2px dashed var(--neutral-300);
+            border-radius: 20px;
+            padding: 48px;
+        }
+        
+        .questions-section h3 {
+            color: var(--neutral-900);
+            font-size: 30px;
+            font-weight: 800;
+            text-align: center;
+            margin-bottom: 36px;
+        }
+        
+        .questions-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
+            gap: 20px;
+        }
+        
+        .question-item {
+            background: white;
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: var(--shadow-md);
+            border: 1px solid var(--neutral-200);
+            transition: all 0.2s ease;
+        }
+        
+        .question-item:hover {
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-lg);
+            border-color: var(--neutral-300);
+        }
+        
+        .question-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+        
+        .question-number {
+            background: linear-gradient(135deg, var(--neutral-900), var(--neutral-700));
+            color: white;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 14px;
+            flex-shrink: 0;
+        }
+        
+        .question-text {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--neutral-900);
+            line-height: 1.4;
+            flex: 1;
+        }
+        
+        .question-options {
+            margin-left: 48px;
+        }
+        
+        .question-options li {
+            color: var(--neutral-700);
+            margin-bottom: 6px;
+            font-size: 15px;
+        }
+        
+        .stat-highlight {
+            background: linear-gradient(135deg, #f0f9ff, #e0f2fe);
+            border: 1px solid #0ea5e9;
+            border-radius: 12px;
+            padding: 12px;
+            margin: 16px 0;
+            text-align: center;
+        }
+        
+        .stat-number {
+            font-size: 28px;
+            font-weight: 800;
+            color: #0369a1;
+            display: block;
+        }
+        
+        .stat-label {
+            font-size: 12px;
+            color: #0369a1;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        
+        @media (max-width: 768px) {
+            .header-content {
+                padding: 48px 20px;
+            }
+            
+            .content {
+                padding: 48px 20px;
+            }
+            
+            .pie-chart {
+                width: 240px;
+                height: 240px;
+            }
+            
+            .legend {
+                grid-template-columns: 1fr;
+            }
+            
+            .equity-breakdown {
+                grid-template-columns: 1fr;
+            }
+            
+            .pathways-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .investment-content {
+                grid-template-columns: 1fr;
+            }
+            
+            .questions-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .equity-card,
+            .pathway-card {
+                padding: 24px;
+            }
+            
+            .investment-section {
+                padding: 24px;
+            }
+            
+            .questions-section {
+                padding: 32px 20px;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .questions-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .question-item {
+                padding: 20px;
+            }
+            
+            .question-options {
+                margin-left: 0;
+                margin-top: 12px;
+            }
+            
+            .question-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <h1>Equity Structure</h1>
+                <p class="header-subtitle">A transparent framework for ownership, contribution, and growth</p>
+                <div class="disclaimer">
+                    <strong>⚠️ Important:</strong> These are example numbers for visualization. Final structure requires team agreement.
+                </div>
+            </div>
+        </header>
+        
+        <!-- Main Content -->
+        <main class="content">
+            <!-- Overview Section -->
+            <section class="section">
+                <div class="overview-visual">
+                    <div class="pie-chart"></div>
+                    <div class="legend">
+                        <div class="legend-item">
+                            <span class="legend-color" style="background: var(--primary-blue);"></span>
+                            <div>
+                                <div style="font-weight: 600; color: var(--neutral-900);">Founders Base</div>
+                                <div style="font-size: 14px; color: var(--neutral-600);">15% total pool</div>
+                            </div>
+                        </div>
+                        <div class="legend-item">
+                            <span class="legend-color" style="background: var(--primary-green);"></span>
+                            <div>
+                                <div style="font-weight: 600; color: var(--neutral-900);">Sweat Equity</div>
+                                <div style="font-size: 14px; color: var(--neutral-600);">35% total pool</div>
+                            </div>
+                        </div>
+                        <div class="legend-item">
+                            <span class="legend-color" style="background: var(--primary-amber);"></span>
+                            <div>
+                                <div style="font-weight: 600; color: var(--neutral-900);">Cash Investment</div>
+                                <div style="font-size: 14px; color: var(--neutral-600);">50% total pool</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            
+            <!-- Equity Breakdown -->
+            <section class="section">
+                <h2 class="section-title">Equity Breakdown</h2>
+                <p class="section-subtitle">Three distinct pathways to ownership, each designed for different contribution styles</p>
+                
+                <div class="equity-breakdown">
+                    <div class="equity-card founders-base">
+                        <h3>Founders Base (15% → 3% each)</h3>
+                        <ul>
+                            <li>Each founder receives 3% from a shared 15% pool</li>
+                            <li>Equal buy-in requirement for all founders</li>
+                            <li>Represents unity and foundational commitment</li>
+                            <li>Vests after 3 consecutive months of $4,000 profit</li>
+                        </ul>
+                        <div class="stat-highlight">
+                            <span class="stat-number">3%</span>
+                            <span class="stat-label">Per Founder</span>
+                        </div>
+                    </div>
+                    
+                    <div class="equity-card sweat-equity">
+                        <h3>Sweat Equity (35% → max 7% each)</h3>
+                        <ul>
+                            <li>Reserved for founders contributing consistent hands-on work</li>
+                            <li>Earned through role fulfillment and operational involvement</li>
+                            <li>Tracked fairly through contribution metrics</li>
+                            <li>Gradual vesting (~2% per year of steady contribution)</li>
+                            <li><em>Optional: founders can choose cash compensation instead</em></li>
+                        </ul>
+                        <div class="stat-highlight">
+                            <span class="stat-number">7%</span>
+                            <span class="stat-label">Maximum Per Founder</span>
+                        </div>
+                    </div>
+                    
+                    <div class="equity-card cash-contributions">
+                        <h3>Cash Investment (50%)</h3>
+                        <ul>
+                            <li>Open to founders and potential outside investors</li>
+                            <li>Proportional equity based on investment amount</li>
+                            <li>Valued at agreed-upon company valuation at time of investment</li>
+                            <li>Completely voluntary with no participation requirements</li>
+                        </ul>
+                        <div class="stat-highlight">
+                            <span class="stat-number">50%</span>
+                            <span class="stat-label">Investment Pool</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            
+            <div class="divider"></div>
+            
+            <!-- Pathways -->
+            <section class="section">
+                <h2 class="section-title">Founder Pathways</h2>
+                <p class="section-subtitle">Real examples showing how different founders can approach equity building</p>
+                
+                <div class="pathways-grid">
+                    <div class="pathway-card">
+                        <div class="pathway-icon">🏋️</div>
+                        <h3 class="pathway-title">Alex — The Operator</h3>
+                        <p class="pathway-subtitle">Sweat equity maximizer</p>
+                        <div class="pathway-description">
+                            <ul style="list-style: none; padding: 0; margin: 0;">
+                                <li style="display: flex; align-items: flex-start; gap: 12px; margin-bottom: 16px; font-size: 15px; line-height: 1.6; color: var(--neutral-700);">
+                                    <span style="background: var(--neutral-900); color: white; width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 12px; flex-shrink: 0; margin-top: 2px;">✓</span>
+                                    Alex pays the standard buy-in and earns the 3% founders share once he stays committed and the company hits 3 months of $4,000 profit
+                                </li>
+                                <li style="display: flex; align-items: flex-start; gap: 12px; margin-bottom: 16px; font-size: 15px; line-height: 1.6; color: var(--neutral-700);">
+                                    <span style="background: var(--neutral-900); color: white; width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 12px; flex-shrink: 0; margin-top: 2px;">✓</span>
+                                    By showing up consistently—helping with sessions, operations, and weekly tasks—Alex earns the full 7% sweat-equity over 3 years
+                                </li>
+                                <li style="display: flex; align-items: flex-start; gap: 12px; margin-bottom: 0; font-size: 15px; line-height: 1.6; color: var(--neutral-700);">
+                                    <span style="background: var(--neutral-900); color: white; width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 12px; flex-shrink: 0; margin-top: 2px;">✓</span>
+                                    He doesn't need to invest any extra money to reach his total 10% ownership
+                                </li>
+                            </ul>
+                            <div class="stat-highlight">
+                                <span class="stat-number">10%</span>
+                                <span class="stat-label">Total Ownership</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="pathway-card">
+                        <div class="pathway-icon">💰</div>
+                        <h3 class="pathway-title">Jordan — The Contributor</h3>
+                        <p class="pathway-subtitle">Salary-focused approach</p>
+                        <div class="pathway-description">
+                            <ul style="list-style: none; padding: 0; margin: 0;">
+                                <li style="display: flex; align-items: flex-start; gap: 12px; margin-bottom: 16px; font-size: 15px; line-height: 1.6; color: var(--neutral-700);">
+                                    <span style="background: var(--neutral-900); color: white; width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 12px; flex-shrink: 0; margin-top: 2px;">✓</span>
+                                    Jordan pays the buy-in and earns the 3% founders share after the company reaches 3 months of $4,000 profit
+                                </li>
+                                <li style="display: flex; align-items: flex-start; gap: 12px; margin-bottom: 16px; font-size: 15px; line-height: 1.6; color: var(--neutral-700);">
+                                    <span style="background: var(--neutral-900); color: white; width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 12px; flex-shrink: 0; margin-top: 2px;">✓</span>
+                                    He completes all his responsibilities during the development phase but chooses to get paid in cash instead of earning sweat equity
+                                </li>
+                                <li style="display: flex; align-items: flex-start; gap: 12px; margin-bottom: 0; font-size: 15px; line-height: 1.6; color: var(--neutral-700);">
+                                    <span style="background: var(--neutral-900); color: white; width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 12px; flex-shrink: 0; margin-top: 2px;">✓</span>
+                                    Later, Jordan decides to leave the business, but he keeps his 3% forever
+                                </li>
+                            </ul>
+                            <div class="stat-highlight">
+                                <span class="stat-number">3%</span>
+                                <span class="stat-label">Total Ownership</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="pathway-card">
+                        <div class="pathway-icon">📈</div>
+                        <h3 class="pathway-title">Sam — The Investor</h3>
+                        <p class="pathway-subtitle">Capital-focused strategy</p>
+                        <div class="pathway-description">
+                            <ul style="list-style: none; padding: 0; margin: 0;">
+                                <li style="display: flex; align-items: flex-start; gap: 12px; margin-bottom: 16px; font-size: 15px; line-height: 1.6; color: var(--neutral-700);">
+                                    <span style="background: var(--neutral-900); color: white; width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 12px; flex-shrink: 0; margin-top: 2px;">✓</span>
+                                    Sam pays the buy-in at first but leaves early, before the company reaches 3 months of $4,000 profit
+                                </li>
+                                <li style="display: flex; align-items: flex-start; gap: 12px; margin-bottom: 16px; font-size: 15px; line-height: 1.6; color: var(--neutral-700);">
+                                    <span style="background: var(--neutral-900); color: white; width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 12px; flex-shrink: 0; margin-top: 2px;">✓</span>
+                                    Later on, he invests $20,000 during a growth phase and gets equity based on the company's value at that time
+                                </li>
+                                <li style="display: flex; align-items: flex-start; gap: 12px; margin-bottom: 0; font-size: 15px; line-height: 1.6; color: var(--neutral-700);">
+                                    <span style="background: var(--neutral-900); color: white; width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 12px; flex-shrink: 0; margin-top: 2px;">✓</span>
+                                    Sam isn't involved in operations anymore but stays connected as an investor
+                                </li>
+                            </ul>
+                            <div class="stat-highlight">
+                                <span class="stat-number">10%</span>
+                                <span class="stat-label">Via Investment</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            
+            <!-- Investment Option -->
+            <section class="investment-section">
+                <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 24px;">
+                    <h3 style="margin: 0; color: #92400e; font-size: 28px; font-weight: 800;">Optional Cash Investment</h3>
+                    <div style="flex: 1; height: 2px; background: linear-gradient(90deg, #f59e0b, #92400e); opacity: 0.6;"></div>
+                    <div style="background: linear-gradient(135deg, #f59e0b, #fbbf24); color: white; padding: 8px 16px; border-radius: 20px; font-weight: 700; font-size: 14px; text-shadow: 0 1px 2px rgba(0,0,0,0.2);">
+                        📊 From 50% Cash Pool Above
+                    </div>
+                </div>
+                
+                <div style="background: rgba(245, 158, 11, 0.1); border: 2px solid #f59e0b; border-radius: 12px; padding: 16px; margin-bottom: 24px;">
+                    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+                        <div style="width: 24px; height: 24px; background: #f59e0b; border-radius: 50%; display: flex; align-items: center; justify-content: center;">
+                            <svg style="width: 14px; height: 14px; color: white;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                            </svg>
+                        </div>
+                        <span style="font-weight: 700; color: #92400e; font-size: 16px;">This draws from the Cash Investment (50%) pool shown in the breakdown above</span>
+                    </div>
+                    <p style="margin: 0; font-size: 14px; color: #92400e; opacity: 0.8; margin-left: 36px;">All founders can participate in this investment pool regardless of their chosen equity pathway</p>
+                </div>
+
+                <div class="investment-content">
+                    <div class="investment-details">
+                        <p>Additional equity available through capital contribution</p>
+                        <ul>
+                            <li>Available during expansion phases (equipment, buildouts, scaling)</li>
+                            <li>Equity percentage based on agreed company valuation</li>
+                            <li>Does not affect chosen pathway (A, B, or C)</li>
+                            <li>Provides capital growth participation alongside sweat equity</li>
+                        </ul>
+                    </div>
+                    <div class="investment-example">
+                        <strong>Example Calculation</strong>
+                        <div class="example-text">
+                            Company valued at $200,000<br>
+                            1% equity = $2,000<br><br>
+                            $4,000 investment = 2% equity
+                        </div>
+                    </div>
+                </div>
+            </section>
+            
+            <!-- Questions -->
+            <section class="questions-section">
+                <h3>Team Decision Points</h3>
+                <div class="questions-grid">
+                    <div class="question-item">
+                        <div class="question-header">
+                            <div class="question-number">1</div>
+                            <div class="question-text">What's the optimal equity split between founders, sweat, and cash pools?</div>
+                        </div>
+                    </div>
+                    
+                    <div class="question-item">
+                        <div class="question-header">
+                            <div class="question-number">2</div>
+                            <div class="question-text">How should we handle buy-in refunds for early departures?</div>
+                        </div>
+                    </div>
+                    
+                    <div class="question-item">
+                        <div class="question-header">
+                            <div class="question-number">3</div>
+                            <div class="question-text">What should the initial founder buy-in amount be?</div>
+                        </div>
+                    </div>
+                    
+                    <div class="question-item">
+                        <div class="question-header">
+                            <div class="question-number">4</div>
+                            <div class="question-text">How do we measure and track sweat equity contribution?</div>
+                        </div>
+                        <ul class="question-options">
+                            <li>Time-based tracking (hours worked)</li>
+                            <li>Role-based consistency (ongoing responsibilities)</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="question-item">
+                        <div class="question-header">
+                            <div class="question-number">5</div>
+                            <div class="question-text">What are the optimal vesting schedules for each equity type?</div>
+                        </div>
+                    </div>
+                    
+                    <div class="question-item">
+                        <div class="question-header">
+                            <div class="question-number">6</div>
+                            <div class="question-text">When should we establish cash equity pricing—now or at investment time?</div>
+                        </div>
+                    </div>
+                    
+                    <div class="question-item">
+                        <div class="question-header">
+                            <div class="question-number">7</div>
+                            <div class="question-text">Should outside investors have access to the cash contribution pool?</div>
+                        </div>
+                    </div>
+                    
+                    <div class="question-item">
+                        <div class="question-header">
+                            <div class="question-number">8</div>
+                            <div class="question-text">How should voting rights be structured—equity-weighted or equal?</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+</body>
+</html>

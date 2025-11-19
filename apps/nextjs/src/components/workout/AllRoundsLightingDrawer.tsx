@@ -2,7 +2,7 @@
 
 import React from "react";
 import { api } from "~/trpc/react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 interface AllRoundsLightingDrawerProps {
   sessionId?: string | null;
@@ -38,10 +38,12 @@ export function AllRoundsLightingDrawer({
     rest: null,
   });
 
+
   const [selectedPhase, setSelectedPhase] = React.useState<keyof GlobalConfigState | null>(null);
   const [expandedPhases, setExpandedPhases] = React.useState<Record<string, boolean>>({});
 
   const trpc = api();
+  const queryClient = useQueryClient();
 
   // Color utility functions (same as LightingConfigDrawer)
   const hexToHSL = (hex: string): { h: number; s: number; l: number } => {
@@ -101,6 +103,20 @@ export function AllRoundsLightingDrawer({
   const { data: lightingConfig } = useQuery({
     ...trpc.lightingConfig.get.queryOptions({ sessionId: sessionId! }),
     enabled: !!sessionId
+  });
+
+  // Update global defaults mutation
+  const updateGlobalDefaults = useMutation({
+    ...trpc.lightingConfig.updateGlobalDefaults.mutationOptions(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: trpc.lightingConfig.get.queryOptions({ sessionId: sessionId! }).queryKey,
+      });
+      onSave?.();
+    },
+    onError: (error) => {
+      console.error('Failed to save global lighting configuration:', error);
+    },
   });
 
   // Process and categorize scenes by color (same logic as LightingConfigDrawer)
@@ -181,16 +197,8 @@ export function AllRoundsLightingDrawer({
     return { categorized, all: sortedScenes };
   }, [rawScenes]);
 
-  // Initialize global config from saved configuration
-  React.useEffect(() => {
-    if (lightingConfig?.globalDefaults) {
-      setGlobalConfig({
-        preview: lightingConfig.globalDefaults.preview || null,
-        work: lightingConfig.globalDefaults.work || null,
-        rest: lightingConfig.globalDefaults.rest || null,
-      });
-    }
-  }, [lightingConfig]);
+  // Note: No pre-population from saved config to avoid unintended overwrites
+  // Users must explicitly select scenes they want to configure globally
 
   // Configuration phase data
   const configPhases = [
@@ -236,9 +244,28 @@ export function AllRoundsLightingDrawer({
   };
 
   const handleApplyGlobalConfig = async () => {
-    // Frontend-only for now - no actual mutation
-    console.log('Would apply global config:', globalConfig);
-    onSave?.();
+    if (!sessionId) return;
+
+    // Filter out null values and build global config (intent-based)
+    const globalConfigToApply = Object.fromEntries(
+      Object.entries(globalConfig).filter(([, value]) => value !== null)
+    ) as {
+      preview?: { sceneId: string; sceneName: string };
+      work?: { sceneId: string; sceneName: string };
+      rest?: { sceneId: string; sceneName: string };
+    };
+
+    // Don't proceed if no configuration selected
+    if (Object.keys(globalConfigToApply).length === 0) return;
+
+    try {
+      await updateGlobalDefaults.mutateAsync({
+        sessionId,
+        globalConfig: globalConfigToApply,
+      });
+    } catch (error) {
+      console.error('Failed to save global configuration:', error);
+    }
   };
 
   return (
@@ -394,16 +421,19 @@ export function AllRoundsLightingDrawer({
           </button>
           <button
             onClick={handleApplyGlobalConfig}
-            disabled={!selectedPhase && Object.values(globalConfig).every(config => config === null)}
+            disabled={Object.values(globalConfig).every(config => config === null) || updateGlobalDefaults.isPending}
             className={`
-              flex-1 px-4 py-2.5 rounded-lg font-medium transition-all
-              ${(!selectedPhase && Object.values(globalConfig).some(config => config !== null)) || selectedPhase
+              flex-1 px-4 py-2.5 rounded-lg font-medium transition-all flex items-center justify-center gap-2
+              ${Object.values(globalConfig).some(config => config !== null) && !updateGlobalDefaults.isPending
                 ? 'bg-purple-500 text-white hover:bg-purple-600 shadow-lg hover:shadow-xl active:scale-[0.98]' 
                 : 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
               }
             `}
           >
-            {selectedPhase ? `Apply to ${configPhases.find(p => p.key === selectedPhase)?.title}` : 'Apply Global Settings'}
+            {updateGlobalDefaults.isPending && (
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+            )}
+            {updateGlobalDefaults.isPending ? 'Applying...' : 'Apply Global Settings'}
           </button>
         </div>
       </div>

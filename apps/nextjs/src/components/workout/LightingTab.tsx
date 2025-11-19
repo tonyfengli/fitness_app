@@ -30,6 +30,10 @@ export function LightingTab({ sessionId, circuitConfig, roundsData, onConfigureL
     roundId: null
   });
   
+  // State for special effects testing
+  const [selectedSpecialEffect, setSelectedSpecialEffect] = React.useState("");
+  const [applyingEffect, setApplyingEffect] = React.useState(false);
+  
   const trpc = api();
   
   // Get current lighting configuration from backend
@@ -154,6 +158,65 @@ export function LightingTab({ sessionId, circuitConfig, roundsData, onConfigureL
       onLightingStateChange(isLightingEnabled);
     }
   }, [isLightingEnabled, onLightingStateChange]);
+  
+  // Handle special effects testing
+  const handleApplySpecialEffect = async () => {
+    if (!selectedSpecialEffect || applyingEffect) return;
+    
+    setApplyingEffect(true);
+    
+    try {
+      // Create test effect based on selection
+      const effectConfig = getSpecialEffectConfig(selectedSpecialEffect);
+      
+      // Apply the effect using existing lighting system
+      const response = await fetch('/api/lighting/apply-effect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          effectType: selectedSpecialEffect,
+          config: effectConfig,
+          sessionId
+        })
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to apply lighting effect');
+      }
+      
+      // Reset selection after successful application
+      setSelectedSpecialEffect("");
+      
+    } catch (error) {
+      console.error('Error applying special effect:', error);
+    } finally {
+      setApplyingEffect(false);
+    }
+  };
+  
+  // Generate effect configurations
+  const getSpecialEffectConfig = (effectType: string) => {
+    switch (effectType) {
+      case 'accelerating-countdown':
+        return { animation: 'countdown-pulse', duration: 5000, intensity: 'high' };
+      case 'victory-celebration':
+        return { animation: 'rainbow-cycle', duration: 3000, intensity: 'max' };
+      case 'heartrate-pulse':
+        return { animation: 'pulse', duration: 1000, color: '#FF4444', intensity: 'medium' };
+      case 'intensity-gradient':
+        return { animation: 'gradient-shift', duration: 10000, colors: ['#FF0000', '#FF8800', '#FFFF00'], intensity: 'high' };
+      case 'breathing-guide':
+        return { animation: 'breathe', duration: 4000, color: '#00AA88', intensity: 'low' };
+      case 'round-transition':
+        return { animation: 'wave-flash', duration: 2000, intensity: 'max' };
+      case 'motivation-blast':
+        return { animation: 'strobe', duration: 1500, color: '#8800FF', intensity: 'high' };
+      case 'focus-zone':
+        return { animation: 'steady-glow', duration: 0, color: '#0066FF', intensity: 'medium' };
+      default:
+        return { animation: 'flash', duration: 500, intensity: 'medium' };
+    }
+  };
   
 
   // Generate lighting configurations from actual workout data
@@ -361,6 +424,24 @@ export function LightingTab({ sessionId, circuitConfig, roundsData, onConfigureL
         )}
       </div>
 
+      {/* Work in Progress Notice */}
+      <div className="bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3 mb-6">
+        <div className="flex items-center gap-3">
+          <div className="w-6 h-6 rounded-full bg-amber-400 dark:bg-amber-500 flex items-center justify-center flex-shrink-0">
+            <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+            </svg>
+          </div>
+          <div>
+            <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
+              Work in Progress - Do Not Use
+            </p>
+            <p className="text-xs text-amber-700 dark:text-amber-300">
+              This lighting system is still under development. Please avoid using it in live sessions.
+            </p>
+          </div>
+        </div>
+      </div>
 
       {/* Rounds Visual Layout */}
       <div className="space-y-6">
@@ -465,6 +546,48 @@ export function LightingTab({ sessionId, circuitConfig, roundsData, onConfigureL
             </div>
           </div>
         ))}
+      </div>
+      
+      {/* Special Effects Testing Section - Moved to Bottom */}
+      <div className="bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 border-2 border-dashed border-purple-300 dark:border-purple-700 rounded-lg p-4 mt-8">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="text-lg font-semibold text-purple-900 dark:text-purple-100">
+              🎆 Special Effects Testing
+            </h3>
+            <p className="text-sm text-purple-600 dark:text-purple-300">
+              Experimental lighting effects - Will be removed later
+            </p>
+          </div>
+          
+          <select 
+            className="px-3 py-2 border border-purple-300 dark:border-purple-600 rounded-md bg-white dark:bg-gray-800 text-purple-900 dark:text-purple-100"
+            onChange={(e) => setSelectedSpecialEffect(e.target.value)}
+            value={selectedSpecialEffect}
+          >
+            <option value="">Select Effect...</option>
+            <option value="accelerating-countdown">🚀 Accelerating Countdown</option>
+            <option value="victory-celebration">🎉 Victory Celebration</option>
+            <option value="heartrate-pulse">💓 Heart Rate Pulse</option>
+            <option value="intensity-gradient">🔥 Intensity Gradient</option>
+            <option value="breathing-guide">🧘 Breathing Guide</option>
+            <option value="round-transition">⚡ Round Transition Wave</option>
+            <option value="motivation-blast">💪 Motivation Blast</option>
+            <option value="focus-zone">🎯 Focus Zone</option>
+          </select>
+          
+          <button
+            onClick={handleApplySpecialEffect}
+            disabled={!selectedSpecialEffect || applyingEffect}
+            className={`px-4 py-2 rounded-md font-medium transition-all ${
+              selectedSpecialEffect && !applyingEffect
+                ? 'bg-purple-500 text-white hover:bg-purple-600 shadow-lg hover:shadow-xl'
+                : 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed'
+            }`}
+          >
+            {applyingEffect ? 'Testing...' : 'Test Effect'}
+          </button>
+        </div>
       </div>
       
       {/* All Rounds Drawer using OptionsDrawer */}
