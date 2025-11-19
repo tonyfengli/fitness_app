@@ -25,6 +25,12 @@ export interface HueScene {
   transitiontime?: number; // Default transition time in deciseconds
 }
 
+interface TokenResponse {
+  access_token: string;
+  refresh_token?: string;
+  expires_in?: number;
+}
+
 export class HueRemoteClient {
   private config: HueRemoteClientConfig;
   private apiUrl: string;
@@ -64,7 +70,7 @@ export class HueRemoteClient {
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
       },
-      body: requestBody,
+      body: requestBody.toString(),
     });
 
     if (!response.ok) {
@@ -73,7 +79,7 @@ export class HueRemoteClient {
       throw new Error(`Token refresh failed: ${response.status} ${response.statusText} - ${errorText}`);
     }
 
-    const tokenData = await response.json();
+    const tokenData = await response.json() as TokenResponse;
     
     console.log('✅ [HueRemoteClient] Token refresh successful!');
     
