@@ -17,21 +17,21 @@ import { env } from "~/env";
 export const metadata: Metadata = {
   metadataBase: new URL(
     env.VERCEL_ENV === "production"
-      ? "https://turbo.t3.gg"
+      ? "https://app.g1fitnessoc.com"
       : "http://localhost:3000",
   ),
-  title: "Create T3 Turbo",
-  description: "Simple monorepo with shared backend for web & mobile apps",
+  title: "G1 Fitness",
+  description: "Professional fitness training and workout management platform",
   openGraph: {
-    title: "Create T3 Turbo",
-    description: "Simple monorepo with shared backend for web & mobile apps",
-    url: "https://create-t3-turbo.vercel.app",
-    siteName: "Create T3 Turbo",
+    title: "G1 Fitness",
+    description: "Professional fitness training and workout management platform",
+    url: "https://app.g1fitnessoc.com",
+    siteName: "G1 Fitness",
   },
   twitter: {
     card: "summary_large_image",
-    site: "@jullerino",
-    creator: "@jullerino",
+    site: "@g1fitness",
+    creator: "@g1fitness",
   },
 };
 
