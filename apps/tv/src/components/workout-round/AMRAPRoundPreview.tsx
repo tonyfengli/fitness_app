@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text } from 'react-native';
 import { TOKENS, MattePanel, RoundData } from './shared';
+import { LightingDotWithTimestamp } from '../LightingDotWithTimestamp';
 
 interface AMRAPRoundPreviewProps {
   currentRound: RoundData;
@@ -155,6 +156,9 @@ export function AMRAPRoundPreview({ currentRound, restDuration = 60, timeRemaini
         </View>
         
       </View>
+      
+      {/* Lighting Status Dot with Timestamp */}
+      <LightingDotWithTimestamp position="absolute" />
     </View>
   );
 }

@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text } from 'react-native';
 import { TOKENS, MattePanel, CircuitExercise, RoundData } from './shared';
+import { LightingDotWithTimestamp } from '../LightingDotWithTimestamp';
 
 interface StationsRoundPreviewProps {
   currentRound: RoundData;
@@ -286,6 +287,8 @@ export function StationsRoundPreview({ currentRound, repeatTimes = 1, workDurati
         </View>
       )}
 
+      {/* Lighting Status Dot with Timestamp */}
+      <LightingDotWithTimestamp position="absolute" />
     </View>
   );
 }
