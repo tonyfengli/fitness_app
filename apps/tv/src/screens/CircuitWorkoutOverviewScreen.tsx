@@ -6,6 +6,7 @@ import { api } from '../providers/TRPCProvider';
 import { useRealtimeExerciseSwaps, useRealtimeCircuitConfig, useRealtimeCircuitExercises } from '@acme/ui-shared';
 import { supabase } from '../lib/supabase';
 import { useStartWorkout } from '../hooks/useStartWorkout';
+import { LightingButtonWrapper } from '../components/LightingButtonWrapper';
 
 // Design tokens - matching other screens
 const TOKENS = {
@@ -575,6 +576,18 @@ function RoundContent({ round, isCompact }: {
 }
 
 export function CircuitWorkoutOverviewScreen() {
+  // DEBUG: Log when this screen mounts to see if other realtime works
+  useEffect(() => {
+    console.log('[CircuitWorkoutOverviewScreen] Component mounted, checking realtime connections...');
+    const channels = supabase.getChannels();
+    console.log('[CircuitWorkoutOverviewScreen] Active channels:', {
+      count: channels.length,
+      channels: channels.map(ch => ({
+        topic: ch.topic,
+        state: ch.state
+      }))
+    });
+  }, []);
   const navigation = useNavigation();
   const sessionId = navigation.getParam('sessionId');
   
@@ -864,26 +877,30 @@ export function CircuitWorkoutOverviewScreen() {
           disabled={isGenerating || roundsData.length === 0}
         >
           {({ focused }) => (
-            <MattePanel 
+            <LightingButtonWrapper
+              sessionId={sessionId}
+              roundNumber={1}
               focused={focused}
-              style={{ 
-                paddingHorizontal: 32,
-                paddingVertical: 12,
-                backgroundColor: focused ? 'rgba(124,255,181,0.2)' : TOKENS.color.card,
-                borderColor: focused ? TOKENS.color.accent : TOKENS.color.borderGlass,
-                borderWidth: 1,
-                transform: focused ? [{ translateY: -1 }] : [],
-                opacity: roundsData.length === 0 ? 0.5 : 1
-              }}
             >
-              <Text style={{ 
-                color: focused ? TOKENS.color.accent : TOKENS.color.text, 
-                fontSize: 18,
-                fontWeight: focused ? '600' : '400'
-              }}>
-                {isGenerating ? 'Starting...' : 'Start Circuit'}
-              </Text>
-            </MattePanel>
+              <MattePanel 
+                focused={focused}
+                style={{ 
+                  paddingHorizontal: 32,
+                  paddingVertical: 12,
+                  backgroundColor: focused ? 'rgba(124,255,181,0.2)' : TOKENS.color.card,
+                  transform: focused ? [{ translateY: -1 }] : [],
+                  opacity: roundsData.length === 0 ? 0.5 : 1
+                }}
+              >
+                <Text style={{ 
+                  color: focused ? TOKENS.color.accent : TOKENS.color.text, 
+                  fontSize: 18,
+                  fontWeight: focused ? '600' : '400'
+                }}>
+                  {isGenerating ? 'Starting...' : 'Start Circuit'}
+                </Text>
+              </MattePanel>
+            </LightingButtonWrapper>
           )}
         </Pressable>
       </View>

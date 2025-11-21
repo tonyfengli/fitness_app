@@ -2,15 +2,33 @@ import React from 'react';
 import { View, Text } from 'react-native';
 import { TOKENS, MattePanel, CircuitExercise, RoundData } from './shared';
 import { LightingDotWithTimestamp } from '../LightingDotWithTimestamp';
+import { useLightingPreview } from '../../hooks/useLightingPreview';
+import { useNavigation } from '../../App';
 
 interface CircuitRoundPreviewProps {
   currentRound: RoundData;
   repeatTimes?: number;
   timeRemaining?: number;
   isTimerActive?: boolean;
+  roundNumber?: number;
 }
 
-export function CircuitRoundPreview({ currentRound, repeatTimes = 1, timeRemaining = 0, isTimerActive = false }: CircuitRoundPreviewProps) {
+export function CircuitRoundPreview({ currentRound, repeatTimes = 1, timeRemaining = 0, isTimerActive = false, roundNumber }: CircuitRoundPreviewProps) {
+  const navigation = useNavigation();
+  const sessionId = navigation.getParam('sessionId');
+  
+  // Extract round number from round name if not provided
+  const extractedRoundNumber = roundNumber || (() => {
+    const match = currentRound.roundName?.match(/Round (\d+)/i);
+    return match ? parseInt(match[1], 10) : 1;
+  })();
+  
+  // Initialize lighting preview for this round
+  useLightingPreview({
+    sessionId: sessionId || '',
+    roundNumber: extractedRoundNumber,
+    enabled: !!sessionId
+  });
   // Calculate grid layout based on number of exercises
   const exerciseCount = currentRound.exercises.length;
   let columns = 4; // Default to 4 columns
@@ -185,7 +203,7 @@ export function CircuitRoundPreview({ currentRound, repeatTimes = 1, timeRemaini
       )}
       
       {/* Lighting Status Dot with Timestamp */}
-      <LightingDotWithTimestamp position="absolute" />
+      <LightingDotWithTimestamp position="absolute" roundNumber={extractedRoundNumber} />
     </View>
   );
 }

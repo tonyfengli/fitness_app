@@ -15,23 +15,7 @@ let lastHealthCheck = 0;
 let isHealthyCache = true;
 let wasHealthy = true;
 
-// Status tracking for UI
-let statusListeners: ((status: 'unknown' | 'success' | 'slow' | 'failed') => void)[] = [];
-let currentStatus: 'unknown' | 'success' | 'slow' | 'failed' = 'unknown';
-
-export function subscribeLightingStatus(listener: (status: typeof currentStatus) => void) {
-  statusListeners.push(listener);
-  listener(currentStatus);
-  
-  return () => {
-    statusListeners = statusListeners.filter(l => l !== listener);
-  };
-}
-
-function updateStatus(status: typeof currentStatus) {
-  currentStatus = status;
-  statusListeners.forEach(l => l(status));
-}
+// Status tracking removed - now handled by Supabase real-time
 
 // Check Hue Bridge health
 async function checkHueHealth(): Promise<boolean> {
@@ -143,13 +127,11 @@ export async function setHueLights(
       lastAppliedPreset = preset;
       await AsyncStorage.setItem('lastHuePreset', JSON.stringify(preset));
       
-      // Update status based on latency
-      const status = latency <= 1500 ? 'success' : 'slow';
-      updateStatus(status);
+      // Status now tracked via Supabase real-time
       return true;
     } else {
       const errorText = await response.text();
-      updateStatus('failed');
+      // Status now tracked via Supabase real-time
       console.warn('[HUE-DIRECT] ❌ Hue API error:', {
         status: response.status,
         statusText: response.statusText,
@@ -158,7 +140,7 @@ export async function setHueLights(
       return false;
     }
   } catch (error) {
-    updateStatus('failed');
+    // Status now tracked via Supabase real-time
     console.warn('[HUE-DIRECT] ❌ Failed to update Hue lights:', {
       error: error.message,
       url,

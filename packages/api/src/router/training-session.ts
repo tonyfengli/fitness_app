@@ -467,7 +467,6 @@ export const trainingSessionRouter = {
     .query(async ({ ctx, input }) => {
       const user = ctx.session?.user as SessionUser;
 
-      console.log(`[BUG TRACE] getCheckedInClients called for session: ${input.sessionId} by user: ${user.id}`);
 
       // Verify session belongs to user's business
 
@@ -476,13 +475,6 @@ export const trainingSessionRouter = {
         where: eq(TrainingSession.id, input.sessionId),
       });
 
-      console.log(`[BUG TRACE] Session exists check:`, {
-        sessionId: input.sessionId,
-        exists: !!sessionExists,
-        templateType: sessionExists?.templateType,
-        templateConfig: sessionExists?.templateConfig ? 'has config' : 'no config',
-        sourceWorkoutId: (sessionExists?.templateConfig as any)?.config?.sourceWorkoutId,
-      });
 
       const session = await ctx.db.query.TrainingSession.findFirst({
         where: and(
@@ -501,7 +493,6 @@ export const trainingSessionRouter = {
       }
 
       // Get checked-in and ready users
-      console.log(`[BUG TRACE] Querying UserTrainingSession for sessionId: ${input.sessionId}`);
       
       // First, let's see ALL users in this session regardless of status
       const allUsers = await ctx.db
@@ -509,14 +500,6 @@ export const trainingSessionRouter = {
         .from(UserTrainingSession)
         .where(eq(UserTrainingSession.trainingSessionId, input.sessionId));
       
-      console.log(`[BUG TRACE] ALL users in session (${allUsers.length} total):`, 
-        allUsers.map(u => ({
-          userId: u.userId,
-          status: u.status,
-          checkedInAt: u.checkedInAt,
-          createdAt: u.createdAt,
-        }))
-      );
       
       const checkedInUsers = await ctx.db
         .select()
@@ -533,14 +516,6 @@ export const trainingSessionRouter = {
         )
         .orderBy(desc(UserTrainingSession.checkedInAt));
       
-      console.log(`[BUG TRACE] FILTERED checked-in users (${checkedInUsers.length} filtered):`, 
-        checkedInUsers.map(u => ({
-          userId: u.userId,
-          status: u.status,
-          checkedInAt: u.checkedInAt,
-          createdAt: u.createdAt,
-        }))
-      );
 
       // Get user details and preferences for each checked-in user
       const usersWithDetails = await Promise.all(

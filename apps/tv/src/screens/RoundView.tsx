@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, Pressable } from 'react-native';
 import { useNavigation } from '../App';
+import { LightingButtonWrapper } from '../components/LightingButtonWrapper';
 
 // Types
 type Assignment = { clientName: string; tag: string };
@@ -500,20 +501,24 @@ export default function RoundView({ sessionId, round, workouts, roundsData, orga
           disabled={isPhase2Loading}
         >
           {({ focused }) => (
-            <MattePanel 
+            <LightingButtonWrapper
+              sessionId={sessionId || ''}
+              roundNumber={Math.max(1, currentRoundIndex)}
               focused={focused}
-              style={{ 
-                paddingHorizontal: 32,
-                paddingVertical: 12,
-                backgroundColor: focused ? 'rgba(255,255,255,0.16)' : TOKENS.color.card,
-                borderColor: focused ? 'rgba(255,255,255,0.45)' : TOKENS.color.borderGlass,
-                borderWidth: focused ? 1 : 1,
-                transform: focused ? [{ translateY: -1 }] : [],
-                opacity: isPhase2Loading ? 0.5 : 1,
-              }}
             >
-              <Text style={{ color: TOKENS.color.text, fontSize: 18, letterSpacing: 0.2 }}>Previous</Text>
-            </MattePanel>
+              <MattePanel 
+                focused={focused}
+                style={{ 
+                  paddingHorizontal: 32,
+                  paddingVertical: 12,
+                  backgroundColor: focused ? 'rgba(255,255,255,0.16)' : TOKENS.color.card,
+                  transform: focused ? [{ translateY: -1 }] : [],
+                  opacity: isPhase2Loading ? 0.5 : 1,
+                }}
+              >
+                <Text style={{ color: TOKENS.color.text, fontSize: 18, letterSpacing: 0.2 }}>Previous</Text>
+              </MattePanel>
+            </LightingButtonWrapper>
           )}
         </Pressable>
         
@@ -524,19 +529,23 @@ export default function RoundView({ sessionId, round, workouts, roundsData, orga
           focusable
         >
           {({ focused }) => (
-            <MattePanel 
+            <LightingButtonWrapper
+              sessionId={sessionId || ''}
+              roundNumber={currentRoundIndex + 1}
               focused={focused}
-              style={{ 
-                paddingHorizontal: 18,
-                paddingVertical: 12,
-                backgroundColor: focused ? 'rgba(255,255,255,0.16)' : TOKENS.color.card,
-                borderColor: focused ? 'rgba(255,255,255,0.45)' : TOKENS.color.borderGlass,
-                borderWidth: focused ? 1 : 1,
-                transform: focused ? [{ translateY: -1 }] : [],
-              }}
             >
-              <Text style={{ color: TOKENS.color.text, fontSize: 18 }}>{isPaused ? '▶' : '❚❚'}</Text>
-            </MattePanel>
+              <MattePanel 
+                focused={focused}
+                style={{ 
+                  paddingHorizontal: 18,
+                  paddingVertical: 12,
+                  backgroundColor: focused ? 'rgba(255,255,255,0.16)' : TOKENS.color.card,
+                  transform: focused ? [{ translateY: -1 }] : [],
+                }}
+              >
+                <Text style={{ color: TOKENS.color.text, fontSize: 18 }}>{isPaused ? '▶' : '❚❚'}</Text>
+              </MattePanel>
+            </LightingButtonWrapper>
           )}
         </Pressable>
         
@@ -546,20 +555,24 @@ export default function RoundView({ sessionId, round, workouts, roundsData, orga
           disabled={isPhase2Loading}
         >
           {({ focused }) => (
-            <MattePanel 
+            <LightingButtonWrapper
+              sessionId={sessionId || ''}
+              roundNumber={Math.min(rounds.length, currentRoundIndex + 2)}
               focused={focused}
-              style={{ 
-                paddingHorizontal: 32,
-                paddingVertical: 12,
-                backgroundColor: focused ? 'rgba(255,255,255,0.16)' : TOKENS.color.card,
-                borderColor: focused ? 'rgba(255,255,255,0.45)' : TOKENS.color.borderGlass,
-                borderWidth: focused ? 1 : 1,
-                transform: focused ? [{ translateY: -1 }] : [],
-                opacity: isPhase2Loading ? 0.5 : 1,
-              }}
             >
-              <Text style={{ color: TOKENS.color.text, fontSize: 18, letterSpacing: 0.2 }}>Next</Text>
-            </MattePanel>
+              <MattePanel 
+                focused={focused}
+                style={{ 
+                  paddingHorizontal: 32,
+                  paddingVertical: 12,
+                  backgroundColor: focused ? 'rgba(255,255,255,0.16)' : TOKENS.color.card,
+                  transform: focused ? [{ translateY: -1 }] : [],
+                  opacity: isPhase2Loading ? 0.5 : 1,
+                }}
+              >
+                <Text style={{ color: TOKENS.color.text, fontSize: 18, letterSpacing: 0.2 }}>Next</Text>
+              </MattePanel>
+            </LightingButtonWrapper>
           )}
         </Pressable>
       </View>

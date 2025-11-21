@@ -6,6 +6,9 @@ import {
 } from '../../../workout-round';
 import { TimerDisplay } from '../../TimerDisplay';
 import { TOKENS, RoundData, CircuitExercise } from '../../types';
+import { LightingDotForPhase } from '../../../LightingDotForPhase';
+import { useLightingForPhase } from '../../../../hooks/useLightingForPhase';
+import { useNavigation } from '../../../../App';
 
 interface CircuitRoundContainerProps {
   state: any; // Will be typed more specifically later
@@ -30,6 +33,27 @@ export function CircuitRoundContainer({
   restDuration,
   repeatTimes
 }: CircuitRoundContainerProps) {
+  const navigation = useNavigation();
+  const sessionId = navigation.getParam('sessionId');
+  
+  // Get lighting for current phase
+  const { currentScene: workScene } = useLightingForPhase({
+    sessionId: sessionId || '',
+    roundNumber: currentRoundIndex + 1, // Convert to 1-based
+    phase: 'work',
+    exerciseIndex: currentExerciseIndex,
+    isStationsRound: false, // This is circuit round
+    enabled: state.value === 'exercise'
+  });
+  
+  const { currentScene: restScene } = useLightingForPhase({
+    sessionId: sessionId || '',
+    roundNumber: currentRoundIndex + 1, // Convert to 1-based
+    phase: 'rest',
+    exerciseIndex: currentExerciseIndex,
+    isStationsRound: false, // This is circuit round
+    enabled: state.value === 'rest'
+  });
   if (state.value === 'roundPreview') {
     return (
       <CircuitRoundPreview 
@@ -111,6 +135,9 @@ export function CircuitRoundContainer({
             </View>
           </View>
         )}
+        
+        {/* Lighting indicator for work phase */}
+        <LightingDotForPhase scene={workScene} position="absolute" />
       </>
     );
   }
@@ -213,6 +240,9 @@ export function CircuitRoundContainer({
             </View>
           </View>
         )}
+        
+        {/* Lighting indicator for rest phase */}
+        <LightingDotForPhase scene={restScene} position="absolute" />
       </View>
     );
   }

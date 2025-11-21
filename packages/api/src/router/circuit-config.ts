@@ -186,7 +186,6 @@ export const circuitConfigRouter = createTRPCRouter({
                   )
                 );
               
-              console.log(`[BUG TRACE - getBySession] Updated exercises from "${oldName}" to "${newName}"`);
             }
           }
           

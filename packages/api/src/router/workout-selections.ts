@@ -1550,13 +1550,6 @@ export const workoutSelectionsRouter = {
           });
         }
 
-        console.log("[BUG TRACE - deleteCircuitExercise] Found exercise to delete:", {
-          id: exerciseToDelete.id,
-          groupName: exerciseToDelete.groupName,
-          orderIndex: exerciseToDelete.orderIndex,
-          stationIndex: exerciseToDelete.stationIndex,
-          exerciseId: exerciseToDelete.exerciseId,
-        });
         
         // 1.5. Get circuit config BEFORE deletion to see if this station has circuit config
         const { TrainingSession } = await import("@acme/db/schema");
@@ -1573,18 +1566,6 @@ export const workoutSelectionsRouter = {
           const roundNumber = parseInt(exerciseToDelete.groupName?.match(/\d+/)?.[0] || '0');
           const roundTemplate = config.roundTemplates?.find((rt: any) => rt.roundNumber === roundNumber);
           
-          console.log("[BUG TRACE - deleteCircuitExercise] BEFORE deletion - Circuit config check:", {
-            roundNumber: roundNumber,
-            roundTemplate: roundTemplate,
-            hasStationCircuits: !!roundTemplate?.template?.stationCircuits,
-            stationCircuitsKeys: roundTemplate?.template?.stationCircuits ? Object.keys(roundTemplate.template.stationCircuits) : [],
-            stationCircuitsData: roundTemplate?.template?.stationCircuits,
-            exerciseBeingDeleted: {
-              orderIndex: exerciseToDelete.orderIndex,
-              stationIndex: exerciseToDelete.stationIndex,
-              isMainStationExercise: exerciseToDelete.stationIndex === null || exerciseToDelete.stationIndex === 0
-            }
-          });
         }
 
         // 2. Get all workouts for this session
@@ -1702,20 +1683,10 @@ export const workoutSelectionsRouter = {
           remainingStationsByOrderIndex.set(ex.orderIndex, remainingStationsByOrderIndex.get(ex.orderIndex)! + 1);
         });
         
-        console.log("[BUG TRACE - deleteCircuitExercise] AFTER deletion analysis:", {
-          deletedStationOrderIndex: exerciseToDelete.orderIndex,
-          deletedStationIndex: exerciseToDelete.stationIndex,
-          wasMainStationExercise: exerciseToDelete.stationIndex === null || exerciseToDelete.stationIndex === 0,
-          remainingStations: Array.from(remainingStationsByOrderIndex.keys()).sort((a, b) => a - b),
-          deletedStationStillHasExercises: remainingStationsByOrderIndex.has(exerciseToDelete.orderIndex),
-          exercisesRemainingAtDeletedStation: remainingStationsByOrderIndex.get(exerciseToDelete.orderIndex) || 0,
-          totalRemainingExercises: remainingExercises.length
-        });
         
         // Check if we need to clean up circuit configuration
         const deletedStationHasNoExercises = !remainingStationsByOrderIndex.has(exerciseToDelete.orderIndex);
         if (deletedStationHasNoExercises && sessionWithConfig?.[0]) {
-          console.log("[BUG TRACE - deleteCircuitExercise] STATION COMPLETELY DELETED - Checking circuit config cleanup");
           
           // Re-read the current config to check if circuit configs need cleanup
           const updatedSession = await tx
@@ -1731,18 +1702,9 @@ export const workoutSelectionsRouter = {
             const roundNumber = parseInt(exerciseToDelete.groupName?.match(/\d+/)?.[0] || '0');
             const roundTemplate = config.roundTemplates?.find((rt: any) => rt.roundNumber === roundNumber);
             
-            console.log("[BUG TRACE - deleteCircuitExercise] AFTER deletion - Circuit config still contains:", {
-              roundNumber: roundNumber,
-              hasStationCircuits: !!roundTemplate?.template?.stationCircuits,
-              stationCircuitsKeys: roundTemplate?.template?.stationCircuits ? Object.keys(roundTemplate.template.stationCircuits) : [],
-              stationCircuitsData: roundTemplate?.template?.stationCircuits,
-              deletedOrderIndex: exerciseToDelete.orderIndex,
-              circuitConfigHasDeletedStation: roundTemplate?.template?.stationCircuits?.[exerciseToDelete.orderIndex.toString()] !== undefined
-            });
             
             // Clean up orphaned circuit config if it exists for the deleted station
             if (roundTemplate?.template?.stationCircuits?.[exerciseToDelete.orderIndex.toString()]) {
-              console.log("[BUG TRACE - deleteCircuitExercise] CLEANING UP orphaned circuit config for station:", exerciseToDelete.orderIndex);
               
               // Remove the circuit config for the deleted station
               delete roundTemplate.template.stationCircuits[exerciseToDelete.orderIndex.toString()];
@@ -1761,8 +1723,6 @@ export const workoutSelectionsRouter = {
                 })
                 .where(eq(TrainingSession.id, input.sessionId));
               
-              console.log("[BUG TRACE - deleteCircuitExercise] Circuit config cleaned up. Remaining station circuits:", 
-                roundTemplate.template.stationCircuits ? Object.keys(roundTemplate.template.stationCircuits) : 'none');
             }
           }
         }
@@ -2086,12 +2046,6 @@ export const workoutSelectionsRouter = {
           const roundTemplate = config.roundTemplates?.find((rt: any) => rt.roundNumber === roundNumber);
           
           if (roundTemplate?.template?.type === 'stations_round') {
-            console.log("[BUG TRACE - addExerciseToRoundPublic] BEFORE station creation - Circuit config check:", {
-              roundTemplate: roundTemplate,
-              hasStationCircuits: !!roundTemplate.template.stationCircuits,
-              stationCircuitsKeys: roundTemplate.template.stationCircuits ? Object.keys(roundTemplate.template.stationCircuits) : [],
-              stationCircuitsData: roundTemplate.template.stationCircuits
-            });
             
             // For stations rounds, assign the station index based on how many unique stations exist
             // Group exercises by orderIndex to count stations
