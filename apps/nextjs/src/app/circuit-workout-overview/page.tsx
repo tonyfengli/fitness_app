@@ -855,9 +855,15 @@ function CircuitWorkoutOverviewContent() {
         }).queryKey,
       });
     },
-    onError: (error) => {
+    onError: (error: any) => {
       console.error("Failed to update round:", error);
-      toast.error("Failed to update round. Please try again.");
+      
+      // Check if it's a circuit timing validation error
+      if (error?.message?.includes('circuit timing') && error?.message?.includes('must equal station duration')) {
+        toast.error(error.message);
+      } else {
+        toast.error("Failed to update round. Please try again.");
+      }
     },
   });
 
