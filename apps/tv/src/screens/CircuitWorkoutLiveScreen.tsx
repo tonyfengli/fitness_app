@@ -658,8 +658,9 @@ export function CircuitWorkoutLiveScreen() {
             justifyContent: 'space-between',
             alignItems: 'center',
             paddingHorizontal: 48,
-            paddingTop: 20,
-            paddingBottom: 20,
+            paddingTop: currentRoundType === 'stations_round' ? 5 : 20,
+            paddingBottom: currentRoundType === 'stations_round' ? 5 : 20,
+            marginBottom: currentRoundType === 'stations_round' ? 30 : 0,
             position: 'relative'
           }}>
             {/* LEFT SIDE: Round Info */}
@@ -677,7 +678,7 @@ export function CircuitWorkoutLiveScreen() {
                 color: state.value === 'exercise' ? (currentRoundType === 'stations_round' ? '#fff5e6' : TOKENS.color.text) : TOKENS.color.accent, // Different colors for different round types
                 letterSpacing: -2,
                 position: 'absolute',
-                top: -15,
+                top: currentRoundType === 'stations_round' ? -25 : -15,
                 left: 0,
                 right: 0,
                 textAlign: 'center',
@@ -695,11 +696,11 @@ export function CircuitWorkoutLiveScreen() {
             />
           </View>
 
-          {/* Sets Badge for Stations (positioned above timer) */}
+          {/* Sets Badge for Stations (positioned at bottom) */}
           {currentRoundType === 'stations_round' && currentRoundTiming.repeatTimes > 1 && (state.value === 'exercise' || state.value === 'rest') && (
             <View style={{
               position: 'absolute',
-              top: 159,
+              bottom: 12,
               left: 0,
               right: 0,
               alignItems: 'center',
@@ -765,7 +766,7 @@ export function CircuitWorkoutLiveScreen() {
           )}
 
           {/* Main Content Area */}
-          <View style={{ flex: 1, paddingHorizontal: 48, paddingBottom: 48 }}>
+          <View style={{ flex: 1, paddingHorizontal: 48, paddingBottom: currentRoundType === 'stations_round' ? 24 : 48 }}>
             <WorkoutContent 
               state={state}
               circuitConfig={circuitConfig}

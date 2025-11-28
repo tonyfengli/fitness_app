@@ -51,7 +51,7 @@ export function StationsRestView({
       <View style={{ 
         flex: 1, 
         paddingHorizontal: 48,
-        paddingTop: 29,
+        paddingTop: 0,
         flexDirection: 'column',
         gap: 2,
       }}>
