@@ -150,10 +150,10 @@ export function StationsRestView({
               <View style={{ 
                 flex: 1,
                 padding: 20,
-                paddingTop: 24,
+                paddingTop: isMultiRow ? 12 : 24,
               }}>
                 {/* Team Badge with Station Badge aligned */}
-                <View style={{ marginBottom: 24 }}>
+                <View style={{ marginBottom: isMultiRow ? 12 : 24 }}>
                   <View style={{
                     flexDirection: 'row',
                     alignItems: 'center',

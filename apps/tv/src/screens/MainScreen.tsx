@@ -96,6 +96,7 @@ interface TrainingSession {
   createdAt: Date;
   updatedAt: Date;
   trainerId: string | null;
+  program?: string | null;
   trainer?: {
     id: string;
     name: string;
@@ -1199,17 +1200,24 @@ export function MainScreen() {
                     </View>
                     <View style={styles.sessionInfo}>
                       <Text style={styles.simpleSessionName} numberOfLines={2} ellipsizeMode="tail">
-                        {session.name || `Session ${session.id.split('-')[0].slice(0, 6)}`}
+                        {(session.program && session.program.toLowerCase() !== 'unassigned') ? session.program : (session.name || `Session ${session.id.split('-')[0].slice(0, 6)}`)}
                       </Text>
                       <Text style={styles.simpleSessionType}>
                         {formatTemplateType(session.templateType)}
                       </Text>
                       <Text style={styles.simpleSessionDate}>
-                        {new Date(session.createdAt).toLocaleDateString('en-US', { 
+                        {session.scheduledAt ? new Date(session.scheduledAt).toLocaleDateString('en-US', { 
                           month: 'short', 
                           day: 'numeric',
                           year: 'numeric'
-                        })}
+                        }) : 'Not scheduled'}
+                      </Text>
+                      <Text style={styles.simpleSessionDate}>
+                        {session.scheduledAt ? (() => {
+                          const date = new Date(session.scheduledAt);
+                          const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+                          return days[date.getDay()];
+                        })() : ''}
                       </Text>
                     </View>
                   </View>
