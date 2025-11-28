@@ -425,6 +425,69 @@ export const workoutSelectionsRouter = {
       });
     }),
 
+  // Update exercise order for a client (public)
+  updateExerciseOrderPublic: publicProcedure
+    .input(
+      z.object({
+        sessionId: z.string(),
+        clientId: z.string(),
+        updates: z.array(z.object({
+          workoutExerciseId: z.string(),
+          newOrderIndex: z.number(),
+        })),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      return await ctx.db.transaction(async (tx) => {
+        // Get the workout for this client
+        const { Workout } = await import("@acme/db/schema");
+        
+        const workout = await tx
+          .select()
+          .from(Workout)
+          .where(
+            and(
+              eq(Workout.trainingSessionId, input.sessionId),
+              eq(Workout.userId, input.clientId),
+              or(eq(Workout.status, "draft"), eq(Workout.status, "ready")),
+            ),
+          )
+          .limit(1);
+
+        if (!workout || workout.length === 0) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Workout not found",
+          });
+        }
+
+        const firstWorkout = workout[0];
+        if (!firstWorkout) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Workout not found",
+          });
+        }
+
+        // Update each exercise's order index
+        for (const update of input.updates) {
+          await tx
+            .update(WorkoutExercise)
+            .set({
+              orderIndex: update.newOrderIndex,
+            })
+            .where(
+              and(
+                eq(WorkoutExercise.id, update.workoutExerciseId),
+                eq(WorkoutExercise.workoutId, firstWorkout.id),
+              ),
+            );
+        }
+
+        return { success: true };
+      });
+    }),
+
   // Swap an exercise in a circuit workout (updates for all participants)
   swapCircuitExercise: publicProcedure
     .input(

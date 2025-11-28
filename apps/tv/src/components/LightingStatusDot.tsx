@@ -1,25 +1,23 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text } from 'react-native';
-import { subscribeLightingStatus } from '../lib/lighting';
 
 export function LightingStatusDot() {
   const [status, setStatus] = useState<'unknown' | 'success' | 'slow' | 'failed'>('unknown');
   const [showTooltip, setShowTooltip] = useState(false);
   
   useEffect(() => {
-    const unsubscribe = subscribeLightingStatus(setStatus);
+    // TODO: Implement lighting status subscription when available
+    // For now, just set to unknown
+    setStatus('unknown');
     
     // Show tooltip for 3 seconds on failure
     if (status === 'failed') {
       setShowTooltip(true);
       const timer = setTimeout(() => setShowTooltip(false), 3000);
       return () => {
-        unsubscribe();
         clearTimeout(timer);
       };
     }
-    
-    return unsubscribe;
   }, [status]);
   
   const getColor = () => {

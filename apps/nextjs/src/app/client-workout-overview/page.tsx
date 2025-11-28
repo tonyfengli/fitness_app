@@ -244,6 +244,8 @@ function ClientWorkoutOverviewContent() {
   const [otherSectionCount, setOtherSectionCount] = useState(3);
   const muscleHistoryModal = useModalState();
   const modalContentRef = useRef<HTMLDivElement>(null);
+  const [isReorderMode, setIsReorderMode] = useState(false);
+  const [reorderedExercises, setReorderedExercises] = useState<any[]>([]);
 
   // Mutation to update client status to workout_ready
   const updateStatusMutation = useMutation({
@@ -255,6 +257,31 @@ function ClientWorkoutOverviewContent() {
       onError: (error) => {
         console.error("Failed to update status:", error);
         alert("Failed to update status. Please try again.");
+      },
+    }),
+  });
+
+  // Mutation to update exercise order
+  const updateExerciseOrderMutation = useMutation({
+    ...trpc.workoutSelections.updateExerciseOrderPublic.mutationOptions({
+      onSuccess: () => {
+        // Exit reorder mode
+        setIsReorderMode(false);
+        setReorderedExercises([]);
+        
+        // Invalidate queries to refetch with new order
+        queryClient.invalidateQueries({
+          queryKey: [["workoutSelections", "getSelectionsPublic"]],
+        });
+        queryClient.invalidateQueries({
+          queryKey: [["trainingSession", "getSavedVisualizationDataPublic"]],
+        });
+      },
+      onError: (error) => {
+        console.error("Failed to update exercise order:", error);
+        alert("Failed to update order. Please try again.");
+        // Reset to original order
+        setReorderedExercises([]);
       },
     }),
   });
@@ -415,7 +442,7 @@ function ClientWorkoutOverviewContent() {
         customExercise: undefined,
         isShared: exercise.isShared || false,
         isPreAssigned: false,
-        orderIndex: exercise.orderIndex || index,
+        orderIndex: exercise.orderIndex || 999,
       }));
     }
 
@@ -429,7 +456,7 @@ function ClientWorkoutOverviewContent() {
         customExercise: selection.custom_exercise,
         isShared: selection.isShared || false,
         isPreAssigned: selection.selectionSource === "pre_assigned",
-        orderIndex: index,
+        orderIndex: selection.orderIndex || 999,
       }));
     }
 
@@ -540,7 +567,7 @@ function ClientWorkoutOverviewContent() {
 
   // Progressively enrich exercises with muscle data as it becomes available
   const enrichedClientExercises = useMemo(() => {
-    return clientExercises.map(exercise => {
+    const enriched = clientExercises.map(exercise => {
       // Skip if already has muscle data
       if (exercise.primaryMuscle) return exercise;
       
@@ -559,7 +586,16 @@ function ClientWorkoutOverviewContent() {
       
       return exercise;
     });
+
+    // Sort by orderIndex to ensure proper display order
+    return enriched.sort((a, b) => a.orderIndex - b.orderIndex);
   }, [clientExercises, availableExercises, visualizationData, userId]);
+
+  // Check if exercises have been ordered by Phase 2 LLM
+  const exercisesAreOrdered = useMemo(() => {
+    // If any exercise has an orderIndex !== 999, then Phase 2 has run
+    return enrichedClientExercises.some(ex => ex.orderIndex !== 999);
+  }, [enrichedClientExercises]);
 
   // Get user name and avatar
   const userName = useMemo(() => {
@@ -623,6 +659,30 @@ function ClientWorkoutOverviewContent() {
       setIsReady(true);
     }
   }, [clientInfoResponse?.status, isReady]);
+
+  // Remove this useEffect - we'll initialize reorderedExercises when clicking the button
+
+  // Handle exercise reordering
+  const moveExercise = (fromIndex: number, toIndex: number) => {
+    const newExercises = [...reorderedExercises];
+    const [removed] = newExercises.splice(fromIndex, 1);
+    newExercises.splice(toIndex, 0, removed);
+    setReorderedExercises(newExercises);
+  };
+
+  // Save new order
+  const saveNewOrder = () => {
+    const updates = reorderedExercises.map((exercise, index) => ({
+      workoutExerciseId: exercise.id,
+      newOrderIndex: index
+    }));
+    
+    updateExerciseOrderMutation.mutate({
+      sessionId: sessionId!,
+      clientId: userId!,
+      updates
+    });
+  };
 
   // Filter exercises for the selection modal
   const filteredExercises = useMemo(() => {
@@ -1126,80 +1186,142 @@ function ClientWorkoutOverviewContent() {
             </h2>
           </div>
           
-          {/* Muscle History Button */}
-          <button
-            onClick={() => muscleHistoryModal.open()}
-            className="flex items-center gap-2 rounded-full bg-indigo-600 px-3 py-2 text-white shadow-md active:scale-95 transition-all hover:bg-indigo-700"
-            aria-label="View Muscle History"
-          >
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-            </svg>
-            <span className="text-sm font-medium">Targets to Hit</span>
-          </button>
+          <div className="flex items-center gap-2">
+            {/* Muscle History Button */}
+            <button
+              onClick={() => muscleHistoryModal.open()}
+              className="flex items-center gap-2 rounded-full bg-indigo-600 px-3 py-2 text-white shadow-md active:scale-95 transition-all hover:bg-indigo-700"
+              aria-label="View Muscle History"
+            >
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
+              <span className="text-sm font-medium">Targets to Hit</span>
+            </button>
+          </div>
         </div>
+
+        {/* Order Status Indicator */}
+        {!exercisesAreOrdered && enrichedClientExercises.length > 0 && (
+          <div className="mb-4 flex items-center gap-2 rounded-lg bg-amber-50 border border-amber-200 px-4 py-3">
+            <div className="flex h-2 w-2 animate-pulse rounded-full bg-amber-400"></div>
+            <p className="text-sm text-amber-800">
+              <span className="font-medium">Finalizing workout order...</span>
+              <span className="ml-1 text-amber-600">Your exercises will be numbered shortly</span>
+            </p>
+          </div>
+        )}
 
         {/* Client Card */}
         <div className="rounded-lg border border-gray-200 bg-white shadow-sm">
+          {/* Exercise list header */}
+          {exercisesAreOrdered && (
+            <div className="border-b border-gray-100 px-4 py-3 bg-gray-50">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-medium text-gray-700">Your Workout Order</p>
+                <span className="text-xs text-gray-500">Follow exercises in sequence</span>
+              </div>
+            </div>
+          )}
+          
           {/* Exercise list */}
           <div className="p-4">
             <div className="space-y-4">
-              {enrichedClientExercises.map((exercise, index) => {
+              {(isReorderMode ? reorderedExercises : enrichedClientExercises).map((exercise, index) => {
                 const muscleGroup = getUnifiedMuscleGroup(exercise.primaryMuscle);
+                const displayOrder = exercisesAreOrdered ? index + 1 : null;
                 
                 return (
-                  <div key={exercise.id} className="group flex items-start justify-between gap-3">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-base font-medium text-gray-800">
-                          {exercise.name}
-                        </span>
-                        {exercise.primaryMuscle ? (
-                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ${
-                            muscleGroup === 'Chest' ? 'bg-yellow-50 text-yellow-700'
-                            : muscleGroup === 'Back' ? 'bg-green-50 text-green-700'
-                            : muscleGroup === 'Shoulders' ? 'bg-purple-50 text-purple-700'
-                            : muscleGroup === 'Core' ? 'bg-orange-50 text-orange-700'
-                            : muscleGroup === 'Glutes' ? 'bg-red-50 text-red-700'
-                            : muscleGroup === 'Quads' || muscleGroup === 'Hamstrings' ? 'bg-pink-50 text-pink-700'
-                            : muscleGroup === 'Biceps' || muscleGroup === 'Triceps' ? 'bg-blue-50 text-blue-700'
-                            : muscleGroup === 'Calves' ? 'bg-indigo-50 text-indigo-700'
-                            : 'bg-gray-50 text-gray-600'
-                          }`}>
-                            {muscleGroup}
-                          </span>
-                        ) : isLoadingExercises ? (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-gray-100">
-                            <div className="h-2 w-2 animate-pulse rounded-full bg-gray-400"></div>
-                          </span>
-                        ) : null}
+                  <div key={exercise.id} className={`group flex items-start gap-3 ${exercisesAreOrdered ? 'relative' : ''}`}>
+                    {/* Exercise Order Number */}
+                    {exercisesAreOrdered && (
+                      <div className="flex-shrink-0 flex items-center justify-center">
+                        <div className={`relative flex h-8 w-8 items-center justify-center rounded-full ${
+                          index === 0 ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-600'
+                        } font-semibold text-sm transition-all group-hover:scale-110`}>
+                          {displayOrder}
+                        </div>
                       </div>
-                    </div>
-                    <button
-                      onClick={() => {
-                        // Use the enriched exercise which already has muscle data if available
-                        setSelectedExercise(exercise);
-                        setSelectedExerciseIndex(index);
-                        // Skip the modal and go directly to exercise selection
-                        setShowExerciseSelection(true);
-                      }}
-                      disabled={!visualizationData?.blueprint?.clientExercisePools?.[userId]?.availableCandidates}
-                      className={`flex-shrink-0 rounded-md px-3 py-1 text-sm font-medium transition-colors ${
-                        !visualizationData?.blueprint?.clientExercisePools?.[userId]?.availableCandidates
-                          ? "bg-gray-50 text-gray-400 cursor-not-allowed"
-                          : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                      }`}
-                      aria-label="Replace exercise"
-                    >
-                      {!visualizationData?.blueprint?.clientExercisePools?.[userId]?.availableCandidates ? (
-                        <span className="flex items-center gap-1.5">
-                          <SpinnerIcon className="h-3 w-3 animate-spin" />
-                          Loading
-                        </span>
+                    )}
+                    
+                    <div className="flex-1 min-w-0 flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className={`text-base font-medium text-gray-800 ${exercisesAreOrdered && index === 0 ? 'text-indigo-700' : ''}`}>
+                            {exercise.name}
+                          </span>
+                          {exercise.primaryMuscle ? (
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ${
+                              muscleGroup === 'Chest' ? 'bg-yellow-50 text-yellow-700'
+                              : muscleGroup === 'Back' ? 'bg-green-50 text-green-700'
+                              : muscleGroup === 'Shoulders' ? 'bg-purple-50 text-purple-700'
+                              : muscleGroup === 'Core' ? 'bg-orange-50 text-orange-700'
+                              : muscleGroup === 'Glutes' ? 'bg-red-50 text-red-700'
+                              : muscleGroup === 'Quads' || muscleGroup === 'Hamstrings' ? 'bg-pink-50 text-pink-700'
+                              : muscleGroup === 'Biceps' || muscleGroup === 'Triceps' ? 'bg-blue-50 text-blue-700'
+                              : muscleGroup === 'Calves' ? 'bg-indigo-50 text-indigo-700'
+                              : 'bg-gray-50 text-gray-600'
+                            }`}>
+                              {muscleGroup}
+                            </span>
+                          ) : isLoadingExercises ? (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-gray-100">
+                              <div className="h-2 w-2 animate-pulse rounded-full bg-gray-400"></div>
+                            </span>
+                          ) : null}
+                        </div>
+                      </div>
+                      {isReorderMode ? (
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => moveExercise(index, Math.max(0, index - 1))}
+                            disabled={index === 0}
+                            className={`p-1 rounded ${index === 0 ? 'text-gray-300 cursor-not-allowed' : 'text-gray-600 hover:bg-gray-100'}`}
+                            aria-label="Move up"
+                          >
+                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                            </svg>
+                          </button>
+                          <button
+                            onClick={() => moveExercise(index, Math.min(reorderedExercises.length - 1, index + 1))}
+                            disabled={index === reorderedExercises.length - 1}
+                            className={`p-1 rounded ${index === reorderedExercises.length - 1 ? 'text-gray-300 cursor-not-allowed' : 'text-gray-600 hover:bg-gray-100'}`}
+                            aria-label="Move down"
+                          >
+                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                            </svg>
+                          </button>
+                        </div>
                       ) : (
-                        "Replace"
+                        <button
+                          onClick={() => {
+                            // Use the enriched exercise which already has muscle data if available
+                            setSelectedExercise(exercise);
+                            setSelectedExerciseIndex(index);
+                            // Skip the modal and go directly to exercise selection
+                            setShowExerciseSelection(true);
+                          }}
+                          disabled={!visualizationData?.blueprint?.clientExercisePools?.[userId]?.availableCandidates}
+                          className={`flex-shrink-0 rounded-md px-3 py-1 text-sm font-medium transition-colors ${
+                            !visualizationData?.blueprint?.clientExercisePools?.[userId]?.availableCandidates
+                              ? "bg-gray-50 text-gray-400 cursor-not-allowed"
+                              : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                          }`}
+                          aria-label="Replace exercise"
+                        >
+                          {!visualizationData?.blueprint?.clientExercisePools?.[userId]?.availableCandidates ? (
+                            <span className="flex items-center gap-1.5">
+                              <SpinnerIcon className="h-3 w-3 animate-spin" />
+                              Loading
+                            </span>
+                          ) : (
+                            "Replace"
+                          )}
+                        </button>
                       )}
-                    </button>
+                    </div>
                   </div>
                 );
               })}
@@ -1227,31 +1349,82 @@ function ClientWorkoutOverviewContent() {
           </div>
         )}
 
-        {/* Ready Button */}
+        {/* Ready Button / Reorder Controls */}
         <div className="mt-6">
-          {isReady ? (
-            <div className="w-full rounded-lg bg-green-100 border border-green-300 py-3 text-center">
-              <span className="text-green-800 font-medium">✓ You're Ready!</span>
-            </div>
+          {exercisesAreOrdered ? (
+            /* Show reorder controls when exercises are ordered */
+            isReorderMode ? (
+              <div className="flex items-center gap-3 justify-center">
+                <button
+                  onClick={() => {
+                    setIsReorderMode(false);
+                    setReorderedExercises([]);
+                  }}
+                  className="px-6 py-3 text-gray-700 font-medium hover:bg-gray-100 rounded-lg transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={saveNewOrder}
+                  disabled={updateExerciseOrderMutation.isPending}
+                  className="flex items-center gap-2 rounded-lg bg-indigo-600 px-6 py-3 text-white font-medium active:scale-95 transition-all hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {updateExerciseOrderMutation.isPending ? (
+                    <>
+                      <SpinnerIcon className="h-4 w-4 animate-spin" />
+                      <span>Saving...</span>
+                    </>
+                  ) : (
+                    <>
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                      <span>Save Order</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => {
+                  setReorderedExercises([...enrichedClientExercises]);
+                  setIsReorderMode(true);
+                }}
+                className="w-full flex items-center justify-center gap-2 rounded-lg bg-gray-600 py-3 text-white font-medium active:scale-95 transition-all hover:bg-gray-700"
+                aria-label="Reorder Exercises"
+              >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+                </svg>
+                <span>Reorder Exercises</span>
+              </button>
+            )
           ) : (
-            <button
-              onClick={() => {
-                updateStatusMutation.mutate({
-                  sessionId: sessionId!,
-                  userId: userId!,
-                  isReady: true,
-                  targetStatus: 'workout_ready'
-                });
-              }}
-              disabled={updateStatusMutation.isPending}
-              className={`w-full rounded-lg py-3 font-medium transition-colors ${
-                updateStatusMutation.isPending
-                  ? "bg-gray-300 text-gray-500"
-                  : "bg-green-600 text-white hover:bg-green-700"
-              }`}
-            >
-              {updateStatusMutation.isPending ? "Updating..." : "Ready"}
-            </button>
+            /* Show ready button when exercises are not ordered yet */
+            isReady ? (
+              <div className="w-full rounded-lg bg-green-100 border border-green-300 py-3 text-center">
+                <span className="text-green-800 font-medium">✓ You're Ready!</span>
+              </div>
+            ) : (
+              <button
+                onClick={() => {
+                  updateStatusMutation.mutate({
+                    sessionId: sessionId!,
+                    userId: userId!,
+                    isReady: true,
+                    targetStatus: 'workout_ready'
+                  });
+                }}
+                disabled={updateStatusMutation.isPending}
+                className={`w-full rounded-lg py-3 font-medium transition-colors ${
+                  updateStatusMutation.isPending
+                    ? "bg-gray-300 text-gray-500"
+                    : "bg-green-600 text-white hover:bg-green-700"
+                }`}
+              >
+                {updateStatusMutation.isPending ? "Updating..." : "Ready"}
+              </button>
+            )
           )}
         </div>
       </div>

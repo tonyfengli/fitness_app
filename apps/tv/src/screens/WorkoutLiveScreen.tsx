@@ -67,8 +67,13 @@ export function WorkoutLiveScreen() {
   
   // Fetch workout data - only if not passed via navigation
   const { data: sessionWorkouts, isLoading: workoutsLoading, error: workoutsError } = useQuery(
-    sessionId && !passedWorkouts ? 
-      api.workout.sessionWorkoutsWithExercises.queryOptions({ sessionId }) : {
+    sessionId && !passedWorkouts ? {
+      ...api.workout.sessionWorkoutsWithExercises.queryOptions({ sessionId }),
+      // Poll every 5 seconds to detect exercise replacements or order changes
+      refetchInterval: 5000,
+      // Always compare with server data even if we have passed workouts
+      refetchIntervalInBackground: true
+    } : {
         enabled: false,
         queryKey: ['disabled'],
         queryFn: () => Promise.resolve(passedWorkouts || []),
