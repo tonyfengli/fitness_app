@@ -444,55 +444,7 @@ export function CircuitWorkoutLiveScreen() {
                 shadowRadius: 8,
                 elevation: 4,
               }}>
-                {/* Teams Button - Only show for stations rounds */}
-                {currentRoundType === 'stations_round' && (
-                  <Pressable
-                    ref={teamsButtonRef}
-                    onPress={() => {
-                      setShouldRestoreFocusToTeams(true);
-                      // Calculate team distribution when opening modal
-                      const stationCount = currentRound?.exercises 
-                        ? [...new Set(currentRound.exercises.map((ex: any) => ex.orderIndex))].length 
-                        : 0;
-                      setTeamsDistribution(distributeClientsToTeams(checkedInClients || [], stationCount));
-                      setIsTeamsModalVisible(true);
-                    }}
-                    focusable
-                  >
-                  {({ focused }) => (
-                    <MattePanel 
-                      focused={focused}
-                      radius={26}
-                      style={{ 
-                        width: 94,
-                        height: 44,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        backgroundColor: focused ? 
-                          'rgba(255,255,255,0.15)' : 
-                          'rgba(255,255,255,0.08)',
-                        borderColor: focused ? 'rgba(255,255,255,0.3)' : 'transparent',
-                        borderWidth: focused ? 1.5 : 0,
-                      }}
-                    >
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <Icon name="groups" size={18} color={TOKENS.color.text} />
-                        <Text style={{ 
-                          color: TOKENS.color.text, 
-                          fontSize: 13, 
-                          fontWeight: '700',
-                          letterSpacing: 0.3,
-                          textTransform: 'uppercase'
-                        }}>
-                          TEAMS
-                        </Text>
-                      </View>
-                    </MattePanel>
-                  )}
-                  </Pressable>
-                )}
-
-                {/* Start Button */}
+{/* Start Button */}
                 <Pressable
                   onPress={handleStartWorkout}
                   focusable
@@ -547,45 +499,7 @@ export function CircuitWorkoutLiveScreen() {
                 shadowRadius: 4,
                 elevation: 2,
               }}>
-                {/* Teams Button - Only show for stations rounds */}
-                {currentRoundType === 'stations_round' && (
-                  <Pressable 
-                    onPress={() => {
-                      setShouldRestoreFocusToTeams(true);
-                      // Calculate team distribution when opening modal
-                      const stationCount = currentRound?.exercises 
-                        ? [...new Set(currentRound.exercises.map((ex: any) => ex.orderIndex))].length 
-                        : 0;
-                      setTeamsDistribution(distributeClientsToTeams(checkedInClients || [], stationCount));
-                      setIsTeamsModalVisible(true);
-                    }} 
-                    focusable
-                  >
-                  {({ focused }) => (
-                    <MattePanel 
-                      focused={focused}
-                      radius={26}
-                      style={{ 
-                        width: 62,
-                        height: 44,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        backgroundColor: focused ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.08)',
-                        borderColor: focused ? 'rgba(255,255,255,0.3)' : 'transparent',
-                        borderWidth: focused ? 1.5 : 0,
-                      }}
-                    >
-                      <Icon 
-                        name="groups" 
-                        size={20}
-                        color={TOKENS.color.text}
-                      />
-                    </MattePanel>
-                  )}
-                  </Pressable>
-                )}
-                
-                {/* Pause/Play */}
+{/* Pause/Play */}
                 <Pressable onPress={() => send(state.context.isPaused ? { type: 'RESUME' } : { type: 'PAUSE' })} focusable>
                   {({ focused }) => (
                     <MattePanel 

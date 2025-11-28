@@ -306,7 +306,7 @@ export function TemplateSelectionStep({ program, onSelectTemplate }: TemplateSel
         includeTemplateConfig: false,
       });
   
-  const { data: sessions, isLoading } = useQuery(sessionsQueryOptions);
+  const { data: sessions, isLoading: isLoadingSessions } = useQuery(sessionsQueryOptions);
 
   // Get session IDs for favorite status checking
   const sessionIds = sessions?.map(session => session.trainingSession.id) || [];
@@ -317,10 +317,13 @@ export function TemplateSelectionStep({ program, onSelectTemplate }: TemplateSel
     trainingSessionIds: sessionIds,
   });
   
-  const { data: favoriteStatus } = useQuery({
+  const { data: favoriteStatus, isLoading: isLoadingFavorites } = useQuery({
     ...favoriteStatusQuery,
     enabled: sessionIds.length > 0,
   });
+
+  // Combined loading state - wait for both queries
+  const isLoading = isLoadingSessions || (sessionIds.length > 0 && isLoadingFavorites);
 
 
   // Add to favorites mutation
@@ -539,8 +542,9 @@ export function TemplateSelectionStep({ program, onSelectTemplate }: TemplateSel
     <>
       <div className="min-h-full">
         {isLoading ? (
-          <div className="flex items-center justify-center h-64">
-            <Loader2 className="h-6 w-6 animate-spin text-gray-300" />
+          <div className="flex flex-col items-center justify-center h-64 space-y-3">
+            <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+            <p className="text-sm text-gray-500 dark:text-gray-400">Loading templates...</p>
           </div>
         ) : sessions && sessions.length > 0 ? (
           <div className="space-y-1">
@@ -2413,7 +2417,10 @@ export function SessionSetupStep({
   // Auto-populate description from template if empty (only on initial load)
   React.useEffect(() => {
     if (!sessionDetails.name && templateData && !hasUserEdited) {
-      const templateName = templateData.name || templateData.rounds?.[0]?.roundName || 'Template Session';
+      let templateName = templateData.name || templateData.rounds?.[0]?.roundName || 'Template Session';
+      
+      // Remove all existing (copy) instances - handles (copy), (Copy), and multiple occurrences
+      templateName = templateName.replace(/\s*\([Cc]opy\)\s*/g, '').trim();
       
       onUpdateSessionDetails({
         ...sessionDetails,
@@ -2491,14 +2498,19 @@ export function SessionSetupStep({
           <label htmlFor="session-description" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
             Description <span className="text-red-500">*</span>
           </label>
-          <Input
-            id="session-description"
-            type="text"
-            value={sessionDetails.name}
-            onChange={handleNameChange}
-            placeholder="Enter session description..."
-            className="w-full py-3 px-4 text-base"
-          />
+          <div className="relative">
+            <Input
+              id="session-description"
+              type="text"
+              value={sessionDetails.name}
+              onChange={handleNameChange}
+              placeholder="Enter session description..."
+              className={cn(
+                "w-full py-3 px-4 text-base transition-all duration-200",
+                !sessionDetails.name.trim() && "border-amber-400 dark:border-amber-500 bg-amber-50 dark:bg-amber-950/20 placeholder:text-amber-600 dark:placeholder:text-amber-400"
+              )}
+            />
+          </div>
         </div>
 
         {/* Scheduled Date - Mobile Optimized */}

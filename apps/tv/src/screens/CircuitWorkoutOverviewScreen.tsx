@@ -888,6 +888,8 @@ export function CircuitWorkoutOverviewScreen() {
                   paddingHorizontal: 32,
                   paddingVertical: 12,
                   backgroundColor: focused ? 'rgba(124,255,181,0.2)' : TOKENS.color.card,
+                  borderColor: focused ? 'rgba(124,255,181,0.6)' : TOKENS.color.borderGlass,
+                  borderWidth: focused ? 1 : 1,
                   transform: focused ? [{ translateY: -1 }] : [],
                   opacity: roundsData.length === 0 ? 0.5 : 1
                 }}
