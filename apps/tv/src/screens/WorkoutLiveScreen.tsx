@@ -65,19 +65,20 @@ export function WorkoutLiveScreen() {
   }, [navigation]);
   
   
-  // Fetch workout data - only if not passed via navigation
+  // Fetch workout data - always poll to detect order changes
   const { data: sessionWorkouts, isLoading: workoutsLoading, error: workoutsError } = useQuery(
-    sessionId && !passedWorkouts ? {
+    sessionId ? {
       ...api.workout.sessionWorkoutsWithExercises.queryOptions({ sessionId }),
       // Poll every 5 seconds to detect exercise replacements or order changes
       refetchInterval: 5000,
       // Always compare with server data even if we have passed workouts
-      refetchIntervalInBackground: true
+      refetchIntervalInBackground: true,
+      // Use passed workouts as initial data to avoid loading state
+      initialData: passedWorkouts
     } : {
         enabled: false,
         queryKey: ['disabled'],
-        queryFn: () => Promise.resolve(passedWorkouts || []),
-        initialData: passedWorkouts
+        queryFn: () => Promise.resolve([])
       }
   );
   
@@ -92,9 +93,71 @@ export function WorkoutLiveScreen() {
       }
   );
   
-  // Use passed data if available, otherwise use fetched data
-  const workouts = passedWorkouts || sessionWorkouts || [];
+  // Use fetched data if available (to get latest orderIndex), otherwise use passed data
+  const workouts = sessionWorkouts || passedWorkouts || [];
   const clients = passedClients || fetchedClients || [];
+  
+  // Debug: Log the structure of polled workouts
+  useEffect(() => {
+    if (sessionWorkouts && sessionWorkouts.length > 0) {
+      console.log('[WorkoutLiveScreen] Polled workout structure:', sessionWorkouts[0]);
+    }
+  }, [sessionWorkouts]);
+  
+  // Track if order indices have been updated
+  const previousOrderIndices = useRef<Map<string, number>>(new Map());
+  
+  useEffect(() => {
+    if (sessionWorkouts && sessionWorkouts.length > 0) {
+      let orderChanged = false;
+      const currentOrderIndices = new Map<string, number>();
+      
+      // Check each workout's exercises
+      sessionWorkouts.forEach((workout: any) => {
+        if (workout.exercises) {
+          workout.exercises.forEach((ex: any) => {
+            const key = `${workout.workout.id}_${ex.id}`;
+            const currentOrder = ex.orderIndex ?? 999;
+            currentOrderIndices.set(key, currentOrder);
+            
+            // Check if order changed
+            const previousOrder = previousOrderIndices.current.get(key);
+            if (previousOrder !== undefined && previousOrder !== currentOrder && currentOrder !== 999) {
+              orderChanged = true;
+              console.log(`[WorkoutLiveScreen] Order changed for ${ex.exercise?.name}: ${previousOrder} → ${currentOrder}`);
+            }
+          });
+        }
+      });
+      
+      // Update the ref for next comparison
+      previousOrderIndices.current = currentOrderIndices;
+      
+      // Check if any exercises have orderIndex !== 999
+      const hasOrderedExercises = sessionWorkouts.some((workout: any) => 
+        workout.exercises?.some((ex: any) => ex.orderIndex !== 999)
+      );
+      
+      if (hasOrderedExercises && orderChanged) {
+        console.log('[WorkoutLiveScreen] Exercise order has been updated!');
+        
+        // Log the new order for each client
+        sessionWorkouts.forEach((workout: any) => {
+          if (workout.exercises && workout.exercises.some((ex: any) => ex.orderIndex !== 999)) {
+            console.log(`[WorkoutLiveScreen] ${workout.user?.name || 'Client'}'s updated exercise order:`,
+              workout.exercises
+                .filter((ex: any) => ex.orderIndex !== 999)
+                .sort((a: any, b: any) => (a.orderIndex ?? 999) - (b.orderIndex ?? 999))
+                .map((ex: any) => ({
+                  name: ex.exercise?.name,
+                  orderIndex: ex.orderIndex
+                }))
+            );
+          }
+        });
+      }
+    }
+  }, [sessionWorkouts]);
   
   // Extract user-exercise pairs for performance query
   const userExercisePairs = React.useMemo(() => {

@@ -351,7 +351,7 @@ export function WorkoutOverviewScreen() {
       {/* Header */}
       <View className="flex-row justify-between items-center mb-6">
         <Pressable
-          onPress={() => navigation.goBack()}
+          onPress={() => navigation.navigate('SessionLobby', { sessionId })}
           focusable
         >
           {({ focused }) => (

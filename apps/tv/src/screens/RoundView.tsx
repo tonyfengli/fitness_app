@@ -279,12 +279,23 @@ export default function RoundView({ sessionId, round, workouts, roundsData, orga
   };
   
   const goToPreviousRound = () => {
-    const prevIndex = (currentRoundIndex - 1 + rounds.length) % rounds.length;
-    setCurrentRoundIndex(prevIndex);
-    setPhase("work");
-    setTimeRemaining(600); // 10 minutes
-    if (onTimerUpdate) {
-      onTimerUpdate(600, prevIndex);
+    if (currentRoundIndex === 0) {
+      // On first round, go back to workout overview
+      navigation.navigate('WorkoutOverview', { 
+        sessionId,
+        organization,
+        workouts,
+        clients
+      });
+    } else {
+      // Go to previous round
+      const prevIndex = currentRoundIndex - 1;
+      setCurrentRoundIndex(prevIndex);
+      setPhase("work");
+      setTimeRemaining(600); // 10 minutes
+      if (onTimerUpdate) {
+        onTimerUpdate(600, prevIndex);
+      }
     }
   };
 
