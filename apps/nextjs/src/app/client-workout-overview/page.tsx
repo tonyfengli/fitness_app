@@ -264,17 +264,23 @@ function ClientWorkoutOverviewContent() {
   // Mutation to update exercise order
   const updateExerciseOrderMutation = useMutation({
     ...trpc.workoutSelections.updateExerciseOrderPublic.mutationOptions({
-      onSuccess: () => {
+      onSuccess: async (data) => {
+        
         // Exit reorder mode
         setIsReorderMode(false);
         setReorderedExercises([]);
         
-        // Invalidate queries to refetch with new order
-        queryClient.invalidateQueries({
+        // Invalidate and await queries to ensure we get fresh data
+        await queryClient.invalidateQueries({
           queryKey: [["workoutSelections", "getSelectionsPublic"]],
         });
-        queryClient.invalidateQueries({
+        await queryClient.invalidateQueries({
           queryKey: [["trainingSession", "getSavedVisualizationDataPublic"]],
+        });
+        
+        // Also invalidate the workout exercises query
+        await queryClient.invalidateQueries({
+          queryKey: [["workout", "sessionWorkoutsWithExercises"]],
         });
       },
       onError: (error) => {
@@ -283,6 +289,8 @@ function ClientWorkoutOverviewContent() {
         // Reset to original order
         setReorderedExercises([]);
       },
+      onMutate: (variables) => {
+      }
     }),
   });
 
@@ -292,14 +300,29 @@ function ClientWorkoutOverviewContent() {
     userId: userId || "",
     supabase,
     onExercisesUpdate: (exercises) => {
+      // Skip updates while in reorder mode to prevent conflicts
+      if (isReorderMode) {
+        console.log('[ClientWorkoutOverview] Skipping real-time update - in reorder mode');
+        return;
+      }
+      
       console.log('[ClientWorkoutOverview] Real-time exercises received:', {
         count: exercises.length,
         hasVisualizationData: !!visualizationData,
         hasBlueprint: !!visualizationData?.blueprint,
         timestamp: new Date().toISOString()
       });
+      
+      // Check if order indices have changed from 999
+      const hasOrderedExercises = exercises.some(ex => ex.orderIndex !== 999);
+      if (hasOrderedExercises) {
+        console.log('[ClientWorkoutOverview] Exercises now have proper order indices!');
+      }
+      
+      // Always update with fresh data
       setRealtimeExercises(exercises);
-      // Force refetch of visualization data when exercises arrive
+      
+      // Force refetch of all data to ensure consistency
       console.log('[ClientWorkoutOverview] Invalidating queries to refetch visualization data');
       queryClient.invalidateQueries({
         queryKey: [["trainingSession", "getSavedVisualizationDataPublic"]],
@@ -318,6 +341,11 @@ function ClientWorkoutOverviewContent() {
     sessionId: sessionId || "",
     supabase,
     onSwapUpdate: (swap) => {
+      // Skip updates while in reorder mode to prevent conflicts
+      if (isReorderMode) {
+        console.log('[ClientWorkoutOverview] Skipping swap update - in reorder mode');
+        return;
+      }
 
       // Force refetch of exercise selections and visualization data
       queryClient.invalidateQueries({
@@ -394,8 +422,21 @@ function ClientWorkoutOverviewContent() {
       clientId: userId || "",
     }),
     enabled: !!sessionId && !!userId,
-    // Poll every 2s initially when no exercises are loaded yet
-    refetchInterval: !hasExercises ? 2000 : false,
+    // Poll every 2s until exercises are loaded AND ordered (orderIndex !== 999)
+    refetchInterval: (data) => {
+      if (!hasExercises) return 2000; // Poll while no exercises
+      
+      // Ensure data is an array before checking
+      if (!Array.isArray(data) || data.length === 0) return 2000;
+      
+      // Check if any exercises still have orderIndex of 999
+      const hasUnorderedExercises = data.some((selection: any) => 
+        selection.orderIndex === 999 || selection.orderIndex === null || selection.orderIndex === undefined
+      );
+      
+      // Continue polling if exercises aren't ordered yet
+      return hasUnorderedExercises ? 2000 : false;
+    },
   });
 
   
@@ -434,135 +475,48 @@ function ClientWorkoutOverviewContent() {
   const clientExercises = useMemo(() => {
     // First check if we have real-time exercises
     if (realtimeExercises.length > 0) {
-      return realtimeExercises.map((exercise, index) => ({
-        id: exercise.exerciseId,
-        name: exercise.exerciseName || exercise.name,
-        primaryMuscle: exercise.primaryMuscle, // Will be undefined initially
-        source: "llm_phase1",
-        customExercise: undefined,
-        isShared: exercise.isShared || false,
-        isPreAssigned: false,
-        orderIndex: exercise.orderIndex || 999,
-      }));
+      
+      return realtimeExercises.map((exercise, index) => {
+        const mapped = {
+          id: exercise.exerciseId,
+          workoutExerciseId: exercise.id, // The workout_exercise.id - THIS IS CRITICAL!
+          name: exercise.exerciseName || exercise.name,
+          primaryMuscle: exercise.primaryMuscle, // Will be undefined initially
+          source: "llm_phase1",
+          customExercise: exercise.customExercise,
+          isShared: exercise.isShared || false,
+          isPreAssigned: false,
+          orderIndex: exercise.orderIndex ?? 999, // Use ?? instead of || to handle 0 correctly
+        };
+        
+        // Verify we have the workout exercise ID
+        if (!mapped.workoutExerciseId) {
+          console.error('[Critical] Missing workoutExerciseId for exercise:', exercise);
+        }
+        
+        
+        return mapped;
+      });
     }
 
     // Then try to use saved selections (source of truth after swaps)
     if (savedSelections && savedSelections.length > 0) {
+      
       return savedSelections.map((selection: any, index: number) => ({
         id: selection.exerciseId,
+        workoutExerciseId: selection.id, // This is the workout_exercise.id we need for updates
         name: selection.exerciseName,
         primaryMuscle: undefined, // Will be populated later
         source: selection.selectionSource,
         customExercise: selection.custom_exercise,
         isShared: selection.isShared || false,
         isPreAssigned: selection.selectionSource === "pre_assigned",
-        orderIndex: selection.orderIndex || 999,
+        orderIndex: selection.orderIndex ?? 999, // Use ?? instead of || to handle 0 correctly
       }));
     }
 
-    // Fall back to visualization data if no saved selections
-    if (!visualizationData || !userId) return [];
-
-    const llmResult = visualizationData.llmResult;
-    const groupContext = visualizationData.groupContext;
-
-    if (!llmResult || !groupContext) {
-      return [];
-    }
-
-
-    // Find the client's information
-    const clientIndex = groupContext.clients.findIndex(
-      (c: any) => c.user_id === userId,
-    );
-    if (clientIndex === -1) {
-      return [];
-    }
-
-    const client = groupContext.clients[clientIndex];
-    const exercises: any[] = [];
-
-    // Get pre-assigned exercises from the blueprint
-    const blueprint = visualizationData.blueprint;
-
-    if (blueprint?.clientExercisePools?.[userId]) {
-      const preAssigned =
-        blueprint.clientExercisePools[userId].preAssigned || [];
-      preAssigned.forEach((pa: any, index: number) => {
-        exercises.push({
-          id: pa.exercise.id,
-          name: pa.exercise.name,
-          source: pa.source,
-          customExercise: undefined,
-          isPreAssigned: true,
-          orderIndex: index,
-        });
-      });
-    } else {
-    }
-
-    // Get LLM selected exercises
-
-    // Check multiple possible paths for the LLM selections
-    let llmSelections = null;
-
-    // First, check if exerciseSelection is a string that needs parsing
-    let exerciseSelection = llmResult.exerciseSelection;
-    if (typeof exerciseSelection === "string") {
-      try {
-        exerciseSelection = JSON.parse(exerciseSelection);
-      } catch (e) {
-      }
-    }
-
-    // Path 1: exerciseSelection.clientSelections
-    if (exerciseSelection?.clientSelections?.[userId]) {
-      // The structure uses 'selected' not 'selectedExercises'
-      llmSelections =
-        exerciseSelection.clientSelections[userId].selected ||
-        exerciseSelection.clientSelections[userId].selectedExercises;
-    }
-    // Path 2: Direct clientSelections
-    else if (llmResult.clientSelections?.[userId]) {
-      llmSelections =
-        llmResult.clientSelections[userId].selected ||
-        llmResult.clientSelections[userId].selectedExercises;
-    }
-    // Path 3: Check if we need to use client index instead of userId
-    else if (exerciseSelection?.clientSelections) {
-      // Try using the client index from groupContext
-      const clientKey = `client_${clientIndex}`;
-      if (exerciseSelection.clientSelections[clientKey]) {
-        llmSelections =
-          exerciseSelection.clientSelections[clientKey].selectedExercises;
-      }
-    }
-    // Path 4: llmAssignments for BMF templates
-    else if (llmResult.llmAssignments) {
-      // Look for user in llmAssignments structure
-    }
-
-    if (llmSelections) {
-      llmSelections.forEach((ex: any, index: number) => {
-        // Handle different possible structures
-        const exercise = {
-          id: ex.exerciseId || ex.id,
-          name: ex.exerciseName || ex.name,
-          customExercise: ex.custom_exercise,
-          isShared: ex.isShared || false,
-          isPreAssigned: false,
-          orderIndex: exercises.length + index,
-        };
-
-        // Only add if we have at least an ID and name
-        if (exercise.id && exercise.name) {
-          exercises.push(exercise);
-        }
-      });
-    } else {
-    }
-
-    return exercises;
+    // No fallback - only use real-time exercises or saved selections
+    return [];
   }, [visualizationData, userId, savedSelections, realtimeExercises]);
 
   // Progressively enrich exercises with muscle data as it becomes available
@@ -588,7 +542,14 @@ function ClientWorkoutOverviewContent() {
     });
 
     // Sort by orderIndex to ensure proper display order
-    return enriched.sort((a, b) => a.orderIndex - b.orderIndex);
+    // BUT only sort if all exercises have valid orderIndex (not 999)
+    const allOrdered = enriched.every(ex => ex.orderIndex !== 999);
+    if (allOrdered) {
+      return enriched.sort((a, b) => a.orderIndex - b.orderIndex);
+    }
+    
+    // If not all ordered, preserve the original order from the data source
+    return enriched;
   }, [clientExercises, availableExercises, visualizationData, userId]);
 
   // Check if exercises have been ordered by Phase 2 LLM
@@ -664,18 +625,48 @@ function ClientWorkoutOverviewContent() {
 
   // Handle exercise reordering
   const moveExercise = (fromIndex: number, toIndex: number) => {
+    if (fromIndex === toIndex) return; // No move needed
+    
+    console.log('[Reorder] moveExercise - BEFORE:', {
+      fromIndex,
+      toIndex,
+      currentOrder: reorderedExercises.map((ex, i) => `${i}: ${ex.name}`),
+      movingExercise: reorderedExercises[fromIndex]?.name
+    });
+    
     const newExercises = [...reorderedExercises];
     const [removed] = newExercises.splice(fromIndex, 1);
     newExercises.splice(toIndex, 0, removed);
     setReorderedExercises(newExercises);
+    
+    console.log('[Reorder] moveExercise - AFTER:', {
+      newOrder: newExercises.map((ex, i) => `${i}: ${ex.name}`),
+      movedExercise: removed?.name
+    });
   };
 
   // Save new order
   const saveNewOrder = () => {
-    const updates = reorderedExercises.map((exercise, index) => ({
-      workoutExerciseId: exercise.id,
-      newOrderIndex: index
-    }));
+    console.log('[Reorder] saveNewOrder called:', {
+      reorderedExercises: reorderedExercises.map((ex, idx) => ({ 
+        idx,
+        id: ex.id, 
+        workoutExerciseId: ex.workoutExerciseId,
+        name: ex.name, 
+        orderIndex: ex.orderIndex 
+      }))
+    });
+    
+    const updates = reorderedExercises.map((exercise, index) => {
+      const update = {
+        workoutExerciseId: exercise.workoutExerciseId || exercise.id,
+        newOrderIndex: index
+      };
+      console.log(`[Reorder] Position ${index}: ${exercise.name} (workoutExerciseId: ${update.workoutExerciseId})`);
+      return update;
+    });
+    
+    console.log('[Reorder] Final updates array:', updates);
     
     updateExerciseOrderMutation.mutate({
       sessionId: sessionId!,
@@ -801,7 +792,6 @@ function ClientWorkoutOverviewContent() {
     const isFullBodyWorkout = workoutType?.toLowerCase().includes('full_body') || false;
     const showAllHighScoring = unifiedMuscle === "Other";
     
-    console.log("[Other Options Debug] Workout type:", workoutType, "isFullBody:", isFullBodyWorkout);
     
     // Get already selected exercise IDs to filter out (excluding the one being replaced)
     const selectedExerciseIds = new Set(
@@ -953,8 +943,6 @@ function ClientWorkoutOverviewContent() {
         // Sort exercises within each muscle by score
         exercisesByTargetMuscle.forEach((exercises, muscle) => {
           exercises.sort((a, b) => (b.score || 0) - (a.score || 0));
-          console.log(`[Other Options Debug] ${muscle} exercises found:`, exercises.length, 
-            exercises.slice(0, 3).map(ex => ({ name: ex.name, score: ex.score })));
         });
         
         // Build final list based on number of other target muscles
@@ -998,13 +986,6 @@ function ClientWorkoutOverviewContent() {
             finalCandidates.push(...remainingCandidates.slice(0, slotsNeeded).map(c => c.exercise));
           }
           
-          console.log("[Other Options Debug] Final distribution:", 
-            finalCandidates.map(ex => ({ 
-              name: ex.name, 
-              muscle: ex.primaryMuscle,
-              unifiedMuscle: getUnifiedMuscleGroup(ex.primaryMuscle),
-              score: ex.score 
-            })));
         } else {
           // 3+ other target muscles - show 1 from each (top 3)
           const topFromEachMuscle: any[] = [];
@@ -1226,13 +1207,26 @@ function ClientWorkoutOverviewContent() {
           
           {/* Exercise list */}
           <div className="p-4">
-            <div className="space-y-4">
-              {(isReorderMode ? reorderedExercises : enrichedClientExercises).map((exercise, index) => {
+            {/* Loading state */}
+            {(isLoading || (!realtimeExercises.length && !savedSelections?.length && !visualizationData)) ? (
+              <div className="py-8 text-center">
+                <div className="inline-flex items-center justify-center w-12 h-12 bg-gray-100 rounded-full mb-3">
+                  <SpinnerIcon className="h-6 w-6 animate-spin text-gray-600" />
+                </div>
+                <p className="text-sm text-gray-600">Loading your exercises...</p>
+              </div>
+            ) : enrichedClientExercises.length === 0 ? (
+              <div className="py-8 text-center">
+                <p className="text-sm text-gray-500">No exercises assigned yet</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {(isReorderMode ? reorderedExercises : enrichedClientExercises).map((exercise, index) => {
                 const muscleGroup = getUnifiedMuscleGroup(exercise.primaryMuscle);
                 const displayOrder = exercisesAreOrdered ? index + 1 : null;
                 
                 return (
-                  <div key={exercise.id} className={`group flex items-start gap-3 ${exercisesAreOrdered ? 'relative' : ''}`}>
+                  <div key={exercise.workoutExerciseId || exercise.id} className={`group flex items-start gap-3 ${exercisesAreOrdered ? 'relative' : ''}`}>
                     {/* Exercise Order Number */}
                     {exercisesAreOrdered && (
                       <div className="flex-shrink-0 flex items-center justify-center">
@@ -1274,7 +1268,17 @@ function ClientWorkoutOverviewContent() {
                       {isReorderMode ? (
                         <div className="flex items-center gap-1">
                           <button
-                            onClick={() => moveExercise(index, Math.max(0, index - 1))}
+                            onClick={() => {
+                              const exercisesArray = isReorderMode ? reorderedExercises : enrichedClientExercises;
+                              console.log(`[Reorder] Up arrow clicked:`, {
+                                clickedIndex: index,
+                                exerciseName: exercisesArray[index]?.name,
+                                movingTo: index - 1,
+                                totalExercises: exercisesArray.length,
+                                currentOrder: exercisesArray.map((ex, i) => `${i}: ${ex.name}`)
+                              });
+                              moveExercise(index, Math.max(0, index - 1));
+                            }}
                             disabled={index === 0}
                             className={`p-1 rounded ${index === 0 ? 'text-gray-300 cursor-not-allowed' : 'text-gray-600 hover:bg-gray-100'}`}
                             aria-label="Move up"
@@ -1284,7 +1288,10 @@ function ClientWorkoutOverviewContent() {
                             </svg>
                           </button>
                           <button
-                            onClick={() => moveExercise(index, Math.min(reorderedExercises.length - 1, index + 1))}
+                            onClick={() => {
+                              console.log(`[Reorder] Down arrow clicked for index ${index}, moving to ${index + 1}`);
+                              moveExercise(index, Math.min(reorderedExercises.length - 1, index + 1));
+                            }}
                             disabled={index === reorderedExercises.length - 1}
                             className={`p-1 rounded ${index === reorderedExercises.length - 1 ? 'text-gray-300 cursor-not-allowed' : 'text-gray-600 hover:bg-gray-100'}`}
                             aria-label="Move down"
@@ -1324,8 +1331,9 @@ function ClientWorkoutOverviewContent() {
                     </div>
                   </div>
                 );
-              })}
-            </div>
+                })}
+              </div>
+            )}
           </div>
         </div>
 
@@ -1387,7 +1395,17 @@ function ClientWorkoutOverviewContent() {
             ) : (
               <button
                 onClick={() => {
-                  setReorderedExercises([...enrichedClientExercises]);
+                  // Always use fresh data when entering reorder mode
+                  const freshExercises = [...enrichedClientExercises];
+                  console.log('[Reorder] Entering reorder mode:', {
+                    currentExercises: freshExercises.map(ex => ({ 
+                      id: ex.id, 
+                      name: ex.name, 
+                      orderIndex: ex.orderIndex 
+                    })),
+                    exercisesAreOrdered
+                  });
+                  setReorderedExercises(freshExercises);
                   setIsReorderMode(true);
                 }}
                 className="w-full flex items-center justify-center gap-2 rounded-lg bg-gray-600 py-3 text-white font-medium active:scale-95 transition-all hover:bg-gray-700"

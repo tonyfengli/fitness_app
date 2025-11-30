@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from 'react';
 import type { RealtimeChannel, SupabaseClient } from '@supabase/supabase-js';
 
 export interface WorkoutExerciseUpdate {
+  id: string; // workout_exercise id
   workoutId: string;
   exerciseId: string;
   exerciseName?: string;
@@ -98,6 +99,7 @@ export function useRealtimeWorkoutExercises({
               
               // Transform and send the exercises
               const transformedExercises = exercises.map(we => ({
+                id: we.id, // Include the workout_exercise id
                 workoutId: we.workout_id,
                 exerciseId: we.exercise_id,
                 exerciseName: we.custom_exercise?.customName || we.exercise?.name || 'Unknown Exercise',
