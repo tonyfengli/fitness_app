@@ -1,136 +1,226 @@
 export default function PricingPage() {
   return (
-    <div className="min-h-screen w-full bg-gradient-to-b from-white to-slate-50 text-slate-900 p-6 md:p-10 print:p-4 print:bg-white print:min-h-0">
-      {/* Header (primary brand heading) */}
-      <header className="max-w-5xl mx-auto text-center mb-6">
-        <h1 className="text-3xl md:text-4xl font-bold tracking-tight">Heart for the House Fitness</h1>
-        <p className="text-lg md:text-xl text-slate-700 mt-1">October–December 2025</p>
+    <div className="min-h-screen w-full bg-gradient-to-br from-slate-50 to-white text-slate-900 p-6 md:p-10 print:p-4 print:bg-white print:min-h-0">
+      {/* Header */}
+      <header className="max-w-6xl mx-auto text-center mb-12">
+        <h1 className="text-4xl md:text-5xl font-black tracking-tight bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">
+          G1 Fitness Membership Pricing
+        </h1>
+        <p className="text-lg md:text-xl text-slate-600 mt-2 font-medium">Group Classes</p>
       </header>
 
-      {/* Pricing-first cards (directly under header) */}
-      <main className="max-w-5xl mx-auto mb-10">
-        <section aria-label="Pricing Plans" className="">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5 md:gap-6">
-            {/* Foundation Builder */}
-            <div className="relative rounded-2xl border border-slate-200 bg-white shadow-sm">
-              <div className="p-6">
-                <div className="flex items-center gap-2 text-slate-700">
-                  <span className="text-xl" aria-hidden>🧱</span>
-                  <h2 className="text-lg font-semibold">Foundation Builder</h2>
-                </div>
-
-                <div className="mt-4">
-                  <div className="text-6xl font-extrabold tracking-tight">$16
-                    <span className="text-lg font-medium text-slate-500"> / session</span>
+      {/* New Members Section */}
+      <main className="max-w-6xl mx-auto">
+        <section aria-label="New Members Pricing" className="mb-16">
+          <div className="flex items-center justify-center mb-8">
+            <div className="h-px bg-gradient-to-r from-transparent via-slate-300 to-transparent flex-1"></div>
+            <h2 className="text-2xl font-bold px-6 text-slate-800">New Members</h2>
+            <div className="h-px bg-gradient-to-r from-transparent via-slate-300 to-transparent flex-1"></div>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            {/* 2x per week */}
+            <div className="group relative rounded-2xl border border-slate-200 bg-white shadow-sm hover:shadow-lg transition-all duration-300 hover:border-slate-300">
+              <div className="p-8">
+                <h3 className="text-xl font-bold text-slate-800 mb-6">2x Per Week</h3>
+                <div className="space-y-4">
+                  <div>
+                    <div className="flex items-baseline">
+                      <span className="text-5xl font-black text-slate-900">$128</span>
+                      <span className="text-lg font-medium text-slate-500 ml-2">/ month</span>
+                    </div>
                   </div>
-                  <p className="mt-2 text-slate-700">1 session per week</p>
-                  <p className="mt-1 text-sm text-slate-500">$16/week → $64/month</p>
+                  <div className="space-y-2 pt-4 border-t border-slate-100">
+                    <p className="text-base font-medium text-slate-700 flex items-center">
+                      <svg className="w-5 h-5 text-green-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
+                      </svg>
+                      8 sessions per month
+                    </p>
+                    <p className="text-sm text-slate-500 pl-7">$16 per session average</p>
+                  </div>
                 </div>
               </div>
             </div>
 
-            {/* Cornerstone Builder */}
-            <div className="relative rounded-2xl border border-blue-200 bg-white shadow-sm ring-1 ring-blue-100">
-              <div className="p-6">
-                <div className="flex items-center gap-2 text-blue-700">
-                  <span className="text-xl" aria-hidden>🪨</span>
-                  <h2 className="text-lg font-semibold">Cornerstone Builder</h2>
-                </div>
-
-                <div className="mt-4">
-                  <div className="text-6xl font-extrabold tracking-tight">$12
-                    <span className="text-lg font-medium text-slate-500"> / session</span>
+            {/* 3x per week */}
+            <div className="group relative rounded-2xl border border-slate-200 bg-white shadow-sm hover:shadow-lg transition-all duration-300 hover:border-slate-300">
+              <div className="p-8">
+                <h3 className="text-xl font-bold text-slate-800 mb-6">3x Per Week</h3>
+                <div className="space-y-4">
+                  <div>
+                    <div className="flex items-baseline">
+                      <span className="text-5xl font-black text-slate-900">$144</span>
+                      <span className="text-lg font-medium text-slate-500 ml-2">/ month</span>
+                    </div>
                   </div>
-                  <p className="mt-2 text-slate-800">2 sessions per week</p>
-                  <p className="mt-1 text-sm text-slate-500">$24/week → $96/month</p>
+                  <div className="space-y-2 pt-4 border-t border-slate-100">
+                    <p className="text-base font-medium text-slate-700 flex items-center">
+                      <svg className="w-5 h-5 text-green-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
+                      </svg>
+                      12 sessions per month
+                    </p>
+                    <p className="text-sm text-slate-500 pl-7">$12 per session average</p>
+                  </div>
                 </div>
               </div>
             </div>
 
-            {/* Kingdom Builder */}
-            <div className="relative rounded-2xl border-2 border-amber-300 bg-gradient-to-b from-amber-50 to-white shadow-lg ring-2 ring-amber-200 ring-offset-2">
-              <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1.5 rounded-full text-sm font-bold bg-gradient-to-r from-amber-500 to-amber-600 text-white shadow-md">Best Value</div>
-              <div className="p-6">
-                <div className="flex items-center gap-2 text-amber-700">
-                  <span className="text-2xl" aria-hidden>👑</span>
-                  <h2 className="text-xl font-bold">Kingdom Builder</h2>
-                </div>
-
-                <div className="mt-4">
-                  <div className="text-6xl font-extrabold tracking-tight text-amber-700">$10
-                    <span className="text-lg font-medium text-slate-600"> / session</span>
+            {/* Unlimited */}
+            <div className="group relative rounded-2xl border-2 border-amber-400 bg-gradient-to-br from-amber-50 via-white to-white shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-[1.02]">
+              <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-5 py-1.5 rounded-full text-sm font-bold bg-gradient-to-r from-amber-500 to-amber-600 text-white shadow-md">
+                BEST VALUE
+              </div>
+              <div className="p-8">
+                <h3 className="text-xl font-bold text-amber-900 mb-6">Unlimited</h3>
+                <div className="space-y-4">
+                  <div>
+                    <div className="flex items-baseline">
+                      <span className="text-5xl font-black text-amber-900">$180</span>
+                      <span className="text-lg font-medium text-amber-700 ml-2">/ month</span>
+                    </div>
                   </div>
-                  <p className="mt-2 text-slate-800 font-semibold">3 sessions per week</p>
-                  <p className="mt-1 text-sm text-slate-600 font-medium">$30/week → $120/month</p>
+                  <div className="space-y-2 pt-4 border-t border-amber-100">
+                    <p className="text-base font-medium text-amber-800 flex items-center">
+                      <svg className="w-5 h-5 text-amber-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
+                      </svg>
+                      Unlimited sessions
+                    </p>
+                    <p className="text-sm text-amber-700 pl-7 font-medium">Train every day if you want!</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Additional New Member Info */}
+          <div className="rounded-2xl bg-slate-50 border border-slate-200 p-6 relative max-w-4xl mx-auto">
+            <div className="absolute top-4 right-4 text-xs text-slate-400 italic font-medium bg-white px-2 py-1 rounded-full border border-slate-200">
+              Internal Note
+            </div>
+            <div className="grid md:grid-cols-2 gap-6">
+              <div>
+                <h4 className="font-bold text-slate-800 mb-2 flex items-center">
+                  <svg className="w-5 h-5 mr-2 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v13m0-13V6a2 2 0 112 2h-2z"></path>
+                  </svg>
+                  Free Trial Class
+                </h4>
+                <p className="text-sm text-slate-700 leading-relaxed">1 free trial class for all new members</p>
+                <p className="text-xs text-slate-500 mt-1 italic">Can be extended to 1 week if needed to close</p>
+              </div>
+              
+              <div>
+                <h4 className="font-bold text-slate-800 mb-2 flex items-center">
+                  <svg className="w-5 h-5 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                  </svg>
+                  Long-Term Commitment Discounts
+                </h4>
+                <p className="text-sm text-slate-700">% Discount: TBD</p>
+                <p className="text-xs text-slate-500 mt-1 italic">Special rates for extended commitments coming soon</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Existing Members Section */}
+        <section aria-label="Existing Members Pricing" className="mb-16">
+          <div className="flex items-center justify-center mb-8">
+            <div className="h-px bg-gradient-to-r from-transparent via-slate-300 to-transparent flex-1"></div>
+            <h2 className="text-2xl font-bold px-6 text-slate-800">Existing H4H Members</h2>
+            <div className="h-px bg-gradient-to-r from-transparent via-slate-300 to-transparent flex-1"></div>
+          </div>
+          
+          <div className="rounded-3xl bg-gradient-to-br from-slate-50 to-slate-100 border border-slate-200 p-8 mb-8">
+            <div className="text-center mb-8">
+              <div className="inline-flex items-center justify-center w-16 h-16 bg-slate-200 rounded-full mb-4">
+                <svg className="w-8 h-8 text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+                </svg>
+              </div>
+              <h3 className="text-2xl font-bold text-slate-900">Your Legacy Rates Are Protected</h3>
+              <p className="text-slate-600 mt-2 text-lg">All current H4H members maintain their existing rates forever</p>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl mx-auto">
+              <div className="bg-white rounded-xl p-6 text-center shadow-sm border border-slate-200">
+                <h4 className="font-bold text-slate-800 text-lg mb-3">Cornerstone</h4>
+                <div className="space-y-2">
+                  <p className="text-4xl font-black text-slate-900">$12<span className="text-lg font-normal text-slate-500">/session</span></p>
+                  <p className="text-sm text-slate-600 font-medium">2x per week</p>
+                  <p className="text-xs text-slate-500">~$96/month</p>
+                </div>
+              </div>
+              <div className="bg-white rounded-xl p-6 text-center shadow-sm border border-slate-200 relative">
+                <div className="absolute -top-3 -right-3 bg-gradient-to-br from-green-500 to-green-600 text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-md transform rotate-12 z-10">
+                  FREE UPGRADE
+                </div>
+                <h4 className="font-bold text-slate-800 text-lg mb-3">Kingdom</h4>
+                <div className="space-y-2">
+                  <p className="text-4xl font-black text-slate-900">$10<span className="text-lg font-normal text-slate-500">/session</span></p>
+                  <p className="text-sm text-slate-400 line-through">3x per week</p>
+                  <p className="text-sm font-bold text-green-700 bg-green-50 rounded px-2 py-1 inline-block">Unlimited sessions</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Special Promotion */}
+          <div className="relative rounded-3xl border-2 border-red-300 bg-gradient-to-br from-red-50 via-white to-white shadow-xl p-8 transform hover:scale-[1.01] transition-transform duration-300">
+            <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-6 py-2 rounded-full text-sm font-black bg-gradient-to-r from-red-500 to-red-600 text-white shadow-lg">
+              LIMITED TIME OFFER
+            </div>
+            <div className="text-center">
+              <h3 className="text-3xl font-black text-red-900 mb-4">Special Launch Promotion</h3>
+              <div className="inline-block bg-white rounded-2xl p-6 shadow-inner border border-red-200">
+                <div className="text-6xl font-black text-red-700">$100
+                  <span className="text-2xl font-bold text-red-600 block mt-2">per month for 3 months</span>
+                </div>
+              </div>
+              <p className="text-xl text-red-800 font-bold mt-4 mb-6">Unlimited Sessions</p>
+              <div className="inline-flex items-center px-6 py-3 bg-red-600 text-white rounded-full font-bold">
+                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                Must commit before January 5, 2026
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Referral Program Section */}
+        <section aria-label="Referral Program" className="mb-16">
+          <div className="flex items-center justify-center mb-8">
+            <div className="h-px bg-gradient-to-r from-transparent via-slate-300 to-transparent flex-1"></div>
+            <h2 className="text-2xl font-bold px-6 text-slate-800">Referral Program</h2>
+            <div className="h-px bg-gradient-to-r from-transparent via-slate-300 to-transparent flex-1"></div>
+          </div>
+          
+          <div className="max-w-3xl mx-auto">
+            <div className="relative rounded-3xl bg-gradient-to-br from-amber-50 via-white to-white border-2 border-amber-300 p-8 shadow-lg overflow-hidden">
+              <div className="absolute top-0 right-0 w-40 h-40 bg-amber-200 rounded-full blur-3xl opacity-30"></div>
+              <div className="relative text-center">
+                <div className="inline-flex items-center justify-center w-16 h-16 bg-amber-100 rounded-full mb-4">
+                  <svg className="w-8 h-8 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path>
+                  </svg>
+                </div>
+                <h3 className="text-2xl font-bold text-amber-900 mb-6">Earn Rewards for Sharing G1 Fitness</h3>
+                <div className="bg-white rounded-2xl p-6 inline-block shadow-sm border border-amber-200">
+                  <p className="text-lg text-amber-800 font-medium mb-3">Current H4H Members:</p>
+                  <div className="text-4xl font-black text-amber-900">50% OFF</div>
+                  <p className="text-lg text-amber-700 mt-2">one month of membership</p>
+                  <p className="text-sm text-amber-600 mt-3 font-medium">for each new member you refer</p>
                 </div>
               </div>
             </div>
           </div>
         </section>
+
       </main>
-
-      {/* Program Narrative Section with Mission Callout as headline */}
-      <div className="max-w-3xl mx-auto mb-10 text-center">
-        <h2 className="text-xl md:text-2xl font-semibold tracking-tight mb-4 text-blue-900">
-          Every session contributes 100% to the Anaheim Church Building
-        </h2>
-        
-        {/* Matching Donation Notice */}
-        <div className="mb-6">
-          <p className="text-base md:text-lg text-slate-800 font-medium">
-            <span className="text-blue-700">✨</span> We'll match contributions dollar-for-dollar up to $15,000, doubling your impact! <span className="text-blue-700">✨</span>
-          </p>
-        </div>
-        
-        <p className="text-slate-700 text-base md:text-lg leading-relaxed">
-          A focused 3-month program blending weights and cardio, designed to help you burn fat, feel stronger, and look leaner. Held in a private boutique studio, each session offers an intimate environment open to all fitness levels, led by Freedomhouse coaches. More than a workout, it's a chance to connect in faith and fellowship while building both body and spirit.
-        </p>
-      </div>
-
-      {/* Schedule + Location (hierarchy #3) */}
-      <div className="max-w-5xl mx-auto mb-6 print:mb-0">
-        <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-slate-100">
-            <div className="p-8 md:p-10">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="text-xl" aria-hidden>🕔</div>
-                <h3 className="font-semibold text-lg">Class Schedule</h3>
-              </div>
-              <div className="space-y-4 pl-8">
-                <div>
-                  <div className="text-slate-900 font-semibold text-lg">5:00 – 6:00 AM</div>
-                  <div className="text-slate-600">Monday • Wednesday • Friday</div>
-                </div>
-                <div>
-                  <div className="text-slate-900 font-semibold text-lg">5:00 – 6:00 PM</div>
-                  <div className="text-slate-600">Monday through Friday (All weekdays)</div>
-                </div>
-              </div>
-            </div>
-            <div className="p-8 md:p-10">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="text-xl" aria-hidden>📍</div>
-                <h3 className="font-semibold text-lg">Studio Location</h3>
-              </div>
-              <div className="pl-8">
-                <div className="text-slate-900 leading-relaxed">
-                  3111 W. Lincoln Ave<br />
-                  Anaheim, CA 92801
-                </div>
-                <div className="mt-3">
-                  <a href="https://maps.google.com/?q=3111+W+Lincoln+Ave+Anaheim+CA+92801" 
-                     target="_blank" 
-                     rel="noopener noreferrer"
-                     className="text-blue-600 hover:text-blue-700 text-sm font-medium inline-flex items-center gap-1">
-                    View on Google Maps
-                    <span aria-hidden>→</span>
-                  </a>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }
