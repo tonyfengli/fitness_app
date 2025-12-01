@@ -149,9 +149,8 @@ export default function PricingPage() {
               <div className="bg-white rounded-xl p-6 text-center shadow-sm border border-slate-200">
                 <h4 className="font-bold text-slate-800 text-lg mb-3">Cornerstone</h4>
                 <div className="space-y-2">
-                  <p className="text-4xl font-black text-slate-900">$12<span className="text-lg font-normal text-slate-500">/session</span></p>
+                  <p className="text-4xl font-black text-slate-900">$96<span className="text-lg font-normal text-slate-500">/month</span></p>
                   <p className="text-sm text-slate-600 font-medium">2x per week</p>
-                  <p className="text-xs text-slate-500">~$96/month</p>
                 </div>
               </div>
               <div className="bg-white rounded-xl p-6 text-center shadow-sm border border-slate-200 relative">
@@ -160,7 +159,7 @@ export default function PricingPage() {
                 </div>
                 <h4 className="font-bold text-slate-800 text-lg mb-3">Kingdom</h4>
                 <div className="space-y-2">
-                  <p className="text-4xl font-black text-slate-900">$10<span className="text-lg font-normal text-slate-500">/session</span></p>
+                  <p className="text-4xl font-black text-slate-900">$120<span className="text-lg font-normal text-slate-500">/month</span></p>
                   <p className="text-sm text-slate-400 line-through">3x per week</p>
                   <p className="text-sm font-bold text-green-700 bg-green-50 rounded px-2 py-1 inline-block">Unlimited sessions</p>
                 </div>
