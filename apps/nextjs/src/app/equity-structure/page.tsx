@@ -19,22 +19,23 @@ export default function EquityStructurePage() {
   const [preferSweatEquity, setPreferSweatEquity] = useState(true); // true = sweat equity, false = cash compensation
   const [buyInAmount, setBuyInAmount] = useState<number | string | undefined>(0);
   const [buyInAmountInput, setBuyInAmountInput] = useState('');
+  
+  // State for active tab in roles section
+  const [activeRoleTab, setActiveRoleTab] = useState('all');
 
   // Founders list
   const founders = [
-    { id: 'founder1', name: 'Eileen', color: 'bg-blue-500' },
-    { id: 'founder2', name: 'Richard', color: 'bg-green-500' },
+    { id: 'founder2', name: 'R&E', color: 'bg-green-500' },
     { id: 'founder3', name: 'David', color: 'bg-purple-500' },
     { id: 'founder4', name: 'Kyle', color: 'bg-orange-500' },
     { id: 'founder5', name: 'Tony', color: 'bg-pink-500' }
   ];
 
-  // State for role bullets with assignees
-  const [roleBullets, setRoleBullets] = useState<{[key: string]: Array<{id: string; text: string; assignees: string[]}>}>({
+  // State for role bullets with assignees and hours per founder
+  const [roleBullets, setRoleBullets] = useState<{[key: string]: Array<{id: string; text: string; assignees: string[]; hours?: {[founderId: string]: number}; expanded?: boolean}>}>({
     leadership: [
       { id: '1', text: "Prepare and lead weekly meetings", assignees: [] },
-      { id: '2', text: "Review KPIs, diagnose issues, assign tasks", assignees: [] },
-      { id: '3', text: "Set monthly budgets for cost management", assignees: [] },
+      { id: '2', text: "Review KPIs, diagnose issues, assign tasks, and set monthly budgets", assignees: [] },
       { id: '4', text: "Make sure other founders/team members are on track and run performance reviews if needed", assignees: [] }
     ],
     maintenance: [
@@ -60,18 +61,18 @@ export default function EquityStructurePage() {
     ],
     sales: [
       { id: '15', text: "Respond quickly to new leads (DM, SMS, email, phone)", assignees: [] },
-      { id: '16', text: "Run intro calls, trials, and consults", assignees: [] },
-      { id: '17', text: "Present offers, handle objections, and close memberships", assignees: [] },
-      { id: '18', text: "Run save attempts when clients want to cancel (before Admin processes)", assignees: [] },
-      { id: '19', text: "Log all sales activity and statuses in CRM", assignees: [] }
+      { id: '16', text: "Group classes - follow ups, trials, close", assignees: [] },
+      { id: '17', text: "Semi-privates - follow ups, assessments and close", assignees: [] },
+      { id: '18', text: "Run save attempts when clients want to cancel (before Admin processes)", assignees: [] }
     ],
     marketing: [
-      { id: '20', text: "Plan and maintain a content calendar", assignees: [] },
+      { id: '20', text: "Plan and maintain a content calendar (frequency & posting cadence to be aligned)", assignees: [] },
       { id: '21', text: "Capture photos and video during sessions and events", assignees: [] },
       { id: '22', text: "Create and publish content on social platforms", assignees: [] },
       { id: '23', text: "Engage with comments, DMs, and basic social interactions", assignees: [] },
       { id: '24', text: "Manage email/newsletter campaigns", assignees: [] },
-      { id: '25', text: "Maintain website/SEO", assignees: [] }
+      { id: '25', text: "Maintain website/SEO", assignees: [] },
+      { id: '50', text: "Create and publish paid ads (Facebook, Google, Instagram)", assignees: [] }
     ],
     partnerships: [
       { id: '26', text: "Identify and contact local businesses for partnerships", assignees: [] },
@@ -94,9 +95,7 @@ export default function EquityStructurePage() {
       { id: '46', text: "Take out trash", assignees: [] }
     ],
     admin: [
-      { id: '41', text: "Onboard clients: contracts, waivers, profiles, payment setup", assignees: [] },
-      { id: '42', text: "Process freezes, cancellations, and membership changes", assignees: [] },
-      { id: '43', text: "Handle schedule management: class caps, coach assignment, overbooking fixes", assignees: [] },
+      { id: '42', text: "Process freezes, cancellations, membership changes, and coach scheduling adjustments", assignees: [] },
       { id: '44', text: "Run payroll for the trainers", assignees: [] },
       { id: '45', text: "Do bookkeeping and monthly financial reports to the team", assignees: [] },
       { id: '47', text: "Chase down unpaid invoices and manage collections", assignees: [] }
@@ -197,6 +196,34 @@ export default function EquityStructurePage() {
         }
         return bullet;
       })
+    }));
+  };
+
+  const updateBulletHours = (roleKey: string, bulletId: string, founderId: string, hours: number) => {
+    setRoleBullets(prev => ({
+      ...prev,
+      [roleKey]: prev[roleKey].map(bullet =>
+        bullet.id === bulletId 
+          ? { 
+              ...bullet, 
+              hours: {
+                ...(bullet.hours || {}),
+                [founderId]: hours
+              }
+            } 
+          : bullet
+      )
+    }));
+  };
+
+  const toggleBulletExpanded = (roleKey: string, bulletId: string) => {
+    setRoleBullets(prev => ({
+      ...prev,
+      [roleKey]: prev[roleKey].map(bullet =>
+        bullet.id === bulletId 
+          ? { ...bullet, expanded: !bullet.expanded } 
+          : bullet
+      )
     }));
   };
 
@@ -1265,6 +1292,56 @@ export default function EquityStructurePage() {
                 </h3>
               </div>
               
+              {/* Founder Tabs */}
+              <div className="mb-6">
+                <div className="flex justify-center">
+                  <div className="inline-flex bg-gray-100 p-0.5 rounded-lg shadow-inner">
+                    <div className="flex gap-0.5 overflow-x-auto scrollbar-hide max-w-full">
+                      {/* All Tab */}
+                      <button
+                        onClick={() => setActiveRoleTab('all')}
+                        className={`px-5 py-1.5 rounded-md font-medium text-xs transition-all duration-200 ${
+                          activeRoleTab === 'all'
+                            ? 'bg-white text-gray-900 shadow-sm'
+                            : 'text-gray-600 hover:text-gray-800'
+                        }`}
+                      >
+                        All
+                      </button>
+                      
+                      {/* Founder Tabs */}
+                      {founders.map((founder) => {
+                        return (
+                          <button
+                            key={founder.id}
+                            onClick={() => setActiveRoleTab(founder.id)}
+                            className={`px-5 py-1.5 rounded-md font-medium text-xs transition-all duration-200 ${
+                              activeRoleTab === founder.id
+                                ? `bg-white text-gray-900 shadow-sm`
+                                : 'text-gray-600 hover:text-gray-800'
+                            }`}
+                          >
+                            {founder.name}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Active filter indicator */}
+                {activeRoleTab !== 'all' && (
+                  <div className="mt-3 text-center">
+                    <p className="text-sm text-gray-600">
+                      Showing responsibilities assigned to{' '}
+                      <span className="font-semibold">
+                        {founders.find(f => f.id === activeRoleTab)?.name}
+                      </span>
+                    </p>
+                  </div>
+                )}
+              </div>
+              
               <div className="bg-white rounded-2xl shadow-xl p-6">
                 {(() => {
                   const roles = [
@@ -1369,12 +1446,147 @@ export default function EquityStructurePage() {
                     }
                   ];
                   
+                  // Different layout for individual founder view
+                  if (activeRoleTab !== 'all') {
+                    // Collect all tasks assigned to this founder with their role info
+                    const founderTasks = [];
+                    const categoryTotals = {};
+                    
+                    roles.forEach(role => {
+                      const bullets = roleBullets[role.key]?.filter(bullet => 
+                        bullet.assignees.includes(activeRoleTab)
+                      ) || [];
+                      
+                      // Calculate total hours for this category for this founder
+                      const categoryHours = bullets.reduce((sum, bullet) => sum + (bullet.hours?.[activeRoleTab] || 0), 0);
+                      if (bullets.length > 0) {
+                        categoryTotals[role.key] = {
+                          title: role.title,
+                          totalHours: roleHours[role.key] || 0,
+                          founderHours: categoryHours,
+                          color: role.bgColor,
+                          borderColor: role.borderColor
+                        };
+                      }
+                      
+                      bullets.forEach(bullet => {
+                        founderTasks.push({
+                          ...bullet,
+                          roleKey: role.key,
+                          roleTitle: role.title,
+                          roleColor: role.color,
+                          roleBgColor: role.bgColor,
+                          roleBorderColor: role.borderColor
+                        });
+                      });
+                    });
+                    
+                    const totalFounderHours = founderTasks.reduce((sum, task) => sum + (task.hours?.[activeRoleTab] || 0), 0);
+                    
+                    return (
+                      <div className="space-y-3">
+                        {founderTasks.length === 0 ? (
+                          <div className="text-center py-12">
+                            <div className="text-gray-400 mb-2">
+                              <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                              </svg>
+                            </div>
+                            <p className="text-gray-600 font-medium">No responsibilities assigned yet</p>
+                            <p className="text-sm text-gray-500 mt-1">
+                              Assign tasks to {founders.find(f => f.id === activeRoleTab)?.name} from the All view
+                            </p>
+                          </div>
+                        ) : (
+                          founderTasks.map((task, index) => (
+                            <div key={task.id} className="border border-gray-200 rounded-lg bg-white hover:border-gray-300 transition-colors">
+                              <div className="p-4">
+                                <div className="flex items-start gap-3">
+                                  <span className="text-gray-400 mt-1 flex-shrink-0">•</span>
+                                  <div className="flex-1 space-y-2">
+                                    {/* Task text */}
+                                    <div className="flex items-start gap-2">
+                                      <textarea
+                                        value={task.text}
+                                        onChange={(e) => updateBulletText(task.roleKey, task.id, e.target.value)}
+                                        className="flex-1 text-[15px] text-gray-700 bg-transparent border-b border-transparent hover:border-gray-300 focus:border-indigo-500 focus:outline-none transition-colors leading-relaxed py-0.5 resize-none overflow-hidden min-h-[1.5em]"
+                                        placeholder="Enter task description..."
+                                        rows={1}
+                                        ref={(el) => {
+                                          if (el && task.text) {
+                                            el.style.height = 'auto';
+                                            el.style.height = el.scrollHeight + 'px';
+                                          }
+                                        }}
+                                        onInput={(e) => {
+                                          e.currentTarget.style.height = 'auto';
+                                          e.currentTarget.style.height = e.currentTarget.scrollHeight + 'px';
+                                        }}
+                                      />
+                                      <button
+                                        onClick={() => removeBullet(task.roleKey, task.id)}
+                                        className="opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity text-gray-400 hover:text-gray-600 p-1"
+                                        title="Remove bullet"
+                                      >
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                        </svg>
+                                      </button>
+                                    </div>
+                                    
+                                    {/* Category, hours, and other assignees */}
+                                    <div className="flex items-center justify-between">
+                                      <div className="flex items-center gap-2">
+                                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${task.roleBgColor} ${task.roleBorderColor} border`}>
+                                          {task.roleTitle}
+                                        </span>
+                                        
+                                        {/* Hours input */}
+                                        <div className="flex items-center gap-1">
+                                          <input
+                                            type="number"
+                                            min="0"
+                                            max="20"
+                                            step="0.5"
+                                            value={task.hours?.[activeRoleTab] || ''}
+                                            onChange={(e) => updateBulletHours(task.roleKey, task.id, activeRoleTab, parseFloat(e.target.value) || 0)}
+                                            placeholder="0"
+                                            className="w-14 px-2 py-0.5 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                                          />
+                                          <span className="text-xs text-gray-500">h/w</span>
+                                        </div>
+                                      </div>
+                                      
+                                      {/* Show other assignees */}
+                                      <div className="flex items-center gap-1">
+                                        {task.assignees.filter(id => id !== activeRoleTab).map(assigneeId => {
+                                          const assignee = founders.find(f => f.id === assigneeId);
+                                          return assignee ? (
+                                            <span key={assigneeId} className="text-xs text-gray-500">
+                                              + {assignee.name}
+                                            </span>
+                                          ) : null;
+                                        })}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    );
+                  }
+                  
+                  // Original grid layout for "All" view
                   return (
                     <>
                       {/* Roles Grid */}
                       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                        {roles.map((role) => (
-                          <div key={role.id} className={`border ${role.borderColor} rounded-xl overflow-hidden hover:shadow-lg transition-all duration-300`}>
+                        {roles.map((role) => {
+                          return (
+                            <div key={role.id} className={`border ${role.borderColor} rounded-xl overflow-hidden hover:shadow-lg transition-all duration-300`}>
                             {/* Header */}
                             <div className={`${role.bgColor} px-4 py-3 border-b ${role.borderColor}`}>
                               <div className="flex items-center justify-between">
@@ -1385,9 +1597,9 @@ export default function EquityStructurePage() {
                                     min="0"
                                     max="40"
                                     step="0.5"
-                                    value={role.hours}
+                                    value={role.hours || ''}
                                     onChange={(e) => {
-                                      const newHours = parseFloat(e.target.value) || 0;
+                                      const newHours = e.target.value === '' ? 0 : parseFloat(e.target.value) || 0;
                                       setRoleHours(prev => ({
                                         ...prev,
                                         [role.key]: newHours
@@ -1403,7 +1615,11 @@ export default function EquityStructurePage() {
                             {/* Bullets */}
                             <div className="px-4 py-3 bg-white">
                               <ul className="space-y-3">
-                                {roleBullets[role.key]?.map((bullet, bulletIndex) => (
+                                {roleBullets[role.key]?.filter(bullet => {
+                                  // Filter bullets based on active tab
+                                  if (activeRoleTab === 'all') return true;
+                                  return bullet.assignees.includes(activeRoleTab);
+                                }).map((bullet, bulletIndex) => (
                                   <li key={bullet.id} className="group">
                                     <div className="flex items-start gap-2">
                                       <span className="text-gray-400 mt-1 flex-shrink-0">•</span>
@@ -1437,21 +1653,71 @@ export default function EquityStructurePage() {
                                           </button>
                                         </div>
                                         
-                                        {/* Founder assignment badges */}
-                                        <div className="flex flex-wrap gap-1">
-                                          {founders.map((founder) => (
-                                            <button
-                                              key={founder.id}
-                                              onClick={() => toggleAssignee(role.key, bullet.id, founder.id)}
-                                              className={`px-2 py-0.5 text-xs rounded-full transition-all ${
-                                                bullet.assignees.includes(founder.id)
-                                                  ? 'bg-gray-700 text-white'
-                                                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                                              }`}
-                                            >
-                                              {founder.name}
-                                            </button>
-                                          ))}
+                                        {/* Founder assignment badges with hours */}
+                                        <div className="space-y-2">
+                                          <div className="flex flex-wrap gap-1">
+                                            {founders.map((founder) => (
+                                              <button
+                                                key={founder.id}
+                                                onClick={() => toggleAssignee(role.key, bullet.id, founder.id)}
+                                                className={`px-2 py-0.5 text-xs rounded-full transition-all ${
+                                                  bullet.assignees.includes(founder.id)
+                                                    ? 'bg-gray-700 text-white'
+                                                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                                }`}
+                                              >
+                                                {founder.name}
+                                              </button>
+                                            ))}
+                                          </div>
+                                          
+                                          {/* Hours section with expand/collapse */}
+                                          {bullet.assignees.length > 0 && (
+                                            <>
+                                              <button
+                                                onClick={() => toggleBulletExpanded(role.key, bullet.id)}
+                                                className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 transition-colors"
+                                              >
+                                                <svg 
+                                                  className={`w-3 h-3 transition-transform duration-200 ${bullet.expanded ? 'rotate-180' : ''}`}
+                                                  fill="none" 
+                                                  stroke="currentColor" 
+                                                  viewBox="0 0 24 24"
+                                                >
+                                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                                </svg>
+                                                <span>Hours allocation</span>
+                                                <span className="text-gray-400">
+                                                  ({bullet.assignees.reduce((sum, fId) => sum + (bullet.hours?.[fId] || 0), 0)}h total)
+                                                </span>
+                                              </button>
+                                              
+                                              {/* Hours inputs for assigned founders */}
+                                              {bullet.expanded && (
+                                                <div className="flex flex-wrap gap-2 pl-4 border-l-2 border-gray-200 mt-2">
+                                                  {bullet.assignees.map(founderId => {
+                                                    const founder = founders.find(f => f.id === founderId);
+                                                    return founder ? (
+                                                      <div key={founderId} className="flex items-center gap-1 bg-gray-50 rounded px-2 py-1">
+                                                        <span className="text-xs text-gray-600">{founder.name}:</span>
+                                                        <input
+                                                          type="number"
+                                                          min="0"
+                                                          max="20"
+                                                          step="0.5"
+                                                          value={bullet.hours?.[founderId] || ''}
+                                                          onChange={(e) => updateBulletHours(role.key, bullet.id, founderId, parseFloat(e.target.value) || 0)}
+                                                          placeholder="0"
+                                                          className="w-12 px-1 py-0.5 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                                                        />
+                                                        <span className="text-xs text-gray-500">h</span>
+                                                      </div>
+                                                    ) : null;
+                                                  })}
+                                                </div>
+                                              )}
+                                            </>
+                                          )}
                                         </div>
                                       </div>
                                     </div>
@@ -1471,8 +1737,35 @@ export default function EquityStructurePage() {
                               </button>
                             </div>
                           </div>
-                        ))}
+                          );
+                        })}
                       </div>
+                      
+                      {/* Empty state when founder has no tasks */}
+                      {activeRoleTab !== 'all' && (() => {
+                        const founderHasAnyTasks = Object.values(roleBullets).some(bullets => 
+                          bullets.some(b => b.assignees.includes(activeRoleTab))
+                        );
+                        if (!founderHasAnyTasks) {
+                          const founder = founders.find(f => f.id === activeRoleTab);
+                          return (
+                            <div className="mt-8 text-center py-12">
+                              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-100 mb-4">
+                                <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                                </svg>
+                              </div>
+                              <h4 className="text-lg font-semibold text-gray-800 mb-2">
+                                No responsibilities assigned to {founder?.name}
+                              </h4>
+                              <p className="text-gray-600 max-w-md mx-auto">
+                                Click on role items above and select {founder?.name}'s badge to assign responsibilities.
+                              </p>
+                            </div>
+                          );
+                        }
+                        return null;
+                      })()}
                       
                       {/* Total Hours Summary */}
                       <div className="mt-6 p-4 bg-gradient-to-r from-gray-100 to-gray-200 rounded-xl">
@@ -1495,6 +1788,249 @@ export default function EquityStructurePage() {
                         </div>
                       </div>
                     </>
+                  );
+                })()}
+              </div>
+            </div>
+          </div>
+          
+          {/* Hours Summary */}
+          <div className="p-8 bg-gradient-to-br from-indigo-50 to-blue-50">
+            <div className="max-w-6xl mx-auto">
+              <div className="text-center mb-8">
+                <h3 className="text-2xl font-bold text-gray-800 text-center">
+                  Hours Summary
+                </h3>
+                <p className="text-gray-600 mt-2">Weekly time allocation by founder and category</p>
+              </div>
+              
+              <div className="bg-white rounded-2xl shadow-xl p-6">
+                {(() => {
+                  // Define roles array
+                  const roles = [
+                    {
+                      id: 1,
+                      key: 'leadership',
+                      title: "Leadership & KPIs",
+                      color: "from-indigo-500 to-purple-600",
+                      borderColor: "border-indigo-200",
+                      bgColor: "bg-indigo-50",
+                      hours: roleHours.leadership
+                    },
+                    {
+                      id: 2,
+                      key: 'maintenance',
+                      title: "Maintain Gym Amenities",
+                      color: "from-blue-500 to-cyan-600",
+                      borderColor: "border-blue-200",
+                      bgColor: "bg-blue-50",
+                      hours: roleHours.maintenance
+                    },
+                    {
+                      id: 3,
+                      key: 'inGymCoaching',
+                      title: "In-Gym Coaching",
+                      color: "from-green-500 to-emerald-600",
+                      borderColor: "border-green-200",
+                      bgColor: "bg-green-50",
+                      hours: roleHours.inGymCoaching
+                    },
+                    {
+                      id: 4,
+                      key: 'remoteCoaching',
+                      title: "Remote Coaching",
+                      color: "from-teal-500 to-cyan-600",
+                      borderColor: "border-teal-200",
+                      bgColor: "bg-teal-50",
+                      hours: roleHours.remoteCoaching
+                    },
+                    {
+                      id: 5,
+                      key: 'coachManagement',
+                      title: "Coach & Training Management",
+                      color: "from-orange-500 to-red-600",
+                      borderColor: "border-orange-200",
+                      bgColor: "bg-orange-50",
+                      hours: roleHours.coachManagement
+                    },
+                    {
+                      id: 6,
+                      key: 'sales',
+                      title: "Sales",
+                      color: "from-purple-500 to-pink-600",
+                      borderColor: "border-purple-200",
+                      bgColor: "bg-purple-50",
+                      hours: roleHours.sales
+                    },
+                    {
+                      id: 7,
+                      key: 'marketing',
+                      title: "Marketing",
+                      color: "from-pink-500 to-rose-600",
+                      borderColor: "border-pink-200",
+                      bgColor: "bg-pink-50",
+                      hours: roleHours.marketing
+                    },
+                    {
+                      id: 8,
+                      key: 'partnerships',
+                      title: "Strategic Partnerships",
+                      color: "from-violet-500 to-purple-600",
+                      borderColor: "border-violet-200",
+                      bgColor: "bg-violet-50",
+                      hours: roleHours.partnerships
+                    },
+                    {
+                      id: 9,
+                      key: 'clientSuccess',
+                      title: "Client Success",
+                      color: "from-amber-500 to-orange-600",
+                      borderColor: "border-amber-200",
+                      bgColor: "bg-amber-50",
+                      hours: roleHours.clientSuccess
+                    },
+                    {
+                      id: 10,
+                      key: 'facilities',
+                      title: "Facilities & Supplies",
+                      color: "from-gray-500 to-slate-600",
+                      borderColor: "border-gray-200",
+                      bgColor: "bg-gray-50",
+                      hours: roleHours.facilities
+                    },
+                    {
+                      id: 11,
+                      key: 'admin',
+                      title: "Admin & Finance",
+                      color: "from-slate-500 to-gray-600",
+                      borderColor: "border-slate-200",
+                      bgColor: "bg-slate-50",
+                      hours: roleHours.admin
+                    }
+                  ];
+                  
+                  // Calculate hours breakdown for each founder by category
+                  const hoursBreakdown = {};
+                  const founderTotals = {};
+                  
+                  founders.forEach(founder => {
+                    founderTotals[founder.id] = 0;
+                  });
+                  
+                  roles.forEach(role => {
+                    hoursBreakdown[role.key] = {
+                      title: role.title,
+                      color: role.color,
+                      bgColor: role.bgColor,
+                      borderColor: role.borderColor,
+                      totalHours: roleHours[role.key] || 0,
+                      founders: {}
+                    };
+                    
+                    founders.forEach(founder => {
+                      hoursBreakdown[role.key].founders[founder.id] = 0;
+                    });
+                    
+                    roleBullets[role.key]?.forEach(bullet => {
+                      bullet.assignees.forEach(founderId => {
+                        const bulletHours = bullet.hours?.[founderId] || 0;
+                        hoursBreakdown[role.key].founders[founderId] += bulletHours;
+                        founderTotals[founderId] = (founderTotals[founderId] || 0) + bulletHours;
+                      });
+                    });
+                  });
+                  
+                  return (
+                    <div className="space-y-6">
+                      {/* Category Breakdown */}
+                      <div className="space-y-4">
+                        {Object.entries(hoursBreakdown).map(([key, category]: [string, any]) => {
+                          const hasAnyHours = Object.values(category.founders).some(h => h > 0);
+                          if (!hasAnyHours && category.totalHours === 0) return null;
+                          
+                          return (
+                            <div key={key} className={`border ${category.borderColor} rounded-xl overflow-hidden`}>
+                              {/* Category Header */}
+                              <div className={`${category.bgColor} px-4 py-2 border-b ${category.borderColor}`}>
+                                <div className="flex items-center justify-between">
+                                  <h4 className="font-medium text-gray-800">{category.title}</h4>
+                                  <div className="text-sm">
+                                    <span className="font-semibold text-gray-900">
+                                      {Object.values(category.founders).reduce((sum: number, h: number) => sum + h, 0)}h
+                                    </span>
+                                    <span className="text-gray-600"> / {category.totalHours}h allocated</span>
+                                  </div>
+                                </div>
+                              </div>
+                              
+                              {/* Founder Bars */}
+                              <div className="p-4 bg-white">
+                                <div className="space-y-3">
+                                  {founders.map((founder, index) => {
+                                    const founderHours = category.founders[founder.id] || 0;
+                                    const percentage = category.totalHours > 0 ? (founderHours / category.totalHours) * 100 : 0;
+                                    
+                                    if (founderHours === 0) return null;
+                                    
+                                    // Use unique colors for each founder for better distinction
+                                    const founderColors = [
+                                      'from-blue-400 to-blue-600',
+                                      'from-green-400 to-green-600',
+                                      'from-purple-400 to-purple-600',
+                                      'from-orange-400 to-orange-600',
+                                      'from-pink-400 to-pink-600'
+                                    ];
+                                    
+                                    return (
+                                      <div key={founder.id} className="space-y-1">
+                                        <div className="flex items-center justify-between text-sm">
+                                          <span className="font-medium text-gray-700">{founder.name}</span>
+                                          <span className="text-gray-600">{founderHours}h</span>
+                                        </div>
+                                        <div className="relative h-2 bg-gray-100 rounded-full overflow-hidden">
+                                          <div 
+                                            className={`absolute left-0 top-0 h-full bg-gradient-to-r ${founderColors[index]} transition-all duration-500 ease-out`}
+                                            style={{ width: `${Math.min(percentage, 100)}%` }}
+                                          />
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                  
+                                  {/* Show unallocated hours if any */}
+                                  {(() => {
+                                    const allocatedHours = Object.values(category.founders).reduce((sum: number, h: number) => sum + h, 0);
+                                    const unallocated = category.totalHours - allocatedHours;
+                                    if (unallocated > 0) {
+                                      return (
+                                        <div className="pt-2 border-t border-gray-100">
+                                          <div className="flex items-center justify-between text-sm">
+                                            <span className="text-gray-500 italic">Unallocated</span>
+                                            <span className="text-gray-500">{unallocated}h</span>
+                                          </div>
+                                        </div>
+                                      );
+                                    }
+                                    return null;
+                                  })()}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      
+                      {/* Founder Summary Cards */}
+                      <div className="grid grid-cols-5 gap-1 sm:gap-3 mt-6">
+                        {founders.map(founder => (
+                          <div key={founder.id} className="bg-gray-50 rounded-lg p-1.5 sm:p-3 text-center">
+                            <h5 className="font-medium text-gray-800 text-xs sm:text-sm truncate">{founder.name}</h5>
+                            <div className="text-lg sm:text-2xl font-bold text-gray-900">{founderTotals[founder.id] || 0}h</div>
+                            <div className="text-[10px] sm:text-xs text-gray-500 leading-tight">per<br className="sm:hidden"/> week</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   );
                 })()}
               </div>
