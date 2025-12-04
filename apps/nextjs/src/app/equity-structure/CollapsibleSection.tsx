@@ -21,12 +21,16 @@ export default function CollapsibleSection({
     <div className={className}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between p-4 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors duration-200 mb-4"
+        className={`w-full flex items-center justify-between px-3 py-2.5 sm:px-4 sm:py-3 transition-all duration-200 ${
+          isOpen 
+            ? 'bg-transparent border-0 pb-2' 
+            : 'bg-white hover:bg-gray-50 border border-gray-200 rounded-lg shadow-sm hover:shadow-md'
+        }`}
       >
-        <h3 className="text-xl font-semibold text-gray-800">{title}</h3>
+        <h3 className="text-sm sm:text-lg font-semibold text-gray-900">{title}</h3>
         <svg
-          className={`w-6 h-6 text-gray-600 transform transition-transform duration-200 ${
-            isOpen ? 'rotate-180' : ''
+          className={`w-5 h-5 sm:w-6 sm:h-6 text-gray-500 transform transition-transform duration-200 ${
+            isOpen ? 'rotate-180 text-gray-700' : ''
           }`}
           fill="none"
           strokeLinecap="round"
@@ -44,9 +48,11 @@ export default function CollapsibleSection({
           isOpen ? 'max-h-[10000px] opacity-100' : 'max-h-0 opacity-0'
         }`}
       >
-        <div className="pb-4">
-          {children}
-        </div>
+        {isOpen && (
+          <div className="pt-2">
+            {children}
+          </div>
+        )}
       </div>
     </div>
   );

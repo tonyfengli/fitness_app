@@ -127,8 +127,9 @@ export default function EquityStructurePage() {
   const [paidAdsCosts, setPaidAdsCosts] = useState<(number | string | undefined)[]>([]);
   const [groupCoachingCosts, setGroupCoachingCosts] = useState<number[]>([]);
   const [expandedCalculations, setExpandedCalculations] = useState<boolean[]>([]);
+  const [expandedSemiPrivateCalc, setExpandedSemiPrivateCalc] = useState<boolean[]>([]);
   const [expandedReviews, setExpandedReviews] = useState<boolean[]>([]);
-  const [trainerSplits, setTrainerSplits] = useState<number[]>([50, 50, 50, 50, 50]); // percentage to trainer (business gets remainder)
+  const [trainerSplits, setTrainerSplits] = useState<(number | string | undefined)[]>([50, 50, 50, 50, 50]); // percentage to trainer (business gets remainder)
   const [expandedYearDetails, setExpandedYearDetails] = useState<boolean[]>([false, false, false, false, false]); // track expansion state for each year
   const [customWeeklySessions, setCustomWeeklySessions] = useState<(number | string | undefined)[]>([]); // custom weekly sessions for coaching cost calculation
   const [customCoachingRates, setCustomCoachingRates] = useState<(number | string | undefined)[]>([]); // custom coaching cost per session
@@ -587,31 +588,37 @@ export default function EquityStructurePage() {
       `}</style>
 
 
-      <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        {/* Main Calculator Card */}
-        <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
+      {/* Page Header */}
+      <div className="bg-white border-b border-gray-200 shadow-sm">
+        <div className="px-3 sm:px-6 lg:px-8 py-3 sm:py-6">
+          <h1 className="text-xl sm:text-3xl font-bold text-gray-900">Equity Structure Calculator</h1>
+          <p className="mt-0.5 text-xs sm:text-base text-gray-600">Plan and visualize your startup equity distribution</p>
+        </div>
+      </div>
+
+      <div className="px-2 sm:px-4 lg:px-8 py-3 sm:py-8">
+        {/* Mobile-Optimized Sections Container */}
+        <div className="space-y-2 sm:space-y-4">
+          {/* All Sections Container */}
+          <div className="bg-gray-50 rounded-lg sm:rounded-xl p-1.5 sm:p-4 shadow-inner">
           {/* Revenue Projections Section */}
-          <div className="p-8 bg-gradient-to-br from-green-50 to-emerald-50">
+          <div className="p-4 sm:p-6 bg-gray-50 rounded-lg mb-2">
             <CollapsibleSection title="💰 Revenue Projections" defaultOpen={false}>
             <div className="max-w-6xl mx-auto">
               <div className="text-center mb-8">
-                <h3 className="text-2xl font-bold text-gray-800 mb-3 flex items-center justify-center gap-2">
-                  <span className="text-2xl">💰</span>
-                  Revenue Projections
-                </h3>
               </div>
 
               {/* Progress Bar for Revenue Steps */}
-              <div className="mb-8">
+              <div className="mb-8 px-4 sm:px-0">
                 <div className="max-w-md mx-auto">
-                  <div className="relative flex items-center justify-between">
+                  <div className="relative flex items-center justify-between pb-8 pt-2">
                     {/* Background line */}
-                    <div className="absolute inset-0 flex items-center">
+                    <div className="absolute inset-x-4 sm:inset-x-0 top-6 flex items-center">
                       <div className="w-full h-0.5 bg-gray-200"></div>
                     </div>
                     
                     {/* Progress line */}
-                    <div className="absolute inset-0 flex items-center">
+                    <div className="absolute inset-x-4 sm:inset-x-0 top-6 flex items-center">
                       <div 
                         className="h-0.5 bg-green-600 transition-all duration-500"
                         style={{ width: `${((revenueStep - 1) / 1) * 100}%` }}
@@ -619,20 +626,22 @@ export default function EquityStructurePage() {
                     </div>
                     
                     {/* Step circles */}
-                    {[1, 2].map((step) => (
-                      <div key={step} className="relative">
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center font-semibold text-sm transition-all duration-300 border-2 ${
-                          step <= revenueStep 
-                            ? 'bg-green-600 text-white border-green-600' 
-                            : 'bg-white text-gray-400 border-gray-200'
-                        }`}>
-                          {step}
+                    <div className="relative z-10 w-full flex justify-between px-4 sm:px-0">
+                      {[1, 2].map((step) => (
+                        <div key={step} className="flex flex-col items-center">
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center font-semibold text-sm transition-all duration-300 border-2 ${
+                            step <= revenueStep 
+                              ? 'bg-green-600 text-white border-green-600' 
+                              : 'bg-white text-gray-400 border-gray-200'
+                          }`}>
+                            {step}
+                          </div>
+                          <div className="mt-2 text-xs font-medium text-gray-600 text-center">
+                            {step === 1 ? 'Group Classes' : 'Semi-Private'}
+                          </div>
                         </div>
-                        <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 whitespace-nowrap text-xs font-medium text-gray-600">
-                          {step === 1 ? 'Group Classes' : 'Semi-Private'}
-                        </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -964,14 +973,10 @@ export default function EquityStructurePage() {
           </div>
           
           {/* Customer Acquisition Funnel Section */}
-          <div className="p-8 bg-gradient-to-br from-amber-50 to-orange-50">
+          <div className="p-4 sm:p-6 bg-gray-100 rounded-lg mb-2">
             <CollapsibleSection title="🚀 Customer Acquisition Funnel" defaultOpen={false}>
             <div className="max-w-6xl mx-auto">
               <div className="text-center mb-8">
-                <h3 className="text-2xl font-bold text-gray-800 mb-3 flex items-center justify-center gap-2">
-                  <span className="text-2xl">🚀</span>
-                  Customer Acquisition Funnel
-                </h3>
               </div>
 
               <div className="space-y-2">
@@ -1289,13 +1294,10 @@ export default function EquityStructurePage() {
           </div>
           
           {/* Roles and Responsibilities */}
-          <div className="p-8 bg-gradient-to-br from-gray-50 to-gray-100">
+          <div className="p-4 sm:p-6 bg-gray-50 rounded-lg mb-2">
             <CollapsibleSection title="👥 Roles and Responsibilities" defaultOpen={false}>
             <div className="max-w-6xl mx-auto">
               <div className="text-center mb-8">
-                <h3 className="text-2xl font-bold text-gray-800 text-center">
-                  Roles and Responsibilities
-                </h3>
               </div>
               
               {/* Founder Tabs */}
@@ -1802,13 +1804,10 @@ export default function EquityStructurePage() {
           </div>
           
           {/* Hours Summary */}
-          <div className="p-8 bg-gradient-to-br from-indigo-50 to-blue-50">
+          <div className="p-4 sm:p-6 bg-gray-100 rounded-lg mb-2">
             <CollapsibleSection title="⏰ Hours Summary" defaultOpen={false}>
             <div className="max-w-6xl mx-auto">
               <div className="text-center mb-8">
-                <h3 className="text-2xl font-bold text-gray-800 text-center">
-                  Hours Summary
-                </h3>
                 <p className="text-gray-600 mt-2">Weekly time allocation by founder and category</p>
               </div>
               
@@ -2047,14 +2046,10 @@ export default function EquityStructurePage() {
           </div>
           
           {/* Financial Projections Flow */}
-          <div ref={financialProjectionsRef} className="p-8 bg-gradient-to-br from-indigo-50 to-purple-50">
+          <div ref={financialProjectionsRef} className="p-4 sm:p-6 bg-gray-50 rounded-lg mb-2">
             <CollapsibleSection title="📊 Financial Projections" defaultOpen={false}>
             <div className="max-w-6xl mx-auto">
               <div className="text-center mb-8">
-                <h3 className="text-2xl font-bold text-gray-800 mb-3 flex items-center justify-center gap-2">
-                  <span className="text-2xl">💸</span>
-                  Cost Projections & Analysis
-                </h3>
               </div>
 
               {/* Progress Bar */}
@@ -2438,7 +2433,11 @@ export default function EquityStructurePage() {
                               const avgClients = (startClients + (Number(groupClassClientsEnd[i]) || 0)) / 2;
                               const calculationDetails = getCalculationDetails(avgClients, i);
                               const isExpanded = expandedCalculations[i] || false;
-                              const totalMonthlyCost = (Number(operatingCosts[i]) || 0) + groupCoachingCost + (Number(paidAdsCosts[i]) || 0);
+                              const startSemiPrivateClients = i === 0 ? (Number(semiPrivateClientsStart[i]) || 0) : (Number(semiPrivateClientsEnd[i-1]) || 0);
+                              const avgSemiPrivateClients = (startSemiPrivateClients + (Number(semiPrivateClientsEnd[i]) || 0)) / 2;
+                              const semiPrivateRevenue = (Number(semiPrivatePrices[i]) || 0) * avgSemiPrivateClients;
+                              const trainerCost = semiPrivateRevenue * ((Number(trainerSplits[i]) || 50) / 100);
+                              const totalMonthlyCost = (Number(operatingCosts[i]) || 0) + groupCoachingCost + (Number(paidAdsCosts[i]) || 0) + trainerCost;
                               
                               return (
                                 <div key={i} className="p-3 bg-gray-50 rounded-lg space-y-2 border border-gray-200">
@@ -2482,6 +2481,93 @@ export default function EquityStructurePage() {
                                     </div>
                                   </div>
                                   <div className="space-y-2">
+                                    {/* Semi-Private Coaching - Full Width */}
+                                    <div className="space-y-1">
+                                      <label className="text-xs font-medium text-gray-600">Semi-Private Coaching</label>
+                                      <div className="relative">
+                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
+                                        <input
+                                          type="text"
+                                          value={formatNumber(Math.round(((Number(semiPrivatePrices[i]) || 0) * ((i === 0 ? (Number(semiPrivateClientsStart[i]) || 0) : (Number(semiPrivateClientsEnd[i-1]) || 0)) + (Number(semiPrivateClientsEnd[i]) || 0)) / 2) * ((Number(trainerSplits[i]) || 50) / 100)))}
+                                          readOnly
+                                          className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-lg bg-gray-50 cursor-not-allowed"
+                                          placeholder="0"
+                                        />
+                                      </div>
+                                      {/* View calculation button */}
+                                      <button
+                                        onClick={() => {
+                                          const newExpanded = [...expandedSemiPrivateCalc];
+                                          while (newExpanded.length <= i) newExpanded.push(false);
+                                          newExpanded[i] = !newExpanded[i];
+                                          setExpandedSemiPrivateCalc(newExpanded);
+                                        }}
+                                        className="mt-1 text-xs text-blue-600 hover:text-blue-700 transition-colors flex items-center gap-1"
+                                      >
+                                        {expandedSemiPrivateCalc[i] ? 'Hide' : 'View'} calculation
+                                        <svg 
+                                          className={`w-3 h-3 transition-transform ${expandedSemiPrivateCalc[i] ? 'rotate-180' : ''}`}
+                                          fill="none" 
+                                          stroke="currentColor" 
+                                          viewBox="0 0 24 24"
+                                        >
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                        </svg>
+                                      </button>
+                                      
+                                      {/* Calculation details */}
+                                      {expandedSemiPrivateCalc[i] && (
+                                        <div className="mt-2 p-3 bg-blue-50 rounded-lg text-xs space-y-2 border border-blue-100">
+                                          <div className="flex justify-between items-center">
+                                            <span className="text-gray-600">Semi-private revenue:</span>
+                                            <span className="font-medium text-gray-700">${formatNumber(Math.round((Number(semiPrivatePrices[i]) || 0) * ((i === 0 ? (Number(semiPrivateClientsStart[i]) || 0) : (Number(semiPrivateClientsEnd[i-1]) || 0)) + (Number(semiPrivateClientsEnd[i]) || 0)) / 2))}</span>
+                                          </div>
+                                          
+                                          <div className="flex justify-between items-center">
+                                            <span className="text-gray-600">Trainer split:</span>
+                                            <div className="flex items-center">
+                                              <input
+                                                type="text"
+                                                value={trainerSplits[i] !== undefined ? formatInputValue(trainerSplits[i]) : ''}
+                                                onChange={(e) => {
+                                                  const newSplits = [...trainerSplits];
+                                                  while (newSplits.length <= i) newSplits.push(50);
+                                                  const value = e.target.value === '' ? '' : parseNumber(e.target.value);
+                                                  if (value === '') {
+                                                    newSplits[i] = '';
+                                                  } else {
+                                                    newSplits[i] = Math.min(100, Math.max(0, value));
+                                                  }
+                                                  setTrainerSplits(newSplits);
+                                                }}
+                                                className="w-14 px-2 py-1 border border-blue-200 rounded text-right font-medium bg-white focus:border-blue-400"
+                                                placeholder="50"
+                                              />
+                                              <span className="ml-1">%</span>
+                                            </div>
+                                          </div>
+                                          
+                                          <div className="pt-2 mt-2 border-t border-blue-200 space-y-1">
+                                            <div className="flex justify-between font-semibold">
+                                              <span className="text-gray-700">Trainer cost:</span>
+                                              <span className="text-blue-700">${formatNumber(Math.round(((Number(semiPrivatePrices[i]) || 0) * ((i === 0 ? (Number(semiPrivateClientsStart[i]) || 0) : (Number(semiPrivateClientsEnd[i-1]) || 0)) + (Number(semiPrivateClientsEnd[i]) || 0)) / 2) * ((Number(trainerSplits[i]) || 50) / 100)))}</span>
+                                            </div>
+                                            <div className="flex justify-between text-[11px]">
+                                              <span className="text-gray-500">Business keeps:</span>
+                                              <span className="text-gray-600">{100 - (Number(trainerSplits[i]) || 50)}%</span>
+                                            </div>
+                                          </div>
+                                          
+                                          <div className="text-[10px] text-gray-500 mt-2 pt-2 border-t border-blue-100">
+                                            <div>Formula: Semi-private revenue × Trainer split %</div>
+                                            <div className="mt-1 text-gray-600">
+                                              Avg clients: {Math.round(((i === 0 ? (Number(semiPrivateClientsStart[i]) || 0) : (Number(semiPrivateClientsEnd[i-1]) || 0)) + (Number(semiPrivateClientsEnd[i]) || 0)) / 2)} × ${Number(semiPrivatePrices[i]) || 0}/client × {Number(trainerSplits[i]) || 50}%
+                                            </div>
+                                          </div>
+                                        </div>
+                                      )}
+                                    </div>
+                                    
                                     {/* Group Coaching - Full Width */}
                                     <div className="space-y-1">
                                       <label className="text-xs font-medium text-gray-600">Group Coaching</label>
@@ -2495,6 +2581,118 @@ export default function EquityStructurePage() {
                                           placeholder="0"
                                         />
                                       </div>
+                                      {/* View calculation button */}
+                                      <button
+                                        onClick={() => {
+                                          const newExpanded = [...expandedCalculations];
+                                          newExpanded[i] = !isExpanded;
+                                          setExpandedCalculations(newExpanded);
+                                        }}
+                                        className="mt-1 text-xs text-blue-600 hover:text-blue-700 transition-colors flex items-center gap-1"
+                                      >
+                                        {isExpanded ? 'Hide' : 'View'} calculation
+                                        <svg 
+                                          className={`w-3 h-3 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                                          fill="none" 
+                                          stroke="currentColor" 
+                                          viewBox="0 0 24 24"
+                                        >
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                        </svg>
+                                      </button>
+                                      
+                                      {/* Calculation details */}
+                                      {isExpanded && (
+                                        <div className="mt-2 p-3 bg-blue-50 rounded-lg text-xs space-y-2 border border-blue-100">
+                                          <div className="flex justify-between items-center">
+                                            <span className="text-gray-600">Client count:</span>
+                                            <span className="font-medium text-gray-700">{Math.round(calculationDetails.clientCount)}</span>
+                                          </div>
+                                          
+                                          <div className="flex justify-between items-center">
+                                            <span className="text-gray-600">Weekly sessions:</span>
+                                            <input
+                                              type="text"
+                                              value={customWeeklySessions[i] !== undefined ? formatInputValue(customWeeklySessions[i]) : ''}
+                                              onChange={(e) => {
+                                                const newSessions = [...customWeeklySessions];
+                                                while (newSessions.length <= i) newSessions.push(undefined);
+                                                newSessions[i] = e.target.value === '' ? '' : parseNumber(e.target.value);
+                                                setCustomWeeklySessions(newSessions);
+                                                
+                                                // Force recalculation of group coaching costs
+                                                const newCosts = [...groupCoachingCosts];
+                                                const avgClients = (startClients + (Number(groupClassClientsEnd[i]) || 0)) / 2;
+                                                newCosts[i] = calculateGroupCoachingCost(avgClients, i);
+                                                setGroupCoachingCosts(newCosts);
+                                              }}
+                                              className="w-16 px-2 py-1 border border-blue-200 rounded text-right font-medium bg-white focus:border-blue-400"
+                                              placeholder={String(calculationDetails.weeklySessions)}
+                                            />
+                                          </div>
+                                          
+                                          <div className="flex justify-between items-center">
+                                            <span className="text-gray-600">Cost per session:</span>
+                                            <div className="flex items-center">
+                                              <span className="mr-1">$</span>
+                                              <input
+                                                type="text"
+                                                value={customCoachingRates[i] !== undefined ? formatInputValue(customCoachingRates[i]) : ''}
+                                                onChange={(e) => {
+                                                  const newRates = [...customCoachingRates];
+                                                  while (newRates.length <= i) newRates.push(undefined);
+                                                  newRates[i] = e.target.value === '' ? '' : parseNumber(e.target.value);
+                                                  setCustomCoachingRates(newRates);
+                                                  
+                                                  // Force recalculation of group coaching costs
+                                                  const newCosts = [...groupCoachingCosts];
+                                                  const avgClients = (startClients + (Number(groupClassClientsEnd[i]) || 0)) / 2;
+                                                  newCosts[i] = calculateGroupCoachingCost(avgClients, i);
+                                                  setGroupCoachingCosts(newCosts);
+                                                }}
+                                                className="w-14 px-2 py-1 border border-blue-200 rounded text-right font-medium bg-white focus:border-blue-400"
+                                                placeholder={String(calculationDetails.costPerSession)}
+                                              />
+                                            </div>
+                                          </div>
+                                          
+                                          <div className="pt-2 mt-2 border-t border-blue-200 space-y-1">
+                                            <div className="flex justify-between text-[11px]">
+                                              <span className="text-gray-500">Monthly sessions:</span>
+                                              <span className="text-gray-600">{calculationDetails.monthlySessions}</span>
+                                            </div>
+                                            <div className="flex justify-between font-semibold">
+                                              <span className="text-gray-700">Total monthly:</span>
+                                              <span className="text-blue-700">${formatNumber(groupCoachingCost)}</span>
+                                            </div>
+                                          </div>
+                                          
+                                          <div className="text-[10px] text-gray-500 mt-2 pt-2 border-t border-blue-100">
+                                            <div>Formula: sessions/week × 4.33 weeks × $/session</div>
+                                            {(customWeeklySessions[i] || customCoachingRates[i]) && (
+                                              <button
+                                                onClick={() => {
+                                                  const newSessions = [...customWeeklySessions];
+                                                  const newRates = [...customCoachingRates];
+                                                  newSessions[i] = undefined;
+                                                  newRates[i] = undefined;
+                                                  setCustomWeeklySessions(newSessions);
+                                                  setCustomCoachingRates(newRates);
+                                                  
+                                                  // Force recalculation with defaults
+                                                  const newCosts = [...groupCoachingCosts];
+                                                  const avgClients = (startClients + (Number(groupClassClientsEnd[i]) || 0)) / 2;
+                                                  newCosts[i] = calculateGroupCoachingCost(avgClients, i);
+                                                  setGroupCoachingCosts(newCosts);
+                                                }}
+                                                className="mt-1 text-blue-600 hover:text-blue-700 underline"
+                                              >
+                                                Reset to defaults
+                                              </button>
+                                            )}
+                                          </div>
+                                        </div>
+                                      )}
                                     </div>
                                     
                                     {/* Operating & Paid Ads - Same Line */}
@@ -2593,7 +2791,7 @@ export default function EquityStructurePage() {
                               const operatingCost = Number(operatingCosts[i]) || 0;
                               const paidAdsCost = Number(paidAdsCosts[i]) || 0;
                               const groupCoachingCost = calculateGroupCoachingCost(avgGroupClients, i);
-                              const trainerCost = semiPrivateRevenue * ((trainerSplits[i] || 50) / 100);
+                              const trainerCost = semiPrivateRevenue * ((Number(trainerSplits[i]) || 50) / 100);
                               const kyleContribution = Math.round((Number(kyleSessions[i]) || 3) * 4.33 * (Number(kyleRates[i]) || 30));
                               const tonyContribution = Math.round((Number(tonySessions[i]) || 3) * 4.33 * (Number(tonyRates[i]) || 30));
                               const totalOwnerTrainerContribution = kyleContribution + tonyContribution;
@@ -2766,18 +2964,18 @@ export default function EquityStructurePage() {
                             ←
                           </button>
                           <button
-                            onClick={() => setProjectionStep(5)}
+                            onClick={() => setProjectionStep(1)}
                             className="bg-green-600 text-white px-6 py-3 rounded-xl font-semibold hover:bg-green-700 transition-colors shadow-lg"
                           >
-                            See Results
+                            Done
                           </button>
                         </div>
                       </div>
                     </>
                   )}
 
-                  {/* Results Page */}
-                  <div className={`${(projectionStep === 3 && !isAdvancedMode) || (projectionStep === 5 && isAdvancedMode) ? 'block' : 'hidden'} p-8 space-y-8`}>
+                  {/* Results Page - Step 3 Simple Mode */}
+                  <div className={`${(projectionStep === 3 && !isAdvancedMode) ? 'block' : 'hidden'} p-8 space-y-8`}>
                     <div>
                       <div className="text-center mb-8">
                         <h4 className="text-xl font-bold text-gray-800 mb-6">Your {projectionYears}-Year Founder Journey</h4>
@@ -2798,7 +2996,7 @@ export default function EquityStructurePage() {
                               const operatingCost = Number(operatingCosts[i]) || 0;
                               const paidAdsCost = Number(paidAdsCosts[i]) || 0;
                               const groupCoachingCost = calculateGroupCoachingCost(avgGroupClients, i);
-                              const trainerCost = semiPrivateRevenue * ((trainerSplits[i] || 50) / 100);
+                              const trainerCost = semiPrivateRevenue * ((Number(trainerSplits[i]) || 50) / 100);
                               const kyleContribution = Math.round((Number(kyleSessions[i]) || 3) * 4.33 * (Number(kyleRates[i]) || 30));
                               const tonyContribution = Math.round((Number(tonySessions[i]) || 3) * 4.33 * (Number(tonyRates[i]) || 30));
                               const totalOwnerTrainerContribution = kyleContribution + tonyContribution;
@@ -3140,22 +3338,13 @@ export default function EquityStructurePage() {
             </div>
             
             {/* Simple Projections Toggle - Bottom Right */}
-            <div className="flex justify-end mt-6">
-              <button 
-                onClick={() => setIsAdvancedMode(false)}
-                className="text-gray-500 hover:text-gray-700 text-sm font-medium underline transition-colors"
-              >
-                Switch to Simple Projections
-              </button>
-            </div>
             </CollapsibleSection>
           </div>
           
           {/* Visual Equity Split Display */}
-          <div className="bg-gradient-to-br from-blue-50 to-indigo-100 p-8">
+          <div className="p-4 sm:p-6 bg-gray-100 rounded-lg mb-2">
             <CollapsibleSection title="📊 Equity Distribution" defaultOpen={false}>
             <div className="max-w-6xl mx-auto">
-              <h2 className="text-2xl font-semibold text-gray-800 mb-6">Equity Distribution</h2>
               
               {/* Circle Pie Chart Visualization */}
               <div className="mb-8 flex justify-center">
@@ -3380,64 +3569,306 @@ export default function EquityStructurePage() {
                   </div>
                 </div>
               )}
-            </div>
-          </div>
-            </CollapsibleSection>
-          </div>
 
-
-          {/* Personal Equity Builder */}
-          <div className="p-8 bg-gradient-to-br from-slate-50 to-blue-50">
-            <CollapsibleSection title="💼 Your Personal Equity Breakdown" defaultOpen={false}>
-            <div className="max-w-6xl mx-auto">
-              <div className="text-center mb-8">
-                <h3 className="text-2xl font-bold text-gray-800 mb-2">Your Personal Equity Breakdown</h3>
-              </div>
-              
-              {/* Total Equity Display */}
-              <div className="bg-white rounded-xl shadow-lg p-6">
-                <div className="text-center mb-6">
-                  <span className="text-lg font-medium text-gray-700">Your Total Equity</span>
-                  <div className="text-4xl font-bold text-blue-600 mt-2">
-                    {totalEquity.toFixed(1)}%
-                  </div>
-                </div>
-
-                {/* Simple Equity Breakdown */}
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between py-2">
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-                      <span className="text-sm text-gray-600">Founder Base</span>
+              {/* Personal Equity Breakdown */}
+              <div className="mt-8 pt-8 border-t border-gray-200">
+                <h4 className="text-lg font-semibold text-gray-800 mb-4">Your Personal Equity Breakdown</h4>
+                
+                {/* Total Equity Display */}
+                <div className="bg-white rounded-xl shadow-lg p-6">
+                  <div className="text-center mb-6">
+                    <span className="text-lg font-medium text-gray-700">Your Total Equity</span>
+                    <div className="text-4xl font-bold text-blue-600 mt-2">
+                      {totalEquity.toFixed(1)}%
                     </div>
-                    <span className="text-sm font-medium text-blue-600">{perFounderEquity.toFixed(1)}%</span>
                   </div>
-                  
-                  <div className="flex items-center justify-between py-2">
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 bg-emerald-500 rounded-full"></div>
-                      <span className="text-sm text-gray-600">
-                        {preferSweatEquity ? 'Sweat Equity' : 'Cash (No Equity)'}
+
+                  {/* Simple Equity Breakdown */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between py-2">
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+                        <span className="text-sm text-gray-600">Founder Base</span>
+                      </div>
+                      <span className="text-sm font-medium text-blue-600">{perFounderEquity.toFixed(1)}%</span>
+                    </div>
+                    
+                    <div className="flex items-center justify-between py-2">
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 bg-emerald-500 rounded-full"></div>
+                        <span className="text-sm text-gray-600">
+                          {preferSweatEquity ? 'Sweat Equity' : 'Cash (No Equity)'}
+                        </span>
+                      </div>
+                      <span className="text-sm font-medium text-emerald-600">
+                        {preferSweatEquity ? (sweatEquityPool / 5).toFixed(1) : '0.0'}%
                       </span>
                     </div>
-                    <span className="text-sm font-medium text-emerald-600">
-                      {preferSweatEquity ? (sweatEquityPool / 5).toFixed(1) : '0.0'}%
-                    </span>
-                  </div>
-                  
-                  <div className="flex items-center justify-between py-2">
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 bg-amber-500 rounded-full"></div>
-                      <span className="text-sm text-gray-600">Investment</span>
+                    
+                    <div className="flex items-center justify-between py-2">
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 bg-amber-500 rounded-full"></div>
+                        <span className="text-sm text-gray-600">Investment</span>
+                      </div>
+                      <span className="text-sm font-medium text-amber-600">{actualEquityFromCash.toFixed(1)}%</span>
                     </div>
-                    <span className="text-sm font-medium text-amber-600">{actualEquityFromCash.toFixed(1)}%</span>
                   </div>
                 </div>
               </div>
             </div>
+          </div>
             </CollapsibleSection>
           </div>
 
+          {/* Your Founder Journey */}
+          <div className="p-4 sm:p-6 bg-gray-50 rounded-lg mb-2">
+            <CollapsibleSection title="🚀 Your Founder Journey" defaultOpen={false}>
+              <div className="space-y-8">
+                <div>
+                  <div className="text-center mb-8">
+                    <h4 className="text-xl font-bold text-gray-800 mb-6">Your {projectionYears}-Year Founder Journey</h4>
+                    {(() => {
+                      // Calculate monthly profits for all years first
+                      const calculatedMonthlyProfits = [];
+                      for (let i = 0; i < projectionYears; i++) {
+                        if (isAdvancedMode) {
+                          // Advanced mode: calculate profit from detailed inputs
+                          const startGroupClients = i === 0 ? (Number(groupClassClientsStart[i]) || 0) : (Number(groupClassClientsEnd[i-1]) || 0);
+                          const avgGroupClients = (startGroupClients + (Number(groupClassClientsEnd[i]) || 0)) / 2;
+                          const startSemiPrivateClients = i === 0 ? (Number(semiPrivateClientsStart[i]) || 0) : (Number(semiPrivateClientsEnd[i-1]) || 0);
+                          const avgSemiPrivateClients = (startSemiPrivateClients + (Number(semiPrivateClientsEnd[i]) || 0)) / 2;
+                          const groupRevenue = (Number(groupClassPrices[i]) || 0) * avgGroupClients;
+                          const semiPrivateRevenue = (Number(semiPrivatePrices[i]) || 0) * avgSemiPrivateClients;
+                          const totalRevenue = groupRevenue + semiPrivateRevenue;
+                          
+                          const operatingCost = Number(operatingCosts[i]) || 0;
+                          const paidAdsCost = Number(paidAdsCosts[i]) || 0;
+                          const groupCoachingCost = calculateGroupCoachingCost(avgGroupClients, i);
+                          const trainerCost = semiPrivateRevenue * ((Number(trainerSplits[i]) || 50) / 100);
+                          const kyleContribution = Math.round((Number(kyleSessions[i]) || 3) * 4.33 * (Number(kyleRates[i]) || 30));
+                          const tonyContribution = Math.round((Number(tonySessions[i]) || 3) * 4.33 * (Number(tonyRates[i]) || 30));
+                          const totalOwnerTrainerContribution = kyleContribution + tonyContribution;
+                          const totalCosts = operatingCost + paidAdsCost + groupCoachingCost + trainerCost - totalOwnerTrainerContribution; // Owner trainers reduce costs
+                          
+                          calculatedMonthlyProfits.push(totalRevenue - totalCosts);
+                        } else {
+                          // Simple mode: use user-entered monthly profits
+                          calculatedMonthlyProfits.push(Number(monthlyProfits[i]) || 0);
+                        }
+                      }
+                      
+                      // Calculate total equity gains across all years
+                      let totalEquityGains = 0;
+                      for (let i = 0; i < projectionYears; i++) {
+                        const monthlyProfit = calculatedMonthlyProfits[i];
+                        const annualProfit = monthlyProfit * 12;
+                        const distributionRate = yearlyDistributions[i] || 0;
+                        const distributedProfit = annualProfit * (distributionRate / 100);
+                        const godsCut = distributedProfit * 0.17; // 17% of distributed profits
+                        const remainingProfit = distributedProfit - godsCut;
+                        const yourEquityShare = remainingProfit * (totalEquity / 100);
+                        totalEquityGains += yourEquityShare;
+                      }
+                      
+                      // Calculate semi-private training gains (direct income to founder)
+                      let totalSemiPrivateGains = 0;
+                      if (isAdvancedMode) {
+                        for (let i = 0; i < projectionYears; i++) {
+                          if (preferSweatEquity) {
+                            const annualRate = (Number(semiPrivateClientsStart[i]) || 0) * 3 * 52 * 30 + (Number(semiPrivateClientsEnd[i]) || 0) * 3 * 52 * 30;
+                            let groupCoachingAnnual = 0;
+                            let semiPrivateTrainerAnnual = 0;
+                            
+                            if (isAdvancedMode) {
+                              const startGroupClients = i === 0 ? (Number(groupClassClientsStart[i]) || 0) : (Number(groupClassClientsEnd[i-1]) || 0);
+                              const avgGroupClients = (startGroupClients + (Number(groupClassClientsEnd[i]) || 0)) / 2;
+                              const groupCoachingMonthly = calculateGroupCoachingCost(avgGroupClients, i);
+                              groupCoachingAnnual = groupCoachingMonthly * 12;
+                              
+                              const startSemiPrivateClients = i === 0 ? (Number(semiPrivateClientsStart[i]) || 0) : (Number(semiPrivateClientsEnd[i-1]) || 0);
+                              const avgSemiPrivateClients = (startSemiPrivateClients + (Number(semiPrivateClientsEnd[i]) || 0)) / 2;
+                              const semiPrivateRevenue = (Number(semiPrivatePrices[i]) || 0) * avgSemiPrivateClients;
+                              const monthlyTrainerCost = semiPrivateRevenue * ((Number(trainerSplits[i]) || 50) / 100);
+                              semiPrivateTrainerAnnual = monthlyTrainerCost * 12;
+                            } else {
+                              const monthlyProfit = calculatedMonthlyProfits[i];
+                              groupCoachingAnnual = monthlyProfit * 2.5;
+                              semiPrivateTrainerAnnual = monthlyProfit * 1.5;
+                            }
+                            
+                            const workCommitment = sweatEquityPercent / 100 * (groupCoachingAnnual + semiPrivateTrainerAnnual);
+                            totalSemiPrivateGains += workCommitment;
+                          }
+                        }
+                      }
+                      
+                      const totalGains = totalEquityGains + totalSemiPrivateGains;
+                      const totalInvestment = Number(poolInvestmentAmount) + (Number(buyInAmount) || 0);
+                      const totalIncome = totalGains;
+                      
+                      return (
+                        <>
+                          {/* Investment vs Returns Summary */}
+                          <div className="grid md:grid-cols-2 gap-6 mb-8">
+                            <div className="bg-white p-6 rounded-xl shadow-lg border-2 border-gray-200">
+                              <h5 className="text-sm font-medium text-gray-600 mb-2">Your Investment</h5>
+                              <div className="text-3xl font-bold text-gray-900">
+                                ${formatNumber(Math.round(totalInvestment))}
+                              </div>
+                              <p className="text-xs text-gray-500 mt-2">
+                                {totalInvestment > 0 
+                                  ? `${(actualEquityFromCash).toFixed(1)}% equity stake`
+                                  : 'No cash investment'}
+                              </p>
+                            </div>
+                            
+                            <div className="bg-white p-6 rounded-xl shadow-lg border-2 border-emerald-600">
+                              <h5 className="text-sm font-medium text-gray-600 mb-2">Your Returns</h5>
+                              <div className="text-3xl font-bold text-emerald-600">
+                                ${formatNumber(Math.round(totalGains))}
+                              </div>
+                              <p className="text-xs text-gray-500 mt-2">
+                                Over {projectionYears} years ({totalInvestment > 0 ? ((totalGains / totalInvestment - 1) * 100).toFixed(0) : '∞'}% return)
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Desktop Timeline View */}
+                          <div className="hidden md:block relative">
+                            {/* Timeline line */}
+                            <div className="absolute left-1/2 transform -translate-x-1/2 h-full w-0.5 bg-gray-300"></div>
+                            
+                            {/* Year entries */}
+                            {Array.from({ length: projectionYears }, (_, i) => {
+                              const monthlyProfit = calculatedMonthlyProfits[i];
+                              const annualProfit = monthlyProfit * 12;
+                              const distributionRate = yearlyDistributions[i] || 0;
+                              const distributedProfit = annualProfit * (distributionRate / 100);
+                              const godsCut = distributedProfit * 0.17;
+                              const remainingProfit = distributedProfit - godsCut;
+                              const yourEquityShare = remainingProfit * (totalEquity / 100);
+                              
+                              let workCommitment = 0;
+                              if (preferSweatEquity && isAdvancedMode) {
+                                let groupCoachingAnnual = 0;
+                                let semiPrivateTrainerAnnual = 0;
+                                
+                                if (isAdvancedMode) {
+                                  const startGroupClients = i === 0 ? (Number(groupClassClientsStart[i]) || 0) : (Number(groupClassClientsEnd[i-1]) || 0);
+                                  const avgGroupClients = (startGroupClients + (Number(groupClassClientsEnd[i]) || 0)) / 2;
+                                  const groupCoachingMonthly = calculateGroupCoachingCost(avgGroupClients, i);
+                                  groupCoachingAnnual = groupCoachingMonthly * 12;
+                                  
+                                  const startSemiPrivateClients = i === 0 ? (Number(semiPrivateClientsStart[i]) || 0) : (Number(semiPrivateClientsEnd[i-1]) || 0);
+                                  const avgSemiPrivateClients = (startSemiPrivateClients + (Number(semiPrivateClientsEnd[i]) || 0)) / 2;
+                                  const semiPrivateRevenue = (Number(semiPrivatePrices[i]) || 0) * avgSemiPrivateClients;
+                                  const monthlyTrainerCost = semiPrivateRevenue * ((Number(trainerSplits[i]) || 50) / 100);
+                                  semiPrivateTrainerAnnual = monthlyTrainerCost * 12;
+                                } else {
+                                  groupCoachingAnnual = monthlyProfit * 2.5;
+                                  semiPrivateTrainerAnnual = monthlyProfit * 1.5;
+                                }
+                                
+                                workCommitment = sweatEquityPercent / 100 * (groupCoachingAnnual + semiPrivateTrainerAnnual);
+                              }
+                              
+                              const totalCashCompensation = workCommitment;
+                              
+                              return (
+                                <div key={i} className={`relative flex ${i % 2 === 0 ? 'justify-start' : 'justify-end'} mb-8`}>
+                                  <div className={`w-5/12 ${i % 2 === 0 ? 'text-right pr-8' : 'text-left pl-8'}`}>
+                                    <div className="bg-white p-4 rounded-lg shadow-md">
+                                      <div className="text-sm font-medium text-gray-600 mb-2">Year {i + 1}</div>
+                                      <div className="text-lg font-bold text-emerald-600 mb-1">
+                                        +${formatNumber(Math.round(yourEquityShare))}
+                                      </div>
+                                      {preferSweatEquity && isAdvancedMode && (
+                                        <div className="text-xs text-gray-500">
+                                          Work: ${formatNumber(Math.round(workCommitment))}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                  {/* Timeline dot */}
+                                  <div className="absolute left-1/2 transform -translate-x-1/2 w-4 h-4 bg-emerald-500 rounded-full border-4 border-white shadow"></div>
+                                </div>
+                              );
+                            })}
+                          </div>
+
+                          {/* Mobile Card View */}
+                          <div className="md:hidden space-y-4">
+                            {Array.from({ length: projectionYears }, (_, i) => {
+                              const monthlyProfit = calculatedMonthlyProfits[i];
+                              const annualProfit = monthlyProfit * 12;
+                              const distributionRate = yearlyDistributions[i] || 0;
+                              const distributedProfit = annualProfit * (distributionRate / 100);
+                              const godsCut = distributedProfit * 0.17;
+                              const remainingProfit = distributedProfit - godsCut;
+                              const yourEquityShare = remainingProfit * (totalEquity / 100);
+                              
+                              let workCommitment = 0;
+                              if (preferSweatEquity && isAdvancedMode) {
+                                let groupCoachingAnnual = 0;
+                                let semiPrivateTrainerAnnual = 0;
+                                
+                                const startGroupClients = i === 0 ? (Number(groupClassClientsStart[i]) || 0) : (Number(groupClassClientsEnd[i-1]) || 0);
+                                const avgGroupClients = (startGroupClients + (Number(groupClassClientsEnd[i]) || 0)) / 2;
+                                const groupCoachingMonthly = calculateGroupCoachingCost(avgGroupClients, i);
+                                groupCoachingAnnual = groupCoachingMonthly * 12;
+                                
+                                const startSemiPrivateClients = i === 0 ? (Number(semiPrivateClientsStart[i]) || 0) : (Number(semiPrivateClientsEnd[i-1]) || 0);
+                                const avgSemiPrivateClients = (startSemiPrivateClients + (Number(semiPrivateClientsEnd[i]) || 0)) / 2;
+                                const semiPrivateRevenue = (Number(semiPrivatePrices[i]) || 0) * avgSemiPrivateClients;
+                                const monthlyTrainerCost = semiPrivateRevenue * ((Number(trainerSplits[i]) || 50) / 100);
+                                semiPrivateTrainerAnnual = monthlyTrainerCost * 12;
+                                
+                                workCommitment = sweatEquityPercent / 100 * (groupCoachingAnnual + semiPrivateTrainerAnnual);
+                              }
+                              
+                              return (
+                                <div key={i} className="bg-white p-4 rounded-lg shadow-md">
+                                  <div className="flex justify-between items-center">
+                                    <span className="text-sm font-medium text-gray-600">Year {i + 1}</span>
+                                    <div className="text-right">
+                                      <div className="text-lg font-bold text-emerald-600">
+                                        +${formatNumber(Math.round(yourEquityShare))}
+                                      </div>
+                                      {preferSweatEquity && isAdvancedMode && (
+                                        <div className="text-xs text-gray-500">
+                                          Work: ${formatNumber(Math.round(workCommitment))}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+
+                          {/* Total Summary */}
+                          <div className="mt-8 bg-gradient-to-r from-emerald-50 to-blue-50 rounded-xl p-6 border border-emerald-200">
+                            <div className="text-center">
+                              <h5 className="text-lg font-semibold text-gray-800 mb-2">
+                                Total {projectionYears}-Year Returns
+                              </h5>
+                              <div className="text-4xl font-bold text-emerald-600 mb-1">
+                                ${formatNumber(Math.round(totalGains))}
+                              </div>
+                              <p className="text-sm text-gray-600">
+                                From {totalEquity.toFixed(1)}% equity ownership
+                              </p>
+                            </div>
+                          </div>
+                        </>
+                      );
+                    })()}
+                  </div>
+                </div>
+              </div>
+            </CollapsibleSection>
+          </div>
+          </div>
         </div>
       </div>
     </div>
