@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from 'react';
+import CollapsibleSection from './CollapsibleSection';
 
 export default function EquityStructurePage() {
   // State for equity pool allocations
@@ -591,6 +592,7 @@ export default function EquityStructurePage() {
         <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
           {/* Revenue Projections Section */}
           <div className="p-8 bg-gradient-to-br from-green-50 to-emerald-50">
+            <CollapsibleSection title="💰 Revenue Projections" defaultOpen={true}>
             <div className="max-w-6xl mx-auto">
               <div className="text-center mb-8">
                 <h3 className="text-2xl font-bold text-gray-800 mb-3 flex items-center justify-center gap-2">
@@ -958,10 +960,12 @@ export default function EquityStructurePage() {
                 </div>
               </div>
             </div>
+            </CollapsibleSection>
           </div>
           
           {/* Customer Acquisition Funnel Section */}
           <div className="p-8 bg-gradient-to-br from-amber-50 to-orange-50">
+            <CollapsibleSection title="🚀 Customer Acquisition Funnel" defaultOpen={true}>
             <div className="max-w-6xl mx-auto">
               <div className="text-center mb-8">
                 <h3 className="text-2xl font-bold text-gray-800 mb-3 flex items-center justify-center gap-2">
@@ -1281,10 +1285,12 @@ export default function EquityStructurePage() {
                 </div>
               </div>
             </div>
+            </CollapsibleSection>
           </div>
           
           {/* Roles and Responsibilities */}
           <div className="p-8 bg-gradient-to-br from-gray-50 to-gray-100">
+            <CollapsibleSection title="👥 Roles and Responsibilities" defaultOpen={true}>
             <div className="max-w-6xl mx-auto">
               <div className="text-center mb-8">
                 <h3 className="text-2xl font-bold text-gray-800 text-center">
@@ -1792,6 +1798,7 @@ export default function EquityStructurePage() {
                 })()}
               </div>
             </div>
+            </CollapsibleSection>
           </div>
           
           {/* Hours Summary */}
@@ -3375,6 +3382,7 @@ export default function EquityStructurePage() {
 
           {/* Personal Equity Builder */}
           <div className="p-8 bg-gradient-to-br from-slate-50 to-blue-50">
+            <CollapsibleSection title="💼 Your Personal Equity Breakdown" defaultOpen={true}>
             <div className="max-w-6xl mx-auto">
               <div className="text-center mb-8">
                 <h3 className="text-2xl font-bold text-gray-800 mb-2">Your Personal Equity Breakdown</h3>
@@ -3421,6 +3429,7 @@ export default function EquityStructurePage() {
                 </div>
               </div>
             </div>
+            </CollapsibleSection>
           </div>
 
         </div>
