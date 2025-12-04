@@ -592,7 +592,7 @@ export default function EquityStructurePage() {
         <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
           {/* Revenue Projections Section */}
           <div className="p-8 bg-gradient-to-br from-green-50 to-emerald-50">
-            <CollapsibleSection title="💰 Revenue Projections" defaultOpen={true}>
+            <CollapsibleSection title="💰 Revenue Projections" defaultOpen={false}>
             <div className="max-w-6xl mx-auto">
               <div className="text-center mb-8">
                 <h3 className="text-2xl font-bold text-gray-800 mb-3 flex items-center justify-center gap-2">
@@ -965,7 +965,7 @@ export default function EquityStructurePage() {
           
           {/* Customer Acquisition Funnel Section */}
           <div className="p-8 bg-gradient-to-br from-amber-50 to-orange-50">
-            <CollapsibleSection title="🚀 Customer Acquisition Funnel" defaultOpen={true}>
+            <CollapsibleSection title="🚀 Customer Acquisition Funnel" defaultOpen={false}>
             <div className="max-w-6xl mx-auto">
               <div className="text-center mb-8">
                 <h3 className="text-2xl font-bold text-gray-800 mb-3 flex items-center justify-center gap-2">
@@ -1290,7 +1290,7 @@ export default function EquityStructurePage() {
           
           {/* Roles and Responsibilities */}
           <div className="p-8 bg-gradient-to-br from-gray-50 to-gray-100">
-            <CollapsibleSection title="👥 Roles and Responsibilities" defaultOpen={true}>
+            <CollapsibleSection title="👥 Roles and Responsibilities" defaultOpen={false}>
             <div className="max-w-6xl mx-auto">
               <div className="text-center mb-8">
                 <h3 className="text-2xl font-bold text-gray-800 text-center">
@@ -1803,7 +1803,7 @@ export default function EquityStructurePage() {
           
           {/* Hours Summary */}
           <div className="p-8 bg-gradient-to-br from-indigo-50 to-blue-50">
-            <CollapsibleSection title="⏰ Hours Summary" defaultOpen={true}>
+            <CollapsibleSection title="⏰ Hours Summary" defaultOpen={false}>
             <div className="max-w-6xl mx-auto">
               <div className="text-center mb-8">
                 <h3 className="text-2xl font-bold text-gray-800 text-center">
@@ -2048,7 +2048,7 @@ export default function EquityStructurePage() {
           
           {/* Financial Projections Flow */}
           <div ref={financialProjectionsRef} className="p-8 bg-gradient-to-br from-indigo-50 to-purple-50">
-            <CollapsibleSection title="📊 Financial Projections" defaultOpen={true}>
+            <CollapsibleSection title="📊 Financial Projections" defaultOpen={false}>
             <div className="max-w-6xl mx-auto">
               <div className="text-center mb-8">
                 <h3 className="text-2xl font-bold text-gray-800 mb-3 flex items-center justify-center gap-2">
@@ -3153,7 +3153,7 @@ export default function EquityStructurePage() {
           
           {/* Visual Equity Split Display */}
           <div className="bg-gradient-to-br from-blue-50 to-indigo-100 p-8">
-            <CollapsibleSection title="📊 Equity Distribution" defaultOpen={true}>
+            <CollapsibleSection title="📊 Equity Distribution" defaultOpen={false}>
             <div className="max-w-6xl mx-auto">
               <h2 className="text-2xl font-semibold text-gray-800 mb-6">Equity Distribution</h2>
               
@@ -3388,7 +3388,7 @@ export default function EquityStructurePage() {
 
           {/* Personal Equity Builder */}
           <div className="p-8 bg-gradient-to-br from-slate-50 to-blue-50">
-            <CollapsibleSection title="💼 Your Personal Equity Breakdown" defaultOpen={true}>
+            <CollapsibleSection title="💼 Your Personal Equity Breakdown" defaultOpen={false}>
             <div className="max-w-6xl mx-auto">
               <div className="text-center mb-8">
                 <h3 className="text-2xl font-bold text-gray-800 mb-2">Your Personal Equity Breakdown</h3>
