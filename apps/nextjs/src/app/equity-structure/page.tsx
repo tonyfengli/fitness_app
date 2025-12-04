@@ -1803,6 +1803,7 @@ export default function EquityStructurePage() {
           
           {/* Hours Summary */}
           <div className="p-8 bg-gradient-to-br from-indigo-50 to-blue-50">
+            <CollapsibleSection title="⏰ Hours Summary" defaultOpen={true}>
             <div className="max-w-6xl mx-auto">
               <div className="text-center mb-8">
                 <h3 className="text-2xl font-bold text-gray-800 text-center">
@@ -2042,10 +2043,12 @@ export default function EquityStructurePage() {
                 })()}
               </div>
             </div>
+            </CollapsibleSection>
           </div>
           
           {/* Financial Projections Flow */}
           <div ref={financialProjectionsRef} className="p-8 bg-gradient-to-br from-indigo-50 to-purple-50">
+            <CollapsibleSection title="📊 Financial Projections" defaultOpen={true}>
             <div className="max-w-6xl mx-auto">
               <div className="text-center mb-8">
                 <h3 className="text-2xl font-bold text-gray-800 mb-3 flex items-center justify-center gap-2">
@@ -3145,10 +3148,12 @@ export default function EquityStructurePage() {
                 Switch to Simple Projections
               </button>
             </div>
+            </CollapsibleSection>
           </div>
           
           {/* Visual Equity Split Display */}
           <div className="bg-gradient-to-br from-blue-50 to-indigo-100 p-8">
+            <CollapsibleSection title="📊 Equity Distribution" defaultOpen={true}>
             <div className="max-w-6xl mx-auto">
               <h2 className="text-2xl font-semibold text-gray-800 mb-6">Equity Distribution</h2>
               
@@ -3320,7 +3325,6 @@ export default function EquityStructurePage() {
                 </div>
               </div>
             </div>
-          </div>
 
           {/* Investment Calculator Section */}
           <div className="p-8 border-t bg-gray-50">
@@ -3377,6 +3381,8 @@ export default function EquityStructurePage() {
                 </div>
               )}
             </div>
+          </div>
+            </CollapsibleSection>
           </div>
 
 
