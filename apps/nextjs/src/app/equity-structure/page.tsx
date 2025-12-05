@@ -417,6 +417,14 @@ export default function EquityStructurePage() {
   const step1Ref = useRef<HTMLDivElement>(null);
   const step1ResultRef = useRef<HTMLDivElement>(null);
   const [step1ResultOpen, setStep1ResultOpen] = useState(false);
+  const step2Ref = useRef<HTMLDivElement>(null);
+  const [step2Open, setStep2Open] = useState(false);
+  const step2ResultRef = useRef<HTMLDivElement>(null);
+  const [step2ResultOpen, setStep2ResultOpen] = useState(false);
+  const step3Ref = useRef<HTMLDivElement>(null);
+  const [step3Open, setStep3Open] = useState(false);
+  const step45Ref = useRef<HTMLDivElement>(null);
+  const [step45Open, setStep45Open] = useState(false);
 
   // Helper functions for role bullets
   const addBullet = (roleKey: string) => {
@@ -1633,13 +1641,36 @@ export default function EquityStructurePage() {
                   </div>
                 </div>
               </div>
+              
+              {/* Next Button */}
+              <div className="flex justify-center mt-8">
+                <button
+                  onClick={() => {
+                    setStep2Open(true);
+                    setTimeout(() => {
+                      if (step2Ref.current) {
+                        step2Ref.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                      }
+                    }, 100);
+                  }}
+                  className="bg-green-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-green-700 transition-colors shadow-lg flex items-center gap-2"
+                >
+                  Next
+                  <span className="text-lg">→</span>
+                </button>
+              </div>
             </div>
             </CollapsibleSection>
           </div>
           
           {/* Roles and Responsibilities */}
-          <div className="p-4 sm:p-6 bg-gray-50 rounded-lg mb-2">
-            <CollapsibleSection title="● Step 2: Roles & Responsibilities" defaultOpen={false}>
+          <div ref={step2Ref} className="p-4 sm:p-6 bg-gray-50 rounded-lg mb-2">
+            <CollapsibleSection 
+              title="● Step 2: Roles & Responsibilities" 
+              defaultOpen={false}
+              isOpen={step2Open}
+              onToggle={setStep2Open}
+            >
             <div className="max-w-6xl mx-auto">
               <div className="text-center mb-8">
               </div>
@@ -2143,13 +2174,36 @@ export default function EquityStructurePage() {
                   );
                 })()}
               </div>
+              
+              {/* Next Button */}
+              <div className="flex justify-center mt-8">
+                <button
+                  onClick={() => {
+                    setStep2ResultOpen(true);
+                    setTimeout(() => {
+                      if (step2ResultRef.current) {
+                        step2ResultRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                      }
+                    }, 100);
+                  }}
+                  className="bg-green-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-green-700 transition-colors shadow-lg flex items-center gap-2"
+                >
+                  Next
+                  <span className="text-lg">→</span>
+                </button>
+              </div>
             </div>
             </CollapsibleSection>
           </div>
           
           {/* Hours Summary */}
-          <div className="p-4 sm:p-6 bg-gray-100 rounded-lg mb-2">
-            <CollapsibleSection title="▸ Step 2 Result" defaultOpen={false}>
+          <div ref={step2ResultRef} className="p-4 sm:p-6 bg-gray-100 rounded-lg mb-2">
+            <CollapsibleSection 
+              title="▸ Step 2 Result" 
+              defaultOpen={false}
+              isOpen={step2ResultOpen}
+              onToggle={setStep2ResultOpen}
+            >
             <div className="max-w-6xl mx-auto">
               <div className="text-center mb-8">
                 <p className="text-gray-600 mt-2">Weekly time allocation by founder and category</p>
@@ -2385,13 +2439,36 @@ export default function EquityStructurePage() {
                   );
                 })()}
               </div>
+              
+              {/* Next Button */}
+              <div className="flex justify-center mt-8">
+                <button
+                  onClick={() => {
+                    setStep3Open(true);
+                    setTimeout(() => {
+                      if (step3Ref.current) {
+                        step3Ref.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                      }
+                    }, 100);
+                  }}
+                  className="bg-green-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-green-700 transition-colors shadow-lg flex items-center gap-2"
+                >
+                  Next
+                  <span className="text-lg">→</span>
+                </button>
+              </div>
             </div>
             </CollapsibleSection>
           </div>
           
           {/* Financial Projections Flow */}
-          <div ref={financialProjectionsRef} className="p-4 sm:p-6 bg-gray-50 rounded-lg mb-2">
-            <CollapsibleSection title="● Step 3: Project Costs" defaultOpen={false}>
+          <div ref={(el) => { financialProjectionsRef.current = el; step3Ref.current = el; }} className="p-4 sm:p-6 bg-gray-50 rounded-lg mb-2">
+            <CollapsibleSection 
+              title="● Step 3: Project Costs" 
+              defaultOpen={false}
+              isOpen={step3Open}
+              onToggle={setStep3Open}
+            >
             <div className="max-w-6xl mx-auto">
               <div className="text-center mb-8">
               </div>
@@ -3308,7 +3385,14 @@ export default function EquityStructurePage() {
                             ←
                           </button>
                           <button
-                            onClick={() => setProjectionStep(1)}
+                            onClick={() => {
+                              setStep45Open(true);
+                              setTimeout(() => {
+                                if (step45Ref.current) {
+                                  step45Ref.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                                }
+                              }, 100);
+                            }}
                             className="bg-green-600 text-white px-6 py-3 rounded-xl font-semibold hover:bg-green-700 transition-colors shadow-lg"
                           >
                             Done
@@ -3686,8 +3770,13 @@ export default function EquityStructurePage() {
           </div>
           
           {/* Visual Equity Split Display */}
-          <div className="p-4 sm:p-6 bg-gray-100 rounded-lg mb-2">
-            <CollapsibleSection title="● Step 4 & 5: Distribute Equity" defaultOpen={false}>
+          <div ref={step45Ref} className="p-4 sm:p-6 bg-gray-100 rounded-lg mb-2">
+            <CollapsibleSection 
+              title="● Step 4 & 5: Distribute Equity" 
+              defaultOpen={false}
+              isOpen={step45Open}
+              onToggle={setStep45Open}
+            >
             <div className="max-w-6xl mx-auto">
               
               {/* Circle Pie Chart Visualization */}
