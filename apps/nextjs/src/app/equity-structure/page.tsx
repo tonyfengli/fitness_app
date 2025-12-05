@@ -414,6 +414,9 @@ export default function EquityStructurePage() {
   // Ref for auto-scrolling to Financial Projections section
   const financialProjectionsRef = useRef<HTMLDivElement>(null);
   const isInitialLoad = useRef(true);
+  const step1Ref = useRef<HTMLDivElement>(null);
+  const step1ResultRef = useRef<HTMLDivElement>(null);
+  const [step1ResultOpen, setStep1ResultOpen] = useState(false);
 
   // Helper functions for role bullets
   const addBullet = (roleKey: string) => {
@@ -925,8 +928,8 @@ export default function EquityStructurePage() {
           {/* All Sections Container */}
           <div className="bg-gray-50 rounded-lg sm:rounded-xl p-1.5 sm:p-4 shadow-inner">
           {/* Revenue Projections Section */}
-          <div className="p-4 sm:p-6 bg-gray-50 rounded-lg mb-2">
-            <CollapsibleSection title="💰 Revenue Projections" defaultOpen={false}>
+          <div ref={step1Ref} className="p-4 sm:p-6 bg-gray-50 rounded-lg mb-2">
+            <CollapsibleSection title="● Step 1: Project Revenue Growth" defaultOpen={false}>
             <div className="max-w-6xl mx-auto">
               <div className="text-center mb-8">
               </div>
@@ -1119,7 +1122,12 @@ export default function EquityStructurePage() {
                     </div>
                     <div className="flex justify-center">
                       <button
-                        onClick={() => setRevenueStep(2)}
+                        onClick={() => {
+                          setRevenueStep(2);
+                          if (step1Ref.current) {
+                            step1Ref.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                          }
+                        }}
                         className="bg-green-600 text-white w-12 h-12 rounded-full text-lg font-bold hover:bg-green-700 transition-colors shadow-lg"
                       >
                         →
@@ -1282,7 +1290,15 @@ export default function EquityStructurePage() {
                         ←
                       </button>
                       <button
-                        onClick={() => setRevenueStep(1)}
+                        onClick={() => {
+                          setRevenueStep(1);
+                          setStep1ResultOpen(true);
+                          setTimeout(() => {
+                            if (step1ResultRef.current) {
+                              step1ResultRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                            }
+                          }, 100);
+                        }}
                         className="bg-green-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-green-700 transition-colors shadow-lg"
                       >
                         Complete Revenue Setup
@@ -1296,8 +1312,13 @@ export default function EquityStructurePage() {
           </div>
           
           {/* Customer Acquisition Funnel Section */}
-          <div className="p-4 sm:p-6 bg-gray-100 rounded-lg mb-2">
-            <CollapsibleSection title="🚀 Customer Acquisition Funnel" defaultOpen={false}>
+          <div ref={step1ResultRef} className="p-4 sm:p-6 bg-gray-100 rounded-lg mb-2">
+            <CollapsibleSection 
+              title="▸ Step 1 Result" 
+              defaultOpen={false}
+              isOpen={step1ResultOpen}
+              onToggle={setStep1ResultOpen}
+            >
             <div className="max-w-6xl mx-auto">
               <div className="text-center mb-8">
               </div>
@@ -1618,7 +1639,7 @@ export default function EquityStructurePage() {
           
           {/* Roles and Responsibilities */}
           <div className="p-4 sm:p-6 bg-gray-50 rounded-lg mb-2">
-            <CollapsibleSection title="👥 Roles and Responsibilities" defaultOpen={false}>
+            <CollapsibleSection title="● Step 2: Roles & Responsibilities" defaultOpen={false}>
             <div className="max-w-6xl mx-auto">
               <div className="text-center mb-8">
               </div>
@@ -2128,7 +2149,7 @@ export default function EquityStructurePage() {
           
           {/* Hours Summary */}
           <div className="p-4 sm:p-6 bg-gray-100 rounded-lg mb-2">
-            <CollapsibleSection title="⏰ Hours Summary" defaultOpen={false}>
+            <CollapsibleSection title="▸ Step 2 Result" defaultOpen={false}>
             <div className="max-w-6xl mx-auto">
               <div className="text-center mb-8">
                 <p className="text-gray-600 mt-2">Weekly time allocation by founder and category</p>
@@ -2370,7 +2391,7 @@ export default function EquityStructurePage() {
           
           {/* Financial Projections Flow */}
           <div ref={financialProjectionsRef} className="p-4 sm:p-6 bg-gray-50 rounded-lg mb-2">
-            <CollapsibleSection title="📊 Financial Projections" defaultOpen={false}>
+            <CollapsibleSection title="● Step 3: Project Costs" defaultOpen={false}>
             <div className="max-w-6xl mx-auto">
               <div className="text-center mb-8">
               </div>
@@ -3666,7 +3687,7 @@ export default function EquityStructurePage() {
           
           {/* Visual Equity Split Display */}
           <div className="p-4 sm:p-6 bg-gray-100 rounded-lg mb-2">
-            <CollapsibleSection title="📊 Equity Distribution" defaultOpen={false}>
+            <CollapsibleSection title="● Step 4 & 5: Distribute Equity" defaultOpen={false}>
             <div className="max-w-6xl mx-auto">
               
               {/* Circle Pie Chart Visualization */}

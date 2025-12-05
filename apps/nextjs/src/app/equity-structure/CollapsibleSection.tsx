@@ -7,20 +7,33 @@ interface CollapsibleSectionProps {
   defaultOpen?: boolean;
   children: React.ReactNode;
   className?: string;
+  isOpen?: boolean;
+  onToggle?: (isOpen: boolean) => void;
 }
 
 export default function CollapsibleSection({ 
   title, 
   defaultOpen = true, 
   children, 
-  className = "" 
+  className = "",
+  isOpen: controlledIsOpen,
+  onToggle
 }: CollapsibleSectionProps) {
-  const [isOpen, setIsOpen] = useState(defaultOpen);
+  const [internalIsOpen, setInternalIsOpen] = useState(defaultOpen);
+  const isOpen = controlledIsOpen !== undefined ? controlledIsOpen : internalIsOpen;
+
+  const handleToggle = () => {
+    if (onToggle) {
+      onToggle(!isOpen);
+    } else {
+      setInternalIsOpen(!internalIsOpen);
+    }
+  };
 
   return (
     <div className={className}>
       <button
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={handleToggle}
         className={`w-full flex items-center justify-between px-3 py-2.5 sm:px-4 sm:py-3 transition-all duration-200 ${
           isOpen 
             ? 'bg-transparent border-0 pb-2' 
