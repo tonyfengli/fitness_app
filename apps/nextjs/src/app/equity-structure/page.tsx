@@ -3,6 +3,102 @@
 import React, { useState, useEffect, useRef } from 'react';
 import CollapsibleSection from './CollapsibleSection';
 
+// Simple localStorage utilities
+const STORAGE_KEY = 'equity-revenue-data';
+
+const saveToStorage = (data: any) => {
+  try {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    }
+  } catch (e) {
+    // Silently fail - this is just for convenience
+  }
+};
+
+const loadFromStorage = () => {
+  try {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      return saved ? JSON.parse(saved) : null;
+    }
+  } catch (e) {
+    return null;
+  }
+  return null;
+};
+
+// Initial role bullets data
+const getInitialRoleBullets = () => ({
+  leadership: [
+    { id: '1', text: "Prepare and lead weekly meetings", assignees: [] },
+    { id: '2', text: "Review KPIs, diagnose issues, assign tasks, and set monthly budgets", assignees: [] },
+    { id: '4', text: "Make sure other founders/team members are on track and run performance reviews if needed", assignees: [] }
+  ],
+  maintenance: [
+    { id: '4', text: "Build and maintain gym technology (apps, Wi-Fi, routers, etc)", assignees: [] },
+    { id: '5', text: "Repair maintenance-related issues (equipment, A/C, other gym amenities)", assignees: [] },
+    { id: '48', text: "Oversee facility renovations and construction projects", assignees: [] }
+  ],
+  inGymCoaching: [
+    { id: '6', text: "Lead in-person workouts", assignees: [] },
+    { id: '7', text: "Program and create the workouts (planning-related)", assignees: [] },
+    { id: '49', text: "Manage workout music and playlists", assignees: [] }
+  ],
+  remoteCoaching: [
+    { id: '8', text: "Review client videos/feedback and provide coaching feedback", assignees: [] },
+    { id: '9', text: "Record new videos if needed", assignees: [] },
+    { id: '10', text: "Update the app for workout changes", assignees: [] }
+  ],
+  coachManagement: [
+    { id: '11', text: "Recruit, interview, and onboard new coaches", assignees: [] },
+    { id: '12', text: "Run training sessions for coaches", assignees: [] },
+    { id: '13', text: "Filming coaching or tutorial videos for content/marketing purposes", assignees: [] },
+    { id: '14', text: "Lead and manage coaching curriculum and training philosophy", assignees: [] }
+  ],
+  sales: [
+    { id: '15', text: "Respond quickly to new leads (DM, SMS, email, phone)", assignees: [] },
+    { id: '16', text: "Group classes - follow ups, trials, close", assignees: [] },
+    { id: '17', text: "Semi-privates - follow ups, assessments and close", assignees: [] },
+    { id: '18', text: "Run save attempts when clients want to cancel (before Admin processes)", assignees: [] }
+  ],
+  marketing: [
+    { id: '20', text: "Plan and maintain a content calendar (frequency & posting cadence to be aligned)", assignees: [] },
+    { id: '21', text: "Capture photos and video during sessions and events", assignees: [] },
+    { id: '22', text: "Create and publish content on social platforms", assignees: [] },
+    { id: '23', text: "Engage with comments, DMs, and basic social interactions", assignees: [] },
+    { id: '24', text: "Manage email/newsletter campaigns", assignees: [] },
+    { id: '25', text: "Maintain website/SEO", assignees: [] },
+    { id: '50', text: "Create and publish paid ads (Facebook, Google, Instagram)", assignees: [] }
+  ],
+  partnerships: [
+    { id: '26', text: "Identify and contact local businesses for partnerships", assignees: [] },
+    { id: '27', text: "Set up referral and cross-promotion agreements", assignees: [] },
+    { id: '28', text: "Coordinate joint events, pop-ups, and challenges", assignees: [] },
+    { id: '29', text: "Engage local Facebook/Nextdoor groups within their rules", assignees: [] }
+  ],
+  clientSuccess: [
+    { id: '30', text: "Client check-ins (monthly touch points)", assignees: [] },
+    { id: '31', text: "Send birthday, milestone, and \"we noticed you\" messages", assignees: [] },
+    { id: '32', text: "Organize community events, challenges, and social outings", assignees: [] },
+    { id: '33', text: "Answer client questions about administrative policies, address complaints", assignees: [] }
+  ],
+  facilities: [
+    { id: '35', text: "Clean per daily checklist (trash, floors, bathrooms, equipment wipe-down)", assignees: [] },
+    { id: '36', text: "Put equipment and supplies back in their proper place", assignees: [] },
+    { id: '37', text: "Restock towels, wipes, toiletries, water, and other consumables", assignees: [] },
+    { id: '38', text: "Manage lost-and-found area and log items", assignees: [] },
+    { id: '40', text: "Order cleaning and maintenance supplies within budget", assignees: [] },
+    { id: '46', text: "Take out trash", assignees: [] }
+  ],
+  admin: [
+    { id: '42', text: "Process freezes, cancellations, membership changes, and coach scheduling adjustments", assignees: [] },
+    { id: '44', text: "Run payroll for the trainers", assignees: [] },
+    { id: '45', text: "Do bookkeeping and monthly financial reports to the team", assignees: [] },
+    { id: '47', text: "Chase down unpaid invoices and manage collections", assignees: [] }
+  ]
+});
+
 export default function EquityStructurePage() {
   // State for equity pool allocations
   const [foundersBasePool, setFoundersBasePool] = useState(15);
@@ -156,6 +252,164 @@ export default function EquityStructurePage() {
     facilities: 0,
     admin: 0
   });
+  
+  // Load revenue data from localStorage on mount
+  useEffect(() => {
+    const savedData = loadFromStorage();
+    if (savedData) {
+      if (savedData.revenue) {
+        // Group class data
+        if (savedData.revenue.groupClassPrices) setGroupClassPrices(savedData.revenue.groupClassPrices);
+        if (savedData.revenue.groupClassClientsStart) setGroupClassClientsStart(savedData.revenue.groupClassClientsStart);
+        if (savedData.revenue.groupClassClientsEnd) setGroupClassClientsEnd(savedData.revenue.groupClassClientsEnd);
+        if (savedData.revenue.groupClassDropoffs) setGroupClassDropoffs(savedData.revenue.groupClassDropoffs);
+        
+        // Semi-private data
+        if (savedData.revenue.semiPrivatePrices) setSemiPrivatePrices(savedData.revenue.semiPrivatePrices);
+        if (savedData.revenue.semiPrivateClientsStart) setSemiPrivateClientsStart(savedData.revenue.semiPrivateClientsStart);
+        if (savedData.revenue.semiPrivateClientsEnd) setSemiPrivateClientsEnd(savedData.revenue.semiPrivateClientsEnd);
+        if (savedData.revenue.semiPrivateDropoffs) setSemiPrivateDropoffs(savedData.revenue.semiPrivateDropoffs);
+        
+        // Operating costs
+        if (savedData.revenue.operatingCosts) setOperatingCosts(savedData.revenue.operatingCosts);
+        if (savedData.revenue.paidAdsCosts) setPaidAdsCosts(savedData.revenue.paidAdsCosts);
+        if (savedData.revenue.trainerSplits) setTrainerSplits(savedData.revenue.trainerSplits);
+        
+        // Profit data
+        if (savedData.revenue.monthlyProfits) setMonthlyProfits(savedData.revenue.monthlyProfits);
+        if (savedData.revenue.yearlyDistributions) setYearlyDistributions(savedData.revenue.yearlyDistributions);
+      }
+      
+      // Customer acquisition data
+      if (savedData.acquisition) {
+        if (savedData.acquisition.leadToTrialRate !== undefined) setLeadToTrialRate(savedData.acquisition.leadToTrialRate);
+        if (savedData.acquisition.trialToMemberRate !== undefined) setTrialToMemberRate(savedData.acquisition.trialToMemberRate);
+      }
+      
+      // Roles and responsibilities data
+      if (savedData.roles) {
+        if (savedData.roles.roleBullets) setRoleBullets(savedData.roles.roleBullets);
+        if (savedData.roles.roleHours) setRoleHours(savedData.roles.roleHours);
+      }
+      
+      // Financial projections data
+      if (savedData.financialProjections) {
+        const fp = savedData.financialProjections;
+        if (fp.foundersBasePool !== undefined) setFoundersBasePool(fp.foundersBasePool);
+        if (fp.sweatEquityPool !== undefined) setSweatEquityPool(fp.sweatEquityPool);
+        if (fp.totalCapitalNeeded !== undefined) setTotalCapitalNeeded(fp.totalCapitalNeeded);
+        if (fp.poolInvestmentAmount !== undefined) setPoolInvestmentAmount(fp.poolInvestmentAmount);
+        if (fp.totalCapitalInput !== undefined) setTotalCapitalInput(fp.totalCapitalInput);
+        if (fp.poolInvestmentInput !== undefined) setPoolInvestmentInput(fp.poolInvestmentInput);
+        if (fp.sweatEquityPercent !== undefined) setSweatEquityPercent(fp.sweatEquityPercent);
+        if (fp.profitPayout !== undefined) setProfitPayout(fp.profitPayout);
+        if (fp.simulationYears !== undefined) setSimulationYears(fp.simulationYears);
+        if (fp.preferSweatEquity !== undefined) setPreferSweatEquity(fp.preferSweatEquity);
+        if (fp.buyInAmount !== undefined) setBuyInAmount(fp.buyInAmount);
+        if (fp.buyInAmountInput !== undefined) setBuyInAmountInput(fp.buyInAmountInput);
+        if (fp.groupCoachingCosts) setGroupCoachingCosts(fp.groupCoachingCosts);
+        if (fp.customWeeklySessions) setCustomWeeklySessions(fp.customWeeklySessions);
+        if (fp.customCoachingRates) setCustomCoachingRates(fp.customCoachingRates);
+        if (fp.kyleSessions) setKyleSessions(fp.kyleSessions);
+        if (fp.kyleRates) setKyleRates(fp.kyleRates);
+        if (fp.tonySessions) setTonySessions(fp.tonySessions);
+        if (fp.tonyRates) setTonyRates(fp.tonyRates);
+      }
+    }
+  }, []);
+  
+  // Save revenue data to localStorage when it changes
+  useEffect(() => {
+    const revenueData = {
+      revenue: {
+        groupClassPrices,
+        groupClassClientsStart,
+        groupClassClientsEnd,
+        groupClassDropoffs,
+        semiPrivatePrices,
+        semiPrivateClientsStart,
+        semiPrivateClientsEnd,
+        semiPrivateDropoffs,
+        operatingCosts,
+        paidAdsCosts,
+        trainerSplits,
+        monthlyProfits,
+        yearlyDistributions
+      },
+      acquisition: {
+        leadToTrialRate,
+        trialToMemberRate
+      },
+      roles: {
+        roleBullets,
+        roleHours
+      },
+      financialProjections: {
+        foundersBasePool,
+        sweatEquityPool,
+        totalCapitalNeeded,
+        poolInvestmentAmount,
+        totalCapitalInput,
+        poolInvestmentInput,
+        sweatEquityPercent,
+        profitPayout,
+        simulationYears,
+        preferSweatEquity,
+        buyInAmount,
+        buyInAmountInput,
+        groupCoachingCosts,
+        customWeeklySessions,
+        customCoachingRates,
+        kyleSessions,
+        kyleRates,
+        tonySessions,
+        tonyRates
+      }
+    };
+    
+    const timeoutId = setTimeout(() => {
+      saveToStorage(revenueData);
+    }, 500); // Debounce for 500ms
+    
+    return () => clearTimeout(timeoutId);
+  }, [
+    groupClassPrices,
+    groupClassClientsStart,
+    groupClassClientsEnd,
+    groupClassDropoffs,
+    semiPrivatePrices,
+    semiPrivateClientsStart,
+    semiPrivateClientsEnd,
+    semiPrivateDropoffs,
+    operatingCosts,
+    paidAdsCosts,
+    trainerSplits,
+    monthlyProfits,
+    yearlyDistributions,
+    leadToTrialRate,
+    trialToMemberRate,
+    roleBullets,
+    roleHours,
+    foundersBasePool,
+    sweatEquityPool,
+    totalCapitalNeeded,
+    poolInvestmentAmount,
+    totalCapitalInput,
+    poolInvestmentInput,
+    sweatEquityPercent,
+    profitPayout,
+    simulationYears,
+    preferSweatEquity,
+    buyInAmount,
+    buyInAmountInput,
+    groupCoachingCosts,
+    customWeeklySessions,
+    customCoachingRates,
+    kyleSessions,
+    kyleRates,
+    tonySessions,
+    tonyRates
+  ]);
   
   // Ref for auto-scrolling to Financial Projections section
   const financialProjectionsRef = useRef<HTMLDivElement>(null);
@@ -590,9 +844,78 @@ export default function EquityStructurePage() {
 
       {/* Page Header */}
       <div className="bg-white border-b border-gray-200 shadow-sm">
-        <div className="px-3 sm:px-6 lg:px-8 py-3 sm:py-6">
-          <h1 className="text-xl sm:text-3xl font-bold text-gray-900">Equity Structure Calculator</h1>
-          <p className="mt-0.5 text-xs sm:text-base text-gray-600">Plan and visualize your startup equity distribution</p>
+        <div className="px-3 sm:px-6 lg:px-8 py-3 sm:py-6 flex items-center justify-between">
+          <div>
+            <h1 className="text-xl sm:text-3xl font-bold text-gray-900">Equity Structure Calculator</h1>
+            <p className="mt-0.5 text-xs sm:text-base text-gray-600">Plan and visualize your startup equity distribution</p>
+          </div>
+          <button
+            onClick={() => {
+              if (confirm('This will reset all values to defaults. Are you sure?')) {
+                // Clear localStorage
+                localStorage.removeItem(STORAGE_KEY);
+                
+                // Reset revenue projection states to defaults
+                setGroupClassPrices([]);
+                setGroupClassClientsStart([]);
+                setGroupClassClientsEnd([]);
+                setGroupClassDropoffs([]);
+                setSemiPrivatePrices([]);
+                setSemiPrivateClientsStart([]);
+                setSemiPrivateClientsEnd([]);
+                setSemiPrivateDropoffs([]);
+                setOperatingCosts([]);
+                setPaidAdsCosts([]);
+                setTrainerSplits([50, 50, 50, 50, 50]);
+                setMonthlyProfits([2000, 4000, 6000, 8000, 10000]);
+                setYearlyDistributions([50, 60, 70, 80, 80]);
+                
+                // Reset customer acquisition to defaults
+                setLeadToTrialRate(50);
+                setTrialToMemberRate(60);
+                
+                // Reset roles and responsibilities to defaults
+                setRoleBullets(getInitialRoleBullets());
+                setRoleHours({
+                  leadership: 0,
+                  maintenance: 0,
+                  inGymCoaching: 0,
+                  remoteCoaching: 0,
+                  coachManagement: 0,
+                  sales: 0,
+                  marketing: 0,
+                  partnerships: 0,
+                  clientSuccess: 0,
+                  facilities: 0,
+                  admin: 0
+                });
+                
+                // Reset financial projections to defaults
+                setFoundersBasePool(15);
+                setSweatEquityPool(35);
+                setTotalCapitalNeeded(0);
+                setPoolInvestmentAmount(0);
+                setTotalCapitalInput('');
+                setPoolInvestmentInput('');
+                setSweatEquityPercent(3.5);
+                setProfitPayout(40);
+                setSimulationYears(5);
+                setPreferSweatEquity(true);
+                setBuyInAmount(0);
+                setBuyInAmountInput('');
+                setGroupCoachingCosts([]);
+                setCustomWeeklySessions([]);
+                setCustomCoachingRates([]);
+                setKyleSessions([]);
+                setKyleRates([]);
+                setTonySessions([]);
+                setTonyRates([]);
+              }
+            }}
+            className="px-3 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
+          >
+            Reset
+          </button>
         </div>
       </div>
 
