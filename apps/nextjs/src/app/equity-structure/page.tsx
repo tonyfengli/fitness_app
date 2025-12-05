@@ -117,6 +117,34 @@ export default function EquityStructurePage() {
   const [buyInAmount, setBuyInAmount] = useState<number | string | undefined>(0);
   const [buyInAmountInput, setBuyInAmountInput] = useState('');
   
+  // Individual founder buy-in amounts (allow string for empty state)
+  const [founderBuyIns, setFounderBuyIns] = useState<{[key: string]: number | string}>({
+    'founder2': '', // R&E
+    'founder3': '', // David
+    'founder4': '', // Kyle
+    'founder5': ''  // Tony
+  });
+  const [founderBuyInInputs, setFounderBuyInInputs] = useState<{[key: string]: string}>({
+    'founder2': '',
+    'founder3': '',
+    'founder4': '',
+    'founder5': ''
+  });
+  
+  // Individual founder sweat equity overrides
+  const [founderSweatEquity, setFounderSweatEquity] = useState<{[key: string]: number | string}>({
+    'founder2': '',
+    'founder3': '',
+    'founder4': '',
+    'founder5': ''
+  });
+  const [founderSweatEquityInputs, setFounderSweatEquityInputs] = useState<{[key: string]: string}>({
+    'founder2': '',
+    'founder3': '',
+    'founder4': '',
+    'founder5': ''
+  });
+  
   // State for active tab in roles section
   const [activeRoleTab, setActiveRoleTab] = useState('all');
 
@@ -314,6 +342,10 @@ export default function EquityStructurePage() {
         if (fp.kyleRates) setKyleRates(fp.kyleRates);
         if (fp.tonySessions) setTonySessions(fp.tonySessions);
         if (fp.tonyRates) setTonyRates(fp.tonyRates);
+        if (fp.founderBuyIns) setFounderBuyIns(fp.founderBuyIns);
+        if (fp.founderBuyInInputs) setFounderBuyInInputs(fp.founderBuyInInputs);
+        if (fp.founderSweatEquity) setFounderSweatEquity(fp.founderSweatEquity);
+        if (fp.founderSweatEquityInputs) setFounderSweatEquityInputs(fp.founderSweatEquityInputs);
       }
     }
   }, []);
@@ -363,7 +395,11 @@ export default function EquityStructurePage() {
         kyleSessions,
         kyleRates,
         tonySessions,
-        tonyRates
+        tonyRates,
+        founderBuyIns,
+        founderBuyInInputs,
+        founderSweatEquity,
+        founderSweatEquityInputs
       }
     };
     
@@ -408,7 +444,11 @@ export default function EquityStructurePage() {
     kyleSessions,
     kyleRates,
     tonySessions,
-    tonyRates
+    tonyRates,
+    founderBuyIns,
+    founderBuyInInputs,
+    founderSweatEquity,
+    founderSweatEquityInputs
   ]);
   
   // Ref for auto-scrolling to Financial Projections section
@@ -425,6 +465,9 @@ export default function EquityStructurePage() {
   const [step3Open, setStep3Open] = useState(false);
   const step45Ref = useRef<HTMLDivElement>(null);
   const [step45Open, setStep45Open] = useState(false);
+  const [activeFounderTab, setActiveFounderTab] = useState(0);
+  const founderJourneyRef = useRef<HTMLDivElement>(null);
+  const [founderJourneyOpen, setFounderJourneyOpen] = useState(false);
 
   // Helper functions for role bullets
   const addBullet = (roleKey: string) => {
@@ -662,6 +705,85 @@ export default function EquityStructurePage() {
 
   const handlePoolInvestmentBlur = () => {
     setPoolInvestmentInput(formatNumber(poolInvestmentAmount));
+  };
+  
+  // Handler for individual founder buy-in changes
+  const handleFounderBuyInChange = (founderId: string, value: string) => {
+    // Allow user to type, update display immediately
+    setFounderBuyInInputs(prev => ({
+      ...prev,
+      [founderId]: value
+    }));
+    
+    // Handle empty string
+    if (value === '') {
+      setFounderBuyIns(prev => ({
+        ...prev,
+        [founderId]: ''
+      }));
+      return;
+    }
+    
+    // Parse and update numeric value for calculations
+    const digitsOnly = value.replace(/\D/g, '');
+    const numericValue = parseInt(digitsOnly) || 0;
+    
+    // Calculate max based on founder (R&E gets 40%, others get 20%)
+    const maxPercentage = founderId === 'founder2' ? 0.4 : 0.2;
+    const maxAmount = Math.round((Number(buyInAmount) || 0) * maxPercentage);
+    
+    // Enforce max limit
+    const finalValue = Math.min(numericValue, maxAmount);
+    
+    setFounderBuyIns(prev => ({
+      ...prev,
+      [founderId]: finalValue
+    }));
+  };
+  
+  const handleFounderBuyInBlur = (founderId: string) => {
+    const value = founderBuyIns[founderId];
+    setFounderBuyInInputs(prev => ({
+      ...prev,
+      [founderId]: value === '' ? '' : formatNumber(Number(value) || 0)
+    }));
+  };
+  
+  // Handler for individual founder sweat equity changes
+  const handleFounderSweatEquityChange = (founderId: string, value: string) => {
+    // Allow user to type, update display immediately
+    setFounderSweatEquityInputs(prev => ({
+      ...prev,
+      [founderId]: value
+    }));
+    
+    // Handle empty string
+    if (value === '') {
+      setFounderSweatEquity(prev => ({
+        ...prev,
+        [founderId]: ''
+      }));
+      return;
+    }
+    
+    // Parse and update numeric value for calculations
+    const numericValue = parseFloat(value) || 0;
+    
+    // Enforce reasonable limits (0-100%)
+    const finalValue = Math.min(100, Math.max(0, numericValue));
+    
+    setFounderSweatEquity(prev => ({
+      ...prev,
+      [founderId]: finalValue
+    }));
+  };
+  
+  const handleFounderSweatEquityBlur = (founderId: string) => {
+    const value = founderSweatEquity[founderId];
+    setFounderSweatEquityInputs(prev => ({
+      ...prev,
+      [founderId]: value === '' ? '' : value.toString()
+    }));
   };
 
   // Update monthly profits when years change
@@ -921,6 +1043,34 @@ export default function EquityStructurePage() {
                 setKyleRates([]);
                 setTonySessions([]);
                 setTonyRates([]);
+                
+                // Reset individual founder buy-ins
+                setFounderBuyIns({
+                  'founder2': '',
+                  'founder3': '',
+                  'founder4': '',
+                  'founder5': ''
+                });
+                setFounderBuyInInputs({
+                  'founder2': '',
+                  'founder3': '',
+                  'founder4': '',
+                  'founder5': ''
+                });
+                
+                // Reset individual founder sweat equity
+                setFounderSweatEquity({
+                  'founder2': '',
+                  'founder3': '',
+                  'founder4': '',
+                  'founder5': ''
+                });
+                setFounderSweatEquityInputs({
+                  'founder2': '',
+                  'founder3': '',
+                  'founder4': '',
+                  'founder5': ''
+                });
               }
             }}
             className="px-3 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
@@ -3544,7 +3694,9 @@ export default function EquityStructurePage() {
                                     const distributedProfit = annualProfit * (distributionRate / 100);
                                     const godsCut = distributedProfit * 0.17;
                                     const remainingProfit = distributedProfit - godsCut;
-                                    const yourEquityShare = remainingProfit * (totalEquity / 100);
+                                    // Calculate equity (using equal split for old section)
+                                    const equityShare = perFounderEquity + (preferSweatEquity ? sweatEquityPool / 5 : 0) + actualEquityFromCash;
+                                    const yourEquityShare = remainingProfit * (equityShare / 100);
                                     
                                     let groupCoachingAnnual = 0;
                                     let semiPrivateAnnual = 0;
@@ -3655,7 +3807,9 @@ export default function EquityStructurePage() {
                                     const distributedProfit = annualProfit * (distributionRate / 100);
                                     const godsCut = distributedProfit * 0.17;
                                     const remainingProfit = distributedProfit - godsCut;
-                                    const yourEquityShare = remainingProfit * (totalEquity / 100);
+                                    // Calculate equity (using equal split for old section)
+                                    const equityShare = perFounderEquity + (preferSweatEquity ? sweatEquityPool / 5 : 0) + actualEquityFromCash;
+                                    const yourEquityShare = remainingProfit * (equityShare / 100);
                                     
                                     let groupCoachingAnnual = 0;
                                     let semiPrivateAnnual = 0;
@@ -3868,7 +4022,7 @@ export default function EquityStructurePage() {
                   
                   {/* Buy-in Amount Input */}
                   <div className="mt-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Buy-in Amount per Founder</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Total Buy-In Pool</label>
                     <div className="relative">
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">$</span>
                       <input
@@ -3886,10 +4040,10 @@ export default function EquityStructurePage() {
                       />
                     </div>
                     <div className="space-y-1 mt-2">
-                      <p className="text-xs text-gray-500">Total buy-in from all founders: ${formatNumber((Number(buyInAmount) || 0) * 5)}</p>
+                      <p className="text-xs text-gray-500">Amount per founder: ${formatNumber(Math.round((Number(buyInAmount) || 0) / 5))}</p>
                       {Number(buyInAmount) > 0 && perFounderEquity > 0 && (
                         <p className="text-xs font-medium text-gray-700">
-                          ${formatNumber(Math.round(Number(buyInAmount) / perFounderEquity))} per 1% equity
+                          ${formatNumber(Math.round((Number(buyInAmount) / 5) / perFounderEquity))} per 1% equity
                         </p>
                       )}
                     </div>
@@ -3924,7 +4078,7 @@ export default function EquityStructurePage() {
                 </div>
 
                 {/* Cash Investment Pool */}
-                <div className="bg-white p-6 rounded-xl shadow-sm opacity-75">
+                <div className="bg-white p-6 rounded-xl shadow-sm">
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-3">
                       <div className="w-4 h-4 bg-amber-500 rounded"></div>
@@ -3944,359 +4098,749 @@ export default function EquityStructurePage() {
                   <p className="text-sm text-gray-500 mt-2">
                     Automatically calculated (100% - Founders - Sweat)
                   </p>
+                  
+                  {/* Total Capital Needed Input */}
+                  <div className="mt-4 pt-4 border-t border-gray-200">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Total Capital Needed
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
+                      <input
+                        type="text"
+                        value={totalCapitalInput}
+                        onChange={(e) => handleTotalCapitalChange(e.target.value)}
+                        onBlur={handleTotalCapitalBlur}
+                        className="w-full pl-8 pr-4 py-2 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                        placeholder="Enter amount"
+                      />
+                    </div>
+                    {totalCapitalNeeded > 0 && (
+                      <div className="mt-2">
+                        <p className="text-xs font-medium text-gray-700">
+                          ${formatNumber(Math.round(totalCapitalNeeded / cashInvestmentPool))} per 1% of investment pool
+                        </p>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
 
-          {/* Investment Calculator Section */}
-          <div className="p-8 border-t bg-gray-50">
-            <div className="max-w-6xl mx-auto">
-              <h3 className="text-xl font-semibold text-gray-800 mb-6">
-                Investment Calculator
-              </h3>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Total Capital Needed
-                  </label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
-                    <input
-                      type="text"
-                      value={totalCapitalInput}
-                      onChange={(e) => handleTotalCapitalChange(e.target.value)}
-                      onBlur={handleTotalCapitalBlur}
-                      className="w-full pl-8 pr-4 py-3 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                      placeholder="Enter amount"
-                    />
-                  </div>
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Your Investment Amount
-                  </label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
-                    <input
-                      type="text"
-                      value={poolInvestmentInput}
-                      onChange={(e) => handlePoolInvestmentChange(e.target.value)}
-                      onBlur={handlePoolInvestmentBlur}
-                      className="w-full pl-8 pr-4 py-3 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                      placeholder="Enter amount"
-                    />
-                  </div>
-                </div>
-              </div>
-              
-              {/* Investment Metrics */}
-              {totalCapitalNeeded > 0 && (
-                <div className="mt-6">
-                  <div className="bg-white p-4 rounded-lg border border-gray-200 max-w-xs">
-                    <p className="text-xs font-medium text-gray-500 uppercase">Price per 1% Equity</p>
-                    <p className="text-lg font-bold text-gray-900 mt-1">
-                      ${formatNumber(Math.round(totalCapitalNeeded / cashInvestmentPool))}
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {/* Personal Equity Breakdown */}
-              <div className="mt-8 pt-8 border-t border-gray-200">
-                <h4 className="text-lg font-semibold text-gray-800 mb-4">Your Personal Equity Breakdown</h4>
-                
-                {/* Total Equity Display */}
-                <div className="bg-white rounded-xl shadow-lg p-6">
-                  <div className="text-center mb-6">
-                    <span className="text-lg font-medium text-gray-700">Your Total Equity</span>
-                    <div className="text-4xl font-bold text-blue-600 mt-2">
-                      {totalEquity.toFixed(1)}%
-                    </div>
-                  </div>
-
-                  {/* Simple Equity Breakdown */}
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between py-2">
-                      <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-                        <span className="text-sm text-gray-600">Founder Base</span>
-                      </div>
-                      <span className="text-sm font-medium text-blue-600">{perFounderEquity.toFixed(1)}%</span>
-                    </div>
-                    
-                    <div className="flex items-center justify-between py-2">
-                      <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 bg-emerald-500 rounded-full"></div>
-                        <span className="text-sm text-gray-600">
-                          {preferSweatEquity ? 'Sweat Equity' : 'Cash (No Equity)'}
-                        </span>
-                      </div>
-                      <span className="text-sm font-medium text-emerald-600">
-                        {preferSweatEquity ? (sweatEquityPool / 5).toFixed(1) : '0.0'}%
-                      </span>
-                    </div>
-                    
-                    <div className="flex items-center justify-between py-2">
-                      <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 bg-amber-500 rounded-full"></div>
-                        <span className="text-sm text-gray-600">Investment</span>
-                      </div>
-                      <span className="text-sm font-medium text-amber-600">{actualEquityFromCash.toFixed(1)}%</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+          {/* Next Button */}
+          <div className="flex justify-center mt-8">
+            <button
+              onClick={() => {
+                setFounderJourneyOpen(true);
+                setTimeout(() => {
+                  if (founderJourneyRef.current) {
+                    founderJourneyRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  }
+                }, 100);
+              }}
+              className="bg-green-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-green-700 transition-colors shadow-lg flex items-center gap-2"
+            >
+              Next
+              <span className="text-lg">→</span>
+            </button>
           </div>
             </CollapsibleSection>
           </div>
 
           {/* Your Founder Journey */}
-          <div className="p-4 sm:p-6 bg-gray-50 rounded-lg mb-2">
-            <CollapsibleSection title="🚀 Your Founder Journey" defaultOpen={false}>
-              <div className="space-y-8">
+          <div ref={founderJourneyRef} className="p-4 sm:p-6 bg-gray-50 rounded-lg mb-2">
+            <CollapsibleSection 
+              title="🚀 Your Founder Journey" 
+              defaultOpen={false}
+              isOpen={founderJourneyOpen}
+              onToggle={setFounderJourneyOpen}
+            >
+              <div className="space-y-6">
+                {/* Founder Tabs */}
                 <div>
-                  <div className="text-center mb-8">
-                    <h4 className="text-xl font-bold text-gray-800 mb-6">Your {projectionYears}-Year Founder Journey</h4>
-                    {(() => {
-                      // Calculate monthly profits for all years first
-                      const calculatedMonthlyProfits = [];
-                      for (let i = 0; i < projectionYears; i++) {
-                        if (isAdvancedMode) {
-                          // Advanced mode: calculate profit from detailed inputs
-                          const startGroupClients = i === 0 ? (Number(groupClassClientsStart[i]) || 0) : (Number(groupClassClientsEnd[i-1]) || 0);
-                          const avgGroupClients = (startGroupClients + (Number(groupClassClientsEnd[i]) || 0)) / 2;
-                          const startSemiPrivateClients = i === 0 ? (Number(semiPrivateClientsStart[i]) || 0) : (Number(semiPrivateClientsEnd[i-1]) || 0);
-                          const avgSemiPrivateClients = (startSemiPrivateClients + (Number(semiPrivateClientsEnd[i]) || 0)) / 2;
-                          const groupRevenue = (Number(groupClassPrices[i]) || 0) * avgGroupClients;
-                          const semiPrivateRevenue = (Number(semiPrivatePrices[i]) || 0) * avgSemiPrivateClients;
-                          const totalRevenue = groupRevenue + semiPrivateRevenue;
-                          
-                          const operatingCost = Number(operatingCosts[i]) || 0;
-                          const paidAdsCost = Number(paidAdsCosts[i]) || 0;
-                          const groupCoachingCost = calculateGroupCoachingCost(avgGroupClients, i);
-                          const trainerCost = semiPrivateRevenue * ((Number(trainerSplits[i]) || 50) / 100);
-                          const kyleContribution = Math.round((Number(kyleSessions[i]) || 3) * 4.33 * (Number(kyleRates[i]) || 30));
-                          const tonyContribution = Math.round((Number(tonySessions[i]) || 3) * 4.33 * (Number(tonyRates[i]) || 30));
-                          const totalOwnerTrainerContribution = kyleContribution + tonyContribution;
-                          const totalCosts = operatingCost + paidAdsCost + groupCoachingCost + trainerCost - totalOwnerTrainerContribution; // Owner trainers reduce costs
-                          
-                          calculatedMonthlyProfits.push(totalRevenue - totalCosts);
-                        } else {
-                          // Simple mode: use user-entered monthly profits
-                          calculatedMonthlyProfits.push(Number(monthlyProfits[i]) || 0);
-                        }
-                      }
-                      
-                      // Calculate total equity gains across all years
-                      let totalEquityGains = 0;
-                      for (let i = 0; i < projectionYears; i++) {
-                        const monthlyProfit = calculatedMonthlyProfits[i];
-                        const annualProfit = monthlyProfit * 12;
-                        const distributionRate = yearlyDistributions[i] || 0;
-                        const distributedProfit = annualProfit * (distributionRate / 100);
-                        const godsCut = distributedProfit * 0.17; // 17% of distributed profits
-                        const remainingProfit = distributedProfit - godsCut;
-                        const yourEquityShare = remainingProfit * (totalEquity / 100);
-                        totalEquityGains += yourEquityShare;
-                      }
-                      
-                      // Calculate semi-private training gains (direct income to founder)
-                      let totalSemiPrivateGains = 0;
-                      if (isAdvancedMode) {
-                        for (let i = 0; i < projectionYears; i++) {
-                          if (preferSweatEquity) {
-                            const annualRate = (Number(semiPrivateClientsStart[i]) || 0) * 3 * 52 * 30 + (Number(semiPrivateClientsEnd[i]) || 0) * 3 * 52 * 30;
-                            let groupCoachingAnnual = 0;
-                            let semiPrivateTrainerAnnual = 0;
-                            
-                            if (isAdvancedMode) {
-                              const startGroupClients = i === 0 ? (Number(groupClassClientsStart[i]) || 0) : (Number(groupClassClientsEnd[i-1]) || 0);
-                              const avgGroupClients = (startGroupClients + (Number(groupClassClientsEnd[i]) || 0)) / 2;
-                              const groupCoachingMonthly = calculateGroupCoachingCost(avgGroupClients, i);
-                              groupCoachingAnnual = groupCoachingMonthly * 12;
-                              
-                              const startSemiPrivateClients = i === 0 ? (Number(semiPrivateClientsStart[i]) || 0) : (Number(semiPrivateClientsEnd[i-1]) || 0);
-                              const avgSemiPrivateClients = (startSemiPrivateClients + (Number(semiPrivateClientsEnd[i]) || 0)) / 2;
-                              const semiPrivateRevenue = (Number(semiPrivatePrices[i]) || 0) * avgSemiPrivateClients;
-                              const monthlyTrainerCost = semiPrivateRevenue * ((Number(trainerSplits[i]) || 50) / 100);
-                              semiPrivateTrainerAnnual = monthlyTrainerCost * 12;
-                            } else {
-                              const monthlyProfit = calculatedMonthlyProfits[i];
-                              groupCoachingAnnual = monthlyProfit * 2.5;
-                              semiPrivateTrainerAnnual = monthlyProfit * 1.5;
-                            }
-                            
-                            const workCommitment = sweatEquityPercent / 100 * (groupCoachingAnnual + semiPrivateTrainerAnnual);
-                            totalSemiPrivateGains += workCommitment;
-                          }
-                        }
-                      }
-                      
-                      const totalGains = totalEquityGains + totalSemiPrivateGains;
-                      const totalInvestment = Number(poolInvestmentAmount) + (Number(buyInAmount) || 0);
-                      const totalIncome = totalGains;
-                      
-                      return (
-                        <>
-                          {/* Investment vs Returns Summary */}
-                          <div className="grid md:grid-cols-2 gap-6 mb-8">
-                            <div className="bg-white p-6 rounded-xl shadow-lg border-2 border-gray-200">
-                              <h5 className="text-sm font-medium text-gray-600 mb-2">Your Investment</h5>
-                              <div className="text-3xl font-bold text-gray-900">
-                                ${formatNumber(Math.round(totalInvestment))}
+                  <div className="flex flex-wrap gap-2 mb-6 border-b border-gray-200">
+                    {founders.map((founder, index) => (
+                      <button
+                        key={founder.id}
+                        onClick={() => setActiveFounderTab(index)}
+                        className={`px-4 py-2 font-medium text-sm transition-all ${
+                          activeFounderTab === index
+                            ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50/50'
+                            : 'text-gray-600 hover:text-gray-800 hover:bg-gray-50'
+                        } rounded-t-lg`}
+                      >
+                        {founder.name}
+                      </button>
+                    ))}
+                  </div>
+                  
+                  {/* Tab Content */}
+                  {founders.map((founder, index) => (
+                    <div key={founder.id} className={activeFounderTab === index ? 'block' : 'hidden'}>
+                      <div className="space-y-6">
+                        {/* Founder Name Header */}
+                        <div className="text-center mb-8">
+                          <h3 className="text-2xl font-bold text-gray-800">{founder.name}'s Investment & Equity</h3>
+                        </div>
+                        
+                        {/* Input Section */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                          {/* Founders Base Input */}
+                          <div className="bg-white rounded-xl shadow-lg p-6">
+                            <h4 className="text-sm font-semibold text-gray-800 mb-3">Founders Base Equity</h4>
+                            <div className="space-y-3">
+                              <div className="relative">
+                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
+                                <input
+                                  type="text"
+                                  value={founderBuyInInputs[founder.id] || (founderBuyIns[founder.id] === '' ? '' : formatNumber(Number(founderBuyIns[founder.id]) || 0))}
+                                  onChange={(e) => handleFounderBuyInChange(founder.id, e.target.value)}
+                                  onBlur={() => handleFounderBuyInBlur(founder.id)}
+                                  className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                                  placeholder="0"
+                                />
                               </div>
-                              <p className="text-xs text-gray-500 mt-2">
-                                {totalInvestment > 0 
-                                  ? `${(actualEquityFromCash).toFixed(1)}% equity stake`
-                                  : 'No cash investment'}
+                              <p className="text-xs text-gray-500">
+                                Enter your buy-in amount
                               </p>
-                            </div>
-                            
-                            <div className="bg-white p-6 rounded-xl shadow-lg border-2 border-emerald-600">
-                              <h5 className="text-sm font-medium text-gray-600 mb-2">Your Returns</h5>
-                              <div className="text-3xl font-bold text-emerald-600">
-                                ${formatNumber(Math.round(totalGains))}
+                              <p className="text-xs text-gray-400">
+                                Max: ${formatNumber(Math.round((Number(buyInAmount) || 0) * (founder.name === 'R&E' ? 0.4 : 0.2)))} ({founder.name === 'R&E' ? '40%' : '20%'} of total)
+                              </p>
+                              <div className="pt-2 border-t border-gray-100">
+                                <p className="text-xs text-gray-600">Equity from Buy-in:</p>
+                                <p className="text-sm font-semibold text-gray-800">
+                                  {((Number(founderBuyIns[founder.id]) || 0) / (Number(buyInAmount) || 1) * foundersBasePool).toFixed(1)}%
+                                </p>
                               </div>
-                              <p className="text-xs text-gray-500 mt-2">
-                                Over {projectionYears} years ({totalInvestment > 0 ? ((totalGains / totalInvestment - 1) * 100).toFixed(0) : '∞'}% return)
-                              </p>
                             </div>
                           </div>
-
-                          {/* Desktop Timeline View */}
-                          <div className="hidden md:block relative">
-                            {/* Timeline line */}
-                            <div className="absolute left-1/2 transform -translate-x-1/2 h-full w-0.5 bg-gray-300"></div>
-                            
-                            {/* Year entries */}
-                            {Array.from({ length: projectionYears }, (_, i) => {
-                              const monthlyProfit = calculatedMonthlyProfits[i];
-                              const annualProfit = monthlyProfit * 12;
-                              const distributionRate = yearlyDistributions[i] || 0;
-                              const distributedProfit = annualProfit * (distributionRate / 100);
-                              const godsCut = distributedProfit * 0.17;
-                              const remainingProfit = distributedProfit - godsCut;
-                              const yourEquityShare = remainingProfit * (totalEquity / 100);
-                              
-                              let workCommitment = 0;
-                              if (preferSweatEquity && isAdvancedMode) {
-                                let groupCoachingAnnual = 0;
-                                let semiPrivateTrainerAnnual = 0;
+                          
+                          {/* Sweat Equity Input */}
+                          <div className="bg-white rounded-xl shadow-lg p-6">
+                            <h4 className="text-sm font-semibold text-gray-800 mb-3">Sweat Equity</h4>
+                            <div className="space-y-3">
+                              {(() => {
+                                // Calculate total hours across all founders
+                                let totalHours = 0;
+                                let founderHours = 0;
                                 
-                                if (isAdvancedMode) {
+                                Object.entries(roleBullets).forEach(([category, bullets]) => {
+                                  bullets.forEach(bullet => {
+                                    if (bullet.hours) {
+                                      // Add up all hours from all founders
+                                      Object.entries(bullet.hours).forEach(([founderId, hours]) => {
+                                        totalHours += hours || 0;
+                                        // Track this specific founder's hours
+                                        if (founderId === founder.id) {
+                                          founderHours += hours || 0;
+                                        }
+                                      });
+                                    }
+                                  });
+                                });
+                                
+                                // Calculate this founder's percentage of total hours
+                                const founderPercentage = totalHours > 0 ? (founderHours / totalHours) * 100 : 0;
+                                // Apply that percentage to the sweat equity pool
+                                const founderSweatEquity = (founderPercentage / 100) * sweatEquityPool;
+                                
+                                return (
+                                  <>
+                                    <div className="relative">
+                                      <input
+                                        type="text"
+                                        min="0"
+                                        value={founderSweatEquityInputs[founder.id] || (founderSweatEquity[founder.id] === '' ? '' : (founderSweatEquity[founder.id] || '').toString())}
+                                        onChange={(e) => handleFounderSweatEquityChange(founder.id, e.target.value)}
+                                        onBlur={() => handleFounderSweatEquityBlur(founder.id)}
+                                        className="w-full pr-8 pl-3 py-2 border border-gray-300 rounded-lg focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                                        placeholder="0"
+                                      />
+                                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500">%</span>
+                                    </div>
+                                    <p className="text-xs text-gray-500 mt-2">
+                                      Based on your hours contribution
+                                    </p>
+                                    <div className="bg-emerald-50 rounded-lg p-2">
+                                      <p className="text-xs text-emerald-700">
+                                        <span className="font-semibold">Suggested: {founderSweatEquity.toFixed(1)}%</span>
+                                      </p>
+                                      <p className="text-xs text-emerald-600 mt-1">
+                                        {founderHours}h/week ({founderPercentage.toFixed(0)}% of total {totalHours}h)
+                                      </p>
+                                      <p className="text-xs text-emerald-600">
+                                        = {founderPercentage.toFixed(0)}% of {sweatEquityPool}% pool
+                                      </p>
+                                    </div>
+                                  </>
+                                );
+                              })()}
+                            </div>
+                          </div>
+                          
+                          {/* Cash Investment Input */}
+                          <div className="bg-white rounded-xl shadow-lg p-6">
+                            <h4 className="text-sm font-semibold text-gray-800 mb-3">Cash Investment</h4>
+                            <div className="space-y-3">
+                              <div className="relative">
+                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
+                                <input
+                                  type="text"
+                                  value={poolInvestmentInput}
+                                  onChange={(e) => handlePoolInvestmentChange(e.target.value)}
+                                  onBlur={handlePoolInvestmentBlur}
+                                  className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-lg focus:border-amber-500 focus:ring-2 focus:ring-amber-100"
+                                  placeholder="0"
+                                />
+                              </div>
+                              <div className="pt-2 border-t border-gray-100">
+                                <p className="text-xs text-gray-600">Total Capital Needed:</p>
+                                <p className="text-sm font-semibold text-gray-800">${formatNumber(totalCapitalNeeded)}</p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        {/* Total Equity Summary */}
+                        <div>
+                          <h4 className="text-lg font-semibold text-gray-800 mb-4">Total Equity Position</h4>
+                  
+                  {/* Total Equity Display */}
+                  <div className="bg-white rounded-xl shadow-lg p-6">
+                    <div className="text-center mb-6">
+                      <span className="text-lg font-medium text-gray-700">Your Total Equity</span>
+                      <div className="text-4xl font-bold text-blue-600 mt-2">
+                        {(() => {
+                          const founderBuyInEquity = (Number(founderBuyIns[founder.id]) || 0) / (Number(buyInAmount) || 1) * foundersBasePool;
+                          
+                          // Calculate sweat equity based on hours percentage
+                          let totalHours = 0;
+                          let founderHours = 0;
+                          
+                          Object.entries(roleBullets).forEach(([category, bullets]) => {
+                            bullets.forEach(bullet => {
+                              if (bullet.hours) {
+                                Object.entries(bullet.hours).forEach(([founderId, hours]) => {
+                                  totalHours += hours || 0;
+                                  if (founderId === founder.id) {
+                                    founderHours += hours || 0;
+                                  }
+                                });
+                              }
+                            });
+                          });
+                          
+                          const founderPercentage = totalHours > 0 ? (founderHours / totalHours) * 100 : 0;
+                          const calculatedSweatEquity = (founderPercentage / 100) * sweatEquityPool;
+                          // Use manual override if provided, otherwise use calculated value
+                          const founderSweatEquityValue = (founderSweatEquity[founder.id] !== '' && founderSweatEquity[founder.id] !== undefined) ? Number(founderSweatEquity[founder.id]) : calculatedSweatEquity;
+                          const finalSweatEquity = preferSweatEquity ? founderSweatEquityValue : 0;
+                          
+                          // Calculate equity from cash investment
+                          const poolOwnership = totalCapitalNeeded > 0 ? (poolInvestmentAmount / totalCapitalNeeded) * 100 : 0;
+                          const actualEquityFromCash = (poolOwnership / 100) * cashInvestmentPool;
+                          
+                          const founderTotalEquity = founderBuyInEquity + finalSweatEquity + actualEquityFromCash;
+                          return founderTotalEquity.toFixed(1);
+                        })()}%
+                      </div>
+                    </div>
+
+                    {/* Simple Equity Breakdown */}
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between py-2">
+                        <div className="flex items-center gap-2">
+                          <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+                          <span className="text-sm text-gray-600">Buy-in (${formatNumber(Number(founderBuyIns[founder.id]) || 0)})</span>
+                        </div>
+                        <span className="text-sm font-medium text-blue-600">{((Number(founderBuyIns[founder.id]) || 0) / (Number(buyInAmount) || 1) * foundersBasePool).toFixed(1)}%</span>
+                      </div>
+                      
+                      <div className="flex items-center justify-between py-2">
+                        <div className="flex items-center gap-2">
+                          <div className="w-3 h-3 bg-emerald-500 rounded-full"></div>
+                          <span className="text-sm text-gray-600">
+                            {preferSweatEquity ? 'Sweat Equity' : 'Cash (No Equity)'}
+                          </span>
+                        </div>
+                        <span className="text-sm font-medium text-emerald-600">
+                          {(() => {
+                            if (!preferSweatEquity) return '0.0';
+                            
+                            let totalHours = 0;
+                            let founderHours = 0;
+                            
+                            Object.entries(roleBullets).forEach(([category, bullets]) => {
+                              bullets.forEach(bullet => {
+                                if (bullet.hours) {
+                                  Object.entries(bullet.hours).forEach(([founderId, hours]) => {
+                                    totalHours += hours || 0;
+                                    if (founderId === founder.id) {
+                                      founderHours += hours || 0;
+                                    }
+                                  });
+                                }
+                              });
+                            });
+                            
+                            const founderPercentage = totalHours > 0 ? (founderHours / totalHours) * 100 : 0;
+                            const calculatedSweatEquity = (founderPercentage / 100) * sweatEquityPool;
+                            // Use manual override if provided, otherwise use calculated value
+                            const founderSweatEquityValue = (founderSweatEquity[founder.id] !== '' && founderSweatEquity[founder.id] !== undefined) ? Number(founderSweatEquity[founder.id]) : calculatedSweatEquity;
+                            return founderSweatEquityValue.toFixed(1);
+                          })()}%
+                        </span>
+                      </div>
+                      
+                      <div className="flex items-center justify-between py-2">
+                        <div className="flex items-center gap-2">
+                          <div className="w-3 h-3 bg-amber-500 rounded-full"></div>
+                          <span className="text-sm text-gray-600">Investment</span>
+                        </div>
+                        <span className="text-sm font-medium text-amber-600">
+                          {(() => {
+                            const poolOwnership = totalCapitalNeeded > 0 ? (poolInvestmentAmount / totalCapitalNeeded) * 100 : 0;
+                            const actualEquityFromCash = (poolOwnership / 100) * cashInvestmentPool;
+                            return actualEquityFromCash.toFixed(1);
+                          })()}%
+                        </span>
+                      </div>
+                    </div>
+                          </div>
+                        </div>
+                        
+                        {/* Founder Investment & Returns */}
+                        <div className="mt-8">
+                          <h4 className="text-lg font-semibold text-gray-800 mb-6">Your {projectionYears}-Year Founder Journey</h4>
+                          
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {/* What You're Putting In */}
+                            <div className="bg-gradient-to-br from-red-50 to-orange-50 border-2 border-red-100 rounded-2xl p-6">
+                              <div className="text-center">
+                                <div className="w-12 h-12 bg-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
+                                  <span className="text-white text-xl">📤</span>
+                                </div>
+                                <h5 className="text-lg font-bold text-red-800 mb-3">Your Investment</h5>
+                                <div className="space-y-2">
+                                  <div className="bg-white/60 rounded-lg p-3">
+                                    <p className="text-sm text-red-600 font-medium">Time Commitment</p>
+                                    <p className="text-lg font-bold text-red-800">{projectionYears} years of work</p>
+                                  </div>
+                                  {(Number(founderBuyIns[founder.id]) || 0) > 0 && (
+                                    <div className="bg-white/60 rounded-lg p-3">
+                                      <p className="text-sm text-red-600 font-medium">Founder Buy-in</p>
+                                      <p className="text-lg font-bold text-red-800">${formatNumber(Number(founderBuyIns[founder.id]) || 0)}</p>
+                                    </div>
+                                  )}
+                                  {poolInvestmentAmount > 0 && (
+                                    <div className="bg-white/60 rounded-lg p-3">
+                                      <p className="text-sm text-red-600 font-medium">Additional Investment</p>
+                                      <p className="text-lg font-bold text-red-800">${formatNumber(poolInvestmentAmount)}</p>
+                                    </div>
+                                  )}
+                                  {((Number(founderBuyIns[founder.id]) || 0) > 0 || poolInvestmentAmount > 0) && (
+                                    <div className="bg-white/80 rounded-lg p-2 border-t border-red-200">
+                                      <p className="text-sm font-semibold text-red-700">Total Cash: ${formatNumber((Number(founderBuyIns[founder.id]) || 0) + poolInvestmentAmount)}</p>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* What You're Getting */}
+                            <div className="bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-200 rounded-2xl p-6">
+                              <div className="text-center">
+                                <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-4">
+                                  <span className="text-white text-xl">📈</span>
+                                </div>
+                                <h5 className="text-lg font-bold text-green-800 mb-3">Your Returns</h5>
+                                <div className="space-y-2">
+                                  {(() => {
+                                    // Calculate total equity for the founder
+                                    const founderBuyInEquity = (Number(founderBuyIns[founder.id]) || 0) / (Number(buyInAmount) || 1) * foundersBasePool;
+                                    
+                                    // Calculate sweat equity
+                                    let totalHours = 0;
+                                    let founderHours = 0;
+                                    
+                                    Object.entries(roleBullets).forEach(([category, bullets]) => {
+                                      bullets.forEach(bullet => {
+                                        if (bullet.hours) {
+                                          Object.entries(bullet.hours).forEach(([founderId, hours]) => {
+                                            totalHours += hours || 0;
+                                            if (founderId === founder.id) {
+                                              founderHours += hours || 0;
+                                            }
+                                          });
+                                        }
+                                      });
+                                    });
+                                    
+                                    const founderPercentage = totalHours > 0 ? (founderHours / totalHours) * 100 : 0;
+                                    const calculatedSweatEquity = (founderPercentage / 100) * sweatEquityPool;
+                                    const founderSweatEquityValue = (founderSweatEquity[founder.id] !== '' && founderSweatEquity[founder.id] !== undefined) ? Number(founderSweatEquity[founder.id]) : calculatedSweatEquity;
+                                    const finalSweatEquity = preferSweatEquity ? founderSweatEquityValue : 0;
+                                    
+                                    // Calculate equity from cash investment
+                                    const poolOwnership = totalCapitalNeeded > 0 ? (poolInvestmentAmount / totalCapitalNeeded) * 100 : 0;
+                                    const actualEquityFromCash = (poolOwnership / 100) * cashInvestmentPool;
+                                    
+                                    const founderTotalEquity = founderBuyInEquity + finalSweatEquity + actualEquityFromCash;
+                                    
+                                    // Simple return calculation (placeholder - can be customized based on projections)
+                                    const totalInvestment = (Number(founderBuyIns[founder.id]) || 0) + poolInvestmentAmount;
+                                    
+                                    // Calculate average yearly returns based on equity percentage
+                                    // This is a simplified calculation that can be expanded based on actual financial projections
+                                    const estimatedAnnualProfit = 50000; // Placeholder - can be calculated from financial projections
+                                    const yearlyReturn = estimatedAnnualProfit * (founderTotalEquity / 100);
+                                    const totalReturn = yearlyReturn * projectionYears;
+                                    
+                                    // Calculate monthly profits for all years
+                                    const calculatedMonthlyProfits = [];
+                                    for (let i = 0; i < projectionYears; i++) {
+                                      if (isAdvancedMode) {
+                                        const startGroupClients = i === 0 ? (Number(groupClassClientsStart[i]) || 0) : (Number(groupClassClientsEnd[i-1]) || 0);
+                                        const avgGroupClients = (startGroupClients + (Number(groupClassClientsEnd[i]) || 0)) / 2;
+                                        const startSemiPrivateClients = i === 0 ? (Number(semiPrivateClientsStart[i]) || 0) : (Number(semiPrivateClientsEnd[i-1]) || 0);
+                                        const avgSemiPrivateClients = (startSemiPrivateClients + (Number(semiPrivateClientsEnd[i]) || 0)) / 2;
+                                        const groupRevenue = (Number(groupClassPrices[i]) || 0) * avgGroupClients;
+                                        const semiPrivateRevenue = (Number(semiPrivatePrices[i]) || 0) * avgSemiPrivateClients;
+                                        const totalRevenue = groupRevenue + semiPrivateRevenue;
+                                        
+                                        const operatingCost = Number(operatingCosts[i]) || 0;
+                                        const paidAdsCost = Number(paidAdsCosts[i]) || 0;
+                                        const groupCoachingCost = calculateGroupCoachingCost(avgGroupClients, i);
+                                        const trainerCost = semiPrivateRevenue * ((Number(trainerSplits[i]) || 50) / 100);
+                                        const kyleContribution = Math.round((Number(kyleSessions[i]) || 3) * 4.33 * (Number(kyleRates[i]) || 30));
+                                        const tonyContribution = Math.round((Number(tonySessions[i]) || 3) * 4.33 * (Number(tonyRates[i]) || 30));
+                                        const totalOwnerTrainerContribution = kyleContribution + tonyContribution;
+                                        const totalCosts = operatingCost + paidAdsCost + groupCoachingCost + trainerCost - totalOwnerTrainerContribution;
+                                        
+                                        calculatedMonthlyProfits.push(totalRevenue - totalCosts);
+                                      } else {
+                                        calculatedMonthlyProfits.push(Number(monthlyProfits[i]) || 0);
+                                      }
+                                    }
+                                    
+                                    // Calculate total equity gains
+                                    let totalEquityGains = 0;
+                                    for (let i = 0; i < projectionYears; i++) {
+                                      const monthlyProfit = calculatedMonthlyProfits[i];
+                                      const annualProfit = monthlyProfit * 12;
+                                      const distributionRate = yearlyDistributions[i] || 0;
+                                      const distributedProfit = annualProfit * (distributionRate / 100);
+                                      const godsCut = distributedProfit * 0.17;
+                                      const remainingProfit = distributedProfit - godsCut;
+                                      const yourEquityShare = remainingProfit * (founderTotalEquity / 100);
+                                      totalEquityGains += yourEquityShare;
+                                    }
+                                    
+                                    return (
+                                      <>
+                                        <div className="bg-white/60 rounded-lg p-3">
+                                          <p className="text-sm text-green-600 font-medium">Average Yearly Returns</p>
+                                          <p className="text-lg font-bold text-green-800">${formatNumber(Math.round(totalEquityGains / projectionYears))}</p>
+                                        </div>
+                                        <div className="bg-white/80 rounded-lg p-2 border-t border-green-200">
+                                          <p className="text-sm font-semibold text-green-700">Total over {projectionYears} years</p>
+                                          <p className="text-xl font-bold text-green-800">${formatNumber(Math.round(totalEquityGains))}</p>
+                                        </div>
+                                      </>
+                                    );
+                                  })()}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          {/* Year by Year Breakdown */}
+                          <div className="mt-8">
+                            <h4 className="text-lg font-semibold text-gray-800 mb-6">Year-by-Year Returns Breakdown</h4>
+                            
+                            {/* Desktop View */}
+                            <div className="hidden md:block space-y-4">
+                              {Array.from({ length: projectionYears }, (_, i) => {
+                                const yearNum = i + 1;
+                                const monthlyProfit = (() => {
+                                  if (isAdvancedMode) {
+                                    const startGroupClients = i === 0 ? (Number(groupClassClientsStart[i]) || 0) : (Number(groupClassClientsEnd[i-1]) || 0);
+                                    const avgGroupClients = (startGroupClients + (Number(groupClassClientsEnd[i]) || 0)) / 2;
+                                    const startSemiPrivateClients = i === 0 ? (Number(semiPrivateClientsStart[i]) || 0) : (Number(semiPrivateClientsEnd[i-1]) || 0);
+                                    const avgSemiPrivateClients = (startSemiPrivateClients + (Number(semiPrivateClientsEnd[i]) || 0)) / 2;
+                                    const groupRevenue = (Number(groupClassPrices[i]) || 0) * avgGroupClients;
+                                    const semiPrivateRevenue = (Number(semiPrivatePrices[i]) || 0) * avgSemiPrivateClients;
+                                    const totalRevenue = groupRevenue + semiPrivateRevenue;
+                                    
+                                    const operatingCost = Number(operatingCosts[i]) || 0;
+                                    const paidAdsCost = Number(paidAdsCosts[i]) || 0;
+                                    const groupCoachingCost = calculateGroupCoachingCost(avgGroupClients, i);
+                                    const trainerCost = semiPrivateRevenue * ((Number(trainerSplits[i]) || 50) / 100);
+                                    const kyleContribution = Math.round((Number(kyleSessions[i]) || 3) * 4.33 * (Number(kyleRates[i]) || 30));
+                                    const tonyContribution = Math.round((Number(tonySessions[i]) || 3) * 4.33 * (Number(tonyRates[i]) || 30));
+                                    const totalOwnerTrainerContribution = kyleContribution + tonyContribution;
+                                    const totalCosts = operatingCost + paidAdsCost + groupCoachingCost + trainerCost - totalOwnerTrainerContribution;
+                                    
+                                    return totalRevenue - totalCosts;
+                                  } else {
+                                    return Number(monthlyProfits[i]) || 0;
+                                  }
+                                })();
+                                
+                                const annualProfit = monthlyProfit * 12;
+                                const distributionRate = yearlyDistributions[i] || 0;
+                                const distributedProfit = annualProfit * (distributionRate / 100);
+                                const godsCut = distributedProfit * 0.17;
+                                const remainingProfit = distributedProfit - godsCut;
+                                
+                                // Calculate founder-specific equity
+                                const founderBuyInEquity = (Number(founderBuyIns[founder.id]) || 0) / (Number(buyInAmount) || 1) * foundersBasePool;
+                                let totalHours = 0;
+                                let founderHours = 0;
+                                
+                                Object.entries(roleBullets).forEach(([category, bullets]) => {
+                                  bullets.forEach(bullet => {
+                                    if (bullet.hours) {
+                                      Object.entries(bullet.hours).forEach(([founderId, hours]) => {
+                                        totalHours += hours || 0;
+                                        if (founderId === founder.id) {
+                                          founderHours += hours || 0;
+                                        }
+                                      });
+                                    }
+                                  });
+                                });
+                                
+                                const founderPercentage = totalHours > 0 ? (founderHours / totalHours) * 100 : 0;
+                                const calculatedSweatEquity = (founderPercentage / 100) * sweatEquityPool;
+                                const founderSweatEquityValue = (founderSweatEquity[founder.id] !== '' && founderSweatEquity[founder.id] !== undefined) ? Number(founderSweatEquity[founder.id]) : calculatedSweatEquity;
+                                const finalSweatEquity = preferSweatEquity ? founderSweatEquityValue : 0;
+                                const poolOwnership = totalCapitalNeeded > 0 ? (poolInvestmentAmount / totalCapitalNeeded) * 100 : 0;
+                                const actualEquityFromCash = (poolOwnership / 100) * cashInvestmentPool;
+                                const founderTotalEquity = founderBuyInEquity + finalSweatEquity + actualEquityFromCash;
+                                
+                                const yourEquityShare = remainingProfit * (founderTotalEquity / 100);
+                                
+                                let groupCoachingAnnual = 0;
+                                let semiPrivateAnnual = 0;
+                                if (isAdvancedMode && preferSweatEquity) {
                                   const startGroupClients = i === 0 ? (Number(groupClassClientsStart[i]) || 0) : (Number(groupClassClientsEnd[i-1]) || 0);
                                   const avgGroupClients = (startGroupClients + (Number(groupClassClientsEnd[i]) || 0)) / 2;
                                   const groupCoachingMonthly = calculateGroupCoachingCost(avgGroupClients, i);
-                                  groupCoachingAnnual = groupCoachingMonthly * 12;
+                                  groupCoachingAnnual = groupCoachingMonthly * 12 * (founderSweatEquityValue / sweatEquityPool);
                                   
                                   const startSemiPrivateClients = i === 0 ? (Number(semiPrivateClientsStart[i]) || 0) : (Number(semiPrivateClientsEnd[i-1]) || 0);
                                   const avgSemiPrivateClients = (startSemiPrivateClients + (Number(semiPrivateClientsEnd[i]) || 0)) / 2;
                                   const semiPrivateRevenue = (Number(semiPrivatePrices[i]) || 0) * avgSemiPrivateClients;
                                   const monthlyTrainerCost = semiPrivateRevenue * ((Number(trainerSplits[i]) || 50) / 100);
-                                  semiPrivateTrainerAnnual = monthlyTrainerCost * 12;
-                                } else {
-                                  groupCoachingAnnual = monthlyProfit * 2.5;
-                                  semiPrivateTrainerAnnual = monthlyProfit * 1.5;
+                                  semiPrivateAnnual = monthlyTrainerCost * 12 * (founderSweatEquityValue / sweatEquityPool);
                                 }
                                 
-                                workCommitment = sweatEquityPercent / 100 * (groupCoachingAnnual + semiPrivateTrainerAnnual);
-                              }
-                              
-                              const totalCashCompensation = workCommitment;
-                              
-                              return (
-                                <div key={i} className={`relative flex ${i % 2 === 0 ? 'justify-start' : 'justify-end'} mb-8`}>
-                                  <div className={`w-5/12 ${i % 2 === 0 ? 'text-right pr-8' : 'text-left pl-8'}`}>
-                                    <div className="bg-white p-4 rounded-lg shadow-md">
-                                      <div className="text-sm font-medium text-gray-600 mb-2">Year {i + 1}</div>
-                                      <div className="text-lg font-bold text-emerald-600 mb-1">
-                                        +${formatNumber(Math.round(yourEquityShare))}
-                                      </div>
-                                      {preferSweatEquity && isAdvancedMode && (
-                                        <div className="text-xs text-gray-500">
-                                          Work: ${formatNumber(Math.round(workCommitment))}
+                                const totalWorkCommitment = groupCoachingAnnual + semiPrivateAnnual;
+                                
+                                return (
+                                  <div key={i} className="group hover:scale-[1.02] transition-transform duration-200">
+                                    <div className="bg-white border-2 border-gray-100 rounded-2xl p-6 shadow-sm hover:shadow-lg transition-shadow">
+                                      <div className="flex items-center justify-between">
+                                        {/* Year Badge */}
+                                        <div className="flex items-center gap-4">
+                                          <div className="w-12 h-12 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-md">
+                                            Y{yearNum}
+                                          </div>
+                                          <div>
+                                            <div className="text-sm text-gray-500">Year {yearNum}</div>
+                                            <div className="text-xs text-gray-400">{distributionRate}% distribution</div>
+                                          </div>
                                         </div>
-                                      )}
+                                        
+                                        {/* Main Metrics */}
+                                        <div className="flex items-center gap-8">
+                                          {/* Equity Share */}
+                                          <div className="text-right">
+                                            <div className="text-sm text-gray-500 mb-1">Equity Returns</div>
+                                            <div className="text-2xl font-bold text-green-600">
+                                              ${formatNumber(Math.round(yourEquityShare))}
+                                            </div>
+                                            <div className="text-xs text-gray-400">
+                                              from ${formatNumber(Math.round(distributedProfit))} profit
+                                            </div>
+                                          </div>
+                                          
+                                          {/* Work Commitment (Advanced Mode) */}
+                                          {isAdvancedMode && preferSweatEquity && totalWorkCommitment > 0 && (
+                                            <div className="border-l-2 border-gray-100 pl-8">
+                                              <div className="text-sm text-gray-500 mb-1">Work Commitment</div>
+                                              <div className="space-y-1">
+                                                {groupCoachingAnnual > 0 && (
+                                                  <div className="flex items-center gap-2">
+                                                    <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                                                    <span className="text-sm font-medium text-red-600">
+                                                      ${formatNumber(Math.round(groupCoachingAnnual))}
+                                                    </span>
+                                                    <span className="text-xs text-gray-500">coaching</span>
+                                                  </div>
+                                                )}
+                                                {semiPrivateAnnual > 0 && (
+                                                  <div className="flex items-center gap-2">
+                                                    <div className="w-2 h-2 bg-red-400 rounded-full"></div>
+                                                    <span className="text-sm font-medium text-red-600">
+                                                      ${formatNumber(Math.round(semiPrivateAnnual))}
+                                                    </span>
+                                                    <span className="text-xs text-gray-500">training</span>
+                                                  </div>
+                                                )}
+                                              </div>
+                                            </div>
+                                          )}
+                                        </div>
+                                      </div>
                                     </div>
                                   </div>
-                                  {/* Timeline dot */}
-                                  <div className="absolute left-1/2 transform -translate-x-1/2 w-4 h-4 bg-emerald-500 rounded-full border-4 border-white shadow"></div>
-                                </div>
-                              );
-                            })}
-                          </div>
-
-                          {/* Mobile Card View */}
-                          <div className="md:hidden space-y-4">
-                            {Array.from({ length: projectionYears }, (_, i) => {
-                              const monthlyProfit = calculatedMonthlyProfits[i];
-                              const annualProfit = monthlyProfit * 12;
-                              const distributionRate = yearlyDistributions[i] || 0;
-                              const distributedProfit = annualProfit * (distributionRate / 100);
-                              const godsCut = distributedProfit * 0.17;
-                              const remainingProfit = distributedProfit - godsCut;
-                              const yourEquityShare = remainingProfit * (totalEquity / 100);
-                              
-                              let workCommitment = 0;
-                              if (preferSweatEquity && isAdvancedMode) {
+                                );
+                              })}
+                            </div>
+                            
+                            {/* Mobile View */}
+                            <div className="md:hidden space-y-3">
+                              {Array.from({ length: projectionYears }, (_, i) => {
+                                const yearNum = i + 1;
+                                const monthlyProfit = (() => {
+                                  if (isAdvancedMode) {
+                                    const startGroupClients = i === 0 ? (Number(groupClassClientsStart[i]) || 0) : (Number(groupClassClientsEnd[i-1]) || 0);
+                                    const avgGroupClients = (startGroupClients + (Number(groupClassClientsEnd[i]) || 0)) / 2;
+                                    const startSemiPrivateClients = i === 0 ? (Number(semiPrivateClientsStart[i]) || 0) : (Number(semiPrivateClientsEnd[i-1]) || 0);
+                                    const avgSemiPrivateClients = (startSemiPrivateClients + (Number(semiPrivateClientsEnd[i]) || 0)) / 2;
+                                    const groupRevenue = (Number(groupClassPrices[i]) || 0) * avgGroupClients;
+                                    const semiPrivateRevenue = (Number(semiPrivatePrices[i]) || 0) * avgSemiPrivateClients;
+                                    const totalRevenue = groupRevenue + semiPrivateRevenue;
+                                    
+                                    const operatingCost = Number(operatingCosts[i]) || 0;
+                                    const paidAdsCost = Number(paidAdsCosts[i]) || 0;
+                                    const groupCoachingCost = calculateGroupCoachingCost(avgGroupClients, i);
+                                    const trainerCost = semiPrivateRevenue * ((Number(trainerSplits[i]) || 50) / 100);
+                                    const kyleContribution = Math.round((Number(kyleSessions[i]) || 3) * 4.33 * (Number(kyleRates[i]) || 30));
+                                    const tonyContribution = Math.round((Number(tonySessions[i]) || 3) * 4.33 * (Number(tonyRates[i]) || 30));
+                                    const totalOwnerTrainerContribution = kyleContribution + tonyContribution;
+                                    const totalCosts = operatingCost + paidAdsCost + groupCoachingCost + trainerCost - totalOwnerTrainerContribution;
+                                    
+                                    return totalRevenue - totalCosts;
+                                  } else {
+                                    return Number(monthlyProfits[i]) || 0;
+                                  }
+                                })();
+                                
+                                const annualProfit = monthlyProfit * 12;
+                                const distributionRate = yearlyDistributions[i] || 0;
+                                const distributedProfit = annualProfit * (distributionRate / 100);
+                                const godsCut = distributedProfit * 0.17;
+                                const remainingProfit = distributedProfit - godsCut;
+                                
+                                // Calculate founder-specific equity
+                                const founderBuyInEquity = (Number(founderBuyIns[founder.id]) || 0) / (Number(buyInAmount) || 1) * foundersBasePool;
+                                let totalHours = 0;
+                                let founderHours = 0;
+                                
+                                Object.entries(roleBullets).forEach(([category, bullets]) => {
+                                  bullets.forEach(bullet => {
+                                    if (bullet.hours) {
+                                      Object.entries(bullet.hours).forEach(([founderId, hours]) => {
+                                        totalHours += hours || 0;
+                                        if (founderId === founder.id) {
+                                          founderHours += hours || 0;
+                                        }
+                                      });
+                                    }
+                                  });
+                                });
+                                
+                                const founderPercentage = totalHours > 0 ? (founderHours / totalHours) * 100 : 0;
+                                const calculatedSweatEquity = (founderPercentage / 100) * sweatEquityPool;
+                                const founderSweatEquityValue = (founderSweatEquity[founder.id] !== '' && founderSweatEquity[founder.id] !== undefined) ? Number(founderSweatEquity[founder.id]) : calculatedSweatEquity;
+                                const finalSweatEquity = preferSweatEquity ? founderSweatEquityValue : 0;
+                                const poolOwnership = totalCapitalNeeded > 0 ? (poolInvestmentAmount / totalCapitalNeeded) * 100 : 0;
+                                const actualEquityFromCash = (poolOwnership / 100) * cashInvestmentPool;
+                                const founderTotalEquity = founderBuyInEquity + finalSweatEquity + actualEquityFromCash;
+                                
+                                const yourEquityShare = remainingProfit * (founderTotalEquity / 100);
+                                
                                 let groupCoachingAnnual = 0;
-                                let semiPrivateTrainerAnnual = 0;
+                                let semiPrivateAnnual = 0;
+                                if (isAdvancedMode && preferSweatEquity) {
+                                  const startGroupClients = i === 0 ? (Number(groupClassClientsStart[i]) || 0) : (Number(groupClassClientsEnd[i-1]) || 0);
+                                  const avgGroupClients = (startGroupClients + (Number(groupClassClientsEnd[i]) || 0)) / 2;
+                                  const groupCoachingMonthly = calculateGroupCoachingCost(avgGroupClients, i);
+                                  groupCoachingAnnual = groupCoachingMonthly * 12 * (founderSweatEquityValue / sweatEquityPool);
+                                  
+                                  const startSemiPrivateClients = i === 0 ? (Number(semiPrivateClientsStart[i]) || 0) : (Number(semiPrivateClientsEnd[i-1]) || 0);
+                                  const avgSemiPrivateClients = (startSemiPrivateClients + (Number(semiPrivateClientsEnd[i]) || 0)) / 2;
+                                  const semiPrivateRevenue = (Number(semiPrivatePrices[i]) || 0) * avgSemiPrivateClients;
+                                  const monthlyTrainerCost = semiPrivateRevenue * ((Number(trainerSplits[i]) || 50) / 100);
+                                  semiPrivateAnnual = monthlyTrainerCost * 12 * (founderSweatEquityValue / sweatEquityPool);
+                                }
                                 
-                                const startGroupClients = i === 0 ? (Number(groupClassClientsStart[i]) || 0) : (Number(groupClassClientsEnd[i-1]) || 0);
-                                const avgGroupClients = (startGroupClients + (Number(groupClassClientsEnd[i]) || 0)) / 2;
-                                const groupCoachingMonthly = calculateGroupCoachingCost(avgGroupClients, i);
-                                groupCoachingAnnual = groupCoachingMonthly * 12;
+                                const totalWorkCommitment = groupCoachingAnnual + semiPrivateAnnual;
                                 
-                                const startSemiPrivateClients = i === 0 ? (Number(semiPrivateClientsStart[i]) || 0) : (Number(semiPrivateClientsEnd[i-1]) || 0);
-                                const avgSemiPrivateClients = (startSemiPrivateClients + (Number(semiPrivateClientsEnd[i]) || 0)) / 2;
-                                const semiPrivateRevenue = (Number(semiPrivatePrices[i]) || 0) * avgSemiPrivateClients;
-                                const monthlyTrainerCost = semiPrivateRevenue * ((Number(trainerSplits[i]) || 50) / 100);
-                                semiPrivateTrainerAnnual = monthlyTrainerCost * 12;
-                                
-                                workCommitment = sweatEquityPercent / 100 * (groupCoachingAnnual + semiPrivateTrainerAnnual);
-                              }
-                              
-                              return (
-                                <div key={i} className="bg-white p-4 rounded-lg shadow-md">
-                                  <div className="flex justify-between items-center">
-                                    <span className="text-sm font-medium text-gray-600">Year {i + 1}</span>
-                                    <div className="text-right">
-                                      <div className="text-lg font-bold text-emerald-600">
-                                        +${formatNumber(Math.round(yourEquityShare))}
+                                return (
+                                  <div key={i} className="bg-white border-2 border-gray-100 rounded-xl p-4 shadow-sm">
+                                    {/* Year Header */}
+                                    <div className="flex items-center justify-between mb-4">
+                                      <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg flex items-center justify-center text-white font-bold text-sm shadow">
+                                          Y{yearNum}
+                                        </div>
+                                        <div>
+                                          <div className="font-semibold text-gray-800">Year {yearNum}</div>
+                                          <div className="text-xs text-gray-500">{distributionRate}% distributed</div>
+                                        </div>
                                       </div>
-                                      {preferSweatEquity && isAdvancedMode && (
-                                        <div className="text-xs text-gray-500">
-                                          Work: ${formatNumber(Math.round(workCommitment))}
+                                      <div className="text-right">
+                                        <div className="text-xl font-bold text-green-600">
+                                          ${formatNumber(Math.round(yourEquityShare))}
+                                        </div>
+                                        <div className="text-xs text-gray-500">equity returns</div>
+                                      </div>
+                                    </div>
+                                    
+                                    {/* Details */}
+                                    <div className="space-y-3">
+                                      <div className="flex justify-between items-center text-sm">
+                                        <span className="text-gray-600">Distributed Yearly Profit</span>
+                                        <span className="font-medium">${formatNumber(Math.round(distributedProfit))}</span>
+                                      </div>
+                                      
+                                      {isAdvancedMode && preferSweatEquity && totalWorkCommitment > 0 && (
+                                        <div className="pt-3 border-t border-gray-100 space-y-2">
+                                          <div className="text-xs font-medium text-gray-500 uppercase">Work Commitment</div>
+                                          {groupCoachingAnnual > 0 && (
+                                            <div className="flex justify-between items-center text-sm">
+                                              <span className="text-gray-600 flex items-center gap-2">
+                                                <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                                                Group coaching
+                                              </span>
+                                              <span className="font-medium text-red-600">${formatNumber(Math.round(groupCoachingAnnual))}</span>
+                                            </div>
+                                          )}
+                                          {semiPrivateAnnual > 0 && (
+                                            <div className="flex justify-between items-center text-sm">
+                                              <span className="text-gray-600 flex items-center gap-2">
+                                                <div className="w-2 h-2 bg-red-400 rounded-full"></div>
+                                                Semi-private
+                                              </span>
+                                              <span className="font-medium text-red-600">${formatNumber(Math.round(semiPrivateAnnual))}</span>
+                                            </div>
+                                          )}
                                         </div>
                                       )}
                                     </div>
                                   </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-
-                          {/* Total Summary */}
-                          <div className="mt-8 bg-gradient-to-r from-emerald-50 to-blue-50 rounded-xl p-6 border border-emerald-200">
-                            <div className="text-center">
-                              <h5 className="text-lg font-semibold text-gray-800 mb-2">
-                                Total {projectionYears}-Year Returns
-                              </h5>
-                              <div className="text-4xl font-bold text-emerald-600 mb-1">
-                                ${formatNumber(Math.round(totalGains))}
-                              </div>
-                              <p className="text-sm text-gray-600">
-                                From {totalEquity.toFixed(1)}% equity ownership
-                              </p>
+                                );
+                              })}
                             </div>
                           </div>
-                        </>
-                      );
-                    })()}
-                  </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             </CollapsibleSection>
