@@ -4424,8 +4424,32 @@ export default function EquityStructurePage() {
                                 <div className="space-y-2">
                                   <div className="bg-white/60 rounded-lg p-3">
                                     <p className="text-sm text-red-600 font-medium">Time Commitment</p>
-                                    <p className="text-lg font-bold text-red-800">{projectionYears} years of work</p>
+                                    {(() => {
+                                      // Calculate founder's weekly hours
+                                      let founderWeeklyHours = 0;
+                                      Object.entries(roleBullets).forEach(([category, bullets]) => {
+                                        bullets.forEach(bullet => {
+                                          if (bullet.hours && bullet.hours[founder.id]) {
+                                            founderWeeklyHours += bullet.hours[founder.id] || 0;
+                                          }
+                                        });
+                                      });
+                                      
+                                      const annualHours = founderWeeklyHours * 52;
+                                      
+                                      return (
+                                        <>
+                                          <p className="text-lg font-bold text-red-800">
+                                            {formatNumber(Math.round(annualHours))} hours/year
+                                          </p>
+                                          <p className="text-xs text-red-600">
+                                            {founderWeeklyHours}h/week × 52 weeks
+                                          </p>
+                                        </>
+                                      );
+                                    })()}
                                   </div>
+                                  
                                   {(Number(founderBuyIns[founder.id]) || 0) > 0 && (
                                     <div className="bg-white/60 rounded-lg p-3">
                                       <p className="text-sm text-red-600 font-medium">Founder Buy-in</p>
@@ -4438,6 +4462,7 @@ export default function EquityStructurePage() {
                                       <p className="text-lg font-bold text-red-800">${formatNumber(poolInvestmentAmount)}</p>
                                     </div>
                                   )}
+                                  
                                   {((Number(founderBuyIns[founder.id]) || 0) > 0 || poolInvestmentAmount > 0) && (
                                     <div className="bg-white/80 rounded-lg p-2 border-t border-red-200">
                                       <p className="text-sm font-semibold text-red-700">Total Cash: ${formatNumber((Number(founderBuyIns[founder.id]) || 0) + poolInvestmentAmount)}</p>
