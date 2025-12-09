@@ -145,7 +145,7 @@ export function StationsExerciseView({
         // Calculate which row this station is in for bottom positioning
         const stationsInFirstRow = exerciseCount === 5 ? 3 : cols;
         const isInFirstRow = isMultiRow ? stationIdx < stationsInFirstRow : true;
-        const timerBottom = isMultiRow ? (isInFirstRow ? '50%' : -38) : -38;
+        const timerBottom = isMultiRow ? (isInFirstRow ? '52%' : 20) : 20;
         
         console.log('[StationsExerciseView] Rendering timer for station:', stationIndex);
         console.log('[StationsExerciseView] - stationIdx:', stationIdx);
