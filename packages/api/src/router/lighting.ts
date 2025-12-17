@@ -236,4 +236,55 @@ export const lightingRouter = createTRPCRouter({
       
       return { success: true };
     }),
+    
+  /**
+   * Get lights via Remote Hue API
+   */
+  getRemoteLights: protectedProcedure.query(async ({ ctx }) => {
+    const remoteClient = await HueRemoteClient.fromEnv();
+    
+    if (!remoteClient) {
+      return [];
+    }
+    
+    try {
+      const lights = await remoteClient.getLights();
+      
+      // Convert to array format for consistency with getLights
+      return Object.entries(lights).map(([id, light]) => ({
+        id,
+        name: light.name,
+        on: light.state?.on || false,
+        brightness: light.state?.bri || 0,
+        reachable: light.state?.reachable || false,
+      }));
+    } catch (error) {
+      console.error('Failed to get remote lights:', error);
+      return [];
+    }
+  }),
+  
+  /**
+   * Set group state via Remote Hue API (on/off, brightness, etc.)
+   */
+  setRemoteGroupState: protectedProcedure
+    .input(z.object({
+      groupId: z.string().default("0"), // "0" = all lights
+      state: z.object({
+        on: z.boolean().optional(),
+        bri: z.number().min(1).max(254).optional(),
+        transitiontime: z.number().min(0).optional(),
+      })
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const remoteClient = await HueRemoteClient.fromEnv();
+      
+      if (!remoteClient) {
+        throw new Error('Remote Hue API not configured. Run OAuth setup script first.');
+      }
+      
+      await remoteClient.setGroupState(input.groupId, input.state);
+      
+      return { success: true };
+    }),
 });

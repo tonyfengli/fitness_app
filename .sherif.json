@@ -1,8 +1,0 @@
-{
-  "ignore": [
-    {
-      "dependency": "nativewind",
-      "packages": ["@acme/tv"]
-    }
-  ]
-}

@@ -3,7 +3,7 @@
 import React from "react";
 import type { CircuitConfig, RoundData } from "@acme/ui-shared";
 import { api } from "~/trpc/react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { OptionsDrawer } from "./OptionsDrawer";
 import { AllRoundsLightingDrawer } from "./AllRoundsLightingDrawer";
 import { RoundLightingDrawer } from "./RoundLightingDrawer";
@@ -17,9 +17,10 @@ interface LightingTabProps {
 }
 
 export function LightingTab({ sessionId, circuitConfig, roundsData, onConfigureLight, onLightingStateChange }: LightingTabProps) {
+  console.log('[LightingTab] Component mounted/rendered');
   
-  // State for global lighting on/off
-  const [isLightingEnabled, setIsLightingEnabled] = React.useState(true);
+  // State for global lighting on/off - initialize to false until we know the actual state
+  const [isLightingEnabled, setIsLightingEnabled] = React.useState(false);
   
   // State for All Rounds drawer
   const [isAllRoundsDrawerOpen, setIsAllRoundsDrawerOpen] = React.useState(false);
@@ -35,6 +36,64 @@ export function LightingTab({ sessionId, circuitConfig, roundsData, onConfigureL
   const [applyingEffect, setApplyingEffect] = React.useState(false);
   
   const trpc = api();
+  const queryClient = useQueryClient();
+  
+  // Mutation for toggling lights
+  const toggleLights = useMutation({
+    ...trpc.lighting.setRemoteGroupState.mutationOptions(),
+    onSuccess: () => {
+      console.log('[LightingTab] Toggle successful');
+      // Refetch lights to confirm state change
+      queryClient.invalidateQueries({
+        queryKey: trpc.lighting.getRemoteLights.queryOptions().queryKey,
+      });
+    },
+    onError: (error) => {
+      console.error('[LightingTab] Toggle failed:', error);
+      // Revert the optimistic update on error
+      setIsLightingEnabled(!isLightingEnabled);
+    }
+  });
+  
+  // Note: We're not checking lighting system status since we're using
+  // the remote API directly, which doesn't require local bridge connection
+  
+  // Query current light state on mount to set initial toggle position
+  // Using getRemoteLights since we're using the remote API
+  const { data: lightsData, isLoading: lightsLoading, error: lightsError } = useQuery({
+    ...trpc.lighting.getRemoteLights.queryOptions(),
+    refetchOnWindowFocus: false, // Don't refetch when window regains focus
+    refetchOnReconnect: false, // Don't refetch on reconnect
+  });
+  
+  // Log the query state for debugging
+  React.useEffect(() => {
+    console.log('[LightingTab] Lights query state:', {
+      isLoading: lightsLoading,
+      hasData: !!lightsData,
+      dataLength: lightsData?.length,
+      error: lightsError,
+      lightsData: lightsData
+    });
+  }, [lightsLoading, lightsData, lightsError]);
+  
+  // Set initial lighting state based on actual lights
+  React.useEffect(() => {
+    if (lightsData && lightsData.length > 0) {
+      // Check if any lights are on
+      const anyLightsOn = lightsData.some(light => light.on && light.reachable);
+      console.log('[LightingTab] Setting lighting state:', {
+        anyLightsOn,
+        lightsDetail: lightsData.map(light => ({
+          id: light.id,
+          name: light.name,
+          on: light.on,
+          reachable: light.reachable
+        }))
+      });
+      setIsLightingEnabled(anyLightsOn);
+    }
+  }, [lightsData]);
   
   // Get current lighting configuration from backend
   const { data: lightingConfig, dataUpdatedAt } = useQuery({
@@ -376,11 +435,22 @@ export function LightingTab({ sessionId, circuitConfig, roundsData, onConfigureL
         <div className="flex justify-between items-center py-6 px-6">
           {/* Global Power Toggle - Left */}
           <button 
-            onClick={() => setIsLightingEnabled(!isLightingEnabled)}
-            className={`relative flex items-center gap-3 px-6 py-3 rounded-2xl font-semibold text-sm transition-all duration-300 shadow-lg active:scale-95 ${
-              isLightingEnabled
-                ? 'bg-gradient-to-r from-purple-500 to-orange-500 hover:from-purple-600 hover:to-orange-600 text-white shadow-purple-500/25 hover:shadow-purple-500/40'
-                : 'bg-gray-200 hover:bg-gray-300 dark:bg-gray-600/70 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-400 shadow-gray-500/15'
+            onClick={() => {
+              const newState = !isLightingEnabled;
+              console.log('[LightingTab] Toggling lights to:', newState);
+              setIsLightingEnabled(newState); // Optimistic update
+              toggleLights.mutate({
+                groupId: "0", // All lights
+                state: { on: newState }
+              });
+            }}
+            disabled={!lightsData || toggleLights.isPending} // Disable until we know the light state or while toggling
+            className={`relative flex items-center gap-3 px-6 py-3 rounded-2xl font-semibold text-sm transition-all duration-300 shadow-lg ${
+              !lightsData 
+                ? 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-500 cursor-wait'
+                : isLightingEnabled
+                ? 'bg-gradient-to-r from-purple-500 to-orange-500 hover:from-purple-600 hover:to-orange-600 text-white shadow-purple-500/25 hover:shadow-purple-500/40 active:scale-95'
+                : 'bg-gray-200 hover:bg-gray-300 dark:bg-gray-600/70 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-400 shadow-gray-500/15 active:scale-95'
             }`}
           >
             {/* Toggle Switch */}
@@ -398,7 +468,7 @@ export function LightingTab({ sessionId, circuitConfig, roundsData, onConfigureL
             
             {/* Dynamic Text */}
             <span className="font-bold">
-              {isLightingEnabled ? 'LIGHTS ON' : 'LIGHTS OFF'}
+              {!lightsData ? 'LOADING...' : toggleLights.isPending ? 'TOGGLING...' : isLightingEnabled ? 'LIGHTS ON' : 'LIGHTS OFF'}
             </span>
           </button>
           
