@@ -5,8 +5,6 @@ import { RealtimeProvider } from './providers/RealtimeProvider';
 import { BusinessProvider } from './providers/BusinessProvider';
 import { AuthProvider } from './providers/AuthProvider';
 import { useAuthCleanup } from './hooks/useAuthCleanup';
-import { setHueLights, startHealthCheck } from './lib/lighting';
-import { getColorForPreset, getHuePresetForColor } from './lib/lighting/colorMappings';
 
 // TVEventHandler might be in a different location for react-native-tvos
 let TVEventHandler: any;
@@ -33,10 +31,8 @@ import { CircuitPreferencesScreen } from './screens/CircuitPreferencesScreen';
 import { CircuitWorkoutGenerationScreen } from './screens/CircuitWorkoutGenerationScreen';
 import { CircuitWorkoutOverviewScreen } from './screens/CircuitWorkoutOverviewScreen';
 import { CircuitWorkoutLiveScreen } from './screens/CircuitWorkoutLiveScreen';
-import { LightingTestScreen } from './screens/LightingTestScreen';
 
-
-type ScreenName = 'Main' | 'SessionLobby' | 'GlobalPreferences' | 'CircuitPreferences' | 'CircuitWorkoutGeneration' | 'WorkoutOverview' | 'CircuitWorkoutOverview' | 'CircuitWorkoutLive' | 'WorkoutLive' | 'WorkoutComplete' | 'SessionMonitor' | 'TestTailwind' | 'LightingTest';
+type ScreenName = 'Main' | 'SessionLobby' | 'GlobalPreferences' | 'CircuitPreferences' | 'CircuitWorkoutGeneration' | 'WorkoutOverview' | 'CircuitWorkoutOverview' | 'CircuitWorkoutLive' | 'WorkoutLive' | 'WorkoutComplete' | 'SessionMonitor' | 'TestTailwind';
 
 interface NavigationState {
   currentScreen: ScreenName;
@@ -90,14 +86,6 @@ function NavigationContainer({ children }: { children: React.ReactNode }) {
       const previousScreen = screenHistory.current[screenHistory.current.length - 1];
       
       setNavigationState(prev => ({ ...prev, currentScreen: previousScreen }));
-      
-      // Apply App Start color when returning to Main screen
-      if (previousScreen === 'Main') {
-        getColorForPreset('app_start').then(color => {
-          const preset = getHuePresetForColor(color);
-          setHueLights(preset);
-        });
-      }
     }
   };
 
@@ -131,18 +119,6 @@ function NavigationContainer({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  // Initialize lighting on app start
-  useEffect(() => {
-    // Start health check
-    startHealthCheck();
-    
-    // Apply App Start color
-    getColorForPreset('app_start').then(color => {
-      const preset = getHuePresetForColor(color);
-      setHueLights(preset);
-    });
-  }, []);
-
   const navigationValue = {
     navigate,
     goBack,
@@ -164,7 +140,6 @@ function NavigationContainer({ children }: { children: React.ReactNode }) {
         {navigationState.currentScreen === 'WorkoutComplete' && <WorkoutCompleteScreen />}
         {navigationState.currentScreen === 'SessionMonitor' && <SessionMonitorScreen />}
         {navigationState.currentScreen === 'TestTailwind' && <TestTailwindScreen />}
-        {navigationState.currentScreen === 'LightingTest' && <LightingTestScreen />}
       </View>
     </NavigationContext.Provider>
   );

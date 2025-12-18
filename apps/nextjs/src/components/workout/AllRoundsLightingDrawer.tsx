@@ -96,7 +96,7 @@ export function AllRoundsLightingDrawer({
   };
 
   const { data: rawScenes, isLoading, error } = useQuery({
-    ...trpc.lighting.getRemoteScenes.queryOptions(),
+    ...trpc.lighting.getScenes.queryOptions(),
   });
 
   // Get current lighting configuration

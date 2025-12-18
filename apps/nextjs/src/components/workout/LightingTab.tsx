@@ -40,12 +40,12 @@ export function LightingTab({ sessionId, circuitConfig, roundsData, onConfigureL
   
   // Mutation for toggling lights
   const toggleLights = useMutation({
-    ...trpc.lighting.setRemoteGroupState.mutationOptions(),
+    ...trpc.lighting.setGroupState.mutationOptions(),
     onSuccess: () => {
       console.log('[LightingTab] Toggle successful');
       // Refetch lights to confirm state change
       queryClient.invalidateQueries({
-        queryKey: trpc.lighting.getRemoteLights.queryOptions().queryKey,
+        queryKey: trpc.lighting.getLights.queryOptions().queryKey,
       });
     },
     onError: (error) => {
@@ -59,9 +59,8 @@ export function LightingTab({ sessionId, circuitConfig, roundsData, onConfigureL
   // the remote API directly, which doesn't require local bridge connection
   
   // Query current light state on mount to set initial toggle position
-  // Using getRemoteLights since we're using the remote API
   const { data: lightsData, isLoading: lightsLoading, error: lightsError } = useQuery({
-    ...trpc.lighting.getRemoteLights.queryOptions(),
+    ...trpc.lighting.getLights.queryOptions(),
     refetchOnWindowFocus: false, // Don't refetch when window regains focus
     refetchOnReconnect: false, // Don't refetch on reconnect
   });
@@ -103,7 +102,7 @@ export function LightingTab({ sessionId, circuitConfig, roundsData, onConfigureL
   
   // Get scenes data to extract colors from scene names
   const { data: rawScenes } = useQuery({
-    ...trpc.lighting.getRemoteScenes.queryOptions(),
+    ...trpc.lighting.getScenes.queryOptions(),
   });
   
   // Helper function to extract color from scene name

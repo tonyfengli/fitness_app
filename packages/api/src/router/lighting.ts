@@ -1,15 +1,23 @@
 /**
- * Lighting control router
+ * Unified lighting control router
  */
 
 import { z } from "zod/v4";
-import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
-import { getLightingService } from "../services/lighting/lighting-service";
-import { HueRemoteClient } from "../services/lighting/hue-remote-client";
+import { createTRPCRouter, protectedProcedure } from "../trpc";
+import { getLightingService } from "../services/lighting/get-service";
 import type { WorkoutTemplate } from "../services/lighting/types";
 import { CIRCUIT_EVENTS, STRENGTH_EVENTS } from "../services/lighting/types";
 
 export const lightingRouter = createTRPCRouter({
+  /**
+   * Initialize the lighting system
+   */
+  initialize: protectedProcedure.mutation(async ({ ctx }) => {
+    const lightingService = getLightingService();
+    // The service initializes itself on creation, so just return status
+    return await lightingService.getStatus();
+  }),
+
   /**
    * Get lighting system status
    */
@@ -32,6 +40,26 @@ export const lightingRouter = createTRPCRouter({
       on: light.state.on,
       brightness: light.state.bri,
       reachable: light.state.reachable,
+    }));
+  }),
+
+  /**
+   * Get available scenes (if supported by provider)
+   */
+  getScenes: protectedProcedure.query(async ({ ctx }) => {
+    const lightingService = getLightingService();
+    const scenes = await lightingService.getScenes();
+    
+    // Return in consistent format
+    return scenes.map(scene => ({
+      id: scene.id,
+      name: scene.name,
+      lastUpdated: scene.lastUpdated,
+      lights: scene.lights,
+      owner: scene.owner,
+      type: scene.type,
+      lightstates: scene.lightstates,
+      group: scene.group,
     }));
   }),
 
@@ -69,22 +97,72 @@ export const lightingRouter = createTRPCRouter({
     )
     .mutation(async ({ ctx, input }) => {
       const lightingService = getLightingService();
-      await lightingService.applyState(input.state);
+      await lightingService.setState(input.state);
       
       return { success: true };
     }),
 
   /**
-   * Report timer event from client (MVP fallback)
+   * Set group state (unified endpoint for all providers)
+   */
+  setGroupState: protectedProcedure
+    .input(
+      z.object({
+        groupId: z.string().default("0"),
+        state: z.object({
+          on: z.boolean().optional(),
+          bri: z.number().min(1).max(254).optional(),
+          hue: z.number().min(0).max(65535).optional(),
+          sat: z.number().min(0).max(254).optional(),
+          transitiontime: z.number().min(0).optional(),
+        })
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const lightingService = getLightingService();
+      // setState already uses the configured groupId, but we could extend this
+      await lightingService.setState(input.state);
+      
+      return { success: true };
+    }),
+
+  /**
+   * Activate a scene (if supported by provider)
+   */
+  activateScene: protectedProcedure
+    .input(
+      z.object({
+        sceneId: z.string(),
+        groupId: z.string().default("0"),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const lightingService = getLightingService();
+      await lightingService.activateScene(input.sceneId, input.groupId);
+      
+      return { success: true };
+    }),
+
+  /**
+   * Report timer event (explicit event reporting for testing/manual control)
    */
   reportTimerEvent: protectedProcedure
     .input(
       z.object({
         sessionId: z.string(),
         event: z.enum([
-          ...Object.values(CIRCUIT_EVENTS),
-          ...Object.values(STRENGTH_EVENTS),
-        ] as const),
+          // Circuit events
+          'circuit:round:start',
+          'circuit:interval:work:start',
+          'circuit:interval:rest:start',
+          'circuit:round:end',
+          'circuit:workout:complete',
+          // Strength events
+          'strength:round:start',
+          'strength:round:rest:start',
+          'strength:round:end',
+          'strength:workout:complete',
+        ]),
         metadata: z.object({
           round: z.number().optional(),
           totalRounds: z.number().optional(),
@@ -96,25 +174,30 @@ export const lightingRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const lightingService = getLightingService();
       
-      await lightingService.handleTimerEvent({
-        sessionId: input.sessionId,
-        event: input.event,
-        timestamp: new Date(),
-        metadata: input.metadata,
-      });
+      // Map events to presets
+      const eventToPreset: Record<string, { preset: string, template: WorkoutTemplate }> = {
+        'circuit:round:start': { preset: 'ROUND_START', template: 'circuit' },
+        'circuit:interval:work:start': { preset: 'WORK', template: 'circuit' },
+        'circuit:interval:rest:start': { preset: 'REST', template: 'circuit' },
+        'circuit:round:end': { preset: 'REST', template: 'circuit' },
+        'circuit:workout:complete': { preset: 'COOLDOWN', template: 'circuit' },
+        'strength:round:start': { preset: 'ROUND_START', template: 'strength' },
+        'strength:round:rest:start': { preset: 'ROUND_REST', template: 'strength' },
+        'strength:round:end': { preset: 'ROUND_REST', template: 'strength' },
+        'strength:workout:complete': { preset: 'COOLDOWN', template: 'strength' },
+      };
+      
+      const presetConfig = eventToPreset[input.event];
+      if (presetConfig) {
+        await lightingService.applyPreset(
+          presetConfig.preset as any,
+          presetConfig.template
+        );
+      }
       
       return { success: true };
     }),
 
-  /**
-   * Initialize lighting service (called on app startup)
-   */
-  initialize: protectedProcedure.mutation(async ({ ctx }) => {
-    const lightingService = getLightingService();
-    await lightingService.initialize();
-    
-    return { success: true };
-  }),
 
   /**
    * Start an animation effect
@@ -156,135 +239,4 @@ export const lightingRouter = createTRPCRouter({
     const lightingService = getLightingService();
     return lightingService.getAnimationStatus();
   }),
-
-  // Remote Hue API endpoints
-  
-  /**
-   * Test Remote Hue API connection
-   */
-  testRemoteConnection: protectedProcedure.query(async ({ ctx }) => {
-    const remoteClient = await HueRemoteClient.fromEnv();
-    
-    if (!remoteClient) {
-      return {
-        success: false,
-        error: 'Remote Hue API not configured. Run OAuth setup script first.',
-        configured: false
-      };
-    }
-
-    const result = await remoteClient.testConnection();
-    return {
-      ...result,
-      configured: true
-    };
-  }),
-
-  /**
-   * Get scenes from Remote Hue API
-   */
-  getRemoteScenes: protectedProcedure.query(async ({ ctx }) => {
-    const remoteClient = await HueRemoteClient.fromEnv();
-    
-    if (!remoteClient) {
-      throw new Error('Remote Hue API not configured. Run OAuth setup script first.');
-    }
-
-    const scenes = await remoteClient.getScenes();
-    
-    // Check if the response is an error array instead of scenes object
-    if (Array.isArray(scenes) && scenes[0]?.error) {
-      const error = scenes[0].error;
-      throw new Error(`Hue API Error: ${error.description} (type: ${error.type})`);
-    }
-    
-    // Convert to array format for easier consumption
-    return Object.entries(scenes).map(([id, scene]) => ({
-      id,
-      name: scene.name,
-      lastUpdated: scene.lastupdated,
-      lights: scene.lights,
-      owner: scene.owner,
-      picture: scene.picture,
-      image: scene.image,
-      version: scene.version,
-      recycle: scene.recycle,
-      locked: scene.locked,
-      type: scene.type,
-      lightstates: scene.lightstates,
-      group: scene.group,
-      transitiontime: scene.transitiontime,
-    }));
-  }),
-
-  /**
-   * Activate a scene via Remote Hue API
-   */
-  activateRemoteScene: protectedProcedure
-    .input(z.object({
-      sceneId: z.string(),
-      groupId: z.string().default("0"),
-    }))
-    .mutation(async ({ ctx, input }) => {
-      const remoteClient = await HueRemoteClient.fromEnv();
-      
-      if (!remoteClient) {
-        throw new Error('Remote Hue API not configured. Run OAuth setup script first.');
-      }
-
-      await remoteClient.activateScene(input.sceneId, input.groupId);
-      
-      return { success: true };
-    }),
-    
-  /**
-   * Get lights via Remote Hue API
-   */
-  getRemoteLights: protectedProcedure.query(async ({ ctx }) => {
-    const remoteClient = await HueRemoteClient.fromEnv();
-    
-    if (!remoteClient) {
-      return [];
-    }
-    
-    try {
-      const lights = await remoteClient.getLights();
-      
-      // Convert to array format for consistency with getLights
-      return Object.entries(lights).map(([id, light]) => ({
-        id,
-        name: light.name,
-        on: light.state?.on || false,
-        brightness: light.state?.bri || 0,
-        reachable: light.state?.reachable || false,
-      }));
-    } catch (error) {
-      console.error('Failed to get remote lights:', error);
-      return [];
-    }
-  }),
-  
-  /**
-   * Set group state via Remote Hue API (on/off, brightness, etc.)
-   */
-  setRemoteGroupState: protectedProcedure
-    .input(z.object({
-      groupId: z.string().default("0"), // "0" = all lights
-      state: z.object({
-        on: z.boolean().optional(),
-        bri: z.number().min(1).max(254).optional(),
-        transitiontime: z.number().min(0).optional(),
-      })
-    }))
-    .mutation(async ({ ctx, input }) => {
-      const remoteClient = await HueRemoteClient.fromEnv();
-      
-      if (!remoteClient) {
-        throw new Error('Remote Hue API not configured. Run OAuth setup script first.');
-      }
-      
-      await remoteClient.setGroupState(input.groupId, input.state);
-      
-      return { success: true };
-    }),
 });

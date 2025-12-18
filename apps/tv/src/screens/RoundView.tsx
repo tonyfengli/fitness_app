@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, Pressable } from 'react-native';
 import { useNavigation } from '../App';
-import { LightingButtonWrapper } from '../components/LightingButtonWrapper';
 
 // Types
 type Assignment = { clientName: string; tag: string };
@@ -220,10 +219,9 @@ interface RoundViewProps {
   clients?: any[];
   isPhase2Loading?: boolean;
   phase2Error?: string;
-  onTimerUpdate?: (timeRemaining: number, roundIndex: number) => void;
 }
 
-export default function RoundView({ sessionId, round, workouts, roundsData, organization, clients, isPhase2Loading, phase2Error, onTimerUpdate }: RoundViewProps = {}) {
+export default function RoundView({ sessionId, round, workouts, roundsData, organization, clients, isPhase2Loading, phase2Error }: RoundViewProps = {}) {
   const navigation = useNavigation();
   
   // Use real data if provided, otherwise fall back to mock data
@@ -235,14 +233,6 @@ export default function RoundView({ sessionId, round, workouts, roundsData, orga
   const [isPaused, setIsPaused] = useState(isPhase2Loading || false); // Start paused if Phase 2 is loading
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   
-  // Call timer update on mount and when round changes
-  useEffect(() => {
-    if (onTimerUpdate) {
-      // Reset to initial time when round changes
-      const initialTime = 600; // 10 minutes
-      onTimerUpdate(initialTime, currentRoundIndex);
-    }
-  }, [currentRoundIndex]);
   
   // Unpause when Phase 2 completes
   useEffect(() => {
@@ -272,9 +262,6 @@ export default function RoundView({ sessionId, round, workouts, roundsData, orga
       setCurrentRoundIndex(nextIndex);
       setPhase("work");
       setTimeRemaining(600); // 10 minutes
-      if (onTimerUpdate) {
-        onTimerUpdate(600, nextIndex);
-      }
     }
   };
   
@@ -293,9 +280,6 @@ export default function RoundView({ sessionId, round, workouts, roundsData, orga
       setCurrentRoundIndex(prevIndex);
       setPhase("work");
       setTimeRemaining(600); // 10 minutes
-      if (onTimerUpdate) {
-        onTimerUpdate(600, prevIndex);
-      }
     }
   };
 
@@ -327,9 +311,6 @@ export default function RoundView({ sessionId, round, workouts, roundsData, orga
       intervalRef.current = setInterval(() => {
         setTimeRemaining((prev) => {
           const newTime = Math.max(0, prev - 1);
-          if (onTimerUpdate) {
-            onTimerUpdate(newTime, currentRoundIndex);
-          }
           return newTime;
         });
       }, 1000);
@@ -512,24 +493,18 @@ export default function RoundView({ sessionId, round, workouts, roundsData, orga
           disabled={isPhase2Loading}
         >
           {({ focused }) => (
-            <LightingButtonWrapper
-              sessionId={sessionId || ''}
-              roundNumber={Math.max(1, currentRoundIndex)}
+            <MattePanel 
               focused={focused}
+              style={{ 
+                paddingHorizontal: 32,
+                paddingVertical: 12,
+                backgroundColor: focused ? 'rgba(255,255,255,0.16)' : TOKENS.color.card,
+                transform: focused ? [{ translateY: -1 }] : [],
+                opacity: isPhase2Loading ? 0.5 : 1,
+              }}
             >
-              <MattePanel 
-                focused={focused}
-                style={{ 
-                  paddingHorizontal: 32,
-                  paddingVertical: 12,
-                  backgroundColor: focused ? 'rgba(255,255,255,0.16)' : TOKENS.color.card,
-                  transform: focused ? [{ translateY: -1 }] : [],
-                  opacity: isPhase2Loading ? 0.5 : 1,
-                }}
-              >
-                <Text style={{ color: TOKENS.color.text, fontSize: 18, letterSpacing: 0.2 }}>Previous</Text>
-              </MattePanel>
-            </LightingButtonWrapper>
+              <Text style={{ color: TOKENS.color.text, fontSize: 18, letterSpacing: 0.2 }}>Previous</Text>
+            </MattePanel>
           )}
         </Pressable>
         
@@ -540,23 +515,17 @@ export default function RoundView({ sessionId, round, workouts, roundsData, orga
           focusable
         >
           {({ focused }) => (
-            <LightingButtonWrapper
-              sessionId={sessionId || ''}
-              roundNumber={currentRoundIndex + 1}
+            <MattePanel 
               focused={focused}
+              style={{ 
+                paddingHorizontal: 18,
+                paddingVertical: 12,
+                backgroundColor: focused ? 'rgba(255,255,255,0.16)' : TOKENS.color.card,
+                transform: focused ? [{ translateY: -1 }] : [],
+              }}
             >
-              <MattePanel 
-                focused={focused}
-                style={{ 
-                  paddingHorizontal: 18,
-                  paddingVertical: 12,
-                  backgroundColor: focused ? 'rgba(255,255,255,0.16)' : TOKENS.color.card,
-                  transform: focused ? [{ translateY: -1 }] : [],
-                }}
-              >
-                <Text style={{ color: TOKENS.color.text, fontSize: 18 }}>{isPaused ? '▶' : '❚❚'}</Text>
-              </MattePanel>
-            </LightingButtonWrapper>
+              <Text style={{ color: TOKENS.color.text, fontSize: 18 }}>{isPaused ? '▶' : '❚❚'}</Text>
+            </MattePanel>
           )}
         </Pressable>
         
@@ -566,24 +535,18 @@ export default function RoundView({ sessionId, round, workouts, roundsData, orga
           disabled={isPhase2Loading}
         >
           {({ focused }) => (
-            <LightingButtonWrapper
-              sessionId={sessionId || ''}
-              roundNumber={Math.min(rounds.length, currentRoundIndex + 2)}
+            <MattePanel 
               focused={focused}
+              style={{ 
+                paddingHorizontal: 32,
+                paddingVertical: 12,
+                backgroundColor: focused ? 'rgba(255,255,255,0.16)' : TOKENS.color.card,
+                transform: focused ? [{ translateY: -1 }] : [],
+                opacity: isPhase2Loading ? 0.5 : 1,
+              }}
             >
-              <MattePanel 
-                focused={focused}
-                style={{ 
-                  paddingHorizontal: 32,
-                  paddingVertical: 12,
-                  backgroundColor: focused ? 'rgba(255,255,255,0.16)' : TOKENS.color.card,
-                  transform: focused ? [{ translateY: -1 }] : [],
-                  opacity: isPhase2Loading ? 0.5 : 1,
-                }}
-              >
-                <Text style={{ color: TOKENS.color.text, fontSize: 18, letterSpacing: 0.2 }}>Next</Text>
-              </MattePanel>
-            </LightingButtonWrapper>
+              <Text style={{ color: TOKENS.color.text, fontSize: 18, letterSpacing: 0.2 }}>Next</Text>
+            </MattePanel>
           )}
         </Pressable>
       </View>

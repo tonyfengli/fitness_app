@@ -1,8 +1,6 @@
 import React from 'react';
 import { View, Text } from 'react-native';
 import { TOKENS, MattePanel, RoundData } from './shared';
-import { LightingDotWithTimestamp } from '../LightingDotWithTimestamp';
-import { useLightingPreview } from '../../hooks/useLightingPreview';
 import { useNavigation } from '../../App';
 
 interface AMRAPRoundPreviewProps {
@@ -23,12 +21,6 @@ export function AMRAPRoundPreview({ currentRound, restDuration = 60, timeRemaini
     return match ? parseInt(match[1], 10) : 1;
   })();
   
-  // Initialize lighting preview for this round
-  useLightingPreview({
-    sessionId: sessionId || '',
-    roundNumber: extractedRoundNumber,
-    enabled: !!sessionId
-  });
 
   const exerciseCount = currentRound.exercises.length;
   const useColumns = exerciseCount > 4;
@@ -175,9 +167,6 @@ export function AMRAPRoundPreview({ currentRound, restDuration = 60, timeRemaini
         </View>
         
       </View>
-      
-      {/* Lighting Status Dot with Timestamp */}
-      <LightingDotWithTimestamp position="absolute" roundNumber={extractedRoundNumber} />
     </View>
   );
 }

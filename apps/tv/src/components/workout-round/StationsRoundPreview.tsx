@@ -1,8 +1,6 @@
 import React from 'react';
 import { View, Text } from 'react-native';
 import { TOKENS, MattePanel, CircuitExercise, RoundData } from './shared';
-import { LightingDotWithTimestamp } from '../LightingDotWithTimestamp';
-import { useLightingPreview } from '../../hooks/useLightingPreview';
 import { useNavigation } from '../../App';
 
 interface StationsRoundPreviewProps {
@@ -36,12 +34,6 @@ export function StationsRoundPreview({ currentRound, repeatTimes = 1, workDurati
     return match ? parseInt(match[1], 10) : 1;
   })();
   
-  // Initialize lighting preview for this round
-  useLightingPreview({
-    sessionId: sessionId || '',
-    roundNumber: extractedRoundNumber,
-    enabled: !!sessionId
-  });
   // Use actual number of exercises as stations
   const exerciseCount = currentRound.exercises.length;
   
@@ -305,8 +297,6 @@ export function StationsRoundPreview({ currentRound, repeatTimes = 1, workDurati
         </View>
       )}
 
-      {/* Lighting Status Dot with Timestamp */}
-      <LightingDotWithTimestamp position="absolute" roundNumber={extractedRoundNumber} />
     </View>
   );
 }

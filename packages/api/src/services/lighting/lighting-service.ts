@@ -1,11 +1,12 @@
 /**
- * Main lighting orchestrator service
+ * Unified lighting orchestrator service using provider abstraction
  */
 
 import { v4 as uuidv4 } from 'uuid';
 import { createLogger } from '../../utils/logger';
-import { HueClient, MockHueClient } from './hue-client';
 import { createPresetProvider, getPresetForEvent } from './presets';
+import { LightingProviderFactory } from './providers';
+import type { ILightingProvider, Light, LightState, Scene, ConnectionStatus as ProviderConnectionStatus } from './providers';
 import type {
   ConnectionStatus,
   HueLightState,
@@ -20,15 +21,14 @@ import type {
 const logger = createLogger('LightingService');
 
 export interface LightingServiceConfig {
-  bridgeIp?: string;
-  appKey?: string;
-  groupId?: string;
+  providers?: ILightingProvider[];
   enabled?: boolean;
-  useMock?: boolean;
+  groupId?: string;
 }
 
 export class LightingService {
-  private hueClient: HueClient;
+  private providers: ILightingProvider[];
+  private activeProvider?: ILightingProvider;
   private presetProvider: PresetProvider;
   private groupId: string;
   private enabled: boolean;
@@ -49,165 +49,87 @@ export class LightingService {
   private lastIntendedState?: HueLightState;
   private lastIntendedPreset?: string;
   private lastIntendedTemplate?: WorkoutTemplate;
+  
+  // Animation support
+  private animationInterval?: ReturnType<typeof setInterval>;
+  private animationType?: 'drift' | 'breathe' | 'countdown' | 'none';
 
-  constructor(config: LightingServiceConfig) {
+  constructor(config: LightingServiceConfig = {}) {
     const { 
-      bridgeIp = process.env.HUE_BRIDGE_IP,
-      appKey = process.env.HUE_APP_KEY,
-      groupId = process.env.HUE_GROUP_ID || '1',
-      enabled = process.env.HUE_ENABLED === 'true',
-      useMock = false,
+      providers,
+      enabled = process.env.HUE_ENABLED === 'true' || process.env.HUE_REMOTE_ENABLED === 'true',
+      groupId = process.env.HUE_GROUP_ID || '0',
     } = config;
 
     this.enabled = enabled;
     this.groupId = groupId;
+    this.presetProvider = createPresetProvider();
 
-    if (!enabled) {
+    // Use provided providers or create from environment
+    this.providers = providers || LightingProviderFactory.createFromEnvironment();
+    
+    if (!this.enabled) {
       logger.info('Lighting service disabled via configuration');
-      this.hueClient = new MockHueClient({ bridgeIp: 'mock', appKey: 'mock' });
-      this.presetProvider = createPresetProvider();
       return;
     }
-
-    if (!bridgeIp || !appKey) {
-      logger.warn('Hue configuration missing, using mock client');
-      this.hueClient = new MockHueClient({ bridgeIp: 'mock', appKey: 'mock' });
-    } else {
-      this.hueClient = useMock 
-        ? new MockHueClient({ bridgeIp, appKey })
-        : new HueClient({ bridgeIp, appKey });
-    }
-
-    this.presetProvider = createPresetProvider();
+    
+    logger.info(`Initialized with ${this.providers.length} provider(s)`);
     
     // Start health monitoring
     this.startHealthMonitoring();
     
-    // Initial connection test
-    this.testConnection();
+    // Initial connection attempt
+    this.connectToProvider();
   }
 
   /**
-   * Initialize the service
+   * Try to connect to available providers in priority order
    */
-  async initialize(): Promise<void> {
-    if (!this.enabled) return;
-
-    try {
-      const connected = await this.hueClient.testConnection();
-      if (connected) {
-        this.status = 'connected';
-        logger.info('Lighting service initialized successfully');
+  private async connectToProvider(): Promise<void> {
+    for (const provider of this.providers) {
+      try {
+        logger.info(`Attempting to connect with ${provider.type} provider...`);
+        await provider.connect();
         
-        // Try to get available groups
-        try {
-          const groups = await this.hueClient.getGroups();
-          logger.info('Available Hue groups', { 
-            groups: Object.entries(groups).map(([id, group]) => ({ 
-              id, 
-              name: group.name, 
-              type: group.type,
-              lightsCount: group.lights.length 
-            })) 
-          });
-          
-          // Verify our configured group exists
-          if (!groups[this.groupId]) {
-            logger.warn(`Configured group ${this.groupId} not found. Available groups:`, {
-              configured: this.groupId,
-              available: Object.keys(groups)
-            });
-          }
-        } catch (error) {
-          logger.warn('Failed to get groups', { error });
+        this.activeProvider = provider;
+        this.status = 'connected';
+        logger.info(`Connected successfully with ${provider.type} provider`);
+        
+        // Start health check if supported
+        if (provider.capabilities.healthCheck && provider.startHealthCheck) {
+          provider.startHealthCheck();
         }
         
-        // Apply default state
-        await this.applyPreset('DEFAULT', 'strength');
+        return;
+      } catch (error) {
+        logger.warn(`Failed to connect with ${provider.type}:`, error);
+        continue;
       }
-    } catch (error) {
-      logger.error('Failed to initialize lighting service', { error });
-      this.status = 'degraded';
-      this.lastError = error instanceof Error ? error.message : 'Unknown error';
     }
+    
+    logger.error('Failed to connect to any lighting provider');
+    this.status = 'disconnected';
+    this.lastError = 'No providers available';
   }
 
   /**
-   * Apply a preset to the light group
-   */
-  async applyPreset(presetName: string, template: WorkoutTemplate): Promise<void> {
-    if (!this.enabled) return;
-
-    const command: LightCommand = {
-      id: uuidv4(),
-      type: 'preset',
-      preset: presetName,
-      template,
-      groupId: this.groupId,
-      timestamp: new Date(),
-      retries: 0,
-    };
-
-    await this.enqueueCommand(command);
-  }
-
-  /**
-   * Apply custom state to the light group
-   */
-  async applyState(state: HueLightState): Promise<void> {
-    if (!this.enabled) return;
-
-    const command: LightCommand = {
-      id: uuidv4(),
-      type: 'state',
-      state,
-      groupId: this.groupId,
-      timestamp: new Date(),
-      retries: 0,
-    };
-
-    await this.enqueueCommand(command);
-  }
-
-  /**
-   * Handle timer event
-   */
-  async handleTimerEvent(eventData: TimerEventData): Promise<void> {
-    if (!this.enabled) return;
-
-    logger.info('Handling timer event', { 
-      event: eventData.event,
-      sessionId: eventData.sessionId,
-    });
-
-    // Map event to preset
-    const presetName = getPresetForEvent(eventData.event);
-    if (!presetName) {
-      logger.warn('No preset mapped for event', { event: eventData.event });
-      return;
-    }
-
-    // Determine template from event
-    const template: WorkoutTemplate = eventData.event.startsWith('circuit:') 
-      ? 'circuit' 
-      : 'strength';
-
-    await this.applyPreset(presetName, template);
-  }
-
-  /**
-   * Get lighting status
+   * Get current status
    */
   async getStatus(): Promise<LightingStatus> {
-    const bridgeInfo = this.status === 'connected' 
-      ? await this.hueClient.getBridgeConfig().catch(() => undefined)
-      : undefined;
+    const providerStatus = this.activeProvider ? 
+      await this.activeProvider.getStatus() : 
+      { connected: false };
 
     return {
+      enabled: this.enabled,
       status: this.status,
-      lastConnected: this.hueClient.getLastSuccessfulConnection(),
-      lastError: this.lastError,
-      bridgeInfo,
+      lastConnected: providerStatus.lastConnected,
+      lastError: this.lastError || providerStatus.lastError,
+      bridgeInfo: providerStatus.details,
+      degraded: this.isDegraded(),
+      degradedUntil: this.degradedUntil,
+      activeProvider: this.activeProvider?.type,
+      availableProviders: this.providers.map(p => p.type),
     };
   }
 
@@ -215,11 +137,108 @@ export class LightingService {
    * Get available lights
    */
   async getLights() {
-    if (!this.enabled || this.status !== 'connected') {
+    if (!this.activeProvider || this.status !== 'connected') {
       return {};
     }
 
-    return await this.hueClient.getLights();
+    try {
+      const lights = await this.activeProvider.getLights();
+      // Convert array to object format for backward compatibility
+      return lights.reduce((acc, light) => {
+        acc[light.id] = {
+          name: light.name,
+          state: {
+            on: light.on,
+            bri: light.brightness,
+            reachable: light.reachable,
+            hue: light.hue,
+            sat: light.saturation,
+          }
+        };
+        return acc;
+      }, {} as Record<string, any>);
+    } catch (error) {
+      logger.error('Failed to get lights:', error);
+      return {};
+    }
+  }
+
+  /**
+   * Get available scenes (if provider supports them)
+   */
+  async getScenes(): Promise<Scene[]> {
+    if (!this.activeProvider || !this.activeProvider.capabilities.scenes) {
+      return [];
+    }
+
+    try {
+      return await this.activeProvider.getScenes!();
+    } catch (error) {
+      logger.error('Failed to get scenes:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Activate a scene
+   */
+  async activateScene(sceneId: string, groupId?: string): Promise<void> {
+    if (!this.activeProvider || !this.activeProvider.capabilities.scenes) {
+      throw new Error('Current provider does not support scenes');
+    }
+
+    await this.activeProvider.activateScene!(sceneId, groupId || this.groupId);
+  }
+
+  /**
+   * Apply a preset
+   */
+  async applyPreset(name: LightingPreset, template?: WorkoutTemplate): Promise<void> {
+    if (!this.enabled || !this.activeProvider || this.isDegraded()) {
+      logger.debug(`Skipping preset ${name} - service not ready`);
+      return;
+    }
+
+    // Store intended state for recovery
+    this.lastIntendedPreset = name;
+    this.lastIntendedTemplate = template;
+
+    const preset = this.presetProvider[name];
+    if (!preset) {
+      logger.warn(`Unknown preset: ${name}`);
+      return;
+    }
+
+    const state: HueLightState = {
+      on: preset.on,
+      bri: preset.brightness,
+      hue: preset.hue,
+      sat: preset.saturation,
+      transitiontime: preset.transition,
+    };
+
+    await this.setState(state);
+  }
+
+  /**
+   * Apply custom state
+   */
+  async setState(state: HueLightState): Promise<void> {
+    if (!this.enabled || !this.activeProvider) {
+      return;
+    }
+
+    // Store intended state
+    this.lastIntendedState = state;
+
+    const command: LightCommand = {
+      id: uuidv4(),
+      type: 'state',
+      state,
+      retries: 0,
+    };
+
+    await this.enqueueCommand(command);
   }
 
   /**
@@ -229,24 +248,64 @@ export class LightingService {
     if (this.healthCheckInterval) {
       clearInterval(this.healthCheckInterval);
     }
+
+    this.stopAnimation();
     
-    // Apply default state before shutting down
-    if (this.enabled && this.status === 'connected') {
-      await this.applyPreset('DEFAULT', 'strength');
+    if (this.activeProvider) {
+      if (this.activeProvider.stopHealthCheck) {
+        this.activeProvider.stopHealthCheck();
+      }
+      await this.activeProvider.disconnect();
+    }
+    
+    this.commandQueue = [];
+  }
+
+  /**
+   * Test connection
+   */
+  private async testConnection(): Promise<void> {
+    if (!this.activeProvider) {
+      await this.connectToProvider();
+      return;
+    }
+
+    try {
+      const connected = await this.activeProvider.testConnection();
+      
+      if (!connected) {
+        logger.warn('Lost connection to provider, attempting reconnection...');
+        this.status = 'disconnected';
+        await this.connectToProvider();
+      } else {
+        this.status = 'connected';
+        this.lastError = undefined;
+      }
+    } catch (error) {
+      logger.error('Connection test failed:', error);
+      this.status = 'error';
+      this.lastError = error instanceof Error ? error.message : 'Unknown error';
+      
+      // Try to reconnect with next provider
+      await this.connectToProvider();
     }
   }
 
   /**
-   * Add command to queue with deduplication
+   * Start health monitoring
+   */
+  private startHealthMonitoring(): void {
+    // Check every 30 seconds
+    this.healthCheckInterval = setInterval(() => {
+      this.testConnection();
+    }, 30000);
+  }
+
+  /**
+   * Enqueue a command
    */
   private async enqueueCommand(command: LightCommand): Promise<void> {
-    // Check if degraded
-    if (this.degradedUntil && new Date() < this.degradedUntil) {
-      logger.warn('Lighting service degraded, dropping command', { command });
-      return;
-    }
-
-    // Debounce duplicate commands
+    // Check for duplicate commands
     const isDuplicate = 
       this.lastCommandId === `${command.type}-${command.preset || JSON.stringify(command.state)}` &&
       Date.now() - this.lastCommandTime < 300;
@@ -297,6 +356,11 @@ export class LightingService {
           }
         }
       }
+
+      // Small delay between commands
+      if (this.commandQueue.length > 0) {
+        await this.sleep(50);
+      }
     }
 
     this.isProcessingQueue = false;
@@ -306,284 +370,94 @@ export class LightingService {
    * Execute a single command
    */
   private async executeCommand(command: LightCommand): Promise<void> {
-    let state: HueLightState;
-
-    if (command.type === 'preset') {
-      const preset = await this.presetProvider.getPreset(command.preset!, command.template!);
-      state = preset;
-      
-      // Track intended state
-      this.lastIntendedState = preset;
-      this.lastIntendedPreset = command.preset;
-      this.lastIntendedTemplate = command.template;
-    } else {
-      state = command.state!;
+    if (!this.activeProvider) {
+      throw new Error('No active provider');
     }
 
-    await this.hueClient.setGroupAction(command.groupId, state);
-    this.status = 'connected';
-    
-    logger.info('Light command executed', {
-      type: command.type,
-      preset: command.preset,
-      groupId: command.groupId,
-    });
+    switch (command.type) {
+      case 'state':
+        if (command.state) {
+          await this.activeProvider.setGroupState(this.groupId, command.state);
+        }
+        break;
+        
+      case 'preset':
+        // For preset commands, we need to convert to state
+        if (command.preset) {
+          const preset = this.presetProvider[command.preset];
+          if (preset) {
+            const state: LightState = {
+              on: preset.on,
+              bri: preset.brightness,
+              hue: preset.hue,
+              sat: preset.saturation,
+              transitiontime: preset.transition,
+            };
+            await this.activeProvider.setGroupState(this.groupId, state);
+          }
+        }
+        break;
+    }
   }
 
   /**
    * Handle command failure
    */
   private handleCommandFailure(): void {
-    this.status = 'degraded';
-    this.degradedUntil = new Date(Date.now() + 60000); // 60 seconds
-    this.lastError = 'Failed to execute light command';
-    
-    logger.warn('Marking lighting service as degraded for 60 seconds');
+    // Enter degraded mode for 5 minutes
+    this.degradedUntil = new Date(Date.now() + 5 * 60 * 1000);
+    logger.warn('Entering degraded mode due to command failures');
   }
 
   /**
-   * Test connection to Hue Bridge
+   * Check if service is degraded
    */
-  private async testConnection(): Promise<void> {
-    try {
-      const connected = await this.hueClient.testConnection();
-      
-      if (connected) {
-        this.status = 'connected';
-        this.degradedUntil = undefined;
-        
-        // Re-apply last intended state if recovering from degraded
-        if (this.lastIntendedPreset && this.lastIntendedTemplate) {
-          logger.info('Reapplying last intended state after recovery');
-          await this.applyPreset(
-            this.lastIntendedPreset,
-            this.lastIntendedTemplate
-          );
-        }
-      } else {
-        this.status = 'disconnected';
-      }
-    } catch (error) {
-      this.status = 'disconnected';
-      this.lastError = error instanceof Error ? error.message : 'Connection test failed';
-    }
+  private isDegraded(): boolean {
+    return !!this.degradedUntil && this.degradedUntil > new Date();
   }
 
   /**
-   * Start health monitoring
-   */
-  private startHealthMonitoring(): void {
-    // Initial health check
-    this.testConnection();
-
-    // Set up periodic health checks
-    this.healthCheckInterval = setInterval(() => {
-      const checkInterval = this.status === 'degraded' ? 10000 : 60000; // 10s if degraded, 60s if healthy
-      
-      if (Date.now() - this.lastCommandTime > checkInterval) {
-        this.testConnection();
-      }
-    }, 10000); // Check every 10 seconds if we need to run health check
-  }
-
-  /**
-   * Sleep utility
-   */
-  private sleep(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
-  }
-
-  // Animation state  
-  private currentAnimation?: ReturnType<typeof setInterval>;
-  private animationType?: string;
-
-  /**
-   * Start an animation effect
+   * Animation support
    */
   async startAnimation(type: 'drift' | 'breathe' | 'countdown'): Promise<void> {
-    if (!this.enabled) return;
+    if (!this.activeProvider?.capabilities.animations) {
+      logger.warn('Current provider does not support animations');
+      return;
+    }
 
-    // Stop any existing animation
     this.stopAnimation();
-
-    logger.info('Starting animation', { type });
     this.animationType = type;
 
-    switch (type) {
-      case 'drift':
-        await this.startDriftAnimation();
-        break;
-      case 'breathe':
-        await this.startBreatheAnimation();
-        break;
-      case 'countdown':
-        await this.startCountdownAnimation();
-        break;
-    }
+    // Implementation would depend on animation type
+    // For now, just log
+    logger.info(`Starting ${type} animation`);
   }
 
   /**
-   * Stop any running animation
+   * Stop animation
    */
   stopAnimation(): void {
-    if (this.currentAnimation) {
-      clearInterval(this.currentAnimation);
-      this.currentAnimation = undefined;
-      this.animationType = undefined;
-      logger.info('Animation stopped');
+    if (this.animationInterval) {
+      clearInterval(this.animationInterval);
+      this.animationInterval = undefined;
     }
+    this.animationType = 'none';
   }
 
   /**
-   * Get current animation status
+   * Get animation status
    */
-  getAnimationStatus(): { isAnimating: boolean; type?: string } {
+  getAnimationStatus() {
     return {
-      isAnimating: !!this.currentAnimation,
-      type: this.animationType,
+      active: !!this.animationInterval,
+      type: this.animationType || 'none',
     };
   }
 
   /**
-   * Drift animation - gentle hue movement for work phase
+   * Utility sleep function
    */
-  private async startDriftAnimation(): Promise<void> {
-    let currentHue = 47000;
-    let direction = 1;
-    const HUE_DRIFT = 1500;
-    let stepCount = 0;
-
-    logger.info('Starting drift animation interval');
-
-    // Apply initial state
-    await this.applyState({
-      on: true,
-      bri: 254,
-      hue: currentHue,
-      sat: 200,
-      transitiontime: 20,
-    });
-
-    const intervalId = setInterval(async () => {
-      stepCount++;
-      logger.info(`Drift animation interval fired - step ${stepCount}`);
-      if (!this.enabled || this.status !== 'connected') {
-        this.stopAnimation();
-        return;
-      }
-
-      currentHue += (HUE_DRIFT * direction);
-      
-      if (currentHue >= 47000 + HUE_DRIFT || currentHue <= 47000 - HUE_DRIFT) {
-        direction *= -1;
-      }
-
-      // Wrap hue value
-      if (currentHue < 0) currentHue += 65536;
-      if (currentHue > 65535) currentHue -= 65536;
-
-      logger.info('Drift animation step', { 
-        currentHue: Math.round(currentHue), 
-        direction,
-        animationType: this.animationType 
-      });
-
-      await this.applyState({
-        hue: Math.round(currentHue),
-        transitiontime: 30,
-      });
-    }, 3000); // Every 3 seconds
-    
-    this.currentAnimation = intervalId;
-    logger.info('Drift animation interval stored', { intervalId: !!intervalId });
+  private sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
   }
-
-  /**
-   * Breathe animation - brightness oscillation for rest phase
-   */
-  private async startBreatheAnimation(): Promise<void> {
-    let currentBri = 100;
-    let direction = 1;
-    const BRI_RANGE = 20;
-
-    // Apply initial state
-    await this.applyState({
-      on: true,
-      bri: currentBri,
-      hue: 25000,
-      sat: 100,
-      transitiontime: 10,
-    });
-
-    this.currentAnimation = setInterval(async () => {
-      if (!this.enabled || this.status !== 'connected') {
-        this.stopAnimation();
-        return;
-      }
-
-      currentBri += (BRI_RANGE * direction);
-      
-      if (currentBri >= 120 || currentBri <= 80) {
-        direction *= -1;
-      }
-
-      logger.info('Breathe animation step', { 
-        currentBri, 
-        direction,
-        animationType: this.animationType 
-      });
-
-      await this.applyState({
-        bri: currentBri,
-        transitiontime: 20,
-      });
-    }, 2000); // Every 2 seconds
-  }
-
-  /**
-   * Countdown animation - quick pulses
-   */
-  private async startCountdownAnimation(): Promise<void> {
-    let count = 5;
-    const baseBri = 180;
-
-    this.currentAnimation = setInterval(async () => {
-      if (!this.enabled || this.status !== 'connected' || count <= 0) {
-        this.stopAnimation();
-        return;
-      }
-
-      // Pulse up
-      await this.applyState({
-        on: true,
-        bri: baseBri + 60,
-        hue: 47000,
-        sat: 200,
-        transitiontime: 2,
-      });
-
-      // Return to base after 400ms
-      setTimeout(async () => {
-        await this.applyState({
-          bri: baseBri,
-          transitiontime: 3,
-        });
-      }, 400);
-
-      count--;
-    }, 1000); // Every second
-  }
-}
-
-// Singleton instance
-let lightingService: LightingService | null = null;
-
-/**
- * Get or create lighting service instance
- */
-export function getLightingService(config?: LightingServiceConfig): LightingService {
-  if (!lightingService) {
-    lightingService = new LightingService(config || {});
-  }
-  return lightingService;
 }
