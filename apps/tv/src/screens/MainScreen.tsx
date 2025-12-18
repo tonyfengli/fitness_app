@@ -916,33 +916,6 @@ export function MainScreen() {
               </MattePanel>
             )}
           </Pressable>
-          
-          {/* Lighting Test Button */}
-          <Pressable
-            onPress={() => {
-              console.log('[MainScreen] 💡 Lighting Test button pressed');
-              navigation.navigate('LightingTest');
-            }}
-            focusable={!selectedSessionId}
-          >
-            {({ focused }) => (
-              <MattePanel 
-                focused={focused}
-                style={{ 
-                  paddingHorizontal: 32,
-                  paddingVertical: 12,
-                  backgroundColor: focused ? 'rgba(255,255,255,0.16)' : TOKENS.color.card,
-                  borderColor: focused ? 'rgba(255,255,255,0.45)' : TOKENS.color.borderGlass,
-                  borderWidth: focused ? 1 : 1,
-                  transform: focused ? [{ translateY: -1 }] : [],
-                }}
-              >
-                <Text style={{ color: TOKENS.color.accent, fontSize: 18, letterSpacing: 0.2 }}>
-                  💡 Lighting
-                </Text>
-              </MattePanel>
-            )}
-          </Pressable>
           </View>
         ) : (
           <View style={[styles.templateSelector, { opacity: showTemplates ? 1 : 0 }]}>
