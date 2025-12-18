@@ -589,6 +589,7 @@ export function CircuitWorkoutOverviewScreen() {
   }, []);
   const navigation = useNavigation();
   const sessionId = navigation.getParam('sessionId');
+  const isStartedOverride = navigation.getParam('isStartedOverride') || false;
   
   const queryClient = useQueryClient();
   const [lastSwapTime, setLastSwapTime] = useState<Date | null>(null);
@@ -823,8 +824,8 @@ export function CircuitWorkoutOverviewScreen() {
   
   const handleStartCircuit = async () => {
     // For circuit workouts, we don't need the complex workout generation
-    // Just navigate to the live workout screen
-    navigation.navigate('CircuitWorkoutLive', { sessionId });
+    // Just navigate to the live workout screen with isStarted override
+    navigation.navigate('CircuitWorkoutLive', { sessionId, isStartedOverride });
   };
   
   if (sessionLoading || selectionsLoading) {

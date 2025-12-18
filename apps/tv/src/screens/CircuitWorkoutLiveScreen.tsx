@@ -12,7 +12,7 @@ import { MattePanel } from '../components/workout-live/MattePanel';
 import { WorkoutHeader } from '../components/workout-live/WorkoutHeader';
 import { WorkoutControls } from '../components/workout-live/WorkoutControls';
 import { WorkoutContent } from '../components/workout-live/WorkoutContent';
-import { useWorkoutMachine } from '../components/workout-live/hooks/useWorkoutMachine';
+import { useWorkoutMachineWithLighting } from '../components/workout-live/hooks/useWorkoutMachineWithLighting';
 
 // Re-export MattePanel for backward compatibility
 export { MattePanel } from '../components/workout-live/MattePanel';
@@ -67,6 +67,7 @@ function distributeClientsToTeams(clients: any[], teamCount: number): Map<number
 export function CircuitWorkoutLiveScreen() {
   const navigation = useNavigation();
   const sessionId = navigation.getParam('sessionId');
+  const isStartedOverride = navigation.getParam('isStartedOverride') || false;
   const componentInstanceId = useRef(Date.now());
   const [isTeamsModalVisible, setIsTeamsModalVisible] = useState(false);
   const closeButtonRef = useRef<any>(null);
@@ -223,12 +224,21 @@ export function CircuitWorkoutLiveScreen() {
     return rounds;
   }, [selections, circuitConfig]);
 
-  // Use the workout machine hook
-  const { state, send, getRoundTiming } = useWorkoutMachine({
+  // Use the workout machine hook with lighting
+  console.log('[CircuitWorkoutLiveScreen] Creating workout machine with:', {
+    sessionId,
+    hasCircuitConfig: !!circuitConfig,
+    roundsCount: roundsData.length,
+    hasSelections: !!selections
+  });
+  
+  const { state, send, getRoundTiming } = useWorkoutMachineWithLighting({
     circuitConfig,
     roundsData,
     selections,
-    onWorkoutComplete: () => navigation.goBack()
+    sessionId,
+    onWorkoutComplete: () => navigation.goBack(),
+    isStartedOverride
   });
 
   const currentRoundTiming = getRoundTiming(state.context.currentRoundIndex);

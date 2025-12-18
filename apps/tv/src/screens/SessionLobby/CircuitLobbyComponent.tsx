@@ -1,5 +1,5 @@
-import React, { useMemo } from 'react';
-import { View, Text, ScrollView, Image, Pressable, ActivityIndicator, Alert } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { View, Text, ScrollView, Image, Pressable, ActivityIndicator, Alert, Switch } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../providers/TRPCProvider';
@@ -109,6 +109,9 @@ export function CircuitLobbyComponent({
 }: CircuitLobbyProps) {
   const navigation = useNavigation();
   const queryClient = useQueryClient();
+  
+  // State for isStarted toggle
+  const [isStartedOverride, setIsStartedOverride] = useState(false);
 
   // Update session status mutation
   const updateSessionStatusMutation = useMutation({
@@ -144,8 +147,8 @@ export function CircuitLobbyComponent({
   const sendStartMessagesMutation = useMutation({
     ...api.trainingSession.sendSessionStartMessages.mutationOptions(),
     onSuccess: (data) => {
-      // Navigate directly to circuit workout overview screen
-      navigation.navigate('CircuitWorkoutOverview', { sessionId });
+      // Navigate directly to circuit workout overview screen with isStarted override
+      navigation.navigate('CircuitWorkoutOverview', { sessionId, isStartedOverride });
     },
     onError: (error: any) => {
       console.error('[TV CircuitLobby] Critical error: Failed to send start messages:', error);
@@ -159,7 +162,7 @@ export function CircuitLobbyComponent({
           {
             text: 'Continue',
             onPress: () => {
-              navigation.navigate('CircuitWorkoutOverview', { sessionId });
+              navigation.navigate('CircuitWorkoutOverview', { sessionId, isStartedOverride });
             }
           }
         ]
@@ -221,6 +224,33 @@ export function CircuitLobbyComponent({
               </MattePanel>
             )}
           </Pressable>
+          
+          {/* isStarted Toggle */}
+          <View style={{ 
+            alignItems: 'center',
+            marginHorizontal: 20,
+          }}>
+            <MattePanel style={{ padding: 16 }}>
+              <View style={{ alignItems: 'center' }}>
+                <Text style={{ 
+                  fontSize: 12, 
+                  color: TOKENS.color.muted,
+                  marginBottom: 8,
+                  textTransform: 'uppercase',
+                  letterSpacing: 0.8
+                }}>
+                  Debug: isStarted
+                </Text>
+                <Switch
+                  value={isStartedOverride}
+                  onValueChange={setIsStartedOverride}
+                  trackColor={{ false: '#767577', true: TOKENS.color.accent }}
+                  thumbColor={isStartedOverride ? '#ffffff' : '#f4f3f4'}
+                  style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
+                />
+              </View>
+            </MattePanel>
+          </View>
           
           {/* Center content - Session info */}
           <View style={{ flex: 2, alignItems: 'center' }}>
