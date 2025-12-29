@@ -13,6 +13,7 @@ import { WorkoutHeader } from '../components/workout-live/WorkoutHeader';
 import { WorkoutControls } from '../components/workout-live/WorkoutControls';
 import { WorkoutContent } from '../components/workout-live/WorkoutContent';
 import { useWorkoutMachineWithLighting } from '../components/workout-live/hooks/useWorkoutMachineWithLighting';
+import { useLightingControl } from '../hooks/useLightingControl';
 
 // Re-export MattePanel for backward compatibility
 export { MattePanel } from '../components/workout-live/MattePanel';
@@ -75,6 +76,7 @@ export function CircuitWorkoutLiveScreen() {
   const backButtonRef = useRef<any>(null);
   const [shouldRestoreFocusToTeams, setShouldRestoreFocusToTeams] = useState(false);
   const [teamsDistribution, setTeamsDistribution] = useState<Map<number, any[]>>(new Map());
+  const [isLightingEnabled, setIsLightingEnabled] = useState(isStartedOverride);
 
   // Get circuit config with polling
   const { data: circuitConfig } = useQuery(
@@ -224,22 +226,59 @@ export function CircuitWorkoutLiveScreen() {
     return rounds;
   }, [selections, circuitConfig]);
 
-  // Use the workout machine hook with lighting
-  console.log('[CircuitWorkoutLiveScreen] Creating workout machine with:', {
-    sessionId,
-    hasCircuitConfig: !!circuitConfig,
-    roundsCount: roundsData.length,
-    hasSelections: !!selections
-  });
+  // Initialize lighting control
+  const { isLightingOn, turnOn, turnOff, activateScene, getSceneForPhase } = useLightingControl({ sessionId });
   
+  // Sync lighting state with toggle
+  useEffect(() => {
+    console.log('[CircuitLive] Mount effect:', { isStartedOverride, isLightingOn });
+    if (isStartedOverride && !isLightingOn) {
+      // Initial state from navigation - turn on lights
+      const previewScene = getSceneForPhase(0, 'preview');
+      console.log('[CircuitLive] Turning on lights from mount:', previewScene);
+      turnOn(previewScene || undefined).catch(console.error);
+    }
+  }, []); // Only on mount
+  
+  // Use the workout machine hook
   const { state, send, getRoundTiming } = useWorkoutMachineWithLighting({
     circuitConfig,
     roundsData,
     selections,
     sessionId,
     onWorkoutComplete: () => navigation.goBack(),
-    isStartedOverride
+    isStartedOverride: false // Don't use automatic lighting in machine
   });
+  
+  // Handle phase changes manually
+  useEffect(() => {
+    console.log('[CircuitLive] Phase change effect:', {
+      stateValue: state.value,
+      roundIndex: state.context.currentRoundIndex,
+      isLightingOn,
+      isLightingEnabled
+    });
+    
+    if (!isLightingOn || !isLightingEnabled) return;
+    
+    const roundTiming = getRoundTiming(state.context.currentRoundIndex);
+    let phaseType = state.value;
+    
+    if (state.value === 'roundPreview') {
+      phaseType = 'preview';
+    } else if (state.value === 'exercise') {
+      phaseType = 'work';
+    } else if (state.value === 'setBreak') {
+      phaseType = 'roundBreak';
+    }
+    
+    const sceneId = getSceneForPhase(state.context.currentRoundIndex, phaseType);
+    console.log('[CircuitLive] Phase scene:', { phaseType, sceneId });
+    
+    if (sceneId) {
+      activateScene(sceneId).catch(console.error);
+    }
+  }, [state.value, state.context.currentRoundIndex, isLightingOn, isLightingEnabled, activateScene, getSceneForPhase, getRoundTiming]);
 
   const currentRoundTiming = getRoundTiming(state.context.currentRoundIndex);
   const currentRoundType = currentRoundTiming.roundType;
@@ -454,11 +493,67 @@ export function CircuitWorkoutLiveScreen() {
                 shadowRadius: 8,
                 elevation: 4,
               }}>
-{/* Start Button */}
+                {/* Lights Button - Icon Only for stations round */}
+                {currentRoundType === 'stations_round' && (
+                  <Pressable
+                    onPress={async () => {
+                      const newState = !isLightingEnabled;
+                      setIsLightingEnabled(newState);
+                      
+                      try {
+                        if (newState) {
+                          // Get appropriate scene for current state
+                          const phaseType = state.value === 'roundPreview' ? 'preview' : 'work';
+                          const sceneId = getSceneForPhase(state.context.currentRoundIndex, phaseType);
+                          await turnOn(sceneId || undefined);
+                        } else {
+                          await turnOff();
+                        }
+                      } catch (error) {
+                        console.error('[CircuitLive] Failed to control lights:', error);
+                      }
+                    }}
+                    focusable
+                  >
+                    {({ focused }) => (
+                      <MattePanel 
+                        focused={focused}
+                        radius={26}
+                        style={{ 
+                          width: 52,
+                          height: 44,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          backgroundColor: isLightingEnabled ? 
+                            (focused ? 'rgba(0,183,194,0.2)' : 'rgba(0,183,194,0.1)') :
+                            (focused ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.08)'),
+                          borderColor: isLightingEnabled ? 
+                            TOKENS.color.accent : 
+                            (focused ? 'rgba(255,255,255,0.3)' : 'transparent'),
+                          borderWidth: isLightingEnabled ? 1.5 : (focused ? 1.5 : 0),
+                        }}
+                      >
+                        <Icon 
+                          name={isLightingEnabled ? "lightbulb" : "lightbulb-outline"} 
+                          size={22} 
+                          color={isLightingEnabled ? TOKENS.color.accent : TOKENS.color.muted}
+                          style={{
+                            shadowColor: isLightingEnabled ? TOKENS.color.accent : 'transparent',
+                            shadowOpacity: isLightingEnabled ? 0.8 : 0,
+                            shadowRadius: isLightingEnabled ? 15 : 0,
+                            shadowOffset: { width: 0, height: 0 },
+                          }}
+                        />
+                      </MattePanel>
+                    )}
+                  </Pressable>
+                )}
+                
+                {/* Start Button */}
                 <Pressable
                   onPress={handleStartWorkout}
                   focusable
-                  hasTVPreferredFocus
+                  hasTVPreferredFocus={currentRoundType !== 'stations_round'}
                 >
                   {({ focused }) => (
                     <MattePanel 

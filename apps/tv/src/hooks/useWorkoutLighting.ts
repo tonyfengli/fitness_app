@@ -18,15 +18,10 @@ export function useWorkoutLighting({ sessionId, isEnabled = true }: UseWorkoutLi
   const lightingConfigRef = useRef<LightingConfig | null>(null);
   const currentPhaseRef = useRef<string | null>(null);
   const lastSceneIdRef = useRef<string | null>(null);
-  
-  console.log('[useWorkoutLighting] Hook initialized:', {
-    sessionId,
-    isEnabled
-  });
+  const manualControlRef = useRef<'on' | 'off' | null>(null);
   
   // Fetch lighting configuration - using useQuery from React Query directly
   const queryOptions = sessionId ? api.lightingConfig.get.queryOptions({ sessionId }) : null;
-  console.log('[useWorkoutLighting] Query options:', queryOptions);
   
   const { data: lightingConfig, isLoading, error } = useQuery({
     ...(queryOptions || {}),
@@ -34,22 +29,10 @@ export function useWorkoutLighting({ sessionId, isEnabled = true }: UseWorkoutLi
     staleTime: 5 * 60 * 1000, // Cache for 5 minutes
   });
   
-  console.log('[useWorkoutLighting] Query status:', {
-    isLoading,
-    hasData: !!lightingConfig,
-    error,
-    enabled: !!sessionId && isEnabled
-  });
-  
   // Update ref when config changes
   useEffect(() => {
     if (lightingConfig) {
       lightingConfigRef.current = lightingConfig;
-      console.log('[useWorkoutLighting] Lighting config loaded:', {
-        enabled: lightingConfig.enabled,
-        globalDefaults: Object.keys(lightingConfig.globalDefaults),
-        roundOverrides: Object.keys(lightingConfig.roundOverrides || {}),
-      });
     }
   }, [lightingConfig]);
   
@@ -57,7 +40,15 @@ export function useWorkoutLighting({ sessionId, isEnabled = true }: UseWorkoutLi
   const activateSceneMutation = useMutation({
     ...api.lighting.activateScene.mutationOptions(),
     onError: (error) => {
-      console.error('[useWorkoutLighting] Failed to activate scene:', error);
+      console.error('[TV-Lighting] Failed to activate scene:', error);
+    },
+  });
+  
+  // Mutation for setting light state (on/off)
+  const setStateMutation = useMutation({
+    ...api.lighting.setState.mutationOptions(),
+    onError: (error) => {
+      console.error('[TV-Lighting] Failed to set light state:', error);
     },
   });
   
@@ -74,35 +65,31 @@ export function useWorkoutLighting({ sessionId, isEnabled = true }: UseWorkoutLi
     
     // 1. Check for detailed override first (e.g., work-station-0)
     if (detailedPhaseType && config.roundOverrides?.[roundKey]?.[detailedPhaseType]) {
-      console.log('[useWorkoutLighting] Using detailed override:', detailedPhaseType);
       return config.roundOverrides[roundKey][detailedPhaseType];
     }
     
     // 2. Check for round master override (e.g., work)
     if (config.roundOverrides?.[roundKey]?.[phaseType]) {
-      console.log('[useWorkoutLighting] Using round master override:', phaseType);
       return config.roundOverrides[roundKey][phaseType];
     }
     
     // 3. Fallback to global default
     const globalScene = config.globalDefaults[phaseType as keyof typeof config.globalDefaults];
     if (globalScene) {
-      console.log('[useWorkoutLighting] Using global default:', phaseType);
       return globalScene;
     }
     
-    console.log('[useWorkoutLighting] No scene found for phase:', { 
-      roundIndex, 
-      phaseType, 
-      detailedPhaseType 
-    });
     return null;
   }, []);
   
   // Apply lighting for a specific phase
   const applyLightingForPhase = useCallback(async (phaseInfo: PhaseInfo) => {
     if (!isEnabled || !lightingConfigRef.current?.enabled) {
-      console.log('[useWorkoutLighting] Lighting disabled, skipping');
+      return;
+    }
+    
+    // Skip if manually turned off
+    if (manualControlRef.current === 'off') {
       return;
     }
     
@@ -111,7 +98,6 @@ export function useWorkoutLighting({ sessionId, isEnabled = true }: UseWorkoutLi
     
     // Avoid re-applying the same phase
     if (currentPhaseRef.current === phaseKey) {
-      console.log('[useWorkoutLighting] Same phase, skipping:', phaseKey);
       return;
     }
     
@@ -121,33 +107,24 @@ export function useWorkoutLighting({ sessionId, isEnabled = true }: UseWorkoutLi
     const scene = getEffectiveScene(roundIndex, phaseType, detailedPhaseType);
     
     if (!scene) {
-      console.log('[useWorkoutLighting] No scene configured for phase:', phaseKey);
       return;
     }
     
     // Avoid re-applying the same scene
     if (lastSceneIdRef.current === scene.sceneId) {
-      console.log('[useWorkoutLighting] Same scene already active:', scene.sceneName);
       return;
     }
     
-    console.log('[useWorkoutLighting] Applying lighting for phase:', {
-      phase: phaseKey,
-      scene: scene.sceneName,
-      sceneId: scene.sceneId,
-    });
     
     lastSceneIdRef.current = scene.sceneId;
     
+    
     // Try LAN first, then fallback to remote
     try {
-      console.log('[useWorkoutLighting] Attempting LAN connection...');
       // TODO: Implement actual LAN connection when we have bridge access
       // For now, simulate LAN failure to test fallback
       throw new Error('LAN not implemented yet');
     } catch (lanError) {
-      console.log('[useWorkoutLighting] LAN failed, falling back to remote');
-      
       // Use the mutation which is properly configured with TRPC
       await activateSceneMutation.mutateAsync({
         sceneId: scene.sceneId,
@@ -160,11 +137,55 @@ export function useWorkoutLighting({ sessionId, isEnabled = true }: UseWorkoutLi
   const resetPhase = useCallback(() => {
     currentPhaseRef.current = null;
     lastSceneIdRef.current = null;
+    manualControlRef.current = null; // Reset manual control
   }, []);
+  
+  // Turn lights on with appropriate preset
+  const turnLightsOn = useCallback(async (roundIndex: number = 0) => {
+    manualControlRef.current = 'on';
+    currentPhaseRef.current = null; // Clear phase to allow re-activation
+    
+    if (!lightingConfigRef.current) return;
+    
+    // Try to get preview scene for the specified round
+    const scene = getEffectiveScene(roundIndex, 'preview');
+    
+    if (scene) {
+      lastSceneIdRef.current = scene.sceneId; // Update last scene
+      await activateSceneMutation.mutateAsync({
+        sceneId: scene.sceneId,
+        groupId: lightingConfigRef.current.targetGroup || '0',
+      });
+    } else {
+      // No preview scene, just turn lights on with default brightness
+      await setStateMutation.mutateAsync({
+        state: {
+          on: true,
+          bri: 254, // Max brightness
+          transitiontime: 10 // 1 second transition
+        }
+      });
+    }
+  }, [getEffectiveScene, activateSceneMutation, setStateMutation]);
+  
+  // Turn lights completely off
+  const turnLightsOff = useCallback(async () => {
+    manualControlRef.current = 'off';
+    lastSceneIdRef.current = null; // Clear last scene
+    currentPhaseRef.current = null; // Clear phase tracking
+    await setStateMutation.mutateAsync({
+      state: {
+        on: false,
+        transitiontime: 10 // 1 second transition
+      }
+    });
+  }, [setStateMutation]);
   
   return {
     applyLightingForPhase,
     resetPhase,
+    turnLightsOn,
+    turnLightsOff,
     isLightingEnabled: lightingConfig?.enabled || false,
     lightingConfig,
   };

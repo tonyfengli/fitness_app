@@ -1,10 +1,11 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { View, Text, ScrollView, Image, Pressable, ActivityIndicator, Alert, Switch } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../providers/TRPCProvider';
 import { useNavigation } from '../../App';
 import { API_URL } from '../../env.generated';
+import { useLightingControl } from '../../hooks/useLightingControl';
 
 // Design tokens
 const TOKENS = {
@@ -112,6 +113,14 @@ export function CircuitLobbyComponent({
   
   // State for isStarted toggle
   const [isStartedOverride, setIsStartedOverride] = useState(false);
+  
+  // Initialize lighting control
+  const { isLightingOn, turnOn, turnOff, getSceneForPhase } = useLightingControl({ sessionId });
+  
+  // Log lighting state changes
+  useEffect(() => {
+    console.log('[CircuitLobby] Lighting state changed:', { isLightingOn });
+  }, [isLightingOn]);
 
   // Update session status mutation
   const updateSessionStatusMutation = useMutation({
@@ -225,31 +234,108 @@ export function CircuitLobbyComponent({
             )}
           </Pressable>
           
-          {/* isStarted Toggle */}
+          {/* isStarted Toggle - World Class Design */}
           <View style={{ 
-            alignItems: 'center',
+            backgroundColor: 'rgba(255,255,255,0.05)',
+            borderRadius: 32,
+            borderWidth: 1,
+            borderColor: 'rgba(255,255,255,0.1)',
+            padding: 6,
             marginHorizontal: 20,
+            elevation: 4,
+            shadowColor: '#000',
+            shadowOpacity: 0.25,
+            shadowRadius: 12,
+            shadowOffset: { width: 0, height: 4 },
           }}>
-            <MattePanel style={{ padding: 16 }}>
-              <View style={{ alignItems: 'center' }}>
-                <Text style={{ 
-                  fontSize: 12, 
-                  color: TOKENS.color.muted,
-                  marginBottom: 8,
-                  textTransform: 'uppercase',
-                  letterSpacing: 0.8
+            <Pressable
+              onPress={async () => {
+                const newState = !isStartedOverride;
+                setIsStartedOverride(newState);
+                
+                try {
+                  if (newState) {
+                    // Turn on with Round 1 preview scene if available
+                    const previewScene = getSceneForPhase(0, 'preview');
+                    await turnOn(previewScene || undefined);
+                  } else {
+                    await turnOff();
+                  }
+                } catch (error) {
+                  console.error('[CircuitLobby] Failed to control lights:', error);
+                }
+              }}
+              focusable
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}
+            >
+              {({ focused }) => (
+                <View style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  backgroundColor: focused ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.08)',
+                  borderRadius: 26,
+                  borderWidth: focused ? 1.5 : 0,
+                  borderColor: focused ? 'rgba(255,255,255,0.3)' : 'transparent',
+                  paddingHorizontal: 14,
+                  height: 44,
+                  minWidth: 140,
+                  elevation: focused ? 6 : 3,
+                  shadowColor: '#000',
+                  shadowOpacity: focused ? 0.3 : 0.2,
+                  shadowRadius: focused ? 20 : 10,
+                  shadowOffset: { width: 0, height: focused ? 6 : 3 },
                 }}>
-                  Debug: isStarted
-                </Text>
-                <Switch
-                  value={isStartedOverride}
-                  onValueChange={setIsStartedOverride}
-                  trackColor={{ false: '#767577', true: TOKENS.color.accent }}
-                  thumbColor={isStartedOverride ? '#ffffff' : '#f4f3f4'}
-                  style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
-                />
-              </View>
-            </MattePanel>
+                  {/* Label Section */}
+                  <View style={{ flex: 1, marginRight: 12 }}>
+                    <Text style={{ 
+                      fontSize: 13, 
+                      color: TOKENS.color.text,
+                      fontWeight: '700',
+                      letterSpacing: 0.3,
+                      textTransform: 'uppercase',
+                    }}>
+                      Lights
+                    </Text>
+                  </View>
+                  
+                  {/* Toggle Indicator */}
+                  <View style={{
+                    width: 48,
+                    height: 26,
+                    borderRadius: 13,
+                    backgroundColor: isStartedOverride ? TOKENS.color.accent : 'rgba(255,255,255,0.2)',
+                    padding: 2,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: isStartedOverride ? 'flex-end' : 'flex-start',
+                  }}>
+                    <View style={{
+                      width: 22,
+                      height: 22,
+                      borderRadius: 11,
+                      backgroundColor: '#ffffff',
+                      elevation: 2,
+                      shadowColor: '#000',
+                      shadowOpacity: 0.25,
+                      shadowRadius: 4,
+                      shadowOffset: { width: 0, height: 2 },
+                    }}>
+                      {isStartedOverride && (
+                        <View style={{
+                          position: 'absolute',
+                          top: 6,
+                          left: 6,
+                          width: 10,
+                          height: 10,
+                          borderRadius: 5,
+                          backgroundColor: TOKENS.color.accent,
+                        }} />
+                      )}
+                    </View>
+                  </View>
+                </View>
+              )}
+            </Pressable>
           </View>
           
           {/* Center content - Session info */}

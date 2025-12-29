@@ -129,18 +129,6 @@ function groupExercisesByStation(exercises: CircuitExercise[]): Map<number, Circ
       ])
   );
   
-  console.log('[TV-CircuitOverview] Station groups after grouping:', {
-    stationCount: sortedStationMap.size,
-    stations: Array.from(sortedStationMap.entries()).map(([orderIndex, exercises]) => ({
-      orderIndex,
-      exerciseCount: exercises.length,
-      exercises: exercises.map(ex => ({
-        name: ex.exerciseName,
-        stationIndex: ex.stationIndex,
-        orderIndex: ex.orderIndex
-      }))
-    }))
-  });
   
   return sortedStationMap;
 }
@@ -180,19 +168,6 @@ function RoundContent({ round, isCompact }: {
     if (isStationRound && stationGroups) {
       const stations = Array.from(stationGroups.entries()).sort((a, b) => a[0] - b[0]);
       
-      console.log(`[TV-CircuitOverview] Rendering stations for ${round.roundName}:`, {
-        totalStations: stations.length,
-        stations: stations.map(([orderIndex, exercises], idx) => ({
-          stationNumber: idx + 1,
-          orderIndex,
-          exerciseCount: exercises.length,
-          exercises: exercises.map(ex => ({
-            name: ex.exerciseName,
-            orderIndex: ex.orderIndex,
-            stationIndex: ex.stationIndex
-          }))
-        }))
-      });
       
       const maxStations = 4;
       const stationsToShow = stations.slice(0, maxStations);
@@ -702,17 +677,6 @@ export function CircuitWorkoutOverviewScreen() {
   useEffect(() => {
     if (selections && selections.length > 0) {
       // Processing workout selections
-      console.log('[TV-CircuitOverview] Raw selections from backend:', {
-        totalCount: selections.length,
-        selections: selections.map(sel => ({
-          id: sel.id.slice(-8),
-          exerciseName: sel.exerciseName,
-          orderIndex: sel.orderIndex,
-          stationIndex: sel.stationIndex,
-          groupName: sel.groupName,
-          clientId: sel.clientId ? sel.clientId.slice(-8) : null
-        }))
-      });
       
       // Process all exercises without deduplication to allow duplicates
       const allExercises: CircuitExercise[] = [];
@@ -755,18 +719,6 @@ export function CircuitWorkoutOverviewScreen() {
           
           const isStationsRound = roundTemplate?.template?.type === 'stations_round';
           
-          console.log(`[TV-CircuitOverview] Processing ${roundName}:`, {
-            roundNum,
-            roundType: roundTemplate?.template?.type,
-            isStationsRound,
-            exerciseCount: exercises.length,
-            exercises: exercises.map(ex => ({
-              name: ex.exerciseName,
-              orderIndex: ex.orderIndex,
-              stationIndex: ex.stationIndex,
-              id: ex.id.slice(-8)
-            }))
-          });
           
           // Extract timing information based on round type
           let roundData: RoundData = {
