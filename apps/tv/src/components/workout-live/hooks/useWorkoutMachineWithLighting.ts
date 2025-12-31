@@ -4,6 +4,7 @@ import { workoutMachine } from '../../../machines/workoutMachine';
 // Removed lighting import - now handled at component level
 import type { CircuitConfig } from '@acme/db';
 import { RoundData, CircuitExercise } from '../types';
+import { audioService } from '../../../services/AudioService';
 
 interface UseWorkoutMachineWithLightingProps {
   circuitConfig: CircuitConfig | null | undefined;
@@ -53,7 +54,10 @@ export function useWorkoutMachineWithLighting({
     }
   }, [roundsData, send]);
 
-  // Timer management
+  // Track previous time remaining for countdown detection
+  const prevTimeRemaining = useRef(state.context.timeRemaining);
+
+  // Timer management with countdown audio
   useEffect(() => {
     if (state.context.timeRemaining > 0 && !state.context.isPaused) {
       const interval = setInterval(() => {
@@ -62,6 +66,37 @@ export function useWorkoutMachineWithLighting({
       return () => clearInterval(interval);
     }
   }, [state.context.timeRemaining, state.context.isPaused, send]);
+
+  // Countdown audio trigger
+  useEffect(() => {
+    const currentTime = state.context.timeRemaining;
+    const previousTime = prevTimeRemaining.current;
+    
+    // Log timer changes for debugging sync issues
+    if (currentTime !== previousTime && currentTime <= 5 && currentTime >= 0) {
+      console.log(`[Timer] ${state.value} - Time: ${currentTime}s`);
+    }
+    
+    // Play individual beeps at 4, 3, 2, and 1 seconds
+    if ((state.value === 'exercise' || state.value === 'rest') && 
+        !state.context.isPaused &&
+        (currentTime === 4 || currentTime === 3 || currentTime === 2 || currentTime === 1) && 
+        previousTime > currentTime) {
+      console.log(`[Timer] Playing beep at ${currentTime}s during ${state.value}`);
+      // Initialize audio service if not already done
+      audioService.initialize().then(() => {
+        if (currentTime === 1) {
+          // For the final beep, play to the end of the file
+          audioService.playFinalBeep();
+        } else {
+          // For other beeps, play just the single beep
+          audioService.playSingleBeep();
+        }
+      }).catch(console.error);
+    }
+    
+    prevTimeRemaining.current = currentTime;
+  }, [state.context.timeRemaining, state.value, state.context.isPaused]);
 
   // Get round timing helper
   const getRoundTiming = useCallback((roundIndex: number) => {

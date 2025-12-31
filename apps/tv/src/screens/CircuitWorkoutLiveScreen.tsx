@@ -14,6 +14,7 @@ import { WorkoutControls } from '../components/workout-live/WorkoutControls';
 import { WorkoutContent } from '../components/workout-live/WorkoutContent';
 import { useWorkoutMachineWithLighting } from '../components/workout-live/hooks/useWorkoutMachineWithLighting';
 import { useLightingControl } from '../hooks/useLightingControl';
+import { useAudio } from '../hooks/useAudio';
 
 // Re-export MattePanel for backward compatibility
 export { MattePanel } from '../components/workout-live/MattePanel';
@@ -77,6 +78,9 @@ export function CircuitWorkoutLiveScreen() {
   const [shouldRestoreFocusToTeams, setShouldRestoreFocusToTeams] = useState(false);
   const [teamsDistribution, setTeamsDistribution] = useState<Map<number, any[]>>(new Map());
   const [isLightingEnabled, setIsLightingEnabled] = useState(isStartedOverride);
+
+  // Initialize audio
+  useAudio();
 
   // Get circuit config with polling
   const { data: circuitConfig } = useQuery(
@@ -231,11 +235,11 @@ export function CircuitWorkoutLiveScreen() {
   
   // Sync lighting state with toggle
   useEffect(() => {
-    console.log('[CircuitLive] Mount effect:', { isStartedOverride, isLightingOn });
+    // console.log('[CircuitLive] Mount effect:', { isStartedOverride, isLightingOn });
     if (isStartedOverride && !isLightingOn) {
       // Initial state from navigation - turn on lights
       const previewScene = getSceneForPhase(0, 'preview');
-      console.log('[CircuitLive] Turning on lights from mount:', previewScene);
+      // console.log('[CircuitLive] Turning on lights from mount:', previewScene);
       turnOn(previewScene || undefined).catch(console.error);
     }
   }, []); // Only on mount
@@ -252,12 +256,12 @@ export function CircuitWorkoutLiveScreen() {
   
   // Handle phase changes manually
   useEffect(() => {
-    console.log('[CircuitLive] Phase change effect:', {
-      stateValue: state.value,
-      roundIndex: state.context.currentRoundIndex,
-      isLightingOn,
-      isLightingEnabled
-    });
+    // console.log('[CircuitLive] Phase change effect:', {
+    //   stateValue: state.value,
+    //   roundIndex: state.context.currentRoundIndex,
+    //   isLightingOn,
+    //   isLightingEnabled
+    // });
     
     if (!isLightingOn || !isLightingEnabled) return;
     
@@ -273,7 +277,7 @@ export function CircuitWorkoutLiveScreen() {
     }
     
     const sceneId = getSceneForPhase(state.context.currentRoundIndex, phaseType);
-    console.log('[CircuitLive] Phase scene:', { phaseType, sceneId });
+    // console.log('[CircuitLive] Phase scene:', { phaseType, sceneId });
     
     if (sceneId) {
       activateScene(sceneId).catch(console.error);
