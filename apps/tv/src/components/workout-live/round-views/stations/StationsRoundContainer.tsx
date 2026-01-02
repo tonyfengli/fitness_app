@@ -76,6 +76,20 @@ export function StationsRoundContainer({
   }
 
   if (state.value === 'exercise') {
+    console.log('[StationsRoundContainer] Exercise state:', {
+      currentExerciseIndex,
+      totalExercises: currentRound.exercises.length,
+      currentExercise: currentRound.exercises[currentExerciseIndex],
+      allExercises: currentRound.exercises.map(ex => ({
+        id: ex.id,
+        name: ex.exercise?.name || 'Unknown',
+        orderIndex: ex.orderIndex,
+        stationIndex: ex.stationIndex
+      })),
+      stationCircuits: stationCircuits,
+      hasGetStationTimerDisplay: !!getStationTimerDisplay,
+    });
+    
     return (
       <>
         <StationsExerciseView 

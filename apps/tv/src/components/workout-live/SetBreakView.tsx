@@ -10,7 +10,7 @@ interface SetBreakViewProps {
   roundType: string;
 }
 
-// Team configuration - matches the preview/rest views
+// Team configuration - supports up to 12 teams
 const TEAMS = [
   { name: 'Team 1', color: '#ef4444' },
   { name: 'Team 2', color: '#3b82f6' },
@@ -20,6 +20,10 @@ const TEAMS = [
   { name: 'Team 6', color: '#14b8a6' },
   { name: 'Team 7', color: '#fb923c' },
   { name: 'Team 8', color: '#06b6d4' },
+  { name: 'Team 9', color: '#ec4899' },
+  { name: 'Team 10', color: '#84cc16' },
+  { name: 'Team 11', color: '#6366f1' },
+  { name: 'Team 12', color: '#f97316' },
 ];
 
 export function SetBreakView({ timeRemaining, currentSetNumber, totalSets, currentRound, roundType }: SetBreakViewProps) {

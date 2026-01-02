@@ -12,7 +12,7 @@ interface StationsRoundPreviewProps {
   roundNumber?: number;
 }
 
-// Team configuration - supports up to 6 teams
+// Team configuration - supports up to 12 teams
 const TEAMS = [
   { name: 'Team 1', color: '#ef4444' },
   { name: 'Team 2', color: '#3b82f6' },
@@ -22,6 +22,10 @@ const TEAMS = [
   { name: 'Team 6', color: '#14b8a6' },
   { name: 'Team 7', color: '#fb923c' },
   { name: 'Team 8', color: '#06b6d4' },
+  { name: 'Team 9', color: '#ec4899' },
+  { name: 'Team 10', color: '#84cc16' },
+  { name: 'Team 11', color: '#6366f1' },
+  { name: 'Team 12', color: '#f97316' },
 ];
 
 export function StationsRoundPreview({ currentRound, repeatTimes = 1, workDuration = 45, timeRemaining = 0, isTimerActive = false, roundNumber }: StationsRoundPreviewProps) {
@@ -66,7 +70,7 @@ export function StationsRoundPreview({ currentRound, repeatTimes = 1, workDurati
       {/* Responsive Grid Layout */}
       <View style={{ 
         flex: 1, 
-        paddingHorizontal: 48,
+        paddingHorizontal: 24,
         flexDirection: 'column',
         gap: 2,
       }}>
@@ -160,12 +164,14 @@ export function StationsRoundPreview({ currentRound, repeatTimes = 1, workDurati
                       alignItems: 'center',
                       gap: 8,
                     }}>
-                      <View style={{
-                        width: 12,
-                        height: 12,
-                        borderRadius: 6,
-                        backgroundColor: team.color,
-                      }} />
+                      {exerciseCount <= 8 && (
+                        <View style={{
+                          width: 12,
+                          height: 12,
+                          borderRadius: 6,
+                          backgroundColor: team.color,
+                        }} />
+                      )}
                       <Text style={{ 
                         color: team.color, 
                         fontWeight: '800',

@@ -79,6 +79,17 @@ export function CircuitWorkoutLiveScreen() {
   const [teamsDistribution, setTeamsDistribution] = useState<Map<number, any[]>>(new Map());
   const [isLightingEnabled, setIsLightingEnabled] = useState(isStartedOverride);
 
+  // Log component lifecycle
+  useEffect(() => {
+    console.log('[CircuitLive] Component mounted');
+    console.log('[CircuitLive] sessionId:', sessionId);
+    console.log('[CircuitLive] isStartedOverride:', isStartedOverride);
+    
+    return () => {
+      console.log('[CircuitLive] Component unmounting');
+    };
+  }, []);
+
   // Initialize audio
   useAudio();
 
@@ -385,9 +396,16 @@ export function CircuitWorkoutLiveScreen() {
               <Pressable
                 ref={backButtonRef}
                 onPress={() => {
+                  console.log('[CircuitLive] Back button pressed');
+                  console.log('[CircuitLive] Current state:', state.value);
+                  console.log('[CircuitLive] Current round index:', state.context.currentRoundIndex);
+                  console.log('[CircuitLive] Is started:', state.context.isStarted);
+                  
                   if (state.context.currentRoundIndex === 0) {
+                    console.log('[CircuitLive] Navigating back (goBack)');
                     navigation.goBack();
                   } else {
+                    console.log('[CircuitLive] Sending BACK event to state machine');
                     send({ type: 'BACK' });
                   }
                 }}
@@ -790,6 +808,15 @@ export function CircuitWorkoutLiveScreen() {
 
           {/* Main Content Area */}
           <View style={{ flex: 1, paddingHorizontal: 48, paddingBottom: currentRoundType === 'stations_round' ? 24 : 48 }}>
+            {console.log('[CircuitLive] Passing to WorkoutContent:', {
+              stateValue: state.value,
+              currentRoundIndex: state.context.currentRoundIndex,
+              currentExerciseIndex: state.context.currentExerciseIndex,
+              currentRound: currentRound,
+              currentRoundType: currentRoundType,
+              exerciseCount: currentRound?.exercises?.length,
+              uniqueStations: currentRound?.exercises ? [...new Set(currentRound.exercises.map(ex => ex.orderIndex))] : [],
+            })}
             <WorkoutContent 
               state={state}
               circuitConfig={circuitConfig}
@@ -888,7 +915,7 @@ export function CircuitWorkoutLiveScreen() {
                 
                 const stationRows = getStationRows();
                 
-                // Team configuration
+                // Team configuration - supports up to 12 teams
                 const TEAMS = [
                   { name: 'Team 1', color: '#ef4444' },
                   { name: 'Team 2', color: '#3b82f6' },
@@ -898,6 +925,10 @@ export function CircuitWorkoutLiveScreen() {
                   { name: 'Team 6', color: '#14b8a6' },
                   { name: 'Team 7', color: '#fb923c' },
                   { name: 'Team 8', color: '#06b6d4' },
+                  { name: 'Team 9', color: '#ec4899' },
+                  { name: 'Team 10', color: '#84cc16' },
+                  { name: 'Team 11', color: '#6366f1' },
+                  { name: 'Team 12', color: '#f97316' },
                 ];
                 
                 // Use the pre-calculated distribution (set when modal opens)

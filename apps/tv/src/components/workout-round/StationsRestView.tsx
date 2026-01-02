@@ -12,7 +12,7 @@ interface StationsRestViewProps {
   workDuration?: number;
 }
 
-// Team configuration - matches the preview
+// Team configuration - supports up to 12 teams
 const TEAMS = [
   { name: 'Team 1', color: '#ef4444' },
   { name: 'Team 2', color: '#3b82f6' },
@@ -22,6 +22,10 @@ const TEAMS = [
   { name: 'Team 6', color: '#14b8a6' },
   { name: 'Team 7', color: '#fb923c' },
   { name: 'Team 8', color: '#06b6d4' },
+  { name: 'Team 9', color: '#ec4899' },
+  { name: 'Team 10', color: '#84cc16' },
+  { name: 'Team 11', color: '#6366f1' },
+  { name: 'Team 12', color: '#f97316' },
 ];
 
 export function StationsRestView({ 
@@ -50,7 +54,7 @@ export function StationsRestView({
       {/* Responsive Grid Layout */}
       <View style={{ 
         flex: 1, 
-        paddingHorizontal: 48,
+        paddingHorizontal: 24,
         paddingTop: 0,
         flexDirection: 'column',
         gap: 2,
@@ -105,11 +109,11 @@ export function StationsRestView({
           
           // Current team (what's leaving this station)
           const safeCurrentIndex = Math.min(Math.max(0, currentExerciseIndex), exerciseCount - 1);
-          const currentTeamIndex = (idx - safeCurrentIndex + activeTeams.length) % activeTeams.length;
+          const currentTeamIndex = ((idx - safeCurrentIndex) % activeTeams.length + activeTeams.length) % activeTeams.length;
           const currentTeam = activeTeams[currentTeamIndex];
           
           // Next team (what's coming to this station)
-          const nextTeamIndex = (idx - nextExerciseIndex + activeTeams.length) % activeTeams.length;
+          const nextTeamIndex = ((idx - nextExerciseIndex) % activeTeams.length + activeTeams.length) % activeTeams.length;
           const nextTeam = activeTeams[nextTeamIndex];
           
           // Safety check
@@ -165,12 +169,14 @@ export function StationsRestView({
                       alignItems: 'center',
                       gap: 8,
                     }}>
-                      <View style={{
-                        width: 12,
-                        height: 12,
-                        borderRadius: 6,
-                        backgroundColor: nextTeam.color,
-                      }} />
+                      {exerciseCount <= 8 && (
+                        <View style={{
+                          width: 12,
+                          height: 12,
+                          borderRadius: 6,
+                          backgroundColor: nextTeam.color,
+                        }} />
+                      )}
                       <Text style={{ 
                         color: nextTeam.color, 
                         fontWeight: '800',

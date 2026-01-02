@@ -13,7 +13,7 @@ interface StationsExerciseViewProps {
   stationCircuits?: Record<string, any>;
 }
 
-// Team configuration - matches the preview
+// Team configuration - supports up to 12 teams
 const TEAMS = [
   { name: 'Team 1', color: '#ef4444' },
   { name: 'Team 2', color: '#3b82f6' },
@@ -23,6 +23,10 @@ const TEAMS = [
   { name: 'Team 6', color: '#14b8a6' },
   { name: 'Team 7', color: '#fb923c' },
   { name: 'Team 8', color: '#06b6d4' },
+  { name: 'Team 9', color: '#ec4899' },
+  { name: 'Team 10', color: '#84cc16' },
+  { name: 'Team 11', color: '#6366f1' },
+  { name: 'Team 12', color: '#f97316' },
 ];
 
 export function StationsExerciseView({ 
@@ -35,16 +39,38 @@ export function StationsExerciseView({
   getStationTimerDisplay,
   stationCircuits
 }: StationsExerciseViewProps) {
+  console.log('[StationsExerciseView] Component render:', {
+    currentExerciseIndex,
+    isPaused,
+    timeRemaining,
+    workDuration,
+    hasStationCircuits: !!stationCircuits,
+    hasGetStationTimerDisplay: !!getStationTimerDisplay,
+    exercisesInRound: currentRound.exercises.length,
+    exercises: currentRound.exercises.map(ex => ({
+      id: ex.id,
+      name: ex.exercise?.name || 'Unknown',
+      orderIndex: ex.orderIndex,
+      stationIndex: ex.stationIndex
+    })),
+  });
+  
   // Use actual number of exercises as stations
   const exerciseCount = currentRound.exercises.length;
   
   // Use only as many teams as there are stations
   const activeTeams = TEAMS.slice(0, exerciseCount);
   
+  console.log('[StationsExerciseView] Teams setup:', {
+    exerciseCount,
+    activeTeamsCount: activeTeams.length,
+    activeTeams: activeTeams.map(t => t.name),
+  });
+  
   // Calculate dynamic positioning for timer based on current station
-  // Account for container padding (48px on each side) in the flex layout
+  // Account for container padding (24px on each side) in the flex layout
   // Each station occupies equal width within the padded container
-  const containerPadding = 48;
+  const containerPadding = 24;
   const contentWidthPercent = 100 - ((containerPadding * 2) / 1920 * 100); // Assuming TV width ~1920px
   const paddingPercent = (containerPadding / 1920) * 100;
   
@@ -280,7 +306,7 @@ export function StationsExerciseView({
       {/* Responsive Grid Layout */}
       <View style={{ 
         flex: 1, 
-        paddingHorizontal: 48,
+        paddingHorizontal: 24,
         paddingTop: 0,
         flexDirection: 'column',
         gap: 2,
@@ -300,8 +326,27 @@ export function StationsExerciseView({
           
           // Calculate which team is at this station
           // Teams rotate clockwise as currentExerciseIndex increases
-          const teamIndex = (idx - currentExerciseIndex + activeTeams.length) % activeTeams.length;
+          // Use double modulo to handle negative values correctly
+          const teamIndex = ((idx - currentExerciseIndex) % activeTeams.length + activeTeams.length) % activeTeams.length;
+          console.log('[StationsExerciseView] Team calculation:', {
+            stationIdx: idx,
+            currentExerciseIndex,
+            activeTeamsLength: activeTeams.length,
+            teamIndex,
+            calculation: `(${idx} - ${currentExerciseIndex} + ${activeTeams.length}) % ${activeTeams.length} = ${teamIndex}`,
+            activeTeams: activeTeams.map(t => t.name),
+          });
           const team = activeTeams[teamIndex];
+          
+          if (!team) {
+            console.error('[StationsExerciseView] TEAM UNDEFINED!', {
+              teamIndex,
+              activeTeamsLength: activeTeams.length,
+              activeTeams,
+              exerciseCount,
+              currentExerciseIndex,
+            });
+          }
           
           return (
             <View 
@@ -346,12 +391,14 @@ export function StationsExerciseView({
                       alignItems: 'center',
                       gap: 8,
                     }}>
-                      <View style={{
-                        width: 12,
-                        height: 12,
-                        borderRadius: 6,
-                        backgroundColor: team.color,
-                      }} />
+                      {exerciseCount <= 8 && (
+                        <View style={{
+                          width: 12,
+                          height: 12,
+                          borderRadius: 6,
+                          backgroundColor: team.color,
+                        }} />
+                      )}
                       <Text style={{ 
                         color: team.color, 
                         fontWeight: '800',

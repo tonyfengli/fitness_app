@@ -77,8 +77,13 @@ export function useWorkoutMachineWithLighting({
       console.log(`[Timer] ${state.value} - Time: ${currentTime}s`);
     }
     
-    // Play individual beeps at 4, 3, 2, and 1 seconds
-    if ((state.value === 'exercise' || state.value === 'rest') && 
+    // Define which states should have countdown
+    const statesWithCountdown = ['rest', 'setBreak'];
+    const shouldPlayCountdown = statesWithCountdown.includes(state.value as string) || 
+      (state.value === 'roundPreview' && state.context.currentRoundIndex > 0);
+    
+    // Play countdown beeps at 4, 3, 2, and 1 seconds
+    if (shouldPlayCountdown && 
         !state.context.isPaused &&
         (currentTime === 4 || currentTime === 3 || currentTime === 2 || currentTime === 1) && 
         previousTime > currentTime) {
