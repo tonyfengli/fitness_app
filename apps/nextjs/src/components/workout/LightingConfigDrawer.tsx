@@ -98,6 +98,16 @@ export function LightingConfigDrawer({
   const { data: rawScenes, isLoading, error } = useQuery({
     ...trpc.lighting.getScenes.queryOptions(),
   });
+  
+  // Debug logging
+  React.useEffect(() => {
+    console.log('[LightingConfigDrawer] Scenes query state:', {
+      isLoading,
+      error,
+      scenesCount: rawScenes?.length,
+      rawScenes
+    });
+  }, [isLoading, error, rawScenes]);
 
   // Get current lighting configuration
   const { data: lightingConfig } = useQuery({

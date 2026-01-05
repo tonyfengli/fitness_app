@@ -137,7 +137,11 @@ export const lightingRouter = createTRPCRouter({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      console.log('[Lighting Router] activateScene called:', input);
       const lightingService = getLightingService();
+      const status = await lightingService.getStatus();
+      console.log('[Lighting Router] Service status:', status);
+      
       await lightingService.activateScene(input.sceneId, input.groupId);
       
       return { success: true };

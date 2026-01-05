@@ -282,7 +282,11 @@ export function CircuitWorkoutLiveScreen() {
     if (state.value === 'roundPreview') {
       phaseType = 'preview';
     } else if (state.value === 'exercise') {
-      phaseType = 'work';
+      // For exercise state, include the exercise index in the phase type
+      phaseType = `work-exercise-${state.context.currentExerciseIndex}`;
+    } else if (state.value === 'rest') {
+      // For rest state, include the exercise index it's resting after
+      phaseType = `rest-after-exercise-${state.context.currentExerciseIndex}`;
     } else if (state.value === 'setBreak') {
       phaseType = 'roundBreak';
     }
@@ -808,15 +812,6 @@ export function CircuitWorkoutLiveScreen() {
 
           {/* Main Content Area */}
           <View style={{ flex: 1, paddingHorizontal: 48, paddingBottom: currentRoundType === 'stations_round' ? 24 : 48 }}>
-            {console.log('[CircuitLive] Passing to WorkoutContent:', {
-              stateValue: state.value,
-              currentRoundIndex: state.context.currentRoundIndex,
-              currentExerciseIndex: state.context.currentExerciseIndex,
-              currentRound: currentRound,
-              currentRoundType: currentRoundType,
-              exerciseCount: currentRound?.exercises?.length,
-              uniqueStations: currentRound?.exercises ? [...new Set(currentRound.exercises.map(ex => ex.orderIndex))] : [],
-            })}
             <WorkoutContent 
               state={state}
               circuitConfig={circuitConfig}

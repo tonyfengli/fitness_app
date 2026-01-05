@@ -109,6 +109,13 @@ export class HueClient {
     await this.makeRequest('PUT', `/groups/${groupId}/action`, action);
     logger.debug('Group action updated', { groupId, action });
   }
+  
+  /**
+   * Get all scenes
+   */
+  async getScenes(): Promise<Record<string, any>> {
+    return await this.makeRequest<Record<string, any>>('GET', '/scenes');
+  }
 
   /**
    * Get last successful connection time

@@ -13,7 +13,7 @@ import type {
 export class HueLocalProvider implements ILightingProvider {
   public readonly type: ProviderType = 'hue-local';
   public readonly capabilities: ProviderCapabilities = {
-    scenes: false, // Local API scene support is limited
+    scenes: true, // Enable scenes for local provider
     directControl: true,
     groupControl: true,
     animations: true,
@@ -62,10 +62,12 @@ export class HueLocalProvider implements ILightingProvider {
     if (!this.client) return false;
     
     try {
+      console.log('[HueLocalProvider] Testing connection to bridge at:', this.config.bridgeIp);
       const result = await this.client.testConnection();
-      return result.success;
+      console.log('[HueLocalProvider] Connection test result:', result);
+      return result; // Fix: testConnection returns boolean directly, not an object
     } catch (error) {
-      console.error('Local connection test failed:', error);
+      console.error('[HueLocalProvider] Local connection test failed:', error);
       this.connectionStatus.lastError = error instanceof Error ? error.message : 'Unknown error';
       return false;
     }
@@ -108,6 +110,43 @@ export class HueLocalProvider implements ILightingProvider {
     }
     
     await this.client.setGroupAction(groupId, state);
+  }
+  
+  async getScenes(): Promise<Scene[]> {
+    if (!this.client) {
+      throw new Error('Provider not connected');
+    }
+    
+    try {
+      const scenes = await this.client.getScenes();
+      
+      // Convert Hue API format to our Scene format
+      return Object.entries(scenes).map(([id, scene]: [string, any]) => ({
+        id,
+        name: scene.name,
+        lights: scene.lights || [],
+        lastUpdated: scene.lastupdated,
+        owner: scene.owner,
+        type: scene.type,
+        lightstates: scene.lightstates,
+        group: scene.group,
+      }));
+    } catch (error) {
+      console.error('[HueLocalProvider] Failed to get scenes:', error);
+      return [];
+    }
+  }
+  
+  async activateScene(sceneId: string, groupId: string = "0"): Promise<void> {
+    if (!this.client) {
+      throw new Error('Provider not connected');
+    }
+    
+    // For local provider, we can activate scenes via group action
+    // Philips Hue V1 API supports scene recall via group action
+    await this.client.setGroupAction(groupId, {
+      scene: sceneId
+    } as any);
   }
   
   startHealthCheck(): void {

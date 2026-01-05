@@ -86,14 +86,22 @@ export class LightingService {
    * Try to connect to available providers in priority order
    */
   private async connectToProvider(): Promise<void> {
+    logger.info(`[LightingService] Available providers: ${this.providers.map(p => p.type).join(', ')}`);
+    logger.info(`[LightingService] Environment config:`, {
+      HUE_ENABLED: process.env.HUE_ENABLED,
+      HUE_BRIDGE_IP: process.env.HUE_BRIDGE_IP,
+      HUE_APP_KEY: process.env.HUE_APP_KEY ? 'SET' : 'NOT SET',
+      HUE_REMOTE_ENABLED: process.env.HUE_REMOTE_ENABLED
+    });
+    
     for (const provider of this.providers) {
       try {
-        logger.info(`Attempting to connect with ${provider.type} provider...`);
+        logger.info(`[LightingService] Attempting to connect with ${provider.type} provider...`);
         await provider.connect();
         
         this.activeProvider = provider;
         this.status = 'connected';
-        logger.info(`Connected successfully with ${provider.type} provider`);
+        logger.info(`[LightingService] Connected successfully with ${provider.type} provider`);
         
         // Start health check if supported
         if (provider.capabilities.healthCheck && provider.startHealthCheck) {
@@ -102,12 +110,12 @@ export class LightingService {
         
         return;
       } catch (error) {
-        logger.warn(`Failed to connect with ${provider.type}:`, error);
+        logger.warn(`[LightingService] Failed to connect with ${provider.type}:`, error);
         continue;
       }
     }
     
-    logger.error('Failed to connect to any lighting provider');
+    logger.error('[LightingService] Failed to connect to any lighting provider');
     this.status = 'disconnected';
     this.lastError = 'No providers available';
   }
@@ -167,14 +175,26 @@ export class LightingService {
    * Get available scenes (if provider supports them)
    */
   async getScenes(): Promise<Scene[]> {
+    logger.info('[LightingService] getScenes called:', {
+      activeProvider: this.activeProvider?.type,
+      hasSceneCapability: this.activeProvider?.capabilities.scenes
+    });
+    
     if (!this.activeProvider || !this.activeProvider.capabilities.scenes) {
+      logger.warn('[LightingService] No provider or scene capability');
       return [];
     }
 
     try {
-      return await this.activeProvider.getScenes!();
+      const scenes = await this.activeProvider.getScenes!();
+      logger.info('[LightingService] Scenes retrieved:', {
+        provider: this.activeProvider.type,
+        count: scenes.length,
+        sceneIds: scenes.map(s => ({ id: s.id, name: s.name }))
+      });
+      return scenes;
     } catch (error) {
-      logger.error('Failed to get scenes:', error);
+      logger.error('[LightingService] Failed to get scenes:', error);
       return [];
     }
   }
