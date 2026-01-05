@@ -530,10 +530,13 @@ export function TemplateSelectionStep({ program, onSelectTemplate }: TemplateSel
 
   // Program label mapping
   const PROGRAM_LABELS = {
-    'h4h_5am': 'H4H 5AM Sessions',
-    'h4h_5pm': 'H4H 5PM Sessions',
+    'h4h_5am': 'Coach Will',
+    'h4h_5pm': 'Coach Tony',
     'saturday_cg': 'Saturday CG',
-    'monday_cg': 'Monday CG'
+    'monday_cg': 'Monday CG',
+    'coach_frank': 'Coach Frank',
+    'coach_steph': 'Coach Steph',
+    'coach_kyle': 'Coach Kyle'
   };
   
   const programLabel = PROGRAM_LABELS[program as keyof typeof PROGRAM_LABELS] || '';
@@ -2459,10 +2462,13 @@ export function SessionSetupStep({
   };
 
   const programOptions = [
-    { value: 'h4h_5am', label: 'H4H 5AM' },
-    { value: 'h4h_5pm', label: 'H4H 5PM' },
+    { value: 'h4h_5am', label: 'Coach Will' },
+    { value: 'h4h_5pm', label: 'Coach Tony' },
     { value: 'saturday_cg', label: 'Saturday CG' },
     { value: 'monday_cg', label: 'Monday CG' },
+    { value: 'coach_frank', label: 'Coach Frank' },
+    { value: 'coach_steph', label: 'Coach Steph' },
+    { value: 'coach_kyle', label: 'Coach Kyle' },
     { value: 'unassigned', label: 'Unassigned' }
   ];
 

@@ -5393,10 +5393,13 @@ Set your goals and preferences for today's session.`;
 
       // Return all possible program values except 'unassigned'
       const programs = [
-        { id: 'h4h_5am', label: 'H4H 5AM Sessions' },
-        { id: 'h4h_5pm', label: 'H4H 5PM Sessions' },
+        { id: 'h4h_5am', label: 'Coach Will' },
+        { id: 'h4h_5pm', label: 'Coach Tony' },
         { id: 'saturday_cg', label: 'Saturday CG' },
         { id: 'monday_cg', label: 'Monday CG' },
+        { id: 'coach_frank', label: 'Coach Frank' },
+        { id: 'coach_steph', label: 'Coach Steph' },
+        { id: 'coach_kyle', label: 'Coach Kyle' },
       ];
 
       return programs;
@@ -5407,7 +5410,7 @@ Set your goals and preferences for today's session.`;
     .input(
       z.object({
         businessId: z.string().uuid(),
-        program: z.enum(["h4h_5am", "h4h_5pm", "saturday_cg", "monday_cg"]),
+        program: z.enum(["h4h_5am", "h4h_5pm", "saturday_cg", "monday_cg", "coach_frank", "coach_steph", "coach_kyle"]),
         includeTemplateConfig: z.boolean().optional().default(false),
       }),
     )

@@ -46,6 +46,17 @@ const CalendarIcon = ({ className = "w-6 h-6" }: { className?: string }) => (
   </svg>
 );
 
+// Program label mapping
+const PROGRAM_LABELS: Record<string, string> = {
+  'h4h_5am': 'Coach Will',
+  'h4h_5pm': 'Coach Tony',
+  'saturday_cg': 'Saturday CG',
+  'monday_cg': 'Monday CG',
+  'coach_frank': 'Coach Frank',
+  'coach_steph': 'Coach Steph',
+  'coach_kyle': 'Coach Kyle',
+  'unassigned': 'Unassigned'
+};
 
 interface SessionDetailPageProps {
   params: Promise<{
@@ -86,7 +97,7 @@ export default function SessionDetailPage({ params }: SessionDetailPageProps) {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [showProgramModal, setShowProgramModal] = useState(false);
   const [editingSessionName, setEditingSessionName] = useState("");
-  const [selectedProgram, setSelectedProgram] = useState<"h4h_5am" | "h4h_5pm" | "saturday_cg" | "monday_cg" | "unassigned">("unassigned");
+  const [selectedProgram, setSelectedProgram] = useState<"h4h_5am" | "h4h_5pm" | "saturday_cg" | "monday_cg" | "coach_frank" | "coach_steph" | "coach_kyle" | "unassigned">("unassigned");
   
   // Unwrap params Promise (Next.js 15 pattern)
   const resolvedParams = use(params);
@@ -779,11 +790,7 @@ export default function SessionDetailPage({ params }: SessionDetailPageProps) {
             </button>
             <div className="text-center flex-1 mx-8">
               <h1 className="text-xl font-bold">
-                {session.program === 'h4h_5am' ? 'H4H 5AM' :
-                 session.program === 'h4h_5pm' ? 'H4H 5PM' :
-                 session.program === 'saturday_cg' ? 'Saturday CG' :
-                 session.program === 'monday_cg' ? 'Monday CG' :
-                 'Unassigned'}
+                {PROGRAM_LABELS[session.program] || 'Unassigned'}
               </h1>
               <p className="text-purple-200 text-sm">{session.name}</p>
             </div>
@@ -1176,15 +1183,18 @@ export default function SessionDetailPage({ params }: SessionDetailPageProps) {
               </label>
               <div className="space-y-2">
                 {[
-                  { value: "h4h_5am", label: "H4H 5AM" },
-                  { value: "h4h_5pm", label: "H4H 5PM" },
+                  { value: "h4h_5am", label: "Coach Will" },
+                  { value: "h4h_5pm", label: "Coach Tony" },
                   { value: "saturday_cg", label: "Saturday CG" },
                   { value: "monday_cg", label: "Monday CG" },
+                  { value: "coach_frank", label: "Coach Frank" },
+                  { value: "coach_steph", label: "Coach Steph" },
+                  { value: "coach_kyle", label: "Coach Kyle" },
                   { value: "unassigned", label: "Unassigned" }
                 ].map((program) => (
                   <button
                     key={program.value}
-                    onClick={() => setSelectedProgram(program.value as "h4h_5am" | "h4h_5pm" | "saturday_cg" | "monday_cg" | "unassigned")}
+                    onClick={() => setSelectedProgram(program.value as "h4h_5am" | "h4h_5pm" | "saturday_cg" | "monday_cg" | "coach_frank" | "coach_steph" | "coach_kyle" | "unassigned")}
                     className={`w-full px-4 py-2.5 rounded-lg border transition-all text-left ${
                       program.value === selectedProgram
                         ? "border-blue-500 dark:border-blue-400 bg-blue-50 dark:bg-blue-950/20 text-blue-700 dark:text-blue-300"

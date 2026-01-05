@@ -49,7 +49,7 @@ export default function CircuitConfigPage() {
   // Session details state
   const [sessionDetails, setSessionDetails] = useState({
     name: '',
-    program: 'unassigned' as 'h4h_5am' | 'h4h_5pm' | 'saturday_cg' | 'monday_cg' | 'unassigned',
+    program: 'unassigned' as 'h4h_5am' | 'h4h_5pm' | 'saturday_cg' | 'monday_cg' | 'coach_frank' | 'coach_steph' | 'coach_kyle' | 'unassigned',
     scheduledAt: new Date()
   });
 

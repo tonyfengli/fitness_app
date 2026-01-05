@@ -39,6 +39,18 @@ const CheckCircleIcon = ({ className = "w-6 h-6" }: { className?: string }) => (
   </svg>
 );
 
+// Program label mapping
+const PROGRAM_LABELS: Record<string, string> = {
+  'h4h_5am': 'Coach Will',
+  'h4h_5pm': 'Coach Tony',
+  'saturday_cg': 'Saturday CG',
+  'monday_cg': 'Monday CG',
+  'coach_frank': 'Coach Frank',
+  'coach_steph': 'Coach Steph',
+  'coach_kyle': 'Coach Kyle',
+  'unassigned': 'Unassigned'
+};
+
 // Load active circuit sessions from API (excludes completed sessions)
 const useActiveCircuitSessions = () => {
   const trpc = api();
@@ -333,11 +345,7 @@ export default function SessionsPage() {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-baseline gap-2 mb-1">
                             <h3 className="text-lg font-semibold text-gray-900 dark:text-white shrink-0">
-                              {session.program === 'h4h_5am' ? 'H4H 5AM' :
-                               session.program === 'h4h_5pm' ? 'H4H 5PM' :
-                               session.program === 'saturday_cg' ? 'Saturday CG' :
-                               session.program === 'monday_cg' ? 'Monday CG' :
-                               'Unassigned'}
+                              {PROGRAM_LABELS[session.program] || 'Unassigned'}
                             </h3>
                             <span className="text-sm font-medium text-gray-400 dark:text-gray-500 truncate min-w-0">
                               · {session.name}
@@ -462,11 +470,7 @@ export default function SessionsPage() {
                           <div className="flex-1 min-w-0">
                             <div className="flex items-baseline gap-2 mb-2">
                               <h3 className="text-base font-medium text-gray-700 dark:text-gray-300 shrink-0">
-                                {session.program === 'h4h_5am' ? 'H4H 5AM' :
-                                 session.program === 'h4h_5pm' ? 'H4H 5PM' :
-                                 session.program === 'saturday_cg' ? 'Saturday CG' :
-                                 session.program === 'monday_cg' ? 'Monday CG' :
-                                 'Unassigned'}
+                                {PROGRAM_LABELS[session.program] || 'Unassigned'}
                               </h3>
                               <span className="text-xs text-gray-400 dark:text-gray-500 truncate min-w-0">
                                 · {session.name}

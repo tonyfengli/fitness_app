@@ -19,6 +19,18 @@ import { api } from '../providers/TRPCProvider';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRealtimeTrainingSessions } from '../hooks/useRealtimeTrainingSessions';
 
+// Program label mapping for coach names
+const PROGRAM_LABELS: Record<string, string> = {
+  'h4h_5am': 'Coach Will',
+  'h4h_5pm': 'Coach Tony',
+  'saturday_cg': 'Saturday CG',
+  'monday_cg': 'Monday CG',
+  'coach_frank': 'Coach Frank',
+  'coach_steph': 'Coach Steph',
+  'coach_kyle': 'Coach Kyle',
+  'unassigned': 'Unassigned'
+};
+
 // Design tokens - matching TV app theme
 const TOKENS = {
   color: {
@@ -1173,7 +1185,7 @@ export function MainScreen() {
                     </View>
                     <View style={styles.sessionInfo}>
                       <Text style={styles.simpleSessionName} numberOfLines={2} ellipsizeMode="tail">
-                        {(session.program && session.program.toLowerCase() !== 'unassigned') ? session.program : (session.name || `Session ${session.id.split('-')[0].slice(0, 6)}`)}
+                        {(session.program && session.program.toLowerCase() !== 'unassigned') ? (PROGRAM_LABELS[session.program] || session.program) : (session.name || `Session ${session.id.split('-')[0].slice(0, 6)}`)}
                       </Text>
                       <Text style={styles.simpleSessionType}>
                         {formatTemplateType(session.templateType)}
