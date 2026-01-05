@@ -7,6 +7,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./src/index.ts"
+    },
+    "./services/lighting/presets": {
+      "types": "./dist/services/lighting/presets.d.ts",
+      "default": "./src/services/lighting/presets.ts"
     }
   },
   "license": "MIT",
