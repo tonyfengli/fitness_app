@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useTRPC } from "~/trpc/react";
-import { LIGHTING_PRESETS } from "../../../../tv/src/lib/lighting/presets";
+import { DEFAULT_PRESETS } from "@acme/api/services/lighting/presets";
 
 type PresetName = 'WARMUP' | 'WORK' | 'REST' | 'COOLDOWN' | 'DEFAULT' | 'ROUND_START' | 'ROUND_REST';
 type Template = 'circuit' | 'strength';
@@ -264,8 +264,8 @@ export default function LightingConfigurationPage() {
                   } else {
                     // Handle circuit/strength presets
                     const preset = template === 'circuit' 
-                      ? LIGHTING_PRESETS.circuit[presetName as keyof typeof LIGHTING_PRESETS.circuit]
-                      : LIGHTING_PRESETS.strength[presetName as keyof typeof LIGHTING_PRESETS.strength];
+                      ? DEFAULT_PRESETS.circuit[presetName as keyof typeof DEFAULT_PRESETS.circuit]
+                      : DEFAULT_PRESETS.strength[presetName as keyof typeof DEFAULT_PRESETS.strength];
                     
                     if (preset) {
                       setCustomState({
