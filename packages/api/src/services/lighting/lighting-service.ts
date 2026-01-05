@@ -13,10 +13,12 @@ import type {
   LightCommand,
   LightingPreset,
   LightingStatus,
-  PresetProvider,
+  PresetProvider as IPresetProvider,
   TimerEventData,
   WorkoutTemplate,
+  LightingPresetType,
 } from './types';
+import type { FilePresetProvider } from './presets';
 
 const logger = createLogger('LightingService');
 
@@ -29,7 +31,8 @@ export interface LightingServiceConfig {
 export class LightingService {
   private providers: ILightingProvider[];
   private activeProvider?: ILightingProvider;
-  private presetProvider: PresetProvider;
+  private presetProvider: IPresetProvider;
+  private presets: any;
   private groupId: string;
   private enabled: boolean;
   
@@ -64,6 +67,8 @@ export class LightingService {
     this.enabled = enabled;
     this.groupId = groupId;
     this.presetProvider = createPresetProvider();
+    // Load presets into memory for direct access
+    this.loadPresets();
 
     // Use provided providers or create from environment
     this.providers = providers || LightingProviderFactory.createFromEnvironment();
@@ -213,28 +218,28 @@ export class LightingService {
   /**
    * Apply a preset
    */
-  async applyPreset(name: LightingPreset, template?: WorkoutTemplate): Promise<void> {
+  async applyPreset(name: string, template?: WorkoutTemplate): Promise<void> {
     if (!this.enabled || !this.activeProvider || this.isDegraded()) {
       logger.debug(`Skipping preset ${name} - service not ready`);
       return;
     }
 
     // Store intended state for recovery
-    this.lastIntendedPreset = name;
+    this.lastIntendedPreset = name as string;
     this.lastIntendedTemplate = template;
 
-    const preset = this.presetProvider[name];
+    const preset = await this.getPresetByName(name, template);
     if (!preset) {
       logger.warn(`Unknown preset: ${name}`);
       return;
     }
 
     const state: HueLightState = {
-      on: preset.on,
-      bri: preset.brightness,
+      on: preset.on !== undefined ? preset.on : true,
+      bri: preset.bri,
       hue: preset.hue,
-      sat: preset.saturation,
-      transitiontime: preset.transition,
+      sat: preset.sat,
+      transitiontime: preset.transitiontime,
     };
 
     await this.setState(state);
@@ -256,6 +261,8 @@ export class LightingService {
       type: 'state',
       state,
       retries: 0,
+      groupId: this.groupId,
+      timestamp: new Date(),
     };
 
     await this.enqueueCommand(command);
@@ -303,7 +310,7 @@ export class LightingService {
       }
     } catch (error) {
       logger.error('Connection test failed:', error);
-      this.status = 'error';
+      this.status = 'error' as ConnectionStatus;
       this.lastError = error instanceof Error ? error.message : 'Unknown error';
       
       // Try to reconnect with next provider
@@ -404,14 +411,14 @@ export class LightingService {
       case 'preset':
         // For preset commands, we need to convert to state
         if (command.preset) {
-          const preset = this.presetProvider[command.preset];
+          const preset = await this.getPresetByName(command.preset!, command.template);
           if (preset) {
             const state: LightState = {
-              on: preset.on,
-              bri: preset.brightness,
+              on: preset.on !== undefined ? preset.on : true,
+              bri: preset.bri,
               hue: preset.hue,
-              sat: preset.saturation,
-              transitiontime: preset.transition,
+              sat: preset.sat,
+              transitiontime: preset.transitiontime,
             };
             await this.activeProvider.setGroupState(this.groupId, state);
           }
@@ -479,5 +486,42 @@ export class LightingService {
    */
   private sleep(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Load presets into memory
+   */
+  private async loadPresets(): Promise<void> {
+    try {
+      this.presets = await this.presetProvider.getAllPresets();
+    } catch (error) {
+      logger.error('Failed to load presets:', error);
+      this.presets = {};
+    }
+  }
+
+  /**
+   * Get preset by name
+   */
+  private async getPresetByName(name: string, template?: WorkoutTemplate): Promise<LightingPreset | null> {
+    if (!template) {
+      // Try to find preset in any template
+      for (const tmpl of ['circuit', 'strength'] as WorkoutTemplate[]) {
+        try {
+          const preset = await this.presetProvider.getPreset(name, tmpl);
+          if (preset) return preset;
+        } catch (error) {
+          continue;
+        }
+      }
+      return null;
+    }
+
+    try {
+      return await this.presetProvider.getPreset(name, template);
+    } catch (error) {
+      logger.warn(`Preset not found: ${name} for template ${template}`);
+      return null;
+    }
   }
 }

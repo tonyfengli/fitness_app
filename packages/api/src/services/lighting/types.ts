@@ -76,13 +76,18 @@ export interface PresetProvider {
   getAllPresets(): Promise<PresetConfig>;
 }
 
-export type ConnectionStatus = 'connected' | 'degraded' | 'disconnected';
+export type ConnectionStatus = 'connected' | 'degraded' | 'disconnected' | 'error';
 
 export interface LightingStatus {
+  enabled: boolean;
   status: ConnectionStatus;
   lastConnected?: Date;
   lastError?: string;
   bridgeInfo?: HueBridgeConfig;
+  degraded?: boolean;
+  degradedUntil?: Date;
+  activeProvider?: string;
+  availableProviders?: string[];
 }
 
 // Command Queue Types
@@ -92,12 +97,14 @@ export interface LightCommand {
   preset?: string;
   state?: HueLightState;
   template?: WorkoutTemplate;
-  groupId: string;
-  timestamp: Date;
+  groupId?: string;
+  timestamp?: Date;
   retries: number;
 }
 
 // Timer Event Types
+export type LightingPresetType = 'WORK' | 'REST' | 'COOLDOWN' | 'DEFAULT' | 'ROUND_START' | 'ROUND_REST';
+
 export const CIRCUIT_EVENTS = {
   ROUND_START: 'circuit:round:start',
   INTERVAL_WORK_START: 'circuit:interval:work:start',

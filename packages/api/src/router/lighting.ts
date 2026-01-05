@@ -5,7 +5,7 @@
 import { z } from "zod/v4";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 import { getLightingService } from "../services/lighting/get-service";
-import type { WorkoutTemplate } from "../services/lighting/types";
+import type { WorkoutTemplate, LightingPreset } from "../services/lighting/types";
 import { CIRCUIT_EVENTS, STRENGTH_EVENTS } from "../services/lighting/types";
 
 export const lightingRouter = createTRPCRouter({

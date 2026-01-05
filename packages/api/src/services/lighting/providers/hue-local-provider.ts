@@ -22,7 +22,7 @@ export class HueLocalProvider implements ILightingProvider {
   
   private client: HueClient | null = null;
   private config: ProviderConfig;
-  private healthCheckInterval?: NodeJS.Timeout;
+  private healthCheckInterval?: ReturnType<typeof setInterval>;
   private connectionStatus: ConnectionStatus = {
     connected: false,
   };
