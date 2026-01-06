@@ -8,7 +8,6 @@ import { config } from '../config';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const getBaseUrl = () => {
-  console.log('[TRPCProvider] API URL:', config.apiUrl);
   return config.apiUrl;
 };
 

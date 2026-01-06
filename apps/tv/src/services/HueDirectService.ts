@@ -96,8 +96,6 @@ class HueDirectService {
         ? 'Connection timeout - not on same network'
         : error.message;
       
-      console.log('[HueDirectService] Bridge connection check failed:', errorMessage);
-      
       this.status = {
         available: false,
         lastChecked: now,

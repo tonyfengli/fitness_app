@@ -57,7 +57,7 @@ export const lightingRouter = createTRPCRouter({
       const status = await lightingService.getStatus();
       console.log('[Lighting Router] Service status:', {
         enabled: status.enabled,
-        connected: status.connected,
+        status: status.status,
         activeProvider: status.activeProvider,
         availableProviders: status.availableProviders
       });

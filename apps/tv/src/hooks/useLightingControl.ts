@@ -29,11 +29,7 @@ export function useLightingControl({ sessionId }: UseLightingControlProps) {
       const status = hueDirectService.getStatus();
       setConnectionError(available ? null : status.error || 'Not on gym network');
       
-      if (available) {
-        console.log('[LightingControl] Hue Bridge available for direct control');
-      } else {
-        console.log('[LightingControl] Hue Bridge not available:', status.error);
-      }
+      // Bridge status updated silently
     };
     
     // Initial check
@@ -45,16 +41,7 @@ export function useLightingControl({ sessionId }: UseLightingControlProps) {
     return () => clearInterval(interval);
   }, []);
   
-  // Debug: Log environment on mount
-  useEffect(() => {
-    console.log('[LightingControl] Environment check:', {
-      API_URL: API_URL || 'NOT SET',
-      HUE_BRIDGE_IP: EXPO_PUBLIC_HUE_BRIDGE_IP || 'NOT SET',
-      HUE_APP_KEY: EXPO_PUBLIC_HUE_APP_KEY ? 'SET' : 'NOT SET',
-      HUE_GROUP_ID: EXPO_PUBLIC_HUE_GROUP_ID || 'NOT SET',
-      sessionId
-    });
-  }, [sessionId]);
+  // Environment loaded from env.generated.ts
   
   // Fetch lighting configuration from API (for consistency)
   const { data: lightingConfig } = useQuery(
@@ -67,40 +54,27 @@ export function useLightingControl({ sessionId }: UseLightingControlProps) {
   
   // Turn lights on with optional scene
   const turnOn = useCallback(async (sceneId?: string) => {
-    console.log('[LightingControl] turnOn called:', { 
-      sceneId, 
-      hasConfig: !!lightingConfig,
-      bridgeAvailable,
-      connectionError
-    });
-    
     // Check if bridge is available
     if (!bridgeAvailable) {
       const error = connectionError || 'Lighting unavailable - not on gym network';
-      console.error('[LightingControl] Cannot control lights:', error);
       throw new Error(error);
     }
     
     try {
       if (sceneId && lightingConfig) {
         // Activate specific scene using direct control
-        console.log('[LightingControl] Activating scene via direct control...');
         await hueDirectService.activateScene(sceneId, lightingConfig.targetGroup || '0');
-        console.log('[LightingControl] Scene activated successfully');
         activeSceneRef.current = sceneId;
       } else {
         // Just turn on with default brightness
-        console.log('[LightingControl] Turning on with default brightness via direct control...');
         await hueDirectService.setState({
           on: true,
           bri: 254,
           transitiontime: 10
         });
-        console.log('[LightingControl] Lights turned on successfully');
       }
       setIsLightingOn(true);
     } catch (error: any) {
-      console.error('[LightingControl] Failed to turn on lights:', error);
       // If bridge became unreachable, update status
       if (error.message?.includes('not available')) {
         setBridgeAvailable(false);
@@ -112,12 +86,9 @@ export function useLightingControl({ sessionId }: UseLightingControlProps) {
   
   // Turn lights completely off
   const turnOff = useCallback(async () => {
-    console.log('[LightingControl] turnOff called');
-    
     // Check if bridge is available
     if (!bridgeAvailable) {
       const error = connectionError || 'Lighting unavailable - not on gym network';
-      console.error('[LightingControl] Cannot control lights:', error);
       throw new Error(error);
     }
     
@@ -126,11 +97,9 @@ export function useLightingControl({ sessionId }: UseLightingControlProps) {
         on: false,
         transitiontime: 10
       });
-      console.log('[LightingControl] Lights turned off successfully');
       setIsLightingOn(false);
       activeSceneRef.current = null;
     } catch (error: any) {
-      console.error('[LightingControl] Failed to turn off lights:', error);
       // If bridge became unreachable, update status
       if (error.message?.includes('not available')) {
         setBridgeAvailable(false);
@@ -162,7 +131,6 @@ export function useLightingControl({ sessionId }: UseLightingControlProps) {
       await hueDirectService.activateScene(sceneId, lightingConfig.targetGroup || '0');
       activeSceneRef.current = sceneId;
     } catch (error: any) {
-      console.error('[LightingControl] Failed to activate scene:', error);
       // If bridge became unreachable, update status
       if (error.message?.includes('not available')) {
         setBridgeAvailable(false);
@@ -196,7 +164,6 @@ export function useLightingControl({ sessionId }: UseLightingControlProps) {
   
   // Refresh bridge connection manually
   const refreshConnection = useCallback(async () => {
-    console.log('[LightingControl] Manually refreshing connection...');
     const available = await hueDirectService.refreshConnection();
     setBridgeAvailable(available);
     
