@@ -22,8 +22,11 @@ export const lightingRouter = createTRPCRouter({
    * Get lighting system status
    */
   getStatus: protectedProcedure.query(async ({ ctx }) => {
+    console.log('[Lighting Router] getStatus called');
     const lightingService = getLightingService();
-    return await lightingService.getStatus();
+    const status = await lightingService.getStatus();
+    console.log('[Lighting Router] Status result:', status);
+    return status;
   }),
 
   /**
@@ -47,16 +50,28 @@ export const lightingRouter = createTRPCRouter({
    * Get available scenes (if supported by provider)
    */
   getScenes: protectedProcedure.query(async ({ ctx }) => {
+    console.log('[Lighting Router] getScenes called');
     const lightingService = getLightingService();
-    const scenes = await lightingService.getScenes();
     
-    // Return in consistent format
-    return scenes.map(scene => ({
-      id: scene.id,
-      name: scene.name,
-      lastUpdated: scene.lastUpdated,
-      lights: scene.lights,
-      owner: scene.owner,
+    try {
+      const status = await lightingService.getStatus();
+      console.log('[Lighting Router] Service status:', {
+        enabled: status.enabled,
+        connected: status.connected,
+        activeProvider: status.activeProvider,
+        availableProviders: status.availableProviders
+      });
+      
+      const scenes = await lightingService.getScenes();
+      console.log('[Lighting Router] Raw scenes from service:', scenes.length);
+      
+      // Return in consistent format
+      const formattedScenes = scenes.map(scene => ({
+        id: scene.id,
+        name: scene.name,
+        lastUpdated: scene.lastUpdated,
+        lights: scene.lights,
+        owner: scene.owner,
       type: scene.type,
       lightstates: scene.lightstates,
       group: scene.group,
