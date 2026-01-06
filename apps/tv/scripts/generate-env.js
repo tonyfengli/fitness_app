@@ -10,11 +10,11 @@ const APP_ENV = process.env.APP_ENV || process.env.NODE_ENV || 'development';
 const candidates = [
   `.env.${APP_ENV}.local`,
   `.env.${APP_ENV}`,
-  `.env.local`,
-  `.env`,
+  // Only load .env and .env.local if no environment-specific file was found
 ].map(p => path.join(appRoot, p));
 
 let env = {};
+let envLoaded = false;
 
 for (const file of candidates) {
   if (fs.existsSync(file)) {
@@ -22,6 +22,20 @@ for (const file of candidates) {
     const res = dotenv.config({ path: file });
     dotenvExpand.expand(res);
     env = { ...env, ...res.parsed };
+    envLoaded = true;
+  }
+}
+
+// Only load base .env files if no environment-specific file was loaded
+if (!envLoaded) {
+  const baseFiles = [`.env.local`, `.env`].map(p => path.join(appRoot, p));
+  for (const file of baseFiles) {
+    if (fs.existsSync(file)) {
+      console.log(`Loading environment from: ${file}`);
+      const res = dotenv.config({ path: file });
+      dotenvExpand.expand(res);
+      env = { ...env, ...res.parsed };
+    }
   }
 }
 

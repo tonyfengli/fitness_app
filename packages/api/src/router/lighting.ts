@@ -72,10 +72,17 @@ export const lightingRouter = createTRPCRouter({
         lastUpdated: scene.lastUpdated,
         lights: scene.lights,
         owner: scene.owner,
-      type: scene.type,
-      lightstates: scene.lightstates,
-      group: scene.group,
-    }));
+        type: scene.type,
+        lightstates: scene.lightstates,
+        group: scene.group,
+      }));
+      
+      console.log('[Lighting Router] Returning formatted scenes:', formattedScenes.length);
+      return formattedScenes;
+    } catch (error) {
+      console.error('[Lighting Router] Error getting scenes:', error);
+      return [];
+    }
   }),
 
   /**

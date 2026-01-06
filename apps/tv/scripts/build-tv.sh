@@ -49,8 +49,12 @@ echo "Build type: $BUILD_TYPE"
 echo "Environment: $ENVIRONMENT"
 
 # Generate environment variables
-echo -e "${YELLOW}Generating environment variables...${NC}"
+echo -e "${YELLOW}Generating environment variables for $ENVIRONMENT...${NC}"
 APP_ENV=$ENVIRONMENT pnpm run generate-env
+
+# Verify the generated file
+echo -e "${YELLOW}Verifying generated environment:${NC}"
+grep "API_URL" src/env.generated.ts
 
 # Bundle JavaScript for release builds
 if [ "$BUILD_TYPE" = "release" ]; then

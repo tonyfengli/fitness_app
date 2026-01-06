@@ -20,6 +20,7 @@
     "prebuild": "pnpm run guard:deps && pnpm run generate-env",
     "build": "react-native bundle --platform android --dev false --entry-file index.js --bundle-output android/app/src/main/assets/index.android.bundle --assets-dest android/app/src/main/res",
     "build:debug": "./scripts/build-tv.sh",
+    "build:debug:dev": "./scripts/build-tv.sh --dev",
     "build:release": "./scripts/build-tv.sh --release",
     "build:clean": "./scripts/build-tv.sh --clean",
     "deploy:tv": "adb install -r android/app/build/outputs/apk/tv/debug/app-tv-debug.apk"
