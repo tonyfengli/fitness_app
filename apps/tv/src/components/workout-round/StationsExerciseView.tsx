@@ -39,33 +39,12 @@ export function StationsExerciseView({
   getStationTimerDisplay,
   stationCircuits
 }: StationsExerciseViewProps) {
-  console.log('[StationsExerciseView] Component render:', {
-    currentExerciseIndex,
-    isPaused,
-    timeRemaining,
-    workDuration,
-    hasStationCircuits: !!stationCircuits,
-    hasGetStationTimerDisplay: !!getStationTimerDisplay,
-    exercisesInRound: currentRound.exercises.length,
-    exercises: currentRound.exercises.map(ex => ({
-      id: ex.id,
-      name: ex.exercise?.name || 'Unknown',
-      orderIndex: ex.orderIndex,
-      stationIndex: ex.stationIndex
-    })),
-  });
   
   // Use actual number of exercises as stations
   const exerciseCount = currentRound.exercises.length;
   
   // Use only as many teams as there are stations
   const activeTeams = TEAMS.slice(0, exerciseCount);
-  
-  console.log('[StationsExerciseView] Teams setup:', {
-    exerciseCount,
-    activeTeamsCount: activeTeams.length,
-    activeTeams: activeTeams.map(t => t.name),
-  });
   
   // Calculate dynamic positioning for timer based on current station
   // Account for container padding (24px on each side) in the flex layout
@@ -79,35 +58,25 @@ export function StationsExerciseView({
   
   // Get all station timers (not just current)
   const getStationCircuitTimers = () => {
-    console.log('[StationsExerciseView] getStationCircuitTimers called');
-    console.log('[StationsExerciseView] stationCircuits:', stationCircuits);
-    console.log('[StationsExerciseView] getStationTimerDisplay available:', !!getStationTimerDisplay);
     
     if (!stationCircuits || !getStationTimerDisplay) {
-      console.log('[StationsExerciseView] Early return - missing stationCircuits or getStationTimerDisplay');
       return {};
     }
     
     const timers: Record<string, any> = {};
     Object.keys(stationCircuits).forEach(stationIndex => {
       const stationIdx = parseInt(stationIndex);
-      console.log('[StationsExerciseView] Processing station index:', stationIndex);
-      console.log('[StationsExerciseView] Station index as number:', stationIdx);
-      console.log('[StationsExerciseView] Exercise count (max stations):', exerciseCount);
       
       // Safety check: only process stations that actually exist
       if (stationIdx >= exerciseCount) {
-        console.log('[StationsExerciseView] SKIPPING station', stationIdx, '- exceeds exercise count', exerciseCount);
         return;
       }
       
       const timer = getStationTimerDisplay(stationIdx);
-      console.log('[StationsExerciseView] Timer for station', stationIndex, ':', timer);
       if (timer) {
         timers[stationIndex] = timer;
       }
     });
-    console.log('[StationsExerciseView] Final timers object:', timers);
     return timers;
   };
   
@@ -173,13 +142,6 @@ export function StationsExerciseView({
         const isInFirstRow = isMultiRow ? stationIdx < stationsInFirstRow : true;
         const timerBottom = isMultiRow ? (isInFirstRow ? '52%' : 20) : 20;
         
-        console.log('[StationsExerciseView] Rendering timer for station:', stationIndex);
-        console.log('[StationsExerciseView] - stationIdx:', stationIdx);
-        console.log('[StationsExerciseView] - timerPosition:', timerPosition);
-        console.log('[StationsExerciseView] - isCurrentStation:', isCurrentStation);
-        console.log('[StationsExerciseView] - currentExerciseIndex:', currentExerciseIndex);
-        console.log('[StationsExerciseView] - exerciseCount:', exerciseCount);
-        console.log('[StationsExerciseView] - timer data:', timer);
         
         return (
           <View 
@@ -328,24 +290,9 @@ export function StationsExerciseView({
           // Teams rotate clockwise as currentExerciseIndex increases
           // Use double modulo to handle negative values correctly
           const teamIndex = ((idx - currentExerciseIndex) % activeTeams.length + activeTeams.length) % activeTeams.length;
-          console.log('[StationsExerciseView] Team calculation:', {
-            stationIdx: idx,
-            currentExerciseIndex,
-            activeTeamsLength: activeTeams.length,
-            teamIndex,
-            calculation: `(${idx} - ${currentExerciseIndex} + ${activeTeams.length}) % ${activeTeams.length} = ${teamIndex}`,
-            activeTeams: activeTeams.map(t => t.name),
-          });
           const team = activeTeams[teamIndex];
           
           if (!team) {
-            console.error('[StationsExerciseView] TEAM UNDEFINED!', {
-              teamIndex,
-              activeTeamsLength: activeTeams.length,
-              activeTeams,
-              exerciseCount,
-              currentExerciseIndex,
-            });
           }
           
           return (

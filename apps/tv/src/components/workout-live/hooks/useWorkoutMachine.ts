@@ -127,12 +127,7 @@ export function useWorkoutMachine({
          state.value === 'rest' || 
          state.value === 'setBreak' || 
          (state.value === 'roundPreview' && state.context.currentRoundIndex > 0))) {
-      console.log('[Timer Complete] Sending TIMER_COMPLETE event', {
-        state: state.value,
-        roundIndex: state.context.currentRoundIndex,
-        exerciseIndex: state.context.currentExerciseIndex,
-        roundType: getRoundTiming(state.context.currentRoundIndex).roundType
-      });
+      // Timer has reached 0, trigger state transition
       const timeoutId = setTimeout(() => {
         send({ type: 'TIMER_COMPLETE' });
       }, 100);

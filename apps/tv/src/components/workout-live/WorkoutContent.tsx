@@ -58,22 +58,7 @@ export function WorkoutContent({ state, circuitConfig, getRoundTiming }: Workout
           )}
           
           {currentRoundType === 'stations_round' && (
-            <>
-              {console.log('[WorkoutContent] Rendering StationsRoundContainer:', {
-                stateValue: state.value,
-                currentRoundIndex: state.context.currentRoundIndex,
-                currentExerciseIndex: state.context.currentExerciseIndex,
-                exerciseCount: currentRound.exercises.length,
-                exercises: currentRound.exercises.map(ex => ({
-                  id: ex.id,
-                  name: ex.exercise?.name || 'Unknown',
-                  orderIndex: ex.orderIndex,
-                  stationIndex: ex.stationIndex
-                })),
-                workDuration: currentRoundTiming.workDuration,
-                restDuration: currentRoundTiming.restDuration,
-              })}
-              <StationsRoundContainer
+            <StationsRoundContainer
                 state={state}
                 currentRound={currentRound}
                 currentRoundIndex={state.context.currentRoundIndex}
@@ -85,7 +70,6 @@ export function WorkoutContent({ state, circuitConfig, getRoundTiming }: Workout
                 workDuration={currentRoundTiming.workDuration}
                 circuitConfig={circuitConfig}
               />
-            </>
           )}
           
           {currentRoundType === 'amrap_round' && (

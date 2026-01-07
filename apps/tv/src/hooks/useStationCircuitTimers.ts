@@ -45,11 +45,8 @@ export function useStationCircuitTimers({
 
   // Helper function to reset timers
   const resetTimers = useCallback(() => {
-    console.log('[useStationCircuitTimers] resetTimers called');
-    console.log('[useStationCircuitTimers] stationCircuits:', stationCircuits);
     
     if (!stationCircuits) {
-      console.log('[useStationCircuitTimers] No stationCircuits, returning early');
       return;
     }
 
@@ -57,7 +54,6 @@ export function useStationCircuitTimers({
     const initialElapsed: Record<string, number> = {};
     
     Object.entries(stationCircuits).forEach(([stationIndex, config]) => {
-      console.log('[useStationCircuitTimers] Initializing station:', stationIndex, 'with config:', config);
       initialStates[stationIndex] = {
         phase: 'WORK',
         timeRemaining: config.workDuration,
@@ -68,7 +64,6 @@ export function useStationCircuitTimers({
       initialElapsed[stationIndex] = 0;
     });
 
-    console.log('[useStationCircuitTimers] Setting initial states:', initialStates);
     setTimerStates(initialStates);
     elapsedSecondsRef.current = initialElapsed;
   }, [stationCircuits]);
@@ -175,14 +170,10 @@ export function useStationCircuitTimers({
 
   // Get timer display for a specific station
   const getStationTimerDisplay = (stationIndex: number): { phase: string; time: string; isActive: boolean; currentSet: number; totalSets: number } | null => {
-    console.log('[useStationCircuitTimers] getStationTimerDisplay called for station:', stationIndex);
-    console.log('[useStationCircuitTimers] Current timerStates:', timerStates);
     
     const state = timerStates[stationIndex.toString()];
-    console.log('[useStationCircuitTimers] State for station', stationIndex, ':', state);
     
     if (!state) {
-      console.log('[useStationCircuitTimers] No state found for station', stationIndex);
       return null;
     }
 
@@ -194,7 +185,6 @@ export function useStationCircuitTimers({
       totalSets: state.totalSets
     };
     
-    console.log('[useStationCircuitTimers] Returning timer display for station', stationIndex, ':', result);
     return result;
   };
 

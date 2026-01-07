@@ -142,13 +142,20 @@ export function useLightingControl({ sessionId }: UseLightingControlProps) {
   
   // Get scene for a specific phase (keep using config from API)
   const getSceneForPhase = useCallback((roundIndex: number, phaseType: string): string | null => {
-    if (!lightingConfig) return null;
+    if (!lightingConfig) {
+      console.log('[getSceneForPhase] No lightingConfig available');
+      return null;
+    }
     
     const roundKey = `round-${roundIndex + 1}`;
+    console.log('[getSceneForPhase] Looking for scene - roundKey:', roundKey, 'phaseType:', phaseType);
+    console.log('[getSceneForPhase] roundOverrides:', lightingConfig.roundOverrides);
+    console.log('[getSceneForPhase] globalDefaults:', lightingConfig.globalDefaults);
     
     // Check round override first
     if (lightingConfig.roundOverrides?.[roundKey]?.[phaseType]) {
       const sceneId = lightingConfig.roundOverrides[roundKey][phaseType].sceneId;
+      console.log('[getSceneForPhase] Found in roundOverrides:', sceneId);
       return sceneId;
     }
     
@@ -156,9 +163,11 @@ export function useLightingControl({ sessionId }: UseLightingControlProps) {
     const globalDefaults = lightingConfig.globalDefaults as any;
     if (globalDefaults?.[phaseType]) {
       const sceneId = globalDefaults[phaseType].sceneId;
+      console.log('[getSceneForPhase] Found in globalDefaults:', sceneId);
       return sceneId;
     }
     
+    console.log('[getSceneForPhase] No scene found for', roundKey, phaseType);
     return null;
   }, [lightingConfig]);
   

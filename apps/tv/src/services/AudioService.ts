@@ -28,24 +28,18 @@ class AudioService {
   }
 
   async initialize(): Promise<void> {
-    console.log('[AudioService] initialize called');
-    console.log('[AudioService] Already initialized:', this.isInitialized);
-    console.log('[AudioService] Currently initializing:', this.isInitializing);
     
     if (this.isInitialized) {
-      console.log('[AudioService] Skipping initialization - already done');
       return;
     }
     
     if (this.isInitializing) {
-      console.log('[AudioService] Skipping initialization - already in progress');
       return;
     }
 
     this.isInitializing = true;
 
     try {
-      console.log('[AudioService] Starting sound preloading');
       
       // Preload all sounds
       await Promise.all([
@@ -57,37 +51,29 @@ class AudioService {
       ]);
 
       this.isInitialized = true;
-      console.log('[AudioService] Initialization completed successfully');
-      console.log('[AudioService] Loaded sounds:', Array.from(this.sounds.keys()));
     } catch (error) {
       console.error('[AudioService] Failed to initialize:', error);
-      console.error('[AudioService] Error stack:', error.stack);
     } finally {
       this.isInitializing = false;
     }
   }
 
   private preloadSound(name: SoundName, filename: string): Promise<void> {
-    console.log(`[AudioService] preloadSound called for ${name} with file ${filename}`);
     
     return new Promise((resolve, reject) => {
       try {
-        console.log(`[AudioService] Creating Sound object for ${name}`);
         
         // For Android, sounds should be in the raw folder without extension
         const sound = new Sound(filename, Sound.MAIN_BUNDLE, (error) => {
           if (error) {
             console.error(`[AudioService] Failed to load sound ${name}:`, error);
-            console.error(`[AudioService] Error details:`, JSON.stringify(error));
             reject(error);
             return;
           }
 
-          console.log(`[AudioService] Sound ${name} loaded successfully`);
           
           // Check if sound object is valid
           if (!sound) {
-            console.error(`[AudioService] Sound object is null after loading ${name}`);
             reject(new Error('Sound object is null'));
             return;
           }
@@ -95,19 +81,16 @@ class AudioService {
           // Set initial volume
           try {
             sound.setVolume(this.config.volume);
-            console.log(`[AudioService] Set volume for ${name} to ${this.config.volume}`);
           } catch (e) {
-            console.error(`[AudioService] Error setting volume for ${name}:`, e);
+            // Error setting volume
           }
           
           // Store for reuse
           this.sounds.set(name, sound);
-          console.log(`[AudioService] Sound ${name} stored in map`);
           
           resolve();
         });
       } catch (error) {
-        console.error(`[AudioService] Error creating Sound object for ${name}:`, error);
         reject(error);
       }
     });
@@ -120,7 +103,6 @@ class AudioService {
 
     const sound = this.sounds.get(name);
     if (!sound) {
-      console.warn(`Sound ${name} not preloaded`);
       return;
     }
 
@@ -130,13 +112,12 @@ class AudioService {
       sound.setCurrentTime(0); // Reset to beginning
       sound.play((success) => {
         if (!success) {
-          console.error(`Sound ${name} playback failed`);
           // Try to reload the sound if playback fails
           this.reloadSound(name);
         }
       });
     } catch (error) {
-      console.error(`Error playing sound ${name}:`, error);
+      // Error playing sound
     }
   }
 
@@ -147,14 +128,14 @@ class AudioService {
       try {
         oldSound.release();
       } catch (error) {
-        console.error(`Error releasing sound ${name}:`, error);
+        // Error releasing sound
       }
       this.sounds.delete(name);
     }
 
     // Reload the sound
     if (name === 'countdown') {
-      this.preloadSound('countdown', 'countdown_321.mp3').catch(console.error);
+      this.preloadSound('countdown', 'countdown_321.mp3').catch(() => {});
     }
   }
 
@@ -176,12 +157,12 @@ class AudioService {
           try {
             sound.pause();
           } catch (error) {
-            console.error('Error pausing beep:', error);
+            // Error pausing beep
           }
         }, 800);
       }
     } catch (error) {
-      console.error('Error playing single beep:', error);
+      // Error playing single beep
     }
   }
 
@@ -197,7 +178,7 @@ class AudioService {
       sound.play();
       // Don't stop - let it play to the end
     } catch (error) {
-      console.error('Error playing final beep:', error);
+      // Error playing final beep
     }
   }
 
@@ -205,11 +186,9 @@ class AudioService {
   playCountdown(): void {
     const sound = this.sounds.get('countdown');
     if (!sound || !this.config.enabled) {
-      console.log('Countdown not playing - sound not loaded or disabled');
       return;
     }
 
-    console.log('Starting countdown sequence');
     let beepCount = 0;
     
     const playBeep = () => {
@@ -218,20 +197,17 @@ class AudioService {
       }
       
       try {
-        console.log(`Playing beep ${beepCount + 1}/3`);
         // Set to 0 second mark to play from beginning
         sound.setCurrentTime(0);
         sound.play((success) => {
-          console.log(`Beep ${beepCount + 1} play result:`, success);
         });
         
         // Stop after 0.5 seconds to play only the first beep
         setTimeout(() => {
           try {
             sound.pause();
-            console.log(`Paused beep ${beepCount + 1}`);
           } catch (error) {
-            console.error('Error pausing beep:', error);
+            // Error pausing beep
           }
           
           beepCount++;
@@ -242,7 +218,7 @@ class AudioService {
           }
         }, 500); // Reduced to 0.5 seconds to isolate first beep
       } catch (error) {
-        console.error('Error playing beep:', error);
+        // Error playing beep
       }
     };
     
@@ -263,77 +239,63 @@ class AudioService {
   }
 
   stopAll(): void {
-    console.log('[AudioService] stopAll called');
-    console.log('[AudioService] Current sounds map size:', this.sounds.size);
-    console.log('[AudioService] isInitialized:', this.isInitialized);
     
     this.sounds.forEach((sound, name) => {
       try {
-        console.log(`[AudioService] Attempting to stop sound: ${name}`);
         
         // Check if sound object exists and is valid
         if (!sound) {
-          console.warn(`[AudioService] Sound object for ${name} is null/undefined`);
           return;
         }
         
         // Log sound state before stopping
         try {
           const isPlaying = sound.isPlaying();
-          console.log(`[AudioService] Sound ${name} isPlaying:`, isPlaying);
           
           // Only stop if actually playing
           if (!isPlaying) {
-            console.log(`[AudioService] Sound ${name} is not playing, skipping stop`);
             return;
           }
         } catch (e) {
-          console.error(`[AudioService] Error checking isPlaying for ${name}:`, e);
           // If we can't check isPlaying, try to reset the sound position instead of stopping
           try {
             sound.setCurrentTime(0);
-            console.log(`[AudioService] Reset sound ${name} to position 0`);
             return;
           } catch (resetError) {
-            console.error(`[AudioService] Error resetting sound ${name}:`, resetError);
+            // Error resetting sound
           }
         }
         
         // Check if sound has the stop method
         if (typeof sound.stop !== 'function') {
-          console.error(`[AudioService] Sound ${name} does not have stop method`);
           return;
         }
         
         // Try stop with a callback to catch async errors
         sound.stop(() => {
-          console.log(`[AudioService] Sound ${name} stopped via callback`);
           // Reset to beginning after stop
           try {
             sound.setCurrentTime(0);
           } catch (e) {
-            console.log(`[AudioService] Could not reset time after stop for ${name}`);
+            // Could not reset time after stop
           }
         });
         
-        console.log(`[AudioService] Stop initiated for sound: ${name}`);
+        
       } catch (error) {
-        console.error(`[AudioService] Error stopping sound ${name}:`, error);
-        console.error(`[AudioService] Error stack:`, error.stack);
         
         // As a last resort, try to pause instead of stop
         try {
           if (sound && typeof sound.pause === 'function') {
             sound.pause();
-            console.log(`[AudioService] Paused sound ${name} as fallback`);
           }
         } catch (pauseError) {
-          console.error(`[AudioService] Error pausing sound ${name}:`, pauseError);
+          // Error pausing sound
         }
       }
     });
     
-    console.log('[AudioService] stopAll completed');
+    
   }
 
   release(): void {

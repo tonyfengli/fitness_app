@@ -79,14 +79,10 @@ export function CircuitWorkoutLiveScreen() {
   const [teamsDistribution, setTeamsDistribution] = useState<Map<number, any[]>>(new Map());
   const [isLightingEnabled, setIsLightingEnabled] = useState(isStartedOverride);
 
-  // Log component lifecycle
+  // Component lifecycle tracking
   useEffect(() => {
-    console.log('[CircuitLive] Component mounted');
-    console.log('[CircuitLive] sessionId:', sessionId);
-    console.log('[CircuitLive] isStartedOverride:', isStartedOverride);
-    
     return () => {
-      console.log('[CircuitLive] Component unmounting');
+      // Cleanup on unmount
     };
   }, []);
 
@@ -242,13 +238,30 @@ export function CircuitWorkoutLiveScreen() {
   }, [selections, circuitConfig]);
 
   // Initialize lighting control
-  const { isLightingOn, turnOn, turnOff, activateScene, getSceneForPhase } = useLightingControl({ sessionId });
+  const { isLightingOn, turnOn, turnOff, activateScene, getSceneForPhase, lightingConfig } = useLightingControl({ sessionId });
+  
+  // Helper to check if any phase has lighting config for current round
+  const hasLightingForAnyPhase = (roundIndex: number, phases: string[]) => {
+    if (!lightingConfig) {
+      console.log('[Lighting] No lightingConfig available');
+      return false;
+    }
+    
+    console.log('[Lighting] Checking phases for round', roundIndex, 'phases:', phases);
+    console.log('[Lighting] lightingConfig:', lightingConfig);
+    
+    return phases.some(phase => {
+      const scene = getSceneForPhase(roundIndex, phase);
+      console.log(`[Lighting] Round ${roundIndex}, Phase ${phase}, Scene:`, scene);
+      return scene !== null;
+    });
+  };
   
   // Sync lighting state with toggle
   useEffect(() => {
-    // console.log('[CircuitLive] Mount effect:', { isStartedOverride, isLightingOn });
-    if (isStartedOverride && !isLightingOn) {
-      // Initial state from navigation - turn on lights
+    // console.log('[CircuitLive] Mount effect:', { isStartedOverride, isLightingOn, lightingConfig });
+    if (isStartedOverride && !isLightingOn && lightingConfig) {
+      // Initial state from navigation - turn on lights only if config exists
       const previewScene = getSceneForPhase(0, 'preview');
       // console.log('[CircuitLive] Turning on lights from mount:', previewScene);
       turnOn(previewScene || undefined).catch(console.error);
@@ -282,11 +295,27 @@ export function CircuitWorkoutLiveScreen() {
     if (state.value === 'roundPreview') {
       phaseType = 'preview';
     } else if (state.value === 'exercise') {
-      // For exercise state, include the exercise index in the phase type
-      phaseType = `work-exercise-${state.context.currentExerciseIndex}`;
+      // For exercise state, include the exercise/station index in the phase type
+      const roundTiming = getRoundTiming(state.context.currentRoundIndex);
+      if (roundTiming.roundType === 'stations_round') {
+        phaseType = `work-station-${state.context.currentExerciseIndex}`;
+      } else if (roundTiming.roundType === 'amrap_round') {
+        // AMRAP uses simple 'work' phase
+        phaseType = 'work';
+      } else {
+        phaseType = `work-exercise-${state.context.currentExerciseIndex}`;
+      }
     } else if (state.value === 'rest') {
-      // For rest state, include the exercise index it's resting after
-      phaseType = `rest-after-exercise-${state.context.currentExerciseIndex}`;
+      // For rest state, include the exercise/station index it's resting after
+      const roundTiming = getRoundTiming(state.context.currentRoundIndex);
+      if (roundTiming.roundType === 'stations_round') {
+        phaseType = `rest-after-station-${state.context.currentExerciseIndex}`;
+      } else if (roundTiming.roundType === 'amrap_round') {
+        // AMRAP uses simple 'rest' phase
+        phaseType = 'rest';
+      } else {
+        phaseType = `rest-after-exercise-${state.context.currentExerciseIndex}`;
+      }
     } else if (state.value === 'setBreak') {
       phaseType = 'roundBreak';
     }
@@ -400,16 +429,9 @@ export function CircuitWorkoutLiveScreen() {
               <Pressable
                 ref={backButtonRef}
                 onPress={() => {
-                  console.log('[CircuitLive] Back button pressed');
-                  console.log('[CircuitLive] Current state:', state.value);
-                  console.log('[CircuitLive] Current round index:', state.context.currentRoundIndex);
-                  console.log('[CircuitLive] Is started:', state.context.isStarted);
-                  
                   if (state.context.currentRoundIndex === 0) {
-                    console.log('[CircuitLive] Navigating back (goBack)');
                     navigation.goBack();
                   } else {
-                    console.log('[CircuitLive] Sending BACK event to state machine');
                     send({ type: 'BACK' });
                   }
                 }}
@@ -505,20 +527,59 @@ export function CircuitWorkoutLiveScreen() {
 
             {/* RIGHT SIDE: Teams/Start Pair, Triple Controls for AMRAP/Circuit, or Spacer */}
             {state.context.currentRoundIndex === 0 && !state.context.isStarted ? (
-              <View style={{ 
-                flexDirection: 'row',
-                backgroundColor: 'rgba(255,255,255,0.05)',
-                borderRadius: 32,
-                padding: 6,
-                gap: 4,
-                borderWidth: 1,
-                borderColor: 'rgba(255,255,255,0.1)',
-                shadowColor: '#000',
-                shadowOffset: { width: 0, height: 4 },
-                shadowOpacity: 0.15,
-                shadowRadius: 8,
-                elevation: 4,
-              }}>
+              <View style={{ position: 'relative' }}>
+                <View style={{ 
+                  flexDirection: 'row',
+                  backgroundColor: 'rgba(255,255,255,0.05)',
+                  borderRadius: 32,
+                  padding: 6,
+                  gap: 4,
+                  borderWidth: 1,
+                  borderColor: 'rgba(255,255,255,0.1)',
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.15,
+                  shadowRadius: 8,
+                  elevation: 4,
+                }}>
+                {/* Start Button */}
+                <Pressable
+                  onPress={handleStartWorkout}
+                  focusable
+                  hasTVPreferredFocus
+                >
+                  {({ focused }) => (
+                    <MattePanel 
+                      focused={focused}
+                      radius={26}
+                      style={{ 
+                        width: 94,
+                        height: 44,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        backgroundColor: focused ? 
+                          'rgba(255,255,255,0.15)' : 
+                          'rgba(255,255,255,0.08)',
+                        borderColor: focused ? 'rgba(255,255,255,0.3)' : 'transparent',
+                        borderWidth: focused ? 1.5 : 0,
+                      }}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Text style={{ 
+                          color: TOKENS.color.text, 
+                          fontSize: 13, 
+                          fontWeight: '700',
+                          letterSpacing: 0.3,
+                          textTransform: 'uppercase'
+                        }}>
+                          START
+                        </Text>
+                        <Icon name="play-arrow" size={18} color={TOKENS.color.text} />
+                      </View>
+                    </MattePanel>
+                  )}
+                </Pressable>
+                
                 {/* Lights Button - Icon Only for stations round */}
                 {currentRoundType === 'stations_round' && (
                   <Pressable
@@ -562,7 +623,7 @@ export function CircuitWorkoutLiveScreen() {
                         <Icon 
                           name={isLightingEnabled ? "lightbulb" : "lightbulb-outline"} 
                           size={22} 
-                          color={isLightingEnabled ? TOKENS.color.accent : TOKENS.color.muted}
+                          color={isLightingEnabled ? TOKENS.color.accent : TOKENS.color.text}
                           style={{
                             shadowColor: isLightingEnabled ? TOKENS.color.accent : 'transparent',
                             shadowOpacity: isLightingEnabled ? 0.8 : 0,
@@ -574,62 +635,50 @@ export function CircuitWorkoutLiveScreen() {
                     )}
                   </Pressable>
                 )}
-                
-                {/* Start Button */}
-                <Pressable
-                  onPress={handleStartWorkout}
-                  focusable
-                  hasTVPreferredFocus={currentRoundType !== 'stations_round'}
-                >
-                  {({ focused }) => (
-                    <MattePanel 
-                      focused={focused}
-                      radius={26}
-                      style={{ 
-                        width: 94,
-                        height: 44,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        backgroundColor: focused ? 
-                          'rgba(255,255,255,0.15)' : 
-                          'rgba(255,255,255,0.08)',
-                        borderColor: focused ? 'rgba(255,255,255,0.3)' : 'transparent',
-                        borderWidth: focused ? 1.5 : 0,
-                      }}
-                    >
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <Text style={{ 
-                          color: TOKENS.color.text, 
-                          fontSize: 13, 
-                          fontWeight: '700',
-                          letterSpacing: 0.3,
-                          textTransform: 'uppercase'
-                        }}>
-                          START
-                        </Text>
-                        <Icon name="play-arrow" size={18} color={TOKENS.color.text} />
-                      </View>
-                    </MattePanel>
-                  )}
-                </Pressable>
+                </View>
+                {/* Lighting Config Badge */}
+                {lightingConfig && currentRoundType === 'stations_round' && hasLightingForAnyPhase(0, ['preview']) && (
+                  <View style={{
+                    position: 'absolute',
+                    bottom: -22,
+                    right: 8,
+                    paddingHorizontal: 8,
+                    paddingVertical: 3,
+                    backgroundColor: 'rgba(255,255,255,0.1)',
+                    borderRadius: 10,
+                    borderWidth: 1,
+                    borderColor: 'rgba(255,255,255,0.15)',
+                  }}>
+                    <Text style={{
+                      fontSize: 9,
+                      fontWeight: '700',
+                      color: 'rgba(255,255,255,0.7)',
+                      letterSpacing: 0.5,
+                      textTransform: 'uppercase',
+                    }}>
+                      AUTO
+                    </Text>
+                  </View>
+                )}
               </View>
             ) : (currentRoundType === 'amrap_round' || currentRoundType === 'circuit_round' || currentRoundType === 'stations_round') ? (
               // Triple button controls for AMRAP, Circuit, and Stations round preview: TEAMS | PAUSE | SKIP
-              <View style={{ 
-                flexDirection: 'row',
-                backgroundColor: 'rgba(255,255,255,0.05)',
-                borderRadius: 32,
-                padding: 6,
-                gap: 4,
-                borderWidth: 1,
-                borderColor: 'rgba(255,255,255,0.1)',
-                zIndex: 1,
-                shadowColor: '#000',
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.08,
-                shadowRadius: 4,
-                elevation: 2,
-              }}>
+              <View style={{ position: 'relative' }}>
+                <View style={{ 
+                  flexDirection: 'row',
+                  backgroundColor: 'rgba(255,255,255,0.05)',
+                  borderRadius: 32,
+                  padding: 6,
+                  gap: 4,
+                  borderWidth: 1,
+                  borderColor: 'rgba(255,255,255,0.1)',
+                  zIndex: 1,
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.08,
+                  shadowRadius: 4,
+                  elevation: 2,
+                }}>
 {/* Pause/Play */}
                 <Pressable onPress={() => send(state.context.isPaused ? { type: 'RESUME' } : { type: 'PAUSE' })} focusable>
                   {({ focused }) => (
@@ -679,6 +728,84 @@ export function CircuitWorkoutLiveScreen() {
                     </MattePanel>
                   )}
                 </Pressable>
+                
+                {/* Lighting Control for AMRAP/Circuit preview */}
+                <Pressable
+                  onPress={async () => {
+                    const newState = !isLightingEnabled;
+                    setIsLightingEnabled(newState);
+                    
+                    try {
+                      if (newState) {
+                        const phaseType = 'preview';
+                        const sceneId = getSceneForPhase(state.context.currentRoundIndex, phaseType);
+                        await turnOn(sceneId || undefined);
+                      } else {
+                        await turnOff();
+                      }
+                    } catch (error) {
+                      console.error('[CircuitLive] Failed to control lights:', error);
+                    }
+                  }}
+                  focusable
+                >
+                  {({ focused }) => (
+                    <MattePanel 
+                      focused={focused}
+                      radius={26}
+                      style={{ 
+                        width: 52,
+                        height: 44,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        backgroundColor: isLightingEnabled ? 
+                          (focused ? 'rgba(0,183,194,0.2)' : 'rgba(0,183,194,0.1)') :
+                          (focused ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.08)'),
+                        borderColor: isLightingEnabled ? 
+                          TOKENS.color.accent : 
+                          (focused ? 'rgba(255,255,255,0.3)' : 'transparent'),
+                        borderWidth: isLightingEnabled ? 1.5 : (focused ? 1.5 : 0),
+                      }}
+                    >
+                      <Icon 
+                        name={isLightingEnabled ? "lightbulb" : "lightbulb-outline"} 
+                        size={22} 
+                        color={isLightingEnabled ? TOKENS.color.accent : TOKENS.color.text}
+                        style={{
+                          shadowColor: isLightingEnabled ? TOKENS.color.accent : 'transparent',
+                          shadowOpacity: isLightingEnabled ? 0.8 : 0,
+                          shadowRadius: isLightingEnabled ? 15 : 0,
+                          shadowOffset: { width: 0, height: 0 },
+                        }}
+                      />
+                    </MattePanel>
+                  )}
+                </Pressable>
+                </View>
+                {/* Lighting Config Badge */}
+                {lightingConfig && hasLightingForAnyPhase(state.context.currentRoundIndex, ['preview']) && (
+                  <View style={{
+                    position: 'absolute',
+                    bottom: -22,
+                    right: 8,
+                    paddingHorizontal: 8,
+                    paddingVertical: 3,
+                    backgroundColor: 'rgba(255,255,255,0.1)',
+                    borderRadius: 10,
+                    borderWidth: 1,
+                    borderColor: 'rgba(255,255,255,0.15)',
+                  }}>
+                    <Text style={{
+                      fontSize: 9,
+                      fontWeight: '700',
+                      color: 'rgba(255,255,255,0.7)',
+                      letterSpacing: 0.5,
+                      textTransform: 'uppercase',
+                    }}>
+                      AUTO
+                    </Text>
+                  </View>
+                )}
               </View>
             ) : (
               <View style={{ width: 60 }} />
@@ -738,6 +865,68 @@ export function CircuitWorkoutLiveScreen() {
               state={state}
               send={send}
               currentRoundType={currentRoundType}
+              isLightingEnabled={isLightingEnabled}
+              lightingConfig={lightingConfig}
+              onToggleLighting={async () => {
+                if (!lightingConfig) return;
+                
+                const newState = !isLightingEnabled;
+                setIsLightingEnabled(newState);
+                
+                try {
+                  if (newState) {
+                    // Get appropriate scene for current state
+                    const phaseType = state.value === 'exercise' ? 'work' : 
+                                    state.value === 'rest' ? 'rest' : 
+                                    state.value === 'setBreak' ? 'rest' : 'preview';
+                    const sceneId = getSceneForPhase(state.context.currentRoundIndex, phaseType);
+                    await turnOn(sceneId || undefined);
+                  } else {
+                    await turnOff();
+                  }
+                } catch (error) {
+                  console.error('[CircuitLive] Failed to control lights:', error);
+                }
+              }}
+              hasLightingForCurrentView={(() => {
+                if (!lightingConfig) return false;
+                
+                // Get the current phase based on current state
+                let currentPhase = state.value;
+                
+                if (state.value === 'roundPreview') {
+                  currentPhase = 'preview';
+                } else if (state.value === 'exercise') {
+                  // For exercise state, handle different round types
+                  const roundTiming = getRoundTiming(state.context.currentRoundIndex);
+                  if (roundTiming.roundType === 'stations_round') {
+                    currentPhase = `work-station-${state.context.currentExerciseIndex}`;
+                  } else if (roundTiming.roundType === 'amrap_round') {
+                    // AMRAP uses simple 'work' phase
+                    currentPhase = 'work';
+                  } else {
+                    currentPhase = `work-exercise-${state.context.currentExerciseIndex}`;
+                  }
+                } else if (state.value === 'rest') {
+                  // For rest state, handle different round types
+                  const roundTiming = getRoundTiming(state.context.currentRoundIndex);
+                  if (roundTiming.roundType === 'stations_round') {
+                    currentPhase = `rest-after-station-${state.context.currentExerciseIndex}`;
+                  } else if (roundTiming.roundType === 'amrap_round') {
+                    // AMRAP uses simple 'rest' phase
+                    currentPhase = 'rest';
+                  } else {
+                    currentPhase = `rest-after-exercise-${state.context.currentExerciseIndex}`;
+                  }
+                } else if (state.value === 'setBreak') {
+                  currentPhase = 'roundBreak';
+                }
+                
+                // Check if this specific phase has lighting configured
+                const scene = getSceneForPhase(state.context.currentRoundIndex, currentPhase);
+                console.log('[WorkoutControls] Checking lighting for phase:', currentPhase, 'scene:', scene);
+                return scene !== null;
+              })()}
             />
           </View>
 
@@ -858,9 +1047,6 @@ export function CircuitWorkoutLiveScreen() {
               const stationCount = currentRound?.exercises 
                 ? [...new Set(currentRound.exercises.map(ex => ex.orderIndex))].length 
                 : 0;
-              
-              console.log('[TeamsModal] Current round:', currentRound?.roundName);
-              console.log('[TeamsModal] Station count:', stationCount);
               
               // Calculate responsive grid layout (same logic as StationsExerciseView)
               const getGridLayout = (count: number) => {

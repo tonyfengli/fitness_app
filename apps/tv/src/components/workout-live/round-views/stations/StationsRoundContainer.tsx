@@ -34,21 +34,13 @@ export function StationsRoundContainer({
   workDuration,
   circuitConfig
 }: StationsRoundContainerProps) {
-  console.log('[StationsRoundContainer] Component render');
-  console.log('[StationsRoundContainer] currentRoundIndex:', currentRoundIndex);
-  console.log('[StationsRoundContainer] currentExerciseIndex:', currentExerciseIndex);
-  console.log('[StationsRoundContainer] state.value:', state.value);
-  console.log('[StationsRoundContainer] circuitConfig available:', !!circuitConfig);
   
   // Get station circuits configuration for current round
   const roundTemplate = circuitConfig?.config?.roundTemplates?.find(
     rt => rt.roundNumber === currentRoundIndex + 1 // roundNumber is 1-based
   );
-  console.log('[StationsRoundContainer] roundTemplate found:', !!roundTemplate);
-  console.log('[StationsRoundContainer] roundTemplate:', roundTemplate);
   
   const stationCircuits = roundTemplate?.template?.stationCircuits;
-  console.log('[StationsRoundContainer] stationCircuits:', stationCircuits);
 
   // Use the station circuit timers hook
   const { getStationTimerDisplay } = useStationCircuitTimers({
@@ -76,19 +68,6 @@ export function StationsRoundContainer({
   }
 
   if (state.value === 'exercise') {
-    console.log('[StationsRoundContainer] Exercise state:', {
-      currentExerciseIndex,
-      totalExercises: currentRound.exercises.length,
-      currentExercise: currentRound.exercises[currentExerciseIndex],
-      allExercises: currentRound.exercises.map(ex => ({
-        id: ex.id,
-        name: ex.exercise?.name || 'Unknown',
-        orderIndex: ex.orderIndex,
-        stationIndex: ex.stationIndex
-      })),
-      stationCircuits: stationCircuits,
-      hasGetStationTimerDisplay: !!getStationTimerDisplay,
-    });
     
     return (
       <>

@@ -72,10 +72,7 @@ export function useWorkoutMachineWithLighting({
     const currentTime = state.context.timeRemaining;
     const previousTime = prevTimeRemaining.current;
     
-    // Log timer changes for debugging sync issues
-    if (currentTime !== previousTime && currentTime <= 5 && currentTime >= 0) {
-      console.log(`[Timer] ${state.value} - Time: ${currentTime}s`);
-    }
+    // Track timer changes
     
     // Define which states should have countdown
     const statesWithCountdown = ['rest', 'setBreak'];
@@ -87,7 +84,6 @@ export function useWorkoutMachineWithLighting({
         !state.context.isPaused &&
         (currentTime === 4 || currentTime === 3 || currentTime === 2 || currentTime === 1) && 
         previousTime > currentTime) {
-      console.log(`[Timer] Playing beep at ${currentTime}s during ${state.value}`);
       // Initialize audio service if not already done
       audioService.initialize().then(() => {
         if (currentTime === 1) {
