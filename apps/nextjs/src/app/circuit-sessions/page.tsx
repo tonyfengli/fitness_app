@@ -78,6 +78,20 @@ const useCompletedCircuitSessions = (enabled: boolean) => {
   });
 };
 
+// Load draft circuit sessions from API (only when needed)
+const useDraftCircuitSessions = (enabled: boolean) => {
+  const trpc = api();
+  return useQuery({
+    ...trpc.trainingSession.listCircuitSessions.queryOptions({
+      limit: 50, // Higher limit for draft sessions
+      offset: 0,
+      businessId: "d33b41e2-f700-4a08-9489-cb6e3daa7f20",
+      status: "draft" as any, // Fetch draft sessions
+    }),
+    enabled,
+  });
+};
+
 const getTimeOfDayBadge = (dateString: string) => {
   const date = new Date(dateString);
   const hour = date.getHours();
@@ -167,6 +181,7 @@ export default function SessionsPage() {
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const [showCompletedSessions, setShowCompletedSessions] = useState(false);
+  const [showDraftSessions, setShowDraftSessions] = useState(false);
   const [navigatingToSession, setNavigatingToSession] = useState<string | null>(null);
 
   // Check authentication on component mount
@@ -201,6 +216,9 @@ export default function SessionsPage() {
   
   // Load completed circuit sessions only when expanded
   const { data: completedSessions, isLoading: completedLoading, error: completedError } = useCompletedCircuitSessions(showCompletedSessions);
+  
+  // Load draft circuit sessions only when expanded
+  const { data: draftSessions, isLoading: draftLoading, error: draftError } = useDraftCircuitSessions(showDraftSessions);
   
   // Get query client for prefetching
   const queryClient = useQueryClient();
@@ -508,6 +526,113 @@ export default function SessionsPage() {
                   </div>
                   <p className="text-sm font-medium text-gray-600 dark:text-gray-400">No completed sessions yet</p>
                   <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">Completed sessions will appear here</p>
+                </div>
+              ) : null}
+            </div>
+          </div>
+
+          {/* Draft Sessions Section - Always show expandable header */}
+          <div className="space-y-4 mt-6">
+            {/* Collapsible Header */}
+            <button
+              onClick={() => setShowDraftSessions(!showDraftSessions)}
+              className="w-full flex items-center justify-between p-4 bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800/50 dark:to-gray-800/30 rounded-xl border border-gray-200 dark:border-gray-700 hover:from-gray-100 hover:to-gray-150 dark:hover:from-gray-700/50 dark:hover:to-gray-700/30 transition-all duration-200 shadow-sm hover:shadow-md"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center">
+                  <svg className="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                </div>
+                <div className="text-left">
+                  <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
+                    Draft Sessions
+                  </h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    {draftLoading && showDraftSessions ? "Loading..." : 
+                     draftSessions ? `${draftSessions.length} session${draftSessions.length !== 1 ? 's' : ''}` : 
+                     showDraftSessions ? "Loading..." : "Tap to view"}
+                  </p>
+                </div>
+              </div>
+              <div className={`transition-transform duration-200 ${showDraftSessions ? 'rotate-180' : ''}`}>
+                <ChevronDownIcon className="w-5 h-5 text-gray-400 dark:text-gray-500" />
+              </div>
+            </button>
+
+            {/* Draft Sessions List */}
+            <div className={`space-y-4 transition-all duration-300 ease-in-out ${
+              showDraftSessions 
+                ? 'opacity-100 max-h-[2000px]' 
+                : 'opacity-0 max-h-0 overflow-hidden'
+            }`}>
+              {draftLoading && showDraftSessions ? (
+                <div className="text-center py-4">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto"></div>
+                  <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">Loading draft sessions...</p>
+                </div>
+              ) : draftSessions && draftSessions.length > 0 ? (
+                draftSessions.map((session: any) => {
+                  const statusBadge = getStatusBadge(session.status);
+                  
+                  return (
+                    <div
+                      key={session.id}
+                      onClick={() => handleSessionSelect(session.id)}
+                      onMouseEnter={() => handleSessionHover(session.id)}
+                      className="relative bg-white dark:bg-gray-800 rounded-xl shadow-sm transition-all duration-200 cursor-pointer opacity-75 hover:opacity-100 hover:shadow-md active:scale-[0.98] transform overflow-hidden group"
+                    >
+                      {/* Draft status indicator bar */}
+                      <div className="absolute top-0 left-0 right-0 h-0.5 bg-amber-400 dark:bg-amber-600"></div>
+                      
+                      <div className="p-4">
+                        {/* Compact Header Row */}
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-baseline gap-2 mb-2">
+                              <h3 className="text-base font-medium text-gray-700 dark:text-gray-300 shrink-0">
+                                {PROGRAM_LABELS[session.program] || 'Unassigned'}
+                              </h3>
+                              <span className="text-xs text-gray-400 dark:text-gray-500 truncate min-w-0">
+                                · {session.name}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-3 mt-2">
+                              <div className="flex items-center gap-1.5">
+                                <UsersIcon className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500" />
+                                <span className="text-xs text-gray-500 dark:text-gray-400">
+                                  {session.participantCount || 0} clients
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                <CalendarIcon className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500" />
+                                <span className="text-xs text-gray-500 dark:text-gray-400">
+                                  {new Date(session.scheduledAt).toLocaleDateString('en-US', {
+                                    weekday: 'short',
+                                    month: 'short',
+                                    day: 'numeric'
+                                  })}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                          <svg className="w-5 h-5 text-amber-500 dark:text-amber-400 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              ) : showDraftSessions && draftSessions && draftSessions.length === 0 ? (
+                <div className="text-center py-8">
+                  <div className="mx-auto w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mb-3">
+                    <svg className="w-8 h-8 text-gray-400 dark:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                  </div>
+                  <p className="text-sm font-medium text-gray-600 dark:text-gray-400">No draft sessions yet</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">Draft sessions will appear here</p>
                 </div>
               ) : null}
             </div>

@@ -595,6 +595,7 @@ export const trainingSessionRouter = {
 
       return {
         ...session,
+        status: session.status === 'cancelled' ? 'draft' as const : session.status,
         participants,
       };
     }),
@@ -4097,7 +4098,11 @@ Set your goals and preferences for today's session.`;
         });
       }
 
-      return session;
+      // Transform cancelled status to draft for frontend
+      return {
+        ...session,
+        status: session.status === 'cancelled' ? 'draft' as const : session.status,
+      };
     }),
 
   // Check if workout exists for session (public - no auth required)
@@ -4134,7 +4139,7 @@ Set your goals and preferences for today's session.`;
         trainerId: z.string().optional(),
         startDate: z.date().optional(),
         endDate: z.date().optional(),
-        status: z.enum(['completed', 'active']).optional(), // 'active' means not completed
+        status: z.enum(['completed', 'active', 'draft']).optional(), // 'active' means not completed, 'draft' means cancelled
       }),
     )
     .query(async ({ ctx, input }) => {
@@ -4161,8 +4166,11 @@ Set your goals and preferences for today's session.`;
       if (input.status === 'completed') {
         conditions.push(eq(TrainingSession.status, 'completed'));
       } else if (input.status === 'active') {
-        // Active means any status except completed
-        conditions.push(sql`${TrainingSession.status} != 'completed'`);
+        // Active means any status except completed and cancelled
+        conditions.push(sql`${TrainingSession.status} NOT IN ('completed', 'cancelled')`);
+      } else if (input.status === 'draft') {
+        // Draft means cancelled status
+        conditions.push(eq(TrainingSession.status, 'cancelled'));
       }
 
       // Get sessions with participant counts
@@ -4202,7 +4210,11 @@ Set your goals and preferences for today's session.`;
         .limit(input.limit)
         .offset(input.offset);
 
-      return sessions;
+      // Transform cancelled status to draft for frontend
+      return sessions.map(session => ({
+        ...session,
+        status: session.status === 'cancelled' ? 'draft' as const : session.status,
+      }));
     }),
 
   createWorkoutsFromBlueprint: protectedProcedure
@@ -4271,7 +4283,9 @@ Set your goals and preferences for today's session.`;
     .input(
       z.object({
         sessionId: z.string().uuid(),
-        status: z.enum(["open", "in_progress"]),
+        status: z.enum(["open", "in_progress", "draft"]).transform(val => 
+          val === "draft" ? "cancelled" : val
+        ),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -4337,7 +4351,7 @@ Set your goals and preferences for today's session.`;
       return {
         success: true,
         sessionId: input.sessionId,
-        newStatus: input.status,
+        newStatus: input.status === "cancelled" ? "draft" : input.status,
       };
     }),
 
@@ -4712,7 +4726,7 @@ Set your goals and preferences for today's session.`;
       sessionDetails: z.object({
         name: z.string().optional(),
         scheduledAt: z.date().optional(),
-        program: z.enum(["h4h_5am", "h4h_5pm", "saturday_cg", "monday_cg", "unassigned"]).optional(),
+        program: z.enum(["h4h_5am", "h4h_5pm", "saturday_cg", "monday_cg", "coach_frank", "coach_steph", "coach_kyle", "unassigned"]).optional(),
       }).optional()
     }))
     .mutation(async ({ ctx, input }) => {
@@ -4740,7 +4754,7 @@ Set your goals and preferences for today's session.`;
         const updateData: Partial<{
           name: string;
           scheduledAt: Date;
-          program: "h4h_5am" | "h4h_5pm" | "saturday_cg" | "monday_cg" | "unassigned";
+          program: "h4h_5am" | "h4h_5pm" | "saturday_cg" | "monday_cg" | "coach_frank" | "coach_steph" | "coach_kyle" | "unassigned";
           updatedAt: Date;
         }> = {
           updatedAt: new Date(),
@@ -5192,7 +5206,9 @@ Set your goals and preferences for today's session.`;
     .input(
       z.object({
         sessionId: z.string().uuid(),
-        status: z.enum(["open", "in_progress", "completed", "cancelled"]),
+        status: z.enum(["open", "in_progress", "completed", "cancelled", "draft"]).transform(val => 
+          val === "draft" ? "cancelled" : val
+        ),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -5254,8 +5270,11 @@ Set your goals and preferences for today's session.`;
       return {
         success: true,
         sessionId: updatedSession!.id,
-        newStatus: updatedSession!.status,
-        session: updatedSession,
+        newStatus: updatedSession!.status === "cancelled" ? "draft" : updatedSession!.status,
+        session: {
+          ...updatedSession,
+          status: updatedSession!.status === "cancelled" ? "draft" : updatedSession!.status,
+        } as typeof updatedSession,
       };
     }),
 
@@ -5337,7 +5356,7 @@ Set your goals and preferences for today's session.`;
     .input(
       z.object({
         sessionId: z.string().uuid(),
-        program: z.enum(["h4h_5am", "h4h_5pm", "saturday_cg", "monday_cg", "unassigned"]),
+        program: z.enum(["h4h_5am", "h4h_5pm", "saturday_cg", "monday_cg", "coach_frank", "coach_steph", "coach_kyle", "unassigned"]),
       }),
     )
     .mutation(async ({ ctx, input }) => {

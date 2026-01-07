@@ -102,7 +102,7 @@ interface TrainingSession {
   id: string;
   businessId: string;
   templateType: string;
-  status: 'open' | 'in_progress' | 'completed' | 'cancelled';
+  status: 'open' | 'in_progress' | 'completed' | 'cancelled' | 'draft';
   scheduledAt: Date | null;
   name: string;
   createdAt: Date;
@@ -179,6 +179,12 @@ export function MainScreen() {
     onUpdate: (session, event) => {
       console.log('[MainScreen] 🔥 REAL-TIME:', event, session.name);
       
+      // Transform cancelled status to draft to match API behavior
+      const transformedSession = {
+        ...session,
+        status: session.status === 'cancelled' ? 'draft' as const : session.status,
+      };
+      
       const queryKey = api.trainingSession.list.queryOptions({ 
         limit: 6, 
         offset: 0 
@@ -189,33 +195,33 @@ export function MainScreen() {
       console.log('[MainScreen] Cache BEFORE:', currentCacheData ? (currentCacheData as any[]).length : 'null', 'items');
 
       if (event === 'INSERT') {
-        console.log('[MainScreen] 🆕 INSERT:', session.id);
+        console.log('[MainScreen] 🆕 INSERT:', transformedSession.id);
         
         // Add new item to cache immediately
         queryClient.setQueryData(queryKey, (oldData: any) => {
-          if (!oldData) return [session];
-          const newData = [session, ...oldData];
+          if (!oldData) return [transformedSession];
+          const newData = [transformedSession, ...oldData];
           return newData.slice(0, 6);
         });
 
         // Add to stored order
-        sessionOrderRef.current = [session.id, ...sessionOrderRef.current];
+        sessionOrderRef.current = [transformedSession.id, ...sessionOrderRef.current];
         
         // Verify cache was updated
         const verifyCache = queryClient.getQueryData(queryKey);
         console.log('[MainScreen] 🆕 Cache AFTER:', verifyCache ? (verifyCache as any[]).length : 'null', 'items');
         
       } else if (event === 'DELETE') {
-        console.log('[MainScreen] 🗑️ DELETE:', session.id);
+        console.log('[MainScreen] 🗑️ DELETE:', transformedSession.id);
         
         // Remove item from cache immediately
         queryClient.setQueryData(queryKey, (oldData: any) => {
           if (!oldData) return [];
-          return oldData.filter((s: any) => s.id !== session.id);
+          return oldData.filter((s: any) => s.id !== transformedSession.id);
         });
 
         // Remove from stored order
-        sessionOrderRef.current = sessionOrderRef.current.filter(id => id !== session.id);
+        sessionOrderRef.current = sessionOrderRef.current.filter(id => id !== transformedSession.id);
         
         // Verify cache was updated
         const verifyCache = queryClient.getQueryData(queryKey);
@@ -240,12 +246,12 @@ export function MainScreen() {
         });
         
       } else if (event === 'UPDATE') {
-        console.log('[MainScreen] 🔄 UPDATE:', session.id, session.status);
+        console.log('[MainScreen] 🔄 UPDATE:', transformedSession.id, transformedSession.status);
         
         // Update existing item in cache
         queryClient.setQueryData(queryKey, (oldData: any) => {
-          if (!oldData) return [session];
-          return oldData.map((s: any) => s.id === session.id ? session : s);
+          if (!oldData) return [transformedSession];
+          return oldData.map((s: any) => s.id === transformedSession.id ? transformedSession : s);
         });
       }
     },
@@ -1170,17 +1176,19 @@ export function MainScreen() {
                       styles.simpleStatusBadge,
                       session.status === 'open' && styles.openBadge,
                       session.status === 'completed' && styles.completeBadge,
-                      session.status === 'cancelled' && styles.incompleteBadge,
+                      (session.status === 'cancelled' || session.status === 'draft') && styles.incompleteBadge,
                       session.status === 'in_progress' && styles.openBadge,
                     ]}>
                       <Text style={[
                         styles.simpleStatusText,
                         session.status === 'open' && styles.openText,
                         session.status === 'completed' && styles.completeText,
-                        session.status === 'cancelled' && styles.incompleteText,
+                        (session.status === 'cancelled' || session.status === 'draft') && styles.incompleteText,
                         session.status === 'in_progress' && styles.openText,
                       ]}>
-                        {session.status === 'in_progress' ? 'IN PROGRESS' : session.status.toUpperCase()}
+                        {session.status === 'in_progress' ? 'IN PROGRESS' : 
+                         session.status === 'draft' ? 'DRAFT' : 
+                         session.status.toUpperCase()}
                       </Text>
                     </View>
                     <View style={styles.sessionInfo}>

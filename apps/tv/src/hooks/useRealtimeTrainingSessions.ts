@@ -6,7 +6,7 @@ interface TrainingSession {
   id: string;
   businessId: string;
   templateType: string;
-  status: 'open' | 'in_progress' | 'completed' | 'cancelled';
+  status: 'open' | 'in_progress' | 'completed' | 'cancelled' | 'draft';
   scheduledAt: Date | null;
   name: string;
   createdAt: Date;

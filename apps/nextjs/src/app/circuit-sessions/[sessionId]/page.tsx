@@ -1007,10 +1007,10 @@ export default function SessionDetailPage({ params }: SessionDetailPageProps) {
               Update Status
             </h3>
             <div className="space-y-2 mb-6">
-              {["open", "in_progress", "completed", "cancelled"].map((status) => (
+              {["open", "in_progress", "completed", "cancelled", "draft"].map((status) => (
                 <button
                   key={status}
-                  onClick={() => updateStatusMutation.mutate({ sessionId, status: status as "open" | "in_progress" | "completed" | "cancelled" })}
+                  onClick={() => updateStatusMutation.mutate({ sessionId, status: status as "open" | "in_progress" | "completed" | "cancelled" | "draft" })}
                   disabled={status === session.status || updateStatusMutation.isPending}
                   className={`w-full px-4 py-2.5 rounded-lg border transition-all ${
                     status === session.status
