@@ -19,6 +19,7 @@ export function useLightingControl({ sessionId }: UseLightingControlProps) {
   const [bridgeAvailable, setBridgeAvailable] = useState<boolean | null>(null);
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const activeSceneRef = useRef<string | null>(null);
+  const currentPhaseRef = useRef<{ roundIndex: number; phaseType: string } | null>(null);
   
   // Check bridge connection on mount and periodically
   useEffect(() => {
@@ -43,9 +44,12 @@ export function useLightingControl({ sessionId }: UseLightingControlProps) {
   
   // Environment loaded from env.generated.ts
   
-  // Fetch lighting configuration from API (for consistency)
+  // Fetch lighting configuration from API with polling (matching circuit config pattern)
   const { data: lightingConfig } = useQuery(
-    sessionId ? api.lightingConfig.get.queryOptions({ sessionId }) : {
+    sessionId ? {
+      ...api.lightingConfig.get.queryOptions({ sessionId }),
+      refetchInterval: 7000 // Poll every 7 seconds, matching circuit config
+    } : {
       enabled: false,
       queryKey: ['disabled-lighting-config'],
       queryFn: () => Promise.resolve(null)
@@ -171,6 +175,39 @@ export function useLightingControl({ sessionId }: UseLightingControlProps) {
     return null;
   }, [lightingConfig]);
   
+  // Track current phase for immediate updates
+  const setCurrentPhase = useCallback((roundIndex: number | null, phaseType: string | null) => {
+    if (roundIndex !== null && phaseType !== null) {
+      currentPhaseRef.current = { roundIndex, phaseType };
+    } else {
+      currentPhaseRef.current = null;
+    }
+  }, []);
+  
+  // Watch for lighting config changes and update scene immediately
+  useEffect(() => {
+    // Only proceed if lights are on and we have a current phase
+    if (!isLightingOn || !currentPhaseRef.current || !lightingConfig) {
+      return;
+    }
+    
+    const { roundIndex, phaseType } = currentPhaseRef.current;
+    const newSceneId = getSceneForPhase(roundIndex, phaseType);
+    
+    // If the scene for current phase has changed, activate it immediately
+    if (newSceneId && newSceneId !== activeSceneRef.current) {
+      console.log('[LightingControl] Config changed, updating scene immediately:', {
+        phase: phaseType,
+        oldScene: activeSceneRef.current,
+        newScene: newSceneId
+      });
+      
+      activateScene(newSceneId).catch(error => {
+        console.error('[LightingControl] Failed to update scene after config change:', error);
+      });
+    }
+  }, [lightingConfig, isLightingOn, getSceneForPhase, activateScene]);
+  
   // Refresh bridge connection manually
   const refreshConnection = useCallback(async () => {
     const available = await hueDirectService.refreshConnection();
@@ -195,6 +232,7 @@ export function useLightingControl({ sessionId }: UseLightingControlProps) {
     turnOff,
     activateScene,
     getSceneForPhase,
+    setCurrentPhase,
     refreshConnection,
   };
 }

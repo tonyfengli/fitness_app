@@ -238,7 +238,7 @@ export function CircuitWorkoutLiveScreen() {
   }, [selections, circuitConfig]);
 
   // Initialize lighting control
-  const { isLightingOn, turnOn, turnOff, activateScene, getSceneForPhase, lightingConfig } = useLightingControl({ sessionId });
+  const { isLightingOn, turnOn, turnOff, activateScene, getSceneForPhase, setCurrentPhase, lightingConfig } = useLightingControl({ sessionId });
   
   // Helper to check if any phase has lighting config for current round
   const hasLightingForAnyPhase = (roundIndex: number, phases: string[]) => {
@@ -274,7 +274,11 @@ export function CircuitWorkoutLiveScreen() {
     roundsData,
     selections,
     sessionId,
-    onWorkoutComplete: () => navigation.goBack(),
+    onWorkoutComplete: () => {
+      // Clear current phase when workout completes
+      setCurrentPhase(null, null);
+      navigation.goBack();
+    },
     isStartedOverride: false // Don't use automatic lighting in machine
   });
   
@@ -320,13 +324,16 @@ export function CircuitWorkoutLiveScreen() {
       phaseType = 'roundBreak';
     }
     
+    // Update current phase for config change tracking
+    setCurrentPhase(state.context.currentRoundIndex, phaseType);
+    
     const sceneId = getSceneForPhase(state.context.currentRoundIndex, phaseType);
     // console.log('[CircuitLive] Phase scene:', { phaseType, sceneId });
     
     if (sceneId) {
       activateScene(sceneId).catch(console.error);
     }
-  }, [state.value, state.context.currentRoundIndex, isLightingOn, isLightingEnabled, activateScene, getSceneForPhase, getRoundTiming]);
+  }, [state.value, state.context.currentRoundIndex, state.context.currentExerciseIndex, isLightingOn, isLightingEnabled, activateScene, getSceneForPhase, setCurrentPhase, getRoundTiming]);
 
   const currentRoundTiming = getRoundTiming(state.context.currentRoundIndex);
   const currentRoundType = currentRoundTiming.roundType;
@@ -595,6 +602,7 @@ export function CircuitWorkoutLiveScreen() {
                           await turnOn(sceneId || undefined);
                         } else {
                           await turnOff();
+                          setCurrentPhase(null, null);
                         }
                       } catch (error) {
                         console.error('[CircuitLive] Failed to control lights:', error);
@@ -742,6 +750,7 @@ export function CircuitWorkoutLiveScreen() {
                         await turnOn(sceneId || undefined);
                       } else {
                         await turnOff();
+                        setCurrentPhase(null, null);
                       }
                     } catch (error) {
                       console.error('[CircuitLive] Failed to control lights:', error);
@@ -883,6 +892,7 @@ export function CircuitWorkoutLiveScreen() {
                     await turnOn(sceneId || undefined);
                   } else {
                     await turnOff();
+                    setCurrentPhase(null, null);
                   }
                 } catch (error) {
                   console.error('[CircuitLive] Failed to control lights:', error);
