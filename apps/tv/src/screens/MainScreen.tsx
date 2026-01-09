@@ -481,14 +481,22 @@ export function MainScreen() {
             [{ text: 'OK' }]
           );
           // Still navigate to the new session but it will remain in 'open' status
-          navigation.navigate('SessionLobby', { 
-            sessionId: newSession.id,
-            isNewSession: true,
-            prefetchedData: {
-              session: newSession, // Pass the complete session object immediately
-              checkedInClients: [] // New sessions start with no checked-in clients
-            }
-          });
+          if (newSession.templateType === 'circuit') {
+            // For circuit sessions, go directly to workout overview
+            navigation.navigate('CircuitWorkoutOverview', { 
+              sessionId: newSession.id
+            });
+          } else {
+            // For strength sessions, use the lobby
+            navigation.navigate('SessionLobby', { 
+              sessionId: newSession.id,
+              isNewSession: true,
+              prefetchedData: {
+                session: newSession, // Pass the complete session object immediately
+                checkedInClients: [] // New sessions start with no checked-in clients
+              }
+            });
+          }
           return;
         }
       } else {
@@ -512,15 +520,23 @@ export function MainScreen() {
         );
       }
       
-      // Navigate to the new session with prefetched data to avoid template type delay
-      navigation.navigate('SessionLobby', { 
-        sessionId: newSession.id,
-        isNewSession: true,
-        prefetchedData: {
-          session: newSession, // Pass the complete session object immediately
-          checkedInClients: [] // New sessions start with no checked-in clients
-        }
-      });
+      // Navigate based on session type
+      if (newSession.templateType === 'circuit') {
+        // For circuit sessions, go directly to workout overview
+        navigation.navigate('CircuitWorkoutOverview', { 
+          sessionId: newSession.id
+        });
+      } else {
+        // For strength sessions, use the lobby
+        navigation.navigate('SessionLobby', { 
+          sessionId: newSession.id,
+          isNewSession: true,
+          prefetchedData: {
+            session: newSession, // Pass the complete session object immediately
+            checkedInClients: [] // New sessions start with no checked-in clients
+          }
+        });
+      }
     },
     onError: (error: any) => {
       // Enhanced error logging
@@ -824,14 +840,22 @@ export function MainScreen() {
         throw statusError;
       }
       
-      // Navigate with pre-fetched data
-      navigation.navigate('SessionLobby', { 
-        sessionId: session.id,
-        prefetchedData: {
-          session: session, // Use the session object we already have
-          checkedInClients: checkedInClients || []
-        }
-      });
+      // Navigate based on session type
+      if (session.templateType === 'circuit') {
+        // For circuit sessions, go directly to workout overview
+        navigation.navigate('CircuitWorkoutOverview', { 
+          sessionId: session.id
+        });
+      } else {
+        // For strength sessions, use the lobby
+        navigation.navigate('SessionLobby', { 
+          sessionId: session.id,
+          prefetchedData: {
+            session: session, // Use the session object we already have
+            checkedInClients: checkedInClients || []
+          }
+        });
+      }
       
     } catch (error: any) {
       console.error('[MainScreen] ❌ Failed to open session:', error);

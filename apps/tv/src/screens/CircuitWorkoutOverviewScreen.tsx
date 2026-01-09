@@ -6,6 +6,8 @@ import { api } from '../providers/TRPCProvider';
 import { useRealtimeExerciseSwaps, useRealtimeCircuitConfig, useRealtimeCircuitExercises } from '@acme/ui-shared';
 import { supabase } from '../lib/supabase';
 import { useStartWorkout } from '../hooks/useStartWorkout';
+import Icon from 'react-native-vector-icons/MaterialIcons';
+import { useLightingControl } from '../hooks/useLightingControl';
 
 // Design tokens - matching other screens
 const TOKENS = {
@@ -572,9 +574,13 @@ export function CircuitWorkoutOverviewScreen() {
   const [showErrorModal, setShowErrorModal] = useState(false);
   const [lastSuccessfulFetch, setLastSuccessfulFetch] = useState<Date | null>(null);
   const [connectionState, setConnectionState] = useState<'connecting' | 'connected' | 'error'>('connecting');
+  const [isLightingEnabled, setIsLightingEnabled] = useState(false); // Always start with OFF
   
   // Local state for exercises organized by round
   const [roundsData, setRoundsData] = useState<RoundData[]>([]);
+  
+  // Initialize lighting control
+  const { isLightingOn, turnOn, turnOff, getSceneForPhase, lightingConfig } = useLightingControl({ sessionId });
   
   // Get circuit config for timing display
   const { data: circuitConfig } = useQuery(
@@ -659,19 +665,24 @@ export function CircuitWorkoutOverviewScreen() {
     ? api.workoutSelections.getSelections.queryOptions({ sessionId })
     : null;
 
-  const { data: selections, isLoading: selectionsLoading, error: selectionsError, dataUpdatedAt } = useQuery({
-    ...selectionsQueryOptions,
-    enabled: !!sessionId && !!selectionsQueryOptions,
-    refetchInterval: 10000, // Poll every 10 seconds
-    refetchIntervalInBackground: true, // Keep polling even when tab is not focused
-    onSuccess: (data) => {
-      console.log('[TV-CircuitOverview] Selections query success:', {
-        timestamp: new Date().toISOString(),
-        dataUpdatedAt: new Date(dataUpdatedAt).toISOString(),
-        selectionsCount: data?.length || 0
-      });
+  const { data: selections, isLoading: selectionsLoading, error: selectionsError, dataUpdatedAt } = useQuery(
+    sessionId && selectionsQueryOptions ? {
+      ...selectionsQueryOptions,
+      refetchInterval: 10000, // Poll every 10 seconds
+      refetchIntervalInBackground: true, // Keep polling even when tab is not focused
+      onSuccess: (data) => {
+        console.log('[TV-CircuitOverview] Selections query success:', {
+          timestamp: new Date().toISOString(),
+          dataUpdatedAt: new Date(dataUpdatedAt).toISOString(),
+          selectionsCount: data?.length || 0
+        });
+      }
+    } : {
+      enabled: false,
+      queryKey: ['disabled-selections'],
+      queryFn: () => Promise.resolve(null)
     }
-  });
+  );
   
   // Process selections into rounds
   useEffect(() => {
@@ -776,8 +787,8 @@ export function CircuitWorkoutOverviewScreen() {
   
   const handleStartCircuit = async () => {
     // For circuit workouts, we don't need the complex workout generation
-    // Just navigate to the live workout screen with isStarted override
-    navigation.navigate('CircuitWorkoutLive', { sessionId, isStartedOverride });
+    // Just navigate to the live workout screen with isStarted override based on lighting state
+    navigation.navigate('CircuitWorkoutLive', { sessionId, isStartedOverride: isLightingEnabled });
   };
   
   if (sessionLoading || selectionsLoading) {
@@ -800,57 +811,167 @@ export function CircuitWorkoutOverviewScreen() {
         paddingHorizontal: 48,
         paddingVertical: 16
       }}>
-        <Pressable
+        {/* Back Button Container */}
+        <View style={{ 
+          flexDirection: 'row',
+          backgroundColor: 'rgba(255,255,255,0.05)',
+          borderRadius: 32,
+          padding: 6,
+          gap: 4,
+          borderWidth: 1,
+          borderColor: 'rgba(255,255,255,0.1)',
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.15,
+          shadowRadius: 8,
+          elevation: 4,
+        }}>
+          <Pressable
             onPress={() => {
-              navigation.navigate('SessionLobby', { sessionId });
+              navigation.navigate('Main', {});
             }}
             focusable
           >
             {({ focused }) => (
               <MattePanel 
                 focused={focused}
+                radius={26}
                 style={{ 
-                  paddingHorizontal: 32,
-                paddingVertical: 12,
-                backgroundColor: focused ? 'rgba(255,255,255,0.16)' : TOKENS.color.card,
-                borderColor: focused ? 'rgba(255,255,255,0.45)' : TOKENS.color.borderGlass,
-                borderWidth: focused ? 1 : 1,
-                transform: focused ? [{ translateY: -1 }] : [],
-              }}
-            >
-              <Text style={{ color: TOKENS.color.text, fontSize: 18, letterSpacing: 0.2 }}>Back</Text>
-            </MattePanel>
-          )}
-        </Pressable>
+                  width: 94,
+                  height: 44,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: focused ? 
+                    'rgba(255,255,255,0.15)' : 
+                    'rgba(255,255,255,0.08)',
+                  borderColor: focused ? 'rgba(255,255,255,0.3)' : 'transparent',
+                  borderWidth: focused ? 1.5 : 0,
+                }}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Icon name="navigate-before" size={18} color={TOKENS.color.text} />
+                  <Text style={{ 
+                    color: TOKENS.color.text, 
+                    fontSize: 13, 
+                    fontWeight: '700',
+                    letterSpacing: 0.3,
+                    textTransform: 'uppercase'
+                  }}>
+                    BACK
+                  </Text>
+                </View>
+              </MattePanel>
+            )}
+          </Pressable>
+        </View>
         
-        <Pressable
-          onPress={handleStartCircuit}
-          focusable
-          disabled={isGenerating || roundsData.length === 0}
-        >
-          {({ focused }) => (
-            <MattePanel 
-              focused={focused}
-              style={{ 
-                paddingHorizontal: 32,
-                paddingVertical: 12,
-                backgroundColor: focused ? 'rgba(124,255,181,0.2)' : TOKENS.color.card,
-                borderColor: focused ? 'rgba(124,255,181,0.6)' : TOKENS.color.borderGlass,
-                borderWidth: focused ? 1 : 1,
-                transform: focused ? [{ translateY: -1 }] : [],
-                opacity: roundsData.length === 0 ? 0.5 : 1
-              }}
-            >
-              <Text style={{ 
-                color: focused ? TOKENS.color.accent : TOKENS.color.text, 
-                fontSize: 18,
-                fontWeight: focused ? '600' : '400'
-              }}>
-                {isGenerating ? 'Starting...' : 'Start Circuit'}
-              </Text>
-            </MattePanel>
-          )}
-        </Pressable>
+        {/* Start Button and Lighting Button Container */}
+        <View style={{ 
+          flexDirection: 'row',
+          backgroundColor: 'rgba(255,255,255,0.05)',
+          borderRadius: 32,
+          padding: 6,
+          gap: 4,
+          borderWidth: 1,
+          borderColor: 'rgba(255,255,255,0.1)',
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.15,
+          shadowRadius: 8,
+          elevation: 4,
+        }}>
+          <Pressable
+            onPress={handleStartCircuit}
+            focusable
+            disabled={isGenerating || roundsData.length === 0}
+            hasTVPreferredFocus
+          >
+            {({ focused }) => (
+              <MattePanel 
+                focused={focused}
+                radius={26}
+                style={{ 
+                  width: 94,
+                  height: 44,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: focused ? 
+                    'rgba(255,255,255,0.15)' : 
+                    'rgba(255,255,255,0.08)',
+                  borderColor: focused ? 'rgba(255,255,255,0.3)' : 'transparent',
+                  borderWidth: focused ? 1.5 : 0,
+                  opacity: roundsData.length === 0 ? 0.5 : 1
+                }}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={{ 
+                    color: TOKENS.color.text, 
+                    fontSize: 13, 
+                    fontWeight: '700',
+                    letterSpacing: 0.3,
+                    textTransform: 'uppercase'
+                  }}>
+                    {isGenerating ? 'WAIT' : 'NEXT'}
+                  </Text>
+                  <Icon name="play-arrow" size={18} color={TOKENS.color.text} />
+                </View>
+              </MattePanel>
+            )}
+          </Pressable>
+          
+          {/* Lights Button */}
+          <Pressable
+            onPress={async () => {
+              const newState = !isLightingEnabled;
+              setIsLightingEnabled(newState);
+              
+              try {
+                if (newState) {
+                  // Get appropriate scene for preview
+                  const previewScene = getSceneForPhase(0, 'preview');
+                  await turnOn(previewScene || undefined);
+                } else {
+                  await turnOff();
+                }
+              } catch (error) {
+                console.error('[CircuitOverview] Failed to control lights:', error);
+              }
+            }}
+            focusable
+          >
+            {({ focused }) => (
+              <MattePanel 
+                focused={focused}
+                radius={26}
+                style={{ 
+                  width: 52,
+                  height: 44,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: isLightingEnabled ? 
+                    (focused ? 'rgba(0,183,194,0.2)' : 'rgba(0,183,194,0.1)') :
+                    (focused ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.08)'),
+                  borderColor: isLightingEnabled ? 
+                    TOKENS.color.accent : 
+                    (focused ? 'rgba(255,255,255,0.3)' : 'transparent'),
+                  borderWidth: isLightingEnabled ? 1.5 : (focused ? 1.5 : 0),
+                }}
+              >
+                <Icon 
+                  name={isLightingEnabled ? "lightbulb" : "lightbulb-outline"} 
+                  size={22} 
+                  color={isLightingEnabled ? TOKENS.color.accent : TOKENS.color.text}
+                  style={{
+                    shadowColor: isLightingEnabled ? TOKENS.color.accent : 'transparent',
+                    shadowOpacity: isLightingEnabled ? 0.8 : 0,
+                    shadowRadius: isLightingEnabled ? 15 : 0,
+                    shadowOffset: { width: 0, height: 0 },
+                  }}
+                />
+              </MattePanel>
+            )}
+          </Pressable>
+        </View>
       </View>
       
       {/* Main Content - Conditional Grid Layout */}
