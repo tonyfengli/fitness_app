@@ -19,9 +19,6 @@ interface LightingTabProps {
 export function LightingTab({ sessionId, circuitConfig, roundsData, onConfigureLight, onLightingStateChange }: LightingTabProps) {
   console.log('[LightingTab] Component mounted/rendered');
   
-  // State for global lighting on/off - initialize to false until we know the actual state
-  const [isLightingEnabled, setIsLightingEnabled] = React.useState(false);
-  
   // State for All Rounds drawer
   const [isAllRoundsDrawerOpen, setIsAllRoundsDrawerOpen] = React.useState(false);
   
@@ -37,23 +34,6 @@ export function LightingTab({ sessionId, circuitConfig, roundsData, onConfigureL
   
   const trpc = api();
   const queryClient = useQueryClient();
-  
-  // Mutation for toggling lights
-  const toggleLights = useMutation({
-    ...trpc.lighting.setGroupState.mutationOptions(),
-    onSuccess: () => {
-      console.log('[LightingTab] Toggle successful');
-      // Refetch lights to confirm state change
-      queryClient.invalidateQueries({
-        queryKey: trpc.lighting.getLights.queryOptions().queryKey,
-      });
-    },
-    onError: (error) => {
-      console.error('[LightingTab] Toggle failed:', error);
-      // Revert the optimistic update on error
-      setIsLightingEnabled(!isLightingEnabled);
-    }
-  });
   
   // Note: We're not checking lighting system status since we're using
   // the remote API directly, which doesn't require local bridge connection
@@ -76,23 +56,6 @@ export function LightingTab({ sessionId, circuitConfig, roundsData, onConfigureL
     });
   }, [lightsLoading, lightsData, lightsError]);
   
-  // Set initial lighting state based on actual lights
-  React.useEffect(() => {
-    if (lightsData && lightsData.length > 0) {
-      // Check if any lights are on
-      const anyLightsOn = lightsData.some(light => light.on && light.reachable);
-      console.log('[LightingTab] Setting lighting state:', {
-        anyLightsOn,
-        lightsDetail: lightsData.map(light => ({
-          id: light.id,
-          name: light.name,
-          on: light.on,
-          reachable: light.reachable
-        }))
-      });
-      setIsLightingEnabled(anyLightsOn);
-    }
-  }, [lightsData]);
   
   // Get current lighting configuration from backend
   const { data: lightingConfig, dataUpdatedAt } = useQuery({
@@ -210,12 +173,6 @@ export function LightingTab({ sessionId, circuitConfig, roundsData, onConfigureL
     };
   }, [getEffectiveScene, getSceneColor, hasCustomOverrides, lightingConfig, rawScenes]);
   
-  // Notify parent when lighting state changes
-  React.useEffect(() => {
-    if (onLightingStateChange) {
-      onLightingStateChange(isLightingEnabled);
-    }
-  }, [isLightingEnabled, onLightingStateChange]);
   
   // Handle special effects testing
   const handleApplySpecialEffect = async () => {
@@ -420,98 +377,7 @@ export function LightingTab({ sessionId, circuitConfig, roundsData, onConfigureL
   }
 
   return (
-    <div className={`space-y-6 transition-all duration-500 ${
-      isLightingEnabled 
-        ? 'bg-gradient-to-br from-purple-50/80 via-amber-50/80 to-orange-50/80 dark:from-purple-900/30 dark:via-amber-900/30 dark:to-orange-900/30 rounded-2xl -mx-4 px-4 -mt-4 pt-4 -mb-6 pb-6' 
-        : ''
-    }`}>
-      {/* Enhanced Header Section with Dynamic Background */}
-      <div className={`relative rounded-2xl transition-all duration-300 ${
-        isLightingEnabled 
-          ? 'bg-gradient-to-br from-purple-50 via-amber-50 to-orange-50 dark:from-purple-900/20 dark:via-amber-900/20 dark:to-orange-900/20 border border-purple-200/50 dark:border-purple-700/50 shadow-lg' 
-          : 'bg-gray-50/40 dark:bg-gray-800/30 border border-gray-200/60 dark:border-gray-700/50 opacity-75'
-      }`}>
-        <div className="flex justify-between items-center py-6 px-6">
-          {/* Global Power Toggle - Left */}
-          <button 
-            onClick={() => {
-              const newState = !isLightingEnabled;
-              console.log('[LightingTab] Toggling lights to:', newState);
-              setIsLightingEnabled(newState); // Optimistic update
-              toggleLights.mutate({
-                groupId: "0", // All lights
-                state: { on: newState }
-              });
-            }}
-            disabled={!lightsData || toggleLights.isPending} // Disable until we know the light state or while toggling
-            className={`relative flex items-center gap-3 px-6 py-3 rounded-2xl font-semibold text-sm transition-all duration-300 shadow-lg ${
-              !lightsData 
-                ? 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-500 cursor-wait'
-                : isLightingEnabled
-                ? 'bg-gradient-to-r from-purple-500 to-orange-500 hover:from-purple-600 hover:to-orange-600 text-white shadow-purple-500/25 hover:shadow-purple-500/40 active:scale-95'
-                : 'bg-gray-200 hover:bg-gray-300 dark:bg-gray-600/70 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-400 shadow-gray-500/15 active:scale-95'
-            }`}
-          >
-            {/* Toggle Switch */}
-            <div className={`w-10 h-5 rounded-full relative transition-all duration-300 ${
-              isLightingEnabled 
-                ? 'bg-white/30' 
-                : 'bg-gray-400/50 dark:bg-gray-500/50'
-            }`}>
-              <div className={`w-4 h-4 rounded-full absolute top-0.5 transition-all duration-300 ${
-                isLightingEnabled 
-                  ? 'left-5 bg-white shadow-sm' 
-                  : 'left-0.5 bg-gray-500 dark:bg-gray-400'
-              }`} />
-            </div>
-            
-            {/* Dynamic Text */}
-            <span className="font-bold">
-              {!lightsData ? 'LOADING...' : toggleLights.isPending ? 'TOGGLING...' : isLightingEnabled ? 'LIGHTS ON' : 'LIGHTS OFF'}
-            </span>
-          </button>
-          
-          {/* All Rounds Button - Right */}
-          <button 
-            onClick={() => setIsAllRoundsDrawerOpen(true)}
-            className={`flex items-center gap-2 px-5 py-3 rounded-xl font-semibold text-sm transition-all duration-150 shadow-lg hover:shadow-xl active:scale-95 group ${
-              isLightingEnabled
-                ? 'bg-purple-500 hover:bg-purple-600 active:bg-purple-700 text-white'
-                : 'bg-gray-200 hover:bg-gray-300 active:bg-gray-400 dark:bg-gray-600/70 dark:hover:bg-gray-600 dark:active:bg-gray-500 text-gray-600 dark:text-gray-400 shadow-gray-500/15'
-            }`}>
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-            <span>All Rounds</span>
-          </button>
-        </div>
-        
-        {/* Enhanced Status Bar */}
-        {isLightingEnabled && (
-          <div className="absolute bottom-0 left-1 right-1 h-1 bg-gradient-to-r from-purple-400 via-amber-400 to-orange-400 opacity-60 rounded-b-2xl"></div>
-        )}
-      </div>
-
-      {/* Work in Progress Notice */}
-      <div className="bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3 mb-6">
-        <div className="flex items-center gap-3">
-          <div className="w-6 h-6 rounded-full bg-amber-400 dark:bg-amber-500 flex items-center justify-center flex-shrink-0">
-            <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
-            </svg>
-          </div>
-          <div>
-            <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
-              Work in Progress - Do Not Use
-            </p>
-            <p className="text-xs text-amber-700 dark:text-amber-300">
-              This lighting system is still under development. Please avoid using it in live sessions.
-            </p>
-          </div>
-        </div>
-      </div>
-
+    <div className="space-y-6">
       {/* Rounds Visual Layout */}
       <div className="space-y-6">
         {roundsWithLighting.map((round) => (
@@ -573,9 +439,7 @@ export function LightingTab({ sessionId, circuitConfig, roundsData, onConfigureL
                             style={{ 
                               backgroundColor: phase.config?.color || '#6B7280',
                               opacity: phase.config?.active ? Math.max(0.85, phase.config?.brightness / 100) : 0.4,
-                              boxShadow: isLightingEnabled && phase.config?.active 
-                                ? `0 0 24px ${phase.config?.color}50, 0 8px 25px rgba(0,0,0,0.15), 0 0 6px ${phase.config?.color}70` 
-                                : phase.config?.active 
+                              boxShadow: phase.config?.active 
                                 ? `0 0 12px ${phase.config?.color}40, 0 8px 25px rgba(0,0,0,0.15)` 
                                 : '0 8px 25px rgba(0,0,0,0.15)'
                             }}

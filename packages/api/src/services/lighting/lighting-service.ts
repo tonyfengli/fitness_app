@@ -150,7 +150,15 @@ export class LightingService {
    * Get available lights
    */
   async getLights() {
+    // If no active provider, try to reconnect first
+    if (!this.activeProvider) {
+      logger.warn('[LightingService] No active provider for getLights, attempting to connect...');
+      await this.connectToProvider();
+    }
+    
+    // Check if we have a connected provider
     if (!this.activeProvider || this.status !== 'connected') {
+      logger.warn('[LightingService] No connected provider available for getLights');
       return {};
     }
 
@@ -185,8 +193,18 @@ export class LightingService {
       hasSceneCapability: this.activeProvider?.capabilities.scenes
     });
     
+    // If no active provider, try to reconnect first
+    if (!this.activeProvider) {
+      logger.warn('[LightingService] No active provider, attempting to connect...');
+      await this.connectToProvider();
+    }
+    
+    // Check if we have a provider with scene capability
     if (!this.activeProvider || !this.activeProvider.capabilities.scenes) {
-      logger.warn('[LightingService] No provider or scene capability');
+      logger.warn('[LightingService] No provider or scene capability available', {
+        hasProvider: !!this.activeProvider,
+        hasSceneCapability: this.activeProvider?.capabilities?.scenes ?? false
+      });
       return [];
     }
 
