@@ -150,6 +150,35 @@ export function SetBreakView({ timeRemaining, currentSetNumber, totalSets, curre
                   return null;
                 }
                 
+                // Calculate total exercise lines for compact mode detection
+                const exerciseLines = (() => {
+                  let lines = 0;
+                  
+                  // Estimate lines based on character count and container width
+                  // Assuming roughly 20-25 characters per line in compact multi-row mode
+                  const estimateLines = (text: string) => {
+                    const charsPerLine = isMultiRow ? 22 : 30;
+                    return Math.ceil(text.length / charsPerLine);
+                  };
+                  
+                  // Primary exercise (name + optional reps)
+                  lines += estimateLines(exercise.exerciseName);
+                  if (exercise.repsPlanned != null && exercise.repsPlanned > 0) lines += 1; // Only count if reps actually exist
+                  
+                  // Additional exercises
+                  if (exercise.stationExercises) {
+                    exercise.stationExercises.forEach(stationEx => {
+                      lines += estimateLines(stationEx.exerciseName);
+                      if (stationEx.repsPlanned != null && stationEx.repsPlanned > 0) lines += 1; // Only count if reps actually exist
+                    });
+                  }
+                  
+                  return lines;
+                })();
+                
+                // Enable compact mode when multi-row AND 3 or more exercise lines
+                const isCompactStation = isMultiRow && exerciseLines >= 3;
+                
                 return (
                   <View 
                     key={`station-${idx}`} 
@@ -174,11 +203,11 @@ export function SetBreakView({ timeRemaining, currentSetNumber, totalSets, curre
                     {/* Content */}
                     <View style={{ 
                       flex: 1,
-                      padding: 20,
-                      paddingTop: 24,
+                      padding: isCompactStation ? 12 : 20,
+                      paddingTop: isCompactStation ? 8 : 24,
                     }}>
                       {/* Team Badge with Station Badge aligned */}
-                      <View style={{ marginBottom: 24 }}>
+                      <View style={{ marginBottom: isCompactStation ? 6 : 24 }}>
                         <View style={{
                           flexDirection: 'row',
                           alignItems: 'center',
@@ -233,48 +262,70 @@ export function SetBreakView({ timeRemaining, currentSetNumber, totalSets, curre
                       {/* Exercise Display */}
                       <View style={{ flex: 1 }}>
                         <View>
-                          <Text style={{ 
-                            fontSize: exerciseCount === 1 ? 28 : 18, 
-                            fontWeight: exerciseCount === 1 ? '800' : '700',
-                            color: TOKENS.color.text,
-                            marginBottom: exerciseCount === 1 ? 12 : 6,
+                          {/* Primary exercise with conditional two-column layout */}
+                          <View style={{ 
+                            flexDirection: exercise.repsPlanned && isCompactStation ? 'row' : 'column',
+                            justifyContent: 'space-between',
+                            alignItems: exercise.repsPlanned && isCompactStation ? 'flex-start' : 'stretch',
+                            marginBottom: isCompactStation ? 2 : (exerciseCount === 1 ? 12 : 6),
                           }}>
-                            {exercise.exerciseName}
-                          </Text>
-                          {exercise.repsPlanned && (
                             <Text style={{ 
-                              fontSize: exerciseCount === 1 ? 16 : 14, 
-                              fontWeight: '600',
-                              color: team.color,
-                              letterSpacing: 0.5,
+                              fontSize: exerciseCount === 1 ? 28 : (isCompactStation ? 14 : 18), 
+                              fontWeight: exerciseCount === 1 ? '800' : '700',
+                              color: TOKENS.color.text,
+                              flex: exercise.repsPlanned && isCompactStation ? 1 : undefined,
+                              marginRight: exercise.repsPlanned && isCompactStation ? 8 : 0,
                             }}>
-                              {exercise.repsPlanned} {exercise.repsPlanned === 1 ? 'rep' : 'reps'}
+                              {exercise.exerciseName}
                             </Text>
-                          )}
+                            {exercise.repsPlanned && (
+                              <Text style={{ 
+                                fontSize: exerciseCount === 1 ? 16 : (isCompactStation ? 11 : 14), 
+                                fontWeight: '600',
+                                color: team.color,
+                                letterSpacing: 0.5,
+                                minWidth: isCompactStation ? 40 : undefined,
+                                textAlign: isCompactStation ? 'right' : 'left',
+                              }}>
+                                {exercise.repsPlanned} {exercise.repsPlanned === 1 ? 'rep' : 'reps'}
+                              </Text>
+                            )}
+                          </View>
                           
                           {/* Additional exercises at this station */}
                           {exercise.stationExercises && exercise.stationExercises.length > 0 && (
-                            <View style={{ marginTop: 12 }}>
+                            <View style={{ marginTop: isCompactStation ? 6 : 12 }}>
                               {exercise.stationExercises.map((stationEx, idx) => (
-                                <View key={stationEx.id} style={{ marginTop: idx > 0 ? 8 : 0 }}>
-                                  <Text style={{ 
-                                    fontSize: exerciseCount === 1 ? 28 : 18, 
-                                    fontWeight: exerciseCount === 1 ? '800' : '700',
-                                    color: TOKENS.color.text,
-                                    marginBottom: exerciseCount === 1 ? 12 : 6,
+                                <View key={stationEx.id} style={{ marginTop: idx > 0 ? (isCompactStation ? 4 : 8) : 0 }}>
+                                  {/* Two-column layout when reps exist in compact mode */}
+                                  <View style={{ 
+                                    flexDirection: stationEx.repsPlanned && isCompactStation ? 'row' : 'column',
+                                    justifyContent: 'space-between',
+                                    alignItems: stationEx.repsPlanned && isCompactStation ? 'flex-start' : 'stretch',
+                                    marginBottom: isCompactStation ? 2 : (exerciseCount === 1 ? 12 : 6),
                                   }}>
-                                    {stationEx.exerciseName}
-                                  </Text>
-                                  {stationEx.repsPlanned && (
                                     <Text style={{ 
-                                      fontSize: exerciseCount === 1 ? 16 : 14, 
-                                      fontWeight: '600',
-                                      color: team.color,
-                                      letterSpacing: 0.5,
+                                      fontSize: exerciseCount === 1 ? 28 : (isCompactStation ? 14 : 18), 
+                                      fontWeight: exerciseCount === 1 ? '800' : '700',
+                                      color: TOKENS.color.text,
+                                      flex: stationEx.repsPlanned && isCompactStation ? 1 : undefined,
+                                      marginRight: stationEx.repsPlanned && isCompactStation ? 8 : 0,
                                     }}>
-                                      {stationEx.repsPlanned} {stationEx.repsPlanned === 1 ? 'rep' : 'reps'}
+                                      {stationEx.exerciseName}
                                     </Text>
-                                  )}
+                                    {stationEx.repsPlanned && (
+                                      <Text style={{ 
+                                        fontSize: exerciseCount === 1 ? 16 : (isCompactStation ? 11 : 14), 
+                                        fontWeight: '600',
+                                        color: team.color,
+                                        letterSpacing: 0.5,
+                                        minWidth: isCompactStation ? 40 : undefined,
+                                        textAlign: isCompactStation ? 'right' : 'left',
+                                      }}>
+                                        {stationEx.repsPlanned} {stationEx.repsPlanned === 1 ? 'rep' : 'reps'}
+                                      </Text>
+                                    )}
+                                  </View>
                                 </View>
                               ))}
                             </View>
