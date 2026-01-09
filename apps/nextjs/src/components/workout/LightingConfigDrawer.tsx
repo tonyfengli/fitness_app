@@ -232,6 +232,50 @@ export function LightingConfigDrawer({
     }
   }, [lightingConfig, roundId, phaseType, isDetailedView]);
 
+  const handleClear = async () => {
+    if (!sessionId || !phaseType) return;
+
+    const currentConfig = lightingConfig || {
+      enabled: true,
+      globalDefaults: {},
+      roundOverrides: {},
+      targetGroup: "0"
+    };
+
+    let updatedConfig = { ...currentConfig };
+
+    if (roundId) {
+      // Clear round override
+      if (updatedConfig.roundOverrides && updatedConfig.roundOverrides[`round-${roundId}`]) {
+        const roundKey = `round-${roundId}`;
+        // Set to null to indicate removal
+        updatedConfig.roundOverrides[roundKey][phaseType] = null as any;
+        
+        // Clean up empty round entries
+        const roundConfig = updatedConfig.roundOverrides[roundKey];
+        const hasAnyConfig = Object.values(roundConfig).some(v => v !== null);
+        if (!hasAnyConfig) {
+          delete updatedConfig.roundOverrides[roundKey];
+        }
+      }
+    } else {
+      // Clear global default
+      updatedConfig.globalDefaults[phaseType as keyof typeof updatedConfig.globalDefaults] = null as any;
+    }
+
+    try {
+      await updateLightingConfig.mutateAsync({
+        sessionId,
+        lighting: updatedConfig
+      });
+      
+      // Close drawer after successful clear
+      onSave?.();
+    } catch (error) {
+      console.error('Failed to clear scene configuration:', error);
+    }
+  };
+
   const handleApply = async () => {
     if (!selectedSceneId || !selectedSceneName || !sessionId) return;
 
@@ -380,6 +424,12 @@ export function LightingConfigDrawer({
             className="flex-1 px-4 py-2.5 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors font-medium"
           >
             Cancel
+          </button>
+          <button
+            onClick={handleClear}
+            className="flex-1 px-4 py-2.5 border border-red-300 dark:border-red-600 text-red-700 dark:text-red-300 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors font-medium"
+          >
+            Clear Selection
           </button>
           <button
             onClick={handleApply}

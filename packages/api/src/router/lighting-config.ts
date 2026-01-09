@@ -17,12 +17,18 @@ const LightingSceneSchema = z.object({
   sceneName: z.string(),
 });
 
+// Schema that allows null for removal
+const LightingSceneNullableSchema = z.union([
+  LightingSceneSchema,
+  z.null(),
+]);
+
 const GlobalLightingDefaultsSchema = z.object({
-  work: LightingSceneSchema.optional(),
-  rest: LightingSceneSchema.optional(),
-  preview: LightingSceneSchema.optional(),
-  warning: LightingSceneSchema.optional(),
-  roundBreak: LightingSceneSchema.optional(),
+  work: LightingSceneNullableSchema.optional(),
+  rest: LightingSceneNullableSchema.optional(),
+  preview: LightingSceneNullableSchema.optional(),
+  warning: LightingSceneNullableSchema.optional(),
+  roundBreak: LightingSceneNullableSchema.optional(),
 });
 
 const LightingConfigUpdateSchema = z.object({
@@ -32,7 +38,7 @@ const LightingConfigUpdateSchema = z.object({
     globalDefaults: GlobalLightingDefaultsSchema,
     roundOverrides: z.record(
       z.string(),
-      z.record(z.string(), LightingSceneSchema)
+      z.record(z.string(), LightingSceneNullableSchema)
     ).optional(),
     targetGroup: z.string().optional(),
   }),
@@ -43,9 +49,9 @@ const BatchRoundConfigSchema = z.object({
   sessionId: z.string().uuid(),
   roundId: z.number(),
   masterConfig: z.object({
-    preview: LightingSceneSchema.optional(),
-    work: LightingSceneSchema.optional(),
-    rest: LightingSceneSchema.optional(),
+    preview: LightingSceneNullableSchema.optional(),
+    work: LightingSceneNullableSchema.optional(),
+    rest: LightingSceneNullableSchema.optional(),
   }),
 });
 
@@ -53,9 +59,9 @@ const BatchRoundConfigSchema = z.object({
 const GlobalDefaultsConfigSchema = z.object({
   sessionId: z.string().uuid(),
   globalConfig: z.object({
-    preview: LightingSceneSchema.optional(),
-    work: LightingSceneSchema.optional(),
-    rest: LightingSceneSchema.optional(),
+    preview: LightingSceneNullableSchema.optional(),
+    work: LightingSceneNullableSchema.optional(),
+    rest: LightingSceneNullableSchema.optional(),
   }),
 });
 
@@ -329,13 +335,18 @@ export const lightingConfigRouter = createTRPCRouter({
       // Process each master configuration and clear corresponding detailed overrides
       
       Object.entries(input.masterConfig).forEach(([phaseType, sceneConfig]) => {
-        if (sceneConfig) {
-          // Clear detailed overrides for this phase type (intent-based)
-          // Only clear if master phase is being explicitly set
-          clearDetailedOverrides(phaseType);
-          
-          // Set the master configuration (no timestamp needed)
-          updatedOverrides[roundKey]![phaseType] = sceneConfig;
+        if (sceneConfig !== undefined) {
+          if (sceneConfig === null) {
+            // Remove the configuration
+            delete updatedOverrides[roundKey]![phaseType];
+          } else {
+            // Clear detailed overrides for this phase type (intent-based)
+            // Only clear if master phase is being explicitly set
+            clearDetailedOverrides(phaseType);
+            
+            // Set the master configuration (no timestamp needed)
+            updatedOverrides[roundKey]![phaseType] = sceneConfig;
+          }
         }
       });
       
@@ -466,12 +477,17 @@ export const lightingConfigRouter = createTRPCRouter({
 
       // Process each global configuration (intent-based)
       Object.entries(input.globalConfig).forEach(([phaseType, sceneConfig]) => {
-        if (sceneConfig) {
-          // Clear all conflicting round masters and detailed overrides
-          clearAllOverridesForPhase(phaseType);
-          
-          // Set the global default
-          updatedGlobalDefaults[phaseType as keyof typeof updatedGlobalDefaults] = sceneConfig;
+        if (sceneConfig !== undefined) {
+          if (sceneConfig === null) {
+            // Remove the global default
+            delete updatedGlobalDefaults[phaseType as keyof typeof updatedGlobalDefaults];
+          } else {
+            // Clear all conflicting round masters and detailed overrides
+            clearAllOverridesForPhase(phaseType);
+            
+            // Set the global default
+            updatedGlobalDefaults[phaseType as keyof typeof updatedGlobalDefaults] = sceneConfig;
+          }
         }
       });
 

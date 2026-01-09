@@ -220,6 +220,30 @@ export function RoundLightingDrawer({
     }));
   };
 
+  const handleClearAllPhases = async () => {
+    if (!sessionId) return;
+
+    // Build master config with all phases set to null
+    const masterConfig = {
+      preview: null,
+      work: null,
+      rest: null,
+    };
+
+    try {
+      await updateRoundConfig.mutateAsync({
+        sessionId,
+        roundId,
+        masterConfig,
+      });
+      
+      // Close drawer after successful clear
+      onSave?.();
+    } catch (error) {
+      console.error('Failed to clear round configuration:', error);
+    }
+  };
+
   const handleApplyRoundConfig = async () => {
     if (!sessionId) return;
 
@@ -405,6 +429,12 @@ export function RoundLightingDrawer({
             className="flex-1 px-4 py-2.5 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors font-medium"
           >
             Cancel
+          </button>
+          <button
+            onClick={handleClearAllPhases}
+            className="flex-1 px-4 py-2.5 border border-red-300 dark:border-red-600 text-red-700 dark:text-red-300 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors font-medium"
+          >
+            Clear All
           </button>
           <button
             onClick={handleApplyRoundConfig}
