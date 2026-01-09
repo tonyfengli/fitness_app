@@ -90,7 +90,7 @@ export class LightingService {
   /**
    * Try to connect to available providers in priority order
    */
-  private async connectToProvider(): Promise<void> {
+  private async connectToProvider(retryCount = 0): Promise<void> {
     logger.info(`[LightingService] Available providers: ${this.providers.map(p => p.type).join(', ')}`);
     logger.info(`[LightingService] Environment config:`, {
       HUE_ENABLED: process.env.HUE_ENABLED,
@@ -98,6 +98,14 @@ export class LightingService {
       HUE_APP_KEY: process.env.HUE_APP_KEY ? 'SET' : 'NOT SET',
       HUE_REMOTE_ENABLED: process.env.HUE_REMOTE_ENABLED
     });
+    
+    // If no providers configured, set clear error
+    if (this.providers.length === 0) {
+      logger.error('[LightingService] No lighting providers configured');
+      this.status = 'disconnected';
+      this.lastError = 'No lighting providers configured. Please configure Hue bridge settings.';
+      return;
+    }
     
     for (const provider of this.providers) {
       try {
@@ -120,9 +128,31 @@ export class LightingService {
       }
     }
     
+    // All providers failed
     logger.error('[LightingService] Failed to connect to any lighting provider');
     this.status = 'disconnected';
-    this.lastError = 'No providers available';
+    this.lastError = 'Unable to connect to lighting system. Check network and bridge settings.';
+    
+    // Implement retry logic with exponential backoff
+    const maxRetries = 10;
+    if (retryCount < maxRetries) {
+      // First 3 retries: every 5 seconds
+      // Next 3 retries: every 15 seconds  
+      // Remaining retries: every 30 seconds
+      let retryDelay = 5000;
+      if (retryCount >= 3 && retryCount < 6) {
+        retryDelay = 15000;
+      } else if (retryCount >= 6) {
+        retryDelay = 30000;
+      }
+      
+      logger.info(`[LightingService] Retrying connection in ${retryDelay/1000} seconds... (attempt ${retryCount + 1}/${maxRetries})`);
+      setTimeout(() => {
+        this.connectToProvider(retryCount + 1);
+      }, retryDelay);
+    } else {
+      logger.error('[LightingService] Max retry attempts reached. Will continue trying via health checks.');
+    }
   }
 
   /**

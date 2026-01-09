@@ -1,6 +1,5 @@
 import { HueLocalProvider } from './hue-local-provider';
 import { HueRemoteProvider } from './hue-remote-provider';
-import { MockProvider } from './mock-provider';
 import type { ILightingProvider, ProviderConfig, ProviderType } from './types';
 
 export class LightingProviderFactory {
@@ -14,9 +13,6 @@ export class LightingProviderFactory {
         
       case 'hue-remote':
         return new HueRemoteProvider(config);
-        
-      case 'mock':
-        return new MockProvider(config);
         
       default:
         throw new Error(`Unknown provider type: ${config.type}`);
@@ -49,8 +45,7 @@ export class LightingProviderFactory {
       }));
     }
     
-    // Always add mock provider as fallback
-    providers.push(this.create({ type: 'mock' }));
+    // No mock provider - only real providers
     
     return providers;
   }
@@ -58,8 +53,8 @@ export class LightingProviderFactory {
   /**
    * Determine provider type from environment
    */
-  static getConfiguredType(): ProviderType {
-    // Priority: local > remote > mock
+  static getConfiguredType(): ProviderType | null {
+    // Priority: local > remote > null
     if (process.env.HUE_BRIDGE_IP && process.env.HUE_APP_KEY && process.env.HUE_ENABLED === 'true') {
       return 'hue-local';
     }
@@ -68,6 +63,7 @@ export class LightingProviderFactory {
       return 'hue-remote';
     }
     
-    return 'mock';
+    // No provider configured
+    return null;
   }
 }

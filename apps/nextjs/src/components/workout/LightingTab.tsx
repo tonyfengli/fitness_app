@@ -400,7 +400,8 @@ export function LightingTab({ sessionId, circuitConfig, roundsData, onConfigureL
                 </span>
               </div>
               
-              {/* Quick Setup Button */}
+              {/* Quick Setup Button - Disabled */}
+              {/* Commenting out the quick setup button to disable it
               <button
                 onClick={() => setRoundSettingsDrawer({ isOpen: true, roundId: round.id })}
                 className="flex items-center gap-3 px-4 py-2.5 text-sm font-semibold bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg shadow-sm hover:shadow-md transition-all duration-200"
@@ -411,6 +412,7 @@ export function LightingTab({ sessionId, circuitConfig, roundsData, onConfigureL
                 </svg>
                 Quick Setup
               </button>
+              */}
             </div>
 
             {/* Clean Lighting Timeline */}

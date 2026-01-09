@@ -2,7 +2,7 @@
  * Provider interface for lighting integrations
  */
 
-export type ProviderType = 'hue-local' | 'hue-remote' | 'mock';
+export type ProviderType = 'hue-local' | 'hue-remote';
 
 export interface ProviderCapabilities {
   scenes: boolean;
