@@ -71,9 +71,25 @@ function transformNullToUndefined<T>(value: T | null | undefined): T | undefined
 }
 
 // Helper function to transform lighting config nulls to undefined
-function transformLightingConfig(config: z.infer<typeof LightingConfigUpdateSchema>['lighting']) {
+function transformLightingConfig(config: z.infer<typeof LightingConfigUpdateSchema>['lighting']): LightingConfig {
+  const roundOverrides = config.roundOverrides
+    ? Object.fromEntries(
+        Object.entries(config.roundOverrides)
+          .map(([roundId, phases]) => [
+            roundId,
+            Object.fromEntries(
+              Object.entries(phases)
+                .filter((entry): entry is [string, { sceneId: string; sceneName: string }] =>
+                  entry[1] !== null && entry[1] !== undefined
+                )
+            )
+          ])
+          .filter(([, phases]) => Object.keys(phases as object).length > 0)
+      )
+    : undefined;
+
   return {
-    ...config,
+    enabled: config.enabled,
     globalDefaults: {
       work: transformNullToUndefined(config.globalDefaults.work),
       rest: transformNullToUndefined(config.globalDefaults.rest),
@@ -81,18 +97,8 @@ function transformLightingConfig(config: z.infer<typeof LightingConfigUpdateSche
       warning: transformNullToUndefined(config.globalDefaults.warning),
       roundBreak: transformNullToUndefined(config.globalDefaults.roundBreak),
     },
-    roundOverrides: config.roundOverrides ? 
-      Object.fromEntries(
-        Object.entries(config.roundOverrides).map(([roundId, phases]) => [
-          roundId,
-          Object.fromEntries(
-            Object.entries(phases).map(([phase, scene]) => [
-              phase,
-              transformNullToUndefined(scene)
-            ])
-          )
-        ])
-      ) : undefined,
+    roundOverrides,
+    targetGroup: config.targetGroup,
   };
 }
 
