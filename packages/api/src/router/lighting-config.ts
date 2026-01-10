@@ -65,6 +65,37 @@ const GlobalDefaultsConfigSchema = z.object({
   }),
 });
 
+// Helper function to transform null to undefined for scene configs
+function transformNullToUndefined<T>(value: T | null | undefined): T | undefined {
+  return value === null ? undefined : value;
+}
+
+// Helper function to transform lighting config nulls to undefined
+function transformLightingConfig(config: z.infer<typeof LightingConfigUpdateSchema>['lighting']) {
+  return {
+    ...config,
+    globalDefaults: {
+      work: transformNullToUndefined(config.globalDefaults.work),
+      rest: transformNullToUndefined(config.globalDefaults.rest),
+      preview: transformNullToUndefined(config.globalDefaults.preview),
+      warning: transformNullToUndefined(config.globalDefaults.warning),
+      roundBreak: transformNullToUndefined(config.globalDefaults.roundBreak),
+    },
+    roundOverrides: config.roundOverrides ? 
+      Object.fromEntries(
+        Object.entries(config.roundOverrides).map(([roundId, phases]) => [
+          roundId,
+          Object.fromEntries(
+            Object.entries(phases).map(([phase, scene]) => [
+              phase,
+              transformNullToUndefined(scene)
+            ])
+          )
+        ])
+      ) : undefined,
+  };
+}
+
 export const lightingConfigRouter = createTRPCRouter({
   /**
    * Get lighting configuration for a session
@@ -160,12 +191,12 @@ export const lightingConfigRouter = createTRPCRouter({
         });
       }
 
-      // Update the config with lighting
+      // Update the config with lighting (transform nulls to undefined)
       const updatedConfig: CircuitConfig = {
         ...existingConfig,
         config: {
           ...existingConfig.config,
-          lighting: input.lighting,
+          lighting: transformLightingConfig(input.lighting),
         },
         lastUpdated: new Date().toISOString(),
         updatedBy: user.id,
@@ -180,7 +211,7 @@ export const lightingConfigRouter = createTRPCRouter({
         })
         .where(eq(TrainingSession.id, input.sessionId));
 
-      return input.lighting;
+      return transformLightingConfig(input.lighting);
     }),
 
   /**
@@ -345,7 +376,7 @@ export const lightingConfigRouter = createTRPCRouter({
             clearDetailedOverrides(phaseType);
             
             // Set the master configuration (no timestamp needed)
-            updatedOverrides[roundKey]![phaseType] = sceneConfig;
+            updatedOverrides[roundKey]![phaseType] = transformNullToUndefined(sceneConfig)!
           }
         }
       });
@@ -485,8 +516,8 @@ export const lightingConfigRouter = createTRPCRouter({
             // Clear all conflicting round masters and detailed overrides
             clearAllOverridesForPhase(phaseType);
             
-            // Set the global default
-            updatedGlobalDefaults[phaseType as keyof typeof updatedGlobalDefaults] = sceneConfig;
+            // Set the global default (transform null to undefined)
+            updatedGlobalDefaults[phaseType as keyof typeof updatedGlobalDefaults] = transformNullToUndefined(sceneConfig);
           }
         }
       });
