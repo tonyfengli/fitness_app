@@ -11,7 +11,7 @@ import { supabase } from "~/lib/supabase/client";
 import { useRealtimeCircuitConfig } from "@acme/ui-shared";
 import type { CircuitConfig } from "@acme/db";
 import { cn } from "@acme/ui-shared";
-import { WorkoutTypeStep, CategorySelectionStep, TemplateSelectionStep, SessionSetupStep, RoundsStep, RoundTypesStep, PerRoundConfigStep, ExercisesStep, TimingStep, ReviewStep, SpotifyStep } from "./components";
+import { WorkoutTypeStep, CategorySelectionStep, TemplateSelectionStep, SessionSetupStep, RoundsStep, RoundTypesStep, PerRoundConfigStep, ExercisesStep, TimingStep, ReviewStep } from "./components";
 
 // TOTAL_STEPS is now dynamic based on workflow type
 
@@ -40,8 +40,6 @@ export default function CircuitConfigPage() {
   // Local state for circuit configuration
   const [config, setConfig] = useState<CircuitConfig | null>(null);
   const [repeatRounds, setRepeatRounds] = useState(false);
-  const [spotifyDeviceId, setSpotifyDeviceId] = useState<string | null>(null);
-  const [spotifyDeviceName, setSpotifyDeviceName] = useState<string | null>(null);
   const [workoutType, setWorkoutType] = useState<'custom' | 'template' | null>(initialWorkoutType);
   const [selectedProgram, setSelectedProgram] = useState<string | null>(null);
   const [templateData, setTemplateData] = useState<{ rounds: any[], exercises: any[], name?: string, id?: string, workoutId?: string, originalTemplate?: any } | null>(null);
@@ -125,8 +123,6 @@ export default function CircuitConfigPage() {
       
       setConfig(normalizedConfig);
       setRepeatRounds(initialConfig.config.repeatRounds || false);
-      setSpotifyDeviceId(initialConfig.config.spotifyDeviceId || null);
-      setSpotifyDeviceName(initialConfig.config.spotifyDeviceName || null);
       setIsLoading(false);
     }
   }, [initialConfig]);
@@ -580,23 +576,6 @@ export default function CircuitConfigPage() {
               </>
             )}
 
-            {/* COMMENTED OUT: Step 6: Music (template) / Step 8: Music (custom) */}
-            {/* {((currentStep === 6 && workoutType === 'template') || (currentStep === 8 && workoutType === 'custom')) && (
-              <SpotifyStep
-                deviceId={spotifyDeviceId}
-                deviceName={spotifyDeviceName}
-                onDeviceSelect={async (id, name) => {
-                  setSpotifyDeviceId(id);
-                  setSpotifyDeviceName(name);
-                  
-                  // Save immediately like other settings
-                  await updateConfig({
-                    spotifyDeviceId: id || undefined,
-                    spotifyDeviceName: name || undefined
-                  });
-                }}
-              />
-            )} */}
           </div>
         </Card>
         </div>

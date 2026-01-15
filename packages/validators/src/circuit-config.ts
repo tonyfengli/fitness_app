@@ -99,9 +99,6 @@ export const CircuitConfigSchema = z.object({
     restBetweenRounds: CircuitRestBetweenRoundsSchema,
     repeatRounds: z.boolean().optional().default(false),
     roundTemplates: z.array(RoundConfigSchema),
-    // Spotify integration
-    spotifyDeviceId: z.string().optional(),
-    spotifyDeviceName: z.string().optional(),
     // Template workout source
     sourceWorkoutId: z.string().uuid().optional(),
     // Legacy fields (optional for backward compatibility)
@@ -123,8 +120,6 @@ export const LegacyCircuitConfigSchema = z.object({
     restDuration: CircuitRestDurationSchema,
     restBetweenRounds: CircuitRestBetweenRoundsSchema,
     repeatRounds: z.boolean().optional().default(false),
-    spotifyDeviceId: z.string().optional(),
-    spotifyDeviceName: z.string().optional(),
   }),
   lastUpdated: z.string().optional(),
   updatedBy: z.string().optional(),
@@ -139,9 +134,6 @@ export const UpdateCircuitConfigSchema = z.object({
   restBetweenRounds: CircuitRestBetweenRoundsSchema.optional(),
   repeatRounds: z.boolean().optional(),
   roundTemplates: z.array(RoundConfigSchema).optional(),
-  // Spotify integration
-  spotifyDeviceId: z.string().optional(),
-  spotifyDeviceName: z.string().optional(),
   // Template workout source
   sourceWorkoutId: z.string().uuid().optional(),
 });

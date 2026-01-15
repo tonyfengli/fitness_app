@@ -4,7 +4,6 @@ import { useNavigation } from '../App';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../providers/TRPCProvider';
 import { WorkoutGenerationLoader } from '../components/WorkoutGenerationLoader';
-import { useSpotifySync } from '../hooks/useSpotifySync';
 import { useRealtimeCircuitConfig } from '../hooks/useRealtimeCircuitConfig';
 
 export function CircuitWorkoutGenerationScreen() {
@@ -17,7 +16,7 @@ export function CircuitWorkoutGenerationScreen() {
   
   console.log('[CircuitWorkoutGeneration] Screen mounted with sessionId:', sessionId);
   
-  // Get circuit config (needed for Spotify sync)
+  // Get circuit config
   const { data: circuitConfig } = useQuery(
     sessionId ? api.circuitConfig.getBySession.queryOptions({ sessionId: sessionId || '' }) : {
       enabled: false,
@@ -34,26 +33,6 @@ export function CircuitWorkoutGenerationScreen() {
       setRealtimeConfig(event.config);
     }
   });
-
-  // Use realtime data if available
-  const currentConfig = realtimeConfig || circuitConfig;
-  
-  // Initialize Spotify connection if device ID is available
-  const { 
-    isConnected: isSpotifyConnected,
-    prefetchSetlistTracks,
-    setlist
-  } = useSpotifySync(
-    sessionId || '', 
-    currentConfig?.config?.spotifyDeviceId
-  );
-  
-  // Prefetch tracks when Spotify is connected
-  useEffect(() => {
-    if (isSpotifyConnected && setlist && prefetchSetlistTracks) {
-      prefetchSetlistTracks();
-    }
-  }, [isSpotifyConnected, setlist, prefetchSetlistTracks]);
 
   // Check for existing workout selections
   const { data: existingSelections } = useQuery(

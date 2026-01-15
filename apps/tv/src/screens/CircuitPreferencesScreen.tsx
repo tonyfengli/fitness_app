@@ -5,7 +5,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../providers/TRPCProvider';
 import { useRealtimeCircuitConfig } from '../hooks/useRealtimeCircuitConfig';
 import { WorkoutGenerationLoader } from '../components/WorkoutGenerationLoader';
-import { useSpotifySync } from '../hooks/useSpotifySync';
 import type { CircuitConfig } from '@acme/db';
 
 // Design tokens - matching other screens
@@ -111,32 +110,6 @@ export function CircuitPreferencesScreen() {
 
   // Use realtime data if available, otherwise fall back to polling
   const circuitConfig = realtimeConfig || pollingData;
-  
-  // Initialize Spotify connection if device ID is available
-  const { 
-    isConnected: isSpotifyConnected,
-    connectionState: spotifyConnectionState,
-    currentDevice: spotifyDevice,
-    error: spotifyError,
-    prefetchSetlistTracks,
-    setlist
-  } = useSpotifySync(
-    sessionId || '', 
-    circuitConfig?.config?.spotifyDeviceId
-  );
-  
-  // Track Spotify connection state changes
-  useEffect(() => {
-    // Spotify connection state updated
-  }, [sessionId, circuitConfig?.config?.spotifyDeviceId, isSpotifyConnected, spotifyConnectionState, spotifyDevice, spotifyError, setlist]);
-
-  // Prefetch tracks when Spotify is connected and setlist is available
-  useEffect(() => {
-    if (isSpotifyConnected && setlist && prefetchSetlistTracks) {
-      // Prefetching setlist tracks
-      prefetchSetlistTracks();
-    }
-  }, [isSpotifyConnected, setlist, prefetchSetlistTracks]);
 
   // Check for existing workout selections
   const { data: existingSelections } = useQuery(
@@ -581,54 +554,6 @@ export function CircuitPreferencesScreen() {
                   color: TOKENS.color.text 
                 }}>
                   {formatDuration(circuitConfig?.config?.restBetweenRounds || circuitConfig?.restBetweenRounds || 60)}
-                </Text>
-              </View>
-            </View>
-
-            {/* Row 6 - Spotify Connection */}
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                <View style={{ 
-                  width: 6, 
-                  height: 6, 
-                  borderRadius: 3, 
-                  backgroundColor: TOKENS.color.accent2 
-                }} />
-                <Text style={{ fontSize: 16, color: TOKENS.color.text }}>Spotify Connection</Text>
-              </View>
-              <View style={{ 
-                padding: 8, 
-                paddingHorizontal: 14,
-                borderWidth: 1,
-                borderColor: (() => {
-                  if (!circuitConfig?.config?.spotifyDeviceId) return '#254063';
-                  return isSpotifyConnected ? '#10b981' : '#6b7280';
-                })(),
-                borderStyle: 'dashed',
-                borderRadius: 10,
-                backgroundColor: (() => {
-                  if (!circuitConfig?.config?.spotifyDeviceId) return 'rgba(12,28,47,0.25)';
-                  return isSpotifyConnected ? 'rgba(16,185,129,0.1)' : 'rgba(107,114,128,0.1)';
-                })(),
-              }}>
-                <Text style={{ 
-                  fontSize: 18, 
-                  fontWeight: '800',
-                  color: (() => {
-                    if (!circuitConfig?.config?.spotifyDeviceId) return TOKENS.color.text;
-                    return isSpotifyConnected ? '#10b981' : '#6b7280';
-                  })()
-                }}>
-                  {(() => {
-                    if (!circuitConfig?.config?.spotifyDeviceId) return 'Disconnected';
-                    const deviceName = circuitConfig?.config?.spotifyDeviceName || 'Device';
-                    if (spotifyConnectionState === 'connecting') return `Connecting to ${deviceName}...`;
-                    if (isSpotifyConnected) return deviceName;
-                    // Don't show error if we're still in early loading states
-                    if (spotifyError && spotifyConnectionState !== 'disconnected') return `${deviceName} (Searching...)`;
-                    if (spotifyError) return `${deviceName} (Offline)`;
-                    return `${deviceName} (Stored)`;
-                  })()}
                 </Text>
               </View>
             </View>

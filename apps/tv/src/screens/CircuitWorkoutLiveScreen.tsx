@@ -75,6 +75,7 @@ export function CircuitWorkoutLiveScreen() {
   const closeButtonRef = useRef<any>(null);
   const teamsButtonRef = useRef<any>(null);
   const backButtonRef = useRef<any>(null);
+  const hasAttemptedLightingInit = useRef(false);
   const [shouldRestoreFocusToTeams, setShouldRestoreFocusToTeams] = useState(false);
   const [teamsDistribution, setTeamsDistribution] = useState<Map<number, any[]>>(new Map());
   const [isLightingEnabled, setIsLightingEnabled] = useState(isStartedOverride);
@@ -238,7 +239,7 @@ export function CircuitWorkoutLiveScreen() {
   }, [selections, circuitConfig]);
 
   // Initialize lighting control
-  const { isLightingOn, turnOn, turnOff, activateScene, getSceneForPhase, setCurrentPhase, lightingConfig } = useLightingControl({ sessionId });
+  const { isLightingOn, turnOn, turnOff, activateScene, getSceneForPhase, setCurrentPhase, lightingConfig, bridgeAvailable } = useLightingControl({ sessionId });
   
   // Helper to check if any phase has lighting config for current round
   const hasLightingForAnyPhase = (roundIndex: number, phases: string[]) => {
@@ -257,16 +258,17 @@ export function CircuitWorkoutLiveScreen() {
     });
   };
   
-  // Sync lighting state with toggle
+  // Sync lighting state with toggle - wait for lightingConfig AND bridgeAvailable
   useEffect(() => {
-    // console.log('[CircuitLive] Mount effect:', { isStartedOverride, isLightingOn, lightingConfig });
-    if (isStartedOverride && !isLightingOn && lightingConfig) {
-      // Initial state from navigation - turn on lights only if config exists
-      const previewScene = getSceneForPhase(0, 'preview');
-      // console.log('[CircuitLive] Turning on lights from mount:', previewScene);
-      turnOn(previewScene || undefined).catch(console.error);
+    // Only attempt initialization once when both lightingConfig and bridge are available
+    if (isStartedOverride && lightingConfig && bridgeAvailable && !hasAttemptedLightingInit.current) {
+      hasAttemptedLightingInit.current = true;
+      if (!isLightingOn) {
+        const previewScene = getSceneForPhase(0, 'preview');
+        turnOn(previewScene || undefined).catch(console.error);
+      }
     }
-  }, []); // Only on mount
+  }, [isStartedOverride, lightingConfig, bridgeAvailable, isLightingOn, getSceneForPhase, turnOn]);
   
   // Use the workout machine hook
   const { state, send, getRoundTiming } = useWorkoutMachineWithLighting({

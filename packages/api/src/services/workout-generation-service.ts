@@ -537,44 +537,8 @@ export class WorkoutGenerationService {
     };
 
 
-    // Generate setlist for circuit workout
-    let setlist = null;
-    if (circuitConfig && 'config' in circuitConfig && circuitConfig.config) {
-      try {
-
-        const { CircuitSetlistService } = await import("./circuit-setlist-service");
-        const setlistService = new CircuitSetlistService(this.ctx.db);
-        
-        // Calculate effective total rounds considering repeatRounds option
-        const baseRounds = normalizedResponse.circuit.rounds.length;
-        const effectiveTotalRounds = (circuitConfig as any).config.repeatRounds ? baseRounds * 2 : baseRounds;
-        
-        
-        // Generate the setlist
-        setlist = await setlistService.generateSetlist(
-          (circuitConfig as any).config,
-          effectiveTotalRounds
-        );
-
-
-        // Update session with setlist in templateConfig
-        const updatedTemplateConfig = {
-          ...circuitConfig,
-          setlist
-        };
-
-        await this.ctx.db
-          .update(TrainingSession)
-          .set({
-            templateConfig: updatedTemplateConfig
-          })
-          .where(eq(TrainingSession.id, sessionId));
-
-      } catch (error) {
-        logger.error("Failed to generate circuit setlist", error);
-        // Don't fail the whole workout generation if setlist fails
-      }
-    }
+    // Setlist generation disabled - music uses local MP3 files
+    const setlist = null;
 
     return {
       systemPrompt,
