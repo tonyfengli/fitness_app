@@ -3,6 +3,22 @@
  * These types define different workout round structures
  */
 
+// Music trigger configuration for a specific phase
+export interface MusicTrigger {
+  enabled: boolean;                    // Toggle on/off
+  trackId?: string;                    // Optional specific track ID, else random from energy pool
+  useStartTimestamp?: boolean;         // Jump to track's startTimestamp or play from 0
+  energy?: 'high' | 'low';             // Energy level (defaults based on phase type)
+}
+
+// Music configuration for a round
+export interface RoundMusicConfig {
+  roundPreview?: MusicTrigger;         // Trigger when round preview starts
+  exercises?: MusicTrigger[];          // Per-exercise triggers (index matches exercise index)
+  rests?: MusicTrigger[];              // Per-rest triggers (index matches rest index)
+  setBreaks?: MusicTrigger[];          // Per-set-break triggers (index matches set transition)
+}
+
 // Base round template interface
 export interface BaseRoundTemplate {
   type: string;
@@ -57,4 +73,5 @@ export type RoundTemplate = CircuitRoundTemplate | StationsRoundTemplate | AMRAP
 export interface RoundConfig {
   roundNumber: number;
   template: RoundTemplate;
+  music?: RoundMusicConfig;            // Optional music configuration for this round
 }

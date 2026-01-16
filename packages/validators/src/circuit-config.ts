@@ -55,9 +55,26 @@ export const RoundTemplateSchema = z.discriminatedUnion('type', [
   // Future: EMOMRoundTemplateSchema,
 ]);
 
+// Music trigger schema for a specific phase
+export const MusicTriggerSchema = z.object({
+  enabled: z.boolean(),
+  trackId: z.string().uuid().optional(),
+  useStartTimestamp: z.boolean().optional(),
+  energy: z.enum(['high', 'low']).optional(),
+});
+
+// Music configuration schema for a round
+export const RoundMusicConfigSchema = z.object({
+  roundPreview: MusicTriggerSchema.optional(),
+  exercises: z.array(MusicTriggerSchema).optional(),
+  rests: z.array(MusicTriggerSchema).optional(),
+  setBreaks: z.array(MusicTriggerSchema).optional(),
+});
+
 export const RoundConfigSchema = z.object({
   roundNumber: z.number().int().positive(),
   template: RoundTemplateSchema,
+  music: RoundMusicConfigSchema.optional(),
 });
 
 // Individual field schemas with constraints (kept for backward compatibility)
@@ -147,3 +164,5 @@ export const CircuitConfigInputSchema = z.object({
 export type CircuitConfig = z.infer<typeof CircuitConfigSchema>;
 export type UpdateCircuitConfig = z.infer<typeof UpdateCircuitConfigSchema>;
 export type CircuitConfigInput = z.infer<typeof CircuitConfigInputSchema>;
+export type MusicTrigger = z.infer<typeof MusicTriggerSchema>;
+export type RoundMusicConfig = z.infer<typeof RoundMusicConfigSchema>;

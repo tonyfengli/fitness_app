@@ -15,6 +15,7 @@ import { WorkoutContent } from '../components/workout-live/WorkoutContent';
 import { useWorkoutMachineWithLighting } from '../components/workout-live/hooks/useWorkoutMachineWithLighting';
 import { useLightingControl } from '../hooks/useLightingControl';
 import { useAudio } from '../hooks/useAudio';
+import { useMusicPlayer } from '../hooks/useMusicPlayer';
 
 // Re-export MattePanel for backward compatibility
 export { MattePanel } from '../components/workout-live/MattePanel';
@@ -89,6 +90,14 @@ export function CircuitWorkoutLiveScreen() {
 
   // Initialize audio
   useAudio();
+
+  // Initialize music player (auto-starts high energy playlist)
+  const { isEnabled: isMusicEnabled, currentTrack, toggle: toggleMusic } = useMusicPlayer();
+
+  // Log music state for debugging
+  useEffect(() => {
+    console.log('[Music]', { isMusicEnabled, currentTrack: currentTrack?.name || 'none' });
+  }, [isMusicEnabled, currentTrack]);
 
   // Get circuit config with polling
   const { data: circuitConfig } = useQuery(

@@ -17,9 +17,10 @@ config.resolver.nodeModulesPaths = [
   path.resolve(workspaceRoot, 'node_modules'),
 ];
 
-// Add extraNodeModules for vector icons
+// Add extraNodeModules for packages that need explicit resolution
 config.resolver.extraNodeModules = {
   'react-native-vector-icons': path.resolve(workspaceRoot, 'node_modules/react-native-vector-icons'),
+  'react-native-fs': path.resolve(workspaceRoot, 'node_modules/react-native-fs'),
 };
 
 // Make sure @babel/runtime resolves correctly

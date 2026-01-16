@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, Pressable, TVFocusGuideView } from 'react-native';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, Pressable, TVFocusGuideView, Modal } from 'react-native';
 
 // TVEventHandler might be in a different location for react-native-tvos
 let TVEventHandler: any;
@@ -18,6 +18,7 @@ import { useNavigation } from '../App';
 import { api } from '../providers/TRPCProvider';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRealtimeTrainingSessions } from '../hooks/useRealtimeTrainingSessions';
+import { musicDownloadService, SyncResult } from '../services/MusicDownloadService';
 
 // Program label mapping for coach names
 const PROGRAM_LABELS: Record<string, string> = {
@@ -152,6 +153,14 @@ export function MainScreen() {
   const [hasActionButtonFocus, setHasActionButtonFocus] = useState(false);
   const [sessionOffset, setSessionOffset] = useState(0);
   const [focusHint, setFocusHint] = useState<'left' | 'right' | null>(null);
+
+  // Music download modal state
+  const [showMusicModal, setShowMusicModal] = useState(false);
+  const [localSongsCount, setLocalSongsCount] = useState<number | null>(null);
+  const [newSongsCount, setNewSongsCount] = useState<number | null>(null);
+  const [isCheckingForUpdates, setIsCheckingForUpdates] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [downloadResult, setDownloadResult] = useState<SyncResult | null>(null);
   
   // Store the initial order of sessions to maintain stable sorting
   const sessionOrderRef = useRef<string[]>([]);
@@ -171,6 +180,104 @@ export function MainScreen() {
     enabled: !!businessId && !isAuthLoading,
     staleTime: 30000, // Cache for 30 seconds
   });
+
+  // Query for music tracks (for checking new songs)
+  const { data: musicTracks, refetch: refetchMusicTracks } = useQuery({
+    ...api.music.list.queryOptions({}),
+    enabled: false, // Only fetch when modal opens
+  });
+
+  // Open music modal and load local count
+  const openMusicModal = useCallback(async () => {
+    setShowMusicModal(true);
+    setNewSongsCount(null);
+    setDownloadResult(null);
+
+    try {
+      const localTracks = await musicDownloadService.listLocalTracks();
+      setLocalSongsCount(localTracks.length);
+    } catch (error) {
+      console.error('[MainScreen] Error getting local tracks:', error);
+      setLocalSongsCount(0);
+    }
+  }, []);
+
+  // Check for new songs available to download
+  const checkForUpdates = useCallback(async () => {
+    setIsCheckingForUpdates(true);
+    setDownloadResult(null);
+
+    try {
+      // Fetch latest tracks from server
+      const result = await refetchMusicTracks();
+      const serverTracks = result.data || [];
+
+      console.log('[MusicModal] Server tracks count:', serverTracks.length);
+      console.log('[MusicModal] Server tracks:', serverTracks.map((t: any) => ({
+        filename: t.filename,
+        hasDownloadUrl: !!t.downloadUrl,
+        downloadUrl: t.downloadUrl?.substring(0, 50) + '...',
+      })));
+
+      // Get local tracks
+      const localTracks = await musicDownloadService.listLocalTracks();
+      const localSet = new Set(localTracks);
+
+      console.log('[MusicModal] Local tracks count:', localTracks.length);
+      console.log('[MusicModal] Local tracks:', localTracks);
+
+      // Count tracks with download URLs that aren't local
+      const newTracks = serverTracks.filter(
+        (t: any) => t.downloadUrl && !localSet.has(t.filename)
+      );
+
+      console.log('[MusicModal] New tracks to download:', newTracks.length);
+      console.log('[MusicModal] New tracks:', newTracks.map((t: any) => t.filename));
+
+      // Also log tracks WITHOUT download URLs
+      const tracksWithoutUrl = serverTracks.filter((t: any) => !t.downloadUrl);
+      console.log('[MusicModal] Tracks WITHOUT downloadUrl:', tracksWithoutUrl.length);
+      console.log('[MusicModal] Missing URLs:', tracksWithoutUrl.map((t: any) => t.filename));
+
+      setNewSongsCount(newTracks.length);
+      setLocalSongsCount(localTracks.length);
+    } catch (error) {
+      console.error('[MainScreen] Error checking for updates:', error);
+      Alert.alert('Error', 'Failed to check for updates');
+    } finally {
+      setIsCheckingForUpdates(false);
+    }
+  }, [refetchMusicTracks]);
+
+  // Download new songs
+  const downloadNewSongs = useCallback(async () => {
+    setIsDownloading(true);
+    console.log('[MusicModal] Starting download...');
+
+    try {
+      // Fetch latest tracks from server
+      const result = await refetchMusicTracks();
+      const serverTracks = result.data || [];
+
+      console.log('[MusicModal] Syncing', serverTracks.length, 'tracks');
+
+      // Sync tracks
+      const syncResult = await musicDownloadService.syncTracks(serverTracks);
+      console.log('[MusicModal] Sync result:', syncResult);
+      setDownloadResult(syncResult);
+
+      // Update local count
+      const localTracks = await musicDownloadService.listLocalTracks();
+      console.log('[MusicModal] Local tracks after sync:', localTracks);
+      setLocalSongsCount(localTracks.length);
+      setNewSongsCount(0);
+    } catch (error) {
+      console.error('[MainScreen] Error downloading songs:', error);
+      Alert.alert('Error', 'Failed to download songs');
+    } finally {
+      setIsDownloading(false);
+    }
+  }, [refetchMusicTracks]);
 
   // Real-time training sessions subscription
   const { isConnected: realtimeConnected, error: realtimeError } = useRealtimeTrainingSessions({
@@ -1438,18 +1545,21 @@ export function MainScreen() {
         </View>
       </View>
       
-      {/* Developer Button - Bottom Right */}
-      <View style={{ position: 'absolute', bottom: 32, right: 32 }}>
+      {/* Bottom Right Buttons */}
+      <View style={{ position: 'absolute', bottom: 32, right: 32, flexDirection: 'row', gap: 12 }}>
+        {/* Download Music Button */}
         <Pressable
-          onPress={() => handleEnvironmentChange('developer')}
+          onPress={() => {
+            console.log('[MainScreen] Download Music button pressed');
+            openMusicModal();
+          }}
           disabled={isSwitching || showTemplates || !!selectedSessionId}
-          focusable={!showTemplates && !selectedSessionId}
-          onFocus={() => console.log('[MainScreen] Developer button focused. selectedSessionId:', selectedSessionId)}
+          focusable={!showTemplates && !selectedSessionId && !showMusicModal}
         >
           {({ focused }) => (
-            <MattePanel 
+            <MattePanel
               focused={focused}
-              style={{ 
+              style={{
                 paddingHorizontal: 24,
                 paddingVertical: 12,
                 opacity: (isSwitching || showTemplates) ? 0.5 : 1,
@@ -1459,9 +1569,40 @@ export function MainScreen() {
                 transform: focused ? [{ translateY: -1 }] : [],
               }}
             >
-              <Text style={{ 
-                color: TOKENS.color.text, 
-                fontSize: 16, 
+              <Text style={{
+                color: TOKENS.color.text,
+                fontSize: 16,
+                letterSpacing: 0.2
+              }}>
+                Download Music
+              </Text>
+            </MattePanel>
+          )}
+        </Pressable>
+
+        {/* Developer Button */}
+        <Pressable
+          onPress={() => handleEnvironmentChange('developer')}
+          disabled={isSwitching || showTemplates || !!selectedSessionId}
+          focusable={!showTemplates && !selectedSessionId}
+          onFocus={() => console.log('[MainScreen] Developer button focused. selectedSessionId:', selectedSessionId)}
+        >
+          {({ focused }) => (
+            <MattePanel
+              focused={focused}
+              style={{
+                paddingHorizontal: 24,
+                paddingVertical: 12,
+                opacity: (isSwitching || showTemplates) ? 0.5 : 1,
+                backgroundColor: focused ? 'rgba(255,255,255,0.16)' : TOKENS.color.card,
+                borderColor: focused ? 'rgba(255,255,255,0.45)' : TOKENS.color.borderGlass,
+                borderWidth: 1,
+                transform: focused ? [{ translateY: -1 }] : [],
+              }}
+            >
+              <Text style={{
+                color: TOKENS.color.text,
+                fontSize: 16,
                 letterSpacing: 0.2
               }}>
                 Developer
@@ -1493,8 +1634,8 @@ export function MainScreen() {
             gap: 8,
           }}>
             <ActivityIndicator size="small" color={TOKENS.color.accent} />
-            <Text style={{ 
-              color: TOKENS.color.muted, 
+            <Text style={{
+              color: TOKENS.color.muted,
               fontSize: 14,
             }}>
               {closingSessionsMessage || (
@@ -1508,6 +1649,126 @@ export function MainScreen() {
           </View>
         </View>
       )}
+
+      {/* Music Download Modal */}
+      <Modal
+        visible={showMusicModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowMusicModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            {/* Header */}
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Music Library</Text>
+              <Pressable
+                onPress={() => setShowMusicModal(false)}
+                focusable
+              >
+                {({ focused }) => (
+                  <View style={[
+                    styles.modalCloseButton,
+                    focused && styles.modalButtonFocused
+                  ]}>
+                    <Icon name="close" size={20} color={TOKENS.color.text} />
+                  </View>
+                )}
+              </Pressable>
+            </View>
+
+            {/* Local songs count */}
+            <View style={styles.modalSection}>
+              <Text style={styles.modalLabel}>Downloaded Songs</Text>
+              <Text style={styles.modalValue}>
+                {localSongsCount === null ? '...' : localSongsCount}
+              </Text>
+            </View>
+
+            {/* Download result message */}
+            {downloadResult && (
+              <View style={styles.modalResultSection}>
+                <Text style={styles.modalResultText}>
+                  {downloadResult.downloaded > 0
+                    ? `Downloaded ${downloadResult.downloaded} new song${downloadResult.downloaded !== 1 ? 's' : ''}`
+                    : 'All songs up to date'}
+                </Text>
+                {downloadResult.failed.length > 0 && (
+                  <Text style={[styles.modalResultText, { color: TOKENS.color.danger }]}>
+                    {downloadResult.failed.length} failed
+                  </Text>
+                )}
+              </View>
+            )}
+
+            {/* New songs available */}
+            {newSongsCount !== null && newSongsCount > 0 && !downloadResult && (
+              <View style={styles.modalSection}>
+                <Text style={[styles.modalLabel, { color: TOKENS.color.accent }]}>
+                  {newSongsCount} new song{newSongsCount !== 1 ? 's' : ''} available
+                </Text>
+              </View>
+            )}
+
+            {/* Actions */}
+            <View style={styles.modalActions}>
+              {/* Check for Updates */}
+              <Pressable
+                onPress={checkForUpdates}
+                disabled={isCheckingForUpdates || isDownloading}
+                focusable={!isCheckingForUpdates && !isDownloading}
+                hasTVPreferredFocus
+              >
+                {({ focused }) => (
+                  <View style={[
+                    styles.modalButton,
+                    focused && styles.modalButtonFocused,
+                    (isCheckingForUpdates || isDownloading) && styles.modalButtonDisabled
+                  ]}>
+                    {isCheckingForUpdates ? (
+                      <ActivityIndicator size="small" color={TOKENS.color.text} />
+                    ) : (
+                      <>
+                        <Icon name="refresh" size={18} color={TOKENS.color.text} />
+                        <Text style={styles.modalButtonText}>Check for Updates</Text>
+                      </>
+                    )}
+                  </View>
+                )}
+              </Pressable>
+
+              {/* Download button - only show if new songs available */}
+              {newSongsCount !== null && newSongsCount > 0 && !downloadResult && (
+                <Pressable
+                  onPress={downloadNewSongs}
+                  disabled={isDownloading}
+                  focusable={!isDownloading}
+                >
+                  {({ focused }) => (
+                    <View style={[
+                      styles.modalButton,
+                      styles.modalButtonPrimary,
+                      focused && styles.modalButtonFocused,
+                      isDownloading && styles.modalButtonDisabled
+                    ]}>
+                      {isDownloading ? (
+                        <ActivityIndicator size="small" color={TOKENS.color.bg} />
+                      ) : (
+                        <>
+                          <Icon name="download" size={18} color={TOKENS.color.bg} />
+                          <Text style={[styles.modalButtonText, { color: TOKENS.color.bg }]}>
+                            Download {newSongsCount} Song{newSongsCount !== 1 ? 's' : ''}
+                          </Text>
+                        </>
+                      )}
+                    </View>
+                  )}
+                </Pressable>
+              )}
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -1953,6 +2214,109 @@ const styles = StyleSheet.create({
   },
   actionButtonText: {
     fontSize: 16,
+    fontWeight: '600',
+    color: TOKENS.color.text,
+  },
+  // Music Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.75)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: TOKENS.color.card,
+    borderColor: TOKENS.color.borderGlass,
+    borderWidth: 1,
+    borderRadius: TOKENS.radius.card,
+    padding: 32,
+    minWidth: 400,
+    maxWidth: 500,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 20 },
+    shadowOpacity: 0.5,
+    shadowRadius: 40,
+    elevation: 20,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  modalTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: TOKENS.color.text,
+  },
+  modalCloseButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: TOKENS.color.cardGlass,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: TOKENS.color.borderGlass,
+  },
+  modalSection: {
+    marginBottom: 20,
+  },
+  modalLabel: {
+    fontSize: 14,
+    color: TOKENS.color.muted,
+    marginBottom: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  modalValue: {
+    fontSize: 48,
+    fontWeight: '700',
+    color: TOKENS.color.text,
+  },
+  modalResultSection: {
+    backgroundColor: TOKENS.color.cardGlass,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 20,
+  },
+  modalResultText: {
+    fontSize: 16,
+    color: TOKENS.color.accent,
+    textAlign: 'center',
+  },
+  modalActions: {
+    flexDirection: 'row',
+    gap: 16,
+    marginTop: 8,
+  },
+  modalButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderRadius: TOKENS.radius.button,
+    backgroundColor: TOKENS.color.cardGlass,
+    borderWidth: 1,
+    borderColor: TOKENS.color.borderGlass,
+    minWidth: 160,
+  },
+  modalButtonPrimary: {
+    backgroundColor: TOKENS.color.accent,
+    borderColor: TOKENS.color.accent,
+  },
+  modalButtonFocused: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderColor: 'rgba(255,255,255,0.5)',
+    transform: [{ scale: 1.02 }],
+  },
+  modalButtonDisabled: {
+    opacity: 0.5,
+  },
+  modalButtonText: {
+    fontSize: 15,
     fontWeight: '600',
     color: TOKENS.color.text,
   },

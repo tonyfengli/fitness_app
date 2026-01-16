@@ -11,6 +11,10 @@ module.exports = {
     ...(process.env.NO_FLIPPER
       ? {'react-native-flipper': {platforms: {ios: null}}}
       : {}),
+    // Explicitly configure react-native-fs for monorepo autolinking
+    'react-native-fs': {
+      root: path.resolve(__dirname, '../../node_modules/react-native-fs'),
+    },
   },
   // Help Metro find packages in monorepo
   watchFolders: [

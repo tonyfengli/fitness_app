@@ -34,6 +34,7 @@
     "@trpc/client": "catalog:",
     "@trpc/server": "catalog:",
     "@trpc/tanstack-react-query": "catalog:",
+    "@vercel/blob": "^0.27.1",
     "next": "15.4.8",
     "react": "catalog:react19",
     "react-dom": "catalog:react19",
@@ -55,6 +56,7 @@
     "prettier": "catalog:",
     "puppeteer": "24.22.0",
     "tailwindcss": "catalog:",
+    "tsx": "^4.20.3",
     "typescript": "catalog:"
   },
   "prettier": "@acme/prettier-config"
