@@ -156,10 +156,11 @@ export function useMusicPlayer(): UseMusicPlayerReturn {
   }, [isEnabled, playNextTrack]);
 
   /**
-   * Start playing music
+   * Start playing music (only if not already playing)
    */
   const start = useCallback(async () => {
-    if (isStartingRef.current || isLoading) return;
+    // Don't restart if already playing or in the process of starting
+    if (isStartingRef.current || isLoading || isPlaying) return;
 
     isStartingRef.current = true;
     setIsEnabled(true);
@@ -170,7 +171,7 @@ export function useMusicPlayer(): UseMusicPlayerReturn {
     } finally {
       isStartingRef.current = false;
     }
-  }, [isLoading, playNextTrack]);
+  }, [isLoading, isPlaying, playNextTrack]);
 
   /**
    * Stop playing music

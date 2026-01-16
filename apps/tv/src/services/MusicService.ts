@@ -24,13 +24,14 @@ interface MusicConfig {
 type MusicEventType = 'trackStart' | 'trackEnd' | 'error';
 type MusicEventCallback = (event: { type: MusicEventType; track?: MusicTrack; error?: Error }) => void;
 
-// Music files are downloaded to the app's document directory
-// Files are synced from cloud storage via MusicDownloadService
+// Music files can be:
+// 1. Bundled in Android raw resources (android/app/src/main/res/raw/)
+// 2. Downloaded to the app's document directory
 const MUSIC_STORAGE_PATH = `${RNFS.DocumentDirectoryPath}/music`;
 
 /**
  * MusicService handles music playback for workouts.
- * Plays MP3 files from the app's document directory (downloaded via MusicDownloadService).
+ * First tries to load from bundled Android raw resources, then falls back to downloaded files.
  */
 class MusicService {
   private currentSound: Sound | null = null;
@@ -70,7 +71,7 @@ class MusicService {
   }
 
   /**
-   * Play a track from device storage
+   * Play a track - tries bundled raw resources first, then downloaded files
    * @param track - The track metadata
    * @param useStartTimestamp - Whether to seek to the track's startTimestamp
    */
@@ -82,70 +83,74 @@ class MusicService {
     // Stop current track if playing
     await this.stop();
 
+    // Helper to start playback once sound is loaded
+    const startPlayback = (sound: Sound, source: string): void => {
+      console.log('[MusicService] Sound loaded successfully:', { source, filename: track.filename, duration: sound.getDuration() });
+
+      this.currentSound = sound;
+      this.currentTrack = track;
+
+      // Set volume
+      sound.setVolume(this.config.volume);
+
+      // Seek to startTimestamp if requested
+      if (useStartTimestamp && track.startTimestamp && track.startTimestamp > 0) {
+        sound.setCurrentTime(track.startTimestamp);
+      }
+
+      // Start playback
+      this.isPlaying = true;
+      this.emit({ type: 'trackStart', track });
+
+      sound.play((success) => {
+        this.isPlaying = false;
+
+        if (success) {
+          this.emit({ type: 'trackEnd', track });
+        } else {
+          console.error('[MusicService] Playback failed');
+          this.emit({ type: 'error', track, error: new Error('Playback failed') });
+        }
+
+        // Clean up
+        this.currentSound = null;
+        this.currentTrack = null;
+      });
+
+      // Start checking for track end (backup for callback)
+      this.startTrackEndCheck();
+    };
+
+    // Try bundled raw resources first (Android: res/raw/)
+    // For Android, pass filename without extension
     return new Promise((resolve, reject) => {
-      try {
-        // Load from app's document directory (downloaded files)
-        const filepath = `${MUSIC_STORAGE_PATH}/${track.filename}.mp3`;
-        console.log('[MusicService] Loading file:', filepath);
+      console.log('[MusicService] Trying bundled raw resource:', track.filename);
 
-        // Empty string as basePath for absolute file paths
-        console.log('[MusicService] Attempting Sound constructor with:', { filepath, basePath: '(empty string)' });
+      const sound = new Sound(track.filename, Sound.MAIN_BUNDLE, (error) => {
+        if (!error) {
+          startPlayback(sound, 'raw');
+          resolve();
+          return;
+        }
 
-        const sound = new Sound(filepath, '', (error) => {
-          if (error) {
-            console.error('[MusicService] Failed to load track:', {
-              error,
-              errorMessage: error?.message,
-              errorCode: error?.code,
-              filepath,
-            });
-            this.emit({ type: 'error', track, error });
-            reject(error);
+        console.log('[MusicService] Raw resource failed, trying downloaded file:', error?.message);
+
+        // Fall back to downloaded files in document directory
+        const downloadedPath = `${MUSIC_STORAGE_PATH}/${track.filename}.mp3`;
+        console.log('[MusicService] Trying downloaded file:', downloadedPath);
+
+        const downloadedSound = new Sound(downloadedPath, '', (downloadError) => {
+          if (downloadError) {
+            console.error('[MusicService] Failed to load track from any source:', track.filename);
+            this.emit({ type: 'error', track, error: downloadError });
+            reject(downloadError);
             return;
           }
 
-          console.log('[MusicService] Sound loaded successfully:', { filepath, duration: sound.getDuration() });
-
-          this.currentSound = sound;
-          this.currentTrack = track;
-
-          // Set volume
-          sound.setVolume(this.config.volume);
-
-          // Seek to startTimestamp if requested
-          if (useStartTimestamp && track.startTimestamp && track.startTimestamp > 0) {
-            sound.setCurrentTime(track.startTimestamp);
-          }
-
-          // Start playback
-          this.isPlaying = true;
-          this.emit({ type: 'trackStart', track });
-
-          sound.play((success) => {
-            this.isPlaying = false;
-
-            if (success) {
-              this.emit({ type: 'trackEnd', track });
-            } else {
-              console.error('[MusicService] Playback failed');
-              this.emit({ type: 'error', track, error: new Error('Playback failed') });
-            }
-
-            // Clean up
-            this.currentSound = null;
-            this.currentTrack = null;
-          });
-
-          // Start checking for track end (backup for callback)
-          this.startTrackEndCheck();
-
+          startPlayback(downloadedSound, 'downloads');
           resolve();
         });
-      } catch (error) {
-        console.error('[MusicService] Error playing track:', error);
-        this.emit({ type: 'error', track, error: error as Error });
-        reject(error);
-      }
+      });
     });
   }
 
@@ -158,7 +163,7 @@ class MusicService {
     // Check every second if track has ended
     this.trackEndCheckInterval = setInterval(() => {
       if (this.currentSound && this.currentTrack) {
-        this.currentSound.getCurrentTime((seconds, isPlaying) => {
+        this.currentSound.getCurrentTime((_seconds, isPlaying) => {
           if (!isPlaying && this.isPlaying) {
             // Track ended
             this.isPlaying = false;

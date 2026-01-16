@@ -91,8 +91,8 @@ export function CircuitWorkoutLiveScreen() {
   // Initialize audio
   useAudio();
 
-  // Initialize music player (auto-starts high energy playlist)
-  const { isEnabled: isMusicEnabled, currentTrack, toggle: toggleMusic } = useMusicPlayer();
+  // Initialize music player
+  const { isEnabled: isMusicEnabled, currentTrack, toggle: toggleMusic, start: startMusic, stop: stopMusic } = useMusicPlayer();
 
   // Log music state for debugging
   useEffect(() => {
@@ -288,6 +288,8 @@ export function CircuitWorkoutLiveScreen() {
     onWorkoutComplete: () => {
       // Clear current phase when workout completes
       setCurrentPhase(null, null);
+      // Stop music when workout completes
+      stopMusic();
       navigation.goBack();
     },
     isStartedOverride: false // Don't use automatic lighting in machine
@@ -352,6 +354,8 @@ export function CircuitWorkoutLiveScreen() {
 
   const handleStartWorkout = () => {
     send({ type: 'START_WORKOUT' });
+    // Start music when workout begins
+    startMusic();
   };
 
   // Auto-focus close button when modal opens, restore focus when modal closes
