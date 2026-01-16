@@ -1,8 +1,11 @@
-import { useEffect, useRef, useCallback, useState } from 'react';
+import { useEffect, useRef, useCallback, useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { musicService, MusicTrack } from '../services/MusicService';
 import { musicDownloadService, SyncResult } from '../services/MusicDownloadService';
 import { api } from '../providers/TRPCProvider';
+
+const TRACKS_CACHE_KEY = '@music_tracks_cache';
 
 interface UseMusicPlayerReturn {
   /** Whether music is currently playing */
@@ -43,21 +46,80 @@ export function useMusicPlayer(): UseMusicPlayerReturn {
   // Track played track IDs to avoid immediate repetition
   const playedTrackIds = useRef<Set<string>>(new Set());
   const isStartingRef = useRef(false);
-  const hasAutoStarted = useRef(false);
+  // Track if start was requested while loading - will auto-start when tracks available
+  const pendingStart = useRef(false);
 
-  // Fetch all music tracks
-  const { data: tracks, isLoading, error: queryError } = useQuery({
+  // Cached tracks from AsyncStorage (loaded on mount)
+  const [cachedTracks, setCachedTracks] = useState<MusicTrack[] | null>(null);
+  const cacheLoaded = useRef(false);
+
+  // Load cached tracks on mount
+  useEffect(() => {
+    if (cacheLoaded.current) return;
+    cacheLoaded.current = true;
+
+    AsyncStorage.getItem(TRACKS_CACHE_KEY)
+      .then((data) => {
+        if (data) {
+          const parsed = JSON.parse(data) as MusicTrack[];
+          console.log('[MusicPlayer] Loaded cached tracks:', parsed.length);
+          setCachedTracks(parsed);
+        }
+      })
+      .catch((err) => {
+        console.warn('[MusicPlayer] Failed to load cached tracks:', err);
+      });
+  }, []);
+
+  // Fetch all music tracks from API
+  const { data: apiTracks, isLoading, error: queryError } = useQuery({
     ...api.music.list.queryOptions({}),
   });
+
+  // Cache tracks when API succeeds
+  useEffect(() => {
+    if (apiTracks && apiTracks.length > 0) {
+      AsyncStorage.setItem(TRACKS_CACHE_KEY, JSON.stringify(apiTracks))
+        .then(() => {
+          console.log('[MusicPlayer] Cached', apiTracks.length, 'tracks');
+          setCachedTracks(apiTracks);
+        })
+        .catch((err) => {
+          console.warn('[MusicPlayer] Failed to cache tracks:', err);
+        });
+    }
+  }, [apiTracks]);
+
+  // Determine track source: API > Cache
+  const { tracks, trackSource } = useMemo(() => {
+    // 1. Prefer API tracks if available
+    if (apiTracks && apiTracks.length > 0) {
+      return { tracks: apiTracks, trackSource: 'api' as const };
+    }
+
+    // 2. If API failed or empty, try cached tracks
+    if (queryError || (!isLoading && (!apiTracks || apiTracks.length === 0))) {
+      if (cachedTracks && cachedTracks.length > 0) {
+        console.log('[MusicPlayer] Using cached tracks');
+        return { tracks: cachedTracks, trackSource: 'cache' as const };
+      }
+      // No cache available
+      console.log('[MusicPlayer] No tracks available (no cache)');
+      return { tracks: [], trackSource: 'none' as const };
+    }
+
+    return { tracks: [], trackSource: 'none' as const };
+  }, [apiTracks, isLoading, queryError, cachedTracks]);
 
   // DEBUG: Log query state
   useEffect(() => {
     console.log('[MusicPlayer] Query state:', {
       isLoading,
       trackCount: tracks?.length ?? 0,
-      queryError: queryError?.message ?? null
+      trackSource,
+      queryError: queryError?.message ?? null,
     });
-  }, [isLoading, tracks, queryError]);
+  }, [isLoading, tracks, trackSource, queryError]);
 
   /**
    * Sync music files from cloud to local storage
@@ -160,9 +222,18 @@ export function useMusicPlayer(): UseMusicPlayerReturn {
    */
   const start = useCallback(async () => {
     // Don't restart if already playing or in the process of starting
-    if (isStartingRef.current || isLoading || isPlaying) return;
+    if (isStartingRef.current || isPlaying) return;
+
+    // If still loading tracks, mark as pending and wait
+    if (tracks.length === 0) {
+      console.log('[MusicPlayer] Start requested but no tracks yet, marking as pending');
+      pendingStart.current = true;
+      setIsEnabled(true);
+      return;
+    }
 
     isStartingRef.current = true;
+    pendingStart.current = false;
     setIsEnabled(true);
     setError(null);
 
@@ -171,7 +242,16 @@ export function useMusicPlayer(): UseMusicPlayerReturn {
     } finally {
       isStartingRef.current = false;
     }
-  }, [isLoading, isPlaying, playNextTrack]);
+  }, [tracks.length, isPlaying, playNextTrack]);
+
+  // Auto-start when tracks become available if start was pending
+  useEffect(() => {
+    if (pendingStart.current && tracks.length > 0 && !isPlaying && !isStartingRef.current) {
+      console.log('[MusicPlayer] Tracks now available, executing pending start');
+      pendingStart.current = false;
+      start();
+    }
+  }, [tracks.length, isPlaying, start]);
 
   /**
    * Stop playing music
