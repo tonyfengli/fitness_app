@@ -62,12 +62,11 @@ export function useMusicPlayer(): UseMusicPlayerReturn {
       .then((data) => {
         if (data) {
           const parsed = JSON.parse(data) as MusicTrack[];
-          console.log('[MusicPlayer] Loaded cached tracks:', parsed.length);
           setCachedTracks(parsed);
         }
       })
-      .catch((err) => {
-        console.warn('[MusicPlayer] Failed to load cached tracks:', err);
+      .catch(() => {
+        // Silently fail - cache is optional
       });
   }, []);
 
@@ -81,45 +80,31 @@ export function useMusicPlayer(): UseMusicPlayerReturn {
     if (apiTracks && apiTracks.length > 0) {
       AsyncStorage.setItem(TRACKS_CACHE_KEY, JSON.stringify(apiTracks))
         .then(() => {
-          console.log('[MusicPlayer] Cached', apiTracks.length, 'tracks');
           setCachedTracks(apiTracks);
         })
-        .catch((err) => {
-          console.warn('[MusicPlayer] Failed to cache tracks:', err);
+        .catch(() => {
+          // Silently fail - cache is optional
         });
     }
   }, [apiTracks]);
 
   // Determine track source: API > Cache
-  const { tracks, trackSource } = useMemo(() => {
+  const tracks = useMemo(() => {
     // 1. Prefer API tracks if available
     if (apiTracks && apiTracks.length > 0) {
-      return { tracks: apiTracks, trackSource: 'api' as const };
+      return apiTracks;
     }
 
     // 2. If API failed or empty, try cached tracks
     if (queryError || (!isLoading && (!apiTracks || apiTracks.length === 0))) {
       if (cachedTracks && cachedTracks.length > 0) {
-        console.log('[MusicPlayer] Using cached tracks');
-        return { tracks: cachedTracks, trackSource: 'cache' as const };
+        return cachedTracks;
       }
-      // No cache available
-      console.log('[MusicPlayer] No tracks available (no cache)');
-      return { tracks: [], trackSource: 'none' as const };
+      return [];
     }
 
-    return { tracks: [], trackSource: 'none' as const };
+    return [];
   }, [apiTracks, isLoading, queryError, cachedTracks]);
-
-  // DEBUG: Log query state
-  useEffect(() => {
-    console.log('[MusicPlayer] Query state:', {
-      isLoading,
-      trackCount: tracks?.length ?? 0,
-      trackSource,
-      queryError: queryError?.message ?? null,
-    });
-  }, [isLoading, tracks, trackSource, queryError]);
 
   /**
    * Sync music files from cloud to local storage
@@ -129,21 +114,13 @@ export function useMusicPlayer(): UseMusicPlayerReturn {
       return;
     }
 
-    console.log('[MusicPlayer] Starting music sync...');
     setIsSyncing(true);
     setError(null);
 
     try {
       const result = await musicDownloadService.syncTracks(tracks);
       setSyncResult(result);
-
-      if (result.failed.length > 0) {
-        console.warn('[MusicPlayer] Some tracks failed to download:', result.failed);
-      }
-
-      console.log('[MusicPlayer] Sync complete:', result);
     } catch (err) {
-      console.error('[MusicPlayer] Sync error:', err);
       setError(err instanceof Error ? err.message : 'Failed to sync music');
     } finally {
       setIsSyncing(false);
@@ -154,10 +131,7 @@ export function useMusicPlayer(): UseMusicPlayerReturn {
    * Play a random high energy track
    */
   const playNextTrack = useCallback(async () => {
-    console.log('[MusicPlayer] playNextTrack called', { trackCount: tracks?.length ?? 0 });
-
     if (!tracks || tracks.length === 0) {
-      console.warn('[MusicPlayer] No high energy tracks available');
       setError('No music tracks available');
       return;
     }
@@ -176,13 +150,11 @@ export function useMusicPlayer(): UseMusicPlayerReturn {
     const track = availableTracks[randomIndex];
 
     if (track) {
-      console.log('[MusicPlayer] Playing track:', { id: track.id, name: track.name, filename: track.filename });
       try {
         playedTrackIds.current.add(track.id);
         await musicService.play(track, false); // Always play from start
         setError(null);
       } catch (err) {
-        console.error('[MusicPlayer] Error playing track:', err);
         setError(err instanceof Error ? err.message : 'Failed to play track');
       }
     }
@@ -226,7 +198,6 @@ export function useMusicPlayer(): UseMusicPlayerReturn {
 
     // If still loading tracks, mark as pending and wait
     if (tracks.length === 0) {
-      console.log('[MusicPlayer] Start requested but no tracks yet, marking as pending');
       pendingStart.current = true;
       setIsEnabled(true);
       return;
@@ -247,7 +218,6 @@ export function useMusicPlayer(): UseMusicPlayerReturn {
   // Auto-start when tracks become available if start was pending
   useEffect(() => {
     if (pendingStart.current && tracks.length > 0 && !isPlaying && !isStartingRef.current) {
-      console.log('[MusicPlayer] Tracks now available, executing pending start');
       pendingStart.current = false;
       start();
     }

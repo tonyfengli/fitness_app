@@ -92,12 +92,7 @@ export function CircuitWorkoutLiveScreen() {
   useAudio();
 
   // Initialize music player
-  const { isEnabled: isMusicEnabled, currentTrack, toggle: toggleMusic, start: startMusic, stop: stopMusic } = useMusicPlayer();
-
-  // Log music state for debugging
-  useEffect(() => {
-    console.log('[Music]', { isMusicEnabled, currentTrack: currentTrack?.name || 'none' });
-  }, [isMusicEnabled, currentTrack]);
+  const { start: startMusic, stop: stopMusic } = useMusicPlayer();
 
   // Get circuit config with polling
   const { data: circuitConfig } = useQuery(
@@ -949,7 +944,6 @@ export function CircuitWorkoutLiveScreen() {
                 
                 // Check if this specific phase has lighting configured
                 const scene = getSceneForPhase(state.context.currentRoundIndex, currentPhase);
-                console.log('[WorkoutControls] Checking lighting for phase:', currentPhase, 'scene:', scene);
                 return scene !== null;
               })()}
             />

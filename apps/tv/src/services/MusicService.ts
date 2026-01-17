@@ -84,9 +84,7 @@ class MusicService {
     await this.stop();
 
     // Helper to start playback once sound is loaded
-    const startPlayback = (sound: Sound, source: string): void => {
-      console.log('[MusicService] Sound loaded successfully:', { source, filename: track.filename, duration: sound.getDuration() });
-
+    const startPlayback = (sound: Sound): void => {
       this.currentSound = sound;
       this.currentTrack = track;
 
@@ -108,7 +106,6 @@ class MusicService {
         if (success) {
           this.emit({ type: 'trackEnd', track });
         } else {
-          console.error('[MusicService] Playback failed');
           this.emit({ type: 'error', track, error: new Error('Playback failed') });
         }
 
@@ -124,30 +121,24 @@ class MusicService {
     // Try bundled raw resources first (Android: res/raw/)
     // For Android, pass filename without extension
     return new Promise((resolve, reject) => {
-      console.log('[MusicService] Trying bundled raw resource:', track.filename);
-
       const sound = new Sound(track.filename, Sound.MAIN_BUNDLE, (error) => {
         if (!error) {
-          startPlayback(sound, 'raw');
+          startPlayback(sound);
           resolve();
           return;
         }
 
-        console.log('[MusicService] Raw resource failed, trying downloaded file:', error?.message);
-
         // Fall back to downloaded files in document directory
         const downloadedPath = `${MUSIC_STORAGE_PATH}/${track.filename}.mp3`;
-        console.log('[MusicService] Trying downloaded file:', downloadedPath);
 
         const downloadedSound = new Sound(downloadedPath, '', (downloadError) => {
           if (downloadError) {
-            console.error('[MusicService] Failed to load track from any source:', track.filename);
             this.emit({ type: 'error', track, error: downloadError });
             reject(downloadError);
             return;
           }
 
-          startPlayback(downloadedSound, 'downloads');
+          startPlayback(downloadedSound);
           resolve();
         });
       });

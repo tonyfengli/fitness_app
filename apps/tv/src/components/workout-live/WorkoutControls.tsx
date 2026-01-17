@@ -23,12 +23,6 @@ export function WorkoutControls({
   onToggleLighting,
   hasLightingForCurrentView = false
 }: WorkoutControlsProps) {
-  console.log('[WorkoutControls] Render:', {
-    stateValue: state.value,
-    currentRoundType,
-    hasLightingConfig: !!lightingConfig,
-    hasLightingForCurrentView
-  });
   const handleBack = () => {
     send({ type: 'BACK' });
   };
