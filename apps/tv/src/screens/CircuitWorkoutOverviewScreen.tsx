@@ -581,7 +581,7 @@ export function CircuitWorkoutOverviewScreen() {
   const [lastSuccessfulFetch, setLastSuccessfulFetch] = useState<Date | null>(null);
   const [connectionState, setConnectionState] = useState<'connecting' | 'connected' | 'error'>('connecting');
   const [isLightingEnabled, setIsLightingEnabled] = useState(false); // Always start with OFF
-  const [isSettingsPanelOpen, setIsSettingsPanelOpen] = useState(false);
+  const { isSettingsPanelOpen, setIsSettingsPanelOpen } = navigation;
 
   // Local state for exercises organized by round
   const [roundsData, setRoundsData] = useState<RoundData[]>([]);
@@ -597,6 +597,11 @@ export function CircuitWorkoutOverviewScreen() {
     resume: resumeMusic,
     start: startMusic,
   } = useMusicPlayer();
+
+  // Ensure settings panel is closed when this screen mounts
+  useEffect(() => {
+    setIsSettingsPanelOpen(false);
+  }, []);
 
   // Toggle settings panel with animation
   const toggleSettingsPanel = () => {

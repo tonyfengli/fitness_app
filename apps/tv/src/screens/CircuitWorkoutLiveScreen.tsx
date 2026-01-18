@@ -85,7 +85,12 @@ export function CircuitWorkoutLiveScreen() {
   const [shouldRestoreFocusToTeams, setShouldRestoreFocusToTeams] = useState(false);
   const [teamsDistribution, setTeamsDistribution] = useState<Map<number, any[]>>(new Map());
   const [isLightingEnabled, setIsLightingEnabled] = useState(isStartedOverride);
-  const [isSettingsPanelOpen, setIsSettingsPanelOpen] = useState(false);
+  const { isSettingsPanelOpen, setIsSettingsPanelOpen } = navigation;
+
+  // Ensure settings panel is closed when this screen mounts
+  useEffect(() => {
+    setIsSettingsPanelOpen(false);
+  }, []);
 
   // Toggle settings panel with animation
   const toggleSettingsPanel = () => {
@@ -374,6 +379,7 @@ export function CircuitWorkoutLiveScreen() {
   const currentRound = state.context.rounds[state.context.currentRoundIndex];
 
   const handleStartWorkout = () => {
+    setIsSettingsPanelOpen(false);
     send({ type: 'START_WORKOUT' });
     // Start music when workout begins
     startMusic();
@@ -472,8 +478,8 @@ export function CircuitWorkoutLiveScreen() {
               <Pressable
                 ref={backButtonRef}
                 onPress={() => {
+                  setIsSettingsPanelOpen(false);
                   if (state.context.currentRoundIndex === 0) {
-                    setIsSettingsPanelOpen(false);
                     navigation.goBack();
                   } else {
                     send({ type: 'BACK' });
@@ -515,7 +521,10 @@ export function CircuitWorkoutLiveScreen() {
 
               {/* Skip Round */}
               <Pressable
-                onPress={() => send({ type: 'SKIP' })}
+                onPress={() => {
+                  setIsSettingsPanelOpen(false);
+                  send({ type: 'SKIP' });
+                }}
                 focusable
                 disabled={state.context.currentRoundIndex >= roundsData.length - 1}
               >
@@ -842,7 +851,7 @@ export function CircuitWorkoutLiveScreen() {
                 </Pressable>
                 
                 {/* Start Round (was Skip Forward) */}
-                <Pressable onPress={() => send({ type: 'START_WORKOUT' })} focusable>
+                <Pressable onPress={() => { setIsSettingsPanelOpen(false); send({ type: 'START_WORKOUT' }); }} focusable>
                   {({ focused }) => (
                     <MattePanel 
                       focused={focused}

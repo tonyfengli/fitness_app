@@ -45,10 +45,14 @@ const NavigationContext = React.createContext<{
   navigate: (screen: ScreenName, params?: any) => void;
   goBack: () => void;
   getParam: (key: string) => any;
+  isSettingsPanelOpen: boolean;
+  setIsSettingsPanelOpen: (open: boolean) => void;
 }>({
   navigate: () => {},
   goBack: () => {},
   getParam: () => null,
+  isSettingsPanelOpen: false,
+  setIsSettingsPanelOpen: () => {},
 });
 
 export const useNavigation = () => React.useContext(NavigationContext);
@@ -61,12 +65,14 @@ function NavigationContainer({ children }: { children: React.ReactNode }) {
   });
   
   const [navigationParams, setNavigationParams] = useState<any>({});
+  const [isSettingsPanelOpen, setIsSettingsPanelOpen] = useState(false);
   const tvEventHandler = useRef<TVEventHandler | null>(null);
 
   const screenHistory = useRef<ScreenName[]>(['Main']);
 
   const navigate = (screen: ScreenName, params?: any) => {
     screenHistory.current.push(screen);
+    setIsSettingsPanelOpen(false); // Reset settings panel on navigation
     setNavigationState(prev => ({ ...prev, currentScreen: screen }));
     if (params) {
       setNavigationParams(params);
@@ -85,6 +91,7 @@ function NavigationContainer({ children }: { children: React.ReactNode }) {
       screenHistory.current.pop();
       const previousScreen = screenHistory.current[screenHistory.current.length - 1];
 
+      setIsSettingsPanelOpen(false); // Reset settings panel on navigation
       setNavigationState(prev => ({ ...prev, currentScreen: previousScreen }));
     }
   };
@@ -123,6 +130,8 @@ function NavigationContainer({ children }: { children: React.ReactNode }) {
     navigate,
     goBack,
     getParam,
+    isSettingsPanelOpen,
+    setIsSettingsPanelOpen,
   };
 
   return (
