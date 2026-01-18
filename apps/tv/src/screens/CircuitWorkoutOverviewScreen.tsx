@@ -1045,10 +1045,10 @@ export function CircuitWorkoutOverviewScreen() {
                     alignItems: 'center',
                     justifyContent: 'center',
                     backgroundColor: isLightingEnabled ?
-                      (focused ? 'rgba(124,255,181,0.25)' : 'rgba(124,255,181,0.12)') :
+                      (focused ? 'rgba(93,225,255,0.25)' : 'rgba(93,225,255,0.12)') :
                       (focused ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.06)'),
                     borderColor: isLightingEnabled ?
-                      TOKENS.color.accent :
+                      TOKENS.color.accent2 :
                       (focused ? 'rgba(255,255,255,0.25)' : 'transparent'),
                     borderWidth: isLightingEnabled ? 1.5 : (focused ? 1 : 0),
                   }}
@@ -1056,7 +1056,7 @@ export function CircuitWorkoutOverviewScreen() {
                   <Icon
                     name={isLightingEnabled ? "lightbulb" : "lightbulb-outline"}
                     size={20}
-                    color={isLightingEnabled ? TOKENS.color.accent : TOKENS.color.text}
+                    color={isLightingEnabled ? TOKENS.color.accent2 : TOKENS.color.text}
                   />
                 </MattePanel>
               )}
@@ -1085,10 +1085,10 @@ export function CircuitWorkoutOverviewScreen() {
                     alignItems: 'center',
                     justifyContent: 'center',
                     backgroundColor: isMusicPlaying ?
-                      (focused ? 'rgba(124,255,181,0.25)' : 'rgba(124,255,181,0.12)') :
+                      (focused ? 'rgba(93,225,255,0.25)' : 'rgba(93,225,255,0.12)') :
                       (focused ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.06)'),
                     borderColor: isMusicPlaying ?
-                      TOKENS.color.accent :
+                      TOKENS.color.accent2 :
                       (focused ? 'rgba(255,255,255,0.25)' : 'transparent'),
                     borderWidth: isMusicPlaying ? 1.5 : (focused ? 1 : 0),
                   }}
@@ -1096,7 +1096,7 @@ export function CircuitWorkoutOverviewScreen() {
                   <Icon
                     name={isMusicPlaying ? "music-note" : "music-off"}
                     size={20}
-                    color={isMusicPlaying ? TOKENS.color.accent : TOKENS.color.text}
+                    color={isMusicPlaying ? TOKENS.color.accent2 : TOKENS.color.text}
                   />
                 </MattePanel>
               )}

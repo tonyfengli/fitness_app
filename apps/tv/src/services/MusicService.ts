@@ -21,7 +21,7 @@ interface MusicConfig {
   enabled: boolean;
 }
 
-type MusicEventType = 'trackStart' | 'trackEnd' | 'error';
+type MusicEventType = 'trackStart' | 'trackEnd' | 'stopped' | 'error';
 type MusicEventCallback = (event: { type: MusicEventType; track?: MusicTrack; error?: Error }) => void;
 
 // Music files can be:
@@ -185,7 +185,12 @@ class MusicService {
       this.trackEndCheckInterval = null;
     }
 
+    const wasPlaying = this.isPlaying || this.currentSound !== null;
+
     if (!this.currentSound) {
+      if (wasPlaying) {
+        this.emit({ type: 'stopped' });
+      }
       return;
     }
 
@@ -199,6 +204,7 @@ class MusicService {
             }
             this.currentTrack = null;
             this.isPlaying = false;
+            this.emit({ type: 'stopped' });
             resolve();
           });
         } else {
@@ -209,6 +215,7 @@ class MusicService {
         this.currentSound = null;
         this.currentTrack = null;
         this.isPlaying = false;
+        this.emit({ type: 'stopped' });
         resolve();
       }
     });

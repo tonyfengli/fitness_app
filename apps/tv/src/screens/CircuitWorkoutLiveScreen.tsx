@@ -381,8 +381,6 @@ export function CircuitWorkoutLiveScreen() {
   const handleStartWorkout = () => {
     setIsSettingsPanelOpen(false);
     send({ type: 'START_WORKOUT' });
-    // Start music when workout begins
-    startMusic();
   };
 
   // Auto-focus close button when modal opens, restore focus when modal closes
@@ -633,8 +631,8 @@ export function CircuitWorkoutLiveScreen() {
                   )}
                 </Pressable>
                 
-                {/* Settings Button - for stations round */}
-                {currentRoundType === 'stations_round' && (
+                {/* Settings Button - for all round types in round 1 */}
+                {(currentRoundType === 'stations_round' || currentRoundType === 'amrap_round' || currentRoundType === 'circuit_round') && (
                   <>
                     <Pressable
                       onPress={toggleSettingsPanel}
@@ -783,7 +781,7 @@ export function CircuitWorkoutLiveScreen() {
                 )}
                 </View>
                 {/* Lighting Config Badge */}
-                {lightingConfig && currentRoundType === 'stations_round' && hasLightingForAnyPhase(0, ['preview']) && (
+                {lightingConfig && (currentRoundType === 'stations_round' || currentRoundType === 'amrap_round' || currentRoundType === 'circuit_round') && hasLightingForAnyPhase(0, ['preview']) && (
                   <View style={{
                     position: 'absolute',
                     bottom: -22,

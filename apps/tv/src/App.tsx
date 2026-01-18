@@ -4,7 +4,9 @@ import { TRPCProvider } from './providers/TRPCProvider';
 import { RealtimeProvider } from './providers/RealtimeProvider';
 import { BusinessProvider } from './providers/BusinessProvider';
 import { AuthProvider } from './providers/AuthProvider';
+import { MusicProvider } from './providers/MusicProvider';
 import { useAuthCleanup } from './hooks/useAuthCleanup';
+import { musicService } from './services/MusicService';
 
 // TVEventHandler might be in a different location for react-native-tvos
 let TVEventHandler: any;
@@ -73,6 +75,10 @@ function NavigationContainer({ children }: { children: React.ReactNode }) {
   const navigate = (screen: ScreenName, params?: any) => {
     screenHistory.current.push(screen);
     setIsSettingsPanelOpen(false); // Reset settings panel on navigation
+    // Stop music when exiting training session to main screen
+    if (screen === 'Main') {
+      musicService.stop();
+    }
     setNavigationState(prev => ({ ...prev, currentScreen: screen }));
     if (params) {
       setNavigationParams(params);
@@ -92,6 +98,10 @@ function NavigationContainer({ children }: { children: React.ReactNode }) {
       const previousScreen = screenHistory.current[screenHistory.current.length - 1];
 
       setIsSettingsPanelOpen(false); // Reset settings panel on navigation
+      // Stop music when exiting training session to main screen
+      if (previousScreen === 'Main') {
+        musicService.stop();
+      }
       setNavigationState(prev => ({ ...prev, currentScreen: previousScreen }));
     }
   };
@@ -158,12 +168,21 @@ function NavigationContainer({ children }: { children: React.ReactNode }) {
 function AppWithCleanup() {
   // This hook must be called inside AuthProvider
   useAuthCleanup();
-  
+
+  // Stop music when app closes/refreshes (but not on screen navigation)
+  useEffect(() => {
+    return () => {
+      musicService.stop();
+    };
+  }, []);
+
   return (
     <TRPCProvider>
       <BusinessProvider>
         <RealtimeProvider>
-          <NavigationContainer />
+          <MusicProvider>
+            <NavigationContainer />
+          </MusicProvider>
         </RealtimeProvider>
       </BusinessProvider>
     </TRPCProvider>
