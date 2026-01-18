@@ -13,11 +13,11 @@ try {
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { useBusiness } from '../providers/BusinessProvider';
 import { useAuth } from '../providers/AuthProvider';
-import { supabase } from '../lib/supabase';
+// import { supabase } from '../lib/supabase'; // Commented out - realtime disabled
 import { useNavigation } from '../App';
 import { api } from '../providers/TRPCProvider';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useRealtimeTrainingSessions } from '../hooks/useRealtimeTrainingSessions';
+// import { useRealtimeTrainingSessions } from '../hooks/useRealtimeTrainingSessions'; // Commented out - realtime disabled
 import { musicDownloadService, SyncResult } from '../services/MusicDownloadService';
 
 // Program label mapping for coach names
@@ -162,23 +162,22 @@ export function MainScreen() {
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadResult, setDownloadResult] = useState<SyncResult | null>(null);
   
-  // Store the initial order of sessions to maintain stable sorting
-  const sessionOrderRef = useRef<string[]>([]);
-  const [hasStoredOrder, setHasStoredOrder] = useState(false);
+  // Session order tracking removed - no longer needed with polling
   
   // Refs for session cards to handle arrow navigation focus
   const sessionCardRefs = useRef<{ [key: string]: any }>({});
   const leftArrowRef = useRef<any>(null);
   const rightArrowRef = useRef<any>(null);
 
-  // Query to fetch recent sessions
+  // Query to fetch recent sessions (polling every 8 seconds)
   const { data: recentSessions, isLoading: isLoadingRecentSessions } = useQuery({
     ...api.trainingSession.list.queryOptions({
       limit: 6,
       offset: 0
     }),
     enabled: !!businessId && !isAuthLoading,
-    staleTime: 30000, // Cache for 30 seconds
+    refetchInterval: 8000, // Poll every 8 seconds
+    refetchIntervalInBackground: true,
   });
 
   // Query for music tracks (for checking new songs)
@@ -279,129 +278,25 @@ export function MainScreen() {
     }
   }, [refetchMusicTracks]);
 
-  // Real-time training sessions subscription
-  const { isConnected: realtimeConnected, error: realtimeError } = useRealtimeTrainingSessions({
-    businessId: businessId || '',
-    supabase,
-    onUpdate: (session, event) => {
-      console.log('[MainScreen] 🔥 REAL-TIME:', event, session.name);
-      
-      // Transform cancelled status to draft to match API behavior
-      const transformedSession = {
-        ...session,
-        status: session.status === 'cancelled' ? 'draft' as const : session.status,
-      };
-      
-      const queryKey = api.trainingSession.list.queryOptions({ 
-        limit: 6, 
-        offset: 0 
-      }).queryKey;
-      
-      // Log current cache state before update
-      const currentCacheData = queryClient.getQueryData(queryKey);
-      console.log('[MainScreen] Cache BEFORE:', currentCacheData ? (currentCacheData as any[]).length : 'null', 'items');
-
-      if (event === 'INSERT') {
-        console.log('[MainScreen] 🆕 INSERT:', transformedSession.id);
-        
-        // Add new item to cache immediately
-        queryClient.setQueryData(queryKey, (oldData: any) => {
-          if (!oldData) return [transformedSession];
-          const newData = [transformedSession, ...oldData];
-          return newData.slice(0, 6);
-        });
-
-        // Add to stored order
-        sessionOrderRef.current = [transformedSession.id, ...sessionOrderRef.current];
-        
-        // Verify cache was updated
-        const verifyCache = queryClient.getQueryData(queryKey);
-        console.log('[MainScreen] 🆕 Cache AFTER:', verifyCache ? (verifyCache as any[]).length : 'null', 'items');
-        
-      } else if (event === 'DELETE') {
-        console.log('[MainScreen] 🗑️ DELETE:', transformedSession.id);
-        
-        // Remove item from cache immediately
-        queryClient.setQueryData(queryKey, (oldData: any) => {
-          if (!oldData) return [];
-          return oldData.filter((s: any) => s.id !== transformedSession.id);
-        });
-
-        // Remove from stored order
-        sessionOrderRef.current = sessionOrderRef.current.filter(id => id !== transformedSession.id);
-        
-        // Verify cache was updated
-        const verifyCache = queryClient.getQueryData(queryKey);
-        console.log('[MainScreen] 🗑️ Cache AFTER:', verifyCache ? (verifyCache as any[]).length : 'null', 'items');
-
-        // Fetch one more item to backfill if we're below the limit
-        queryClient.fetchQuery({
-          ...api.trainingSession.list.queryOptions({
-            limit: 1,
-            offset: 6 // Fetch the 7th item
-          }),
-          staleTime: 0
-        }).then((newItems: any) => {
-          if (newItems?.length > 0) {
-            console.log('[MainScreen] 🗑️ Backfilling with:', newItems[0].name);
-            queryClient.setQueryData(queryKey, (oldData: any) => {
-              return [...(oldData || []), ...newItems];
-            });
-          }
-        }).catch(() => {
-          // No additional sessions available
-        });
-        
-      } else if (event === 'UPDATE') {
-        console.log('[MainScreen] 🔄 UPDATE:', transformedSession.id, transformedSession.status);
-        
-        // Update existing item in cache
-        queryClient.setQueryData(queryKey, (oldData: any) => {
-          if (!oldData) return [transformedSession];
-          return oldData.map((s: any) => s.id === transformedSession.id ? transformedSession : s);
-        });
-      }
-    },
-    onError: (error) => {
-      console.error('[MainScreen] Real-time training sessions error:', error);
-    }
-  });
+  // Real-time training sessions subscription (DISABLED - using polling instead)
+  // Commented out due to Supabase Realtime connection issues
+  // const { isConnected: realtimeConnected, error: realtimeError } = useRealtimeTrainingSessions({
+  //   businessId: businessId || '',
+  //   supabase,
+  //   onUpdate: (session, event) => {
+  //     console.log('[MainScreen] 🔥 REAL-TIME:', event, session.name);
+  //     // Invalidate query to refetch - polling will handle the rest
+  //     queryClient.invalidateQueries({
+  //       queryKey: api.trainingSession.list.queryOptions({ limit: 6, offset: 0 }).queryKey
+  //     });
+  //   },
+  //   onError: (error) => {
+  //     console.error('[MainScreen] Real-time training sessions error:', error);
+  //   }
+  // });
   
-  // Store the initial session order when first loaded
-  useEffect(() => {
-    if (recentSessions && recentSessions.length > 0 && !hasStoredOrder) {
-      sessionOrderRef.current = recentSessions.map((s: any) => s.id);
-      setHasStoredOrder(true);
-      console.log('[MainScreen] Stored initial session order:', sessionOrderRef.current);
-    }
-  }, [recentSessions, hasStoredOrder]);
   
-  // Sort sessions based on stored order to maintain stability
-  const sortedSessions = React.useMemo(() => {
-    if (!recentSessions || sessionOrderRef.current.length === 0) {
-      return recentSessions;
-    }
-    
-    // Create a copy and sort based on stored order
-    const sorted = [...recentSessions].sort((a: any, b: any) => {
-      const indexA = sessionOrderRef.current.indexOf(a.id);
-      const indexB = sessionOrderRef.current.indexOf(b.id);
-      
-      // If both are in the stored order, maintain that order
-      if (indexA !== -1 && indexB !== -1) {
-        return indexA - indexB;
-      }
-      
-      // If only one is in stored order, it comes first
-      if (indexA !== -1) return -1;
-      if (indexB !== -1) return 1;
-      
-      // If neither is in stored order (new sessions), sort by createdAt desc
-      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-    });
-    
-    return sorted;
-  }, [recentSessions]);
+  // Sessions are fetched via polling - no sorting needed
 
   // Template options matching the webapp
   const templates = [
@@ -546,14 +441,14 @@ export function MainScreen() {
       });
       
       // Check if there's an in-progress session to close
-      const inProgressFromCurrent = sortedSessions?.find((s: any) => 
+      const inProgressFromCurrent = recentSessions?.find((s: any) => 
         s.status === 'in_progress'
       );
       
       let sessionToClose = inProgressFromCurrent;
       
-      // Only fetch if we don't have sortedSessions loaded yet (edge case)
-      if (!sortedSessions && !sessionToClose) {
+      // Only fetch if we don't have recentSessions loaded yet (edge case)
+      if (!recentSessions && !sessionToClose) {
         const recentSessionsData = await queryClient.fetchQuery(
           api.trainingSession.list.queryOptions({ limit: 6, offset: 0 })
         );
@@ -732,12 +627,7 @@ export function MainScreen() {
     },
   });
 
-  // Log key state changes
-  React.useEffect(() => {
-    if (businessId && realtimeConnected) {
-      console.log('[MainScreen] ✅ Ready for real-time updates');
-    }
-  }, [businessId, realtimeConnected]);
+  // Realtime logging removed - using polling instead
 
   // Handle close session
   const handleCloseSession = (sessionId: string) => {
@@ -863,14 +753,14 @@ export function MainScreen() {
     
     try {
       // First check if there's an in-progress session to close
-      const inProgressFromCurrent = sortedSessions?.find((s: any) => 
+      const inProgressFromCurrent = recentSessions?.find((s: any) => 
         s.status === 'in_progress' && s.id !== session.id
       );
       
       let sessionToClose = inProgressFromCurrent;
       
-      // Only fetch if we don't have sortedSessions loaded yet (edge case)
-      if (!sortedSessions && !sessionToClose) {
+      // Only fetch if we don't have recentSessions loaded yet (edge case)
+      if (!recentSessions && !sessionToClose) {
         const recentSessionsData = await queryClient.fetchQuery(
           api.trainingSession.list.queryOptions({ limit: 6, offset: 0 })
         );
@@ -1187,7 +1077,7 @@ export function MainScreen() {
         <View style={styles.sessionsContainer}>
           <View style={styles.sessionsRowWrapper}>
             {/* Left Arrow */}
-            {sortedSessions && sortedSessions.length > 3 && sessionOffset > 0 && (
+            {recentSessions && recentSessions.length > 3 && sessionOffset > 0 && (
               <Pressable
                 ref={leftArrowRef}
                 focusable={!selectedSessionId}
@@ -1223,14 +1113,14 @@ export function MainScreen() {
             )}
             
             {/* Right Arrow */}
-            {sortedSessions && sortedSessions.length > 3 && sessionOffset < sortedSessions.length - 3 && (
+            {recentSessions && recentSessions.length > 3 && sessionOffset < recentSessions.length - 3 && (
               <Pressable
                 ref={rightArrowRef}
                 focusable={!selectedSessionId}
                 onPress={() => {
-                  const newOffset = Math.min(sortedSessions.length - 3, sessionOffset + 1);
+                  const newOffset = Math.min(recentSessions.length - 3, sessionOffset + 1);
                   setSessionOffset(newOffset);
-                  if (newOffset === sortedSessions.length - 3) {
+                  if (newOffset === recentSessions.length - 3) {
                     // Arrow will disappear, hint to focus right card
                     setFocusHint('right');
                   }
@@ -1264,13 +1154,13 @@ export function MainScreen() {
                 <ActivityIndicator size="large" color={TOKENS.color.accent} />
                 <Text style={{ color: TOKENS.color.muted, marginTop: 16 }}>Loading sessions...</Text>
               </View>
-            ) : !sortedSessions || sortedSessions.length === 0 ? (
+            ) : !recentSessions || recentSessions.length === 0 ? (
               <View style={[styles.sessionCardWrapper, { justifyContent: 'center', alignItems: 'center', width: '100%' }]}>
                 <Icon name="inbox" size={48} color={TOKENS.color.muted} />
                 <Text style={{ color: TOKENS.color.muted, marginTop: 16, fontSize: 16 }}>No sessions available</Text>
                 <Text style={{ color: TOKENS.color.muted, marginTop: 8, fontSize: 14 }}>Create a session to get started</Text>
               </View>
-            ) : sortedSessions.slice(sessionOffset, sessionOffset + 3).map((session, index) => (
+            ) : recentSessions.slice(sessionOffset, sessionOffset + 3).map((session, index) => (
               <Pressable
                 key={session.id}
                 ref={(ref) => {
@@ -1353,7 +1243,7 @@ export function MainScreen() {
           
           {/* Action Buttons */}
           {(() => {
-            const selectedSession = sortedSessions?.find(s => s.id === selectedSessionId);
+            const selectedSession = recentSessions?.find(s => s.id === selectedSessionId);
             const isCompleted = selectedSession?.status === 'completed';
             
             return (
@@ -1373,7 +1263,7 @@ export function MainScreen() {
                       onFocus={() => setHasActionButtonFocus(true)}
                       onBlur={() => setHasActionButtonFocus(false)}
                       onPress={async () => {
-                        const session = sortedSessions?.find(s => s.id === selectedSessionId);
+                        const session = recentSessions?.find(s => s.id === selectedSessionId);
                         if (session && !activeOperation) {
                           setSelectedSessionId(null);
                           await handleSessionClick(session);
