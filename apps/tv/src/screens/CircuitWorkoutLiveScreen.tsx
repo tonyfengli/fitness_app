@@ -1,5 +1,10 @@
 import React, { useMemo, useRef, useState, useEffect } from 'react';
-import { View, Text, Pressable, ActivityIndicator, TVFocusGuideView } from 'react-native';
+import { View, Text, Pressable, ActivityIndicator, TVFocusGuideView, LayoutAnimation, Platform, UIManager } from 'react-native';
+
+// Enable LayoutAnimation on Android
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 import { useNavigation } from '../App';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../providers/TRPCProvider';
@@ -80,6 +85,18 @@ export function CircuitWorkoutLiveScreen() {
   const [shouldRestoreFocusToTeams, setShouldRestoreFocusToTeams] = useState(false);
   const [teamsDistribution, setTeamsDistribution] = useState<Map<number, any[]>>(new Map());
   const [isLightingEnabled, setIsLightingEnabled] = useState(isStartedOverride);
+  const [isSettingsPanelOpen, setIsSettingsPanelOpen] = useState(false);
+
+  // Toggle settings panel with animation
+  const toggleSettingsPanel = () => {
+    LayoutAnimation.configureNext({
+      duration: 200,
+      update: { type: LayoutAnimation.Types.easeInEaseOut },
+      create: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
+      delete: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
+    });
+    setIsSettingsPanelOpen(!isSettingsPanelOpen);
+  };
 
   // Component lifecycle tracking
   useEffect(() => {
@@ -92,7 +109,14 @@ export function CircuitWorkoutLiveScreen() {
   useAudio();
 
   // Initialize music player
-  const { start: startMusic, stop: stopMusic } = useMusicPlayer();
+  const {
+    isPlaying: isMusicPlaying,
+    currentTrack,
+    pause: pauseMusic,
+    resume: resumeMusic,
+    start: startMusic,
+    stop: stopMusic,
+  } = useMusicPlayer();
 
   // Get circuit config with polling
   const { data: circuitConfig } = useQuery(
@@ -285,6 +309,8 @@ export function CircuitWorkoutLiveScreen() {
       setCurrentPhase(null, null);
       // Stop music when workout completes
       stopMusic();
+      // Close settings panel before navigating
+      setIsSettingsPanelOpen(false);
       navigation.goBack();
     },
     isStartedOverride: false // Don't use automatic lighting in machine
@@ -447,6 +473,7 @@ export function CircuitWorkoutLiveScreen() {
                 ref={backButtonRef}
                 onPress={() => {
                   if (state.context.currentRoundIndex === 0) {
+                    setIsSettingsPanelOpen(false);
                     navigation.goBack();
                   } else {
                     send({ type: 'BACK' });
@@ -597,61 +624,153 @@ export function CircuitWorkoutLiveScreen() {
                   )}
                 </Pressable>
                 
-                {/* Lights Button - Icon Only for stations round */}
+                {/* Settings Button - for stations round */}
                 {currentRoundType === 'stations_round' && (
-                  <Pressable
-                    onPress={async () => {
-                      const newState = !isLightingEnabled;
-                      setIsLightingEnabled(newState);
-                      
-                      try {
-                        if (newState) {
-                          // Get appropriate scene for current state
-                          const phaseType = state.value === 'roundPreview' ? 'preview' : 'work';
-                          const sceneId = getSceneForPhase(state.context.currentRoundIndex, phaseType);
-                          await turnOn(sceneId || undefined);
-                        } else {
-                          await turnOff();
-                          setCurrentPhase(null, null);
-                        }
-                      } catch (error) {
-                        console.error('[CircuitLive] Failed to control lights:', error);
-                      }
-                    }}
-                    focusable
-                  >
-                    {({ focused }) => (
-                      <MattePanel 
-                        focused={focused}
-                        radius={26}
-                        style={{ 
-                          width: 52,
-                          height: 44,
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          backgroundColor: isLightingEnabled ? 
-                            (focused ? 'rgba(0,183,194,0.2)' : 'rgba(0,183,194,0.1)') :
-                            (focused ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.08)'),
-                          borderColor: isLightingEnabled ? 
-                            TOKENS.color.accent : 
-                            (focused ? 'rgba(255,255,255,0.3)' : 'transparent'),
-                          borderWidth: isLightingEnabled ? 1.5 : (focused ? 1.5 : 0),
-                        }}
-                      >
-                        <Icon 
-                          name={isLightingEnabled ? "lightbulb" : "lightbulb-outline"} 
-                          size={22} 
-                          color={isLightingEnabled ? TOKENS.color.accent : TOKENS.color.text}
-                          style={{
-                            shadowColor: isLightingEnabled ? TOKENS.color.accent : 'transparent',
-                            shadowOpacity: isLightingEnabled ? 0.8 : 0,
-                            shadowRadius: isLightingEnabled ? 15 : 0,
-                            shadowOffset: { width: 0, height: 0 },
+                  <>
+                    <Pressable
+                      onPress={toggleSettingsPanel}
+                      focusable
+                    >
+                      {({ focused }) => (
+                        <View style={{ position: 'relative' }}>
+                          <MattePanel
+                            focused={focused}
+                            radius={26}
+                            style={{
+                              width: 52,
+                              height: 44,
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              backgroundColor: focused ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.08)',
+                              borderColor: focused ? 'rgba(255,255,255,0.3)' : 'transparent',
+                              borderWidth: focused ? 1.5 : 0,
+                            }}
+                          >
+                            <Icon
+                              name="settings"
+                              size={22}
+                              color={TOKENS.color.text}
+                            />
+                          </MattePanel>
+                          {/* Indicator dot when panel is closed and has active states */}
+                          {!isSettingsPanelOpen && (isLightingEnabled || isMusicPlaying) && (
+                            <View style={{
+                              position: 'absolute',
+                              top: 8,
+                              right: 8,
+                              width: 6,
+                              height: 6,
+                              borderRadius: 3,
+                              backgroundColor: TOKENS.color.accent,
+                              opacity: 0.5,
+                            }} />
+                          )}
+                        </View>
+                      )}
+                    </Pressable>
+
+                    {/* Expandable Settings Panel */}
+                    {isSettingsPanelOpen && (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', overflow: 'hidden' }}>
+                        {/* Divider */}
+                        <View style={{
+                          width: 1,
+                          height: 24,
+                          backgroundColor: 'rgba(255,255,255,0.15)',
+                          marginLeft: 4,
+                          marginRight: 8,
+                        }} />
+
+                        {/* Lights Button */}
+                        <Pressable
+                          onPress={async () => {
+                            const newState = !isLightingEnabled;
+                            setIsLightingEnabled(newState);
+                            try {
+                              if (newState) {
+                                const phaseType = state.value === 'roundPreview' ? 'preview' : 'work';
+                                const sceneId = getSceneForPhase(state.context.currentRoundIndex, phaseType);
+                                await turnOn(sceneId || undefined);
+                              } else {
+                                await turnOff();
+                                setCurrentPhase(null, null);
+                              }
+                            } catch (error) {
+                              console.error('[CircuitLive] Failed to control lights:', error);
+                            }
                           }}
-                        />
-                      </MattePanel>
+                          focusable={isSettingsPanelOpen}
+                          style={{ marginRight: 6 }}
+                        >
+                          {({ focused }) => (
+                            <MattePanel
+                              focused={focused}
+                              radius={22}
+                              style={{
+                                width: 44,
+                                height: 44,
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                backgroundColor: isLightingEnabled ?
+                                  (focused ? 'rgba(124,255,181,0.25)' : 'rgba(124,255,181,0.12)') :
+                                  (focused ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.06)'),
+                                borderColor: isLightingEnabled ?
+                                  TOKENS.color.accent :
+                                  (focused ? 'rgba(255,255,255,0.25)' : 'transparent'),
+                                borderWidth: isLightingEnabled ? 1.5 : (focused ? 1 : 0),
+                              }}
+                            >
+                              <Icon
+                                name={isLightingEnabled ? "lightbulb" : "lightbulb-outline"}
+                                size={20}
+                                color={isLightingEnabled ? TOKENS.color.accent : TOKENS.color.text}
+                              />
+                            </MattePanel>
+                          )}
+                        </Pressable>
+
+                        {/* Music Toggle */}
+                        <Pressable
+                          onPress={() => {
+                            if (isMusicPlaying) {
+                              pauseMusic();
+                            } else if (currentTrack) {
+                              resumeMusic();
+                            } else {
+                              startMusic();
+                            }
+                          }}
+                          focusable={isSettingsPanelOpen}
+                        >
+                          {({ focused }) => (
+                            <MattePanel
+                              focused={focused}
+                              radius={22}
+                              style={{
+                                width: 44,
+                                height: 44,
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                backgroundColor: isMusicPlaying ?
+                                  (focused ? 'rgba(124,255,181,0.25)' : 'rgba(124,255,181,0.12)') :
+                                  (focused ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.06)'),
+                                borderColor: isMusicPlaying ?
+                                  TOKENS.color.accent :
+                                  (focused ? 'rgba(255,255,255,0.25)' : 'transparent'),
+                                borderWidth: isMusicPlaying ? 1.5 : (focused ? 1 : 0),
+                              }}
+                            >
+                              <Icon
+                                name={isMusicPlaying ? "music-note" : "music-off"}
+                                size={20}
+                                color={isMusicPlaying ? TOKENS.color.accent : TOKENS.color.text}
+                              />
+                            </MattePanel>
+                          )}
+                        </Pressable>
+                      </View>
                     )}
-                  </Pressable>
+                  </>
                 )}
                 </View>
                 {/* Lighting Config Badge */}
@@ -747,59 +866,150 @@ export function CircuitWorkoutLiveScreen() {
                   )}
                 </Pressable>
                 
-                {/* Lighting Control for AMRAP/Circuit preview */}
+                {/* Settings Button for AMRAP/Circuit preview */}
                 <Pressable
-                  onPress={async () => {
-                    const newState = !isLightingEnabled;
-                    setIsLightingEnabled(newState);
-                    
-                    try {
-                      if (newState) {
-                        const phaseType = 'preview';
-                        const sceneId = getSceneForPhase(state.context.currentRoundIndex, phaseType);
-                        await turnOn(sceneId || undefined);
-                      } else {
-                        await turnOff();
-                        setCurrentPhase(null, null);
-                      }
-                    } catch (error) {
-                      console.error('[CircuitLive] Failed to control lights:', error);
-                    }
-                  }}
+                  onPress={toggleSettingsPanel}
                   focusable
                 >
                   {({ focused }) => (
-                    <MattePanel 
-                      focused={focused}
-                      radius={26}
-                      style={{ 
-                        width: 52,
-                        height: 44,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        backgroundColor: isLightingEnabled ? 
-                          (focused ? 'rgba(0,183,194,0.2)' : 'rgba(0,183,194,0.1)') :
-                          (focused ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.08)'),
-                        borderColor: isLightingEnabled ? 
-                          TOKENS.color.accent : 
-                          (focused ? 'rgba(255,255,255,0.3)' : 'transparent'),
-                        borderWidth: isLightingEnabled ? 1.5 : (focused ? 1.5 : 0),
-                      }}
-                    >
-                      <Icon 
-                        name={isLightingEnabled ? "lightbulb" : "lightbulb-outline"} 
-                        size={22} 
-                        color={isLightingEnabled ? TOKENS.color.accent : TOKENS.color.text}
+                    <View style={{ position: 'relative' }}>
+                      <MattePanel
+                        focused={focused}
+                        radius={26}
                         style={{
-                          shadowColor: isLightingEnabled ? TOKENS.color.accent : 'transparent',
-                          shadowOpacity: isLightingEnabled ? 0.8 : 0,
-                          shadowRadius: isLightingEnabled ? 15 : 0,
-                          shadowOffset: { width: 0, height: 0 },
+                          width: 52,
+                          height: 44,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          backgroundColor: focused ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.08)',
+                          borderColor: focused ? 'rgba(255,255,255,0.3)' : 'transparent',
+                          borderWidth: focused ? 1.5 : 0,
                         }}
-                      />
-                    </MattePanel>
+                      >
+                        <Icon
+                          name="settings"
+                          size={22}
+                          color={TOKENS.color.text}
+                        />
+                      </MattePanel>
+                      {/* Indicator dot when panel is closed and has active states */}
+                      {!isSettingsPanelOpen && (isLightingEnabled || isMusicPlaying) && (
+                        <View style={{
+                          position: 'absolute',
+                          top: 8,
+                          right: 8,
+                          width: 6,
+                          height: 6,
+                          borderRadius: 3,
+                          backgroundColor: TOKENS.color.accent,
+                          opacity: 0.5,
+                        }} />
+                      )}
+                    </View>
                   )}
                 </Pressable>
+
+                {/* Expandable Settings Panel */}
+                {isSettingsPanelOpen && (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', overflow: 'hidden' }}>
+                    {/* Divider */}
+                    <View style={{
+                      width: 1,
+                      height: 24,
+                      backgroundColor: 'rgba(255,255,255,0.15)',
+                      marginLeft: 4,
+                      marginRight: 8,
+                    }} />
+
+                    {/* Lights Button */}
+                    <Pressable
+                      onPress={async () => {
+                        const newState = !isLightingEnabled;
+                        setIsLightingEnabled(newState);
+                        try {
+                          if (newState) {
+                            const phaseType = 'preview';
+                            const sceneId = getSceneForPhase(state.context.currentRoundIndex, phaseType);
+                            await turnOn(sceneId || undefined);
+                          } else {
+                            await turnOff();
+                            setCurrentPhase(null, null);
+                          }
+                        } catch (error) {
+                          console.error('[CircuitLive] Failed to control lights:', error);
+                        }
+                      }}
+                      focusable={isSettingsPanelOpen}
+                      style={{ marginRight: 6 }}
+                    >
+                      {({ focused }) => (
+                        <MattePanel
+                          focused={focused}
+                          radius={22}
+                          style={{
+                            width: 44,
+                            height: 44,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            backgroundColor: isLightingEnabled ?
+                              (focused ? 'rgba(124,255,181,0.25)' : 'rgba(124,255,181,0.12)') :
+                              (focused ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.06)'),
+                            borderColor: isLightingEnabled ?
+                              TOKENS.color.accent :
+                              (focused ? 'rgba(255,255,255,0.25)' : 'transparent'),
+                            borderWidth: isLightingEnabled ? 1.5 : (focused ? 1 : 0),
+                          }}
+                        >
+                          <Icon
+                            name={isLightingEnabled ? "lightbulb" : "lightbulb-outline"}
+                            size={20}
+                            color={isLightingEnabled ? TOKENS.color.accent : TOKENS.color.text}
+                          />
+                        </MattePanel>
+                      )}
+                    </Pressable>
+
+                    {/* Music Toggle */}
+                    <Pressable
+                      onPress={() => {
+                        if (isMusicPlaying) {
+                          pauseMusic();
+                        } else if (currentTrack) {
+                          resumeMusic();
+                        } else {
+                          startMusic();
+                        }
+                      }}
+                      focusable={isSettingsPanelOpen}
+                    >
+                      {({ focused }) => (
+                        <MattePanel
+                          focused={focused}
+                          radius={22}
+                          style={{
+                            width: 44,
+                            height: 44,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            backgroundColor: isMusicPlaying ?
+                              (focused ? 'rgba(124,255,181,0.25)' : 'rgba(124,255,181,0.12)') :
+                              (focused ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.06)'),
+                            borderColor: isMusicPlaying ?
+                              TOKENS.color.accent :
+                              (focused ? 'rgba(255,255,255,0.25)' : 'transparent'),
+                            borderWidth: isMusicPlaying ? 1.5 : (focused ? 1 : 0),
+                          }}
+                        >
+                          <Icon
+                            name={isMusicPlaying ? "music-note" : "music-off"}
+                            size={20}
+                            color={isMusicPlaying ? TOKENS.color.accent : TOKENS.color.text}
+                          />
+                        </MattePanel>
+                      )}
+                    </Pressable>
+                  </View>
+                )}
                 </View>
                 {/* Lighting Config Badge */}
                 {lightingConfig && hasLightingForAnyPhase(state.context.currentRoundIndex, ['preview']) && (

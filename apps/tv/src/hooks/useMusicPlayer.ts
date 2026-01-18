@@ -26,6 +26,14 @@ interface UseMusicPlayerReturn {
   start: () => Promise<void>;
   /** Explicitly stop music */
   stop: () => Promise<void>;
+  /** Pause current playback (keeps track position) */
+  pause: () => void;
+  /** Resume paused playback */
+  resume: () => void;
+  /** Skip to next random track */
+  skipNext: () => Promise<void>;
+  /** Skip back - restart if >5s into song, previous track if <5s */
+  skipBack: () => Promise<void>;
   /** Manually trigger sync */
   syncMusic: () => Promise<void>;
 }
@@ -43,11 +51,13 @@ export function useMusicPlayer(): UseMusicPlayerReturn {
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<SyncResult | null>(null);
 
-  // Track played track IDs to avoid immediate repetition
-  const playedTrackIds = useRef<Set<string>>(new Set());
+  // Track played tracks as array to remember order for skip back
+  const playedTracksHistory = useRef<MusicTrack[]>([]);
   const isStartingRef = useRef(false);
   // Track if start was requested while loading - will auto-start when tracks available
   const pendingStart = useRef(false);
+  // Track if playback is paused (vs stopped)
+  const [isPaused, setIsPaused] = useState(false);
 
   // Cached tracks from AsyncStorage (loaded on mount)
   const [cachedTracks, setCachedTracks] = useState<MusicTrack[] | null>(null);
@@ -136,12 +146,18 @@ export function useMusicPlayer(): UseMusicPlayerReturn {
       return;
     }
 
+    // Get IDs of recently played tracks (last N tracks where N = tracks.length - 1)
+    // This ensures we don't repeat until all tracks have been played
+    const recentlyPlayedIds = new Set(
+      playedTracksHistory.current.slice(-Math.max(0, tracks.length - 1)).map(t => t.id)
+    );
+
     // Filter out recently played tracks
-    let availableTracks = tracks.filter(t => !playedTrackIds.current.has(t.id));
+    let availableTracks = tracks.filter(t => !recentlyPlayedIds.has(t.id));
 
     // If all tracks have been played, reset and allow repeats
     if (availableTracks.length === 0) {
-      playedTrackIds.current.clear();
+      playedTracksHistory.current = [];
       availableTracks = tracks;
     }
 
@@ -151,7 +167,8 @@ export function useMusicPlayer(): UseMusicPlayerReturn {
 
     if (track) {
       try {
-        playedTrackIds.current.add(track.id);
+        playedTracksHistory.current.push(track);
+        setIsPaused(false);
         await musicService.play(track, false); // Always play from start
         setError(null);
       } catch (err) {
@@ -228,10 +245,77 @@ export function useMusicPlayer(): UseMusicPlayerReturn {
    */
   const stop = useCallback(async () => {
     setIsEnabled(false);
+    setIsPaused(false);
     await musicService.stop();
     setIsPlaying(false);
     setCurrentTrack(null);
   }, []);
+
+  /**
+   * Pause current playback (keeps track position)
+   */
+  const pause = useCallback(() => {
+    if (isPlaying && !isPaused) {
+      musicService.pause();
+      setIsPaused(true);
+      setIsPlaying(false);
+    }
+  }, [isPlaying, isPaused]);
+
+  /**
+   * Resume paused playback
+   */
+  const resume = useCallback(() => {
+    if (isPaused && currentTrack) {
+      musicService.resume();
+      setIsPaused(false);
+      setIsPlaying(true);
+    }
+  }, [isPaused, currentTrack]);
+
+  /**
+   * Skip to next random track
+   */
+  const skipNext = useCallback(async () => {
+    setIsPaused(false);
+    await playNextTrack();
+  }, [playNextTrack]);
+
+  /**
+   * Skip back - restart if >5s into song, previous track if <5s
+   */
+  const skipBack = useCallback(async () => {
+    const currentTime = await musicService.getCurrentTime();
+
+    // If more than 5 seconds in, restart current track
+    if (currentTime > 5 && currentTrack) {
+      musicService.seekTo(0);
+      return;
+    }
+
+    // Otherwise, go to previous track
+    // Remove current track from history and get the previous one
+    if (playedTracksHistory.current.length >= 2) {
+      // Pop current track
+      playedTracksHistory.current.pop();
+      // Get and pop previous track (we'll re-add it when we play)
+      const previousTrack = playedTracksHistory.current.pop();
+
+      if (previousTrack) {
+        try {
+          playedTracksHistory.current.push(previousTrack);
+          setIsPaused(false);
+          await musicService.play(previousTrack, false);
+          setError(null);
+        } catch (err) {
+          setError(err instanceof Error ? err.message : 'Failed to play previous track');
+        }
+      }
+    } else if (currentTrack) {
+      // No previous track, just restart current
+      musicService.seekTo(0);
+    }
+  }, [currentTrack]);
 
   /**
    * Toggle music on/off - single button control
@@ -264,6 +348,10 @@ export function useMusicPlayer(): UseMusicPlayerReturn {
     toggle,
     start,
     stop,
+    pause,
+    resume,
+    skipNext,
+    skipBack,
     syncMusic,
   };
 }

@@ -62,7 +62,7 @@ function NavigationContainer({ children }: { children: React.ReactNode }) {
   
   const [navigationParams, setNavigationParams] = useState<any>({});
   const tvEventHandler = useRef<TVEventHandler | null>(null);
-  
+
   const screenHistory = useRef<ScreenName[]>(['Main']);
 
   const navigate = (screen: ScreenName, params?: any) => {
@@ -84,7 +84,7 @@ function NavigationContainer({ children }: { children: React.ReactNode }) {
       const currentScreen = screenHistory.current[screenHistory.current.length - 1];
       screenHistory.current.pop();
       const previousScreen = screenHistory.current[screenHistory.current.length - 1];
-      
+
       setNavigationState(prev => ({ ...prev, currentScreen: previousScreen }));
     }
   };
