@@ -41,6 +41,8 @@ import { TabNavigation } from "@acme/ui-shared";
 import { WorkoutTab } from "~/components/workout/WorkoutTab";
 import { LightingTab } from "~/components/workout/LightingTab";
 import { LightingConfigDrawer } from "~/components/workout/LightingConfigDrawer";
+import { MusicLightingButton } from "~/components/workout/MusicLightingButton";
+import { RoundSettingsDrawer } from "~/components/workout/RoundSettingsDrawer";
 
 
 // World-class Circuit Timer Calculator Component
@@ -478,6 +480,12 @@ function CircuitWorkoutOverviewContent() {
   const [showAddExerciseInDrawer, setShowAddExerciseInDrawer] = useState(false);
   const [showAddRoundInDrawer, setShowAddRoundInDrawer] = useState(false);
   const [showLightingConfigInDrawer, setShowLightingConfigInDrawer] = useState(false);
+  const [showRoundSettingsInDrawer, setShowRoundSettingsInDrawer] = useState(false);
+  const [selectedRoundForSettings, setSelectedRoundForSettings] = useState<{
+    roundNumber: number;
+    roundName: string;
+    roundType: "circuit_round" | "stations_round" | "amrap_round";
+  } | null>(null);
   const [selectedLightForConfig, setSelectedLightForConfig] = useState<{
     roundId: number;
     phaseType: string;
@@ -1963,7 +1971,30 @@ function CircuitWorkoutOverviewContent() {
                     )}
                   </div>
                 )}
-                
+
+                {/* Round Settings Button - Music & Lighting Triggers */}
+                {(() => {
+                  const roundNum = parseInt(round.roundName.match(/\d+/)?.[0] || '1');
+
+                  return (
+                    <MusicLightingButton
+                      roundNumber={roundNum}
+                      roundType={round.roundType || 'circuit_round'}
+                      hasLightingConfig={false}
+                      hasMusicConfig={false}
+                      onClick={() => {
+                        setSelectedRoundForSettings({
+                          roundNumber: roundNum,
+                          roundName: round.roundName,
+                          roundType: round.roundType || 'circuit_round',
+                        });
+                        setShowRoundSettingsInDrawer(true);
+                        setShowOptionsDrawer(true);
+                      }}
+                    />
+                  );
+                })()}
+
                 {/* Add Exercise button for circuit and amrap rounds */}
                 {(round.roundType === 'circuit_round' || round.roundType === 'amrap_round') && (
                   <div className="mt-4">
@@ -2737,14 +2768,18 @@ function CircuitWorkoutOverviewContent() {
           setShowAddRoundInDrawer(false);
           setShowLightingConfigInDrawer(false);
           setSelectedLightForConfig(null);
+          setShowRoundSettingsInDrawer(false);
+          setSelectedRoundForSettings(null);
         }}
         title={
-          showRepsInDrawer 
+          showRoundSettingsInDrawer
+            ? `${selectedRoundForSettings?.roundName || 'Round'} · Music & Lighting`
+            : showRepsInDrawer
             ? "Configure Exercise"
             : showReplaceInDrawer
             ? "Replace Exercise"
             : showAddExerciseInDrawer
-            ? addExerciseModalConfig?.mode === 'add-to-station' 
+            ? addExerciseModalConfig?.mode === 'add-to-station'
               ? `Add Exercise to Station ${(addExerciseModalConfig?.targetStation || 0) + 1}`
               : addExerciseModalConfig?.mode === 'create-station'
               ? `Create Station ${(addExerciseModalConfig?.targetStation || 0) + 1}`
@@ -2753,15 +2788,38 @@ function CircuitWorkoutOverviewContent() {
             ? "Configure Light"
             : showAddRoundInDrawer
             ? (addRoundDrawerEditMode ? `Edit ${selectedItemForOptions?.name || 'Round'}` : "Add New Round")
-            : selectedItemForOptions?.type === 'round' 
-            ? selectedItemForOptions.name 
+            : selectedItemForOptions?.type === 'round'
+            ? selectedItemForOptions.name
             : selectedItemForOptions?.type === 'station'
             ? selectedItemForOptions.name
             : selectedItemForOptions?.name || "Options"
         }
         customContent={
           (() => {
-            
+
+            if (showRoundSettingsInDrawer && selectedRoundForSettings) {
+              return (
+                <RoundSettingsDrawer
+                  roundNumber={selectedRoundForSettings.roundNumber}
+                  roundName={selectedRoundForSettings.roundName}
+                  roundType={selectedRoundForSettings.roundType}
+                  onSelectLighting={() => {
+                    // TODO: Navigate to lighting config
+                    console.log('Lighting selected for round', selectedRoundForSettings.roundNumber);
+                  }}
+                  onSelectMusic={() => {
+                    // TODO: Navigate to music config
+                    console.log('Music selected for round', selectedRoundForSettings.roundNumber);
+                  }}
+                  onClose={() => {
+                    setShowRoundSettingsInDrawer(false);
+                    setShowOptionsDrawer(false);
+                    setSelectedRoundForSettings(null);
+                  }}
+                />
+              );
+            }
+
             if (showRepsInDrawer && selectedExerciseForSets) {
               return (
             <RepsConfiguration
