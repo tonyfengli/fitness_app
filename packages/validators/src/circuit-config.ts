@@ -176,6 +176,8 @@ export const UpdateCircuitConfigSchema = z.object({
   restBetweenRounds: CircuitRestBetweenRoundsSchema.optional(),
   repeatRounds: z.boolean().optional(),
   roundTemplates: z.array(RoundConfigSchema).optional(),
+  // Lighting configuration
+  lighting: LightingConfigSchema.optional(),
   // Template workout source
   sourceWorkoutId: z.string().uuid().optional(),
 });
