@@ -43,9 +43,9 @@ import { LightingTab } from "~/components/workout/LightingTab";
 import { LightingConfigDrawer } from "~/components/workout/LightingConfigDrawer";
 import { MusicLightingButton } from "~/components/workout/MusicLightingButton";
 import { RoundSettingsDrawer } from "~/components/workout/RoundSettingsDrawer";
+import { RoundMusicDrawer } from "~/components/workout/RoundMusicDrawer";
 import { RoundLightingContent } from "~/components/workout/RoundLightingContent";
 import { LightingIndicator } from "~/components/workout/LightingIndicator";
-import { MusicIndicator } from "~/components/workout/MusicIndicator";
 
 
 // World-class Circuit Timer Calculator Component
@@ -485,6 +485,7 @@ function CircuitWorkoutOverviewContent() {
   const [showLightingConfigInDrawer, setShowLightingConfigInDrawer] = useState(false);
   const [showRoundSettingsInDrawer, setShowRoundSettingsInDrawer] = useState(false);
   const [showRoundLightingInDrawer, setShowRoundLightingInDrawer] = useState(false);
+  const [showRoundMusicInDrawer, setShowRoundMusicInDrawer] = useState(false);
   const [roundLightingDrawerTitle, setRoundLightingDrawerTitle] = useState("");
   const [selectedRoundForSettings, setSelectedRoundForSettings] = useState<{
     roundNumber: number;
@@ -1046,38 +1047,6 @@ function CircuitWorkoutOverviewContent() {
     return colorMatch ? `#${colorMatch[1]}` : "#F59E0B"; // Default amber if no color
   };
 
-  // Helper to get music trigger for a specific phase
-  // Returns the trigger config or null if not configured
-  const getMusicTrigger = (roundNumber: number, phaseType: 'preview' | 'exercise' | 'rest' | 'setBreak', index: number = 0): {
-    enabled: boolean;
-    energy: 'high' | 'low';
-    useStartTimestamp: boolean;
-    trackId?: string;
-  } | null => {
-    if (!circuitConfig?.config?.roundTemplates) return null;
-
-    const roundTemplate = circuitConfig.config.roundTemplates.find(
-      (rt: any) => rt.roundNumber === roundNumber
-    );
-
-    if (!roundTemplate?.music) return null;
-
-    const music = roundTemplate.music as any;
-
-    switch (phaseType) {
-      case 'preview':
-        return music.roundPreview || null;
-      case 'exercise':
-        return music.exercises?.[index] || null;
-      case 'rest':
-        return music.rests?.[index] || null;
-      case 'setBreak':
-        return music.setBreaks?.[index] || null;
-      default:
-        return null;
-    }
-  };
-
   // Fetch session data to get templateConfig with setlist
   const { data: sessionData } = useQuery({
     ...trpc.trainingSession.getSession.queryOptions({ id: sessionId || "" }),
@@ -1546,11 +1515,6 @@ function CircuitWorkoutOverviewContent() {
                                   primaryColor={getLightingSceneColor(roundNumber, 'preview')}
                                   primaryTitle="Preview lighting"
                                 />
-                                {/* Preview music indicator */}
-                                <MusicIndicator
-                                  trigger={getMusicTrigger(roundNumber, 'preview')}
-                                  title="Preview music"
-                                />
                               </div>
                               
                               {/* 2. Total Time - Clear and Prominent */}
@@ -1754,16 +1718,6 @@ function CircuitWorkoutOverviewContent() {
                                           secondaryColor={secondaryColor}
                                           primaryTitle="Work lighting"
                                           secondaryTitle={secondaryTitle}
-                                        />
-                                      );
-                                    })()}
-                                    {/* Music indicator for station */}
-                                    {(() => {
-                                      const rNum = parseInt(round.roundName.match(/\d+/)?.[0] || '1');
-                                      return (
-                                        <MusicIndicator
-                                          trigger={getMusicTrigger(rNum, 'exercise', idx)}
-                                          title="Station music"
                                         />
                                       );
                                     })()}
@@ -2053,16 +2007,6 @@ function CircuitWorkoutOverviewContent() {
                                         />
                                       );
                                     })()}
-                                    {/* Music indicator for exercise */}
-                                    {(() => {
-                                      const rNum = parseInt(round.roundName.match(/\d+/)?.[0] || '1');
-                                      return (
-                                        <MusicIndicator
-                                          trigger={getMusicTrigger(rNum, 'exercise', idx)}
-                                          title="Exercise music"
-                                        />
-                                      );
-                                    })()}
                                   </div>
                                   {exercise.repsPlanned && (
                                     <span className="text-xs text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-md font-semibold whitespace-nowrap self-start shadow-sm">
@@ -2296,12 +2240,22 @@ function CircuitWorkoutOverviewContent() {
                 {(() => {
                   const roundNum = parseInt(round.roundName.match(/\d+/)?.[0] || '1');
 
+                  // Get music triggers for this round
+                  const roundTemplate = circuitConfig?.config?.roundTemplates?.find(
+                    (rt: any) => rt.roundNumber === roundNum
+                  );
+                  const musicTriggers = roundTemplate?.music as {
+                    roundPreview?: { enabled: boolean; energy?: 'high' | 'low'; useStartTimestamp?: boolean };
+                    exercises?: { enabled: boolean; energy?: 'high' | 'low'; useStartTimestamp?: boolean }[];
+                  } | undefined;
+
                   return (
                     <MusicLightingButton
                       roundNumber={roundNum}
                       roundType={round.roundType || 'circuit_round'}
                       hasLightingConfig={false}
                       hasMusicConfig={false}
+                      musicTriggers={musicTriggers}
                       onClick={() => {
                         setSelectedRoundForSettings({
                           roundNumber: roundNum,
@@ -3008,11 +2962,14 @@ function CircuitWorkoutOverviewContent() {
           setSelectedLightForConfig(null);
           setShowRoundSettingsInDrawer(false);
           setShowRoundLightingInDrawer(false);
+          setShowRoundMusicInDrawer(false);
           setSelectedRoundForSettings(null);
         }}
         title={
           showRoundLightingInDrawer
             ? roundLightingDrawerTitle || `${selectedRoundForSettings?.roundName || 'Round'} · Lighting`
+            : showRoundMusicInDrawer
+            ? `${selectedRoundForSettings?.roundName || 'Round'} · Music`
             : showRoundSettingsInDrawer
             ? `${selectedRoundForSettings?.roundName || 'Round'} · Music & Lighting`
             : showRepsInDrawer
@@ -3061,6 +3018,20 @@ function CircuitWorkoutOverviewContent() {
               );
             }
 
+            if (showRoundMusicInDrawer && selectedRoundForSettings) {
+              return (
+                <RoundMusicDrawer
+                  sessionId={sessionId}
+                  roundNumber={selectedRoundForSettings.roundNumber}
+                  roundType={selectedRoundForSettings.roundType}
+                  onClose={() => {
+                    setShowRoundMusicInDrawer(false);
+                    setShowRoundSettingsInDrawer(true);
+                  }}
+                />
+              );
+            }
+
             if (showRoundSettingsInDrawer && selectedRoundForSettings) {
               return (
                 <RoundSettingsDrawer
@@ -3072,8 +3043,8 @@ function CircuitWorkoutOverviewContent() {
                     setShowRoundLightingInDrawer(true);
                   }}
                   onSelectMusic={() => {
-                    // TODO: Navigate to music config
-                    console.log('Music selected for round', selectedRoundForSettings.roundNumber);
+                    setShowRoundSettingsInDrawer(false);
+                    setShowRoundMusicInDrawer(true);
                   }}
                   onClose={() => {
                     setShowRoundSettingsInDrawer(false);

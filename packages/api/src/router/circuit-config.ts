@@ -9,6 +9,22 @@ import {
   CircuitConfigSchema,
 } from "@acme/validators";
 
+// Define music config schemas using local zod v3 to avoid version mismatch
+// (validators package uses zod/v4 which has incompatible parse methods)
+const MusicTriggerSchemaV3 = z.object({
+  enabled: z.boolean(),
+  trackId: z.string().uuid().optional(),
+  useStartTimestamp: z.boolean().optional(),
+  energy: z.enum(['high', 'low']).optional(),
+});
+
+const RoundMusicConfigSchemaV3 = z.object({
+  roundPreview: MusicTriggerSchemaV3.optional(),
+  exercises: z.array(MusicTriggerSchemaV3).optional(),
+  rests: z.array(MusicTriggerSchemaV3).optional(),
+  setBreaks: z.array(MusicTriggerSchemaV3).optional(),
+});
+
 import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
 import { getSessionUserWithBusiness } from "../utils/session";
 import { generateMinimalMusicConfig } from "../services/music-selection-service";
@@ -1039,5 +1055,90 @@ export const circuitConfigRouter = createTRPCRouter({
 
       console.log("[addRound DEBUG] Transaction completed, returning config");
       return result.config;
+    }),
+
+  /**
+   * Update music configuration for a specific round
+   */
+  updateRoundMusicConfig: publicProcedure
+    .input(
+      z.object({
+        sessionId: z.string().uuid(),
+        roundNumber: z.number().int().positive(),
+        musicConfig: RoundMusicConfigSchemaV3,
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const session = await ctx.db
+        .select()
+        .from(TrainingSession)
+        .where(eq(TrainingSession.id, input.sessionId))
+        .limit(1)
+        .then((res) => res[0]);
+
+      if (!session) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Session not found",
+        });
+      }
+
+      if (session.templateType !== "circuit") {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Session is not a circuit training session",
+        });
+      }
+
+      // Get existing config
+      const existingConfig = session.templateConfig as typeof DEFAULT_CIRCUIT_CONFIG;
+
+      if (!existingConfig?.config?.roundTemplates) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Session has no round templates",
+        });
+      }
+
+      // Find the round to update
+      const roundIndex = existingConfig.config.roundTemplates.findIndex(
+        (rt: any) => rt.roundNumber === input.roundNumber
+      );
+
+      if (roundIndex === -1) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: `Round ${input.roundNumber} not found`,
+        });
+      }
+
+      // Update the music config for this round
+      const updatedRoundTemplates = [...existingConfig.config.roundTemplates];
+      updatedRoundTemplates[roundIndex] = {
+        ...updatedRoundTemplates[roundIndex],
+        music: input.musicConfig,
+      };
+
+      const updatedConfig = {
+        ...existingConfig,
+        config: {
+          ...existingConfig.config,
+          roundTemplates: updatedRoundTemplates,
+        },
+        lastUpdated: new Date().toISOString(),
+      };
+
+      // Validate and save
+      const validatedConfig = CircuitConfigSchema.parse(updatedConfig);
+
+      await ctx.db
+        .update(TrainingSession)
+        .set({
+          templateConfig: validatedConfig,
+          updatedAt: new Date(),
+        })
+        .where(eq(TrainingSession.id, input.sessionId));
+
+      return validatedConfig;
     }),
 });

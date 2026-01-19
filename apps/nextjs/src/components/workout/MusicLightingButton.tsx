@@ -2,11 +2,23 @@
 
 import React from "react";
 
+interface MusicTrigger {
+  enabled: boolean;
+  energy?: "high" | "low";
+  useStartTimestamp?: boolean;
+}
+
+interface MusicTriggers {
+  roundPreview?: MusicTrigger;
+  exercises?: MusicTrigger[];
+}
+
 interface MusicLightingButtonProps {
   roundNumber: number;
   roundType: "circuit_round" | "stations_round" | "amrap_round";
   hasLightingConfig?: boolean;
   hasMusicConfig?: boolean;
+  musicTriggers?: MusicTriggers;
   onClick: () => void;
 }
 
@@ -15,9 +27,40 @@ export function MusicLightingButton({
   roundType,
   hasLightingConfig = false,
   hasMusicConfig = false,
+  musicTriggers,
   onClick,
 }: MusicLightingButtonProps) {
   const hasAnyConfig = hasLightingConfig || hasMusicConfig;
+
+  // Build music trigger summary
+  const getMusicSummary = () => {
+    if (!musicTriggers) return null;
+
+    const parts: { label: string; energy: "high" | "low"; hasDrop?: boolean }[] = [];
+
+    // Check preview
+    if (musicTriggers.roundPreview?.enabled) {
+      parts.push({
+        label: "Preview",
+        energy: musicTriggers.roundPreview.energy || "low",
+        hasDrop: musicTriggers.roundPreview.useStartTimestamp,
+      });
+    }
+
+    // Check first exercise (represents exercise phase)
+    const firstExercise = musicTriggers.exercises?.[0];
+    if (firstExercise?.enabled) {
+      parts.push({
+        label: roundType === "stations_round" ? "Stations" : "Exercise",
+        energy: firstExercise.energy || "high",
+        hasDrop: firstExercise.useStartTimestamp,
+      });
+    }
+
+    return parts.length > 0 ? parts : null;
+  };
+
+  const musicSummary = getMusicSummary();
 
   return (
     <div className="mt-6">
@@ -69,32 +112,60 @@ export function MusicLightingButton({
             {/* Music icon */}
             <div className={`
               w-7 h-7 rounded-lg flex items-center justify-center
-              ${hasMusicConfig
+              ${musicSummary
                 ? 'bg-purple-100 dark:bg-purple-900/30'
                 : 'bg-gray-100 dark:bg-gray-700/50'
               }
             `}>
               <svg
-                className={`w-4 h-4 ${hasMusicConfig ? 'text-purple-500 dark:text-purple-400' : 'text-gray-400 dark:text-gray-500'}`}
+                className={`w-4 h-4 ${musicSummary ? 'text-purple-500 dark:text-purple-400' : 'text-gray-400 dark:text-gray-500'}`}
                 viewBox="0 0 24 24"
-                fill={hasMusicConfig ? "currentColor" : "none"}
+                fill={musicSummary ? "currentColor" : "none"}
                 stroke="currentColor"
-                strokeWidth={hasMusicConfig ? 0 : 1.5}
+                strokeWidth={musicSummary ? 0 : 1.5}
               >
                 <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
               </svg>
             </div>
           </div>
 
-          {/* Text */}
-          <div className="flex flex-col items-start">
-            <span className={`text-sm font-medium ${hasAnyConfig ? 'text-gray-700 dark:text-gray-200' : 'text-gray-600 dark:text-gray-400'}`}>
+          {/* Text and Music Summary */}
+          <div className="flex flex-col items-start gap-1">
+            <span className={`text-sm font-medium ${hasAnyConfig || musicSummary ? 'text-gray-700 dark:text-gray-200' : 'text-gray-600 dark:text-gray-400'}`}>
               Music & Lighting
             </span>
-            {hasAnyConfig ? (
-              <span className="text-xs text-gray-500 dark:text-gray-400">
-                {[hasLightingConfig && "Lights", hasMusicConfig && "Music"].filter(Boolean).join(" & ")} configured
-              </span>
+
+            {/* Music trigger summary - subtle inline display */}
+            {musicSummary ? (
+              <div className="flex items-center gap-1.5">
+                {musicSummary.map((part, idx) => (
+                  <React.Fragment key={part.label}>
+                    {idx > 0 && (
+                      <svg className="w-3 h-3 text-gray-300 dark:text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                      </svg>
+                    )}
+                    <span className="flex items-center gap-1">
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full ${
+                          part.energy === "low"
+                            ? "bg-violet-400"
+                            : "bg-emerald-400"
+                        }`}
+                        title={`${part.energy} energy`}
+                      />
+                      <span className="text-[11px] text-gray-500 dark:text-gray-400">
+                        {part.label}
+                      </span>
+                      {part.hasDrop && (
+                        <span className="text-[9px] text-amber-500 dark:text-amber-400 font-medium">
+                          drop
+                        </span>
+                      )}
+                    </span>
+                  </React.Fragment>
+                ))}
+              </div>
             ) : (
               <span className="text-xs text-gray-400 dark:text-gray-500">
                 Tap to configure

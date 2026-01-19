@@ -124,6 +124,7 @@ export function CircuitWorkoutLiveScreen() {
     start: startMusic,
     stop: stopMusic,
     enable: enableMusic,
+    playWithTrigger,
   } = useMusicPlayer();
 
   // Get circuit config with polling
@@ -310,8 +311,10 @@ export function CircuitWorkoutLiveScreen() {
     onWorkoutComplete: () => {
       // Clear current phase when workout completes
       setCurrentPhase(null, null);
-      // Stop music when workout completes
-      stopMusic();
+      // Transition music to low energy if enabled, otherwise leave it off
+      if (isMusicEnabled) {
+        playWithTrigger({ energy: 'low' });
+      }
       // Close settings panel before navigating
       setIsSettingsPanelOpen(false);
       navigation.goBack();
