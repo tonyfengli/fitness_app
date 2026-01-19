@@ -592,10 +592,13 @@ export function CircuitWorkoutOverviewScreen() {
   // Initialize music player
   const {
     isPlaying: isMusicPlaying,
+    isEnabled: isMusicEnabled,
     currentTrack,
     pause: pauseMusic,
     resume: resumeMusic,
-    start: startMusic,
+    stop: stopMusic,
+    enable: enableMusic,
+    playWithTrigger,
   } = useMusicPlayer();
 
   // Ensure settings panel is closed when this screen mounts
@@ -981,7 +984,7 @@ export function CircuitWorkoutOverviewScreen() {
                   />
                 </MattePanel>
                 {/* Indicator dot when panel is closed and has active states */}
-                {!isSettingsPanelOpen && (isLightingEnabled || isMusicPlaying) && (
+                {!isSettingsPanelOpen && (isLightingEnabled || isMusicEnabled) && (
                   <View style={{
                     position: 'absolute',
                     top: 8,
@@ -1065,12 +1068,16 @@ export function CircuitWorkoutOverviewScreen() {
             {/* Music Toggle */}
             <Pressable
               onPress={() => {
-                if (isMusicPlaying) {
-                  pauseMusic();
-                } else if (currentTrack) {
-                  resumeMusic();
+                if (isMusicEnabled) {
+                  // Disable music - stops playback
+                  stopMusic();
                 } else {
-                  startMusic();
+                  // Enable music using Round 1 Preview config (same as workout preview)
+                  const round1Template = circuitConfig?.config?.roundTemplates?.find(
+                    (rt: any) => rt.roundNumber === 1
+                  );
+                  const previewEnergy = round1Template?.music?.roundPreview?.energy ?? 'low';
+                  playWithTrigger({ energy: previewEnergy });
                 }
               }}
               focusable={isSettingsPanelOpen}
@@ -1084,19 +1091,19 @@ export function CircuitWorkoutOverviewScreen() {
                     height: 44,
                     alignItems: 'center',
                     justifyContent: 'center',
-                    backgroundColor: isMusicPlaying ?
+                    backgroundColor: isMusicEnabled ?
                       (focused ? 'rgba(93,225,255,0.25)' : 'rgba(93,225,255,0.12)') :
                       (focused ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.06)'),
-                    borderColor: isMusicPlaying ?
+                    borderColor: isMusicEnabled ?
                       TOKENS.color.accent2 :
                       (focused ? 'rgba(255,255,255,0.25)' : 'transparent'),
-                    borderWidth: isMusicPlaying ? 1.5 : (focused ? 1 : 0),
+                    borderWidth: isMusicEnabled ? 1.5 : (focused ? 1 : 0),
                   }}
                 >
                   <Icon
-                    name={isMusicPlaying ? "music-note" : "music-off"}
+                    name={isMusicEnabled ? "music-note" : "music-off"}
                     size={20}
-                    color={isMusicPlaying ? TOKENS.color.accent2 : TOKENS.color.text}
+                    color={isMusicEnabled ? TOKENS.color.accent2 : TOKENS.color.text}
                   />
                 </MattePanel>
               )}

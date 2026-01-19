@@ -32,10 +32,41 @@ export function createDefaultMusicTrigger(
 }
 
 /**
- * Generates default music configuration for a round based on its template.
- * Creates triggers for all phases with sensible defaults.
+ * Generates MINIMAL default music configuration for a round.
+ * Only creates two triggers per the user's requirements:
+ * - Preview: low energy music
+ * - First exercise/station: high energy music with startTimestamp
+ *
+ * Users can add more triggers manually if needed.
  */
-export function generateDefaultRoundMusicConfig(
+export function generateMinimalMusicConfig(
+  template: RoundTemplate
+): RoundMusicConfig {
+  const config: RoundMusicConfig = {
+    // Round preview - trigger low energy track
+    roundPreview: createDefaultMusicTrigger('roundPreview'),
+
+    // Only first exercise/station gets a trigger (high energy, use startTimestamp)
+    exercises: [
+      createDefaultMusicTrigger('exercise', { useStartTimestamp: true })
+    ],
+
+    // No rest triggers by default - music continues playing
+    rests: [],
+
+    // No set break triggers by default - music continues playing
+    setBreaks: [],
+  };
+
+  return config;
+}
+
+/**
+ * Generates FULL default music configuration for a round based on its template.
+ * Creates triggers for all phases with sensible defaults.
+ * Use this when you need triggers for every phase, not just defaults.
+ */
+export function generateFullRoundMusicConfig(
   template: RoundTemplate
 ): RoundMusicConfig {
   const exerciseCount = template.exercisesPerRound;
@@ -80,6 +111,15 @@ export function generateDefaultRoundMusicConfig(
   }
 
   return config;
+}
+
+/**
+ * @deprecated Use generateMinimalMusicConfig for new sessions or generateFullRoundMusicConfig for complete triggers
+ */
+export function generateDefaultRoundMusicConfig(
+  template: RoundTemplate
+): RoundMusicConfig {
+  return generateFullRoundMusicConfig(template);
 }
 
 /**

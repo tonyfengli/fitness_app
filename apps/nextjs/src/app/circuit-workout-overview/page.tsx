@@ -44,6 +44,8 @@ import { LightingConfigDrawer } from "~/components/workout/LightingConfigDrawer"
 import { MusicLightingButton } from "~/components/workout/MusicLightingButton";
 import { RoundSettingsDrawer } from "~/components/workout/RoundSettingsDrawer";
 import { RoundLightingContent } from "~/components/workout/RoundLightingContent";
+import { LightingIndicator } from "~/components/workout/LightingIndicator";
+import { MusicIndicator } from "~/components/workout/MusicIndicator";
 
 
 // World-class Circuit Timer Calculator Component
@@ -988,6 +990,29 @@ function CircuitWorkoutOverviewContent() {
     });
   }, [lightingConfig, lightingConfigUpdatedAt]);
 
+  // Debug logging for music config
+  useEffect(() => {
+    if (circuitConfig?.config?.roundTemplates) {
+      console.log('[MusicConfig Debug] Circuit config loaded:', {
+        totalRounds: circuitConfig.config.roundTemplates.length,
+        roundTemplates: circuitConfig.config.roundTemplates.map((rt: any, idx: number) => ({
+          roundNumber: rt.roundNumber,
+          roundType: rt.template?.type,
+          hasMusic: !!rt.music,
+          music: rt.music ? {
+            roundPreview: rt.music.roundPreview,
+            exercisesCount: rt.music.exercises?.length || 0,
+            exercises: rt.music.exercises,
+            restsCount: rt.music.rests?.length || 0,
+            setBreaksCount: rt.music.setBreaks?.length || 0,
+          } : null,
+        })),
+      });
+    } else {
+      console.log('[MusicConfig Debug] No circuit config or round templates');
+    }
+  }, [circuitConfig]);
+
   // Fetch scenes for color extraction
   const { data: lightingScenes } = useQuery({
     ...trpc.lighting.getScenes.queryOptions(),
@@ -1019,6 +1044,38 @@ function CircuitWorkoutOverviewContent() {
     if (!scene) return null;
     const colorMatch = scene.name.match(/#([a-fA-F0-9]{6})/);
     return colorMatch ? `#${colorMatch[1]}` : "#F59E0B"; // Default amber if no color
+  };
+
+  // Helper to get music trigger for a specific phase
+  // Returns the trigger config or null if not configured
+  const getMusicTrigger = (roundNumber: number, phaseType: 'preview' | 'exercise' | 'rest' | 'setBreak', index: number = 0): {
+    enabled: boolean;
+    energy: 'high' | 'low';
+    useStartTimestamp: boolean;
+    trackId?: string;
+  } | null => {
+    if (!circuitConfig?.config?.roundTemplates) return null;
+
+    const roundTemplate = circuitConfig.config.roundTemplates.find(
+      (rt: any) => rt.roundNumber === roundNumber
+    );
+
+    if (!roundTemplate?.music) return null;
+
+    const music = roundTemplate.music as any;
+
+    switch (phaseType) {
+      case 'preview':
+        return music.roundPreview || null;
+      case 'exercise':
+        return music.exercises?.[index] || null;
+      case 'rest':
+        return music.rests?.[index] || null;
+      case 'setBreak':
+        return music.setBreaks?.[index] || null;
+      default:
+        return null;
+    }
   };
 
   // Fetch session data to get templateConfig with setlist
@@ -1485,23 +1542,15 @@ function CircuitWorkoutOverviewContent() {
                                   })()}
                                 </span>
                                 {/* Preview lighting indicator */}
-                                {(() => {
-                                  const previewColor = getLightingSceneColor(roundNumber, 'preview');
-                                  if (!previewColor) return null;
-                                  return (
-                                    <svg
-                                      className="w-4 h-4"
-                                      viewBox="0 0 24 24"
-                                      fill={previewColor}
-                                      stroke="#9CA3AF"
-                                      strokeWidth="1"
-                                      style={{ filter: `drop-shadow(0 0 2px ${previewColor}80)` }}
-                                      title="Preview lighting configured"
-                                    >
-                                      <path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7z" />
-                                    </svg>
-                                  );
-                                })()}
+                                <LightingIndicator
+                                  primaryColor={getLightingSceneColor(roundNumber, 'preview')}
+                                  primaryTitle="Preview lighting"
+                                />
+                                {/* Preview music indicator */}
+                                <MusicIndicator
+                                  trigger={getMusicTrigger(roundNumber, 'preview')}
+                                  title="Preview music"
+                                />
                               </div>
                               
                               {/* 2. Total Time - Clear and Prominent */}
@@ -1699,44 +1748,23 @@ function CircuitWorkoutOverviewContent() {
                                       const secondaryColor = restColor || roundBreakColor;
                                       const secondaryTitle = restColor ? "Rest lighting" : "Set break lighting";
 
-                                      if (!workColor && !secondaryColor) return null;
-
-                                      // Only rest/roundBreak (no work) - show bigger dot
-                                      if (!workColor && secondaryColor) {
-                                        return (
-                                          <div
-                                            className="w-3 h-3 rounded-full flex-shrink-0 border border-gray-300 dark:border-gray-600"
-                                            style={{
-                                              backgroundColor: secondaryColor,
-                                              boxShadow: `0 0 4px ${secondaryColor}60`
-                                            }}
-                                            title={secondaryTitle}
-                                          />
-                                        );
-                                      }
-
-                                      // Work (with optional rest/roundBreak dot at bottom-right)
                                       return (
-                                        <div className="relative flex-shrink-0">
-                                          <svg
-                                            className="w-4 h-4"
-                                            viewBox="0 0 24 24"
-                                            fill={workColor}
-                                            stroke="#9CA3AF"
-                                            strokeWidth="1"
-                                            style={{ filter: `drop-shadow(0 0 2px ${workColor}80)` }}
-                                            title="Work lighting"
-                                          >
-                                            <path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7z" />
-                                          </svg>
-                                          {secondaryColor && (
-                                            <div
-                                              className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border border-white dark:border-gray-800"
-                                              style={{ backgroundColor: secondaryColor }}
-                                              title={secondaryTitle}
-                                            />
-                                          )}
-                                        </div>
+                                        <LightingIndicator
+                                          primaryColor={workColor}
+                                          secondaryColor={secondaryColor}
+                                          primaryTitle="Work lighting"
+                                          secondaryTitle={secondaryTitle}
+                                        />
+                                      );
+                                    })()}
+                                    {/* Music indicator for station */}
+                                    {(() => {
+                                      const rNum = parseInt(round.roundName.match(/\d+/)?.[0] || '1');
+                                      return (
+                                        <MusicIndicator
+                                          trigger={getMusicTrigger(rNum, 'exercise', idx)}
+                                          title="Station music"
+                                        />
                                       );
                                     })()}
                                     {(() => {
@@ -2016,44 +2044,23 @@ function CircuitWorkoutOverviewContent() {
                                       const secondaryColor = restColor || roundBreakColor;
                                       const secondaryTitle = restColor ? "Rest lighting" : "Set break lighting";
 
-                                      if (!workColor && !secondaryColor) return null;
-
-                                      // Only rest/roundBreak (no work) - show bigger dot
-                                      if (!workColor && secondaryColor) {
-                                        return (
-                                          <div
-                                            className="w-3 h-3 rounded-full flex-shrink-0 border border-gray-300 dark:border-gray-600"
-                                            style={{
-                                              backgroundColor: secondaryColor,
-                                              boxShadow: `0 0 4px ${secondaryColor}60`
-                                            }}
-                                            title={secondaryTitle}
-                                          />
-                                        );
-                                      }
-
-                                      // Work (with optional rest/roundBreak dot at bottom-right)
                                       return (
-                                        <div className="relative flex-shrink-0">
-                                          <svg
-                                            className="w-4 h-4"
-                                            viewBox="0 0 24 24"
-                                            fill={workColor}
-                                            stroke="#9CA3AF"
-                                            strokeWidth="1"
-                                            style={{ filter: `drop-shadow(0 0 2px ${workColor}80)` }}
-                                            title="Work lighting"
-                                          >
-                                            <path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7z" />
-                                          </svg>
-                                          {secondaryColor && (
-                                            <div
-                                              className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border border-white dark:border-gray-800"
-                                              style={{ backgroundColor: secondaryColor }}
-                                              title={secondaryTitle}
-                                            />
-                                          )}
-                                        </div>
+                                        <LightingIndicator
+                                          primaryColor={workColor}
+                                          secondaryColor={secondaryColor}
+                                          primaryTitle="Work lighting"
+                                          secondaryTitle={secondaryTitle}
+                                        />
+                                      );
+                                    })()}
+                                    {/* Music indicator for exercise */}
+                                    {(() => {
+                                      const rNum = parseInt(round.roundName.match(/\d+/)?.[0] || '1');
+                                      return (
+                                        <MusicIndicator
+                                          trigger={getMusicTrigger(rNum, 'exercise', idx)}
+                                          title="Exercise music"
+                                        />
                                       );
                                     })()}
                                   </div>

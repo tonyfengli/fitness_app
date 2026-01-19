@@ -408,6 +408,9 @@ importers:
       '@babel/core':
         specifier: ^7.27.4
         version: 7.28.3
+      '@babel/plugin-transform-export-namespace-from':
+        specifier: ^7.27.1
+        version: 7.27.1(@babel/core@7.28.3)
       '@babel/preset-env':
         specifier: ^7.27.2
         version: 7.28.3(@babel/core@7.28.3)

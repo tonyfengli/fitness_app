@@ -21,6 +21,7 @@ import { useWorkoutMachineWithLighting } from '../components/workout-live/hooks/
 import { useLightingControl } from '../hooks/useLightingControl';
 import { useAudio } from '../hooks/useAudio';
 import { useMusicPlayer } from '../hooks/useMusicPlayer';
+import { useWorkoutMusic } from '../hooks/useWorkoutMusic';
 
 // Re-export MattePanel for backward compatibility
 export { MattePanel } from '../components/workout-live/MattePanel';
@@ -116,11 +117,13 @@ export function CircuitWorkoutLiveScreen() {
   // Initialize music player
   const {
     isPlaying: isMusicPlaying,
+    isEnabled: isMusicEnabled,
     currentTrack,
     pause: pauseMusic,
     resume: resumeMusic,
     start: startMusic,
     stop: stopMusic,
+    enable: enableMusic,
   } = useMusicPlayer();
 
   // Get circuit config with polling
@@ -277,16 +280,11 @@ export function CircuitWorkoutLiveScreen() {
   // Helper to check if any phase has lighting config for current round
   const hasLightingForAnyPhase = (roundIndex: number, phases: string[]) => {
     if (!lightingConfig) {
-      console.log('[Lighting] No lightingConfig available');
       return false;
     }
-    
-    console.log('[Lighting] Checking phases for round', roundIndex, 'phases:', phases);
-    console.log('[Lighting] lightingConfig:', lightingConfig);
-    
+
     return phases.some(phase => {
       const scene = getSceneForPhase(roundIndex, phase);
-      console.log(`[Lighting] Round ${roundIndex}, Phase ${phase}, Scene:`, scene);
       return scene !== null;
     });
   };
@@ -320,7 +318,14 @@ export function CircuitWorkoutLiveScreen() {
     },
     isStartedOverride: false // Don't use automatic lighting in machine
   });
-  
+
+  // Bridge workout state to music triggers (enabled when music system is on)
+  useWorkoutMusic({
+    workoutState: state,
+    circuitConfig,
+    enabled: isMusicEnabled,
+  });
+
   // Handle phase changes manually
   useEffect(() => {
     // console.log('[CircuitLive] Phase change effect:', {
@@ -660,7 +665,7 @@ export function CircuitWorkoutLiveScreen() {
                             />
                           </MattePanel>
                           {/* Indicator dot when panel is closed and has active states */}
-                          {!isSettingsPanelOpen && (isLightingEnabled || isMusicPlaying) && (
+                          {!isSettingsPanelOpen && (isLightingEnabled || isMusicEnabled) && (
                             <View style={{
                               position: 'absolute',
                               top: 8,
@@ -739,12 +744,12 @@ export function CircuitWorkoutLiveScreen() {
                         {/* Music Toggle */}
                         <Pressable
                           onPress={() => {
-                            if (isMusicPlaying) {
-                              pauseMusic();
-                            } else if (currentTrack) {
-                              resumeMusic();
+                            if (isMusicEnabled) {
+                              // Disable music - stops playback and ignores triggers
+                              stopMusic();
                             } else {
-                              startMusic();
+                              // Enable music - triggers will handle playback
+                              enableMusic();
                             }
                           }}
                           focusable={isSettingsPanelOpen}
@@ -758,19 +763,19 @@ export function CircuitWorkoutLiveScreen() {
                                 height: 44,
                                 alignItems: 'center',
                                 justifyContent: 'center',
-                                backgroundColor: isMusicPlaying ?
+                                backgroundColor: isMusicEnabled ?
                                   (focused ? 'rgba(124,255,181,0.25)' : 'rgba(124,255,181,0.12)') :
                                   (focused ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.06)'),
-                                borderColor: isMusicPlaying ?
+                                borderColor: isMusicEnabled ?
                                   TOKENS.color.accent :
                                   (focused ? 'rgba(255,255,255,0.25)' : 'transparent'),
-                                borderWidth: isMusicPlaying ? 1.5 : (focused ? 1 : 0),
+                                borderWidth: isMusicEnabled ? 1.5 : (focused ? 1 : 0),
                               }}
                             >
                               <Icon
-                                name={isMusicPlaying ? "music-note" : "music-off"}
+                                name={isMusicEnabled ? "music-note" : "music-off"}
                                 size={20}
-                                color={isMusicPlaying ? TOKENS.color.accent : TOKENS.color.text}
+                                color={isMusicEnabled ? TOKENS.color.accent : TOKENS.color.text}
                               />
                             </MattePanel>
                           )}
@@ -900,7 +905,7 @@ export function CircuitWorkoutLiveScreen() {
                         />
                       </MattePanel>
                       {/* Indicator dot when panel is closed and has active states */}
-                      {!isSettingsPanelOpen && (isLightingEnabled || isMusicPlaying) && (
+                      {!isSettingsPanelOpen && (isLightingEnabled || isMusicEnabled) && (
                         <View style={{
                           position: 'absolute',
                           top: 8,
@@ -979,12 +984,12 @@ export function CircuitWorkoutLiveScreen() {
                     {/* Music Toggle */}
                     <Pressable
                       onPress={() => {
-                        if (isMusicPlaying) {
-                          pauseMusic();
-                        } else if (currentTrack) {
-                          resumeMusic();
+                        if (isMusicEnabled) {
+                          // Disable music - stops playback and ignores triggers
+                          stopMusic();
                         } else {
-                          startMusic();
+                          // Enable music - triggers will handle playback
+                          enableMusic();
                         }
                       }}
                       focusable={isSettingsPanelOpen}
@@ -998,19 +1003,19 @@ export function CircuitWorkoutLiveScreen() {
                             height: 44,
                             alignItems: 'center',
                             justifyContent: 'center',
-                            backgroundColor: isMusicPlaying ?
+                            backgroundColor: isMusicEnabled ?
                               (focused ? 'rgba(124,255,181,0.25)' : 'rgba(124,255,181,0.12)') :
                               (focused ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.06)'),
-                            borderColor: isMusicPlaying ?
+                            borderColor: isMusicEnabled ?
                               TOKENS.color.accent :
                               (focused ? 'rgba(255,255,255,0.25)' : 'transparent'),
-                            borderWidth: isMusicPlaying ? 1.5 : (focused ? 1 : 0),
+                            borderWidth: isMusicEnabled ? 1.5 : (focused ? 1 : 0),
                           }}
                         >
                           <Icon
-                            name={isMusicPlaying ? "music-note" : "music-off"}
+                            name={isMusicEnabled ? "music-note" : "music-off"}
                             size={20}
-                            color={isMusicPlaying ? TOKENS.color.accent : TOKENS.color.text}
+                            color={isMusicEnabled ? TOKENS.color.accent : TOKENS.color.text}
                           />
                         </MattePanel>
                       )}
@@ -1168,11 +1173,10 @@ export function CircuitWorkoutLiveScreen() {
               onToggleSettingsPanel={toggleSettingsPanel}
               onCloseSettingsPanel={() => setIsSettingsPanelOpen(false)}
               // Music props
-              isMusicPlaying={isMusicPlaying}
+              isMusicEnabled={isMusicEnabled}
               currentTrack={currentTrack}
-              onPauseMusic={pauseMusic}
-              onResumeMusic={resumeMusic}
-              onStartMusic={startMusic}
+              onStopMusic={stopMusic}
+              onEnableMusic={enableMusic}
             />
           </View>
 

@@ -11,8 +11,9 @@ import {
 
 import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
 import { getSessionUserWithBusiness } from "../utils/session";
+import { generateMinimalMusicConfig } from "../services/music-selection-service";
 
-// Helper to ensure round templates exist in config
+// Helper to ensure round templates exist in config and have music defaults
 function ensureRoundTemplates(config: any) {
   // If roundTemplates already exist, normalize them
   if (config.config?.roundTemplates?.length > 0) {
@@ -21,42 +22,40 @@ function ensureRoundTemplates(config: any) {
       config: {
         ...config.config,
         roundTemplates: config.config.roundTemplates.map((rt: any) => {
+          let processedRound = rt;
+
           if (rt.template.type === 'circuit_round') {
-            return {
+            processedRound = {
               ...rt,
               template: {
                 ...rt.template,
                 // Ensure all values are explicitly set (including 0)
-                workDuration: rt.template.workDuration !== undefined 
-                  ? rt.template.workDuration 
+                workDuration: rt.template.workDuration !== undefined
+                  ? rt.template.workDuration
                   : (config.config.workDuration !== undefined ? config.config.workDuration : 45),
-                restDuration: rt.template.restDuration !== undefined 
-                  ? rt.template.restDuration 
+                restDuration: rt.template.restDuration !== undefined
+                  ? rt.template.restDuration
                   : (config.config.restDuration !== undefined ? config.config.restDuration : 0),
                 repeatTimes: rt.template.repeatTimes ?? 1,
                 restBetweenSets: rt.template.restBetweenSets ?? 60,
               }
             };
           } else if (rt.template.type === 'stations_round') {
-            
-            const processedTemplate = {
+            processedRound = {
               ...rt,
               template: {
                 ...rt.template,
-                workDuration: rt.template.workDuration !== undefined 
-                  ? rt.template.workDuration 
+                workDuration: rt.template.workDuration !== undefined
+                  ? rt.template.workDuration
                   : (config.config.workDuration !== undefined ? config.config.workDuration : 60),
-                restDuration: rt.template.restDuration !== undefined 
-                  ? rt.template.restDuration 
+                restDuration: rt.template.restDuration !== undefined
+                  ? rt.template.restDuration
                   : (config.config.restDuration !== undefined ? config.config.restDuration : 15),
                 repeatTimes: rt.template.repeatTimes ?? 1,
               }
             };
-            
-            
-            return processedTemplate;
           } else if (rt.template.type === 'amrap_round') {
-            return {
+            processedRound = {
               ...rt,
               template: {
                 ...rt.template,
@@ -64,29 +63,44 @@ function ensureRoundTemplates(config: any) {
               }
             };
           }
-          return rt;
+
+          // Add music config if missing
+          if (!processedRound.music) {
+            processedRound = {
+              ...processedRound,
+              music: generateMinimalMusicConfig(processedRound.template),
+            };
+          }
+
+          return processedRound;
         }),
       },
     };
   }
-  
+
   // Otherwise create round templates from legacy fields
   const rounds = config.config?.rounds ?? 3;
   const exercisesPerRound = config.config?.exercisesPerRound ?? 6;
   // Use explicit checks for 0 values
   const workDuration = config.config?.workDuration !== undefined ? config.config.workDuration : 45;
   const restDuration = config.config?.restDuration !== undefined ? config.config.restDuration : 0;
-  
+
+  // Create round templates with music config
+  const roundTemplates = createDefaultRoundTemplates(
+    rounds,
+    exercisesPerRound,
+    workDuration,
+    restDuration
+  ).map(rt => ({
+    ...rt,
+    music: generateMinimalMusicConfig(rt.template),
+  }));
+
   return {
     ...config,
     config: {
       ...config.config,
-      roundTemplates: createDefaultRoundTemplates(
-        rounds,
-        exercisesPerRound,
-        workDuration,
-        restDuration
-      ),
+      roundTemplates,
     },
   };
 }
@@ -909,10 +923,12 @@ export const circuitConfigRouter = createTRPCRouter({
         const newRoundTemplate = {
           roundNumber: newRoundNumber,
           template,
+          music: generateMinimalMusicConfig(template),
         };
 
         console.log("[addRound] Built template:", template);
         console.log("[addRound] New round template:", newRoundTemplate);
+        console.log("[addRound] Music config:", newRoundTemplate.music);
         console.log("[addRound DEBUG] Template timing values:", {
           workDuration: template.workDuration,
           restDuration: template.restDuration,

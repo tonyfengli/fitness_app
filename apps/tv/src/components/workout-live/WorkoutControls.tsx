@@ -22,11 +22,10 @@ interface WorkoutControlsProps {
   onToggleSettingsPanel?: () => void;
   onCloseSettingsPanel?: () => void; // Close without animation (for navigation)
   // Music props
-  isMusicPlaying?: boolean;
+  isMusicEnabled?: boolean;
   currentTrack?: any;
-  onPauseMusic?: () => void;
-  onResumeMusic?: () => void;
-  onStartMusic?: () => void;
+  onStopMusic?: () => void;
+  onEnableMusic?: () => void;
 }
 
 export function WorkoutControls({
@@ -40,11 +39,10 @@ export function WorkoutControls({
   isSettingsPanelOpen = false,
   onToggleSettingsPanel,
   onCloseSettingsPanel,
-  isMusicPlaying = false,
+  isMusicEnabled = false,
   currentTrack = null,
-  onPauseMusic,
-  onResumeMusic,
-  onStartMusic,
+  onStopMusic,
+  onEnableMusic,
 }: WorkoutControlsProps) {
   const handleBack = () => {
     // Close panel without animation to avoid LayoutAnimation conflicts
@@ -71,12 +69,12 @@ export function WorkoutControls({
   };
 
   const handleMusicToggle = () => {
-    if (isMusicPlaying) {
-      onPauseMusic?.();
-    } else if (currentTrack) {
-      onResumeMusic?.();
+    if (isMusicEnabled) {
+      // Disable music - stops playback and ignores triggers
+      onStopMusic?.();
     } else {
-      onStartMusic?.();
+      // Enable music - triggers will handle playback
+      onEnableMusic?.();
     }
   };
 
@@ -279,7 +277,7 @@ export function WorkoutControls({
                   />
                 </MattePanel>
                 {/* Indicator dot when panel is closed and has active states */}
-                {!isSettingsPanelOpen && (isLightingEnabled || isMusicPlaying) && (
+                {!isSettingsPanelOpen && (isLightingEnabled || isMusicEnabled) && (
                   <View style={{
                     position: 'absolute',
                     top: 8,
@@ -364,23 +362,23 @@ export function WorkoutControls({
                       height: 44,
                       alignItems: 'center',
                       justifyContent: 'center',
-                      backgroundColor: isMusicPlaying ?
+                      backgroundColor: isMusicEnabled ?
                         (focused ? 'rgba(93,225,255,0.25)' : 'rgba(93,225,255,0.12)') :
                         (focused ?
                           (isStationsExercise ? 'rgba(255,179,102,0.2)' : 'rgba(255,255,255,0.15)') :
                           (isStationsExercise ? 'rgba(255,179,102,0.1)' : 'rgba(255,255,255,0.06)')),
-                      borderColor: isMusicPlaying ?
+                      borderColor: isMusicEnabled ?
                         TOKENS.color.accent2 :
                         (focused ?
                           (isStationsExercise ? 'rgba(255,179,102,0.4)' : 'rgba(255,255,255,0.25)') :
                           'transparent'),
-                      borderWidth: isMusicPlaying ? 1.5 : (focused ? 1 : 0),
+                      borderWidth: isMusicEnabled ? 1.5 : (focused ? 1 : 0),
                     }}
                   >
                     <Icon
-                      name={isMusicPlaying ? "music-note" : "music-off"}
+                      name={isMusicEnabled ? "music-note" : "music-off"}
                       size={20}
-                      color={isMusicPlaying ? TOKENS.color.accent2 : (isStationsExercise ? '#fff5e6' : TOKENS.color.text)}
+                      color={isMusicEnabled ? TOKENS.color.accent2 : (isStationsExercise ? '#fff5e6' : TOKENS.color.text)}
                     />
                   </MattePanel>
                 )}

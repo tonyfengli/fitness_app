@@ -34,6 +34,7 @@ import { assignExerciseTiers, type ExerciseWithTier } from "../utils/exerciseTie
 import { buildAllowedSlots, type AllowedSlotsResult } from "../utils/buildAllowedSlots";
 import { getBusinessEquipmentCapacity, type EquipmentCapacityMap } from "../config/equipmentCapacity";
 import { WorkoutGenerationService } from "../services/workout-generation-service";
+import { generateMinimalMusicConfig } from "../services/music-selection-service";
 
 // Helper function to calculate score distribution
 function calculateScoreDistribution(
@@ -397,8 +398,19 @@ export const trainingSessionRouter = {
       // Add default circuit config for circuit templates
       if (input.templateType === "circuit") {
         const { DEFAULT_CIRCUIT_CONFIG } = await import("@acme/db");
+
+        // Add music config to each round template
+        const roundTemplatesWithMusic = DEFAULT_CIRCUIT_CONFIG.config.roundTemplates.map(rt => ({
+          ...rt,
+          music: generateMinimalMusicConfig(rt.template),
+        }));
+
         sessionData.templateConfig = {
           ...DEFAULT_CIRCUIT_CONFIG,
+          config: {
+            ...DEFAULT_CIRCUIT_CONFIG.config,
+            roundTemplates: roundTemplatesWithMusic,
+          },
           lastUpdated: new Date(),
           updatedBy: user.id,
         };
@@ -5013,6 +5025,12 @@ Set your goals and preferences for today's session.`;
       const { DEFAULT_CIRCUIT_CONFIG, EMPTY_CIRCUIT_CONFIG } = await import("@acme/db");
       const selectedConfig = input.startFromScratch ? EMPTY_CIRCUIT_CONFIG : DEFAULT_CIRCUIT_CONFIG;
 
+      // Add music config to round templates (if any exist)
+      const roundTemplatesWithMusic = selectedConfig.config.roundTemplates.map(rt => ({
+        ...rt,
+        music: generateMinimalMusicConfig(rt.template),
+      }));
+
       // Create the session data
       const sessionData = {
         businessId: HARDCODED_BUSINESS_ID,
@@ -5025,6 +5043,10 @@ Set your goals and preferences for today's session.`;
         templateType: "circuit" as const,
         templateConfig: {
           ...selectedConfig,
+          config: {
+            ...selectedConfig.config,
+            roundTemplates: roundTemplatesWithMusic,
+          },
           lastUpdated: new Date(),
           updatedBy: HARDCODED_TRAINER_ID,
         }

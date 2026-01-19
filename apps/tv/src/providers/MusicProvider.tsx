@@ -13,19 +13,29 @@ interface MusicContextValue {
   isEnabled: boolean;
   isPaused: boolean;
   currentTrack: MusicTrack | null;
+  currentEnergy: 'high' | 'low' | null;
   error: string | null;
   isSyncing: boolean;
   syncResult: SyncResult | null;
+  tracks: MusicTrack[];
 
   // Actions
   start: () => Promise<void>;
   stop: () => Promise<void>;
+  enable: () => void;  // Enable without playing (lets triggers handle playback)
   pause: () => void;
   resume: () => void;
   toggle: () => void;
   skipNext: () => Promise<void>;
   skipBack: () => Promise<void>;
   syncMusic: () => Promise<void>;
+
+  // Trigger-based playback
+  playWithTrigger: (options: {
+    energy: 'high' | 'low';
+    useStartTimestamp?: boolean;
+    trackId?: string;
+  }) => Promise<void>;
 }
 
 const MusicContext = createContext<MusicContextValue | null>(null);
@@ -36,6 +46,7 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
   const [isEnabled, setIsEnabled] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [currentTrack, setCurrentTrack] = useState<MusicTrack | null>(null);
+  const [currentEnergy, setCurrentEnergy] = useState<'high' | 'low' | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // Sync state
@@ -45,6 +56,8 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
   // Track history for skip back (persists across screen transitions)
   const playedTracksHistory = useRef<MusicTrack[]>([]);
   const isStartingRef = useRef(false);
+  // Track when we're switching tracks (to ignore 'stopped' events during switch)
+  const isSwitchingTrackRef = useRef(false);
   const pendingStart = useRef(false);
 
   // Cached tracks from AsyncStorage
@@ -96,62 +109,167 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     return [];
   }, [apiTracks, isLoading, queryError, cachedTracks]);
 
-  // Play next random track
-  const playNextTrack = useCallback(async () => {
+  // Play next random track (optionally filtered by energy)
+  const playNextTrack = useCallback(async (options?: {
+    energy?: 'high' | 'low';
+    useStartTimestamp?: boolean;
+  }) => {
+    console.log(`[MusicProvider] playNextTrack called:`, { options, totalTracks: tracks.length });
+
+    // Guard against concurrent play calls
+    if (isStartingRef.current) {
+      console.log(`[MusicProvider] Skipping playNextTrack - already starting a track`);
+      return;
+    }
+
     if (!tracks || tracks.length === 0) {
+      console.log(`[MusicProvider] No tracks available!`);
       setError('No music tracks available');
       return;
     }
 
+    // Mark as starting to prevent concurrent calls
+    isStartingRef.current = true;
+
+    const targetEnergy = options?.energy;
+    const useStartTimestamp = options?.useStartTimestamp ?? false;
+
+    // Filter by energy if specified
+    let trackPool = targetEnergy
+      ? tracks.filter(t => t.energy === targetEnergy)
+      : tracks;
+
+    console.log(`[MusicProvider] Energy filter: ${targetEnergy || 'none'}, pool size: ${trackPool.length}`);
+
+    // Fallback to all tracks if no tracks match the energy
+    if (trackPool.length === 0) {
+      console.log(`[MusicProvider] No ${targetEnergy} energy tracks, falling back to all tracks`);
+      trackPool = tracks;
+    }
+
     // Get IDs of recently played tracks
     const recentlyPlayedIds = new Set(
-      playedTracksHistory.current.slice(-Math.max(0, tracks.length - 1)).map(t => t.id)
+      playedTracksHistory.current.slice(-Math.max(0, trackPool.length - 1)).map(t => t.id)
     );
 
-    let availableTracks = tracks.filter(t => !recentlyPlayedIds.has(t.id));
+    let availableTracks = trackPool.filter(t => !recentlyPlayedIds.has(t.id));
 
     if (availableTracks.length === 0) {
       playedTracksHistory.current = [];
-      availableTracks = tracks;
+      availableTracks = trackPool;
     }
 
     const randomIndex = Math.floor(Math.random() * availableTracks.length);
     const track = availableTracks[randomIndex];
 
     if (track) {
+      console.log(`[MusicProvider] 🎶 Selected track: "${track.name}" (${track.energy} energy), useStartTimestamp: ${useStartTimestamp}`);
       try {
         playedTracksHistory.current.push(track);
         setIsPaused(false);
-        await musicService.play(track, false);
+        setCurrentEnergy(track.energy);
+        // Mark that we're switching tracks so 'stopped' event is ignored
+        isSwitchingTrackRef.current = true;
+        await musicService.play(track, useStartTimestamp);
         setError(null);
       } catch (err) {
+        console.error(`[MusicProvider] Error playing track:`, err);
         setError(err instanceof Error ? err.message : 'Failed to play track');
+        // Clear the switching flag on error
+        isSwitchingTrackRef.current = false;
+      } finally {
+        // Clear the starting flag so next play can proceed
+        isStartingRef.current = false;
       }
+    } else {
+      console.log(`[MusicProvider] No track selected from pool of ${availableTracks.length}`);
+      isStartingRef.current = false;
     }
   }, [tracks]);
+
+  // Play a specific track by ID or random track with energy filter
+  const playWithTrigger = useCallback(async (options: {
+    energy: 'high' | 'low';
+    useStartTimestamp?: boolean;
+    trackId?: string;
+  }) => {
+    const { energy, useStartTimestamp = false, trackId } = options;
+
+    console.log(`[MusicProvider] 🎵 playWithTrigger called:`, { energy, useStartTimestamp, trackId, availableTracks: tracks.length });
+
+    // Guard against concurrent play calls
+    if (isStartingRef.current) {
+      console.log(`[MusicProvider] Skipping playWithTrigger - already starting a track`);
+      return;
+    }
+
+    // If a specific track is requested, try to find and play it
+    if (trackId) {
+      const specificTrack = tracks.find(t => t.id === trackId);
+      if (specificTrack) {
+        isStartingRef.current = true;
+        try {
+          console.log(`[MusicProvider] Playing specific track:`, specificTrack.name);
+          playedTracksHistory.current.push(specificTrack);
+          setIsPaused(false);
+          setCurrentEnergy(specificTrack.energy);
+          setIsEnabled(true);
+          // Mark that we're switching tracks so 'stopped' event is ignored
+          isSwitchingTrackRef.current = true;
+          await musicService.play(specificTrack, useStartTimestamp);
+          setError(null);
+          return;
+        } catch (err) {
+          console.warn(`[MusicProvider] Failed to play specific track ${trackId}, falling back to energy-based selection`);
+          // Clear the switching flag on error before falling back
+          isSwitchingTrackRef.current = false;
+        } finally {
+          isStartingRef.current = false;
+        }
+      } else {
+        console.warn(`[MusicProvider] Track ${trackId} not found, falling back to energy-based selection`);
+      }
+    }
+
+    // Play random track with energy filter
+    console.log(`[MusicProvider] Playing random ${energy} energy track`);
+    setIsEnabled(true);
+    await playNextTrack({ energy, useStartTimestamp });
+  }, [tracks, playNextTrack]);
 
   // Subscribe to MusicService events (single subscription at provider level)
   useEffect(() => {
     const unsubscribe = musicService.addEventListener((event) => {
       switch (event.type) {
         case 'trackStart':
+          // Clear the switching flag now that new track has started
+          isSwitchingTrackRef.current = false;
           setIsPlaying(true);
           setCurrentTrack(event.track || null);
+          if (event.track?.energy) {
+            setCurrentEnergy(event.track.energy);
+          }
           break;
         case 'trackEnd':
           setCurrentTrack(null);
-          // Auto-play next track if enabled
+          // Auto-play next track if enabled, maintaining current energy level
           if (isEnabled) {
-            playNextTrack();
+            playNextTrack({ energy: currentEnergy ?? undefined });
           } else {
             setIsPlaying(false);
           }
           break;
         case 'stopped':
+          // Ignore 'stopped' events during track switching (internal stop before new track)
+          if (isSwitchingTrackRef.current) {
+            console.log(`[MusicProvider] Ignoring 'stopped' event during track switch`);
+            break;
+          }
           // Handle external stop calls (e.g., from navigation)
           setIsPlaying(false);
           setIsPaused(false);
           setCurrentTrack(null);
+          setCurrentEnergy(null);
           setIsEnabled(false);
           break;
         case 'error':
@@ -162,10 +280,11 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     });
 
     return unsubscribe;
-  }, [isEnabled, playNextTrack]);
+  }, [isEnabled, playNextTrack, currentEnergy]);
 
   // Start music
   const start = useCallback(async () => {
+    // Guard handled by playNextTrack, but also check isPlaying
     if (isStartingRef.current || isPlaying) return;
 
     if (tracks.length === 0) {
@@ -174,16 +293,11 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    isStartingRef.current = true;
     pendingStart.current = false;
     setIsEnabled(true);
     setError(null);
 
-    try {
-      await playNextTrack();
-    } finally {
-      isStartingRef.current = false;
-    }
+    await playNextTrack();
   }, [tracks.length, isPlaying, playNextTrack]);
 
   // Auto-start when tracks become available
@@ -201,6 +315,12 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     await musicService.stop();
     setIsPlaying(false);
     setCurrentTrack(null);
+  }, []);
+
+  // Enable music without playing (lets useWorkoutMusic triggers handle playback)
+  const enable = useCallback(() => {
+    setIsEnabled(true);
+    setError(null);
   }, []);
 
   // Pause music
@@ -286,17 +406,21 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     isEnabled,
     isPaused,
     currentTrack,
+    currentEnergy,
     error,
     isSyncing,
     syncResult,
+    tracks,
     start,
     stop,
+    enable,
     pause,
     resume,
     toggle,
     skipNext,
     skipBack,
     syncMusic,
+    playWithTrigger,
   };
 
   return (

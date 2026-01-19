@@ -89,6 +89,28 @@ export default function CircuitConfigPage() {
     }, []),
   });
 
+  // Debug logging for music config on initial load
+  useEffect(() => {
+    if (initialConfig?.config?.roundTemplates) {
+      console.log('[MusicConfig Debug - circuit-config page] Initial config loaded:', {
+        sessionId,
+        totalRounds: initialConfig.config.roundTemplates.length,
+        roundTemplates: initialConfig.config.roundTemplates.map((rt: any) => ({
+          roundNumber: rt.roundNumber,
+          roundType: rt.template?.type,
+          hasMusic: !!rt.music,
+          music: rt.music ? {
+            roundPreview: rt.music.roundPreview,
+            exercisesCount: rt.music.exercises?.length || 0,
+            exercises: rt.music.exercises,
+            restsCount: rt.music.rests?.length || 0,
+            setBreaksCount: rt.music.setBreaks?.length || 0,
+          } : null,
+        })),
+      });
+    }
+  }, [initialConfig, sessionId]);
+
   // Initialize config from query result
   useEffect(() => {
     if (initialConfig) {

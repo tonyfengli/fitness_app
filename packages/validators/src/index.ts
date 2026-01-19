@@ -9,3 +9,6 @@ export const unused = z.string().describe(
 
 // Export circuit-config validators
 export * from "./circuit-config";
+
+// Export music trigger evaluation utilities
+export * from "./music-triggers";
