@@ -1097,7 +1097,7 @@ export function CircuitWorkoutLiveScreen() {
             ) : null}
 
             {/* RIGHT SIDE: Control Buttons */}
-            <WorkoutControls 
+            <WorkoutControls
               state={state}
               send={send}
               currentRoundType={currentRoundType}
@@ -1105,15 +1105,15 @@ export function CircuitWorkoutLiveScreen() {
               lightingConfig={lightingConfig}
               onToggleLighting={async () => {
                 if (!lightingConfig) return;
-                
+
                 const newState = !isLightingEnabled;
                 setIsLightingEnabled(newState);
-                
+
                 try {
                   if (newState) {
                     // Get appropriate scene for current state
-                    const phaseType = state.value === 'exercise' ? 'work' : 
-                                    state.value === 'rest' ? 'rest' : 
+                    const phaseType = state.value === 'exercise' ? 'work' :
+                                    state.value === 'rest' ? 'rest' :
                                     state.value === 'setBreak' ? 'rest' : 'preview';
                     const sceneId = getSceneForPhase(state.context.currentRoundIndex, phaseType);
                     await turnOn(sceneId || undefined);
@@ -1127,10 +1127,10 @@ export function CircuitWorkoutLiveScreen() {
               }}
               hasLightingForCurrentView={(() => {
                 if (!lightingConfig) return false;
-                
+
                 // Get the current phase based on current state
                 let currentPhase = state.value;
-                
+
                 if (state.value === 'roundPreview') {
                   currentPhase = 'preview';
                 } else if (state.value === 'exercise') {
@@ -1158,11 +1158,21 @@ export function CircuitWorkoutLiveScreen() {
                 } else if (state.value === 'setBreak') {
                   currentPhase = 'roundBreak';
                 }
-                
+
                 // Check if this specific phase has lighting configured
                 const scene = getSceneForPhase(state.context.currentRoundIndex, currentPhase);
                 return scene !== null;
               })()}
+              // Settings panel props
+              isSettingsPanelOpen={isSettingsPanelOpen}
+              onToggleSettingsPanel={toggleSettingsPanel}
+              onCloseSettingsPanel={() => setIsSettingsPanelOpen(false)}
+              // Music props
+              isMusicPlaying={isMusicPlaying}
+              currentTrack={currentTrack}
+              onPauseMusic={pauseMusic}
+              onResumeMusic={resumeMusic}
+              onStartMusic={startMusic}
             />
           </View>
 

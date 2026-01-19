@@ -1,29 +1,56 @@
 import React from 'react';
-import { View, Text, Pressable } from 'react-native';
+import { View, Text, Pressable, LayoutAnimation, Platform, UIManager } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { TOKENS } from './types';
 import { MattePanel } from './MattePanel';
 
+// Enable LayoutAnimation on Android
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
 interface WorkoutControlsProps {
-  state: any; // We'll type this more specifically in a later phase
+  state: any;
   send: (event: any) => void;
   currentRoundType?: 'circuit_round' | 'stations_round' | 'amrap_round';
   isLightingEnabled?: boolean;
   lightingConfig?: any;
   onToggleLighting?: () => Promise<void>;
   hasLightingForCurrentView?: boolean;
+  // Settings panel props
+  isSettingsPanelOpen?: boolean;
+  onToggleSettingsPanel?: () => void;
+  onCloseSettingsPanel?: () => void; // Close without animation (for navigation)
+  // Music props
+  isMusicPlaying?: boolean;
+  currentTrack?: any;
+  onPauseMusic?: () => void;
+  onResumeMusic?: () => void;
+  onStartMusic?: () => void;
 }
 
-export function WorkoutControls({ 
-  state, 
-  send, 
+export function WorkoutControls({
+  state,
+  send,
   currentRoundType,
   isLightingEnabled = false,
   lightingConfig = null,
   onToggleLighting,
-  hasLightingForCurrentView = false
+  hasLightingForCurrentView = false,
+  isSettingsPanelOpen = false,
+  onToggleSettingsPanel,
+  onCloseSettingsPanel,
+  isMusicPlaying = false,
+  currentTrack = null,
+  onPauseMusic,
+  onResumeMusic,
+  onStartMusic,
 }: WorkoutControlsProps) {
   const handleBack = () => {
+    // Close panel without animation to avoid LayoutAnimation conflicts
+    if (isSettingsPanelOpen && onCloseSettingsPanel) {
+      onCloseSettingsPanel();
+    }
     send({ type: 'BACK' });
   };
 
@@ -36,7 +63,31 @@ export function WorkoutControls({
   };
 
   const handleSkip = () => {
+    // Close panel without animation to avoid LayoutAnimation conflicts
+    if (isSettingsPanelOpen && onCloseSettingsPanel) {
+      onCloseSettingsPanel();
+    }
     send({ type: 'SKIP' });
+  };
+
+  const handleMusicToggle = () => {
+    if (isMusicPlaying) {
+      onPauseMusic?.();
+    } else if (currentTrack) {
+      onResumeMusic?.();
+    } else {
+      onStartMusic?.();
+    }
+  };
+
+  const toggleSettingsPanel = () => {
+    LayoutAnimation.configureNext({
+      duration: 200,
+      update: { type: LayoutAnimation.Types.easeInEaseOut },
+      create: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
+      delete: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
+    });
+    onToggleSettingsPanel?.();
   };
 
   // Only show controls during exercise, rest, or setBreak states
@@ -44,19 +95,31 @@ export function WorkoutControls({
     return null;
   }
 
+  // Check if we should show settings panel for this view
+  // Stations: rest, work (exercise), set break
+  // Circuit: rest, work (exercise), set break
+  // AMRAP: work (exercise) only
+  const shouldShowSettings =
+    currentRoundType === 'stations_round' ||
+    currentRoundType === 'circuit_round' ||
+    (currentRoundType === 'amrap_round' && state.value === 'exercise');
+
+  // Theming for stations exercise state
+  const isStationsExercise = currentRoundType === 'stations_round' && state.value === 'exercise';
+
   // Exact match to old implementation styling
   return (
     <View style={{ position: 'relative' }}>
-      <View style={{ 
+      <View style={{
         flexDirection: 'row',
-        backgroundColor: currentRoundType === 'stations_round' && state.value === 'exercise' 
+        backgroundColor: isStationsExercise
           ? 'rgba(255,179,102,0.08)' // Warm orange tint for stations exercise
           : 'rgba(255,255,255,0.05)', // Clean white for everything else
         borderRadius: 32,
         padding: 6,
         gap: 4,
         borderWidth: 1,
-        borderColor: currentRoundType === 'stations_round' && state.value === 'exercise'
+        borderColor: isStationsExercise
           ? 'rgba(255,179,102,0.15)' // Subtle orange border for stations
           : 'rgba(255,255,255,0.1)', // Subtle white border for others
         zIndex: 1,
@@ -69,168 +132,263 @@ export function WorkoutControls({
       {/* Back */}
       <Pressable onPress={handleBack} focusable>
         {({ focused }) => (
-          <MattePanel 
+          <MattePanel
             focused={focused}
             radius={26}
-            style={{ 
+            style={{
               width: 52,
               height: 44,
               alignItems: 'center',
               justifyContent: 'center',
-              backgroundColor: focused ? 
-                (currentRoundType === 'stations_round' && state.value === 'exercise' 
-                  ? 'rgba(255,179,102,0.2)' 
-                  : 'rgba(255,255,255,0.15)') : 
-                (currentRoundType === 'stations_round' && state.value === 'exercise'
+              backgroundColor: focused ?
+                (isStationsExercise
+                  ? 'rgba(255,179,102,0.2)'
+                  : 'rgba(255,255,255,0.15)') :
+                (isStationsExercise
                   ? 'rgba(255,179,102,0.1)'
                   : 'rgba(255,255,255,0.08)'),
-              borderColor: focused ? 
-                (currentRoundType === 'stations_round' && state.value === 'exercise'
+              borderColor: focused ?
+                (isStationsExercise
                   ? 'rgba(255,179,102,0.4)'
-                  : 'rgba(255,255,255,0.3)') 
+                  : 'rgba(255,255,255,0.3)')
                 : 'transparent',
               borderWidth: focused ? 1.5 : 0,
             }}
           >
-            <Icon 
-              name="skip-previous" 
-              size={22} 
-              color={currentRoundType === 'stations_round' && state.value === 'exercise' 
-                ? '#fff5e6' 
+            <Icon
+              name="skip-previous"
+              size={22}
+              color={isStationsExercise
+                ? '#fff5e6'
                 : TOKENS.color.text}
             />
           </MattePanel>
         )}
       </Pressable>
-      
+
       {/* Pause/Play */}
       <Pressable onPress={handlePause} focusable>
         {({ focused }) => (
-          <MattePanel 
+          <MattePanel
             focused={focused}
             radius={26}
-            style={{ 
+            style={{
               width: 56, // Slightly wider for play/pause button
               height: 44,
               alignItems: 'center',
               justifyContent: 'center',
-              backgroundColor: focused ? 
-                (currentRoundType === 'stations_round' && state.value === 'exercise' 
-                  ? 'rgba(255,179,102,0.2)' 
-                  : 'rgba(255,255,255,0.15)') : 
-                (currentRoundType === 'stations_round' && state.value === 'exercise'
+              backgroundColor: focused ?
+                (isStationsExercise
+                  ? 'rgba(255,179,102,0.2)'
+                  : 'rgba(255,255,255,0.15)') :
+                (isStationsExercise
                   ? 'rgba(255,179,102,0.1)'
                   : 'rgba(255,255,255,0.08)'),
-              borderColor: focused ? 
-                (currentRoundType === 'stations_round' && state.value === 'exercise'
+              borderColor: focused ?
+                (isStationsExercise
                   ? 'rgba(255,179,102,0.4)'
-                  : 'rgba(255,255,255,0.3)') 
+                  : 'rgba(255,255,255,0.3)')
                 : 'transparent',
               borderWidth: focused ? 1.5 : 0,
             }}
           >
-            <Icon 
-              name={state.context.isPaused ? "play-arrow" : "pause"} 
+            <Icon
+              name={state.context.isPaused ? "play-arrow" : "pause"}
               size={26} // Larger icon for play/pause
-              color={currentRoundType === 'stations_round' && state.value === 'exercise' 
-                ? '#fff5e6' 
+              color={isStationsExercise
+                ? '#fff5e6'
                 : TOKENS.color.text}
             />
           </MattePanel>
         )}
       </Pressable>
-      
+
       {/* Skip Forward */}
       <Pressable onPress={handleSkip} focusable>
         {({ focused }) => (
-          <MattePanel 
+          <MattePanel
             focused={focused}
             radius={26}
-            style={{ 
+            style={{
               width: 52,
               height: 44,
               alignItems: 'center',
               justifyContent: 'center',
-              backgroundColor: focused ? 
-                (currentRoundType === 'stations_round' && state.value === 'exercise' 
-                  ? 'rgba(255,179,102,0.2)' 
-                  : 'rgba(255,255,255,0.15)') : 
-                (currentRoundType === 'stations_round' && state.value === 'exercise'
+              backgroundColor: focused ?
+                (isStationsExercise
+                  ? 'rgba(255,179,102,0.2)'
+                  : 'rgba(255,255,255,0.15)') :
+                (isStationsExercise
                   ? 'rgba(255,179,102,0.1)'
                   : 'rgba(255,255,255,0.08)'),
-              borderColor: focused ? 
-                (currentRoundType === 'stations_round' && state.value === 'exercise'
+              borderColor: focused ?
+                (isStationsExercise
                   ? 'rgba(255,179,102,0.4)'
-                  : 'rgba(255,255,255,0.3)') 
+                  : 'rgba(255,255,255,0.3)')
                 : 'transparent',
               borderWidth: focused ? 1.5 : 0,
             }}
           >
-            <Icon 
-              name="skip-next" 
-              size={22} 
-              color={currentRoundType === 'stations_round' && state.value === 'exercise' 
-                ? '#fff5e6' 
+            <Icon
+              name="skip-next"
+              size={22}
+              color={isStationsExercise
+                ? '#fff5e6'
                 : TOKENS.color.text}
             />
           </MattePanel>
         )}
       </Pressable>
-      
-      {/* Lighting Control */}
-      <Pressable
-        onPress={async () => {
-          if (!onToggleLighting) return;
-          await onToggleLighting();
-        }}
-        focusable
-      >
-        {({ focused }) => (
-          <MattePanel 
-            focused={focused}
-            radius={26}
-            style={{ 
-              width: 52,
-              height: 44,
-              alignItems: 'center',
-              justifyContent: 'center',
-              backgroundColor: isLightingEnabled ? 
-                (focused ? 'rgba(0,183,194,0.2)' : 'rgba(0,183,194,0.1)') :
-                (focused ? 
-                  (currentRoundType === 'stations_round' && state.value === 'exercise' 
-                    ? 'rgba(255,179,102,0.2)' 
-                    : 'rgba(255,255,255,0.15)') : 
-                  (currentRoundType === 'stations_round' && state.value === 'exercise'
-                    ? 'rgba(255,179,102,0.1)'
-                    : 'rgba(255,255,255,0.08)')),
-              borderColor: isLightingEnabled ? 
-                TOKENS.color.accent : 
-                (focused ? 
-                  (currentRoundType === 'stations_round' && state.value === 'exercise'
-                    ? 'rgba(255,179,102,0.4)'
-                    : 'rgba(255,255,255,0.3)') 
-                  : 'transparent'),
-              borderWidth: isLightingEnabled ? 1.5 : (focused ? 1.5 : 0),
-            }}
+
+      {/* Settings Button - only for applicable views */}
+      {shouldShowSettings && (
+        <>
+          <Pressable
+            onPress={toggleSettingsPanel}
+            focusable
           >
-            <Icon 
-              name={isLightingEnabled ? "lightbulb" : "lightbulb-outline"} 
-              size={22} 
-              color={isLightingEnabled ? 
-                TOKENS.color.accent : 
-                (currentRoundType === 'stations_round' && state.value === 'exercise' 
-                  ? '#fff5e6' 
-                  : TOKENS.color.text)}
-              style={{
-                shadowColor: isLightingEnabled ? TOKENS.color.accent : 'transparent',
-                shadowOpacity: isLightingEnabled ? 0.8 : 0,
-                shadowRadius: isLightingEnabled ? 15 : 0,
-                shadowOffset: { width: 0, height: 0 },
-              }}
-            />
-          </MattePanel>
-        )}
-      </Pressable>
+            {({ focused }) => (
+              <View style={{ position: 'relative' }}>
+                <MattePanel
+                  focused={focused}
+                  radius={26}
+                  style={{
+                    width: 52,
+                    height: 44,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: focused ?
+                      (isStationsExercise
+                        ? 'rgba(255,179,102,0.2)'
+                        : 'rgba(255,255,255,0.15)') :
+                      (isStationsExercise
+                        ? 'rgba(255,179,102,0.1)'
+                        : 'rgba(255,255,255,0.08)'),
+                    borderColor: focused ?
+                      (isStationsExercise
+                        ? 'rgba(255,179,102,0.4)'
+                        : 'rgba(255,255,255,0.3)')
+                      : 'transparent',
+                    borderWidth: focused ? 1.5 : 0,
+                  }}
+                >
+                  <Icon
+                    name="settings"
+                    size={22}
+                    color={isStationsExercise ? '#fff5e6' : TOKENS.color.text}
+                  />
+                </MattePanel>
+                {/* Indicator dot when panel is closed and has active states */}
+                {!isSettingsPanelOpen && (isLightingEnabled || isMusicPlaying) && (
+                  <View style={{
+                    position: 'absolute',
+                    top: 8,
+                    right: 8,
+                    width: 6,
+                    height: 6,
+                    borderRadius: 3,
+                    backgroundColor: TOKENS.color.accent,
+                    opacity: 0.5,
+                  }} />
+                )}
+              </View>
+            )}
+          </Pressable>
+
+          {/* Expandable Settings Panel */}
+          {isSettingsPanelOpen && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', overflow: 'hidden' }}>
+              {/* Divider */}
+              <View style={{
+                width: 1,
+                height: 24,
+                backgroundColor: isStationsExercise
+                  ? 'rgba(255,179,102,0.25)'
+                  : 'rgba(255,255,255,0.15)',
+                marginLeft: 4,
+                marginRight: 8,
+              }} />
+
+              {/* Lights Button */}
+              <Pressable
+                onPress={async () => {
+                  if (onToggleLighting) {
+                    await onToggleLighting();
+                  }
+                }}
+                focusable={isSettingsPanelOpen}
+                style={{ marginRight: 6 }}
+              >
+                {({ focused }) => (
+                  <MattePanel
+                    focused={focused}
+                    radius={22}
+                    style={{
+                      width: 44,
+                      height: 44,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      backgroundColor: isLightingEnabled ?
+                        (focused ? 'rgba(93,225,255,0.25)' : 'rgba(93,225,255,0.12)') :
+                        (focused ?
+                          (isStationsExercise ? 'rgba(255,179,102,0.2)' : 'rgba(255,255,255,0.15)') :
+                          (isStationsExercise ? 'rgba(255,179,102,0.1)' : 'rgba(255,255,255,0.06)')),
+                      borderColor: isLightingEnabled ?
+                        TOKENS.color.accent2 :
+                        (focused ?
+                          (isStationsExercise ? 'rgba(255,179,102,0.4)' : 'rgba(255,255,255,0.25)') :
+                          'transparent'),
+                      borderWidth: isLightingEnabled ? 1.5 : (focused ? 1 : 0),
+                    }}
+                  >
+                    <Icon
+                      name={isLightingEnabled ? "lightbulb" : "lightbulb-outline"}
+                      size={20}
+                      color={isLightingEnabled ? TOKENS.color.accent2 : (isStationsExercise ? '#fff5e6' : TOKENS.color.text)}
+                    />
+                  </MattePanel>
+                )}
+              </Pressable>
+
+              {/* Music Toggle */}
+              <Pressable
+                onPress={handleMusicToggle}
+                focusable={isSettingsPanelOpen}
+              >
+                {({ focused }) => (
+                  <MattePanel
+                    focused={focused}
+                    radius={22}
+                    style={{
+                      width: 44,
+                      height: 44,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      backgroundColor: isMusicPlaying ?
+                        (focused ? 'rgba(93,225,255,0.25)' : 'rgba(93,225,255,0.12)') :
+                        (focused ?
+                          (isStationsExercise ? 'rgba(255,179,102,0.2)' : 'rgba(255,255,255,0.15)') :
+                          (isStationsExercise ? 'rgba(255,179,102,0.1)' : 'rgba(255,255,255,0.06)')),
+                      borderColor: isMusicPlaying ?
+                        TOKENS.color.accent2 :
+                        (focused ?
+                          (isStationsExercise ? 'rgba(255,179,102,0.4)' : 'rgba(255,255,255,0.25)') :
+                          'transparent'),
+                      borderWidth: isMusicPlaying ? 1.5 : (focused ? 1 : 0),
+                    }}
+                  >
+                    <Icon
+                      name={isMusicPlaying ? "music-note" : "music-off"}
+                      size={20}
+                      color={isMusicPlaying ? TOKENS.color.accent2 : (isStationsExercise ? '#fff5e6' : TOKENS.color.text)}
+                    />
+                  </MattePanel>
+                )}
+              </Pressable>
+            </View>
+          )}
+        </>
+      )}
       </View>
       {/* Lighting Config Badge */}
       {lightingConfig && hasLightingForCurrentView && (
