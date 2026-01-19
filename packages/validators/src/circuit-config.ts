@@ -55,6 +55,29 @@ export const RoundTemplateSchema = z.discriminatedUnion('type', [
   // Future: EMOMRoundTemplateSchema,
 ]);
 
+// Lighting scene schema
+export const LightingSceneSchema = z.object({
+  sceneId: z.string(),
+  sceneName: z.string(),
+});
+
+// Lighting configuration schema
+export const LightingConfigSchema = z.object({
+  enabled: z.boolean(),
+  globalDefaults: z.object({
+    work: LightingSceneSchema.optional(),
+    rest: LightingSceneSchema.optional(),
+    preview: LightingSceneSchema.optional(),
+    warning: LightingSceneSchema.optional(),
+    roundBreak: LightingSceneSchema.optional(),
+  }),
+  roundOverrides: z.record(
+    z.string(),
+    z.record(z.string(), LightingSceneSchema)
+  ).optional(),
+  targetGroup: z.string().optional(),
+});
+
 // Music trigger schema for a specific phase
 export const MusicTriggerSchema = z.object({
   enabled: z.boolean(),
@@ -116,6 +139,8 @@ export const CircuitConfigSchema = z.object({
     restBetweenRounds: CircuitRestBetweenRoundsSchema,
     repeatRounds: z.boolean().optional().default(false),
     roundTemplates: z.array(RoundConfigSchema),
+    // Lighting configuration
+    lighting: LightingConfigSchema.optional(),
     // Template workout source
     sourceWorkoutId: z.string().uuid().optional(),
     // Legacy fields (optional for backward compatibility)

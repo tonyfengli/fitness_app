@@ -757,32 +757,39 @@ function CircuitWorkoutOverviewContent() {
     ...trpc.circuitConfig.deleteRound.mutationOptions(),
     onSuccess: () => {
       console.log("[deleteRoundMutation] Success!");
-      
+
       // Close modal - following the same pattern as round settings save
       setShowRoundOptionsModal(false);
       setSelectedRoundForOptions(null);
-      
+
       // Show success toast
       toast.success("Round deleted successfully");
-      
+
       // Invalidate queries to refresh data
       queryClient.invalidateQueries({
-        queryKey: trpc.circuitConfig.getBySession.queryOptions({ 
-          sessionId: sessionId || "" 
+        queryKey: trpc.circuitConfig.getBySession.queryOptions({
+          sessionId: sessionId || ""
         }).queryKey,
       });
-      
+
       // Also invalidate workout selections to trigger full UI refresh
       queryClient.invalidateQueries({
-        queryKey: trpc.workoutSelections.getSelections.queryOptions({ 
-          sessionId: sessionId || "" 
+        queryKey: trpc.workoutSelections.getSelections.queryOptions({
+          sessionId: sessionId || ""
         }).queryKey,
       });
-      
+
       // Invalidate session query as well since it contains templateConfig
       queryClient.invalidateQueries({
-        queryKey: trpc.trainingSession.getSession.queryOptions({ 
-          id: sessionId || "" 
+        queryKey: trpc.trainingSession.getSession.queryOptions({
+          id: sessionId || ""
+        }).queryKey,
+      });
+
+      // Invalidate lighting config since it's stored in templateConfig
+      queryClient.invalidateQueries({
+        queryKey: trpc.lightingConfig.get.queryOptions({
+          sessionId: sessionId || ""
         }).queryKey,
       });
     },
@@ -797,32 +804,39 @@ function CircuitWorkoutOverviewContent() {
     ...trpc.circuitConfig.addRound.mutationOptions(),
     onSuccess: () => {
       console.log("[addRoundMutation] Success!");
-      
+
       // Close drawer and reset state
       setShowAddRoundInDrawer(false);
       setShowOptionsDrawer(false);
-      
+
       // Show success toast
       toast.success("Round added successfully");
-      
+
       // Invalidate queries to refresh data
       queryClient.invalidateQueries({
-        queryKey: trpc.circuitConfig.getBySession.queryOptions({ 
-          sessionId: sessionId || "" 
+        queryKey: trpc.circuitConfig.getBySession.queryOptions({
+          sessionId: sessionId || ""
         }).queryKey,
       });
-      
+
       // Also invalidate workout selections to trigger full UI refresh
       queryClient.invalidateQueries({
-        queryKey: trpc.workoutSelections.getSelections.queryOptions({ 
-          sessionId: sessionId || "" 
+        queryKey: trpc.workoutSelections.getSelections.queryOptions({
+          sessionId: sessionId || ""
         }).queryKey,
       });
-      
+
       // Invalidate session query as well since it contains templateConfig
       queryClient.invalidateQueries({
-        queryKey: trpc.trainingSession.getSession.queryOptions({ 
-          id: sessionId || "" 
+        queryKey: trpc.trainingSession.getSession.queryOptions({
+          id: sessionId || ""
+        }).queryKey,
+      });
+
+      // Invalidate lighting config since it's stored in templateConfig
+      queryClient.invalidateQueries({
+        queryKey: trpc.lightingConfig.get.queryOptions({
+          sessionId: sessionId || ""
         }).queryKey,
       });
     },
@@ -837,33 +851,40 @@ function CircuitWorkoutOverviewContent() {
     ...trpc.circuitConfig.updatePublic.mutationOptions(),
     onSuccess: () => {
       console.log("[updateRoundMutation] Success!");
-      
+
       // Close drawer and reset edit mode
       setShowAddRoundInDrawer(false);
       setAddRoundDrawerEditMode(null);
       setShowOptionsDrawer(false);
-      
+
       // Show success toast
       toast.success("Round settings updated successfully");
-      
+
       // Invalidate queries to refresh data
       queryClient.invalidateQueries({
-        queryKey: trpc.circuitConfig.getBySession.queryOptions({ 
-          sessionId: sessionId || "" 
+        queryKey: trpc.circuitConfig.getBySession.queryOptions({
+          sessionId: sessionId || ""
         }).queryKey,
       });
-      
+
       // Also invalidate workout selections to trigger full UI refresh
       queryClient.invalidateQueries({
-        queryKey: trpc.workoutSelections.getSelections.queryOptions({ 
-          sessionId: sessionId || "" 
+        queryKey: trpc.workoutSelections.getSelections.queryOptions({
+          sessionId: sessionId || ""
         }).queryKey,
       });
-      
+
       // Invalidate session query as well since it contains templateConfig
       queryClient.invalidateQueries({
-        queryKey: trpc.trainingSession.getSession.queryOptions({ 
-          id: sessionId || "" 
+        queryKey: trpc.trainingSession.getSession.queryOptions({
+          id: sessionId || ""
+        }).queryKey,
+      });
+
+      // Invalidate lighting config since it's stored in templateConfig
+      queryClient.invalidateQueries({
+        queryKey: trpc.lightingConfig.get.queryOptions({
+          sessionId: sessionId || ""
         }).queryKey,
       });
     },
@@ -896,19 +917,26 @@ function CircuitWorkoutOverviewContent() {
       console.log('[reorderRoundsMutation] onSuccess called, clearing loading state');
       // Clear loading state
       setMovingRoundId(null);
-      
+
       // Invalidate both circuit config and selections to refresh data
       queryClient.invalidateQueries({
-        queryKey: trpc.circuitConfig.getBySession.queryOptions({ 
-          sessionId: sessionId || "" 
+        queryKey: trpc.circuitConfig.getBySession.queryOptions({
+          sessionId: sessionId || ""
         }).queryKey,
       });
       queryClient.invalidateQueries({
-        queryKey: trpc.workoutSelections.getSelections.queryOptions({ 
-          sessionId: sessionId || "" 
+        queryKey: trpc.workoutSelections.getSelections.queryOptions({
+          sessionId: sessionId || ""
         }).queryKey,
       });
-      
+
+      // Invalidate lighting config since round reordering affects lighting keys
+      queryClient.invalidateQueries({
+        queryKey: trpc.lightingConfig.get.queryOptions({
+          sessionId: sessionId || ""
+        }).queryKey,
+      });
+
       toast.success("Round order updated successfully");
     },
     onError: (error) => {
@@ -945,10 +973,20 @@ function CircuitWorkoutOverviewContent() {
   });
 
   // Fetch lighting config for visual indicators
-  const { data: lightingConfig } = useQuery({
+  const { data: lightingConfig, dataUpdatedAt: lightingConfigUpdatedAt } = useQuery({
     ...trpc.lightingConfig.get.queryOptions({ sessionId: sessionId || "" }),
     enabled: !!sessionId
   });
+
+  // Debug logging for lighting config
+  useEffect(() => {
+    console.log('[LightingConfig Debug] Config updated:', {
+      timestamp: lightingConfigUpdatedAt,
+      hasConfig: !!lightingConfig,
+      roundOverrideKeys: lightingConfig ? Object.keys((lightingConfig as any)?.roundOverrides || {}) : [],
+      roundOverrides: (lightingConfig as any)?.roundOverrides,
+    });
+  }, [lightingConfig, lightingConfigUpdatedAt]);
 
   // Fetch scenes for color extraction
   const { data: lightingScenes } = useQuery({
@@ -957,9 +995,23 @@ function CircuitWorkoutOverviewContent() {
 
   // Helper to get scene color from lighting config
   const getLightingSceneColor = (roundNumber: number, phaseType: string): string | null => {
-    if (!lightingConfig || !lightingScenes) return null;
+    if (!lightingConfig || !lightingScenes) {
+      console.log('[getLightingSceneColor] No config/scenes', { roundNumber, phaseType, hasConfig: !!lightingConfig, hasScenes: !!lightingScenes });
+      return null;
+    }
     const roundKey = `round-${roundNumber}`;
     const sceneConfig = (lightingConfig as any)?.roundOverrides?.[roundKey]?.[phaseType];
+
+    // Debug log for round 1 queries
+    if (roundNumber === 1) {
+      console.log('[getLightingSceneColor] Round 1 lookup:', {
+        roundKey,
+        phaseType,
+        availableRoundKeys: Object.keys((lightingConfig as any)?.roundOverrides || {}),
+        sceneConfig,
+      });
+    }
+
     if (!sceneConfig?.sceneId) return null;
 
     // Find the scene and extract color from name

@@ -708,13 +708,49 @@ export const circuitConfigRouter = createTRPCRouter({
             roundNumber: index + 1, // Renumber sequentially
           }));
 
-        // 2. Update circuit config
+        // 2. Clean up lighting config for deleted round and renumber subsequent rounds
+        let updatedLighting = currentConfig.config.lighting;
+        if (updatedLighting?.roundOverrides) {
+          const oldOverrides = updatedLighting.roundOverrides;
+          const newOverrides: typeof oldOverrides = {};
+
+          for (const [key, value] of Object.entries(oldOverrides)) {
+            // Extract round number from key (e.g., "round-2" -> 2)
+            const match = key.match(/^round-(\d+)$/);
+            if (!match) {
+              // Keep non-round keys as-is
+              newOverrides[key] = value;
+              continue;
+            }
+
+            const roundNum = parseInt(match[1], 10);
+
+            if (roundNum === input.roundNumber) {
+              // Skip deleted round's config
+              continue;
+            } else if (roundNum > input.roundNumber) {
+              // Renumber subsequent rounds (round-3 -> round-2)
+              newOverrides[`round-${roundNum - 1}`] = value;
+            } else {
+              // Keep rounds before deleted round as-is
+              newOverrides[key] = value;
+            }
+          }
+
+          updatedLighting = {
+            ...updatedLighting,
+            roundOverrides: Object.keys(newOverrides).length > 0 ? newOverrides : undefined,
+          };
+        }
+
+        // 3. Build updated circuit config
         const updatedConfig = {
           ...currentConfig,
           config: {
             ...currentConfig.config,
             rounds: updatedRoundTemplates.length,
             roundTemplates: updatedRoundTemplates,
+            lighting: updatedLighting,
           },
           lastUpdated: new Date().toISOString(),
           updatedBy: "anonymous", // Public endpoint
@@ -723,7 +759,7 @@ export const circuitConfigRouter = createTRPCRouter({
         // Validate the updated config
         const validatedConfig = CircuitConfigSchema.parse(updatedConfig);
 
-        // 3. Update session config
+        // 4. Update session config in database
         await tx
           .update(TrainingSession)
           .set({
@@ -732,7 +768,7 @@ export const circuitConfigRouter = createTRPCRouter({
           })
           .where(eq(TrainingSession.id, input.sessionId));
 
-        // 4. Handle WorkoutExercise cleanup
+        // 5. Handle WorkoutExercise cleanup
         const deletedRoundName = `Round ${input.roundNumber}`;
         const workouts = await tx
           .select({ id: Workout.id })
