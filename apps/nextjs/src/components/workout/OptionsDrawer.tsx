@@ -208,7 +208,8 @@ export function OptionsDrawer({
         {/* Custom content or default menu */}
         {customContent ? (
           <div className={cn(
-            fullScreen ? "h-full overflow-y-auto" : "max-h-[80vh] overflow-y-auto"
+            "flex flex-col",
+            fullScreen ? "h-full" : "max-h-[80vh]"
           )}>
             {customContent}
           </div>

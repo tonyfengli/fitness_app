@@ -43,6 +43,7 @@ import { LightingTab } from "~/components/workout/LightingTab";
 import { LightingConfigDrawer } from "~/components/workout/LightingConfigDrawer";
 import { MusicLightingButton } from "~/components/workout/MusicLightingButton";
 import { RoundSettingsDrawer } from "~/components/workout/RoundSettingsDrawer";
+import { RoundLightingContent } from "~/components/workout/RoundLightingContent";
 
 
 // World-class Circuit Timer Calculator Component
@@ -481,10 +482,13 @@ function CircuitWorkoutOverviewContent() {
   const [showAddRoundInDrawer, setShowAddRoundInDrawer] = useState(false);
   const [showLightingConfigInDrawer, setShowLightingConfigInDrawer] = useState(false);
   const [showRoundSettingsInDrawer, setShowRoundSettingsInDrawer] = useState(false);
+  const [showRoundLightingInDrawer, setShowRoundLightingInDrawer] = useState(false);
+  const [roundLightingDrawerTitle, setRoundLightingDrawerTitle] = useState("");
   const [selectedRoundForSettings, setSelectedRoundForSettings] = useState<{
     roundNumber: number;
     roundName: string;
     roundType: "circuit_round" | "stations_round" | "amrap_round";
+    roundData?: any;
   } | null>(null);
   const [selectedLightForConfig, setSelectedLightForConfig] = useState<{
     roundId: number;
@@ -940,6 +944,30 @@ function CircuitWorkoutOverviewContent() {
     enabled: !!sessionId
   });
 
+  // Fetch lighting config for visual indicators
+  const { data: lightingConfig } = useQuery({
+    ...trpc.lightingConfig.get.queryOptions({ sessionId: sessionId || "" }),
+    enabled: !!sessionId
+  });
+
+  // Fetch scenes for color extraction
+  const { data: lightingScenes } = useQuery({
+    ...trpc.lighting.getScenes.queryOptions(),
+  });
+
+  // Helper to get scene color from lighting config
+  const getLightingSceneColor = (roundNumber: number, phaseType: string): string | null => {
+    if (!lightingConfig || !lightingScenes) return null;
+    const roundKey = `round-${roundNumber}`;
+    const sceneConfig = (lightingConfig as any)?.roundOverrides?.[roundKey]?.[phaseType];
+    if (!sceneConfig?.sceneId) return null;
+
+    // Find the scene and extract color from name
+    const scene = lightingScenes.find((s: any) => s.id === sceneConfig.sceneId);
+    if (!scene) return null;
+    const colorMatch = scene.name.match(/#([a-fA-F0-9]{6})/);
+    return colorMatch ? `#${colorMatch[1]}` : "#F59E0B"; // Default amber if no color
+  };
 
   // Fetch session data to get templateConfig with setlist
   const { data: sessionData } = useQuery({
@@ -1367,49 +1395,69 @@ function CircuitWorkoutOverviewContent() {
                           <>
                             {/* Information Hierarchy */}
                             <div className="flex items-center justify-between">
-                              {/* 1. Round Type - Most Prominent */}
-                              <span className="inline-flex items-center gap-2 px-3 py-1.5 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-lg text-sm font-semibold">
+                              {/* 1. Round Type Badge + Preview Lighting Indicator */}
+                              <div className="flex items-center gap-2">
+                                <span className="inline-flex items-center gap-2 px-3 py-1.5 bg-gray-100 dark:bg-gray-700/50 text-gray-600 dark:text-gray-400 rounded-lg text-sm font-semibold">
+                                  {(() => {
+                                    switch (roundType) {
+                                      case 'amrap_round':
+                                        return (
+                                          <>
+                                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                              <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                            </svg>
+                                            AMRAP
+                                          </>
+                                        );
+                                      case 'circuit_round':
+                                        return (
+                                          <>
+                                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                              <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                            </svg>
+                                            CIRCUIT
+                                          </>
+                                        );
+                                      case 'stations_round':
+                                        return (
+                                          <>
+                                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                              <path strokeLinecap="round" strokeLinejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                                            </svg>
+                                            STATIONS
+                                          </>
+                                        );
+                                      default:
+                                        return 'UNKNOWN';
+                                    }
+                                  })()}
+                                </span>
+                                {/* Preview lighting indicator */}
                                 {(() => {
-                                  switch (roundType) {
-                                    case 'amrap_round':
-                                      return (
-                                        <>
-                                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                          </svg>
-                                          AMRAP
-                                        </>
-                                      );
-                                    case 'circuit_round':
-                                      return (
-                                        <>
-                                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                                            <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                                          </svg>
-                                          CIRCUIT
-                                        </>
-                                      );
-                                    case 'stations_round':
-                                      return (
-                                        <>
-                                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                                          </svg>
-                                          STATIONS
-                                        </>
-                                      );
-                                    default:
-                                      return 'UNKNOWN';
-                                  }
+                                  const previewColor = getLightingSceneColor(roundNumber, 'preview');
+                                  if (!previewColor) return null;
+                                  return (
+                                    <svg
+                                      className="w-4 h-4"
+                                      viewBox="0 0 24 24"
+                                      fill={previewColor}
+                                      stroke="#9CA3AF"
+                                      strokeWidth="1"
+                                      style={{ filter: `drop-shadow(0 0 2px ${previewColor}80)` }}
+                                      title="Preview lighting configured"
+                                    >
+                                      <path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7z" />
+                                    </svg>
+                                  );
                                 })()}
-                              </span>
+                              </div>
                               
                               {/* 2. Total Time - Clear and Prominent */}
                               <div className="flex items-center gap-1.5">
-                                <svg className="w-4 h-4 text-purple-600 dark:text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                <svg className="w-4 h-4 text-gray-400 dark:text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                                 </svg>
-                                <span className="text-lg font-bold text-purple-700 dark:text-purple-300">
+                                <span className="text-lg font-bold text-gray-600 dark:text-gray-300">
                                   {(() => {
                                     let totalDuration = 0;
                                     
@@ -1579,16 +1627,76 @@ function CircuitWorkoutOverviewContent() {
                                     <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
                                       Station {idx + 1}
                                     </span>
+                                    {/* Lighting indicator for station - in header */}
+                                    {(() => {
+                                      const rNum = parseInt(round.roundName.match(/\d+/)?.[0] || '1');
+                                      const workColor = getLightingSceneColor(rNum, `work-station-${idx}`);
+                                      const restColor = getLightingSceneColor(rNum, `rest-after-station-${idx}`);
+
+                                      // Check for roundBreak on last station (treated like rest after last station)
+                                      const isLastStation = idx === round.exercises.length - 1;
+                                      const stationRoundTemplate = circuitConfig?.config?.roundTemplates?.find(
+                                        (rt: any) => rt.roundNumber === rNum
+                                      );
+                                      const repeatTimes = stationRoundTemplate?.template?.repeatTimes || 1;
+                                      const roundBreakColor = isLastStation && repeatTimes > 1
+                                        ? getLightingSceneColor(rNum, 'roundBreak')
+                                        : null;
+
+                                      // Combine rest and roundBreak - roundBreak acts as "rest after last station"
+                                      const secondaryColor = restColor || roundBreakColor;
+                                      const secondaryTitle = restColor ? "Rest lighting" : "Set break lighting";
+
+                                      if (!workColor && !secondaryColor) return null;
+
+                                      // Only rest/roundBreak (no work) - show bigger dot
+                                      if (!workColor && secondaryColor) {
+                                        return (
+                                          <div
+                                            className="w-3 h-3 rounded-full flex-shrink-0 border border-gray-300 dark:border-gray-600"
+                                            style={{
+                                              backgroundColor: secondaryColor,
+                                              boxShadow: `0 0 4px ${secondaryColor}60`
+                                            }}
+                                            title={secondaryTitle}
+                                          />
+                                        );
+                                      }
+
+                                      // Work (with optional rest/roundBreak dot at bottom-right)
+                                      return (
+                                        <div className="relative flex-shrink-0">
+                                          <svg
+                                            className="w-4 h-4"
+                                            viewBox="0 0 24 24"
+                                            fill={workColor}
+                                            stroke="#9CA3AF"
+                                            strokeWidth="1"
+                                            style={{ filter: `drop-shadow(0 0 2px ${workColor}80)` }}
+                                            title="Work lighting"
+                                          >
+                                            <path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7z" />
+                                          </svg>
+                                          {secondaryColor && (
+                                            <div
+                                              className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border border-white dark:border-gray-800"
+                                              style={{ backgroundColor: secondaryColor }}
+                                              title={secondaryTitle}
+                                            />
+                                          )}
+                                        </div>
+                                      );
+                                    })()}
                                     {(() => {
                                       // Check if this station has circuit configuration
                                       const roundNumber = parseInt(round.roundName.match(/\d+/)?.[0] || '1');
                                       const roundTemplate = circuitConfig?.config?.roundTemplates?.find(
                                         rt => rt.roundNumber === roundNumber
                                       );
-                                      const stationCircuitConfig = roundTemplate?.template?.type === 'stations_round' 
+                                      const stationCircuitConfig = roundTemplate?.template?.type === 'stations_round'
                                         ? roundTemplate.template.stationCircuits?.[idx.toString()]
                                         : null;
-                                      
+
                                       if (stationCircuitConfig) {
                                         return (
                                           <div className="flex items-center gap-1">
@@ -1654,7 +1762,9 @@ function CircuitWorkoutOverviewContent() {
                                   </div>
                                   <div className="flex-1 min-w-0 mx-1 sm:mx-0">
                                     <div className="flex flex-col gap-1 sm:gap-2">
-                                      <span className="font-normal text-gray-900 dark:text-gray-100 text-base sm:text-lg break-words">{exercise.exerciseName}</span>
+                                      <div className="flex items-center gap-2">
+                                        <span className="font-normal text-gray-900 dark:text-gray-100 text-base sm:text-lg break-words">{exercise.exerciseName}</span>
+                                      </div>
                                       {exercise.repsPlanned && (
                                         <span className="text-xs text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-md font-semibold whitespace-nowrap self-start shadow-sm">
                                           {exercise.repsPlanned} {exercise.repsPlanned === 1 ? 'rep' : 'reps'}
@@ -1695,7 +1805,7 @@ function CircuitWorkoutOverviewContent() {
                                   </div>
                                 </div>
                               </div>
-                              
+
                               {/* Additional exercises */}
                               {exercise.stationExercises?.map((stationEx, stationIdx) => (
                                 <div key={stationEx.id} className="px-3 sm:px-6 py-3 sm:py-4 bg-white dark:bg-gray-800">
@@ -1827,7 +1937,74 @@ function CircuitWorkoutOverviewContent() {
                               </div>
                               <div className="flex-1 min-w-0 mx-1 sm:mx-0">
                                 <div className="flex flex-col gap-1 sm:gap-2">
-                                  <span className="font-normal text-gray-900 dark:text-gray-100 text-base sm:text-lg break-words">{exercise.exerciseName}</span>
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-normal text-gray-900 dark:text-gray-100 text-base sm:text-lg break-words">{exercise.exerciseName}</span>
+                                    {/* Lighting indicator - combined work + rest + roundBreak on last exercise */}
+                                    {(() => {
+                                      // For AMRAP, only show lighting on first exercise (single work phase for whole round)
+                                      if (round.roundType === 'amrap_round' && idx !== 0) return null;
+
+                                      const rNum = parseInt(round.roundName.match(/\d+/)?.[0] || '1');
+                                      const workPhase = round.roundType === 'amrap_round' ? 'work' : `work-exercise-${idx}`;
+                                      const restPhase = `rest-after-exercise-${idx}`;
+                                      const workColor = getLightingSceneColor(rNum, workPhase);
+                                      const restColor = round.roundType === 'amrap_round' ? null : getLightingSceneColor(rNum, restPhase);
+
+                                      // Check for roundBreak on last exercise (treated like rest after last exercise)
+                                      const isLastExercise = idx === round.exercises.length - 1;
+                                      const exerciseRoundTemplate = circuitConfig?.config?.roundTemplates?.find(
+                                        (rt: any) => rt.roundNumber === rNum
+                                      );
+                                      const repeatTimes = exerciseRoundTemplate?.template?.repeatTimes || 1;
+                                      const roundBreakColor = isLastExercise && repeatTimes > 1
+                                        ? getLightingSceneColor(rNum, 'roundBreak')
+                                        : null;
+
+                                      // Combine rest and roundBreak - roundBreak acts as "rest after last exercise"
+                                      const secondaryColor = restColor || roundBreakColor;
+                                      const secondaryTitle = restColor ? "Rest lighting" : "Set break lighting";
+
+                                      if (!workColor && !secondaryColor) return null;
+
+                                      // Only rest/roundBreak (no work) - show bigger dot
+                                      if (!workColor && secondaryColor) {
+                                        return (
+                                          <div
+                                            className="w-3 h-3 rounded-full flex-shrink-0 border border-gray-300 dark:border-gray-600"
+                                            style={{
+                                              backgroundColor: secondaryColor,
+                                              boxShadow: `0 0 4px ${secondaryColor}60`
+                                            }}
+                                            title={secondaryTitle}
+                                          />
+                                        );
+                                      }
+
+                                      // Work (with optional rest/roundBreak dot at bottom-right)
+                                      return (
+                                        <div className="relative flex-shrink-0">
+                                          <svg
+                                            className="w-4 h-4"
+                                            viewBox="0 0 24 24"
+                                            fill={workColor}
+                                            stroke="#9CA3AF"
+                                            strokeWidth="1"
+                                            style={{ filter: `drop-shadow(0 0 2px ${workColor}80)` }}
+                                            title="Work lighting"
+                                          >
+                                            <path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7z" />
+                                          </svg>
+                                          {secondaryColor && (
+                                            <div
+                                              className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border border-white dark:border-gray-800"
+                                              style={{ backgroundColor: secondaryColor }}
+                                              title={secondaryTitle}
+                                            />
+                                          )}
+                                        </div>
+                                      );
+                                    })()}
+                                  </div>
                                   {exercise.repsPlanned && (
                                     <span className="text-xs text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-md font-semibold whitespace-nowrap self-start shadow-sm">
                                       {exercise.repsPlanned} {exercise.repsPlanned === 1 ? 'rep' : 'reps'}
@@ -1873,12 +2050,13 @@ function CircuitWorkoutOverviewContent() {
                             </div>
                           </div>
                         )}
-                        
+
+
                         {/* Moved to modal below */}
                       </div>
                     );
                   })}
-                  
+
                 </div>
                 
                 
@@ -1972,29 +2150,6 @@ function CircuitWorkoutOverviewContent() {
                   </div>
                 )}
 
-                {/* Round Settings Button - Music & Lighting Triggers */}
-                {(() => {
-                  const roundNum = parseInt(round.roundName.match(/\d+/)?.[0] || '1');
-
-                  return (
-                    <MusicLightingButton
-                      roundNumber={roundNum}
-                      roundType={round.roundType || 'circuit_round'}
-                      hasLightingConfig={false}
-                      hasMusicConfig={false}
-                      onClick={() => {
-                        setSelectedRoundForSettings({
-                          roundNumber: roundNum,
-                          roundName: round.roundName,
-                          roundType: round.roundType || 'circuit_round',
-                        });
-                        setShowRoundSettingsInDrawer(true);
-                        setShowOptionsDrawer(true);
-                      }}
-                    />
-                  );
-                })()}
-
                 {/* Add Exercise button for circuit and amrap rounds */}
                 {(round.roundType === 'circuit_round' || round.roundType === 'amrap_round') && (
                   <div className="mt-4">
@@ -2022,7 +2177,7 @@ function CircuitWorkoutOverviewContent() {
                     </button>
                   </div>
                 )}
-                
+
                 {/* Add Station button for stations rounds */}
                 {round.roundType === 'stations_round' && (
                   <div className="mt-4">
@@ -2031,7 +2186,7 @@ function CircuitWorkoutOverviewContent() {
                         // Calculate the next station index (number of unique orderIndex values)
                         const uniqueStations = new Set(round.exercises.map(ex => ex.orderIndex));
                         const nextStationIndex = uniqueStations.size;
-                        
+
                         console.log('[AddStation] Button clicked:', {
                           roundName: round.roundName,
                           currentStations: uniqueStations.size,
@@ -2046,7 +2201,7 @@ function CircuitWorkoutOverviewContent() {
                               }
                               stationGroups[ex.orderIndex].push({
                                 exerciseName: ex.exerciseName,
-                                stationIndex: ex.stationExercises?.length > 0 ? 
+                                stationIndex: ex.stationExercises?.length > 0 ?
                                   'has_sub_exercises' : 'main_exercise',
                                 subExerciseCount: ex.stationExercises?.length || 0
                               });
@@ -2054,7 +2209,7 @@ function CircuitWorkoutOverviewContent() {
                             return stationGroups;
                           })()
                         });
-                        
+
                         setAddExerciseModalConfig({
                           roundName: round.roundName,
                           roundData: round,
@@ -2077,6 +2232,30 @@ function CircuitWorkoutOverviewContent() {
                     </button>
                   </div>
                 )}
+
+                {/* Round Settings Button - Music & Lighting Triggers */}
+                {(() => {
+                  const roundNum = parseInt(round.roundName.match(/\d+/)?.[0] || '1');
+
+                  return (
+                    <MusicLightingButton
+                      roundNumber={roundNum}
+                      roundType={round.roundType || 'circuit_round'}
+                      hasLightingConfig={false}
+                      hasMusicConfig={false}
+                      onClick={() => {
+                        setSelectedRoundForSettings({
+                          roundNumber: roundNum,
+                          roundName: round.roundName,
+                          roundType: round.roundType || 'circuit_round',
+                          roundData: round,
+                        });
+                        setShowRoundSettingsInDrawer(true);
+                        setShowOptionsDrawer(true);
+                      }}
+                    />
+                  );
+                })()}
                 </div>
               </Card>
             )})
@@ -2769,10 +2948,13 @@ function CircuitWorkoutOverviewContent() {
           setShowLightingConfigInDrawer(false);
           setSelectedLightForConfig(null);
           setShowRoundSettingsInDrawer(false);
+          setShowRoundLightingInDrawer(false);
           setSelectedRoundForSettings(null);
         }}
         title={
-          showRoundSettingsInDrawer
+          showRoundLightingInDrawer
+            ? roundLightingDrawerTitle || `${selectedRoundForSettings?.roundName || 'Round'} · Lighting`
+            : showRoundSettingsInDrawer
             ? `${selectedRoundForSettings?.roundName || 'Round'} · Music & Lighting`
             : showRepsInDrawer
             ? "Configure Exercise"
@@ -2797,6 +2979,29 @@ function CircuitWorkoutOverviewContent() {
         customContent={
           (() => {
 
+            if (showRoundLightingInDrawer && selectedRoundForSettings) {
+              return (
+                <RoundLightingContent
+                  sessionId={sessionId}
+                  roundId={selectedRoundForSettings.roundNumber}
+                  roundName={selectedRoundForSettings.roundName}
+                  roundType={selectedRoundForSettings.roundType}
+                  roundData={selectedRoundForSettings.roundData}
+                  onTitleChange={setRoundLightingDrawerTitle}
+                  onBack={() => {
+                    setShowRoundLightingInDrawer(false);
+                    setShowRoundSettingsInDrawer(true);
+                  }}
+                  onClose={() => {
+                    setShowRoundLightingInDrawer(false);
+                    setShowRoundSettingsInDrawer(false);
+                    setShowOptionsDrawer(false);
+                    setSelectedRoundForSettings(null);
+                  }}
+                />
+              );
+            }
+
             if (showRoundSettingsInDrawer && selectedRoundForSettings) {
               return (
                 <RoundSettingsDrawer
@@ -2804,8 +3009,8 @@ function CircuitWorkoutOverviewContent() {
                   roundName={selectedRoundForSettings.roundName}
                   roundType={selectedRoundForSettings.roundType}
                   onSelectLighting={() => {
-                    // TODO: Navigate to lighting config
-                    console.log('Lighting selected for round', selectedRoundForSettings.roundNumber);
+                    setShowRoundSettingsInDrawer(false);
+                    setShowRoundLightingInDrawer(true);
                   }}
                   onSelectMusic={() => {
                     // TODO: Navigate to music config
