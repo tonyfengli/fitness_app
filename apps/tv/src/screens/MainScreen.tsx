@@ -160,6 +160,7 @@ export function MainScreen() {
   const [newSongsCount, setNewSongsCount] = useState<number | null>(null);
   const [isCheckingForUpdates, setIsCheckingForUpdates] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
   const [downloadResult, setDownloadResult] = useState<SyncResult | null>(null);
   
   // Session order tracking removed - no longer needed with polling
@@ -203,12 +204,21 @@ export function MainScreen() {
 
   // Check for new songs available to download
   const checkForUpdates = useCallback(async () => {
+    console.log('[MusicModal] === CHECK FOR UPDATES START ===');
     setIsCheckingForUpdates(true);
     setDownloadResult(null);
 
     try {
       // Fetch latest tracks from server
+      console.log('[MusicModal] Calling refetchMusicTracks...');
       const result = await refetchMusicTracks();
+      console.log('[MusicModal] Refetch result status:', result.status);
+      console.log('[MusicModal] Refetch result isSuccess:', result.isSuccess);
+      console.log('[MusicModal] Refetch result isError:', result.isError);
+      console.log('[MusicModal] Refetch result error:', result.error);
+      console.log('[MusicModal] Refetch result data type:', typeof result.data);
+      console.log('[MusicModal] Refetch result data:', result.data);
+
       const serverTracks = result.data || [];
 
       console.log('[MusicModal] Server tracks count:', serverTracks.length);
@@ -219,6 +229,7 @@ export function MainScreen() {
       })));
 
       // Get local tracks
+      console.log('[MusicModal] Calling listLocalTracks...');
       const localTracks = await musicDownloadService.listLocalTracks();
       const localSet = new Set(localTracks);
 
@@ -238,8 +249,11 @@ export function MainScreen() {
       console.log('[MusicModal] Tracks WITHOUT downloadUrl:', tracksWithoutUrl.length);
       console.log('[MusicModal] Missing URLs:', tracksWithoutUrl.map((t: any) => t.filename));
 
+      console.log('[MusicModal] Setting newSongsCount to:', newTracks.length);
+      console.log('[MusicModal] Setting localSongsCount to:', localTracks.length);
       setNewSongsCount(newTracks.length);
       setLocalSongsCount(localTracks.length);
+      console.log('[MusicModal] === CHECK FOR UPDATES END ===');
     } catch (error) {
       console.error('[MainScreen] Error checking for updates:', error);
       Alert.alert('Error', 'Failed to check for updates');
@@ -277,6 +291,33 @@ export function MainScreen() {
       setIsDownloading(false);
     }
   }, [refetchMusicTracks]);
+
+  // Clear all downloaded songs
+  const clearAllDownloaded = useCallback(async () => {
+    console.log('[MusicModal] === CLEAR ALL START ===');
+    console.log('[MusicModal] Current localSongsCount:', localSongsCount);
+    setIsClearing(true);
+    setDownloadResult(null);
+
+    try {
+      console.log('[MusicModal] Calling clearLocalTracks...');
+      await musicDownloadService.clearLocalTracks();
+      console.log('[MusicModal] clearLocalTracks completed');
+
+      // Verify deletion by listing tracks
+      const remaining = await musicDownloadService.listLocalTracks();
+      console.log('[MusicModal] Remaining tracks after clear:', remaining);
+
+      setLocalSongsCount(0);
+      setNewSongsCount(null);
+      console.log('[MusicModal] === CLEAR ALL END ===');
+    } catch (error) {
+      console.error('[MainScreen] Error clearing tracks:', error);
+      Alert.alert('Error', 'Failed to clear downloaded songs');
+    } finally {
+      setIsClearing(false);
+    }
+  }, [localSongsCount]);
 
   // Real-time training sessions subscription (DISABLED - using polling instead)
   // Commented out due to Supabase Realtime connection issues
@@ -675,11 +716,7 @@ export function MainScreen() {
   // Handle environment toggle
   const handleEnvironmentChange = async (newEnv: 'gym' | 'developer') => {
     if (isSwitching) return;
-    
-    // Reset the stored session order when refreshing
-    sessionOrderRef.current = [];
-    setHasStoredOrder(false);
-    
+
     // If clicking the same environment button, force a re-login
     if (newEnv === currentEnvironment) {
       console.log('[MainScreen] 🔄 Re-logging into same environment:', newEnv);
@@ -1655,6 +1692,35 @@ export function MainScreen() {
                   )}
                 </Pressable>
               )}
+
+              {/* Clear All button - only show if there are local songs */}
+              {localSongsCount !== null && localSongsCount > 0 && (
+                <Pressable
+                  onPress={clearAllDownloaded}
+                  disabled={isClearing || isDownloading}
+                  focusable={!isClearing && !isDownloading}
+                >
+                  {({ focused }) => (
+                    <View style={[
+                      styles.modalButton,
+                      styles.modalButtonDanger,
+                      focused && styles.modalButtonFocused,
+                      (isClearing || isDownloading) && styles.modalButtonDisabled
+                    ]}>
+                      {isClearing ? (
+                        <ActivityIndicator size="small" color={TOKENS.color.danger} />
+                      ) : (
+                        <>
+                          <Icon name="delete" size={18} color={TOKENS.color.danger} />
+                          <Text style={[styles.modalButtonText, { color: TOKENS.color.danger }]}>
+                            Clear All Downloaded
+                          </Text>
+                        </>
+                      )}
+                    </View>
+                  )}
+                </Pressable>
+              )}
             </View>
           </View>
         </View>
@@ -2196,6 +2262,10 @@ const styles = StyleSheet.create({
   modalButtonPrimary: {
     backgroundColor: TOKENS.color.accent,
     borderColor: TOKENS.color.accent,
+  },
+  modalButtonDanger: {
+    backgroundColor: 'transparent',
+    borderColor: TOKENS.color.danger,
   },
   modalButtonFocused: {
     backgroundColor: 'rgba(255,255,255,0.2)',

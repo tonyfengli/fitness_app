@@ -8,11 +8,14 @@ import { useMusic } from '../providers/MusicProvider';
 
 type MusicPhaseType = 'preview' | 'exercise' | 'rest' | 'setBreak';
 
+// Playable energy levels (matches MusicProvider)
+type PlayableEnergy = 'low' | 'medium' | 'high';
+
 interface MusicTrigger {
   enabled: boolean;
   trackId?: string;
-  useStartTimestamp?: boolean;
-  energy?: 'high' | 'low';
+  useBuildup?: boolean; // Start at buildup point before the drop
+  energy?: PlayableEnergy;
 }
 
 interface RoundMusicConfig {
@@ -23,8 +26,8 @@ interface RoundMusicConfig {
 }
 
 interface MusicTriggerResult {
-  energy: 'high' | 'low';
-  useStartTimestamp: boolean;
+  energy: PlayableEnergy;
+  useBuildup: boolean;
   trackId?: string;
 }
 
@@ -56,7 +59,7 @@ function evaluateMusicTrigger(
 
   return {
     energy: trigger.energy ?? 'high',
-    useStartTimestamp: trigger.useStartTimestamp ?? false,
+    useBuildup: trigger.useBuildup ?? false,
     trackId: trigger.trackId,
   };
 }
@@ -130,7 +133,7 @@ function getRoundMusicConfig(
  * useWorkoutMusic({
  *   workoutState: state,
  *   circuitConfig,
- *   enabled: isLightingEnabled, // or a separate music enabled flag
+ *   enabled: isMusicEnabled,
  * });
  * ```
  */
@@ -225,9 +228,9 @@ export function useWorkoutMusic({
     if (triggerResult) {
       // For preview phases, skip trigger if:
       // - Music is already playing at the same energy level
-      // - The trigger is a "default" trigger (no specific trackId, no useStartTimestamp)
+      // - The trigger is a "default" trigger (no specific trackId, no useBuildup)
       // This allows seamless navigation between round previews without interrupting music
-      const isDefaultTrigger = !triggerResult.trackId && !triggerResult.useStartTimestamp;
+      const isDefaultTrigger = !triggerResult.trackId && !triggerResult.useBuildup;
       if (phaseType === 'preview' && isPlaying && currentEnergy === triggerResult.energy && isDefaultTrigger) {
         console.log(`[useWorkoutMusic] Skipping preview trigger - music already playing at ${currentEnergy} energy (default trigger)`);
         lastTriggeredPhase.current = phaseKey; // Mark as triggered to prevent re-firing
@@ -242,7 +245,7 @@ export function useWorkoutMusic({
       // Fire the music action
       playWithTrigger({
         energy: triggerResult.energy,
-        useStartTimestamp: triggerResult.useStartTimestamp,
+        useBuildup: triggerResult.useBuildup,
         trackId: triggerResult.trackId,
       });
     } else {

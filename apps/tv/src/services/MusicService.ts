@@ -4,16 +4,29 @@ import RNFS from 'react-native-fs';
 // Enable playback in silence mode
 Sound.setCategory('Playback');
 
+// Supported audio extensions (same as MusicDownloadService)
+const SUPPORTED_EXTENSIONS = ['.mp3', '.m4a', '.aac', '.wav'];
+
+/**
+ * Music segment within a track - marks a point with a specific energy level
+ */
+export interface MusicSegment {
+  timestamp: number; // seconds - where this segment starts
+  energy: 'low' | 'medium' | 'high' | 'outro';
+  buildupDuration?: number; // seconds before timestamp where buildup starts
+}
+
+export type EnergyLevel = 'low' | 'medium' | 'high' | 'outro';
+
 export interface MusicTrack {
   id: string;
   filename: string;
   name: string;
   artist: string;
   durationMs: number;
-  energy: 'high' | 'low';
   genre?: string | null;
   downloadUrl?: string | null;
-  startTimestamp?: number | null;
+  segments: MusicSegment[];
 }
 
 interface MusicConfig {
@@ -21,21 +34,26 @@ interface MusicConfig {
   enabled: boolean;
 }
 
-type MusicEventType = 'trackStart' | 'trackEnd' | 'stopped' | 'error';
-type MusicEventCallback = (event: { type: MusicEventType; track?: MusicTrack; error?: Error }) => void;
+type MusicEventType = 'trackStart' | 'trackEnd' | 'stopped' | 'error' | 'buildupComplete';
+type MusicEventCallback = (event: {
+  type: MusicEventType;
+  track?: MusicTrack;
+  segment?: MusicSegment;
+  error?: Error;
+}) => void;
 
-// Music files can be:
-// 1. Bundled in Android raw resources (android/app/src/main/res/raw/)
-// 2. Downloaded to the app's document directory
+// Music files are downloaded to the app's document directory
+// Sound effects use bundled resources (see AudioService.ts)
 const MUSIC_STORAGE_PATH = `${RNFS.DocumentDirectoryPath}/music`;
 
 /**
  * MusicService handles music playback for workouts.
- * First tries to load from bundled Android raw resources, then falls back to downloaded files.
+ * Plays from downloaded files in the document directory.
  */
 class MusicService {
   private currentSound: Sound | null = null;
   private currentTrack: MusicTrack | null = null;
+  private currentSegment: MusicSegment | null = null;
   private isPlaying = false;
   private config: MusicConfig = {
     volume: 0.8,
@@ -43,6 +61,7 @@ class MusicService {
   };
   private eventListeners: Set<MusicEventCallback> = new Set();
   private trackEndCheckInterval: NodeJS.Timeout | null = null;
+  private buildupTimeout: NodeJS.Timeout | null = null;
 
   constructor() {
     // Singleton pattern
@@ -71,11 +90,13 @@ class MusicService {
   }
 
   /**
-   * Play a track - tries bundled raw resources first, then downloaded files
+   * Play a track from downloaded files
    * @param track - The track metadata
-   * @param useStartTimestamp - Whether to seek to the track's startTimestamp
+   * @param options - Playback options
+   * @param options.segment - The segment to seek to (uses segment.timestamp)
+   * @param options.useBuildup - If true and segment has buildupDuration, starts earlier for buildup
    */
-  async play(track: MusicTrack, useStartTimestamp = false): Promise<void> {
+  async play(track: MusicTrack, options?: { segment?: MusicSegment; useBuildup?: boolean }): Promise<void> {
     if (!this.config.enabled) {
       return;
     }
@@ -83,66 +104,111 @@ class MusicService {
     // Stop current track if playing
     await this.stop();
 
+    const segment = options?.segment;
+    const useBuildup = options?.useBuildup ?? false;
+
     // Helper to start playback once sound is loaded
     const startPlayback = (sound: Sound): void => {
       this.currentSound = sound;
       this.currentTrack = track;
+      this.currentSegment = segment || null;
 
       // Set volume
       sound.setVolume(this.config.volume);
 
-      // Seek to startTimestamp if requested
-      if (useStartTimestamp && track.startTimestamp && track.startTimestamp > 0) {
-        sound.setCurrentTime(track.startTimestamp);
+      // Calculate seek position based on segment and buildup
+      let seekPosition = 0;
+      let buildupDuration = 0;
+
+      if (segment) {
+        seekPosition = segment.timestamp;
+
+        // If using buildup and segment has buildupDuration, start earlier
+        if (useBuildup && segment.buildupDuration && segment.buildupDuration > 0) {
+          buildupDuration = segment.buildupDuration;
+          seekPosition = Math.max(0, segment.timestamp - buildupDuration);
+          console.log(`[MusicService] Starting with buildup: seek to ${seekPosition}s, drop at ${segment.timestamp}s`);
+        }
+      }
+
+      if (seekPosition > 0) {
+        sound.setCurrentTime(seekPosition);
       }
 
       // Start playback
       this.isPlaying = true;
-      this.emit({ type: 'trackStart', track });
+      this.emit({ type: 'trackStart', track, segment });
+
+      // Set up buildup complete timer if applicable
+      if (buildupDuration > 0) {
+        this.buildupTimeout = setTimeout(() => {
+          console.log(`[MusicService] Buildup complete - DROP!`);
+          this.emit({ type: 'buildupComplete', track, segment });
+          this.buildupTimeout = null;
+        }, buildupDuration * 1000);
+      }
 
       sound.play((success) => {
         this.isPlaying = false;
+        this.clearBuildupTimeout();
 
         if (success) {
-          this.emit({ type: 'trackEnd', track });
+          this.emit({ type: 'trackEnd', track, segment });
         } else {
-          this.emit({ type: 'error', track, error: new Error('Playback failed') });
+          this.emit({ type: 'error', track, segment, error: new Error('Playback failed') });
         }
 
         // Clean up
         this.currentSound = null;
         this.currentTrack = null;
+        this.currentSegment = null;
       });
 
       // Start checking for track end (backup for callback)
       this.startTrackEndCheck();
     };
 
-    // Try bundled raw resources first (Android: res/raw/)
-    // For Android, pass filename without extension
+    // Find the downloaded file (try all supported extensions)
+    const findDownloadedFile = async (): Promise<string | null> => {
+      for (const ext of SUPPORTED_EXTENSIONS) {
+        const path = `${MUSIC_STORAGE_PATH}/${track.filename}${ext}`;
+        const exists = await RNFS.exists(path);
+        if (exists) {
+          return path;
+        }
+      }
+      return null;
+    };
+
+    const downloadedPath = await findDownloadedFile();
+
+    if (!downloadedPath) {
+      const error = new Error(`Track file not found: ${track.filename}`);
+      console.error('[MusicService] Failed to find track:', track.filename);
+      this.emit({ type: 'error', track, segment, error });
+      throw error;
+    }
+
     return new Promise((resolve, reject) => {
-      const sound = new Sound(track.filename, Sound.MAIN_BUNDLE, (error) => {
-        if (!error) {
-          startPlayback(sound);
-          resolve();
+      const sound = new Sound(downloadedPath, '', (error) => {
+        if (error) {
+          console.error('[MusicService] Failed to load track:', track.filename, error);
+          this.emit({ type: 'error', track, segment, error });
+          reject(error);
           return;
         }
 
-        // Fall back to downloaded files in document directory
-        const downloadedPath = `${MUSIC_STORAGE_PATH}/${track.filename}.mp3`;
-
-        const downloadedSound = new Sound(downloadedPath, '', (downloadError) => {
-          if (downloadError) {
-            this.emit({ type: 'error', track, error: downloadError });
-            reject(downloadError);
-            return;
-          }
-
-          startPlayback(downloadedSound);
-          resolve();
-        });
+        startPlayback(sound);
+        resolve();
       });
     });
+  }
+
+  private clearBuildupTimeout(): void {
+    if (this.buildupTimeout) {
+      clearTimeout(this.buildupTimeout);
+      this.buildupTimeout = null;
+    }
   }
 
   private startTrackEndCheck(): void {
@@ -159,11 +225,14 @@ class MusicService {
             // Track ended
             this.isPlaying = false;
             const track = this.currentTrack;
+            const segment = this.currentSegment;
             this.currentSound = null;
             this.currentTrack = null;
+            this.currentSegment = null;
+            this.clearBuildupTimeout();
 
             if (track) {
-              this.emit({ type: 'trackEnd', track });
+              this.emit({ type: 'trackEnd', track, segment: segment || undefined });
             }
 
             if (this.trackEndCheckInterval) {
@@ -185,9 +254,12 @@ class MusicService {
       this.trackEndCheckInterval = null;
     }
 
+    this.clearBuildupTimeout();
+
     const wasPlaying = this.isPlaying || this.currentSound !== null;
 
     if (!this.currentSound) {
+      this.currentSegment = null;
       if (wasPlaying) {
         this.emit({ type: 'stopped' });
       }
@@ -203,6 +275,7 @@ class MusicService {
               this.currentSound = null;
             }
             this.currentTrack = null;
+            this.currentSegment = null;
             this.isPlaying = false;
             this.emit({ type: 'stopped' });
             resolve();
@@ -214,6 +287,7 @@ class MusicService {
         console.error('[MusicService] Error stopping:', error);
         this.currentSound = null;
         this.currentTrack = null;
+        this.currentSegment = null;
         this.isPlaying = false;
         this.emit({ type: 'stopped' });
         resolve();
@@ -325,6 +399,13 @@ class MusicService {
    */
   getCurrentTrack(): MusicTrack | null {
     return this.currentTrack;
+  }
+
+  /**
+   * Get current segment
+   */
+  getCurrentSegment(): MusicSegment | null {
+    return this.currentSegment;
   }
 
   /**

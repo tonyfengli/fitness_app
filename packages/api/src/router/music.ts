@@ -3,28 +3,48 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod/v4";
 
 import { eq } from "@acme/db";
-import { musicTracks, CreateMusicTrackSchema, UpdateMusicTrackSchema } from "@acme/db/schema";
+import { musicTracks, CreateMusicTrackSchema, UpdateMusicTrackSchema, MusicSegmentSchema } from "@acme/db/schema";
+import type { MusicSegment } from "@acme/db/schema";
 
 import { protectedProcedure } from "../trpc";
+
+// Energy type for filtering (excludes "outro" since you don't filter by it)
+const EnergyFilterSchema = z.enum(["low", "medium", "high"]);
+type EnergyFilter = z.infer<typeof EnergyFilterSchema>;
+
+/**
+ * Helper to check if a track has a segment with the given energy
+ */
+function hasEnergySegment(segments: MusicSegment[] | null | undefined, energy: EnergyFilter): boolean {
+  if (!segments || segments.length === 0) return false;
+  return segments.some(s => s.energy === energy);
+}
+
+/**
+ * Helper to get a random segment with the given energy from a track
+ */
+function getRandomSegmentByEnergy(segments: MusicSegment[], energy: EnergyFilter): MusicSegment | null {
+  const matching = segments.filter(s => s.energy === energy);
+  if (matching.length === 0) return null;
+  return matching[Math.floor(Math.random() * matching.length)] ?? null;
+}
 
 export const musicRouter = {
   // Get all music tracks
   list: protectedProcedure
     .input(z.object({
-      energy: z.enum(["high", "low"]).optional(),
+      energy: EnergyFilterSchema.optional(), // filter tracks that have segments with this energy
     }).optional())
     .query(async ({ ctx, input }) => {
-      const conditions = [];
-
-      if (input?.energy) {
-        conditions.push(eq(musicTracks.energy, input.energy));
-      }
-
       const tracks = await ctx.db
         .select()
         .from(musicTracks)
-        .where(conditions.length > 0 ? conditions[0] : undefined)
         .orderBy(musicTracks.name);
+
+      // If energy filter provided, filter tracks that have at least one segment with that energy
+      if (input?.energy) {
+        return tracks.filter(t => hasEnergySegment(t.segments, input.energy!));
+      }
 
       return tracks;
     }),
@@ -49,39 +69,48 @@ export const musicRouter = {
       return track;
     }),
 
-  // Get a random track by energy level
+  // Get a random track with a segment matching the energy level
+  // Returns the track AND the selected segment to seek to
   getRandom: protectedProcedure
     .input(z.object({
-      energy: z.enum(["high", "low"]),
+      energy: EnergyFilterSchema,
       excludeIds: z.array(z.string().uuid()).optional(),
     }))
     .query(async ({ ctx, input }) => {
-      const tracks = await ctx.db
+      const allTracks = await ctx.db
         .select()
-        .from(musicTracks)
-        .where(eq(musicTracks.energy, input.energy));
+        .from(musicTracks);
 
-      // Filter out excluded tracks
-      let availableTracks = tracks;
+      // Filter tracks that have at least one segment with the requested energy
+      let availableTracks = allTracks.filter(t => hasEnergySegment(t.segments, input.energy));
+
+      // Exclude specified track IDs
       if (input.excludeIds && input.excludeIds.length > 0) {
-        availableTracks = tracks.filter(t => !input.excludeIds!.includes(t.id));
-      }
-
-      if (availableTracks.length === 0) {
+        const excludeSet = new Set(input.excludeIds);
+        const filtered = availableTracks.filter(t => !excludeSet.has(t.id));
         // If all tracks are excluded, allow repeats
-        availableTracks = tracks;
+        if (filtered.length > 0) {
+          availableTracks = filtered;
+        }
       }
 
       if (availableTracks.length === 0) {
         throw new TRPCError({
           code: "NOT_FOUND",
-          message: `No ${input.energy} energy tracks available`,
+          message: `No tracks with ${input.energy} energy segments available`,
         });
       }
 
-      // Return a random track
-      const randomIndex = Math.floor(Math.random() * availableTracks.length);
-      return availableTracks[randomIndex];
+      // Pick a random track
+      const randomTrack = availableTracks[Math.floor(Math.random() * availableTracks.length)]!;
+
+      // Pick a random segment with the requested energy from that track
+      const segment = getRandomSegmentByEnergy(randomTrack.segments ?? [], input.energy);
+
+      return {
+        track: randomTrack,
+        segment, // The segment to seek to
+      };
     }),
 
   // Create a new track

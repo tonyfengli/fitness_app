@@ -4,6 +4,30 @@ import { MusicTrack } from './MusicService';
 // Local storage path for downloaded music
 const MUSIC_DIR = `${RNFS.DocumentDirectoryPath}/music`;
 
+// Supported audio extensions
+const SUPPORTED_EXTENSIONS = ['.mp3', '.m4a', '.aac', '.wav'];
+const DEFAULT_EXTENSION = '.mp3';
+
+/**
+ * Extract file extension from a URL or filename
+ */
+function getExtensionFromUrl(url: string): string {
+  try {
+    // Remove query params and get the path
+    const urlPath = url.split('?')[0] || url;
+    const lastSegment = urlPath.split('/').pop() || '';
+
+    for (const ext of SUPPORTED_EXTENSIONS) {
+      if (lastSegment.toLowerCase().endsWith(ext)) {
+        return ext;
+      }
+    }
+  } catch {
+    // Fall through to default
+  }
+  return DEFAULT_EXTENSION;
+}
+
 export interface DownloadProgress {
   trackId: string;
   filename: string;
@@ -38,16 +62,32 @@ class MusicDownloadService {
   /**
    * Get the local file path for a track
    */
-  getLocalPath(filename: string): string {
-    return `${MUSIC_DIR}/${filename}.mp3`;
+  getLocalPath(filename: string, extension: string = DEFAULT_EXTENSION): string {
+    return `${MUSIC_DIR}/${filename}${extension}`;
   }
 
   /**
-   * Check if a track exists locally
+   * Check if a track exists locally (checks all supported extensions)
    */
   async existsLocally(filename: string): Promise<boolean> {
-    const path = this.getLocalPath(filename);
-    return RNFS.exists(path);
+    for (const ext of SUPPORTED_EXTENSIONS) {
+      const path = this.getLocalPath(filename, ext);
+      const exists = await RNFS.exists(path);
+      if (exists) return true;
+    }
+    return false;
+  }
+
+  /**
+   * Find the local path for a track (checks all supported extensions)
+   */
+  async findLocalPath(filename: string): Promise<string | null> {
+    for (const ext of SUPPORTED_EXTENSIONS) {
+      const path = this.getLocalPath(filename, ext);
+      const exists = await RNFS.exists(path);
+      if (exists) return path;
+    }
+    return null;
   }
 
   /**
@@ -82,11 +122,13 @@ class MusicDownloadService {
       return false;
     }
 
-    const localPath = this.getLocalPath(track.filename);
+    // Get extension from the download URL
+    const extension = getExtensionFromUrl(track.downloadUrl);
+    const localPath = this.getLocalPath(track.filename, extension);
 
-    // Check if already exists
-    const exists = await RNFS.exists(localPath);
-    if (exists) {
+    // Check if already exists (any supported extension)
+    const existingPath = await this.findLocalPath(track.filename);
+    if (existingPath) {
       console.log('[MusicDownload] Already exists:', track.filename);
       return true;
     }
@@ -197,14 +239,20 @@ class MusicDownloadService {
    */
   async listLocalTracks(): Promise<string[]> {
     try {
+      console.log('[MusicDownload] listLocalTracks - checking MUSIC_DIR:', MUSIC_DIR);
       const exists = await RNFS.exists(MUSIC_DIR);
+      console.log('[MusicDownload] listLocalTracks - directory exists:', exists);
       if (!exists) {
+        console.log('[MusicDownload] listLocalTracks - returning empty (no dir)');
         return [];
       }
       const files = await RNFS.readDir(MUSIC_DIR);
-      return files
+      console.log('[MusicDownload] listLocalTracks - raw files:', files.map(f => f.name));
+      const mp3Files = files
         .filter(f => f.name.endsWith('.mp3'))
         .map(f => f.name.replace('.mp3', ''));
+      console.log('[MusicDownload] listLocalTracks - mp3 files:', mp3Files);
+      return mp3Files;
     } catch (error) {
       console.error('[MusicDownload] Error listing local tracks:', error);
       return [];
@@ -223,6 +271,7 @@ class MusicDownloadService {
       }
     } catch (error) {
       console.error('[MusicDownload] Error clearing local tracks:', error);
+      throw error;
     }
   }
 
