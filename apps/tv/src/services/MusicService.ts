@@ -97,7 +97,11 @@ class MusicService {
    * @param options.useBuildup - If true and segment has buildupDuration, starts earlier for buildup
    */
   async play(track: MusicTrack, options?: { segment?: MusicSegment; useBuildup?: boolean }): Promise<void> {
+    console.log(`[MusicService] play() called for track: ${track.filename}`);
+    console.log(`[MusicService] play() options:`, { segment: options?.segment, useBuildup: options?.useBuildup });
+
     if (!this.config.enabled) {
+      console.log(`[MusicService] play() - music disabled, returning`);
       return;
     }
 
@@ -137,6 +141,7 @@ class MusicService {
 
       // Start playback
       this.isPlaying = true;
+      console.log(`[MusicService] Starting playback for: ${track.filename}, volume: ${this.config.volume}`);
       this.emit({ type: 'trackStart', track, segment });
 
       // Set up buildup complete timer if applicable
@@ -148,13 +153,17 @@ class MusicService {
         }, buildupDuration * 1000);
       }
 
+      console.log(`[MusicService] Calling sound.play() for: ${track.filename}`);
       sound.play((success) => {
+        console.log(`[MusicService] sound.play() callback: ${track.filename}, success: ${success}`);
         this.isPlaying = false;
         this.clearBuildupTimeout();
 
         if (success) {
+          console.log(`[MusicService] Track finished successfully: ${track.filename}`);
           this.emit({ type: 'trackEnd', track, segment });
         } else {
+          console.error(`[MusicService] Playback FAILED for: ${track.filename}`);
           this.emit({ type: 'error', track, segment, error: new Error('Playback failed') });
         }
 
@@ -170,9 +179,11 @@ class MusicService {
 
     // Find the downloaded file (try all supported extensions)
     const findDownloadedFile = async (): Promise<string | null> => {
+      console.log(`[MusicService] Searching for file: ${track.filename}`);
       for (const ext of SUPPORTED_EXTENSIONS) {
         const path = `${MUSIC_STORAGE_PATH}/${track.filename}${ext}`;
         const exists = await RNFS.exists(path);
+        console.log(`[MusicService]   Checking ${path}: ${exists ? 'FOUND' : 'not found'}`);
         if (exists) {
           return path;
         }
@@ -181,6 +192,7 @@ class MusicService {
     };
 
     const downloadedPath = await findDownloadedFile();
+    console.log(`[MusicService] Final path: ${downloadedPath || 'NOT FOUND'}`);
 
     if (!downloadedPath) {
       const error = new Error(`Track file not found: ${track.filename}`);
@@ -189,15 +201,17 @@ class MusicService {
       throw error;
     }
 
+    console.log(`[MusicService] Creating Sound object for: ${downloadedPath}`);
     return new Promise((resolve, reject) => {
       const sound = new Sound(downloadedPath, '', (error) => {
         if (error) {
-          console.error('[MusicService] Failed to load track:', track.filename, error);
+          console.error('[MusicService] Sound constructor error:', track.filename, error);
           this.emit({ type: 'error', track, segment, error });
           reject(error);
           return;
         }
 
+        console.log(`[MusicService] Sound loaded successfully: ${track.filename}, duration: ${sound.getDuration()}s`);
         startPlayback(sound);
         resolve();
       });
@@ -269,16 +283,25 @@ class MusicService {
     return new Promise((resolve) => {
       try {
         if (this.currentSound) {
-          this.currentSound.stop(() => {
-            if (this.currentSound) {
-              this.currentSound.release();
-              this.currentSound = null;
+          const soundToRelease = this.currentSound;
+          const trackName = this.currentTrack?.filename || 'unknown';
+          console.log(`[MusicService] Stopping and releasing: ${trackName}`);
+
+          soundToRelease.stop(() => {
+            console.log(`[MusicService] Stop callback fired for: ${trackName}`);
+            try {
+              soundToRelease.release();
+              console.log(`[MusicService] Released: ${trackName}`);
+            } catch (releaseError) {
+              console.error(`[MusicService] Release error for ${trackName}:`, releaseError);
             }
+            this.currentSound = null;
             this.currentTrack = null;
             this.currentSegment = null;
             this.isPlaying = false;
             this.emit({ type: 'stopped' });
-            resolve();
+            // Small delay to ensure native resources are freed
+            setTimeout(() => resolve(), 50);
           });
         } else {
           resolve();

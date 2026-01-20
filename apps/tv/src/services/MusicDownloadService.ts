@@ -248,11 +248,17 @@ class MusicDownloadService {
       }
       const files = await RNFS.readDir(MUSIC_DIR);
       console.log('[MusicDownload] listLocalTracks - raw files:', files.map(f => f.name));
-      const mp3Files = files
-        .filter(f => f.name.endsWith('.mp3'))
-        .map(f => f.name.replace('.mp3', ''));
-      console.log('[MusicDownload] listLocalTracks - mp3 files:', mp3Files);
-      return mp3Files;
+
+      // Find all audio files with supported extensions
+      const audioFiles = files
+        .filter(f => SUPPORTED_EXTENSIONS.some(ext => f.name.toLowerCase().endsWith(ext)))
+        .map(f => {
+          // Remove extension to get filename
+          const ext = SUPPORTED_EXTENSIONS.find(e => f.name.toLowerCase().endsWith(e)) || '';
+          return f.name.slice(0, -ext.length);
+        });
+      console.log('[MusicDownload] listLocalTracks - audio files:', audioFiles);
+      return audioFiles;
     } catch (error) {
       console.error('[MusicDownload] Error listing local tracks:', error);
       return [];

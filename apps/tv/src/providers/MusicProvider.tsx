@@ -209,14 +209,19 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     );
 
     let availableTracks = trackPool.filter(t => !recentlyPlayedIds.has(t.id));
+    console.log(`[MusicProvider] Track pool filenames:`, trackPool.map(t => t.filename));
+    console.log(`[MusicProvider] Recently played IDs:`, Array.from(recentlyPlayedIds));
+    console.log(`[MusicProvider] Available tracks after filtering:`, availableTracks.map(t => t.filename));
 
     if (availableTracks.length === 0) {
+      console.log(`[MusicProvider] All tracks played, resetting history`);
       playedTracksHistory.current = [];
       availableTracks = trackPool;
     }
 
     const randomIndex = Math.floor(Math.random() * availableTracks.length);
     const track = availableTracks[randomIndex];
+    console.log(`[MusicProvider] Random selection: index=${randomIndex}, track=${track?.filename || 'none'}`);
 
     if (track) {
       // Select a segment with the target energy (or first segment as fallback)
@@ -224,7 +229,7 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
         ? getRandomSegmentByEnergy(track.segments || [], targetEnergy)
         : track.segments?.[0] || null;
 
-      console.log(`[MusicProvider] Selected track: "${track.name}", segment: ${segment?.energy} @ ${segment?.timestamp}s, useBuildup: ${useBuildup}`);
+      console.log(`[MusicProvider] Selected track: "${track.name}" (${track.filename}), segment: ${segment?.energy} @ ${segment?.timestamp}s, useBuildup: ${useBuildup}`);
 
       try {
         playedTracksHistory.current.push({ track, segment });
