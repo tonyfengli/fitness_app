@@ -7,8 +7,10 @@
 export interface MusicTrigger {
   enabled: boolean;                    // Toggle on/off
   trackId?: string;                    // Optional specific track ID, else random from energy pool
-  useStartTimestamp?: boolean;         // Jump to track's startTimestamp or play from 0
-  energy?: 'high' | 'low';             // Energy level (defaults based on phase type)
+  trackName?: string;                  // Track name for display purposes
+  useBuildup?: boolean;                // Start at buildup point before the drop
+  energy?: 'low' | 'medium' | 'high';  // Energy level (defaults based on phase type)
+  repeatOnAllSets?: boolean;           // If true, trigger fires on every set (not just first)
 }
 
 // Music configuration for a round

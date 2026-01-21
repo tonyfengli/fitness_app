@@ -82,8 +82,10 @@ export const LightingConfigSchema = z.object({
 export const MusicTriggerSchema = z.object({
   enabled: z.boolean(),
   trackId: z.string().uuid().optional(),
-  useStartTimestamp: z.boolean().optional(),
-  energy: z.enum(['high', 'low']).optional(),
+  trackName: z.string().optional(),
+  useBuildup: z.boolean().optional(),
+  energy: z.enum(['low', 'medium', 'high']).optional(),
+  repeatOnAllSets: z.boolean().optional(),
 });
 
 // Music configuration schema for a round

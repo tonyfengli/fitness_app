@@ -27,8 +27,9 @@ interface MusicTrigger {
   enabled: boolean;
   trackId?: string;
   trackName?: string;
-  useStartTimestamp?: boolean;
+  useBuildup?: boolean; // Start at buildup point before the drop
   energy?: EnergyLevel;
+  repeatOnAllSets?: boolean; // If true, trigger fires on every set (not just first)
 }
 
 interface RoundMusicConfig {
@@ -75,9 +76,11 @@ export function RoundMusicDrawer({
   const [hasChanges, setHasChanges] = useState(false);
 
   // Phase detail state
+  const [detailEnabled, setDetailEnabled] = useState(false);
   const [detailTrackId, setDetailTrackId] = useState<string | null>(null);
   const [detailTrackName, setDetailTrackName] = useState<string>("");
   const [detailEnergy, setDetailEnergy] = useState<EnergyLevel>("high");
+  const [detailRepeatOnAllSets, setDetailRepeatOnAllSets] = useState(false);
 
   // Track picker state
   const [trackSearchQuery, setTrackSearchQuery] = useState("");
@@ -304,9 +307,11 @@ export function RoundMusicDrawer({
   // Open phase detail
   const handleOpenPhaseDetail = (phase: Phase) => {
     const trigger = getTriggerForPhase(phase);
+    setDetailEnabled(trigger?.enabled ?? false);
     setDetailTrackId(trigger?.trackId || null);
     setDetailTrackName(trigger?.trackName || "");
-    setDetailEnergy((trigger?.energy as EnergyLevel) || "high");
+    setDetailEnergy((trigger?.energy as EnergyLevel) || (phase.phaseType === "rest" ? "low" : "high"));
+    setDetailRepeatOnAllSets(trigger?.repeatOnAllSets ?? false);
     setViewState({ type: "phase-detail", phase });
   };
 
@@ -314,11 +319,15 @@ export function RoundMusicDrawer({
   const handleApplyPhaseDetail = () => {
     if (viewState.type !== "phase-detail") return;
 
-    updateTriggerForPhase(viewState.phase, {
-      enabled: true,
+    const phase = viewState.phase;
+    const showRepeatOption = repeatTimes > 1 && (phase.phaseType === "exercise" || phase.phaseType === "rest");
+
+    updateTriggerForPhase(phase, {
+      enabled: detailEnabled,
       trackId: detailTrackId || undefined,
       trackName: detailTrackId ? detailTrackName : undefined,
       energy: detailEnergy,
+      ...(showRepeatOption ? { repeatOnAllSets: detailRepeatOnAllSets } : {}),
     });
 
     setViewState({ type: "phases" });
@@ -352,7 +361,14 @@ export function RoundMusicDrawer({
 
     const trackPart = trigger.trackName || "Random";
     const energyPart = ENERGY_DISPLAY[trigger.energy || "high"];
-    return `${trackPart} · ${energyPart}`;
+
+    // Show repeat indicator for exercise/rest phases in multi-set rounds
+    const showRepeat = repeatTimes > 1 &&
+      (phase.phaseType === "exercise" || phase.phaseType === "rest") &&
+      trigger.repeatOnAllSets;
+
+    const repeatPart = showRepeat ? ` · ${repeatTimes}x` : "";
+    return `${trackPart} · ${energyPart}${repeatPart}`;
   };
 
   // Phases View
@@ -388,7 +404,12 @@ export function RoundMusicDrawer({
                 <div key={phase.key}>
                   <button
                     onClick={() => handleOpenPhaseDetail(phase)}
-                    className="w-full py-4 flex items-center justify-between group"
+                    className={cn(
+                      "w-full py-4 px-3 -mx-3 rounded-xl flex items-center justify-between group transition-colors",
+                      isEnabled
+                        ? "bg-purple-50 dark:bg-purple-900/20"
+                        : "hover:bg-gray-50 dark:hover:bg-gray-800/50"
+                    )}
                   >
                     <div className="flex-1 min-w-0 text-left">
                       <p
@@ -413,20 +434,21 @@ export function RoundMusicDrawer({
                       </p>
                     </div>
 
-                    <Toggle
-                      enabled={isEnabled}
-                      onToggle={() => {
-                        if (isEnabled) {
-                          updateTriggerForPhase(phase, { enabled: false });
-                        } else {
-                          // Enable with smart defaults
-                          updateTriggerForPhase(phase, {
-                            enabled: true,
-                            energy: phase.phaseType === "rest" ? "low" : "high",
-                          });
-                        }
-                      }}
-                    />
+                    {/* Chevron - indicates drill-in */}
+                    <svg
+                      className={cn(
+                        "w-5 h-5 transition-colors",
+                        isEnabled
+                          ? "text-purple-400 dark:text-purple-500"
+                          : "text-gray-400 dark:text-gray-500 group-hover:text-gray-600 dark:group-hover:text-gray-400"
+                      )}
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                    </svg>
                   </button>
 
                   {/* Subtle separator */}
@@ -445,7 +467,7 @@ export function RoundMusicDrawer({
             onClick={onClose}
             className="flex-1 py-3 text-gray-600 dark:text-gray-400 font-medium rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
           >
-            Cancel
+            Back
           </button>
           <button
             onClick={handleSave}
@@ -476,22 +498,63 @@ export function RoundMusicDrawer({
     return (
       <div className="flex flex-col h-full">
         {/* Header */}
-        <div className="px-6 pt-4 pb-4 flex items-center gap-4">
+        <div className="px-6 pt-4 pb-4">
           <button
             onClick={() => setViewState({ type: "phases" })}
-            className="p-2 -ml-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+            className="flex items-center gap-1 -ml-2 px-2 py-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
           >
             <svg className="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+              {viewState.phase.label}
+            </h2>
           </button>
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-            {viewState.phase.label}
-          </h2>
         </div>
 
         {/* Content */}
         <div className="flex-1 min-h-0 overflow-y-auto px-6">
+          {/* Primary Toggle - Top of hierarchy */}
+          <div
+            onClick={() => setDetailEnabled(!detailEnabled)}
+            className={cn(
+              "w-full p-4 rounded-2xl mt-4 mb-6 flex items-center justify-between transition-all cursor-pointer",
+              detailEnabled
+                ? "bg-purple-50 dark:bg-purple-900/20 ring-2 ring-purple-500"
+                : "bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700"
+            )}
+          >
+            <div className="flex items-center gap-3">
+              <div className={cn(
+                "w-10 h-10 rounded-xl flex items-center justify-center transition-colors",
+                detailEnabled
+                  ? "bg-purple-500 text-white"
+                  : "bg-gray-200 dark:bg-gray-700 text-gray-400"
+              )}>
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+                </svg>
+              </div>
+              <span className={cn(
+                "font-semibold text-lg",
+                detailEnabled
+                  ? "text-purple-700 dark:text-purple-300"
+                  : "text-gray-500 dark:text-gray-400"
+              )}>
+                Change Music Track
+              </span>
+            </div>
+            <Toggle
+              enabled={detailEnabled}
+              onToggle={() => setDetailEnabled(!detailEnabled)}
+            />
+          </div>
+
+          {/* Configuration - dimmed when disabled */}
+          <div className={cn(
+            "transition-opacity",
+            !detailEnabled && "opacity-40 pointer-events-none"
+          )}>
           {/* Energy Selection - Primary */}
           <div className="mb-8">
             <h3 className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3">
@@ -564,10 +627,10 @@ export function RoundMusicDrawer({
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-gray-900 dark:text-white truncate">
-                        {detailTrackName}
+                        {detailTrackName || selectedTrack?.name || "Selected track"}
                       </p>
                       <p className="text-sm text-gray-500 dark:text-gray-400">
-                        {selectedTrack?.artist || "Specific track"}
+                        Specific track
                       </p>
                     </div>
                   </>
@@ -577,6 +640,43 @@ export function RoundMusicDrawer({
                 </svg>
               </div>
             </button>
+          </div>
+
+          {/* Repeat on All Sets - Only show for exercise/rest phases in rounds with 2+ sets */}
+          {repeatTimes > 1 && (viewState.phase.phaseType === "exercise" || viewState.phase.phaseType === "rest") && (
+            <div className="mb-8">
+              <button
+                onClick={() => setDetailRepeatOnAllSets(!detailRepeatOnAllSets)}
+                className="w-full p-4 rounded-xl bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex-1 min-w-0 text-left">
+                    <p className="font-medium text-gray-900 dark:text-white">
+                      Play every set
+                    </p>
+                    {detailRepeatOnAllSets && (
+                      <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+                        Triggers on all {repeatTimes} sets
+                      </p>
+                    )}
+                  </div>
+                  <div
+                    className={cn(
+                      "relative w-12 h-7 rounded-full transition-all duration-200 flex-shrink-0 ml-4",
+                      detailRepeatOnAllSets ? "bg-purple-500" : "bg-gray-200 dark:bg-gray-700"
+                    )}
+                  >
+                    <div
+                      className={cn(
+                        "absolute top-1 w-5 h-5 rounded-full bg-white shadow-sm transition-transform duration-200",
+                        detailRepeatOnAllSets ? "translate-x-6" : "translate-x-1"
+                      )}
+                    />
+                  </div>
+                </div>
+              </button>
+            </div>
+          )}
           </div>
         </div>
 
@@ -608,18 +708,18 @@ export function RoundMusicDrawer({
     return (
       <div className="flex flex-col h-full">
         {/* Header */}
-        <div className="px-6 pt-4 pb-4 flex items-center gap-4">
+        <div className="px-6 pt-4 pb-4">
           <button
             onClick={() => setViewState({ type: "phase-detail", phase: viewState.phase })}
-            className="p-2 -ml-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+            className="flex items-center gap-1 -ml-2 px-2 py-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
           >
             <svg className="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+              Choose Track
+            </h2>
           </button>
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-            Choose Track
-          </h2>
         </div>
 
         {/* Search Input */}
@@ -733,31 +833,23 @@ export function RoundMusicDrawer({
                         <p className="font-medium text-gray-900 dark:text-white truncate">
                           {track.name}
                         </p>
-                        <div className="flex items-center gap-2 mt-1">
-                          <span className="text-sm text-gray-500 dark:text-gray-400 truncate">
-                            {track.artist}
-                          </span>
-                          {energyLevels.length > 0 && (
-                            <>
-                              <span className="text-gray-300 dark:text-gray-600">·</span>
-                              <div className="flex gap-1">
-                                {energyLevels.map((e) => (
-                                  <span
-                                    key={e}
-                                    className={cn(
-                                      "text-xs font-medium",
-                                      e === "low" && "text-blue-500",
-                                      e === "medium" && "text-amber-500",
-                                      e === "high" && "text-orange-500"
-                                    )}
-                                  >
-                                    {ENERGY_DISPLAY[e]}
-                                  </span>
-                                ))}
-                              </div>
-                            </>
-                          )}
-                        </div>
+                        {energyLevels.length > 0 && (
+                          <div className="flex gap-1 mt-1">
+                            {energyLevels.map((e) => (
+                              <span
+                                key={e}
+                                className={cn(
+                                  "text-xs font-medium",
+                                  e === "low" && "text-blue-500",
+                                  e === "medium" && "text-amber-500",
+                                  e === "high" && "text-orange-500"
+                                )}
+                              >
+                                {ENERGY_DISPLAY[e]}
+                              </span>
+                            ))}
+                          </div>
+                        )}
                       </div>
                       {detailTrackId === track.id && (
                         <svg className="w-5 h-5 text-purple-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
@@ -770,6 +862,16 @@ export function RoundMusicDrawer({
               })
             )}
           </div>
+        </div>
+
+        {/* Footer */}
+        <div className="px-6 py-4 border-t border-gray-100 dark:border-gray-800">
+          <button
+            onClick={() => setViewState({ type: "phase-detail", phase: viewState.phase })}
+            className="w-full py-3 text-gray-600 dark:text-gray-400 font-medium rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+          >
+            Back
+          </button>
         </div>
       </div>
     );

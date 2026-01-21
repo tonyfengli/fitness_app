@@ -10,11 +10,13 @@ export type MusicPhaseType = "preview" | "exercise" | "rest" | "setBreak";
  */
 export interface MusicTriggerResult {
   /** Energy level for track selection */
-  energy: "high" | "low";
-  /** Whether to use the track's startTimestamp (skip intro) */
-  useStartTimestamp: boolean;
+  energy: "low" | "medium" | "high";
+  /** Whether to start at buildup point before the drop */
+  useBuildup: boolean;
   /** Specific track ID if configured (otherwise select by energy) */
   trackId?: string;
+  /** Whether to repeat on all sets (not just first) */
+  repeatOnAllSets: boolean;
 }
 
 /**
@@ -29,7 +31,7 @@ export interface MusicTriggerResult {
  * // Check if music should change at round preview
  * const result = evaluateMusicTrigger(roundConfig.music, 'preview', 0);
  * if (result) {
- *   playMusic({ energy: result.energy, useStartTimestamp: result.useStartTimestamp });
+ *   playMusic({ energy: result.energy, useBuildup: result.useBuildup });
  * }
  *
  * @example
@@ -66,8 +68,9 @@ export function evaluateMusicTrigger(
   // Return the trigger result with defaults
   return {
     energy: trigger.energy ?? "high",
-    useStartTimestamp: trigger.useStartTimestamp ?? false,
+    useBuildup: trigger.useBuildup ?? false,
     trackId: trigger.trackId,
+    repeatOnAllSets: trigger.repeatOnAllSets ?? false,
   };
 }
 

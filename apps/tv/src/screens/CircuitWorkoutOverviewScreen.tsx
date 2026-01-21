@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, ScrollView, ActivityIndicator, Pressable, LayoutAnimation, Platform, UIManager } from 'react-native';
 
 // Enable LayoutAnimation on Android
@@ -14,6 +14,8 @@ import { useStartWorkout } from '../hooks/useStartWorkout';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { useLightingControl } from '../hooks/useLightingControl';
 import { useMusicPlayer } from '../hooks/useMusicPlayer';
+import { useWorkoutMusic } from '../hooks/useWorkoutMusic';
+import { useMusic } from '../providers/MusicProvider';
 
 // Design tokens - matching other screens
 const TOKENS = {
@@ -602,6 +604,9 @@ export function CircuitWorkoutOverviewScreen() {
     playWithTrigger,
   } = useMusicPlayer();
 
+  // Get shared trigger state from music context
+  const { setLastTriggeredPhase } = useMusic();
+
   // Ensure settings panel is closed when this screen mounts
   useEffect(() => {
     setIsSettingsPanelOpen(false);
@@ -626,8 +631,28 @@ export function CircuitWorkoutOverviewScreen() {
       queryFn: () => Promise.resolve(null)
     }
   );
-  
-  
+
+  // Create synthetic workout state for Round 1 Preview
+  // This allows useWorkoutMusic to evaluate triggers on this screen
+  const syntheticWorkoutState = useMemo(() => ({
+    value: 'roundPreview',
+    context: {
+      currentRoundIndex: 0,
+      currentExerciseIndex: 0,
+      currentSetNumber: 1,
+      isPaused: false,
+      isStarted: true,
+    }
+  }), []);
+
+  // Use workout music hook to handle automatic triggers
+  // Only enable if music is enabled (user has toggled music on)
+  useWorkoutMusic({
+    workoutState: syntheticWorkoutState,
+    circuitConfig,
+    enabled: isMusicEnabled,
+  });
+
   // Get session data to check template type
   const { data: sessionData, isLoading: sessionLoading } = useQuery(
     sessionId ? api.trainingSession.getById.queryOptions({ id: sessionId }) : {
@@ -1080,8 +1105,14 @@ export function CircuitWorkoutOverviewScreen() {
                   const round1Template = circuitConfig?.config?.roundTemplates?.find(
                     (rt: any) => rt.roundNumber === 1
                   );
-                  const previewEnergy = round1Template?.music?.roundPreview?.energy ?? 'low';
-                  playWithTrigger({ energy: previewEnergy });
+                  const previewTrigger = round1Template?.music?.roundPreview;
+                  playWithTrigger({
+                    energy: previewTrigger?.energy ?? 'low',
+                    useBuildup: previewTrigger?.useBuildup ?? false,
+                    trackId: previewTrigger?.trackId,
+                  });
+                  // Mark Round 1 Preview as triggered so CircuitWorkoutLive doesn't re-trigger
+                  setLastTriggeredPhase('roundPreview-0-0-1');
                 }
               }}
               focusable={isSettingsPanelOpen}

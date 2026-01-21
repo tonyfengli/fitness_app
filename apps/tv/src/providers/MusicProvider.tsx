@@ -24,6 +24,10 @@ interface MusicContextValue {
   tracks: MusicTrack[];
   buildupCountdown: number | null; // Seconds remaining in buildup, null if not in buildup
 
+  // Trigger tracking (shared across screens)
+  lastTriggeredPhase: string | null;
+  setLastTriggeredPhase: (phase: string | null) => void;
+
   // Actions
   start: () => Promise<void>;
   stop: () => Promise<void>;
@@ -72,6 +76,9 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
   const [currentEnergy, setCurrentEnergy] = useState<EnergyLevel | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [buildupCountdown, setBuildupCountdown] = useState<number | null>(null);
+
+  // Trigger tracking (shared across screens to prevent duplicate triggers)
+  const [lastTriggeredPhase, setLastTriggeredPhase] = useState<string | null>(null);
 
   // Sync state
   const [isSyncing, setIsSyncing] = useState(false);
@@ -277,20 +284,27 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     // If a specific track is requested, try to find and play it
     if (trackId) {
       const specificTrack = tracks.find(t => t.id === trackId);
-      if (specificTrack && hasEnergySegment(specificTrack, energy)) {
+      if (specificTrack) {
         isStartingRef.current = true;
         try {
-          const segment = getRandomSegmentByEnergy(specificTrack.segments || [], energy);
+          // Try to get segment with requested energy
+          let segment = getRandomSegmentByEnergy(specificTrack.segments || [], energy);
 
-          console.log(`[MusicProvider] Playing specific track: ${specificTrack.name}, segment: ${segment?.energy}`);
+          // If requested energy not available, play from beginning of track
+          if (!segment) {
+            console.log(`[MusicProvider] Track ${specificTrack.name} has no ${energy} segment, playing from beginning`);
+            segment = { timestamp: 0, energy } as MusicSegment;
+          }
+
+          console.log(`[MusicProvider] Playing specific track: ${specificTrack.name}, segment: ${segment.energy} @ ${segment.timestamp}s`);
 
           playedTracksHistory.current.push({ track: specificTrack, segment });
           setIsPaused(false);
-          setCurrentEnergy(segment?.energy || energy);
+          setCurrentEnergy(segment.energy || energy);
           setIsEnabled(true);
           isSwitchingTrackRef.current = true;
 
-          if (useBuildup && segment?.buildupDuration && segment.buildupDuration > 0) {
+          if (useBuildup && segment.buildupDuration && segment.buildupDuration > 0) {
             startBuildupCountdown(segment.buildupDuration);
           }
 
@@ -305,7 +319,7 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
           isStartingRef.current = false;
         }
       } else {
-        console.warn(`[MusicProvider] Track ${trackId} not found or has no ${energy} segment, falling back`);
+        console.warn(`[MusicProvider] Track ${trackId} not found in available tracks, falling back`);
       }
     }
 
@@ -518,6 +532,8 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     syncResult,
     tracks,
     buildupCountdown,
+    lastTriggeredPhase,
+    setLastTriggeredPhase,
     start,
     stop,
     enable,

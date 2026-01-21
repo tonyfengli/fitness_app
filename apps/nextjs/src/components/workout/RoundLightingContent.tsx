@@ -535,18 +535,18 @@ export function RoundLightingContent({
     return (
       <div className="flex flex-col h-full">
         {/* Header */}
-        <div className="px-6 pt-4 pb-4 flex items-center gap-4">
+        <div className="px-6 pt-4 pb-4">
           <button
             onClick={handleBackFromPicker}
-            className="p-2 -ml-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+            className="flex items-center gap-1 -ml-2 px-2 py-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
           >
             <svg className="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+              {viewState.phaseLabel}
+            </h2>
           </button>
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-            {viewState.phaseLabel}
-          </h2>
         </div>
 
         {/* Search Input */}

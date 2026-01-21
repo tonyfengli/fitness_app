@@ -4,8 +4,11 @@ import React from "react";
 
 interface MusicTrigger {
   enabled: boolean;
-  energy?: "high" | "medium" | "low";
-  useStartTimestamp?: boolean;
+  energy?: "low" | "medium" | "high";
+  useBuildup?: boolean;
+  trackId?: string;
+  trackName?: string;
+  repeatOnAllSets?: boolean;
 }
 
 interface MusicTriggers {

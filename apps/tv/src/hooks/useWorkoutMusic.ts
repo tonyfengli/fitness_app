@@ -2,6 +2,9 @@ import { useEffect, useRef } from 'react';
 import type { CircuitConfig } from '@acme/db';
 import { useMusic } from '../providers/MusicProvider';
 
+// Re-export shared trigger state for use by other screens (e.g., CircuitWorkoutOverviewScreen)
+export { useMusic } from '../providers/MusicProvider';
+
 // ============================================================================
 // Music Trigger Types & Logic (inlined to avoid zod/v4 bundling issues)
 // ============================================================================
@@ -16,6 +19,7 @@ interface MusicTrigger {
   trackId?: string;
   useBuildup?: boolean; // Start at buildup point before the drop
   energy?: PlayableEnergy;
+  repeatOnAllSets?: boolean; // If true, trigger fires on every set (not just first)
 }
 
 interface RoundMusicConfig {
@@ -29,6 +33,7 @@ interface MusicTriggerResult {
   energy: PlayableEnergy;
   useBuildup: boolean;
   trackId?: string;
+  repeatOnAllSets: boolean;
 }
 
 function evaluateMusicTrigger(
@@ -61,6 +66,7 @@ function evaluateMusicTrigger(
     energy: trigger.energy ?? 'high',
     useBuildup: trigger.useBuildup ?? false,
     trackId: trigger.trackId,
+    repeatOnAllSets: trigger.repeatOnAllSets ?? false,
   };
 }
 
@@ -142,10 +148,7 @@ export function useWorkoutMusic({
   circuitConfig,
   enabled = true,
 }: UseWorkoutMusicProps) {
-  const { playWithTrigger, isPlaying, currentEnergy } = useMusic();
-
-  // Track the last triggered phase to avoid duplicate triggers
-  const lastTriggeredPhase = useRef<string | null>(null);
+  const { playWithTrigger, isPlaying, currentEnergy, lastTriggeredPhase, setLastTriggeredPhase } = useMusic();
 
   // Track previous enabled state to detect re-enable
   const prevEnabledRef = useRef(enabled);
@@ -155,10 +158,10 @@ export function useWorkoutMusic({
   useEffect(() => {
     if (enabled && !prevEnabledRef.current) {
       console.log(`[useWorkoutMusic] Music re-enabled - resetting trigger state`);
-      lastTriggeredPhase.current = null;
+      setLastTriggeredPhase(null);
     }
     prevEnabledRef.current = enabled;
-  }, [enabled]);
+  }, [enabled, setLastTriggeredPhase]);
 
   useEffect(() => {
     const { value: stateValue, context } = workoutState;
@@ -205,15 +208,9 @@ export function useWorkoutMusic({
     // Create a unique key for this phase to avoid duplicate triggers
     const phaseKey = `${stateValue}-${currentRoundIndex}-${phaseIndex}-${currentSetNumber}`;
 
-    // Skip if we already triggered for this phase
-    if (lastTriggeredPhase.current === phaseKey) {
+    // Skip if we already triggered for this phase (shared across screens)
+    if (lastTriggeredPhase === phaseKey) {
       console.log(`[useWorkoutMusic] Skipping - already triggered for: ${phaseKey}`);
-      return;
-    }
-
-    // Only trigger on first set for exercise/rest phases (per user requirements)
-    if ((phaseType === 'exercise' || phaseType === 'rest') && currentSetNumber > 1) {
-      console.log(`[useWorkoutMusic] Skipping - not first set (set ${currentSetNumber})`);
       return;
     }
 
@@ -225,6 +222,15 @@ export function useWorkoutMusic({
     const triggerResult = evaluateMusicTrigger(musicConfig, phaseType, phaseIndex);
     console.log(`[useWorkoutMusic] Trigger evaluation for ${phaseType}[${phaseIndex}]:`, triggerResult);
 
+    // Skip non-first sets unless repeatOnAllSets is enabled
+    if ((phaseType === 'exercise' || phaseType === 'rest') && currentSetNumber > 1) {
+      if (!triggerResult?.repeatOnAllSets) {
+        console.log(`[useWorkoutMusic] Skipping - not first set (set ${currentSetNumber}) and repeatOnAllSets is false`);
+        return;
+      }
+      console.log(`[useWorkoutMusic] repeatOnAllSets enabled - firing trigger on set ${currentSetNumber}`);
+    }
+
     if (triggerResult) {
       // For preview phases, skip trigger if:
       // - Music is already playing at the same energy level
@@ -233,14 +239,14 @@ export function useWorkoutMusic({
       const isDefaultTrigger = !triggerResult.trackId && !triggerResult.useBuildup;
       if (phaseType === 'preview' && isPlaying && currentEnergy === triggerResult.energy && isDefaultTrigger) {
         console.log(`[useWorkoutMusic] Skipping preview trigger - music already playing at ${currentEnergy} energy (default trigger)`);
-        lastTriggeredPhase.current = phaseKey; // Mark as triggered to prevent re-firing
+        setLastTriggeredPhase(phaseKey); // Mark as triggered to prevent re-firing
         return;
       }
 
       console.log(`[useWorkoutMusic] 🎵 FIRING TRIGGER for ${phaseType} at round ${currentRoundIndex + 1}, index ${phaseIndex}:`, triggerResult);
 
-      // Mark this phase as triggered
-      lastTriggeredPhase.current = phaseKey;
+      // Mark this phase as triggered (shared across screens)
+      setLastTriggeredPhase(phaseKey);
 
       // Fire the music action
       playWithTrigger({
@@ -262,13 +268,15 @@ export function useWorkoutMusic({
     playWithTrigger,
     isPlaying,
     currentEnergy,
+    lastTriggeredPhase,
+    setLastTriggeredPhase,
   ]);
 
   // Reset the last triggered phase when the workout restarts or round changes significantly
   useEffect(() => {
     // Reset when going back to idle or workout complete
     if (workoutState.value === 'idle' || workoutState.value === 'workoutComplete') {
-      lastTriggeredPhase.current = null;
+      setLastTriggeredPhase(null);
     }
-  }, [workoutState.value]);
+  }, [workoutState.value, setLastTriggeredPhase]);
 }

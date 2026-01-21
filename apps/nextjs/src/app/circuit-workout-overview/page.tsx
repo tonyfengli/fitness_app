@@ -2245,10 +2245,10 @@ function CircuitWorkoutOverviewContent() {
                     (rt: any) => rt.roundNumber === roundNum
                   );
                   const musicTriggers = roundTemplate?.music as {
-                    roundPreview?: { enabled: boolean; energy?: 'high' | 'medium' | 'low'; useStartTimestamp?: boolean };
-                    exercises?: { enabled: boolean; energy?: 'high' | 'medium' | 'low'; useStartTimestamp?: boolean }[];
-                    rests?: { enabled: boolean; energy?: 'high' | 'medium' | 'low'; useStartTimestamp?: boolean }[];
-                    setBreaks?: { enabled: boolean; energy?: 'high' | 'medium' | 'low'; useStartTimestamp?: boolean }[];
+                    roundPreview?: { enabled: boolean; energy?: 'low' | 'medium' | 'high'; useBuildup?: boolean; trackId?: string; trackName?: string; repeatOnAllSets?: boolean };
+                    exercises?: { enabled: boolean; energy?: 'low' | 'medium' | 'high'; useBuildup?: boolean; trackId?: string; trackName?: string; repeatOnAllSets?: boolean }[];
+                    rests?: { enabled: boolean; energy?: 'low' | 'medium' | 'high'; useBuildup?: boolean; trackId?: string; trackName?: string; repeatOnAllSets?: boolean }[];
+                    setBreaks?: { enabled: boolean; energy?: 'low' | 'medium' | 'high'; useBuildup?: boolean; trackId?: string; trackName?: string; repeatOnAllSets?: boolean }[];
                   } | undefined;
 
                   return (

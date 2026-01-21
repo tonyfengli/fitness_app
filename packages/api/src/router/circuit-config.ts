@@ -14,8 +14,10 @@ import {
 const MusicTriggerSchemaV3 = z.object({
   enabled: z.boolean(),
   trackId: z.string().uuid().optional(),
-  useStartTimestamp: z.boolean().optional(),
-  energy: z.enum(['high', 'low']).optional(),
+  trackName: z.string().optional(), // Track name for display
+  useBuildup: z.boolean().optional(), // Start at buildup point before the drop
+  energy: z.enum(['low', 'medium', 'high']).optional(), // All three energy levels
+  repeatOnAllSets: z.boolean().optional(), // If true, trigger fires on every set
 });
 
 const RoundMusicConfigSchemaV3 = z.object({

@@ -21,13 +21,13 @@ export function createDefaultMusicTrigger(
   phaseType: 'exercise' | 'rest' | 'roundPreview' | 'setBreak',
   options?: {
     enabled?: boolean;
-    useStartTimestamp?: boolean;
+    useBuildup?: boolean;
   }
 ): MusicTrigger {
   return {
     enabled: options?.enabled ?? true,
     energy: PHASE_ENERGY_DEFAULTS[phaseType],
-    useStartTimestamp: options?.useStartTimestamp ?? false,
+    useBuildup: options?.useBuildup ?? false,
   };
 }
 
@@ -35,7 +35,7 @@ export function createDefaultMusicTrigger(
  * Generates MINIMAL default music configuration for a round.
  * Only creates two triggers per the user's requirements:
  * - Preview: low energy music
- * - First exercise/station: high energy music with startTimestamp
+ * - First exercise/station: high energy music with buildup
  *
  * Users can add more triggers manually if needed.
  */
@@ -46,9 +46,9 @@ export function generateMinimalMusicConfig(
     // Round preview - trigger low energy track
     roundPreview: createDefaultMusicTrigger('roundPreview'),
 
-    // Only first exercise/station gets a trigger (high energy, use startTimestamp)
+    // Only first exercise/station gets a trigger (high energy, use buildup)
     exercises: [
-      createDefaultMusicTrigger('exercise', { useStartTimestamp: true })
+      createDefaultMusicTrigger('exercise', { useBuildup: true })
     ],
 
     // No rest triggers by default - music continues playing
