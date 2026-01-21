@@ -4,13 +4,15 @@ import React from "react";
 
 interface MusicTrigger {
   enabled: boolean;
-  energy?: "high" | "low";
+  energy?: "high" | "medium" | "low";
   useStartTimestamp?: boolean;
 }
 
 interface MusicTriggers {
   roundPreview?: MusicTrigger;
   exercises?: MusicTrigger[];
+  rests?: MusicTrigger[];
+  setBreaks?: MusicTrigger[];
 }
 
 interface MusicLightingButtonProps {
@@ -19,6 +21,7 @@ interface MusicLightingButtonProps {
   hasLightingConfig?: boolean;
   hasMusicConfig?: boolean;
   musicTriggers?: MusicTriggers;
+  exerciseCount: number;
   onClick: () => void;
 }
 
@@ -28,39 +31,66 @@ export function MusicLightingButton({
   hasLightingConfig = false,
   hasMusicConfig = false,
   musicTriggers,
+  exerciseCount,
   onClick,
 }: MusicLightingButtonProps) {
   const hasAnyConfig = hasLightingConfig || hasMusicConfig;
 
-  // Build music trigger summary
-  const getMusicSummary = () => {
-    if (!musicTriggers) return null;
+  // Build music trigger dots - represents all phases in order
+  const getMusicDots = () => {
+    const dots: Array<{ enabled: boolean; energy?: "high" | "medium" | "low"; type: "preview" | "exercise" | "rest" }> = [];
 
-    const parts: { label: string; energy: "high" | "low"; hasDrop?: boolean }[] = [];
+    // Preview phase (all round types have this)
+    const previewTrigger = musicTriggers?.roundPreview;
+    dots.push({
+      enabled: previewTrigger?.enabled ?? false,
+      energy: previewTrigger?.energy,
+      type: "preview",
+    });
 
-    // Check preview
-    if (musicTriggers.roundPreview?.enabled) {
-      parts.push({
-        label: "Preview",
-        energy: musicTriggers.roundPreview.energy || "low",
-        hasDrop: musicTriggers.roundPreview.useStartTimestamp,
+    // AMRAP only has preview + single work phase
+    if (roundType === "amrap_round") {
+      const workTrigger = musicTriggers?.exercises?.[0];
+      dots.push({
+        enabled: workTrigger?.enabled ?? false,
+        energy: workTrigger?.energy,
+        type: "exercise",
       });
+      return dots;
     }
 
-    // Check first exercise (represents exercise phase)
-    const firstExercise = musicTriggers.exercises?.[0];
-    if (firstExercise?.enabled) {
-      parts.push({
-        label: roundType === "stations_round" ? "Stations" : "Exercise",
-        energy: firstExercise.energy || "high",
-        hasDrop: firstExercise.useStartTimestamp,
+    // Circuit and stations rounds: interleave exercises and rests
+    if (exerciseCount === 0) return dots;
+
+    const exercises = musicTriggers?.exercises || [];
+    const rests = musicTriggers?.rests || [];
+
+    for (let i = 0; i < exerciseCount; i++) {
+      // Exercise dot
+      const exTrigger = exercises[i];
+      dots.push({
+        enabled: exTrigger?.enabled ?? false,
+        energy: exTrigger?.energy,
+        type: "exercise",
       });
+
+      // Rest dot (except after last exercise)
+      if (i < exerciseCount - 1) {
+        const restTrigger = rests[i];
+        dots.push({
+          enabled: restTrigger?.enabled ?? false,
+          energy: restTrigger?.energy,
+          type: "rest",
+        });
+      }
     }
 
-    return parts.length > 0 ? parts : null;
+    return dots;
   };
 
-  const musicSummary = getMusicSummary();
+  const musicDots = getMusicDots();
+  const enabledCount = musicDots?.filter(d => d.enabled).length || 0;
+  const hasAnyEnabled = enabledCount > 0;
 
   return (
     <div className="mt-6">
@@ -88,82 +118,29 @@ export function MusicLightingButton({
         `}
       >
         <div className="flex items-center gap-3">
-          {/* Icons container */}
-          <div className="flex items-center gap-1.5">
-            {/* Lightbulb icon */}
-            <div className={`
-              w-7 h-7 rounded-lg flex items-center justify-center
-              ${hasLightingConfig
-                ? 'bg-amber-100 dark:bg-amber-900/30'
-                : 'bg-gray-100 dark:bg-gray-700/50'
-              }
-            `}>
-              <svg
-                className={`w-4 h-4 ${hasLightingConfig ? 'text-amber-500 dark:text-amber-400' : 'text-gray-400 dark:text-gray-500'}`}
-                viewBox="0 0 24 24"
-                fill={hasLightingConfig ? "currentColor" : "none"}
-                stroke="currentColor"
-                strokeWidth={hasLightingConfig ? 0 : 1.5}
-              >
-                <path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7z" />
-              </svg>
-            </div>
-
-            {/* Music icon */}
-            <div className={`
-              w-7 h-7 rounded-lg flex items-center justify-center
-              ${musicSummary
-                ? 'bg-purple-100 dark:bg-purple-900/30'
-                : 'bg-gray-100 dark:bg-gray-700/50'
-              }
-            `}>
-              <svg
-                className={`w-4 h-4 ${musicSummary ? 'text-purple-500 dark:text-purple-400' : 'text-gray-400 dark:text-gray-500'}`}
-                viewBox="0 0 24 24"
-                fill={musicSummary ? "currentColor" : "none"}
-                stroke="currentColor"
-                strokeWidth={musicSummary ? 0 : 1.5}
-              >
-                <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
-              </svg>
-            </div>
-          </div>
-
           {/* Text and Music Summary */}
-          <div className="flex flex-col items-start gap-1">
-            <span className={`text-sm font-medium ${hasAnyConfig || musicSummary ? 'text-gray-700 dark:text-gray-200' : 'text-gray-600 dark:text-gray-400'}`}>
+          <div className="flex items-center gap-3">
+            <span className={`text-sm font-medium ${hasAnyConfig || hasAnyEnabled ? 'text-gray-700 dark:text-gray-200' : 'text-gray-600 dark:text-gray-400'}`}>
               Music & Lighting
             </span>
 
-            {/* Music trigger summary - subtle inline display */}
-            {musicSummary ? (
-              <div className="flex items-center gap-1.5">
-                {musicSummary.map((part, idx) => (
-                  <React.Fragment key={part.label}>
-                    {idx > 0 && (
-                      <svg className="w-3 h-3 text-gray-300 dark:text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                      </svg>
-                    )}
-                    <span className="flex items-center gap-1">
-                      <span
-                        className={`w-1.5 h-1.5 rounded-full ${
-                          part.energy === "low"
-                            ? "bg-violet-400"
-                            : "bg-emerald-400"
-                        }`}
-                        title={`${part.energy} energy`}
-                      />
-                      <span className="text-[11px] text-gray-500 dark:text-gray-400">
-                        {part.label}
-                      </span>
-                      {part.hasDrop && (
-                        <span className="text-[9px] text-amber-500 dark:text-amber-400 font-medium">
-                          drop
-                        </span>
-                      )}
-                    </span>
-                  </React.Fragment>
+            {/* Music trigger dots - scannable energy visualization */}
+            {musicDots && musicDots.length > 0 ? (
+              <div className="flex items-center gap-1">
+                {musicDots.map((dot, idx) => (
+                  <div
+                    key={idx}
+                    className={`w-1.5 h-1.5 rounded-full transition-colors ${
+                      dot.enabled
+                        ? dot.energy === "low"
+                          ? "bg-blue-300 dark:bg-blue-400/60"
+                          : dot.energy === "medium"
+                          ? "bg-amber-300 dark:bg-amber-400/60"
+                          : "bg-orange-300 dark:bg-orange-400/60"
+                        : "bg-gray-200 dark:bg-gray-600"
+                    }`}
+                    title={`${dot.type}${dot.enabled ? `: ${dot.energy || "high"} energy` : " (off)"}`}
+                  />
                 ))}
               </div>
             ) : (

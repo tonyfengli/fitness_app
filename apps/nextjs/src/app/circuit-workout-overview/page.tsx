@@ -2245,8 +2245,10 @@ function CircuitWorkoutOverviewContent() {
                     (rt: any) => rt.roundNumber === roundNum
                   );
                   const musicTriggers = roundTemplate?.music as {
-                    roundPreview?: { enabled: boolean; energy?: 'high' | 'low'; useStartTimestamp?: boolean };
-                    exercises?: { enabled: boolean; energy?: 'high' | 'low'; useStartTimestamp?: boolean }[];
+                    roundPreview?: { enabled: boolean; energy?: 'high' | 'medium' | 'low'; useStartTimestamp?: boolean };
+                    exercises?: { enabled: boolean; energy?: 'high' | 'medium' | 'low'; useStartTimestamp?: boolean }[];
+                    rests?: { enabled: boolean; energy?: 'high' | 'medium' | 'low'; useStartTimestamp?: boolean }[];
+                    setBreaks?: { enabled: boolean; energy?: 'high' | 'medium' | 'low'; useStartTimestamp?: boolean }[];
                   } | undefined;
 
                   return (
@@ -2256,6 +2258,7 @@ function CircuitWorkoutOverviewContent() {
                       hasLightingConfig={false}
                       hasMusicConfig={false}
                       musicTriggers={musicTriggers}
+                      exerciseCount={round.exercises?.length || 0}
                       onClick={() => {
                         setSelectedRoundForSettings({
                           roundNumber: roundNum,
@@ -3023,7 +3026,9 @@ function CircuitWorkoutOverviewContent() {
                 <RoundMusicDrawer
                   sessionId={sessionId}
                   roundNumber={selectedRoundForSettings.roundNumber}
+                  roundName={selectedRoundForSettings.roundName}
                   roundType={selectedRoundForSettings.roundType}
+                  roundData={selectedRoundForSettings.roundData}
                   onClose={() => {
                     setShowRoundMusicInDrawer(false);
                     setShowRoundSettingsInDrawer(true);

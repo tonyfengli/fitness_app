@@ -593,6 +593,7 @@ export function CircuitWorkoutOverviewScreen() {
   const {
     isPlaying: isMusicPlaying,
     isEnabled: isMusicEnabled,
+    isPaused: isMusicPaused,
     currentTrack,
     pause: pauseMusic,
     resume: resumeMusic,
@@ -1068,11 +1069,14 @@ export function CircuitWorkoutOverviewScreen() {
             {/* Music Toggle */}
             <Pressable
               onPress={() => {
-                if (isMusicEnabled) {
-                  // Disable music - stops playback
-                  stopMusic();
+                if (isMusicPlaying) {
+                  // Pause music - preserves current track position
+                  pauseMusic();
+                } else if (isMusicPaused && currentTrack) {
+                  // Resume paused music
+                  resumeMusic();
                 } else {
-                  // Enable music using Round 1 Preview config (same as workout preview)
+                  // Start fresh with Round 1 Preview config
                   const round1Template = circuitConfig?.config?.roundTemplates?.find(
                     (rt: any) => rt.roundNumber === 1
                   );
@@ -1091,19 +1095,19 @@ export function CircuitWorkoutOverviewScreen() {
                     height: 44,
                     alignItems: 'center',
                     justifyContent: 'center',
-                    backgroundColor: isMusicEnabled ?
+                    backgroundColor: isMusicPlaying ?
                       (focused ? 'rgba(93,225,255,0.25)' : 'rgba(93,225,255,0.12)') :
                       (focused ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.06)'),
-                    borderColor: isMusicEnabled ?
+                    borderColor: isMusicPlaying ?
                       TOKENS.color.accent2 :
                       (focused ? 'rgba(255,255,255,0.25)' : 'transparent'),
-                    borderWidth: isMusicEnabled ? 1.5 : (focused ? 1 : 0),
+                    borderWidth: isMusicPlaying ? 1.5 : (focused ? 1 : 0),
                   }}
                 >
                   <Icon
-                    name={isMusicEnabled ? "music-note" : "music-off"}
+                    name={isMusicPlaying ? "music-note" : "music-off"}
                     size={20}
-                    color={isMusicEnabled ? TOKENS.color.accent2 : TOKENS.color.text}
+                    color={isMusicPlaying ? TOKENS.color.accent2 : TOKENS.color.text}
                   />
                 </MattePanel>
               )}

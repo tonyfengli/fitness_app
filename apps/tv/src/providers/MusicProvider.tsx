@@ -410,7 +410,7 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     setError(null);
   }, []);
 
-  // Pause music
+  // Pause music (does NOT change isEnabled - that controls trigger firing)
   const pause = useCallback(() => {
     if (isPlaying && !isPaused) {
       musicService.pause();
@@ -419,7 +419,7 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     }
   }, [isPlaying, isPaused]);
 
-  // Resume music
+  // Resume music (does NOT change isEnabled - that controls trigger firing)
   const resume = useCallback(() => {
     if (isPaused && currentTrack) {
       musicService.resume();
