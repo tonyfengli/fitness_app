@@ -86,6 +86,7 @@ export const MusicTriggerSchema = z.object({
   useBuildup: z.boolean().optional(),
   energy: z.enum(['low', 'medium', 'high']).optional(),
   repeatOnAllSets: z.boolean().optional(),
+  naturalEnding: z.boolean().optional(),
 });
 
 // Music configuration schema for a round

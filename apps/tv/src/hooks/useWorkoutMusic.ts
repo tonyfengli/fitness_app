@@ -20,6 +20,7 @@ interface MusicTrigger {
   useBuildup?: boolean; // Start at buildup point before the drop
   energy?: PlayableEnergy;
   repeatOnAllSets?: boolean; // If true, trigger fires on every set (not just first)
+  naturalEnding?: boolean; // If true, seek so music ends naturally with round end
 }
 
 interface RoundMusicConfig {
@@ -34,6 +35,7 @@ interface MusicTriggerResult {
   useBuildup: boolean;
   trackId?: string;
   repeatOnAllSets: boolean;
+  naturalEnding: boolean;
 }
 
 function evaluateMusicTrigger(
@@ -67,7 +69,77 @@ function evaluateMusicTrigger(
     useBuildup: trigger.useBuildup ?? false,
     trackId: trigger.trackId,
     repeatOnAllSets: trigger.repeatOnAllSets ?? false,
+    naturalEnding: trigger.naturalEnding ?? false,
   };
+}
+
+/**
+ * Calculates the REMAINING time from the current phase to the end of the round.
+ * This is used for natural ending - we need to know how much time is left, not total duration.
+ */
+function calculateRemainingRoundTime(
+  circuitConfig: CircuitConfig | null | undefined,
+  roundIndex: number,
+  currentExerciseIndex: number,
+  currentSetNumber: number,
+  phaseType: MusicPhaseType
+): number {
+  if (!circuitConfig?.config?.roundTemplates) return 0;
+
+  const roundConfig = (circuitConfig.config.roundTemplates as any[]).find(
+    (rt) => rt.roundNumber === roundIndex + 1
+  );
+  if (!roundConfig?.template) return 0;
+
+  const template = roundConfig.template;
+  const exerciseCount = template.exercisesPerRound || 0;
+  const totalSets = template.repeatTimes || 1;
+
+  if (template.type === 'circuit_round' || template.type === 'stations_round') {
+    const workDuration = template.workDuration || 0;
+    const restDuration = template.restDuration || 0;
+    const restBetweenSets = template.restBetweenSets || 0;
+
+    // Calculate remaining time in current set from current position
+    let remainingInCurrentSet = 0;
+    const remainingExercises = exerciseCount - currentExerciseIndex;
+
+    // Buffer per phase transition to account for state machine latency
+    const TRANSITION_BUFFER_SEC = 1.5;
+
+    if (phaseType === 'exercise') {
+      // At start of exercise: current exercise + remaining exercises + rests between them
+      remainingInCurrentSet = (workDuration * remainingExercises) + (restDuration * Math.max(0, remainingExercises - 1));
+      // Add buffer for transitions: rest transitions + exercise transitions + final transition
+      const transitionCount = (remainingExercises - 1) + Math.max(0, remainingExercises - 1) + 1;
+      remainingInCurrentSet += transitionCount * TRANSITION_BUFFER_SEC;
+    } else if (phaseType === 'rest') {
+      // At start of rest: current rest + remaining exercises + rests between them
+      const exercisesAfterRest = exerciseCount - currentExerciseIndex - 1;
+      remainingInCurrentSet = restDuration + (workDuration * exercisesAfterRest) + (restDuration * Math.max(0, exercisesAfterRest - 1));
+      // Add buffer for transitions
+      const transitionCount = exercisesAfterRest + Math.max(0, exercisesAfterRest - 1) + 1;
+      remainingInCurrentSet += transitionCount * TRANSITION_BUFFER_SEC;
+    } else if (phaseType === 'preview' || phaseType === 'setBreak') {
+      // Full set duration
+      remainingInCurrentSet = (workDuration * exerciseCount) + (restDuration * Math.max(0, exerciseCount - 1));
+      // Add buffer for all transitions in the set
+      const transitionCount = exerciseCount + (exerciseCount - 1) + 1;
+      remainingInCurrentSet += transitionCount * TRANSITION_BUFFER_SEC;
+    }
+
+    // Calculate remaining complete sets after current set
+    const remainingSets = totalSets - currentSetNumber;
+    const oneSetDuration = (workDuration * exerciseCount) + (restDuration * Math.max(0, exerciseCount - 1));
+    const remainingAfterCurrentSet = (remainingSets * oneSetDuration) + (restBetweenSets * remainingSets);
+
+    return remainingInCurrentSet + remainingAfterCurrentSet;
+  } else if (template.type === 'amrap_round') {
+    // AMRAP doesn't have natural ending support in the same way
+    return template.totalDuration || 0;
+  }
+
+  return 0;
 }
 
 // ============================================================================
@@ -248,11 +320,30 @@ export function useWorkoutMusic({
       // Mark this phase as triggered (shared across screens)
       setLastTriggeredPhase(phaseKey);
 
+      // Calculate REMAINING round time for natural ending (from current phase to end of round)
+      const remainingRoundTime = triggerResult.naturalEnding
+        ? calculateRemainingRoundTime(circuitConfig, currentRoundIndex, currentExerciseIndex, currentSetNumber, phaseType)
+        : undefined;
+
+      if (triggerResult.naturalEnding) {
+        // Get round template for detailed logging
+        const roundConfig = (circuitConfig?.config?.roundTemplates as any[])?.find(
+          (rt) => rt.roundNumber === currentRoundIndex + 1
+        );
+        const template = roundConfig?.template;
+        console.log(`[useWorkoutMusic] === NATURAL ENDING DEBUG ===`);
+        console.log(`[useWorkoutMusic] Phase: ${phaseType}, exerciseIndex: ${currentExerciseIndex}, set: ${currentSetNumber}`);
+        console.log(`[useWorkoutMusic] Template: exercises=${template?.exercisesPerRound}, work=${template?.workDuration}s, rest=${template?.restDuration}s, sets=${template?.repeatTimes || 1}`);
+        console.log(`[useWorkoutMusic] Calculated remaining round time: ${remainingRoundTime}s`);
+      }
+
       // Fire the music action
       playWithTrigger({
         energy: triggerResult.energy,
         useBuildup: triggerResult.useBuildup,
         trackId: triggerResult.trackId,
+        naturalEnding: triggerResult.naturalEnding,
+        roundDurationSec: remainingRoundTime,
       });
     } else {
       console.log(`[useWorkoutMusic] No trigger for ${phaseType}[${phaseIndex}]`);

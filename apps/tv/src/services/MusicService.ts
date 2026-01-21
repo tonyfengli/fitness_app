@@ -136,7 +136,15 @@ class MusicService {
       }
 
       if (seekPosition > 0) {
+        console.log(`[MusicService] === SEEK DEBUG ===`);
+        console.log(`[MusicService] Calling setCurrentTime(${seekPosition})`);
         sound.setCurrentTime(seekPosition);
+        // Verify the seek worked
+        setTimeout(() => {
+          sound.getCurrentTime((actualTime) => {
+            console.log(`[MusicService] After seek, actual position: ${actualTime}s (target was ${seekPosition}s)`);
+          });
+        }, 100);
       }
 
       // Start playback

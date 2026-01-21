@@ -11,6 +11,7 @@ export interface MusicTrigger {
   useBuildup?: boolean;                // Start at buildup point before the drop
   energy?: 'low' | 'medium' | 'high';  // Energy level (defaults based on phase type)
   repeatOnAllSets?: boolean;           // If true, trigger fires on every set (not just first)
+  naturalEnding?: boolean;             // If true, seek so music ends naturally with round end
 }
 
 // Music configuration for a round

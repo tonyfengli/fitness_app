@@ -30,6 +30,7 @@ interface MusicTrigger {
   useBuildup?: boolean; // Start at buildup point before the drop
   energy?: EnergyLevel;
   repeatOnAllSets?: boolean; // If true, trigger fires on every set (not just first)
+  naturalEnding?: boolean; // If true, seek so music ends naturally with round end
 }
 
 interface RoundMusicConfig {
@@ -73,7 +74,6 @@ export function RoundMusicDrawer({
 
   const [viewState, setViewState] = useState<ViewState>({ type: "phases" });
   const [localConfig, setLocalConfig] = useState<RoundMusicConfig | null>(null);
-  const [hasChanges, setHasChanges] = useState(false);
 
   // Phase detail state
   const [detailEnabled, setDetailEnabled] = useState(false);
@@ -81,9 +81,13 @@ export function RoundMusicDrawer({
   const [detailTrackName, setDetailTrackName] = useState<string>("");
   const [detailEnergy, setDetailEnergy] = useState<EnergyLevel>("high");
   const [detailRepeatOnAllSets, setDetailRepeatOnAllSets] = useState(false);
+  const [detailNaturalEnding, setDetailNaturalEnding] = useState(false);
 
   // Track picker state
   const [trackSearchQuery, setTrackSearchQuery] = useState("");
+
+  // Alert state for auto-enabled next round preview
+  const [showNextRoundAlert, setShowNextRoundAlert] = useState(false);
 
   const { data: circuitConfig, isLoading } = useQuery({
     ...trpc.circuitConfig.getBySession.queryOptions({ sessionId: sessionId! }),
@@ -116,6 +120,83 @@ export function RoundMusicDrawer({
     );
     return template?.template?.repeatTimes ?? 1;
   }, [circuitConfig, roundNumber]);
+
+  // Get total number of rounds
+  const totalRounds = useMemo(() => {
+    return circuitConfig?.config?.rounds ?? 0;
+  }, [circuitConfig]);
+
+  // Check if next round's preview is enabled
+  const isNextRoundPreviewEnabled = useMemo(() => {
+    if (!circuitConfig?.config?.roundTemplates || roundNumber >= totalRounds) return true; // No next round
+    const nextRoundTemplate = (circuitConfig.config.roundTemplates as any[]).find(
+      (rt) => rt.roundNumber === roundNumber + 1
+    );
+    return nextRoundTemplate?.music?.roundPreview?.enabled ?? false;
+  }, [circuitConfig, roundNumber, totalRounds]);
+
+  // Calculate total round duration (in seconds)
+  const roundDuration = useMemo(() => {
+    if (!circuitConfig?.config?.roundTemplates) return 0;
+    const roundConfig = (circuitConfig.config.roundTemplates as any[]).find(
+      (rt) => rt.roundNumber === roundNumber
+    );
+    if (!roundConfig?.template) return 0;
+
+    const template = roundConfig.template;
+    const exerciseCount = roundData?.exercises?.length || template.exercisesPerRound || 0;
+    const sets = template.repeatTimes || 1;
+
+    if (template.type === "circuit_round" || template.type === "stations_round") {
+      const workDuration = template.workDuration || 0;
+      const restDuration = template.restDuration || 0;
+      const restBetweenSets = template.restBetweenSets || 0;
+
+      // One set = (work * exercises) + (rest * (exercises - 1))
+      const oneSet = (workDuration * exerciseCount) + (restDuration * Math.max(0, exerciseCount - 1));
+      // Total = sets * oneSet + (sets - 1) * restBetweenSets
+      return (oneSet * sets) + (restBetweenSets * Math.max(0, sets - 1));
+    } else if (template.type === "amrap_round") {
+      return template.totalDuration || 0;
+    }
+
+    return 0;
+  }, [circuitConfig, roundNumber, roundData]);
+
+  /**
+   * Check if a track is compatible with natural ending for the current round duration.
+   * For natural ending, we calculate: seekPoint = trackDuration - roundDuration
+   * The seekPoint must land in a medium or high segment (never low).
+   */
+  const getTrackNaturalEndingCompatibility = (track: MusicTrack): { compatible: boolean; reason?: string } => {
+    if (!track.segments || track.segments.length === 0) {
+      return { compatible: false, reason: "No segments" };
+    }
+
+    const trackDurationSec = track.durationMs / 1000;
+    const seekPoint = trackDurationSec - roundDuration;
+
+    if (seekPoint < 0) {
+      return { compatible: false, reason: "Track too short" };
+    }
+
+    // Find the segment at the seek point (highest timestamp <= seekPoint)
+    const sortedSegments = [...track.segments].sort((a, b) => a.timestamp - b.timestamp);
+    let segmentAtSeek = sortedSegments[0];
+    for (const segment of sortedSegments) {
+      if (segment.timestamp <= seekPoint) {
+        segmentAtSeek = segment;
+      } else {
+        break;
+      }
+    }
+
+    if (segmentAtSeek?.energy === "low") {
+      return { compatible: false, reason: "Starts in low energy" };
+    }
+
+    return { compatible: true };
+  };
 
   // Generate phases
   const phases = useMemo((): Phase[] => {
@@ -233,7 +314,6 @@ export function RoundMusicDrawer({
       queryClient.invalidateQueries({
         queryKey: trpc.circuitConfig.getBySession.queryOptions({ sessionId: sessionId! }).queryKey,
       });
-      setHasChanges(false);
     },
   });
 
@@ -285,17 +365,6 @@ export function RoundMusicDrawer({
     }
 
     setLocalConfig(newConfig);
-    setHasChanges(true);
-  };
-
-  const handleSave = async () => {
-    if (!sessionId || !localConfig) return;
-    await updateMusicConfig.mutateAsync({
-      sessionId,
-      roundNumber,
-      musicConfig: localConfig,
-    });
-    onClose?.();
   };
 
   const getTrackEnergyLevels = (track: MusicTrack): EnergyLevel[] => {
@@ -312,25 +381,75 @@ export function RoundMusicDrawer({
     setDetailTrackName(trigger?.trackName || "");
     setDetailEnergy((trigger?.energy as EnergyLevel) || (phase.phaseType === "rest" ? "low" : "high"));
     setDetailRepeatOnAllSets(trigger?.repeatOnAllSets ?? false);
+    setDetailNaturalEnding(trigger?.naturalEnding ?? false);
     setViewState({ type: "phase-detail", phase });
   };
 
-  // Apply phase detail changes
-  const handleApplyPhaseDetail = () => {
-    if (viewState.type !== "phase-detail") return;
+  // Apply phase detail changes and save immediately
+  const handleApplyPhaseDetail = async () => {
+    if (viewState.type !== "phase-detail" || !localConfig || !sessionId) return;
 
     const phase = viewState.phase;
     const showRepeatOption = repeatTimes > 1 && (phase.phaseType === "exercise" || phase.phaseType === "rest");
 
-    updateTriggerForPhase(phase, {
+    // Build updated config
+    const newConfig = { ...localConfig };
+    const defaultTrigger: MusicTrigger = { enabled: false };
+    const updates = {
       enabled: detailEnabled,
       trackId: detailTrackId || undefined,
       trackName: detailTrackId ? detailTrackName : undefined,
       energy: detailEnergy,
+      naturalEnding: detailNaturalEnding,
       ...(showRepeatOption ? { repeatOnAllSets: detailRepeatOnAllSets } : {}),
+    };
+
+    if (phase.phaseType === "preview") {
+      newConfig.roundPreview = { ...(newConfig.roundPreview || defaultTrigger), ...updates };
+    } else if (phase.phaseType === "exercise") {
+      const arr = [...(newConfig.exercises || [])];
+      while (arr.length <= phase.index) arr.push({ ...defaultTrigger });
+      arr[phase.index] = { ...arr[phase.index], ...updates };
+      newConfig.exercises = arr;
+    } else if (phase.phaseType === "rest") {
+      const arr = [...(newConfig.rests || [])];
+      while (arr.length <= phase.index) arr.push({ ...defaultTrigger });
+      arr[phase.index] = { ...arr[phase.index], ...updates };
+      newConfig.rests = arr;
+    } else if (phase.phaseType === "setBreak") {
+      const arr = [...(newConfig.setBreaks || [])];
+      while (arr.length <= phase.index) arr.push({ ...defaultTrigger });
+      arr[phase.index] = { ...arr[phase.index], ...updates };
+      newConfig.setBreaks = arr;
+    }
+
+    setLocalConfig(newConfig);
+    setViewState({ type: "phases" });
+
+    // Save current round config
+    await updateMusicConfig.mutateAsync({
+      sessionId,
+      roundNumber,
+      musicConfig: newConfig,
     });
 
-    setViewState({ type: "phases" });
+    // If natural ending is enabled and there's a next round without preview enabled,
+    // automatically enable the next round's preview
+    if (detailNaturalEnding && detailEnabled && roundNumber < totalRounds && !isNextRoundPreviewEnabled) {
+      // Enable next round's preview with default settings
+      await updateMusicConfig.mutateAsync({
+        sessionId,
+        roundNumber: roundNumber + 1,
+        musicConfig: {
+          roundPreview: {
+            enabled: true,
+            energy: "high", // Default to high energy for preview
+          },
+        },
+      });
+      // Show alert to inform user
+      setShowNextRoundAlert(true);
+    }
   };
 
   // Toggle component
@@ -371,9 +490,46 @@ export function RoundMusicDrawer({
     return `${trackPart} · ${energyPart}${repeatPart}`;
   };
 
+  // Auto-dismiss alert after 4 seconds
+  useEffect(() => {
+    if (showNextRoundAlert) {
+      const timer = setTimeout(() => setShowNextRoundAlert(false), 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [showNextRoundAlert]);
+
   // Phases View
   const renderPhasesView = () => (
     <div className="flex flex-col h-full">
+      {/* Alert for auto-enabled next round preview */}
+      {showNextRoundAlert && (
+        <div className="mx-6 mt-4 p-4 bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-800 rounded-xl">
+          <div className="flex items-start gap-3">
+            <div className="w-6 h-6 rounded-full bg-purple-500 flex items-center justify-center flex-shrink-0 mt-0.5">
+              <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <div className="flex-1">
+              <p className="font-medium text-purple-900 dark:text-purple-100">
+                Round {roundNumber + 1} preview enabled
+              </p>
+              <p className="text-sm text-purple-700 dark:text-purple-300 mt-0.5">
+                Music will continue after natural ending
+              </p>
+            </div>
+            <button
+              onClick={() => setShowNextRoundAlert(false)}
+              className="p-1 rounded-lg hover:bg-purple-100 dark:hover:bg-purple-800/50 transition-colors"
+            >
+              <svg className="w-4 h-4 text-purple-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="px-6 pt-6 pb-4">
         <h2 className="text-2xl font-semibold text-gray-900 dark:text-white">
@@ -462,26 +618,12 @@ export function RoundMusicDrawer({
 
       {/* Footer */}
       <div className="px-6 py-4 border-t border-gray-100 dark:border-gray-800">
-        <div className="flex gap-3">
-          <button
-            onClick={onClose}
-            className="flex-1 py-3 text-gray-600 dark:text-gray-400 font-medium rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-          >
-            Back
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={!hasChanges || updateMusicConfig.isPending}
-            className={cn(
-              "flex-1 py-3 rounded-xl font-medium transition-all",
-              hasChanges && !updateMusicConfig.isPending
-                ? "bg-purple-500 text-white hover:bg-purple-600"
-                : "bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500"
-            )}
-          >
-            {updateMusicConfig.isPending ? "Saving..." : "Save Changes"}
-          </button>
-        </div>
+        <button
+          onClick={onClose}
+          className="w-full py-3 text-gray-600 dark:text-gray-400 font-medium rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+        >
+          Done
+        </button>
       </div>
     </div>
   );
@@ -677,6 +819,46 @@ export function RoundMusicDrawer({
               </button>
             </div>
           )}
+
+          {/* Natural Ending - Available for all phases, but requires specific track */}
+          <div className="mb-8">
+            <button
+              onClick={() => {
+                const newValue = !detailNaturalEnding;
+                setDetailNaturalEnding(newValue);
+                // If enabling natural ending and no track selected, user will need to pick one
+              }}
+              className="w-full p-4 rounded-xl bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex-1 min-w-0 text-left">
+                  <p className="font-medium text-gray-900 dark:text-white">
+                    Natural ending
+                  </p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+                    {detailNaturalEnding
+                      ? detailTrackId
+                        ? "Music ends naturally with the round"
+                        : "Select a compatible track below"
+                      : "Time music to end with round completion"}
+                  </p>
+                </div>
+                <div
+                  className={cn(
+                    "relative w-12 h-7 rounded-full transition-all duration-200 flex-shrink-0 ml-4",
+                    detailNaturalEnding ? "bg-purple-500" : "bg-gray-200 dark:bg-gray-700"
+                  )}
+                >
+                  <div
+                    className={cn(
+                      "absolute top-1 w-5 h-5 rounded-full bg-white shadow-sm transition-transform duration-200",
+                      detailNaturalEnding ? "translate-x-6" : "translate-x-1"
+                    )}
+                  />
+                </div>
+              </div>
+            </button>
+          </div>
           </div>
         </div>
 
@@ -757,33 +939,48 @@ export function RoundMusicDrawer({
         {/* Track List */}
         <div className="flex-1 min-h-0 overflow-y-auto px-6">
           <div className="space-y-2 pt-2 pb-4">
-            {/* Random Option */}
+            {/* Random Option - disabled when natural ending is enabled */}
             <button
               onClick={() => {
+                if (detailNaturalEnding) return;
                 setDetailTrackId(null);
                 setDetailTrackName("");
                 setViewState({ type: "phase-detail", phase: viewState.phase });
               }}
+              disabled={detailNaturalEnding}
               className={cn(
                 "w-full p-4 rounded-xl text-left transition-all",
-                detailTrackId === null
+                detailNaturalEnding && "opacity-50 cursor-not-allowed",
+                !detailNaturalEnding && detailTrackId === null
                   ? "bg-purple-50 dark:bg-purple-900/20 ring-2 ring-purple-500"
                   : "bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800"
               )}
             >
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center flex-shrink-0">
+                <div className={cn(
+                  "w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0",
+                  detailNaturalEnding
+                    ? "bg-gray-300 dark:bg-gray-600"
+                    : "bg-gradient-to-br from-purple-400 to-pink-400"
+                )}>
                   <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                   </svg>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-medium text-gray-900 dark:text-white">Random</p>
+                  <p className={cn(
+                    "font-medium",
+                    detailNaturalEnding
+                      ? "text-gray-400 dark:text-gray-500"
+                      : "text-gray-900 dark:text-white"
+                  )}>Random</p>
                   <p className="text-sm text-gray-500 dark:text-gray-400">
-                    Auto-select based on energy
+                    {detailNaturalEnding
+                      ? "Not available with natural ending"
+                      : "Auto-select based on energy"}
                   </p>
                 </div>
-                {detailTrackId === null && (
+                {!detailNaturalEnding && detailTrackId === null && (
                   <svg className="w-5 h-5 text-purple-500" fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                   </svg>
@@ -803,11 +1000,16 @@ export function RoundMusicDrawer({
             ) : (
               filteredTracks.map((track) => {
                 const energyLevels = getTrackEnergyLevels(track);
+                const compatibility = detailNaturalEnding
+                  ? getTrackNaturalEndingCompatibility(track)
+                  : { compatible: true };
+                const isDisabled = detailNaturalEnding && !compatibility.compatible;
 
                 return (
                   <button
                     key={track.id}
                     onClick={() => {
+                      if (isDisabled) return;
                       setDetailTrackId(track.id);
                       setDetailTrackName(track.name);
                       // Auto-select first available energy if current isn't available
@@ -816,9 +1018,11 @@ export function RoundMusicDrawer({
                       }
                       setViewState({ type: "phase-detail", phase: viewState.phase });
                     }}
+                    disabled={isDisabled}
                     className={cn(
                       "w-full p-4 rounded-xl text-left transition-all",
-                      detailTrackId === track.id
+                      isDisabled && "opacity-50 cursor-not-allowed",
+                      !isDisabled && detailTrackId === track.id
                         ? "bg-purple-50 dark:bg-purple-900/20 ring-2 ring-purple-500"
                         : "bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800"
                     )}
@@ -830,10 +1034,19 @@ export function RoundMusicDrawer({
                         </svg>
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="font-medium text-gray-900 dark:text-white truncate">
+                        <p className={cn(
+                          "font-medium truncate",
+                          isDisabled
+                            ? "text-gray-400 dark:text-gray-500"
+                            : "text-gray-900 dark:text-white"
+                        )}>
                           {track.name}
                         </p>
-                        {energyLevels.length > 0 && (
+                        {isDisabled && compatibility.reason ? (
+                          <p className="text-xs text-red-400 mt-1">
+                            {compatibility.reason}
+                          </p>
+                        ) : energyLevels.length > 0 ? (
                           <div className="flex gap-1 mt-1">
                             {energyLevels.map((e) => (
                               <span
@@ -849,9 +1062,9 @@ export function RoundMusicDrawer({
                               </span>
                             ))}
                           </div>
-                        )}
+                        ) : null}
                       </div>
-                      {detailTrackId === track.id && (
+                      {!isDisabled && detailTrackId === track.id && (
                         <svg className="w-5 h-5 text-purple-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                           <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                         </svg>
