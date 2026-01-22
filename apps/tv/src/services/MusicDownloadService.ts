@@ -96,7 +96,6 @@ class MusicDownloadService {
   async ensureMusicDir(): Promise<void> {
     const exists = await RNFS.exists(MUSIC_DIR);
     if (!exists) {
-      console.log('[MusicDownload] Creating music directory:', MUSIC_DIR);
       await RNFS.mkdir(MUSIC_DIR);
     }
   }
@@ -117,25 +116,14 @@ class MusicDownloadService {
    * Download a single track
    */
   async downloadTrack(track: MusicTrack): Promise<boolean> {
-    if (!track.downloadUrl) {
-      console.warn('[MusicDownload] No downloadUrl for track:', track.filename);
-      return false;
-    }
+    if (!track.downloadUrl) return false;
 
-    // Get extension from the download URL
     const extension = getExtensionFromUrl(track.downloadUrl);
     const localPath = this.getLocalPath(track.filename, extension);
 
-    // Check if already exists (any supported extension)
+    // Check if already exists
     const existingPath = await this.findLocalPath(track.filename);
-    if (existingPath) {
-      console.log('[MusicDownload] Already exists:', track.filename);
-      return true;
-    }
-
-    console.log('[MusicDownload] Downloading:', track.filename);
-    console.log('[MusicDownload] From:', track.downloadUrl);
-    console.log('[MusicDownload] To:', localPath);
+    if (existingPath) return true;
 
     try {
       const downloadResult = await RNFS.downloadFile({
@@ -151,22 +139,16 @@ class MusicDownloadService {
             percent,
           });
         },
-        progressDivider: 10, // Emit progress every 10%
+        progressDivider: 10,
       }).promise;
 
       if (downloadResult.statusCode === 200) {
-        const stats = await RNFS.stat(localPath);
-        console.log('[MusicDownload] Downloaded:', track.filename, `(${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
         return true;
       } else {
-        console.error('[MusicDownload] Failed with status:', downloadResult.statusCode);
-        // Clean up failed download
         await RNFS.unlink(localPath).catch(() => {});
         return false;
       }
     } catch (error) {
-      console.error('[MusicDownload] Error downloading:', track.filename, error);
-      // Clean up failed download
       await RNFS.unlink(localPath).catch(() => {});
       return false;
     }
@@ -177,12 +159,10 @@ class MusicDownloadService {
    */
   async syncTracks(tracks: MusicTrack[]): Promise<SyncResult> {
     if (this.downloadInProgress) {
-      console.warn('[MusicDownload] Sync already in progress');
       return { total: 0, downloaded: 0, skipped: 0, failed: [] };
     }
 
     this.downloadInProgress = true;
-    console.log('[MusicDownload] Starting sync for', tracks.length, 'tracks');
 
     const result: SyncResult = {
       total: tracks.length,
@@ -194,12 +174,9 @@ class MusicDownloadService {
     try {
       await this.ensureMusicDir();
 
-      // Filter tracks that have downloadUrl
       const tracksWithUrl = tracks.filter(t => t.downloadUrl);
-      console.log('[MusicDownload] Tracks with downloadUrl:', tracksWithUrl.length);
-
-      // Check which tracks need downloading
       const toDownload: MusicTrack[] = [];
+
       for (const track of tracksWithUrl) {
         const exists = await this.existsLocally(track.filename);
         if (exists) {
@@ -209,10 +186,6 @@ class MusicDownloadService {
         }
       }
 
-      console.log('[MusicDownload] Need to download:', toDownload.length);
-      console.log('[MusicDownload] Already have:', result.skipped);
-
-      // Download missing tracks
       for (const track of toDownload) {
         const success = await this.downloadTrack(track);
         if (success) {
@@ -221,12 +194,6 @@ class MusicDownloadService {
           result.failed.push(track.filename);
         }
       }
-
-      console.log('[MusicDownload] Sync complete:', {
-        downloaded: result.downloaded,
-        skipped: result.skipped,
-        failed: result.failed.length,
-      });
 
       return result;
     } finally {
@@ -239,28 +206,17 @@ class MusicDownloadService {
    */
   async listLocalTracks(): Promise<string[]> {
     try {
-      console.log('[MusicDownload] listLocalTracks - checking MUSIC_DIR:', MUSIC_DIR);
       const exists = await RNFS.exists(MUSIC_DIR);
-      console.log('[MusicDownload] listLocalTracks - directory exists:', exists);
-      if (!exists) {
-        console.log('[MusicDownload] listLocalTracks - returning empty (no dir)');
-        return [];
-      }
-      const files = await RNFS.readDir(MUSIC_DIR);
-      console.log('[MusicDownload] listLocalTracks - raw files:', files.map(f => f.name));
+      if (!exists) return [];
 
-      // Find all audio files with supported extensions
-      const audioFiles = files
+      const files = await RNFS.readDir(MUSIC_DIR);
+      return files
         .filter(f => SUPPORTED_EXTENSIONS.some(ext => f.name.toLowerCase().endsWith(ext)))
         .map(f => {
-          // Remove extension to get filename
           const ext = SUPPORTED_EXTENSIONS.find(e => f.name.toLowerCase().endsWith(e)) || '';
           return f.name.slice(0, -ext.length);
         });
-      console.log('[MusicDownload] listLocalTracks - audio files:', audioFiles);
-      return audioFiles;
     } catch (error) {
-      console.error('[MusicDownload] Error listing local tracks:', error);
       return [];
     }
   }
@@ -273,10 +229,8 @@ class MusicDownloadService {
       const exists = await RNFS.exists(MUSIC_DIR);
       if (exists) {
         await RNFS.unlink(MUSIC_DIR);
-        console.log('[MusicDownload] Cleared all local tracks');
       }
     } catch (error) {
-      console.error('[MusicDownload] Error clearing local tracks:', error);
       throw error;
     }
   }
@@ -287,13 +241,10 @@ class MusicDownloadService {
   async getLocalStorageSize(): Promise<number> {
     try {
       const exists = await RNFS.exists(MUSIC_DIR);
-      if (!exists) {
-        return 0;
-      }
+      if (!exists) return 0;
       const files = await RNFS.readDir(MUSIC_DIR);
       return files.reduce((total, file) => total + (file.size || 0), 0);
     } catch (error) {
-      console.error('[MusicDownload] Error getting storage size:', error);
       return 0;
     }
   }

@@ -202,51 +202,48 @@ export function useWorkoutMusic({
   circuitConfig,
   enabled = true,
 }: UseWorkoutMusicProps) {
-  const { playWithTrigger, isPlaying, currentEnergy, lastTriggeredPhase, setLastTriggeredPhase } = useMusic();
+  const { playWithTrigger, isPlaying, currentEnergy, lastTriggeredPhase, setLastTriggeredPhase, consumedTriggers, clearConsumedTriggers } = useMusic();
 
   // Track previous enabled state to detect re-enable
   const prevEnabledRef = useRef(enabled);
+  // Track previous state to detect transitions
+  const prevStateRef = useRef(workoutState.value);
 
   // When user re-enables music (enabled goes false → true), reset lastTriggeredPhase
-  // so the current phase trigger can fire
   useEffect(() => {
     if (enabled && !prevEnabledRef.current) {
-      console.log(`[useWorkoutMusic] Music re-enabled - resetting trigger state`);
       setLastTriggeredPhase(null);
     }
     prevEnabledRef.current = enabled;
   }, [enabled, setLastTriggeredPhase]);
 
+  // Clear consumed triggers when entering roundPreview
+  // This ensures that if the user goes back to preview and then manually navigates forward,
+  // triggers will fire normally (not be blocked by stale consumed triggers from previous Rise usage)
+  useEffect(() => {
+    const currentState = workoutState.value;
+    const prevState = prevStateRef.current;
+
+    if (currentState === 'roundPreview' && prevState !== 'roundPreview') {
+      console.log('[useWorkoutMusic] Entering roundPreview - clearing consumed triggers');
+      clearConsumedTriggers();
+    }
+
+    prevStateRef.current = currentState;
+  }, [workoutState.value, clearConsumedTriggers]);
+
   useEffect(() => {
     const { value: stateValue, context } = workoutState;
     const { currentRoundIndex, currentExerciseIndex, currentSetNumber, isPaused } = context;
 
-    // Debug: Log every state change
-    console.log(`[useWorkoutMusic] State change:`, {
-      stateValue,
-      roundIndex: currentRoundIndex,
-      exerciseIndex: currentExerciseIndex,
-      setNumber: currentSetNumber,
-      isPaused,
-      enabled,
-      hasConfig: !!circuitConfig?.config?.roundTemplates,
-    });
+    console.log('[useWorkoutMusic] State changed:', { stateValue, currentRoundIndex, currentExerciseIndex, currentSetNumber, isPaused, enabled });
 
-    if (!enabled) {
-      console.log(`[useWorkoutMusic] Skipping - not enabled`);
-      return;
-    }
-
-    // Don't trigger while paused
-    if (isPaused) {
-      console.log(`[useWorkoutMusic] Skipping - paused`);
-      return;
-    }
+    if (!enabled || isPaused) return;
 
     // Map state to phase type
     const phaseType = mapStateToPhaseType(stateValue);
     if (!phaseType) {
-      console.log(`[useWorkoutMusic] Skipping - unmapped state: ${stateValue}`);
+      console.log('[useWorkoutMusic] No phase type for state:', stateValue);
       return;
     }
 
@@ -261,20 +258,25 @@ export function useWorkoutMusic({
 
     // Create a unique key for this phase to avoid duplicate triggers
     const phaseKey = `${stateValue}-${currentRoundIndex}-${phaseIndex}-${currentSetNumber}`;
+    console.log('[useWorkoutMusic] Phase key:', phaseKey, 'lastTriggeredPhase:', lastTriggeredPhase);
+    console.log('[useWorkoutMusic] Consumed triggers:', Array.from(consumedTriggers));
 
-    // Skip if we already triggered for this phase (shared across screens)
+    // Skip if this trigger was pre-consumed (e.g., played early via rise transition)
+    if (consumedTriggers.has(phaseKey)) {
+      console.log('[useWorkoutMusic] SKIPPED - trigger was pre-consumed:', phaseKey);
+      setLastTriggeredPhase(phaseKey);
+      return;
+    }
+
+    // Skip if we already triggered for this phase
     if (lastTriggeredPhase === phaseKey) {
-      console.log(`[useWorkoutMusic] Skipping - already triggered for: ${phaseKey}`);
+      console.log('[useWorkoutMusic] SKIPPED - already triggered:', phaseKey);
       return;
     }
 
     // Get the music config for this round
     const musicConfig = getRoundMusicConfig(circuitConfig, currentRoundIndex);
-    console.log(`[useWorkoutMusic] Round ${currentRoundIndex + 1} music config:`, musicConfig);
-
-    // Evaluate the trigger
     const triggerResult = evaluateMusicTrigger(musicConfig, phaseType, phaseIndex);
-    console.log(`[useWorkoutMusic] Trigger evaluation for ${phaseType}[${phaseIndex}]:`, triggerResult);
 
     // Get total sets to determine last set
     const roundConfig = (circuitConfig?.config?.roundTemplates as any[])?.find(
@@ -283,64 +285,33 @@ export function useWorkoutMusic({
     const totalSets = roundConfig?.template?.repeatTimes || 1;
     const isLastSet = currentSetNumber >= totalSets;
 
-    console.log(`[useWorkoutMusic] Set info: currentSet=${currentSetNumber}, totalSets=${totalSets}, isLastSet=${isLastSet}`);
-
     // Handle multi-set logic for exercise/rest phases
     if (phaseType === 'exercise' || phaseType === 'rest') {
-      // Natural ending ONLY fires on the last set - skip ALL earlier sets (including set 1)
-      if (triggerResult?.naturalEnding) {
-        if (!isLastSet) {
-          console.log(`[useWorkoutMusic] Skipping - naturalEnding only fires on last set (current: ${currentSetNumber}/${totalSets})`);
-          return;
-        }
-        console.log(`[useWorkoutMusic] Natural ending - this IS the last set (${currentSetNumber}/${totalSets}), proceeding`);
-      } else if (currentSetNumber > 1) {
-        // Non-natural-ending triggers on sets 2+: skip unless repeatOnAllSets is enabled
-        if (!triggerResult?.repeatOnAllSets) {
-          console.log(`[useWorkoutMusic] Skipping - not first set (set ${currentSetNumber}) and repeatOnAllSets is false`);
-          return;
-        }
-        console.log(`[useWorkoutMusic] repeatOnAllSets enabled - firing trigger on set ${currentSetNumber}`);
-      }
+      // Natural ending ONLY fires on the last set
+      if (triggerResult?.naturalEnding && !isLastSet) return;
+      // Non-natural-ending triggers on sets 2+: skip unless repeatOnAllSets is enabled
+      if (!triggerResult?.naturalEnding && currentSetNumber > 1 && !triggerResult?.repeatOnAllSets) return;
     }
 
     if (triggerResult) {
-      // For preview phases, skip trigger if:
-      // - Music is already playing at the same energy level
-      // - The trigger is a "default" trigger (no specific trackId, no useBuildup)
-      // This allows seamless navigation between round previews without interrupting music
+      console.log('[useWorkoutMusic] Trigger found:', triggerResult);
+
+      // For preview phases with default triggers, skip if music already playing at same energy
       const isDefaultTrigger = !triggerResult.trackId && !triggerResult.useBuildup;
       if (phaseType === 'preview' && isPlaying && currentEnergy === triggerResult.energy && isDefaultTrigger) {
-        console.log(`[useWorkoutMusic] Skipping preview trigger - music already playing at ${currentEnergy} energy (default trigger)`);
-        setLastTriggeredPhase(phaseKey); // Mark as triggered to prevent re-firing
+        console.log('[useWorkoutMusic] SKIPPED - preview with same energy already playing');
+        setLastTriggeredPhase(phaseKey);
         return;
       }
 
-      console.log(`[useWorkoutMusic] 🎵 FIRING TRIGGER for ${phaseType} at round ${currentRoundIndex + 1}, exercise ${phaseIndex}, set ${currentSetNumber}/${totalSets}:`, triggerResult);
-
-      // Mark this phase as triggered (shared across screens)
+      console.log('[useWorkoutMusic] FIRING trigger for phase:', phaseKey);
       setLastTriggeredPhase(phaseKey);
 
-      // Natural ending only fires on the LAST set
       const shouldUseNaturalEnding = triggerResult.naturalEnding && isLastSet;
-
-      // Calculate remaining SET time for natural ending (only on last set)
       const remainingSetTime = shouldUseNaturalEnding
         ? calculateRemainingSetTime(circuitConfig, currentRoundIndex, currentExerciseIndex, phaseType)
         : undefined;
 
-      if (triggerResult.naturalEnding) {
-        const template = roundConfig?.template;
-        console.log(`[useWorkoutMusic] === NATURAL ENDING DEBUG ===`);
-        console.log(`[useWorkoutMusic] Phase: ${phaseType}, exerciseIndex: ${currentExerciseIndex}, set: ${currentSetNumber}/${totalSets}`);
-        console.log(`[useWorkoutMusic] Template: exercises=${template?.exercisesPerRound}, work=${template?.workDuration}s, rest=${template?.restDuration}s`);
-        console.log(`[useWorkoutMusic] isLastSet: ${isLastSet}, shouldUseNaturalEnding: ${shouldUseNaturalEnding}`);
-        if (shouldUseNaturalEnding) {
-          console.log(`[useWorkoutMusic] ✓ NATURAL ENDING ACTIVE - calculated remaining SET time: ${remainingSetTime}s`);
-        }
-      }
-
-      // Fire the music action
       playWithTrigger({
         energy: triggerResult.energy,
         useBuildup: triggerResult.useBuildup,
@@ -349,7 +320,7 @@ export function useWorkoutMusic({
         roundDurationSec: remainingSetTime,
       });
     } else {
-      console.log(`[useWorkoutMusic] No trigger for ${phaseType}[${phaseIndex}]`);
+      console.log('[useWorkoutMusic] No trigger result for phase:', phaseKey);
     }
   }, [
     workoutState.value,
@@ -364,6 +335,7 @@ export function useWorkoutMusic({
     currentEnergy,
     lastTriggeredPhase,
     setLastTriggeredPhase,
+    consumedTriggers,
   ]);
 
   // Reset the last triggered phase when the workout restarts or round changes significantly

@@ -51,6 +51,9 @@ type MusicEventCallback = (event: {
 // Sound effects use bundled resources (see AudioService.ts)
 const MUSIC_STORAGE_PATH = `${RNFS.DocumentDirectoryPath}/music`;
 
+// Global key for singleton - survives hot reloads
+const MUSIC_SERVICE_GLOBAL_KEY = '__MUSIC_SERVICE_INSTANCE__';
+
 /**
  * MusicService handles music playback for workouts.
  * Plays from downloaded files in the document directory.
@@ -70,11 +73,11 @@ class MusicService {
   private currentFadeCancel: (() => void) | null = null;
 
   constructor() {
-    // Singleton pattern
-    if ((MusicService as any).instance) {
-      return (MusicService as any).instance;
+    // Singleton pattern using global to survive hot reloads
+    if ((global as any)[MUSIC_SERVICE_GLOBAL_KEY]) {
+      return (global as any)[MUSIC_SERVICE_GLOBAL_KEY];
     }
-    (MusicService as any).instance = this;
+    (global as any)[MUSIC_SERVICE_GLOBAL_KEY] = this;
   }
 
   /**
@@ -103,15 +106,14 @@ class MusicService {
    * @param options.useBuildup - If true and segment has buildupDuration, starts earlier for buildup
    */
   async play(track: MusicTrack, options?: { segment?: MusicSegment; useBuildup?: boolean }): Promise<void> {
-    console.log(`[MusicService] play() called for track: ${track.filename}`);
-    console.log(`[MusicService] play() options:`, { segment: options?.segment, useBuildup: options?.useBuildup });
-
+    console.log('[MusicService] play() called:', track.filename, 'enabled:', this.config.enabled);
     if (!this.config.enabled) {
-      console.log(`[MusicService] play() - music disabled, returning`);
+      console.log('[MusicService] play() skipped - not enabled');
       return;
     }
 
     // Stop current track if playing
+    console.log('[MusicService] play() - stopping current track first');
     await this.stop();
 
     const segment = options?.segment;
@@ -143,52 +145,39 @@ class MusicService {
         if (useBuildup && segment.buildupDuration && segment.buildupDuration > 0) {
           buildupDuration = segment.buildupDuration;
           seekPosition = Math.max(0, segment.timestamp - buildupDuration);
-          console.log(`[MusicService] Starting with buildup: seek to ${seekPosition}s, drop at ${segment.timestamp}s`);
         }
       }
 
       if (seekPosition > 0) {
-        console.log(`[MusicService] === SEEK DEBUG ===`);
-        console.log(`[MusicService] Calling setCurrentTime(${seekPosition})`);
         sound.setCurrentTime(seekPosition);
-        // Verify the seek worked
-        setTimeout(() => {
-          sound.getCurrentTime((actualTime) => {
-            console.log(`[MusicService] After seek, actual position: ${actualTime}s (target was ${seekPosition}s)`);
-          });
-        }, 100);
       }
 
       // Start playback
       this.isPlaying = true;
-      console.log(`[MusicService] Starting playback for: ${track.filename}, volume: ${this.config.volume}`);
       this.emit({ type: 'trackStart', track, segment });
 
       // Set up buildup complete timer if applicable
       if (buildupDuration > 0) {
         this.buildupTimeout = setTimeout(() => {
-          console.log(`[MusicService] Buildup complete - DROP!`);
           this.emit({ type: 'buildupComplete', track, segment });
           this.buildupTimeout = null;
         }, buildupDuration * 1000);
       }
 
-      console.log(`[MusicService] Calling sound.play() for: ${track.filename}`);
+      console.log('[MusicService] Starting sound.play()');
       sound.play((success) => {
-        console.log(`[MusicService] sound.play() callback: ${track.filename}, success: ${success}`);
+        console.log('[MusicService] sound.play() callback, success:', success);
         this.isPlaying = false;
         this.clearBuildupTimeout();
         this.currentFadeCancel = null;
 
         if (success) {
-          console.log(`[MusicService] Track finished successfully: ${track.filename}`);
           this.emit({ type: 'trackEnd', track, segment });
         } else {
-          console.error(`[MusicService] Playback FAILED for: ${track.filename}`);
+          console.error(`[MusicService] Playback failed: ${track.filename}`);
           this.emit({ type: 'error', track, segment, error: new Error('Playback failed') });
         }
 
-        // Clean up
         this.currentSound = null;
         this.currentTrack = null;
         this.currentSegment = null;
@@ -204,39 +193,32 @@ class MusicService {
 
     // Find the downloaded file (try all supported extensions)
     const findDownloadedFile = async (): Promise<string | null> => {
-      console.log(`[MusicService] Searching for file: ${track.filename}`);
       for (const ext of SUPPORTED_EXTENSIONS) {
         const path = `${MUSIC_STORAGE_PATH}/${track.filename}${ext}`;
         const exists = await RNFS.exists(path);
-        console.log(`[MusicService]   Checking ${path}: ${exists ? 'FOUND' : 'not found'}`);
-        if (exists) {
-          return path;
-        }
+        if (exists) return path;
       }
       return null;
     };
 
     const downloadedPath = await findDownloadedFile();
-    console.log(`[MusicService] Final path: ${downloadedPath || 'NOT FOUND'}`);
 
     if (!downloadedPath) {
       const error = new Error(`Track file not found: ${track.filename}`);
-      console.error('[MusicService] Failed to find track:', track.filename);
+      console.error('[MusicService] Track not found:', track.filename);
       this.emit({ type: 'error', track, segment, error });
       throw error;
     }
 
-    console.log(`[MusicService] Creating Sound object for: ${downloadedPath}`);
     return new Promise((resolve, reject) => {
       const sound = new Sound(downloadedPath, '', (error) => {
         if (error) {
-          console.error('[MusicService] Sound constructor error:', track.filename, error);
+          console.error('[MusicService] Load error:', track.filename, error);
           this.emit({ type: 'error', track, segment, error });
           reject(error);
           return;
         }
 
-        console.log(`[MusicService] Sound loaded successfully: ${track.filename}, duration: ${sound.getDuration()}s`);
         startPlayback(sound);
         resolve();
       });
@@ -285,9 +267,12 @@ class MusicService {
   }
 
   /**
-   * Stop current playback with fade-out
+   * Stop current playback
+   * @param immediate - If true, stop immediately without fade-out (use for cleanup/unmount)
    */
-  async stop(): Promise<void> {
+  async stop(immediate: boolean = false): Promise<void> {
+    console.log('[MusicService] stop() called, currentSound:', !!this.currentSound, 'isPlaying:', this.isPlaying, 'immediate:', immediate);
+
     if (this.trackEndCheckInterval) {
       clearInterval(this.trackEndCheckInterval);
       this.trackEndCheckInterval = null;
@@ -304,6 +289,7 @@ class MusicService {
     const wasPlaying = this.isPlaying || this.currentSound !== null;
 
     if (!this.currentSound) {
+      console.log('[MusicService] stop() - no current sound, returning early');
       this.currentSegment = null;
       if (wasPlaying) {
         this.emit({ type: 'stopped' });
@@ -312,43 +298,50 @@ class MusicService {
     }
 
     const soundToRelease = this.currentSound;
-    const trackName = this.currentTrack?.filename || 'unknown';
-    console.log(`[MusicService] Stopping with fade-out: ${trackName}`);
 
-    // Fade out before stopping
-    try {
-      const { promise } = fadeOut(soundToRelease, this.config.volume, FADE_OUT_DURATION);
-      await promise;
-    } catch (error) {
-      // Fade was cancelled or failed - continue with stop anyway
-      console.log(`[MusicService] Fade-out interrupted, stopping immediately`);
+    // Clear references immediately to prevent double-stop issues
+    this.currentSound = null;
+    this.currentTrack = null;
+    this.currentSegment = null;
+    this.isPlaying = false;
+
+    // Fade out before stopping (unless immediate)
+    if (!immediate) {
+      console.log('[MusicService] stop() - fading out...');
+      try {
+        const { promise } = fadeOut(soundToRelease, this.config.volume, FADE_OUT_DURATION);
+        await promise;
+        console.log('[MusicService] stop() - fade out complete');
+      } catch (error) {
+        console.log('[MusicService] stop() - fade out failed/cancelled:', error);
+        // Fade was cancelled or failed - continue with stop anyway
+      }
+    } else {
+      console.log('[MusicService] stop() - immediate stop (no fade)');
     }
 
     // Now stop and release
+    console.log('[MusicService] stop() - stopping and releasing sound');
     return new Promise((resolve) => {
       try {
         soundToRelease.stop(() => {
-          console.log(`[MusicService] Stop callback fired for: ${trackName}`);
+          console.log('[MusicService] stop() - sound.stop() callback fired');
           try {
             soundToRelease.release();
-            console.log(`[MusicService] Released: ${trackName}`);
+            console.log('[MusicService] stop() - sound released');
           } catch (releaseError) {
-            console.error(`[MusicService] Release error for ${trackName}:`, releaseError);
+            console.log('[MusicService] stop() - release error:', releaseError);
+            // Ignore release errors
           }
-          this.currentSound = null;
-          this.currentTrack = null;
-          this.currentSegment = null;
-          this.isPlaying = false;
           this.emit({ type: 'stopped' });
-          // Small delay to ensure native resources are freed
-          setTimeout(() => resolve(), 50);
+          if (immediate) {
+            resolve(); // No delay for immediate stop
+          } else {
+            setTimeout(() => resolve(), 50);
+          }
         });
       } catch (error) {
-        console.error('[MusicService] Error stopping:', error);
-        this.currentSound = null;
-        this.currentTrack = null;
-        this.currentSegment = null;
-        this.isPlaying = false;
+        console.log('[MusicService] stop() - error in stop:', error);
         this.emit({ type: 'stopped' });
         resolve();
       }

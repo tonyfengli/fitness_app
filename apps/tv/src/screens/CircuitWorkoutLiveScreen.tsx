@@ -1062,10 +1062,11 @@ export function CircuitWorkoutLiveScreen() {
 
           {/* Main Content Area */}
           <View style={{ flex: 1, paddingHorizontal: 48, paddingBottom: 48 }}>
-            <WorkoutContent 
+            <WorkoutContent
               state={state}
               circuitConfig={circuitConfig}
               getRoundTiming={getRoundTiming}
+              onStartExercise={() => send({ type: 'START_WORKOUT' })}
             />
           </View>
         </>
@@ -1258,10 +1259,11 @@ export function CircuitWorkoutLiveScreen() {
 
           {/* Main Content Area */}
           <View style={{ flex: 1, paddingHorizontal: 48, paddingBottom: currentRoundType === 'stations_round' ? 24 : 48 }}>
-            <WorkoutContent 
+            <WorkoutContent
               state={state}
               circuitConfig={circuitConfig}
               getRoundTiming={getRoundTiming}
+              onStartExercise={() => send({ type: 'START_WORKOUT' })}
             />
           </View>
         </>

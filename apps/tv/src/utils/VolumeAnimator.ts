@@ -43,7 +43,6 @@ export function fadeVolume(
     try {
       sound.setVolume(from);
     } catch (error) {
-      console.error('[VolumeAnimator] Failed to set initial volume:', error);
       reject(error);
       return;
     }
@@ -62,18 +61,16 @@ export function fadeVolume(
       try {
         sound.setVolume(Math.max(0, Math.min(1, volume)));
       } catch (error) {
-        console.error('[VolumeAnimator] Failed to set volume:', error);
         // Continue animation even if one setVolume fails
       }
 
       if (progress < 1) {
         animationFrameId = requestAnimationFrame(animate);
       } else {
-        // Ensure final volume is exact
         try {
           sound.setVolume(to);
         } catch (error) {
-          console.error('[VolumeAnimator] Failed to set final volume:', error);
+          // Ignore final volume errors
         }
         resolve();
       }
@@ -102,12 +99,11 @@ export function fadeIn(
   targetVolume: number = 0.8,
   durationMs: number = 500
 ): { promise: Promise<void>; cancel: () => void } {
-  console.log(`[VolumeAnimator] fadeIn: 0 → ${targetVolume} over ${durationMs}ms`);
   return fadeVolume(sound, {
     from: 0,
     to: targetVolume,
     durationMs,
-    easing: 'easeOut', // Fade-in sounds better with easeOut
+    easing: 'easeOut',
   });
 }
 
@@ -119,11 +115,10 @@ export function fadeOut(
   currentVolume: number = 0.8,
   durationMs: number = 800
 ): { promise: Promise<void>; cancel: () => void } {
-  console.log(`[VolumeAnimator] fadeOut: ${currentVolume} → 0 over ${durationMs}ms`);
   return fadeVolume(sound, {
     from: currentVolume,
     to: 0,
     durationMs,
-    easing: 'easeIn', // Fade-out sounds better with easeIn
+    easing: 'easeIn',
   });
 }

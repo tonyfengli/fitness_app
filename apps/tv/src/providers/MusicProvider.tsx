@@ -5,6 +5,8 @@ import { musicService, MusicTrack, MusicSegment, EnergyLevel } from '../services
 import { musicDownloadService, SyncResult } from '../services/MusicDownloadService';
 import { api } from './TRPCProvider';
 
+const DOWNLOADED_FILENAMES_KEY = '@music_downloaded_filenames';
+
 const TRACKS_CACHE_KEY = '@music_tracks_cache';
 
 // Playable energy levels (excludes 'outro')
@@ -34,6 +36,11 @@ interface MusicContextValue {
   // Trigger tracking (shared across screens)
   lastTriggeredPhase: string | null;
   setLastTriggeredPhase: (phase: string | null) => void;
+
+  // Pre-consumed triggers (for rise transition - marks triggers as already played)
+  consumedTriggers: Set<string>;
+  addConsumedTrigger: (phaseKey: string) => void;
+  clearConsumedTriggers: () => void;
 
   // Actions
   start: () => Promise<void>;
@@ -91,12 +98,40 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
   // Trigger tracking (shared across screens to prevent duplicate triggers)
   const [lastTriggeredPhase, setLastTriggeredPhase] = useState<string | null>(null);
 
+  // Pre-consumed triggers (e.g., exercise trigger played early via rise transition)
+  const [consumedTriggers, setConsumedTriggers] = useState<Set<string>>(new Set());
+
   // Sync state
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<SyncResult | null>(null);
 
   // Pre-selected rise track for random buildup
   const [preSelectedRiseTrack, setPreSelectedRiseTrack] = useState<PreSelectedRiseTrack | null>(null);
+
+  // Downloaded track filenames (for filtering selection to only playable tracks)
+  const [downloadedFilenames, setDownloadedFilenames] = useState<Set<string>>(new Set());
+  const downloadedFilenamesLoaded = useRef(false);
+
+  // Load downloaded filenames on mount
+  useEffect(() => {
+    if (downloadedFilenamesLoaded.current) return;
+    downloadedFilenamesLoaded.current = true;
+
+    musicDownloadService.listLocalTracks()
+      .then((filenames) => {
+        setDownloadedFilenames(new Set(filenames));
+      })
+      .catch(() => {});
+  }, []);
+
+  // Refresh downloaded filenames after sync completes
+  useEffect(() => {
+    if (syncResult && !isSyncing) {
+      musicDownloadService.listLocalTracks()
+        .then((filenames) => setDownloadedFilenames(new Set(filenames)))
+        .catch(() => {});
+    }
+  }, [syncResult, isSyncing]);
 
   // Track history for skip back (persists across screen transitions)
   const playedTracksHistory = useRef<{ track: MusicTrack; segment: MusicSegment | null }[]>([]);
@@ -156,6 +191,12 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     return [];
   }, [apiTracks, isLoading, queryError, cachedTracks]);
 
+  // Filter tracks to only those that are downloaded locally (for playback selection)
+  const downloadedTracks = useMemo((): MusicTrack[] => {
+    if (downloadedFilenames.size === 0) return [];
+    return tracks.filter(t => downloadedFilenames.has(t.filename));
+  }, [tracks, downloadedFilenames]);
+
   // Start buildup countdown
   const startBuildupCountdown = useCallback((durationSeconds: number) => {
     setBuildupCountdown(durationSeconds);
@@ -191,21 +232,11 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
 
   // Pre-select a random track for buildup (used to show rise info before trigger fires)
   const preSelectRiseTrack = useCallback((energy: PlayableEnergy) => {
-    console.log(`[MusicProvider] preSelectRiseTrack called with energy: ${energy}`);
-
-    if (!tracks || tracks.length === 0) {
-      console.log(`[MusicProvider] No tracks available for pre-selection`);
-      return;
-    }
+    if (!downloadedTracks || downloadedTracks.length === 0) return;
 
     // Filter tracks that have the target energy segment (for buildup, we need 'medium' segment)
-    const trackPool = tracks.filter(t => hasEnergySegment(t, 'medium') && hasEnergySegment(t, 'high'));
-    console.log(`[MusicProvider] Pre-select pool size: ${trackPool.length} (tracks with medium+high segments)`);
-
-    if (trackPool.length === 0) {
-      console.log(`[MusicProvider] No tracks with medium+high segments for pre-selection`);
-      return;
-    }
+    const trackPool = downloadedTracks.filter(t => hasEnergySegment(t, 'medium') && hasEnergySegment(t, 'high'));
+    if (trackPool.length === 0) return;
 
     // Get IDs of recently played tracks
     const recentlyPlayedIds = new Set(
@@ -213,43 +244,45 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     );
 
     let availableTracks = trackPool.filter(t => !recentlyPlayedIds.has(t.id));
-    if (availableTracks.length === 0) {
-      availableTracks = trackPool;
-    }
+    if (availableTracks.length === 0) availableTracks = trackPool;
 
     // Pick a random track
     const randomIndex = Math.floor(Math.random() * availableTracks.length);
     const track = availableTracks[randomIndex];
-
-    if (!track) {
-      console.log(`[MusicProvider] Failed to select track for pre-selection`);
-      return;
-    }
+    if (!track) return;
 
     // Calculate rise duration (high.timestamp - medium.timestamp)
     const segments = track.segments || [];
     const mediumSegment = segments.find(s => s.energy === 'medium');
     const highSegment = segments.find(s => s.energy === 'high');
-
-    if (!mediumSegment || !highSegment) {
-      console.log(`[MusicProvider] Track ${track.name} missing medium or high segment`);
-      return;
-    }
+    if (!mediumSegment || !highSegment) return;
 
     const riseDuration = highSegment.timestamp - mediumSegment.timestamp;
 
-    console.log(`[MusicProvider] Pre-selected rise track: ${track.name}, riseDuration: ${riseDuration}s`);
-
     setPreSelectedRiseTrack({
       track,
-      riseDuration: Math.round(riseDuration * 10) / 10, // Round to 1 decimal
+      riseDuration: Math.round(riseDuration * 10) / 10,
     });
-  }, [tracks]);
+  }, [downloadedTracks]);
 
   // Clear pre-selected rise track
   const clearPreSelectedRiseTrack = useCallback(() => {
-    console.log(`[MusicProvider] Clearing pre-selected rise track`);
     setPreSelectedRiseTrack(null);
+  }, []);
+
+  // Add a trigger to the consumed set (for rise transition)
+  const addConsumedTrigger = useCallback((phaseKey: string) => {
+    console.log('[MusicProvider] addConsumedTrigger:', phaseKey);
+    setConsumedTriggers(prev => {
+      const newSet = new Set(prev).add(phaseKey);
+      console.log('[MusicProvider] consumedTriggers now:', Array.from(newSet));
+      return newSet;
+    });
+  }, []);
+
+  // Clear consumed triggers (e.g., when starting a new workout)
+  const clearConsumedTriggers = useCallback(() => {
+    setConsumedTriggers(new Set());
   }, []);
 
   // Play next random track (optionally filtered by energy)
@@ -257,17 +290,12 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     energy?: PlayableEnergy;
     useBuildup?: boolean;
   }) => {
-    console.log(`[MusicProvider] playNextTrack called:`, { options, totalTracks: tracks.length });
-
     // Guard against concurrent play calls
-    if (isStartingRef.current) {
-      console.log(`[MusicProvider] Skipping playNextTrack - already starting a track`);
-      return;
-    }
+    if (isStartingRef.current) return;
 
-    if (!tracks || tracks.length === 0) {
-      console.log(`[MusicProvider] No tracks available!`);
-      setError('No music tracks available');
+    // Use downloadedTracks to ensure we only play tracks that exist locally
+    if (!downloadedTracks || downloadedTracks.length === 0) {
+      setError('No downloaded music tracks available');
       return;
     }
 
@@ -276,18 +304,13 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     const targetEnergy = options?.energy;
     const useBuildup = options?.useBuildup ?? false;
 
-    // Filter tracks that have segments with the target energy
+    // Filter downloaded tracks that have segments with the target energy
     let trackPool = targetEnergy
-      ? tracks.filter(t => hasEnergySegment(t, targetEnergy))
-      : tracks;
+      ? downloadedTracks.filter(t => hasEnergySegment(t, targetEnergy))
+      : downloadedTracks;
 
-    console.log(`[MusicProvider] Energy filter: ${targetEnergy || 'none'}, pool size: ${trackPool.length}`);
-
-    // Fallback to all tracks if no tracks match the energy
-    if (trackPool.length === 0) {
-      console.log(`[MusicProvider] No ${targetEnergy} energy tracks, falling back to all tracks`);
-      trackPool = tracks;
-    }
+    // Fallback to all downloaded tracks if no tracks match the energy
+    if (trackPool.length === 0) trackPool = downloadedTracks;
 
     // Get IDs of recently played tracks
     const recentlyPlayedIds = new Set(
@@ -295,19 +318,13 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     );
 
     let availableTracks = trackPool.filter(t => !recentlyPlayedIds.has(t.id));
-    console.log(`[MusicProvider] Track pool filenames:`, trackPool.map(t => t.filename));
-    console.log(`[MusicProvider] Recently played IDs:`, Array.from(recentlyPlayedIds));
-    console.log(`[MusicProvider] Available tracks after filtering:`, availableTracks.map(t => t.filename));
-
     if (availableTracks.length === 0) {
-      console.log(`[MusicProvider] All tracks played, resetting history`);
       playedTracksHistory.current = [];
       availableTracks = trackPool;
     }
 
     const randomIndex = Math.floor(Math.random() * availableTracks.length);
     const track = availableTracks[randomIndex];
-    console.log(`[MusicProvider] Random selection: index=${randomIndex}, track=${track?.filename || 'none'}`);
 
     if (track) {
       // Select a segment with the target energy (or first segment as fallback)
@@ -315,17 +332,13 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
         ? getRandomSegmentByEnergy(track.segments || [], targetEnergy)
         : track.segments?.[0] || null;
 
-      console.log(`[MusicProvider] Selected track: "${track.name}" (${track.filename}), segment: ${segment?.energy} @ ${segment?.timestamp}s, useBuildup: ${useBuildup}`);
-
       try {
         playedTracksHistory.current.push({ track, segment });
         setIsPaused(false);
         setCurrentEnergy(segment?.energy || null);
         isSwitchingTrackRef.current = true;
-        // Random tracks are not natural ending
         naturalEndingActiveRef.current = false;
 
-        // Start buildup countdown if applicable
         if (useBuildup && segment?.buildupDuration && segment.buildupDuration > 0) {
           startBuildupCountdown(segment.buildupDuration);
         }
@@ -341,10 +354,9 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
         isStartingRef.current = false;
       }
     } else {
-      console.log(`[MusicProvider] No track selected from pool of ${availableTracks.length}`);
       isStartingRef.current = false;
     }
-  }, [tracks, startBuildupCountdown, clearBuildupCountdown]);
+  }, [downloadedTracks, tracks, startBuildupCountdown, clearBuildupCountdown]);
 
   // Helper to find segment at a specific timestamp
   const findSegmentAtTimestamp = useCallback((segments: MusicSegment[], timestamp: number): MusicSegment | null => {
@@ -371,22 +383,11 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
   }) => {
     const { energy, useBuildup = false, trackId, naturalEnding = false, roundDurationSec } = options;
 
-    console.log(`[MusicProvider] playWithTrigger called:`, {
-      energy,
-      useBuildup,
-      trackId: trackId || '(random)',
-      naturalEnding,
-      roundDurationSec: roundDurationSec ?? '(none)',
-      availableTracks: tracks.length
-    });
-
-    if (naturalEnding) {
-      console.log(`[MusicProvider] 🎯 NATURAL ENDING MODE - track should end when set ends`);
-    }
+    console.log('[MusicProvider] playWithTrigger called:', { energy, useBuildup, trackId, naturalEnding, isStarting: isStartingRef.current });
 
     // Guard against concurrent play calls
     if (isStartingRef.current) {
-      console.log(`[MusicProvider] Skipping playWithTrigger - already starting a track`);
+      console.log('[MusicProvider] playWithTrigger BLOCKED - already starting');
       return;
     }
 
@@ -394,52 +395,31 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     if (trackId) {
       const specificTrack = tracks.find(t => t.id === trackId);
       if (specificTrack) {
-        console.log(`[MusicProvider] Found track: ${specificTrack.name}, segments:`, JSON.stringify(specificTrack.segments));
+        // Check if the track is downloaded before attempting to play
+        if (!downloadedFilenames.has(specificTrack.filename)) {
+          // Fall through to random selection below
+        } else {
         isStartingRef.current = true;
         try {
           let segment: MusicSegment | null = null;
           let seekTimestamp: number | undefined;
 
-          // Handle natural ending - calculate seek point so track ends ~1s AFTER round
-          // The -1s buffer makes track start earlier, so it overshoots and gets smoothly cut off by next trigger's fade-out
+          // Handle natural ending - calculate seek point so track ends when round ends
           if (naturalEnding && roundDurationSec && specificTrack.durationMs) {
             const trackDurationSec = specificTrack.durationMs / 1000;
             const OVERSHOOT_BUFFER_SEC = 2.5;
             seekTimestamp = trackDurationSec - roundDurationSec - OVERSHOOT_BUFFER_SEC;
-
-            console.log(`[MusicProvider] === NATURAL ENDING CALCULATION ===`);
-            console.log(`[MusicProvider] Track: ${specificTrack.name}, duration: ${trackDurationSec}s (${specificTrack.durationMs}ms)`);
-            console.log(`[MusicProvider] Remaining round time: ${roundDurationSec}s`);
-            console.log(`[MusicProvider] Seek point: ${trackDurationSec} - ${roundDurationSec} - ${OVERSHOOT_BUFFER_SEC} = ${seekTimestamp}s`);
-
-            if (seekTimestamp < 0) {
-              console.log(`[MusicProvider] Track too short for natural ending, playing from beginning`);
-              seekTimestamp = 0;
-            }
+            if (seekTimestamp < 0) seekTimestamp = 0;
 
             // Find which segment the seek point falls into
             segment = findSegmentAtTimestamp(specificTrack.segments || [], seekTimestamp);
-
-            if (segment?.energy === 'low') {
-              console.warn(`[MusicProvider] Natural ending seek point lands in LOW energy segment - this shouldn't happen if compatibility check passed`);
-            }
-
-            console.log(`[MusicProvider] Will seek to: ${seekTimestamp}s (lands in ${segment?.energy} segment)`);
-            console.log(`[MusicProvider] Expected: music ends at track position ${trackDurationSec}s when round ends`);
           } else {
             // Standard behavior - try to get segment with requested energy
             segment = getRandomSegmentByEnergy(specificTrack.segments || [], energy);
-            console.log(`[MusicProvider] Looking for ${energy} segment, found:`, segment);
-
-            // If requested energy not available, play from beginning of track
             if (!segment) {
-              console.log(`[MusicProvider] Track ${specificTrack.name} has no ${energy} segment, playing from beginning`);
               segment = { timestamp: 0, energy } as MusicSegment;
             }
           }
-
-          const finalTimestamp = seekTimestamp ?? segment?.timestamp ?? 0;
-          console.log(`[MusicProvider] Playing specific track: ${specificTrack.name}, at ${finalTimestamp}s (segment: ${segment?.energy})`);
 
           playedTracksHistory.current.push({ track: specificTrack, segment });
           setIsPaused(false);
@@ -450,10 +430,21 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
           // Track if this is a natural ending track (suppress auto-play when it ends)
           naturalEndingActiveRef.current = naturalEnding;
 
-          // Don't use buildup for natural ending
-          const shouldUseBuildup = useBuildup && !naturalEnding && segment?.buildupDuration && segment.buildupDuration > 0;
-          if (shouldUseBuildup && segment?.buildupDuration) {
-            startBuildupCountdown(segment.buildupDuration);
+          // Handle buildup for specific tracks (not for natural ending)
+          if (useBuildup && !naturalEnding) {
+            const segments = specificTrack.segments || [];
+            const mediumSegment = segments.find(s => s.energy === 'medium');
+            const highSegment = segments.find(s => s.energy === 'high');
+
+            if (mediumSegment && highSegment) {
+              const riseDuration = highSegment.timestamp - mediumSegment.timestamp;
+              if (riseDuration > 0) {
+                startBuildupCountdown(riseDuration);
+                segment = mediumSegment;
+              }
+            } else if (segment?.buildupDuration && segment.buildupDuration > 0) {
+              startBuildupCountdown(segment.buildupDuration);
+            }
           }
 
           // Create a modified segment with the natural ending seek timestamp if needed
@@ -461,55 +452,46 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
             ? { ...segment, timestamp: seekTimestamp } as MusicSegment
             : segment;
 
-          await musicService.play(specificTrack, { segment: playSegment || undefined, useBuildup: shouldUseBuildup ? true : false });
+          // For buildup, we handle the countdown ourselves, so don't pass useBuildup to MusicService
+          await musicService.play(specificTrack, { segment: playSegment || undefined, useBuildup: false });
           setError(null);
           return;
         } catch (err) {
-          console.warn(`[MusicProvider] Failed to play specific track ${trackId}, falling back`);
           isSwitchingTrackRef.current = false;
           clearBuildupCountdown();
         } finally {
           isStartingRef.current = false;
         }
-      } else {
-        console.warn(`[MusicProvider] Track ${trackId} not found in available tracks, falling back`);
+        } // end of "else" block for downloaded check
       }
     }
 
     // If useBuildup and we have a pre-selected rise track, use it
     if (useBuildup && preSelectedRiseTrack) {
-      const { track: preSelectedTrack } = preSelectedRiseTrack;
-      console.log(`[MusicProvider] Using pre-selected rise track: ${preSelectedTrack.name}`);
+      const { track: preSelectedTrack, riseDuration } = preSelectedRiseTrack;
 
       isStartingRef.current = true;
       try {
-        // Get medium segment for buildup
-        const segment = getRandomSegmentByEnergy(preSelectedTrack.segments || [], 'medium');
+        const mediumSegment = getRandomSegmentByEnergy(preSelectedTrack.segments || [], 'medium');
 
-        if (segment) {
-          console.log(`[MusicProvider] Playing pre-selected track: ${preSelectedTrack.name}, segment: ${segment.energy} @ ${segment.timestamp}s`);
-
-          playedTracksHistory.current.push({ track: preSelectedTrack, segment });
+        if (mediumSegment) {
+          playedTracksHistory.current.push({ track: preSelectedTrack, segment: mediumSegment });
           setIsPaused(false);
-          setCurrentEnergy(segment.energy);
+          setCurrentEnergy(mediumSegment.energy);
           setIsEnabled(true);
           isSwitchingTrackRef.current = true;
           naturalEndingActiveRef.current = false;
 
-          // Start buildup countdown
-          if (segment.buildupDuration && segment.buildupDuration > 0) {
-            startBuildupCountdown(segment.buildupDuration);
+          if (riseDuration && riseDuration > 0) {
+            startBuildupCountdown(riseDuration);
           }
 
-          await musicService.play(preSelectedTrack, { segment, useBuildup: true });
+          await musicService.play(preSelectedTrack, { segment: mediumSegment, useBuildup: false });
           setError(null);
-
-          // Clear pre-selected track after use
           setPreSelectedRiseTrack(null);
           return;
         }
       } catch (err) {
-        console.warn(`[MusicProvider] Failed to play pre-selected rise track, falling back to random`);
         isSwitchingTrackRef.current = false;
         clearBuildupCountdown();
       } finally {
@@ -517,14 +499,18 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
-    // Play random track with energy filter (natural ending not supported for random tracks)
-    if (naturalEnding) {
-      console.warn(`[MusicProvider] Natural ending requires a specific trackId, falling back to random without natural ending`);
-    }
-    console.log(`[MusicProvider] Playing random ${energy} energy track`);
+    // Play random track with energy filter
     setIsEnabled(true);
     await playNextTrack({ energy, useBuildup });
-  }, [tracks, playNextTrack, startBuildupCountdown, clearBuildupCountdown, findSegmentAtTimestamp, preSelectedRiseTrack]);
+  }, [tracks, downloadedFilenames, playNextTrack, startBuildupCountdown, clearBuildupCountdown, findSegmentAtTimestamp, preSelectedRiseTrack]);
+
+  // Stop music on unmount to prevent orphaned audio during hot reload
+  // Use immediate=true to skip fade-out and ensure cleanup completes before JS context is destroyed
+  useEffect(() => {
+    return () => {
+      musicService.stop(true); // Immediate stop - no fade
+    };
+  }, []);
 
   // Subscribe to MusicService events
   useEffect(() => {
@@ -543,13 +529,11 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
           setCurrentTrack(null);
           setCurrentSegment(null);
           clearBuildupCountdown();
-          // Suppress auto-play for natural ending tracks (round is ending anyway)
+          // Suppress auto-play for natural ending tracks
           if (naturalEndingActiveRef.current) {
-            console.log(`[MusicProvider] Natural ending track finished - suppressing auto-play`);
             naturalEndingActiveRef.current = false;
             setIsPlaying(false);
           } else if (isEnabled && currentEnergy && currentEnergy !== 'outro') {
-            // Auto-play next track if enabled
             playNextTrack({ energy: currentEnergy as PlayableEnergy });
           } else {
             setIsPlaying(false);
@@ -557,7 +541,6 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
           break;
         case 'stopped':
           if (isSwitchingTrackRef.current) {
-            console.log(`[MusicProvider] Ignoring 'stopped' event during track switch`);
             break;
           }
           setIsPlaying(false);
@@ -570,8 +553,6 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
           naturalEndingActiveRef.current = false;
           break;
         case 'buildupComplete':
-          // Buildup finished - drop is happening now
-          console.log(`[MusicProvider] Buildup complete - DROP!`);
           clearBuildupCountdown();
           break;
         case 'error':
@@ -739,6 +720,9 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     preSelectedRiseTrack,
     lastTriggeredPhase,
     setLastTriggeredPhase,
+    consumedTriggers,
+    addConsumedTrigger,
+    clearConsumedTriggers,
     start,
     stop,
     enable,

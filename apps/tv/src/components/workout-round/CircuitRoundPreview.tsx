@@ -1,5 +1,5 @@
-import React, { useMemo, useEffect } from 'react';
-import { View, Text } from 'react-native';
+import React, { useMemo, useEffect, useState, useCallback, useRef } from 'react';
+import { View, Text, Pressable } from 'react-native';
 import { TOKENS, MattePanel, CircuitExercise, RoundData } from './shared';
 import { useNavigation } from '../../App';
 import { useMusic } from '../../providers/MusicProvider';
@@ -15,14 +15,18 @@ interface CircuitRoundPreviewProps {
   totalRounds?: number;
   roundDuration?: number;
   circuitConfig?: CircuitConfig;
+  onStartExercise?: () => void; // Callback to start exercise (triggered when rise countdown completes)
 }
 
-export function CircuitRoundPreview({ currentRound, repeatTimes = 1, timeRemaining = 0, isTimerActive = false, roundNumber, currentRoundIndex = 0, circuitConfig }: CircuitRoundPreviewProps) {
+export function CircuitRoundPreview({ currentRound, repeatTimes = 1, timeRemaining = 0, isTimerActive = false, roundNumber, currentRoundIndex = 0, circuitConfig, onStartExercise }: CircuitRoundPreviewProps) {
   const navigation = useNavigation();
   const sessionId = navigation.getParam('sessionId');
-  const { tracks, preSelectedRiseTrack, preSelectRiseTrack, clearPreSelectedRiseTrack } = useMusic();
+  const { tracks, preSelectedRiseTrack, preSelectRiseTrack, clearPreSelectedRiseTrack, buildupCountdown, playWithTrigger, addConsumedTrigger } = useMusic();
 
-  console.log('[CircuitRoundPreview] RENDER:', { currentRoundIndex, hasCircuitConfig: !!circuitConfig, tracksCount: tracks.length, hasPreSelected: !!preSelectedRiseTrack });
+  // Track if rise transition has been started
+  const [isRiseActive, setIsRiseActive] = useState(false);
+  const hasTriggeredTransition = useRef(false);
+  const hadCountdownActive = useRef(false);
 
   // Extract round number from round name if not provided
   const extractedRoundNumber = roundNumber || (() => {
@@ -48,7 +52,6 @@ export function CircuitRoundPreview({ currentRound, repeatTimes = 1, timeRemaini
 
     // Check if exercise 1 has buildup enabled but no specific track
     if (exercise1Trigger?.enabled && exercise1Trigger?.useBuildup && !exercise1Trigger?.trackId) {
-      console.log('[CircuitRoundPreview] Pre-selecting random rise track for round 1');
       const energy = exercise1Trigger.energy || 'medium';
       preSelectRiseTrack(energy);
     }
@@ -61,32 +64,13 @@ export function CircuitRoundPreview({ currentRound, repeatTimes = 1, timeRemaini
 
   // Calculate rise info for round 1 only (exercise 1 with buildup)
   const riseInfo = useMemo(() => {
-    console.log('[CircuitRoundPreview] riseInfo calculation:', {
-      currentRoundIndex,
-      hasCircuitConfig: !!circuitConfig,
-      tracksCount: tracks.length,
-      hasPreSelected: !!preSelectedRiseTrack,
-    });
-
-    // Only show for round 1 (index 0)
-    if (currentRoundIndex !== 0) {
-      console.log('[CircuitRoundPreview] Not round 1, skipping');
-      return null;
-    }
-
-    console.log('[CircuitRoundPreview] Exercise 1 trigger:', exercise1Trigger);
-
-    if (!exercise1Trigger?.enabled || !exercise1Trigger?.useBuildup) {
-      console.log('[CircuitRoundPreview] No buildup configured for exercise 1');
-      return null;
-    }
+    if (currentRoundIndex !== 0) return null;
+    if (!exercise1Trigger?.enabled || !exercise1Trigger?.useBuildup) return null;
 
     // Check for specific track first
     const trackId = exercise1Trigger.trackId;
     if (trackId) {
       const track = tracks.find(t => t.id === trackId);
-      console.log('[CircuitRoundPreview] Specific track lookup:', { trackId, trackFound: !!track });
-
       if (track) {
         const segments = track.segments || [];
         const mediumSegment = segments.find(s => s.energy === 'medium');
@@ -94,10 +78,6 @@ export function CircuitRoundPreview({ currentRound, repeatTimes = 1, timeRemaini
 
         if (mediumSegment && highSegment) {
           const riseDuration = highSegment.timestamp - mediumSegment.timestamp;
-          console.log('[CircuitRoundPreview] Rise info from specific track:', {
-            trackName: track.name,
-            riseDuration,
-          });
           return {
             trackName: track.name,
             riseDuration: Math.round(riseDuration * 10) / 10,
@@ -108,20 +88,76 @@ export function CircuitRoundPreview({ currentRound, repeatTimes = 1, timeRemaini
 
     // Use pre-selected track for random mode
     if (preSelectedRiseTrack) {
-      console.log('[CircuitRoundPreview] Rise info from pre-selected track:', {
-        trackName: preSelectedRiseTrack.track.name,
-        riseDuration: preSelectedRiseTrack.riseDuration,
-      });
       return {
         trackName: preSelectedRiseTrack.track.name,
         riseDuration: preSelectedRiseTrack.riseDuration,
       };
     }
 
-    console.log('[CircuitRoundPreview] No track available for rise info');
     return null;
-  }, [currentRoundIndex, circuitConfig, tracks, exercise1Trigger, preSelectedRiseTrack]);
-  
+  }, [currentRoundIndex, tracks, exercise1Trigger, preSelectedRiseTrack]);
+
+  // Check if showRiseCountdown is enabled (defaults to true when useBuildup is true)
+  const showRiseCountdown = exercise1Trigger?.showRiseCountdown ?? (exercise1Trigger?.useBuildup ?? false);
+
+  // Handle starting the rise transition
+  const handleStartRise = useCallback(async () => {
+    console.log('[CircuitRoundPreview] handleStartRise called, riseInfo:', !!riseInfo, 'isRiseActive:', isRiseActive);
+    if (!riseInfo || isRiseActive) return;
+
+    setIsRiseActive(true);
+    hasTriggeredTransition.current = false;
+    hadCountdownActive.current = false;
+
+    // Mark the exercise 1 trigger as "consumed" so it won't fire again when we enter exercise 1
+    const exercisePhaseKey = `exercise-${currentRoundIndex}-0-1`;
+    console.log('[CircuitRoundPreview] Adding consumed trigger:', exercisePhaseKey);
+    addConsumedTrigger(exercisePhaseKey);
+
+    const trackId = exercise1Trigger?.trackId || preSelectedRiseTrack?.track.id;
+    const energy = exercise1Trigger?.energy || 'medium';
+
+    console.log('[CircuitRoundPreview] Calling playWithTrigger for rise:', { energy, trackId, useBuildup: true });
+    await playWithTrigger({
+      energy: energy as 'low' | 'medium' | 'high',
+      useBuildup: true,
+      trackId,
+    });
+  }, [riseInfo, isRiseActive, exercise1Trigger, preSelectedRiseTrack, playWithTrigger, currentRoundIndex, addConsumedTrigger]);
+
+  // Watch for countdown completion to trigger transition
+  useEffect(() => {
+    if (!isRiseActive) return;
+
+    console.log('[CircuitRoundPreview] Countdown effect, buildupCountdown:', buildupCountdown, 'hadCountdownActive:', hadCountdownActive.current);
+
+    if (buildupCountdown !== null && buildupCountdown > 0) {
+      hadCountdownActive.current = true;
+    }
+
+    // Trigger transition when countdown was active and now completes
+    if (hadCountdownActive.current && buildupCountdown === null && !hasTriggeredTransition.current) {
+      console.log('[CircuitRoundPreview] Countdown complete, triggering transition in 100ms');
+      const timer = setTimeout(() => {
+        if (!hasTriggeredTransition.current) {
+          hasTriggeredTransition.current = true;
+          console.log('[CircuitRoundPreview] Calling onStartExercise');
+          onStartExercise?.();
+        }
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [isRiseActive, buildupCountdown, onStartExercise]);
+
+  // Reset rise state when leaving this preview (e.g., navigating away)
+  useEffect(() => {
+    return () => {
+      setIsRiseActive(false);
+      hasTriggeredTransition.current = false;
+      hadCountdownActive.current = false;
+    };
+  }, []);
+
   // Calculate grid layout based on number of exercises
   const exerciseCount = currentRound.exercises.length;
   let columns = 4; // Default to 4 columns
@@ -295,45 +331,78 @@ export function CircuitRoundPreview({ currentRound, repeatTimes = 1, timeRemaini
         </View>
       )}
 
-      {/* Rise Info - Only for round 1 with buildup configured */}
-      {riseInfo && (
+      {/* Rise Info & Start Button - Only for round 1 with buildup configured */}
+      {riseInfo && !isRiseActive && (
         <View style={{
           position: 'absolute',
           bottom: 40,
           left: 48,
         }}>
-          <MattePanel style={{
-            paddingHorizontal: 20,
-            paddingVertical: 12,
-            gap: 4,
-            backgroundColor: TOKENS.color.accent + '10',
-            borderColor: TOKENS.color.accent,
-            borderWidth: 1,
+          <Pressable
+            onPress={handleStartRise}
+            style={({ focused }) => ({
+              opacity: focused ? 1 : 0.9,
+              transform: [{ scale: focused ? 1.02 : 1 }],
+            })}
+          >
+            <MattePanel style={{
+              paddingHorizontal: 20,
+              paddingVertical: 12,
+              gap: 4,
+              backgroundColor: TOKENS.color.accent + '10',
+              borderColor: TOKENS.color.accent,
+              borderWidth: 1,
+            }}>
+              <Text style={{
+                fontSize: 13,
+                fontWeight: '700',
+                color: TOKENS.color.accent,
+                textTransform: 'uppercase',
+                letterSpacing: 1.2,
+              }}>
+                Rise
+              </Text>
+              <Text style={{
+                fontSize: 16,
+                fontWeight: '600',
+                color: TOKENS.color.text,
+              }}>
+                {riseInfo.trackName}
+              </Text>
+              <Text style={{
+                fontSize: 14,
+                fontWeight: '500',
+                color: TOKENS.color.muted,
+              }}>
+                {riseInfo.riseDuration}s
+              </Text>
+            </MattePanel>
+          </Pressable>
+        </View>
+      )}
+
+      {/* Rise Countdown Overlay - Shows 3, 2, 1 before the drop */}
+      {isRiseActive && showRiseCountdown && buildupCountdown !== null && buildupCountdown <= 3 && (
+        <View style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          justifyContent: 'center',
+          alignItems: 'center',
+          backgroundColor: 'rgba(0, 0, 0, 0.7)',
+        }}>
+          <Text style={{
+            fontSize: 200,
+            fontWeight: '900',
+            color: TOKENS.color.accent,
+            textShadowColor: 'rgba(0, 0, 0, 0.5)',
+            textShadowOffset: { width: 0, height: 4 },
+            textShadowRadius: 20,
           }}>
-            <Text style={{
-              fontSize: 13,
-              fontWeight: '700',
-              color: TOKENS.color.accent,
-              textTransform: 'uppercase',
-              letterSpacing: 1.2,
-            }}>
-              Rise
-            </Text>
-            <Text style={{
-              fontSize: 16,
-              fontWeight: '600',
-              color: TOKENS.color.text,
-            }}>
-              {riseInfo.trackName}
-            </Text>
-            <Text style={{
-              fontSize: 14,
-              fontWeight: '500',
-              color: TOKENS.color.muted,
-            }}>
-              {riseInfo.riseDuration}s
-            </Text>
-          </MattePanel>
+            {buildupCountdown}
+          </Text>
         </View>
       )}
     </View>

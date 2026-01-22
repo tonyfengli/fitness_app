@@ -82,6 +82,7 @@ export function RoundMusicDrawer({
   const [detailEnergy, setDetailEnergy] = useState<EnergyLevel>("high");
   const [detailRepeatOnAllSets, setDetailRepeatOnAllSets] = useState(false);
   const [detailNaturalEnding, setDetailNaturalEnding] = useState(false);
+  const [detailUseBuildup, setDetailUseBuildup] = useState(false);
 
   // Track picker state
   const [trackSearchQuery, setTrackSearchQuery] = useState("");
@@ -411,6 +412,7 @@ export function RoundMusicDrawer({
     setDetailEnergy((trigger?.energy as EnergyLevel) || (phase.phaseType === "rest" ? "low" : "high"));
     setDetailRepeatOnAllSets(trigger?.repeatOnAllSets ?? false);
     setDetailNaturalEnding(trigger?.naturalEnding ?? false);
+    setDetailUseBuildup(trigger?.useBuildup ?? false);
     setViewState({ type: "phase-detail", phase });
   };
 
@@ -430,6 +432,7 @@ export function RoundMusicDrawer({
       trackName: detailTrackId ? detailTrackName : undefined,
       energy: detailEnergy,
       naturalEnding: detailNaturalEnding,
+      useBuildup: detailUseBuildup,
       ...(showRepeatOption ? { repeatOnAllSets: detailRepeatOnAllSets } : {}),
     };
 
@@ -1025,6 +1028,57 @@ export function RoundMusicDrawer({
                         />
                       </div>
                     </div>
+                  </button>
+                )}
+
+                {/* Use Buildup - Only show when energy is "Rise" (medium) */}
+                {detailEnergy === "medium" && (
+                  <button
+                    onClick={() => setDetailUseBuildup(!detailUseBuildup)}
+                    className={cn(
+                      "w-full p-4 rounded-xl transition-all text-left",
+                      detailUseBuildup
+                        ? "bg-amber-50 dark:bg-amber-900/20 ring-1 ring-amber-300 dark:ring-amber-700"
+                        : "bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800"
+                    )}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-gray-900 dark:text-white">
+                          Rise countdown
+                        </p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+                          Show 3-2-1 countdown before the drop
+                        </p>
+                      </div>
+                      <div
+                        className={cn(
+                          "relative w-12 h-7 rounded-full transition-all duration-200 flex-shrink-0 ml-4",
+                          detailUseBuildup ? "bg-amber-500" : "bg-gray-200 dark:bg-gray-700"
+                        )}
+                      >
+                        <div
+                          className={cn(
+                            "absolute top-1 w-5 h-5 rounded-full bg-white shadow-sm transition-transform duration-200",
+                            detailUseBuildup ? "translate-x-6" : "translate-x-1"
+                          )}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Buildup info */}
+                    {detailUseBuildup && (
+                      <div className="mt-3 pt-3 border-t border-amber-200 dark:border-amber-800">
+                        <div className="flex items-start gap-2">
+                          <svg className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          <p className="text-sm text-amber-700 dark:text-amber-300">
+                            Music starts at the buildup, countdown appears at 3 seconds before the drop
+                          </p>
+                        </div>
+                      </div>
+                    )}
                   </button>
                 )}
 

@@ -13,9 +13,10 @@ interface WorkoutContentProps {
   state: any; // Will be typed more specifically later
   circuitConfig: CircuitConfig;
   getRoundTiming: (roundIndex: number) => any;
+  onStartExercise?: () => void; // Callback to start exercise (e.g., from rise countdown)
 }
 
-export function WorkoutContent({ state, circuitConfig, getRoundTiming }: WorkoutContentProps) {
+export function WorkoutContent({ state, circuitConfig, getRoundTiming, onStartExercise }: WorkoutContentProps) {
   // Get current round data
   const currentRound: RoundData | undefined = state.context.rounds[state.context.currentRoundIndex];
   const currentExercise: CircuitExercise | undefined = currentRound?.exercises[state.context.currentExerciseIndex];
@@ -55,6 +56,7 @@ export function WorkoutContent({ state, circuitConfig, getRoundTiming }: Workout
               restDuration={currentRoundTiming.restDuration}
               repeatTimes={currentRepeatTimes}
               circuitConfig={circuitConfig}
+              onStartExercise={onStartExercise}
             />
           )}
           

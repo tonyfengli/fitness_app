@@ -20,6 +20,7 @@ interface CircuitRoundContainerProps {
   restDuration: number;
   repeatTimes: number;
   circuitConfig?: CircuitConfig;
+  onStartExercise?: () => void; // Callback to start exercise (e.g., from rise countdown)
 }
 
 export function CircuitRoundContainer({
@@ -32,7 +33,8 @@ export function CircuitRoundContainer({
   roundDuration,
   restDuration,
   repeatTimes,
-  circuitConfig
+  circuitConfig,
+  onStartExercise
 }: CircuitRoundContainerProps) {
   const navigation = useNavigation();
   const sessionId = navigation.getParam('sessionId');
@@ -47,6 +49,7 @@ export function CircuitRoundContainer({
         timeRemaining={state.context.timeRemaining}
         isTimerActive={state.context.currentRoundIndex > 0}
         circuitConfig={circuitConfig}
+        onStartExercise={onStartExercise}
       />
     );
   }

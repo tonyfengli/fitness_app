@@ -17,6 +17,8 @@ export interface MusicTriggerResult {
   trackId?: string;
   /** Whether to repeat on all sets (not just first) */
   repeatOnAllSets: boolean;
+  /** Whether to show 3-2-1 countdown before the drop (only relevant when useBuildup is true) */
+  showRiseCountdown: boolean;
 }
 
 /**
@@ -65,12 +67,16 @@ export function evaluateMusicTrigger(
   // No trigger configured or trigger is disabled
   if (!trigger?.enabled) return null;
 
+  const useBuildup = trigger.useBuildup ?? false;
+
   // Return the trigger result with defaults
+  // showRiseCountdown defaults to true when useBuildup is true
   return {
     energy: trigger.energy ?? "high",
-    useBuildup: trigger.useBuildup ?? false,
+    useBuildup,
     trackId: trigger.trackId,
     repeatOnAllSets: trigger.repeatOnAllSets ?? false,
+    showRiseCountdown: trigger.showRiseCountdown ?? useBuildup,
   };
 }
 
