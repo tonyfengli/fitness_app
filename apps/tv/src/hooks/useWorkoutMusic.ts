@@ -101,25 +101,19 @@ function calculateRemainingSetTime(
     let remainingInSet = 0;
     const remainingExercises = exerciseCount - currentExerciseIndex;
 
-    // Buffer per phase transition to account for state machine latency
-    const TRANSITION_BUFFER_SEC = 1.5;
+    // Note: No buffer added here - the OVERSHOOT_BUFFER_SEC in MusicProvider handles timing
+    // so the track intentionally runs ~1s past round end and gets smoothly cut off
 
     if (phaseType === 'exercise') {
       // At start of exercise: current exercise + remaining exercises + rests between them
       remainingInSet = (workDuration * remainingExercises) + (restDuration * Math.max(0, remainingExercises - 1));
-      const transitionCount = (remainingExercises - 1) + Math.max(0, remainingExercises - 1) + 1;
-      remainingInSet += transitionCount * TRANSITION_BUFFER_SEC;
     } else if (phaseType === 'rest') {
       // At start of rest: current rest + remaining exercises + rests between them
       const exercisesAfterRest = exerciseCount - currentExerciseIndex - 1;
       remainingInSet = restDuration + (workDuration * exercisesAfterRest) + (restDuration * Math.max(0, exercisesAfterRest - 1));
-      const transitionCount = exercisesAfterRest + Math.max(0, exercisesAfterRest - 1) + 1;
-      remainingInSet += transitionCount * TRANSITION_BUFFER_SEC;
     } else if (phaseType === 'preview' || phaseType === 'setBreak') {
       // Full set duration
       remainingInSet = (workDuration * exerciseCount) + (restDuration * Math.max(0, exerciseCount - 1));
-      const transitionCount = exerciseCount + (exerciseCount - 1) + 1;
-      remainingInSet += transitionCount * TRANSITION_BUFFER_SEC;
     }
 
     return remainingInSet;

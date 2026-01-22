@@ -1,8 +1,13 @@
 import Sound from 'react-native-sound';
 import RNFS from 'react-native-fs';
+import { fadeIn, fadeOut } from '../utils/VolumeAnimator';
 
 // Enable playback in silence mode
 Sound.setCategory('Playback');
+
+// Fade durations in milliseconds
+const FADE_IN_DURATION = 500;  // 0.5 seconds fade in
+const FADE_OUT_DURATION = 800; // 0.8 seconds fade out
 
 // Supported audio extensions (same as MusicDownloadService)
 const SUPPORTED_EXTENSIONS = ['.mp3', '.m4a', '.aac', '.wav'];
@@ -62,6 +67,7 @@ class MusicService {
   private eventListeners: Set<MusicEventCallback> = new Set();
   private trackEndCheckInterval: NodeJS.Timeout | null = null;
   private buildupTimeout: NodeJS.Timeout | null = null;
+  private currentFadeCancel: (() => void) | null = null;
 
   constructor() {
     // Singleton pattern
@@ -113,12 +119,18 @@ class MusicService {
 
     // Helper to start playback once sound is loaded
     const startPlayback = (sound: Sound): void => {
+      // Cancel any ongoing fade
+      if (this.currentFadeCancel) {
+        this.currentFadeCancel();
+        this.currentFadeCancel = null;
+      }
+
       this.currentSound = sound;
       this.currentTrack = track;
       this.currentSegment = segment || null;
 
-      // Set volume
-      sound.setVolume(this.config.volume);
+      // Start with volume at 0 for fade-in
+      sound.setVolume(0);
 
       // Calculate seek position based on segment and buildup
       let seekPosition = 0;
@@ -166,6 +178,7 @@ class MusicService {
         console.log(`[MusicService] sound.play() callback: ${track.filename}, success: ${success}`);
         this.isPlaying = false;
         this.clearBuildupTimeout();
+        this.currentFadeCancel = null;
 
         if (success) {
           console.log(`[MusicService] Track finished successfully: ${track.filename}`);
@@ -180,6 +193,10 @@ class MusicService {
         this.currentTrack = null;
         this.currentSegment = null;
       });
+
+      // Fade in the volume
+      const { cancel } = fadeIn(sound, this.config.volume, FADE_IN_DURATION);
+      this.currentFadeCancel = cancel;
 
       // Start checking for track end (backup for callback)
       this.startTrackEndCheck();
@@ -268,7 +285,7 @@ class MusicService {
   }
 
   /**
-   * Stop current playback
+   * Stop current playback with fade-out
    */
   async stop(): Promise<void> {
     if (this.trackEndCheckInterval) {
@@ -277,6 +294,12 @@ class MusicService {
     }
 
     this.clearBuildupTimeout();
+
+    // Cancel any ongoing fade
+    if (this.currentFadeCancel) {
+      this.currentFadeCancel();
+      this.currentFadeCancel = null;
+    }
 
     const wasPlaying = this.isPlaying || this.currentSound !== null;
 
@@ -288,32 +311,38 @@ class MusicService {
       return;
     }
 
+    const soundToRelease = this.currentSound;
+    const trackName = this.currentTrack?.filename || 'unknown';
+    console.log(`[MusicService] Stopping with fade-out: ${trackName}`);
+
+    // Fade out before stopping
+    try {
+      const { promise } = fadeOut(soundToRelease, this.config.volume, FADE_OUT_DURATION);
+      await promise;
+    } catch (error) {
+      // Fade was cancelled or failed - continue with stop anyway
+      console.log(`[MusicService] Fade-out interrupted, stopping immediately`);
+    }
+
+    // Now stop and release
     return new Promise((resolve) => {
       try {
-        if (this.currentSound) {
-          const soundToRelease = this.currentSound;
-          const trackName = this.currentTrack?.filename || 'unknown';
-          console.log(`[MusicService] Stopping and releasing: ${trackName}`);
-
-          soundToRelease.stop(() => {
-            console.log(`[MusicService] Stop callback fired for: ${trackName}`);
-            try {
-              soundToRelease.release();
-              console.log(`[MusicService] Released: ${trackName}`);
-            } catch (releaseError) {
-              console.error(`[MusicService] Release error for ${trackName}:`, releaseError);
-            }
-            this.currentSound = null;
-            this.currentTrack = null;
-            this.currentSegment = null;
-            this.isPlaying = false;
-            this.emit({ type: 'stopped' });
-            // Small delay to ensure native resources are freed
-            setTimeout(() => resolve(), 50);
-          });
-        } else {
-          resolve();
-        }
+        soundToRelease.stop(() => {
+          console.log(`[MusicService] Stop callback fired for: ${trackName}`);
+          try {
+            soundToRelease.release();
+            console.log(`[MusicService] Released: ${trackName}`);
+          } catch (releaseError) {
+            console.error(`[MusicService] Release error for ${trackName}:`, releaseError);
+          }
+          this.currentSound = null;
+          this.currentTrack = null;
+          this.currentSegment = null;
+          this.isPlaying = false;
+          this.emit({ type: 'stopped' });
+          // Small delay to ensure native resources are freed
+          setTimeout(() => resolve(), 50);
+        });
       } catch (error) {
         console.error('[MusicService] Error stopping:', error);
         this.currentSound = null;

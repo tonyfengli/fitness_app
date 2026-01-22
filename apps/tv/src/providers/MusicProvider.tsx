@@ -325,15 +325,17 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
           let segment: MusicSegment | null = null;
           let seekTimestamp: number | undefined;
 
-          // Handle natural ending - calculate seek point so track ends with round
+          // Handle natural ending - calculate seek point so track ends ~1s AFTER round
+          // The -1s buffer makes track start earlier, so it overshoots and gets smoothly cut off by next trigger's fade-out
           if (naturalEnding && roundDurationSec && specificTrack.durationMs) {
             const trackDurationSec = specificTrack.durationMs / 1000;
-            seekTimestamp = trackDurationSec - roundDurationSec;
+            const OVERSHOOT_BUFFER_SEC = 2.5;
+            seekTimestamp = trackDurationSec - roundDurationSec - OVERSHOOT_BUFFER_SEC;
 
             console.log(`[MusicProvider] === NATURAL ENDING CALCULATION ===`);
             console.log(`[MusicProvider] Track: ${specificTrack.name}, duration: ${trackDurationSec}s (${specificTrack.durationMs}ms)`);
             console.log(`[MusicProvider] Remaining round time: ${roundDurationSec}s`);
-            console.log(`[MusicProvider] Seek point: ${trackDurationSec} - ${roundDurationSec} = ${seekTimestamp}s`);
+            console.log(`[MusicProvider] Seek point: ${trackDurationSec} - ${roundDurationSec} - ${OVERSHOOT_BUFFER_SEC} = ${seekTimestamp}s`);
 
             if (seekTimestamp < 0) {
               console.log(`[MusicProvider] Track too short for natural ending, playing from beginning`);
