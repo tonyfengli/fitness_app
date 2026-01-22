@@ -1,7 +1,9 @@
-import React from 'react';
+import React, { useMemo, useEffect } from 'react';
 import { View, Text } from 'react-native';
 import { TOKENS, MattePanel, CircuitExercise, RoundData } from './shared';
 import { useNavigation } from '../../App';
+import { useMusic } from '../../providers/MusicProvider';
+import type { CircuitConfig } from '@acme/db';
 
 interface CircuitRoundPreviewProps {
   currentRound: RoundData;
@@ -9,17 +11,116 @@ interface CircuitRoundPreviewProps {
   timeRemaining?: number;
   isTimerActive?: boolean;
   roundNumber?: number;
+  currentRoundIndex?: number;
+  totalRounds?: number;
+  roundDuration?: number;
+  circuitConfig?: CircuitConfig;
 }
 
-export function CircuitRoundPreview({ currentRound, repeatTimes = 1, timeRemaining = 0, isTimerActive = false, roundNumber }: CircuitRoundPreviewProps) {
+export function CircuitRoundPreview({ currentRound, repeatTimes = 1, timeRemaining = 0, isTimerActive = false, roundNumber, currentRoundIndex = 0, circuitConfig }: CircuitRoundPreviewProps) {
   const navigation = useNavigation();
   const sessionId = navigation.getParam('sessionId');
-  
+  const { tracks, preSelectedRiseTrack, preSelectRiseTrack, clearPreSelectedRiseTrack } = useMusic();
+
+  console.log('[CircuitRoundPreview] RENDER:', { currentRoundIndex, hasCircuitConfig: !!circuitConfig, tracksCount: tracks.length, hasPreSelected: !!preSelectedRiseTrack });
+
   // Extract round number from round name if not provided
   const extractedRoundNumber = roundNumber || (() => {
     const match = currentRound.roundName?.match(/Round (\d+)/i);
     return match ? parseInt(match[1], 10) : 1;
   })();
+
+  // Get music config for round 1
+  const exercise1Trigger = useMemo(() => {
+    if (currentRoundIndex !== 0) return null;
+    const roundTemplates = circuitConfig?.config?.roundTemplates as any[] | undefined;
+    const round1Config = roundTemplates?.find((rt) => rt.roundNumber === 1);
+    return round1Config?.music?.exercises?.[0];
+  }, [currentRoundIndex, circuitConfig]);
+
+  // Pre-select rise track when entering round 1 preview with random buildup
+  useEffect(() => {
+    // Only for round 1
+    if (currentRoundIndex !== 0) {
+      clearPreSelectedRiseTrack();
+      return;
+    }
+
+    // Check if exercise 1 has buildup enabled but no specific track
+    if (exercise1Trigger?.enabled && exercise1Trigger?.useBuildup && !exercise1Trigger?.trackId) {
+      console.log('[CircuitRoundPreview] Pre-selecting random rise track for round 1');
+      const energy = exercise1Trigger.energy || 'medium';
+      preSelectRiseTrack(energy);
+    }
+
+    // Cleanup when leaving round 1 preview
+    return () => {
+      // Don't clear immediately - let playWithTrigger use it
+    };
+  }, [currentRoundIndex, exercise1Trigger, preSelectRiseTrack, clearPreSelectedRiseTrack]);
+
+  // Calculate rise info for round 1 only (exercise 1 with buildup)
+  const riseInfo = useMemo(() => {
+    console.log('[CircuitRoundPreview] riseInfo calculation:', {
+      currentRoundIndex,
+      hasCircuitConfig: !!circuitConfig,
+      tracksCount: tracks.length,
+      hasPreSelected: !!preSelectedRiseTrack,
+    });
+
+    // Only show for round 1 (index 0)
+    if (currentRoundIndex !== 0) {
+      console.log('[CircuitRoundPreview] Not round 1, skipping');
+      return null;
+    }
+
+    console.log('[CircuitRoundPreview] Exercise 1 trigger:', exercise1Trigger);
+
+    if (!exercise1Trigger?.enabled || !exercise1Trigger?.useBuildup) {
+      console.log('[CircuitRoundPreview] No buildup configured for exercise 1');
+      return null;
+    }
+
+    // Check for specific track first
+    const trackId = exercise1Trigger.trackId;
+    if (trackId) {
+      const track = tracks.find(t => t.id === trackId);
+      console.log('[CircuitRoundPreview] Specific track lookup:', { trackId, trackFound: !!track });
+
+      if (track) {
+        const segments = track.segments || [];
+        const mediumSegment = segments.find(s => s.energy === 'medium');
+        const highSegment = segments.find(s => s.energy === 'high');
+
+        if (mediumSegment && highSegment) {
+          const riseDuration = highSegment.timestamp - mediumSegment.timestamp;
+          console.log('[CircuitRoundPreview] Rise info from specific track:', {
+            trackName: track.name,
+            riseDuration,
+          });
+          return {
+            trackName: track.name,
+            riseDuration: Math.round(riseDuration * 10) / 10,
+          };
+        }
+      }
+    }
+
+    // Use pre-selected track for random mode
+    if (preSelectedRiseTrack) {
+      console.log('[CircuitRoundPreview] Rise info from pre-selected track:', {
+        trackName: preSelectedRiseTrack.track.name,
+        riseDuration: preSelectedRiseTrack.riseDuration,
+      });
+      return {
+        trackName: preSelectedRiseTrack.track.name,
+        riseDuration: preSelectedRiseTrack.riseDuration,
+      };
+    }
+
+    console.log('[CircuitRoundPreview] No track available for rise info');
+    return null;
+  }, [currentRoundIndex, circuitConfig, tracks, exercise1Trigger, preSelectedRiseTrack]);
   
   // Calculate grid layout based on number of exercises
   const exerciseCount = currentRound.exercises.length;
@@ -189,6 +290,48 @@ export function CircuitRoundPreview({ currentRound, repeatTimes = 1, timeRemaini
               color: TOKENS.color.blue,
             }}>
               {repeatTimes}×
+            </Text>
+          </MattePanel>
+        </View>
+      )}
+
+      {/* Rise Info - Only for round 1 with buildup configured */}
+      {riseInfo && (
+        <View style={{
+          position: 'absolute',
+          bottom: 40,
+          left: 48,
+        }}>
+          <MattePanel style={{
+            paddingHorizontal: 20,
+            paddingVertical: 12,
+            gap: 4,
+            backgroundColor: TOKENS.color.accent + '10',
+            borderColor: TOKENS.color.accent,
+            borderWidth: 1,
+          }}>
+            <Text style={{
+              fontSize: 13,
+              fontWeight: '700',
+              color: TOKENS.color.accent,
+              textTransform: 'uppercase',
+              letterSpacing: 1.2,
+            }}>
+              Rise
+            </Text>
+            <Text style={{
+              fontSize: 16,
+              fontWeight: '600',
+              color: TOKENS.color.text,
+            }}>
+              {riseInfo.trackName}
+            </Text>
+            <Text style={{
+              fontSize: 14,
+              fontWeight: '500',
+              color: TOKENS.color.muted,
+            }}>
+              {riseInfo.riseDuration}s
             </Text>
           </MattePanel>
         </View>

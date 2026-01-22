@@ -7,6 +7,7 @@ import {
 import { TimerDisplay } from '../../TimerDisplay';
 import { TOKENS, RoundData, CircuitExercise } from '../../types';
 import { useNavigation } from '../../../../App';
+import type { CircuitConfig } from '@acme/db';
 
 interface CircuitRoundContainerProps {
   state: any; // Will be typed more specifically later
@@ -18,6 +19,7 @@ interface CircuitRoundContainerProps {
   roundDuration: number;
   restDuration: number;
   repeatTimes: number;
+  circuitConfig?: CircuitConfig;
 }
 
 export function CircuitRoundContainer({
@@ -29,20 +31,22 @@ export function CircuitRoundContainer({
   currentExerciseIndex,
   roundDuration,
   restDuration,
-  repeatTimes
+  repeatTimes,
+  circuitConfig
 }: CircuitRoundContainerProps) {
   const navigation = useNavigation();
   const sessionId = navigation.getParam('sessionId');
-  
+
   if (state.value === 'roundPreview') {
     return (
-      <CircuitRoundPreview 
+      <CircuitRoundPreview
         currentRound={currentRound}
         currentRoundIndex={currentRoundIndex}
         totalRounds={totalRounds}
         roundDuration={roundDuration}
         timeRemaining={state.context.timeRemaining}
         isTimerActive={state.context.currentRoundIndex > 0}
+        circuitConfig={circuitConfig}
       />
     );
   }

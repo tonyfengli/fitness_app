@@ -54,6 +54,7 @@ export function WorkoutContent({ state, circuitConfig, getRoundTiming }: Workout
               roundDuration={currentRoundTiming.workDuration * currentRound.exercises.length}
               restDuration={currentRoundTiming.restDuration}
               repeatTimes={currentRepeatTimes}
+              circuitConfig={circuitConfig}
             />
           )}
           

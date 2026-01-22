@@ -10,6 +10,12 @@ const TRACKS_CACHE_KEY = '@music_tracks_cache';
 // Playable energy levels (excludes 'outro')
 type PlayableEnergy = 'low' | 'medium' | 'high';
 
+// Pre-selected rise track info (for random buildup tracks)
+interface PreSelectedRiseTrack {
+  track: MusicTrack;
+  riseDuration: number; // high.timestamp - medium.timestamp
+}
+
 interface MusicContextValue {
   // State
   isPlaying: boolean;
@@ -23,6 +29,7 @@ interface MusicContextValue {
   syncResult: SyncResult | null;
   tracks: MusicTrack[];
   buildupCountdown: number | null; // Seconds remaining in buildup, null if not in buildup
+  preSelectedRiseTrack: PreSelectedRiseTrack | null; // Pre-selected track for random buildup
 
   // Trigger tracking (shared across screens)
   lastTriggeredPhase: string | null;
@@ -39,6 +46,8 @@ interface MusicContextValue {
   skipBack: () => Promise<void>;
   syncMusic: () => Promise<void>;
   clearLocalTracks: () => Promise<void>;
+  preSelectRiseTrack: (energy: PlayableEnergy) => void; // Pre-select a random track for buildup
+  clearPreSelectedRiseTrack: () => void;
 
   // Trigger-based playback
   playWithTrigger: (options: {
@@ -85,6 +94,9 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
   // Sync state
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<SyncResult | null>(null);
+
+  // Pre-selected rise track for random buildup
+  const [preSelectedRiseTrack, setPreSelectedRiseTrack] = useState<PreSelectedRiseTrack | null>(null);
 
   // Track history for skip back (persists across screen transitions)
   const playedTracksHistory = useRef<{ track: MusicTrack; segment: MusicSegment | null }[]>([]);
@@ -175,6 +187,69 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
       buildupIntervalRef.current = null;
     }
     setBuildupCountdown(null);
+  }, []);
+
+  // Pre-select a random track for buildup (used to show rise info before trigger fires)
+  const preSelectRiseTrack = useCallback((energy: PlayableEnergy) => {
+    console.log(`[MusicProvider] preSelectRiseTrack called with energy: ${energy}`);
+
+    if (!tracks || tracks.length === 0) {
+      console.log(`[MusicProvider] No tracks available for pre-selection`);
+      return;
+    }
+
+    // Filter tracks that have the target energy segment (for buildup, we need 'medium' segment)
+    const trackPool = tracks.filter(t => hasEnergySegment(t, 'medium') && hasEnergySegment(t, 'high'));
+    console.log(`[MusicProvider] Pre-select pool size: ${trackPool.length} (tracks with medium+high segments)`);
+
+    if (trackPool.length === 0) {
+      console.log(`[MusicProvider] No tracks with medium+high segments for pre-selection`);
+      return;
+    }
+
+    // Get IDs of recently played tracks
+    const recentlyPlayedIds = new Set(
+      playedTracksHistory.current.slice(-Math.max(0, trackPool.length - 1)).map(h => h.track.id)
+    );
+
+    let availableTracks = trackPool.filter(t => !recentlyPlayedIds.has(t.id));
+    if (availableTracks.length === 0) {
+      availableTracks = trackPool;
+    }
+
+    // Pick a random track
+    const randomIndex = Math.floor(Math.random() * availableTracks.length);
+    const track = availableTracks[randomIndex];
+
+    if (!track) {
+      console.log(`[MusicProvider] Failed to select track for pre-selection`);
+      return;
+    }
+
+    // Calculate rise duration (high.timestamp - medium.timestamp)
+    const segments = track.segments || [];
+    const mediumSegment = segments.find(s => s.energy === 'medium');
+    const highSegment = segments.find(s => s.energy === 'high');
+
+    if (!mediumSegment || !highSegment) {
+      console.log(`[MusicProvider] Track ${track.name} missing medium or high segment`);
+      return;
+    }
+
+    const riseDuration = highSegment.timestamp - mediumSegment.timestamp;
+
+    console.log(`[MusicProvider] Pre-selected rise track: ${track.name}, riseDuration: ${riseDuration}s`);
+
+    setPreSelectedRiseTrack({
+      track,
+      riseDuration: Math.round(riseDuration * 10) / 10, // Round to 1 decimal
+    });
+  }, [tracks]);
+
+  // Clear pre-selected rise track
+  const clearPreSelectedRiseTrack = useCallback(() => {
+    console.log(`[MusicProvider] Clearing pre-selected rise track`);
+    setPreSelectedRiseTrack(null);
   }, []);
 
   // Play next random track (optionally filtered by energy)
@@ -401,6 +476,47 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
+    // If useBuildup and we have a pre-selected rise track, use it
+    if (useBuildup && preSelectedRiseTrack) {
+      const { track: preSelectedTrack } = preSelectedRiseTrack;
+      console.log(`[MusicProvider] Using pre-selected rise track: ${preSelectedTrack.name}`);
+
+      isStartingRef.current = true;
+      try {
+        // Get medium segment for buildup
+        const segment = getRandomSegmentByEnergy(preSelectedTrack.segments || [], 'medium');
+
+        if (segment) {
+          console.log(`[MusicProvider] Playing pre-selected track: ${preSelectedTrack.name}, segment: ${segment.energy} @ ${segment.timestamp}s`);
+
+          playedTracksHistory.current.push({ track: preSelectedTrack, segment });
+          setIsPaused(false);
+          setCurrentEnergy(segment.energy);
+          setIsEnabled(true);
+          isSwitchingTrackRef.current = true;
+          naturalEndingActiveRef.current = false;
+
+          // Start buildup countdown
+          if (segment.buildupDuration && segment.buildupDuration > 0) {
+            startBuildupCountdown(segment.buildupDuration);
+          }
+
+          await musicService.play(preSelectedTrack, { segment, useBuildup: true });
+          setError(null);
+
+          // Clear pre-selected track after use
+          setPreSelectedRiseTrack(null);
+          return;
+        }
+      } catch (err) {
+        console.warn(`[MusicProvider] Failed to play pre-selected rise track, falling back to random`);
+        isSwitchingTrackRef.current = false;
+        clearBuildupCountdown();
+      } finally {
+        isStartingRef.current = false;
+      }
+    }
+
     // Play random track with energy filter (natural ending not supported for random tracks)
     if (naturalEnding) {
       console.warn(`[MusicProvider] Natural ending requires a specific trackId, falling back to random without natural ending`);
@@ -408,7 +524,7 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     console.log(`[MusicProvider] Playing random ${energy} energy track`);
     setIsEnabled(true);
     await playNextTrack({ energy, useBuildup });
-  }, [tracks, playNextTrack, startBuildupCountdown, clearBuildupCountdown, findSegmentAtTimestamp]);
+  }, [tracks, playNextTrack, startBuildupCountdown, clearBuildupCountdown, findSegmentAtTimestamp, preSelectedRiseTrack]);
 
   // Subscribe to MusicService events
   useEffect(() => {
@@ -620,6 +736,7 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     syncResult,
     tracks,
     buildupCountdown,
+    preSelectedRiseTrack,
     lastTriggeredPhase,
     setLastTriggeredPhase,
     start,
@@ -632,6 +749,8 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     skipBack,
     syncMusic,
     clearLocalTracks,
+    preSelectRiseTrack,
+    clearPreSelectedRiseTrack,
     playWithTrigger,
   };
 
