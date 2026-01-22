@@ -296,7 +296,18 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
   }) => {
     const { energy, useBuildup = false, trackId, naturalEnding = false, roundDurationSec } = options;
 
-    console.log(`[MusicProvider] playWithTrigger called:`, { energy, useBuildup, trackId, naturalEnding, roundDurationSec, availableTracks: tracks.length });
+    console.log(`[MusicProvider] playWithTrigger called:`, {
+      energy,
+      useBuildup,
+      trackId: trackId || '(random)',
+      naturalEnding,
+      roundDurationSec: roundDurationSec ?? '(none)',
+      availableTracks: tracks.length
+    });
+
+    if (naturalEnding) {
+      console.log(`[MusicProvider] 🎯 NATURAL ENDING MODE - track should end when set ends`);
+    }
 
     // Guard against concurrent play calls
     if (isStartingRef.current) {

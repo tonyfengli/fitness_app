@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState, useEffect } from "react";
+import React, { useMemo, useState, useEffect, useCallback } from "react";
 import { api } from "~/trpc/react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { cn } from "@acme/ui-shared";
@@ -88,6 +88,8 @@ export function RoundMusicDrawer({
 
   // Alert state for auto-enabled next round preview
   const [showNextRoundAlert, setShowNextRoundAlert] = useState(false);
+  // Alert state for disabled subsequent triggers
+  const [disabledTriggersCount, setDisabledTriggersCount] = useState(0);
 
   const { data: circuitConfig, isLoading } = useQuery({
     ...trpc.circuitConfig.getBySession.queryOptions({ sessionId: sessionId! }),
@@ -135,8 +137,11 @@ export function RoundMusicDrawer({
     return nextRoundTemplate?.music?.roundPreview?.enabled ?? false;
   }, [circuitConfig, roundNumber, totalRounds]);
 
-  // Calculate total round duration (in seconds)
-  const roundDuration = useMemo(() => {
+  /**
+   * Calculate remaining time from a specific phase to the end of ONE SET.
+   * Natural ending only fires on the LAST set, so we just need one set's duration.
+   */
+  const calculateRemainingSetDuration = useCallback((phase: Phase): number => {
     if (!circuitConfig?.config?.roundTemplates) return 0;
     const roundConfig = (circuitConfig.config.roundTemplates as any[]).find(
       (rt) => rt.roundNumber === roundNumber
@@ -145,17 +150,37 @@ export function RoundMusicDrawer({
 
     const template = roundConfig.template;
     const exerciseCount = roundData?.exercises?.length || template.exercisesPerRound || 0;
-    const sets = template.repeatTimes || 1;
 
     if (template.type === "circuit_round" || template.type === "stations_round") {
       const workDuration = template.workDuration || 0;
       const restDuration = template.restDuration || 0;
-      const restBetweenSets = template.restBetweenSets || 0;
 
-      // One set = (work * exercises) + (rest * (exercises - 1))
-      const oneSet = (workDuration * exerciseCount) + (restDuration * Math.max(0, exerciseCount - 1));
-      // Total = sets * oneSet + (sets - 1) * restBetweenSets
-      return (oneSet * sets) + (restBetweenSets * Math.max(0, sets - 1));
+      // Buffer per phase transition (matches TV app)
+      const TRANSITION_BUFFER_SEC = 1.5;
+
+      let remainingInSet = 0;
+      const currentExerciseIndex = phase.index;
+
+      if (phase.phaseType === "preview" || phase.phaseType === "setBreak") {
+        // Full set duration from the start
+        remainingInSet = (workDuration * exerciseCount) + (restDuration * Math.max(0, exerciseCount - 1));
+        const transitionCount = exerciseCount + (exerciseCount - 1) + 1;
+        remainingInSet += transitionCount * TRANSITION_BUFFER_SEC;
+      } else if (phase.phaseType === "exercise") {
+        // From start of this exercise to end of set
+        const remainingExercises = exerciseCount - currentExerciseIndex;
+        remainingInSet = (workDuration * remainingExercises) + (restDuration * Math.max(0, remainingExercises - 1));
+        const transitionCount = (remainingExercises - 1) + Math.max(0, remainingExercises - 1) + 1;
+        remainingInSet += transitionCount * TRANSITION_BUFFER_SEC;
+      } else if (phase.phaseType === "rest") {
+        // From start of this rest to end of set
+        const exercisesAfterRest = exerciseCount - currentExerciseIndex - 1;
+        remainingInSet = restDuration + (workDuration * exercisesAfterRest) + (restDuration * Math.max(0, exercisesAfterRest - 1));
+        const transitionCount = exercisesAfterRest + Math.max(0, exercisesAfterRest - 1) + 1;
+        remainingInSet += transitionCount * TRANSITION_BUFFER_SEC;
+      }
+
+      return remainingInSet;
     } else if (template.type === "amrap_round") {
       return template.totalDuration || 0;
     }
@@ -164,20 +189,24 @@ export function RoundMusicDrawer({
   }, [circuitConfig, roundNumber, roundData]);
 
   /**
-   * Check if a track is compatible with natural ending for the current round duration.
-   * For natural ending, we calculate: seekPoint = trackDuration - roundDuration
-   * The seekPoint must land in a medium or high segment (never low).
+   * Check if a track is compatible with natural ending for the current phase.
+   * Natural ending only fires on the LAST set, so we check against one set's duration.
+   * seekPoint = trackDuration - remainingSetDuration must land in medium/high segment.
    */
-  const getTrackNaturalEndingCompatibility = (track: MusicTrack): { compatible: boolean; reason?: string } => {
+  const getTrackNaturalEndingCompatibility = useCallback((
+    track: MusicTrack,
+    phase: Phase
+  ): { compatible: boolean; reason?: string } => {
     if (!track.segments || track.segments.length === 0) {
       return { compatible: false, reason: "No segments" };
     }
 
+    const remainingDuration = calculateRemainingSetDuration(phase);
     const trackDurationSec = track.durationMs / 1000;
-    const seekPoint = trackDurationSec - roundDuration;
+    const seekPoint = trackDurationSec - remainingDuration;
 
     if (seekPoint < 0) {
-      return { compatible: false, reason: "Track too short" };
+      return { compatible: false, reason: `Track too short (need ${Math.ceil(remainingDuration)}s)` };
     }
 
     // Find the segment at the seek point (highest timestamp <= seekPoint)
@@ -196,7 +225,7 @@ export function RoundMusicDrawer({
     }
 
     return { compatible: true };
-  };
+  }, [calculateRemainingSetDuration]);
 
   // Generate phases
   const phases = useMemo((): Phase[] => {
@@ -423,6 +452,57 @@ export function RoundMusicDrawer({
       newConfig.setBreaks = arr;
     }
 
+    // If natural ending is enabled, disable all triggers AFTER this phase in the round
+    let triggersDisabled = 0;
+    if (detailNaturalEnding && detailEnabled) {
+      // Find current phase position in the phases array
+      const currentPhaseIndex = phases.findIndex((p) => p.key === phase.key);
+
+      // Disable all phases after the current one
+      for (let i = currentPhaseIndex + 1; i < phases.length; i++) {
+        const subsequentPhase = phases[i];
+        if (!subsequentPhase) continue;
+
+        // Check if this phase has an enabled trigger
+        let wasEnabled = false;
+
+        if (subsequentPhase.phaseType === "preview") {
+          wasEnabled = newConfig.roundPreview?.enabled ?? false;
+          if (wasEnabled) {
+            newConfig.roundPreview = { ...(newConfig.roundPreview || defaultTrigger), enabled: false };
+          }
+        } else if (subsequentPhase.phaseType === "exercise") {
+          const arr = [...(newConfig.exercises || [])];
+          wasEnabled = arr[subsequentPhase.index]?.enabled ?? false;
+          if (wasEnabled) {
+            while (arr.length <= subsequentPhase.index) arr.push({ ...defaultTrigger });
+            arr[subsequentPhase.index] = { ...arr[subsequentPhase.index], enabled: false };
+            newConfig.exercises = arr;
+          }
+        } else if (subsequentPhase.phaseType === "rest") {
+          const arr = [...(newConfig.rests || [])];
+          wasEnabled = arr[subsequentPhase.index]?.enabled ?? false;
+          if (wasEnabled) {
+            while (arr.length <= subsequentPhase.index) arr.push({ ...defaultTrigger });
+            arr[subsequentPhase.index] = { ...arr[subsequentPhase.index], enabled: false };
+            newConfig.rests = arr;
+          }
+        } else if (subsequentPhase.phaseType === "setBreak") {
+          const arr = [...(newConfig.setBreaks || [])];
+          wasEnabled = arr[subsequentPhase.index]?.enabled ?? false;
+          if (wasEnabled) {
+            while (arr.length <= subsequentPhase.index) arr.push({ ...defaultTrigger });
+            arr[subsequentPhase.index] = { ...arr[subsequentPhase.index], enabled: false };
+            newConfig.setBreaks = arr;
+          }
+        }
+
+        if (wasEnabled) {
+          triggersDisabled++;
+        }
+      }
+    }
+
     setLocalConfig(newConfig);
     setViewState({ type: "phases" });
 
@@ -432,6 +512,11 @@ export function RoundMusicDrawer({
       roundNumber,
       musicConfig: newConfig,
     });
+
+    // Show alert if triggers were disabled
+    if (triggersDisabled > 0) {
+      setDisabledTriggersCount(triggersDisabled);
+    }
 
     // If natural ending is enabled and there's a next round without preview enabled,
     // automatically enable the next round's preview
@@ -490,13 +575,20 @@ export function RoundMusicDrawer({
     return `${trackPart} · ${energyPart}${repeatPart}`;
   };
 
-  // Auto-dismiss alert after 4 seconds
+  // Auto-dismiss alerts after 4 seconds
   useEffect(() => {
     if (showNextRoundAlert) {
       const timer = setTimeout(() => setShowNextRoundAlert(false), 4000);
       return () => clearTimeout(timer);
     }
   }, [showNextRoundAlert]);
+
+  useEffect(() => {
+    if (disabledTriggersCount > 0) {
+      const timer = setTimeout(() => setDisabledTriggersCount(0), 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [disabledTriggersCount]);
 
   // Phases View
   const renderPhasesView = () => (
@@ -530,6 +622,35 @@ export function RoundMusicDrawer({
         </div>
       )}
 
+      {/* Alert for disabled subsequent triggers */}
+      {disabledTriggersCount > 0 && (
+        <div className="mx-6 mt-4 p-4 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 rounded-xl">
+          <div className="flex items-start gap-3">
+            <div className="w-6 h-6 rounded-full bg-amber-500 flex items-center justify-center flex-shrink-0 mt-0.5">
+              <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <div className="flex-1">
+              <p className="font-medium text-amber-900 dark:text-amber-100">
+                {disabledTriggersCount} {disabledTriggersCount === 1 ? "trigger" : "triggers"} disabled
+              </p>
+              <p className="text-sm text-amber-700 dark:text-amber-300 mt-0.5">
+                Subsequent phases won't interrupt natural ending
+              </p>
+            </div>
+            <button
+              onClick={() => setDisabledTriggersCount(0)}
+              className="p-1 rounded-lg hover:bg-amber-100 dark:hover:bg-amber-800/50 transition-colors"
+            >
+              <svg className="w-4 h-4 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="px-6 pt-6 pb-4">
         <h2 className="text-2xl font-semibold text-gray-900 dark:text-white">
@@ -552,66 +673,96 @@ export function RoundMusicDrawer({
           </div>
         ) : (
           <div className="space-y-1">
-            {phases.map((phase) => {
-              const trigger = getTriggerForPhase(phase);
-              const isEnabled = trigger?.enabled ?? false;
+            {(() => {
+              // Find which phase has natural ending enabled
+              const naturalEndingPhaseIndex = phases.findIndex((p) => {
+                const t = getTriggerForPhase(p);
+                return t?.enabled && t?.naturalEnding;
+              });
 
-              return (
-                <div key={phase.key}>
-                  <button
-                    onClick={() => handleOpenPhaseDetail(phase)}
-                    className={cn(
-                      "w-full py-4 px-3 -mx-3 rounded-xl flex items-center justify-between group transition-colors",
-                      isEnabled
-                        ? "bg-purple-50 dark:bg-purple-900/20"
-                        : "hover:bg-gray-50 dark:hover:bg-gray-800/50"
-                    )}
-                  >
-                    <div className="flex-1 min-w-0 text-left">
-                      <p
-                        className={cn(
-                          "font-medium transition-colors",
-                          isEnabled
-                            ? "text-gray-900 dark:text-white"
-                            : "text-gray-500 dark:text-gray-400"
-                        )}
-                      >
-                        {phase.label}
-                      </p>
-                      <p
-                        className={cn(
-                          "text-sm mt-0.5 transition-colors",
-                          isEnabled
-                            ? "text-purple-600 dark:text-purple-400"
-                            : "text-gray-400 dark:text-gray-500"
-                        )}
-                      >
-                        {getPhaseStatus(phase)}
-                      </p>
-                    </div>
+              return phases.map((phase, phaseIndex) => {
+                const trigger = getTriggerForPhase(phase);
+                const isEnabled = trigger?.enabled ?? false;
+                const hasNaturalEnding = trigger?.naturalEnding ?? false;
 
-                    {/* Chevron - indicates drill-in */}
-                    <svg
+                // Check if this phase is blocked (comes after a natural ending phase)
+                const isBlockedByNaturalEnding =
+                  naturalEndingPhaseIndex !== -1 && phaseIndex > naturalEndingPhaseIndex;
+
+                return (
+                  <div key={phase.key}>
+                    <button
+                      onClick={() => handleOpenPhaseDetail(phase)}
                       className={cn(
-                        "w-5 h-5 transition-colors",
-                        isEnabled
-                          ? "text-purple-400 dark:text-purple-500"
-                          : "text-gray-400 dark:text-gray-500 group-hover:text-gray-600 dark:group-hover:text-gray-400"
+                        "w-full py-4 px-3 -mx-3 rounded-xl flex items-center justify-between group transition-colors",
+                        isEnabled && hasNaturalEnding
+                          ? "bg-gradient-to-r from-purple-50 to-amber-50 dark:from-purple-900/20 dark:to-amber-900/20"
+                          : isEnabled
+                          ? "bg-purple-50 dark:bg-purple-900/20"
+                          : isBlockedByNaturalEnding
+                          ? "bg-gray-100/50 dark:bg-gray-800/30 opacity-60"
+                          : "hover:bg-gray-50 dark:hover:bg-gray-800/50"
                       )}
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={2}
                     >
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                    </svg>
-                  </button>
+                      <div className="flex-1 min-w-0 text-left">
+                        <div className="flex items-center gap-2">
+                          <p
+                            className={cn(
+                              "font-medium transition-colors",
+                              isEnabled
+                                ? "text-gray-900 dark:text-white"
+                                : isBlockedByNaturalEnding
+                                ? "text-gray-400 dark:text-gray-500"
+                                : "text-gray-500 dark:text-gray-400"
+                            )}
+                          >
+                            {phase.label}
+                          </p>
+                          {isEnabled && hasNaturalEnding && (
+                            <span className="text-xs font-medium text-amber-600 dark:text-amber-400 bg-amber-100 dark:bg-amber-900/40 px-1.5 py-0.5 rounded">
+                              Natural End
+                            </span>
+                          )}
+                        </div>
+                        <p
+                          className={cn(
+                            "text-sm mt-0.5 transition-colors",
+                            isEnabled
+                              ? "text-purple-600 dark:text-purple-400"
+                              : isBlockedByNaturalEnding
+                              ? "text-gray-400 dark:text-gray-500 italic"
+                              : "text-gray-400 dark:text-gray-500"
+                          )}
+                        >
+                          {isBlockedByNaturalEnding ? "Blocked by natural ending" : getPhaseStatus(phase)}
+                        </p>
+                      </div>
 
-                  {/* Subtle separator */}
-                  <div className="border-b border-dashed border-gray-200 dark:border-gray-700" />
-                </div>
-              );
-            })}
+                      {/* Chevron - indicates drill-in */}
+                      <svg
+                        className={cn(
+                          "w-5 h-5 transition-colors",
+                          isEnabled
+                            ? "text-purple-400 dark:text-purple-500"
+                            : isBlockedByNaturalEnding
+                            ? "text-gray-300 dark:text-gray-600"
+                            : "text-gray-400 dark:text-gray-500 group-hover:text-gray-600 dark:group-hover:text-gray-400"
+                        )}
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                      </svg>
+                    </button>
+
+                    {/* Subtle separator */}
+                    <div className="border-b border-dashed border-gray-200 dark:border-gray-700" />
+                  </div>
+                );
+              });
+            })()}
           </div>
         )}
       </div>
@@ -636,6 +787,9 @@ export function RoundMusicDrawer({
       ? (tracks as MusicTrack[]).find((t) => t.id === detailTrackId)
       : null;
     const availableEnergies = selectedTrack ? getTrackEnergyLevels(selectedTrack) : undefined;
+
+    // Track selection mode: "random" or "specific"
+    const trackMode = detailTrackId === null ? "random" : "specific";
 
     return (
       <div className="flex flex-col h-full">
@@ -697,168 +851,244 @@ export function RoundMusicDrawer({
             "transition-opacity",
             !detailEnabled && "opacity-40 pointer-events-none"
           )}>
-          {/* Energy Selection - Primary */}
-          <div className="mb-8">
-            <h3 className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3">
-              Energy Level
-            </h3>
-
-            <div className="flex gap-2">
-              {(["low", "medium", "high"] as EnergyLevel[]).map((energy) => {
-                const isAvailable = !availableEnergies || availableEnergies.includes(energy);
-                const isSelected = detailEnergy === energy;
-
-                return (
-                  <button
-                    key={energy}
-                    onClick={() => isAvailable && setDetailEnergy(energy)}
-                    disabled={!isAvailable}
-                    className={cn(
-                      "flex-1 py-3 rounded-xl font-medium transition-all",
-                      !isAvailable && "opacity-30 cursor-not-allowed",
-                      isSelected
-                        ? energy === "low"
-                          ? "bg-blue-500 text-white"
-                          : energy === "medium"
-                          ? "bg-amber-500 text-white"
-                          : "bg-orange-500 text-white"
-                        : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700"
-                    )}
-                  >
-                    {ENERGY_DISPLAY[energy]}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Track Selection - Secondary */}
-          <div className="mb-8">
-            <h3 className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3">
-              Track
-            </h3>
-
-            <button
-              onClick={() => {
-                setTrackSearchQuery("");
-                setViewState({ type: "track-picker", phase: viewState.phase });
-              }}
-              className="w-full p-4 rounded-xl bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all text-left"
-            >
-              <div className="flex items-center gap-3">
-                {detailTrackId === null ? (
-                  <>
-                    <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center flex-shrink-0">
-                      <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                      </svg>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-gray-900 dark:text-white">Random</p>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">
-                        Auto-select based on energy
-                      </p>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="w-10 h-10 rounded-lg bg-gray-200 dark:bg-gray-700 flex items-center justify-center flex-shrink-0">
-                      <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
-                      </svg>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-gray-900 dark:text-white truncate">
-                        {detailTrackName || selectedTrack?.name || "Selected track"}
-                      </p>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">
-                        Specific track
-                      </p>
-                    </div>
-                  </>
-                )}
-                <svg className="w-5 h-5 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
-              </div>
-            </button>
-          </div>
-
-          {/* Repeat on All Sets - Only show for exercise/rest phases in rounds with 2+ sets */}
-          {repeatTimes > 1 && (viewState.phase.phaseType === "exercise" || viewState.phase.phaseType === "rest") && (
+            {/* ═══════════════════════════════════════════════════════════════ */}
+            {/* WHAT TO PLAY Section */}
+            {/* ═══════════════════════════════════════════════════════════════ */}
             <div className="mb-8">
-              <button
-                onClick={() => setDetailRepeatOnAllSets(!detailRepeatOnAllSets)}
-                className="w-full p-4 rounded-xl bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all"
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex-1 min-w-0 text-left">
-                    <p className="font-medium text-gray-900 dark:text-white">
-                      Play every set
-                    </p>
-                    {detailRepeatOnAllSets && (
-                      <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-                        Triggers on all {repeatTimes} sets
-                      </p>
-                    )}
-                  </div>
-                  <div
-                    className={cn(
-                      "relative w-12 h-7 rounded-full transition-all duration-200 flex-shrink-0 ml-4",
-                      detailRepeatOnAllSets ? "bg-purple-500" : "bg-gray-200 dark:bg-gray-700"
-                    )}
-                  >
-                    <div
-                      className={cn(
-                        "absolute top-1 w-5 h-5 rounded-full bg-white shadow-sm transition-transform duration-200",
-                        detailRepeatOnAllSets ? "translate-x-6" : "translate-x-1"
-                      )}
-                    />
-                  </div>
-                </div>
-              </button>
-            </div>
-          )}
+              <h3 className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-4">
+                What to Play
+              </h3>
 
-          {/* Natural Ending - Available for all phases, but requires specific track */}
-          <div className="mb-8">
-            <button
-              onClick={() => {
-                const newValue = !detailNaturalEnding;
-                setDetailNaturalEnding(newValue);
-                // If enabling natural ending and no track selected, user will need to pick one
-              }}
-              className="w-full p-4 rounded-xl bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all"
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex-1 min-w-0 text-left">
-                  <p className="font-medium text-gray-900 dark:text-white">
-                    Natural ending
-                  </p>
-                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-                    {detailNaturalEnding
-                      ? detailTrackId
-                        ? "Music ends naturally with the round"
-                        : "Select a compatible track below"
-                      : "Time music to end with round completion"}
-                  </p>
+              {/* Energy Selection */}
+              <div className="mb-4">
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">Energy</p>
+                <div className="flex gap-2">
+                  {(["low", "medium", "high"] as EnergyLevel[]).map((energy) => {
+                    const isAvailable = !availableEnergies || availableEnergies.includes(energy);
+                    const isSelected = detailEnergy === energy;
+
+                    return (
+                      <button
+                        key={energy}
+                        onClick={() => isAvailable && setDetailEnergy(energy)}
+                        disabled={!isAvailable}
+                        className={cn(
+                          "flex-1 py-3 rounded-xl font-medium transition-all",
+                          !isAvailable && "opacity-30 cursor-not-allowed",
+                          isSelected
+                            ? energy === "low"
+                              ? "bg-blue-500 text-white"
+                              : energy === "medium"
+                              ? "bg-amber-500 text-white"
+                              : "bg-orange-500 text-white"
+                            : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700"
+                        )}
+                      >
+                        {ENERGY_DISPLAY[energy]}
+                      </button>
+                    );
+                  })}
                 </div>
-                <div
+              </div>
+
+              {/* Track Selection - Radio Button Style */}
+              <div className="space-y-2">
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">Track</p>
+
+                {/* Random Option */}
+                <button
+                  onClick={() => {
+                    setDetailTrackId(null);
+                    setDetailTrackName("");
+                  }}
                   className={cn(
-                    "relative w-12 h-7 rounded-full transition-all duration-200 flex-shrink-0 ml-4",
-                    detailNaturalEnding ? "bg-purple-500" : "bg-gray-200 dark:bg-gray-700"
+                    "w-full p-4 rounded-xl text-left transition-all flex items-center gap-3",
+                    trackMode === "random"
+                      ? "bg-purple-50 dark:bg-purple-900/20 ring-2 ring-purple-500"
+                      : "bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800"
                   )}
                 >
-                  <div
-                    className={cn(
-                      "absolute top-1 w-5 h-5 rounded-full bg-white shadow-sm transition-transform duration-200",
-                      detailNaturalEnding ? "translate-x-6" : "translate-x-1"
+                  {/* Radio Circle */}
+                  <div className={cn(
+                    "w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0",
+                    trackMode === "random"
+                      ? "border-purple-500"
+                      : "border-gray-300 dark:border-gray-600"
+                  )}>
+                    {trackMode === "random" && (
+                      <div className="w-2.5 h-2.5 rounded-full bg-purple-500" />
                     )}
-                  />
-                </div>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-gray-900 dark:text-white">Random</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      Auto-select based on energy level
+                    </p>
+                  </div>
+                </button>
+
+                {/* Specific Track Option */}
+                <button
+                  onClick={() => {
+                    if (trackMode === "random") {
+                      // Switch to specific mode - open track picker
+                      setTrackSearchQuery("");
+                      setViewState({ type: "track-picker", phase: viewState.phase });
+                    }
+                  }}
+                  className={cn(
+                    "w-full p-4 rounded-xl text-left transition-all",
+                    trackMode === "specific"
+                      ? "bg-purple-50 dark:bg-purple-900/20 ring-2 ring-purple-500"
+                      : "bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800"
+                  )}
+                >
+                  <div className="flex items-center gap-3">
+                    {/* Radio Circle */}
+                    <div className={cn(
+                      "w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0",
+                      trackMode === "specific"
+                        ? "border-purple-500"
+                        : "border-gray-300 dark:border-gray-600"
+                    )}>
+                      {trackMode === "specific" && (
+                        <div className="w-2.5 h-2.5 rounded-full bg-purple-500" />
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-gray-900 dark:text-white">Specific Track</p>
+                      {trackMode === "specific" && detailTrackName ? (
+                        <p className="text-sm text-purple-600 dark:text-purple-400 truncate">
+                          {detailTrackName}
+                        </p>
+                      ) : (
+                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                          Choose a specific song
+                        </p>
+                      )}
+                    </div>
+                    {/* Change button when specific track is selected */}
+                    {trackMode === "specific" && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setTrackSearchQuery("");
+                          setViewState({ type: "track-picker", phase: viewState.phase });
+                        }}
+                        className="px-3 py-1.5 text-sm font-medium text-purple-600 dark:text-purple-400 bg-purple-100 dark:bg-purple-900/40 rounded-lg hover:bg-purple-200 dark:hover:bg-purple-900/60 transition-colors"
+                      >
+                        Change
+                      </button>
+                    )}
+                  </div>
+                </button>
               </div>
-            </button>
-          </div>
+            </div>
+
+            {/* ═══════════════════════════════════════════════════════════════ */}
+            {/* HOW TO PLAY Section */}
+            {/* ═══════════════════════════════════════════════════════════════ */}
+            <div className="mb-8">
+              <h3 className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-4">
+                How to Play
+              </h3>
+
+              <div className="space-y-3">
+                {/* Repeat on All Sets - Only show for exercise/rest phases in rounds with 2+ sets */}
+                {repeatTimes > 1 && (viewState.phase.phaseType === "exercise" || viewState.phase.phaseType === "rest") && (
+                  <button
+                    onClick={() => setDetailRepeatOnAllSets(!detailRepeatOnAllSets)}
+                    className="w-full p-4 rounded-xl bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1 min-w-0 text-left">
+                        <p className="font-medium text-gray-900 dark:text-white">
+                          Play every set
+                        </p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+                          {detailRepeatOnAllSets
+                            ? `Triggers on all ${repeatTimes} sets`
+                            : "Only triggers on first set"}
+                        </p>
+                      </div>
+                      <div
+                        className={cn(
+                          "relative w-12 h-7 rounded-full transition-all duration-200 flex-shrink-0 ml-4",
+                          detailRepeatOnAllSets ? "bg-purple-500" : "bg-gray-200 dark:bg-gray-700"
+                        )}
+                      >
+                        <div
+                          className={cn(
+                            "absolute top-1 w-5 h-5 rounded-full bg-white shadow-sm transition-transform duration-200",
+                            detailRepeatOnAllSets ? "translate-x-6" : "translate-x-1"
+                          )}
+                        />
+                      </div>
+                    </div>
+                  </button>
+                )}
+
+                {/* Natural Ending */}
+                <button
+                  onClick={() => setDetailNaturalEnding(!detailNaturalEnding)}
+                  className={cn(
+                    "w-full p-4 rounded-xl transition-all text-left",
+                    detailNaturalEnding
+                      ? "bg-amber-50 dark:bg-amber-900/20 ring-1 ring-amber-300 dark:ring-amber-700"
+                      : "bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800"
+                  )}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-gray-900 dark:text-white">
+                        Natural ending
+                      </p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+                        Music ends when the set completes
+                      </p>
+                    </div>
+                    <div
+                      className={cn(
+                        "relative w-12 h-7 rounded-full transition-all duration-200 flex-shrink-0 ml-4",
+                        detailNaturalEnding ? "bg-amber-500" : "bg-gray-200 dark:bg-gray-700"
+                      )}
+                    >
+                      <div
+                        className={cn(
+                          "absolute top-1 w-5 h-5 rounded-full bg-white shadow-sm transition-transform duration-200",
+                          detailNaturalEnding ? "translate-x-6" : "translate-x-1"
+                        )}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Natural ending info/warning */}
+                  {detailNaturalEnding && (
+                    <div className="mt-3 pt-3 border-t border-amber-200 dark:border-amber-800">
+                      {trackMode === "random" ? (
+                        <div className="flex items-start gap-2">
+                          <svg className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          <p className="text-sm text-amber-700 dark:text-amber-300">
+                            A compatible track will be auto-selected based on set duration
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="flex items-start gap-2">
+                          <svg className="w-4 h-4 text-green-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                          </svg>
+                          <p className="text-sm text-gray-600 dark:text-gray-400">
+                            "{detailTrackName}" will play and end with the set
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -1000,8 +1230,8 @@ export function RoundMusicDrawer({
             ) : (
               filteredTracks.map((track) => {
                 const energyLevels = getTrackEnergyLevels(track);
-                const compatibility = detailNaturalEnding
-                  ? getTrackNaturalEndingCompatibility(track)
+                const compatibility = detailNaturalEnding && viewState.type === "track-picker"
+                  ? getTrackNaturalEndingCompatibility(track, viewState.phase)
                   : { compatible: true };
                 const isDisabled = detailNaturalEnding && !compatibility.compatible;
 

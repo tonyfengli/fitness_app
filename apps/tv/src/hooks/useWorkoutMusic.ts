@@ -74,14 +74,13 @@ function evaluateMusicTrigger(
 }
 
 /**
- * Calculates the REMAINING time from the current phase to the end of the round.
- * This is used for natural ending - we need to know how much time is left, not total duration.
+ * Calculates the REMAINING time from the current phase to the end of the SET.
+ * Natural ending only fires on the LAST set, so we just need to calculate time to end of current set.
  */
-function calculateRemainingRoundTime(
+function calculateRemainingSetTime(
   circuitConfig: CircuitConfig | null | undefined,
   roundIndex: number,
   currentExerciseIndex: number,
-  currentSetNumber: number,
   phaseType: MusicPhaseType
 ): number {
   if (!circuitConfig?.config?.roundTemplates) return 0;
@@ -93,15 +92,13 @@ function calculateRemainingRoundTime(
 
   const template = roundConfig.template;
   const exerciseCount = template.exercisesPerRound || 0;
-  const totalSets = template.repeatTimes || 1;
 
   if (template.type === 'circuit_round' || template.type === 'stations_round') {
     const workDuration = template.workDuration || 0;
     const restDuration = template.restDuration || 0;
-    const restBetweenSets = template.restBetweenSets || 0;
 
     // Calculate remaining time in current set from current position
-    let remainingInCurrentSet = 0;
+    let remainingInSet = 0;
     const remainingExercises = exerciseCount - currentExerciseIndex;
 
     // Buffer per phase transition to account for state machine latency
@@ -109,33 +106,24 @@ function calculateRemainingRoundTime(
 
     if (phaseType === 'exercise') {
       // At start of exercise: current exercise + remaining exercises + rests between them
-      remainingInCurrentSet = (workDuration * remainingExercises) + (restDuration * Math.max(0, remainingExercises - 1));
-      // Add buffer for transitions: rest transitions + exercise transitions + final transition
+      remainingInSet = (workDuration * remainingExercises) + (restDuration * Math.max(0, remainingExercises - 1));
       const transitionCount = (remainingExercises - 1) + Math.max(0, remainingExercises - 1) + 1;
-      remainingInCurrentSet += transitionCount * TRANSITION_BUFFER_SEC;
+      remainingInSet += transitionCount * TRANSITION_BUFFER_SEC;
     } else if (phaseType === 'rest') {
       // At start of rest: current rest + remaining exercises + rests between them
       const exercisesAfterRest = exerciseCount - currentExerciseIndex - 1;
-      remainingInCurrentSet = restDuration + (workDuration * exercisesAfterRest) + (restDuration * Math.max(0, exercisesAfterRest - 1));
-      // Add buffer for transitions
+      remainingInSet = restDuration + (workDuration * exercisesAfterRest) + (restDuration * Math.max(0, exercisesAfterRest - 1));
       const transitionCount = exercisesAfterRest + Math.max(0, exercisesAfterRest - 1) + 1;
-      remainingInCurrentSet += transitionCount * TRANSITION_BUFFER_SEC;
+      remainingInSet += transitionCount * TRANSITION_BUFFER_SEC;
     } else if (phaseType === 'preview' || phaseType === 'setBreak') {
       // Full set duration
-      remainingInCurrentSet = (workDuration * exerciseCount) + (restDuration * Math.max(0, exerciseCount - 1));
-      // Add buffer for all transitions in the set
+      remainingInSet = (workDuration * exerciseCount) + (restDuration * Math.max(0, exerciseCount - 1));
       const transitionCount = exerciseCount + (exerciseCount - 1) + 1;
-      remainingInCurrentSet += transitionCount * TRANSITION_BUFFER_SEC;
+      remainingInSet += transitionCount * TRANSITION_BUFFER_SEC;
     }
 
-    // Calculate remaining complete sets after current set
-    const remainingSets = totalSets - currentSetNumber;
-    const oneSetDuration = (workDuration * exerciseCount) + (restDuration * Math.max(0, exerciseCount - 1));
-    const remainingAfterCurrentSet = (remainingSets * oneSetDuration) + (restBetweenSets * remainingSets);
-
-    return remainingInCurrentSet + remainingAfterCurrentSet;
+    return remainingInSet;
   } else if (template.type === 'amrap_round') {
-    // AMRAP doesn't have natural ending support in the same way
     return template.totalDuration || 0;
   }
 
@@ -294,13 +282,32 @@ export function useWorkoutMusic({
     const triggerResult = evaluateMusicTrigger(musicConfig, phaseType, phaseIndex);
     console.log(`[useWorkoutMusic] Trigger evaluation for ${phaseType}[${phaseIndex}]:`, triggerResult);
 
-    // Skip non-first sets unless repeatOnAllSets is enabled
-    if ((phaseType === 'exercise' || phaseType === 'rest') && currentSetNumber > 1) {
-      if (!triggerResult?.repeatOnAllSets) {
-        console.log(`[useWorkoutMusic] Skipping - not first set (set ${currentSetNumber}) and repeatOnAllSets is false`);
-        return;
+    // Get total sets to determine last set
+    const roundConfig = (circuitConfig?.config?.roundTemplates as any[])?.find(
+      (rt) => rt.roundNumber === currentRoundIndex + 1
+    );
+    const totalSets = roundConfig?.template?.repeatTimes || 1;
+    const isLastSet = currentSetNumber >= totalSets;
+
+    console.log(`[useWorkoutMusic] Set info: currentSet=${currentSetNumber}, totalSets=${totalSets}, isLastSet=${isLastSet}`);
+
+    // Handle multi-set logic for exercise/rest phases
+    if (phaseType === 'exercise' || phaseType === 'rest') {
+      // Natural ending ONLY fires on the last set - skip ALL earlier sets (including set 1)
+      if (triggerResult?.naturalEnding) {
+        if (!isLastSet) {
+          console.log(`[useWorkoutMusic] Skipping - naturalEnding only fires on last set (current: ${currentSetNumber}/${totalSets})`);
+          return;
+        }
+        console.log(`[useWorkoutMusic] Natural ending - this IS the last set (${currentSetNumber}/${totalSets}), proceeding`);
+      } else if (currentSetNumber > 1) {
+        // Non-natural-ending triggers on sets 2+: skip unless repeatOnAllSets is enabled
+        if (!triggerResult?.repeatOnAllSets) {
+          console.log(`[useWorkoutMusic] Skipping - not first set (set ${currentSetNumber}) and repeatOnAllSets is false`);
+          return;
+        }
+        console.log(`[useWorkoutMusic] repeatOnAllSets enabled - firing trigger on set ${currentSetNumber}`);
       }
-      console.log(`[useWorkoutMusic] repeatOnAllSets enabled - firing trigger on set ${currentSetNumber}`);
     }
 
     if (triggerResult) {
@@ -315,26 +322,28 @@ export function useWorkoutMusic({
         return;
       }
 
-      console.log(`[useWorkoutMusic] 🎵 FIRING TRIGGER for ${phaseType} at round ${currentRoundIndex + 1}, index ${phaseIndex}:`, triggerResult);
+      console.log(`[useWorkoutMusic] 🎵 FIRING TRIGGER for ${phaseType} at round ${currentRoundIndex + 1}, exercise ${phaseIndex}, set ${currentSetNumber}/${totalSets}:`, triggerResult);
 
       // Mark this phase as triggered (shared across screens)
       setLastTriggeredPhase(phaseKey);
 
-      // Calculate REMAINING round time for natural ending (from current phase to end of round)
-      const remainingRoundTime = triggerResult.naturalEnding
-        ? calculateRemainingRoundTime(circuitConfig, currentRoundIndex, currentExerciseIndex, currentSetNumber, phaseType)
+      // Natural ending only fires on the LAST set
+      const shouldUseNaturalEnding = triggerResult.naturalEnding && isLastSet;
+
+      // Calculate remaining SET time for natural ending (only on last set)
+      const remainingSetTime = shouldUseNaturalEnding
+        ? calculateRemainingSetTime(circuitConfig, currentRoundIndex, currentExerciseIndex, phaseType)
         : undefined;
 
       if (triggerResult.naturalEnding) {
-        // Get round template for detailed logging
-        const roundConfig = (circuitConfig?.config?.roundTemplates as any[])?.find(
-          (rt) => rt.roundNumber === currentRoundIndex + 1
-        );
         const template = roundConfig?.template;
         console.log(`[useWorkoutMusic] === NATURAL ENDING DEBUG ===`);
-        console.log(`[useWorkoutMusic] Phase: ${phaseType}, exerciseIndex: ${currentExerciseIndex}, set: ${currentSetNumber}`);
-        console.log(`[useWorkoutMusic] Template: exercises=${template?.exercisesPerRound}, work=${template?.workDuration}s, rest=${template?.restDuration}s, sets=${template?.repeatTimes || 1}`);
-        console.log(`[useWorkoutMusic] Calculated remaining round time: ${remainingRoundTime}s`);
+        console.log(`[useWorkoutMusic] Phase: ${phaseType}, exerciseIndex: ${currentExerciseIndex}, set: ${currentSetNumber}/${totalSets}`);
+        console.log(`[useWorkoutMusic] Template: exercises=${template?.exercisesPerRound}, work=${template?.workDuration}s, rest=${template?.restDuration}s`);
+        console.log(`[useWorkoutMusic] isLastSet: ${isLastSet}, shouldUseNaturalEnding: ${shouldUseNaturalEnding}`);
+        if (shouldUseNaturalEnding) {
+          console.log(`[useWorkoutMusic] ✓ NATURAL ENDING ACTIVE - calculated remaining SET time: ${remainingSetTime}s`);
+        }
       }
 
       // Fire the music action
@@ -342,8 +351,8 @@ export function useWorkoutMusic({
         energy: triggerResult.energy,
         useBuildup: triggerResult.useBuildup,
         trackId: triggerResult.trackId,
-        naturalEnding: triggerResult.naturalEnding,
-        roundDurationSec: remainingRoundTime,
+        naturalEnding: shouldUseNaturalEnding,
+        roundDurationSec: remainingSetTime,
       });
     } else {
       console.log(`[useWorkoutMusic] No trigger for ${phaseType}[${phaseIndex}]`);

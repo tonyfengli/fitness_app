@@ -28,6 +28,7 @@ export const musicTracks = pgTable("music_tracks", (t) => ({
   genre: t.text(), // optional genre classification
   downloadUrl: t.text("download_url"), // URL to download from cloud storage
   segments: jsonb("segments").$type<MusicSegment[]>().notNull().default([]), // energy segments within the track
+  recommendedForNaturalEnding: t.boolean("recommended_for_natural_ending").default(false), // flag for tracks good for natural ending
   createdAt: t.timestamp("created_at").defaultNow().notNull(),
   updatedAt: t
     .timestamp("updated_at", { mode: "date", withTimezone: true })
@@ -44,6 +45,7 @@ export const CreateMusicTrackSchema = z.object({
   genre: z.string().optional(),
   downloadUrl: z.string().url().optional(),
   segments: z.array(MusicSegmentSchema).min(1), // at least one segment required
+  recommendedForNaturalEnding: z.boolean().optional(),
 });
 
 export const UpdateMusicTrackSchema = z.object({
@@ -53,6 +55,7 @@ export const UpdateMusicTrackSchema = z.object({
   genre: z.string().optional(),
   downloadUrl: z.string().url().optional(),
   segments: z.array(MusicSegmentSchema).min(1).optional(),
+  recommendedForNaturalEnding: z.boolean().optional(),
 });
 
 export type MusicTrack = typeof musicTracks.$inferSelect;
