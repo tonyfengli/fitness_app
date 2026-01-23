@@ -144,15 +144,6 @@ export function CircuitWorkoutLiveScreen() {
     }
   );
 
-  // Check if rise countdown should be shown (for round 1, exercise 1 with useBuildup)
-  const showRiseCountdown = useMemo(() => {
-    const roundTemplates = circuitConfig?.config?.roundTemplates as any[] | undefined;
-    const round1Config = roundTemplates?.find((rt) => rt.roundNumber === 1);
-    const exercise1Trigger = round1Config?.music?.exercises?.[0];
-    // showRiseCountdown defaults to true when useBuildup is true
-    return exercise1Trigger?.showRiseCountdown ?? (exercise1Trigger?.useBuildup ?? false);
-  }, [circuitConfig]);
-
   // Get saved selections with polling
   const selectionsQueryOptions = sessionId 
     ? api.workoutSelections.getSelections.queryOptions({ sessionId })
@@ -342,6 +333,21 @@ export function CircuitWorkoutLiveScreen() {
     circuitConfig,
     enabled: isMusicEnabled,
   });
+
+  // Check if rise countdown should be shown for the current round's first exercise
+  // Rise countdown triggers when transitioning from preview to exercise with useBuildup: true
+  const showRiseCountdown = useMemo(() => {
+    const roundTemplates = circuitConfig?.config?.roundTemplates as any[] | undefined;
+    const currentRoundConfig = roundTemplates?.find(
+      (rt) => rt.roundNumber === state.context.currentRoundIndex + 1
+    );
+
+    // Check the first exercise's trigger config for useBuildup
+    const exercise1Trigger = currentRoundConfig?.music?.exercises?.[0];
+
+    // showRiseCountdown defaults to true when useBuildup is true
+    return exercise1Trigger?.showRiseCountdown ?? (exercise1Trigger?.useBuildup ?? false);
+  }, [circuitConfig, state.context.currentRoundIndex]);
 
   // Callback for when rise countdown completes
   const handleRiseComplete = useCallback(() => {
@@ -719,25 +725,25 @@ export function CircuitWorkoutLiveScreen() {
                   hasTVPreferredFocus
                 >
                   {({ focused }) => (
-                    <MattePanel 
+                    <MattePanel
                       focused={focused}
                       radius={26}
-                      style={{ 
+                      style={{
                         width: 94,
                         height: 44,
                         alignItems: 'center',
                         justifyContent: 'center',
-                        backgroundColor: focused ? 
-                          'rgba(255,255,255,0.15)' : 
+                        backgroundColor: focused ?
+                          'rgba(255,255,255,0.15)' :
                           'rgba(255,255,255,0.08)',
                         borderColor: focused ? 'rgba(255,255,255,0.3)' : 'transparent',
                         borderWidth: focused ? 1.5 : 0,
                       }}
                     >
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <Text style={{ 
-                          color: TOKENS.color.text, 
-                          fontSize: 13, 
+                        <Text style={{
+                          color: TOKENS.color.text,
+                          fontSize: 13,
                           fontWeight: '700',
                           letterSpacing: 0.3,
                           textTransform: 'uppercase'
@@ -973,10 +979,10 @@ export function CircuitWorkoutLiveScreen() {
                 {/* Start Round (was Skip Forward) */}
                 <Pressable onPress={() => { setIsSettingsPanelOpen(false); send({ type: 'START_WORKOUT' }); }} focusable>
                   {({ focused }) => (
-                    <MattePanel 
+                    <MattePanel
                       focused={focused}
                       radius={26}
-                      style={{ 
+                      style={{
                         width: 52,
                         height: 44,
                         alignItems: 'center',
@@ -986,9 +992,9 @@ export function CircuitWorkoutLiveScreen() {
                         borderWidth: focused ? 1.5 : 0,
                       }}
                     >
-                      <Icon 
-                        name="skip-next" 
-                        size={22} 
+                      <Icon
+                        name="skip-next"
+                        size={22}
                         color={TOKENS.color.text}
                       />
                     </MattePanel>
