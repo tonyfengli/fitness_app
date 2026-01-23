@@ -18,6 +18,10 @@ interface PreSelectedRiseTrack {
   riseDuration: number; // high.timestamp - medium.timestamp
 }
 
+// Configurable render latency offset (time from transition trigger to screen visible)
+// Adjust per device if needed
+const RENDER_LATENCY_MS = 150;
+
 interface MusicContextValue {
   // State
   isPlaying: boolean;
@@ -30,7 +34,8 @@ interface MusicContextValue {
   isSyncing: boolean;
   syncResult: SyncResult | null;
   tracks: MusicTrack[];
-  buildupCountdown: number | null; // Seconds remaining in buildup, null if not in buildup
+  buildupCountdown: number | null; // Seconds remaining in buildup, null if not in buildup (JS timer fallback)
+  dropTime: number | null; // Absolute timestamp (ms) when the drop should hit (audio-sync precision)
   preSelectedRiseTrack: PreSelectedRiseTrack | null; // Pre-selected track for random buildup
 
   // Trigger tracking (shared across screens)
@@ -94,6 +99,7 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
   const [currentEnergy, setCurrentEnergy] = useState<EnergyLevel | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [buildupCountdown, setBuildupCountdown] = useState<number | null>(null);
+  const [dropTime, setDropTime] = useState<number | null>(null); // Audio-sync: absolute timestamp when drop hits
 
   // Trigger tracking (shared across screens to prevent duplicate triggers)
   const [lastTriggeredPhase, setLastTriggeredPhase] = useState<string | null>(null);
@@ -201,12 +207,19 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
   const startBuildupCountdown = useCallback((durationSeconds: number) => {
     setBuildupCountdown(durationSeconds);
 
+    // Audio-sync: Calculate exact timestamp when drop should hit
+    // This is the source of truth for precision timing
+    const now = Date.now();
+    const calculatedDropTime = now + (durationSeconds * 1000);
+    setDropTime(calculatedDropTime);
+    console.log('[MusicProvider] Audio-sync: dropTime set to', calculatedDropTime, 'duration:', durationSeconds, 'now:', now);
+
     // Clear any existing interval
     if (buildupIntervalRef.current) {
       clearInterval(buildupIntervalRef.current);
     }
 
-    // Count down every second
+    // Count down every second (fallback display, not used for transition timing)
     buildupIntervalRef.current = setInterval(() => {
       setBuildupCountdown(prev => {
         if (prev === null || prev <= 1) {
@@ -228,6 +241,7 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
       buildupIntervalRef.current = null;
     }
     setBuildupCountdown(null);
+    setDropTime(null); // Clear audio-sync timing
   }, []);
 
   // Pre-select a random track for buildup (used to show rise info before trigger fires)
@@ -727,6 +741,7 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     syncResult,
     tracks,
     buildupCountdown,
+    dropTime,
     preSelectedRiseTrack,
     lastTriggeredPhase,
     setLastTriggeredPhase,

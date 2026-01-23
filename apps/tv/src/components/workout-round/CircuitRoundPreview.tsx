@@ -1,4 +1,4 @@
-import React, { useMemo, useEffect, useState, useCallback, useRef } from 'react';
+import React, { useMemo, useEffect, useState, useCallback } from 'react';
 import { View, Text, Pressable } from 'react-native';
 import { TOKENS, MattePanel, CircuitExercise, RoundData } from './shared';
 import { useNavigation } from '../../App';
@@ -22,12 +22,10 @@ interface CircuitRoundPreviewProps {
 export function CircuitRoundPreview({ currentRound, repeatTimes = 1, timeRemaining = 0, isTimerActive = false, roundNumber, currentRoundIndex = 0, circuitConfig, onStartExercise }: CircuitRoundPreviewProps) {
   const navigation = useNavigation();
   const sessionId = navigation.getParam('sessionId');
-  const { tracks, preSelectedRiseTrack, preSelectRiseTrack, clearPreSelectedRiseTrack, buildupCountdown, playWithTrigger, addConsumedTrigger } = useMusic();
+  const { tracks, preSelectedRiseTrack, preSelectRiseTrack, clearPreSelectedRiseTrack, dropTime, playWithTrigger, addConsumedTrigger } = useMusic();
 
   // Track if rise transition has been started
   const [isRiseActive, setIsRiseActive] = useState(false);
-  const hasTriggeredTransition = useRef(false);
-  const hadCountdownActive = useRef(false);
 
   // Extract round number from round name if not provided
   const extractedRoundNumber = roundNumber || (() => {
@@ -107,8 +105,6 @@ export function CircuitRoundPreview({ currentRound, repeatTimes = 1, timeRemaini
     if (!riseInfo || isRiseActive) return;
 
     setIsRiseActive(true);
-    hasTriggeredTransition.current = false;
-    hadCountdownActive.current = false;
 
     // Mark the exercise 1 trigger as "consumed" so it won't fire again when we enter exercise 1
     const exercisePhaseKey = `exercise-${currentRoundIndex}-0-1`;
@@ -126,36 +122,10 @@ export function CircuitRoundPreview({ currentRound, repeatTimes = 1, timeRemaini
     });
   }, [riseInfo, isRiseActive, exercise1Trigger, preSelectedRiseTrack, playWithTrigger, currentRoundIndex, addConsumedTrigger]);
 
-  // Watch for countdown completion to trigger transition
-  useEffect(() => {
-    if (!isRiseActive) return;
-
-    console.log('[CircuitRoundPreview] Countdown effect, buildupCountdown:', buildupCountdown, 'hadCountdownActive:', hadCountdownActive.current);
-
-    if (buildupCountdown !== null && buildupCountdown > 0) {
-      hadCountdownActive.current = true;
-    }
-
-    // Trigger transition when countdown was active and now completes
-    if (hadCountdownActive.current && buildupCountdown === null && !hasTriggeredTransition.current) {
-      console.log('[CircuitRoundPreview] Countdown complete, triggering transition in 100ms');
-      const timer = setTimeout(() => {
-        if (!hasTriggeredTransition.current) {
-          hasTriggeredTransition.current = true;
-          console.log('[CircuitRoundPreview] Calling onStartExercise');
-          onStartExercise?.();
-        }
-      }, 100);
-      return () => clearTimeout(timer);
-    }
-  }, [isRiseActive, buildupCountdown, onStartExercise]);
-
   // Reset rise state when leaving this preview (e.g., navigating away)
   useEffect(() => {
     return () => {
       setIsRiseActive(false);
-      hasTriggeredTransition.current = false;
-      hadCountdownActive.current = false;
     };
   }, []);
 
@@ -382,11 +352,12 @@ export function CircuitRoundPreview({ currentRound, repeatTimes = 1, timeRemaini
         </View>
       )}
 
-      {/* Rise Countdown Overlay - Shows GET READY (2s) then 3, 2, 1 before the drop */}
+      {/* Rise Countdown Overlay - Shows GET READY then 3, 2, 1 before the drop */}
+      {/* Overlay handles all timing internally via dropTime and calls onComplete for transition */}
       <RiseCountdownOverlay
-        countdown={buildupCountdown}
+        dropTime={dropTime}
         isVisible={isRiseActive && showRiseCountdown}
-        holdAfterComplete={true}
+        onComplete={onStartExercise}
       />
     </View>
   );
