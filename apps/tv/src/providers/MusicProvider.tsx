@@ -386,9 +386,19 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     console.log('[MusicProvider] playWithTrigger called:', { energy, useBuildup, trackId, naturalEnding, isStarting: isStartingRef.current });
 
     // Guard against concurrent play calls
+    // EXCEPTION: Rise triggers (useBuildup=true) are user-initiated and have priority
+    // They should interrupt any ongoing start operation
     if (isStartingRef.current) {
-      console.log('[MusicProvider] playWithTrigger BLOCKED - already starting');
-      return;
+      if (useBuildup) {
+        console.log('[MusicProvider] playWithTrigger - Rise trigger interrupting current start');
+        // Stop any ongoing operation and reset the guard
+        // The ongoing operation will complete but its track will be immediately stopped
+        await musicService.stop(true); // Immediate stop
+        isStartingRef.current = false;
+      } else {
+        console.log('[MusicProvider] playWithTrigger BLOCKED - already starting');
+        return;
+      }
     }
 
     // If a specific track is requested, try to find and play it

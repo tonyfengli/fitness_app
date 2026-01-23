@@ -3,6 +3,7 @@ import { View, Text, Pressable } from 'react-native';
 import { TOKENS, MattePanel, CircuitExercise, RoundData } from './shared';
 import { useNavigation } from '../../App';
 import { useMusic } from '../../providers/MusicProvider';
+import { RiseCountdownOverlay } from '../shared/RiseCountdownOverlay';
 import type { CircuitConfig } from '@acme/db';
 
 interface CircuitRoundPreviewProps {
@@ -381,30 +382,12 @@ export function CircuitRoundPreview({ currentRound, repeatTimes = 1, timeRemaini
         </View>
       )}
 
-      {/* Rise Countdown Overlay - Shows 3, 2, 1 before the drop */}
-      {isRiseActive && showRiseCountdown && buildupCountdown !== null && buildupCountdown <= 3 && (
-        <View style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          justifyContent: 'center',
-          alignItems: 'center',
-          backgroundColor: 'rgba(0, 0, 0, 0.7)',
-        }}>
-          <Text style={{
-            fontSize: 200,
-            fontWeight: '900',
-            color: TOKENS.color.accent,
-            textShadowColor: 'rgba(0, 0, 0, 0.5)',
-            textShadowOffset: { width: 0, height: 4 },
-            textShadowRadius: 20,
-          }}>
-            {buildupCountdown}
-          </Text>
-        </View>
-      )}
+      {/* Rise Countdown Overlay - Shows GET READY (2s) then 3, 2, 1 before the drop */}
+      <RiseCountdownOverlay
+        countdown={buildupCountdown}
+        isVisible={isRiseActive && showRiseCountdown}
+        holdAfterComplete={true}
+      />
     </View>
   );
 }
