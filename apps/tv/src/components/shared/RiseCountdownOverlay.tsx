@@ -24,10 +24,16 @@ interface RiseCountdownOverlayProps {
   dropTime: number | null;
   /** Whether the overlay should be visible */
   isVisible: boolean;
-  /** Callback fired when countdown completes (RENDER_LATENCY_MS before dropTime) */
+  /** Callback fired when countdown completes (RENDER_LATENCY_MS before dropTime if useLatencyOffset is true) */
   onComplete?: () => void;
+  /** Callback fired early to prepare audio (accounts for track loading latency) */
+  onAudioPrepare?: () => void;
+  /** How many ms before completion to fire onAudioPrepare (default: 1000ms) */
+  audioPrepareLead?: number;
   /** Debug mode: always show overlay with a static number */
   debug?: boolean;
+  /** Whether to apply render latency offset (default: true for Rise, set false for High) */
+  useLatencyOffset?: boolean;
 }
 
 /**
@@ -44,13 +50,18 @@ export function RiseCountdownOverlay({
   dropTime,
   isVisible,
   onComplete,
+  onAudioPrepare,
+  audioPrepareLead = 1000,
   debug = false,
+  useLatencyOffset = true,
 }: RiseCountdownOverlayProps) {
   // Current display phase - controlled by scheduled setTimeouts
   const [displayPhase, setDisplayPhase] = useState<DisplayPhase>('ready');
 
   // Track if we've triggered onComplete to prevent double-firing
   const hasCompletedRef = useRef(false);
+  // Track if we've triggered onAudioPrepare to prevent double-firing
+  const hasAudioPreparedRef = useRef(false);
 
   // Animation values
   const numberScale = useRef(new Animated.Value(1)).current;
@@ -69,14 +80,18 @@ export function RiseCountdownOverlay({
       // Reset state when not visible
       setDisplayPhase('ready');
       hasCompletedRef.current = false;
+      hasAudioPreparedRef.current = false;
       return;
     }
 
     const now = Date.now();
     const timeToGo = dropTime - now;
 
+    // Calculate the latency to apply (0 if disabled)
+    const latencyMs = useLatencyOffset ? RENDER_LATENCY_MS : 0;
+
     // If dropTime already passed, trigger complete immediately
-    if (timeToGo <= RENDER_LATENCY_MS) {
+    if (timeToGo <= latencyMs) {
       if (!hasCompletedRef.current) {
         hasCompletedRef.current = true;
         setDisplayPhase('complete');
@@ -89,7 +104,7 @@ export function RiseCountdownOverlay({
     const showThreeAt = Math.max(0, timeToGo - 3000);
     const showTwoAt = Math.max(0, timeToGo - 2000);
     const showOneAt = Math.max(0, timeToGo - 1000);
-    const completeAt = Math.max(0, timeToGo - RENDER_LATENCY_MS);
+    const completeAt = Math.max(0, timeToGo - latencyMs);
 
     // Determine initial phase based on current time
     if (timeToGo > 3000) {
@@ -115,6 +130,25 @@ export function RiseCountdownOverlay({
       timers.push(setTimeout(() => setDisplayPhase(1), showOneAt));
     }
 
+    // Schedule audio prepare callback (fires early to account for loading latency)
+    if (onAudioPrepare) {
+      const audioPrepareAt = Math.max(0, completeAt - audioPrepareLead);
+      if (audioPrepareAt > 0) {
+        timers.push(setTimeout(() => {
+          if (!hasAudioPreparedRef.current) {
+            hasAudioPreparedRef.current = true;
+            console.log('[RiseCountdownOverlay] Audio prepare callback fired');
+            onAudioPrepare();
+          }
+        }, audioPrepareAt));
+      } else if (!hasAudioPreparedRef.current) {
+        // If audioPrepareAt is 0 or negative, fire immediately
+        hasAudioPreparedRef.current = true;
+        console.log('[RiseCountdownOverlay] Audio prepare callback fired immediately');
+        onAudioPrepare();
+      }
+    }
+
     // Schedule completion
     timers.push(setTimeout(() => {
       if (!hasCompletedRef.current) {
@@ -129,13 +163,14 @@ export function RiseCountdownOverlay({
       showThreeAt,
       showTwoAt,
       showOneAt,
+      audioPrepareAt: onAudioPrepare ? Math.max(0, completeAt - audioPrepareLead) : 'n/a',
       completeAt,
     });
 
     return () => {
       timers.forEach(clearTimeout);
     };
-  }, [isVisible, dropTime, onComplete]);
+  }, [isVisible, dropTime, onComplete, onAudioPrepare, audioPrepareLead, useLatencyOffset]);
 
   // Number punch animation when display phase changes to a number
   useEffect(() => {
@@ -339,13 +374,11 @@ export function RiseCountdownOverlay({
 const styles = StyleSheet.create({
   overlay: {
     position: 'absolute',
-    // Use extended dimensions and negative offsets to break out of parent padding
-    width: SCREEN_WIDTH + 48,
-    height: SCREEN_HEIGHT + 200,
-    top: -200,
-    left: -48,
-    paddingBottom: 60,   // Push content up to center on screen
-    paddingLeft: 0,      // Shifted left
+    // Full screen positioning - rendered at screen root level
+    top: 0,
+    left: 0,
+    width: SCREEN_WIDTH,
+    height: SCREEN_HEIGHT,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: 'rgba(0, 0, 0, 0.92)',

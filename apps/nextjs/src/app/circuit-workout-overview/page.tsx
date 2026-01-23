@@ -981,16 +981,6 @@ function CircuitWorkoutOverviewContent() {
     enabled: !!sessionId
   });
 
-  // Debug logging for lighting config
-  useEffect(() => {
-    console.log('[LightingConfig Debug] Config updated:', {
-      timestamp: lightingConfigUpdatedAt,
-      hasConfig: !!lightingConfig,
-      roundOverrideKeys: lightingConfig ? Object.keys((lightingConfig as any)?.roundOverrides || {}) : [],
-      roundOverrides: (lightingConfig as any)?.roundOverrides,
-    });
-  }, [lightingConfig, lightingConfigUpdatedAt]);
-
   // Debug logging for music config
   useEffect(() => {
     if (circuitConfig?.config?.roundTemplates) {
@@ -1021,23 +1011,9 @@ function CircuitWorkoutOverviewContent() {
 
   // Helper to get scene color from lighting config
   const getLightingSceneColor = (roundNumber: number, phaseType: string): string | null => {
-    if (!lightingConfig || !lightingScenes) {
-      console.log('[getLightingSceneColor] No config/scenes', { roundNumber, phaseType, hasConfig: !!lightingConfig, hasScenes: !!lightingScenes });
-      return null;
-    }
+    if (!lightingConfig || !lightingScenes) return null;
     const roundKey = `round-${roundNumber}`;
     const sceneConfig = (lightingConfig as any)?.roundOverrides?.[roundKey]?.[phaseType];
-
-    // Debug log for round 1 queries
-    if (roundNumber === 1) {
-      console.log('[getLightingSceneColor] Round 1 lookup:', {
-        roundKey,
-        phaseType,
-        availableRoundKeys: Object.keys((lightingConfig as any)?.roundOverrides || {}),
-        sceneConfig,
-      });
-    }
-
     if (!sceneConfig?.sceneId) return null;
 
     // Find the scene and extract color from name

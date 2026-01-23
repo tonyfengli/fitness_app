@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState, useEffect } from 'react';
+import React, { useMemo, useRef, useState, useEffect, useCallback, useLayoutEffect } from 'react';
 import { View, Text, Pressable, ActivityIndicator, TVFocusGuideView, LayoutAnimation, Platform, UIManager } from 'react-native';
 
 // Enable LayoutAnimation on Android
@@ -21,7 +21,8 @@ import { useWorkoutMachineWithLighting } from '../components/workout-live/hooks/
 import { useLightingControl } from '../hooks/useLightingControl';
 import { useAudio } from '../hooks/useAudio';
 import { useMusicPlayer } from '../hooks/useMusicPlayer';
-import { useWorkoutMusic } from '../hooks/useWorkoutMusic';
+import { useWorkoutMusic, useMusic } from '../hooks/useWorkoutMusic';
+import { RiseCountdownOverlay } from '../components/shared/RiseCountdownOverlay';
 
 // Re-export MattePanel for backward compatibility
 export { MattePanel } from '../components/workout-live/MattePanel';
@@ -128,6 +129,9 @@ export function CircuitWorkoutLiveScreen() {
     playWithTrigger,
   } = useMusicPlayer();
 
+  // Get high countdown state from music provider
+  const { isHighCountdownActive, isRiseCountdownActive, setRiseCountdownActive, dropTime, prepareHighAudio, completeHighCountdown, lastTriggeredPhase } = useMusic();
+
   // Get circuit config with polling
   const { data: circuitConfig } = useQuery(
     sessionId ? {
@@ -139,6 +143,15 @@ export function CircuitWorkoutLiveScreen() {
       queryFn: () => Promise.resolve(null)
     }
   );
+
+  // Check if rise countdown should be shown (for round 1, exercise 1 with useBuildup)
+  const showRiseCountdown = useMemo(() => {
+    const roundTemplates = circuitConfig?.config?.roundTemplates as any[] | undefined;
+    const round1Config = roundTemplates?.find((rt) => rt.roundNumber === 1);
+    const exercise1Trigger = round1Config?.music?.exercises?.[0];
+    // showRiseCountdown defaults to true when useBuildup is true
+    return exercise1Trigger?.showRiseCountdown ?? (exercise1Trigger?.useBuildup ?? false);
+  }, [circuitConfig]);
 
   // Get saved selections with polling
   const selectionsQueryOptions = sessionId 
@@ -330,6 +343,103 @@ export function CircuitWorkoutLiveScreen() {
     enabled: isMusicEnabled,
   });
 
+  // Callback for when rise countdown completes
+  const handleRiseComplete = useCallback(() => {
+    console.log('[CircuitWorkoutLiveScreen] Rise countdown complete, starting workout');
+    setRiseCountdownActive(false);
+    send({ type: 'RESUME' }); // Resume from pause before starting
+    send({ type: 'START_WORKOUT' });
+  }, [setRiseCountdownActive, send]);
+
+  // Callback for when high countdown completes
+  const handleHighComplete = useCallback(() => {
+    console.log('[CircuitWorkoutLiveScreen] High countdown complete, resuming state machine');
+    completeHighCountdown();
+    send({ type: 'RESUME' }); // Resume from pause
+  }, [completeHighCountdown, send]);
+
+  // Callback for when high audio should start (1 second before countdown completes)
+  // This accounts for audio loading latency so music is ready when countdown visually ends
+  const handleHighAudioPrepare = useCallback(() => {
+    console.log('[CircuitWorkoutLiveScreen] High audio prepare callback, starting audio early');
+    prepareHighAudio();
+  }, [prepareHighAudio]);
+
+  // ============================================================================
+  // Visual State Management for High Countdown
+  // When High countdown is about to trigger, we hold the visual at the previous
+  // state (preview/rest) until the countdown completes, preventing a "flash"
+  // ============================================================================
+
+  // Track previous state value for visual continuity during High countdown
+  const prevVisualStateRef = useRef(state.value);
+
+  // Optimistically detect when High countdown SHOULD show (before isHighCountdownActive is set)
+  // This prevents the flash on the render where state changes but countdown hasn't started yet
+  const shouldShowHighCountdownOptimistic = useMemo(() => {
+    // Only relevant when in exercise state
+    if (state.value !== 'exercise') return false;
+
+    const { currentRoundIndex, currentExerciseIndex, currentSetNumber } = state.context;
+    const phaseKey = `exercise-${currentRoundIndex}-${currentExerciseIndex}-${currentSetNumber}`;
+
+    // If this phase already triggered, countdown already happened
+    if (lastTriggeredPhase === phaseKey) return false;
+
+    // Get the music trigger config for this exercise
+    const roundTemplates = circuitConfig?.config?.roundTemplates as any[] | undefined;
+    const roundConfig = roundTemplates?.find(rt => rt.roundNumber === currentRoundIndex + 1);
+    const exerciseTrigger = roundConfig?.music?.exercises?.[currentExerciseIndex];
+
+    if (!exerciseTrigger?.enabled) return false;
+    if (!exerciseTrigger?.showHighCountdown) return false;
+    if (exerciseTrigger?.energy !== 'high') return false;
+
+    // Multi-set logic (same as useWorkoutMusic)
+    const totalSets = roundConfig?.template?.repeatTimes || 1;
+    const isLastSet = currentSetNumber >= totalSets;
+
+    // naturalEnding only fires on last set
+    if (exerciseTrigger?.naturalEnding && !isLastSet) return false;
+    // Non-natural-ending on sets 2+: skip unless repeatOnAllSets
+    if (!exerciseTrigger?.naturalEnding && currentSetNumber > 1 && !exerciseTrigger?.repeatOnAllSets) return false;
+
+    return true;
+  }, [
+    state.value,
+    state.context.currentRoundIndex,
+    state.context.currentExerciseIndex,
+    state.context.currentSetNumber,
+    circuitConfig,
+    lastTriggeredPhase,
+  ]);
+
+  // Whether to hold the visual state at the previous value (during countdown)
+  const holdVisualState = isHighCountdownActive || shouldShowHighCountdownOptimistic;
+
+  // Update previous visual state ref when NOT holding
+  // Use useLayoutEffect to update synchronously before paint
+  useLayoutEffect(() => {
+    if (!holdVisualState) {
+      prevVisualStateRef.current = state.value;
+    }
+  }, [state.value, holdVisualState]);
+
+  // The state to use for visual rendering decisions
+  // When holding, use previous state; otherwise use current state
+  const visualState = holdVisualState ? prevVisualStateRef.current : state.value;
+
+  // Pause state machine timer when Rise or High countdown is active (or about to be active)
+  // This prevents auto-transition while countdown is showing
+  // Note: holdVisualState includes shouldShowHighCountdownOptimistic which catches the moment
+  // BEFORE isHighCountdownActive is set, preventing timer tick during the transition
+  useEffect(() => {
+    if (isRiseCountdownActive || holdVisualState) {
+      console.log('[CircuitWorkoutLiveScreen] Countdown active, pausing state machine');
+      send({ type: 'PAUSE' });
+    }
+  }, [isRiseCountdownActive, holdVisualState, send]);
+
   // Handle phase changes manually
   useEffect(() => {
     // console.log('[CircuitLive] Phase change effect:', {
@@ -443,9 +553,9 @@ export function CircuitWorkoutLiveScreen() {
     );
   }
 
-  // Dynamic background color function
+  // Dynamic background color function (uses visualState to prevent flash)
   const getBackgroundColor = () => {
-    if (state.value === 'exercise' && currentRoundType === 'stations_round') {
+    if (visualState === 'exercise' && currentRoundType === 'stations_round') {
       return '#2d1508'; // Reddish-brown background for stations work
     }
     return TOKENS.color.bg; // Default background for all other states
@@ -453,7 +563,7 @@ export function CircuitWorkoutLiveScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: getBackgroundColor(), paddingTop: 40 }}>
-      {state.value === 'roundPreview' ? (
+      {visualState === 'roundPreview' ? (
         /* ROUND PREVIEW LAYOUT - Matches old implementation exactly */
         <>
           {/* Header with controls */}
@@ -1067,6 +1177,7 @@ export function CircuitWorkoutLiveScreen() {
               circuitConfig={circuitConfig}
               getRoundTiming={getRoundTiming}
               onStartExercise={() => send({ type: 'START_WORKOUT' })}
+              visualState={visualState}
             />
           </View>
         </>
@@ -1091,12 +1202,12 @@ export function CircuitWorkoutLiveScreen() {
               currentRoundType={currentRoundType}
             />
 
-            {/* CENTER: Timer (absolute positioned) */}
-            {(state.value === 'exercise' || state.value === 'rest' || state.value === 'setBreak') && (currentRoundType === 'stations_round' || currentRoundType === 'amrap_round') ? (
-              <Text style={{ 
-                fontSize: 120, 
-                fontWeight: '900', 
-                color: state.value === 'exercise' ? (currentRoundType === 'stations_round' ? '#fff5e6' : TOKENS.color.text) : TOKENS.color.accent, // Different colors for different round types
+            {/* CENTER: Timer (absolute positioned) - uses visualState to prevent flash */}
+            {(visualState === 'exercise' || visualState === 'rest' || visualState === 'setBreak') && (currentRoundType === 'stations_round' || currentRoundType === 'amrap_round') ? (
+              <Text style={{
+                fontSize: 120,
+                fontWeight: '900',
+                color: visualState === 'exercise' ? (currentRoundType === 'stations_round' ? '#fff5e6' : TOKENS.color.text) : TOKENS.color.accent, // Different colors for different round types
                 letterSpacing: -2,
                 position: 'absolute',
                 top: currentRoundType === 'stations_round' ? -25 : -15,
@@ -1188,8 +1299,8 @@ export function CircuitWorkoutLiveScreen() {
             />
           </View>
 
-          {/* Sets Badge for Stations (positioned at bottom) */}
-          {currentRoundType === 'stations_round' && currentRoundTiming.repeatTimes > 1 && (state.value === 'exercise' || state.value === 'rest') && (
+          {/* Sets Badge for Stations (positioned at bottom) - uses visualState to prevent flash */}
+          {currentRoundType === 'stations_round' && currentRoundTiming.repeatTimes > 1 && (visualState === 'exercise' || visualState === 'rest') && (
             <View style={{
               position: 'absolute',
               bottom: 12,
@@ -1204,10 +1315,10 @@ export function CircuitWorkoutLiveScreen() {
                 gap: 5,
                 flexDirection: 'row',
                 alignItems: 'center',
-                backgroundColor: state.value === 'exercise' 
+                backgroundColor: visualState === 'exercise'
                   ? 'rgba(255,179,102,0.15)'  // Orange for exercise
                   : TOKENS.color.accent + '15', // Cyan for rest and setBreak (#5de1ff15)
-                borderColor: state.value === 'exercise' 
+                borderColor: visualState === 'exercise'
                   ? '#ffb366'  // Orange for exercise
                   : TOKENS.color.accent, // Cyan for rest and setBreak (#5de1ff)
                 borderWidth: 1,
@@ -1216,7 +1327,7 @@ export function CircuitWorkoutLiveScreen() {
                 <Text style={{
                   fontSize: 12,
                   fontWeight: '700',
-                  color: state.value === 'exercise' 
+                  color: visualState === 'exercise'
                     ? '#ffb366'  // Orange for exercise
                     : TOKENS.color.accent, // Cyan for rest and setBreak (#5de1ff)
                   textTransform: 'uppercase',
@@ -1227,17 +1338,17 @@ export function CircuitWorkoutLiveScreen() {
                 <Text style={{
                   fontSize: 14,
                   fontWeight: '800',
-                  color: state.value === 'exercise' 
+                  color: visualState === 'exercise'
                     ? '#ffb366'  // Orange for exercise
                     : TOKENS.color.accent, // Cyan for rest and setBreak (#5de1ff)
                   marginLeft: 2,
                 }}>
-                  {state.value === 'setBreak' ? state.context.currentSetNumber : state.context.currentSetNumber}
+                  {visualState === 'setBreak' ? state.context.currentSetNumber : state.context.currentSetNumber}
                 </Text>
                 <Text style={{
                   fontSize: 12,
                   fontWeight: '500',
-                  color: state.value === 'exercise' 
+                  color: visualState === 'exercise'
                     ? '#ffb366'  // Orange for exercise
                     : TOKENS.color.accent, // Cyan for rest and setBreak (#5de1ff)
                   marginHorizontal: 3,
@@ -1247,7 +1358,7 @@ export function CircuitWorkoutLiveScreen() {
                 <Text style={{
                   fontSize: 14,
                   fontWeight: '800',
-                  color: state.value === 'exercise' 
+                  color: visualState === 'exercise'
                     ? '#ffb366'  // Orange for exercise
                     : TOKENS.color.accent, // Cyan for rest and setBreak (#5de1ff)
                 }}>
@@ -1264,10 +1375,28 @@ export function CircuitWorkoutLiveScreen() {
               circuitConfig={circuitConfig}
               getRoundTiming={getRoundTiming}
               onStartExercise={() => send({ type: 'START_WORKOUT' })}
+              visualState={visualState}
             />
           </View>
         </>
       )}
+
+      {/* Rise Countdown Overlay - Shows GET READY then 3, 2, 1 before the buildup drop */}
+      <RiseCountdownOverlay
+        dropTime={dropTime}
+        isVisible={isRiseCountdownActive && showRiseCountdown}
+        onComplete={handleRiseComplete}
+      />
+
+      {/* High Countdown Overlay - Shows 4.5s countdown before HIGH energy transition */}
+      <RiseCountdownOverlay
+        dropTime={dropTime}
+        isVisible={isHighCountdownActive}
+        onAudioPrepare={handleHighAudioPrepare}
+        audioPrepareLead={1000}
+        onComplete={handleHighComplete}
+        useLatencyOffset={false}
+      />
 
       {/* Teams Assignment Modal */}
       {isTeamsModalVisible && (

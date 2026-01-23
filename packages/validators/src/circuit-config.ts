@@ -87,8 +87,10 @@ export const MusicTriggerSchema = z.object({
   energy: z.enum(['low', 'medium', 'high']).optional(),
   repeatOnAllSets: z.boolean().optional(),
   naturalEnding: z.boolean().optional(),
-  // When useBuildup is true, show a 3-2-1 countdown before the drop (defaults to true)
+  // When useBuildup is true (Rise countdown), show a 3-2-1 countdown before the drop (defaults to true)
   showRiseCountdown: z.boolean().optional(),
+  // When energy is "high", show a 4.5s countdown before the high energy drop (current music ducks)
+  showHighCountdown: z.boolean().optional(),
 });
 
 // Music configuration schema for a round

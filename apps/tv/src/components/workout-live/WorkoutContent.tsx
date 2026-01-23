@@ -14,9 +14,12 @@ interface WorkoutContentProps {
   circuitConfig: CircuitConfig;
   getRoundTiming: (roundIndex: number) => any;
   onStartExercise?: () => void; // Callback to start exercise (e.g., from rise countdown)
+  visualState?: string; // Override for visual rendering (prevents flash during countdown)
 }
 
-export function WorkoutContent({ state, circuitConfig, getRoundTiming, onStartExercise }: WorkoutContentProps) {
+export function WorkoutContent({ state, circuitConfig, getRoundTiming, onStartExercise, visualState }: WorkoutContentProps) {
+  // Use visualState for rendering decisions if provided, otherwise fall back to state.value
+  const displayState = visualState ?? state.value;
   // Get current round data
   const currentRound: RoundData | undefined = state.context.rounds[state.context.currentRoundIndex];
   const currentExercise: CircuitExercise | undefined = currentRound?.exercises[state.context.currentExerciseIndex];
@@ -27,7 +30,8 @@ export function WorkoutContent({ state, circuitConfig, getRoundTiming, onStartEx
   const currentRepeatTimes = currentRoundTiming.repeatTimes || 1;
 
   // Handle set break state (common across round types)
-  if (state.value === 'setBreak' && currentRound) {
+  // Use displayState to prevent flash during countdown
+  if (displayState === 'setBreak' && currentRound) {
     return (
       <SetBreakView
         timeRemaining={state.context.timeRemaining}
@@ -57,9 +61,10 @@ export function WorkoutContent({ state, circuitConfig, getRoundTiming, onStartEx
               repeatTimes={currentRepeatTimes}
               circuitConfig={circuitConfig}
               onStartExercise={onStartExercise}
+              displayState={displayState}
             />
           )}
-          
+
           {currentRoundType === 'stations_round' && (
             <StationsRoundContainer
                 state={state}
@@ -72,9 +77,10 @@ export function WorkoutContent({ state, circuitConfig, getRoundTiming, onStartEx
                 restDuration={currentRoundTiming.restDuration}
                 workDuration={currentRoundTiming.workDuration}
                 circuitConfig={circuitConfig}
+                displayState={displayState}
               />
           )}
-          
+
           {currentRoundType === 'amrap_round' && (
             <AMRAPRoundContainer
               state={state}
@@ -82,6 +88,7 @@ export function WorkoutContent({ state, circuitConfig, getRoundTiming, onStartEx
               currentRoundIndex={state.context.currentRoundIndex}
               totalRounds={state.context.rounds.length}
               totalDuration={currentRoundTiming.workDuration}
+              displayState={displayState}
             />
           )}
         </>

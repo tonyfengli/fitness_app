@@ -19,6 +19,8 @@ const MusicTriggerSchemaV3 = z.object({
   energy: z.enum(['low', 'medium', 'high']).optional(), // All three energy levels
   repeatOnAllSets: z.boolean().optional(), // If true, trigger fires on every set
   naturalEnding: z.boolean().optional(), // If true, seek so music ends naturally with round end
+  showRiseCountdown: z.boolean().optional(), // Show 3-2-1 countdown before rise drop (when useBuildup is true)
+  showHighCountdown: z.boolean().optional(), // Show 4.5s countdown before high energy drop
 });
 
 const RoundMusicConfigSchemaV3 = z.object({

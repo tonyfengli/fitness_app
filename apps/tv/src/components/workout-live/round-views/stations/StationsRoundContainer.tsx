@@ -20,6 +20,7 @@ interface StationsRoundContainerProps {
   restDuration: number;
   workDuration: number;
   circuitConfig: CircuitConfig;
+  displayState?: string; // Visual state override (prevents flash during countdown)
 }
 
 export function StationsRoundContainer({
@@ -32,8 +33,11 @@ export function StationsRoundContainer({
   repeatTimes,
   restDuration,
   workDuration,
-  circuitConfig
+  circuitConfig,
+  displayState,
 }: StationsRoundContainerProps) {
+  // Use displayState for rendering if provided, otherwise fall back to state.value
+  const renderState = displayState ?? state.value;
   
   // Get station circuits configuration for current round
   const roundTemplate = circuitConfig?.config?.roundTemplates?.find(
@@ -53,7 +57,9 @@ export function StationsRoundContainer({
     currentRoundIndex: currentRoundIndex, // Pass round index to detect round changes
     stateValue: state.value // Pass state value to detect state transitions
   });
-  if (state.value === 'roundPreview') {
+
+  // Use renderState for visual rendering decisions
+  if (renderState === 'roundPreview') {
     return (
       <StationsRoundPreview 
         currentRound={currentRound}
@@ -67,8 +73,8 @@ export function StationsRoundContainer({
     );
   }
 
-  if (state.value === 'exercise') {
-    
+  if (renderState === 'exercise') {
+
     return (
       <>
         <StationsExerciseView 
@@ -85,7 +91,7 @@ export function StationsRoundContainer({
     );
   }
 
-  if (state.value === 'rest') {
+  if (renderState === 'rest') {
     return (
       <StationsRestView 
         currentRound={currentRound}

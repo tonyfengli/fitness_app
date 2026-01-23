@@ -18,9 +18,21 @@ interface PreSelectedRiseTrack {
   riseDuration: number; // high.timestamp - medium.timestamp
 }
 
+// Pending high countdown trigger (stored while countdown runs)
+interface PendingHighTrigger {
+  energy: PlayableEnergy;
+  trackId?: string;
+}
+
 // Configurable render latency offset (time from transition trigger to screen visible)
 // Adjust per device if needed
 const RENDER_LATENCY_MS = 150;
+
+// High countdown duration: 1.5s GET READY + 3s countdown = 4.5s total
+const HIGH_COUNTDOWN_DURATION_MS = 4500;
+
+// Volume level when ducking for high countdown (40% of normal)
+const DUCKED_VOLUME_RATIO = 0.4;
 
 interface MusicContextValue {
   // State
@@ -37,6 +49,8 @@ interface MusicContextValue {
   buildupCountdown: number | null; // Seconds remaining in buildup, null if not in buildup (JS timer fallback)
   dropTime: number | null; // Absolute timestamp (ms) when the drop should hit (audio-sync precision)
   preSelectedRiseTrack: PreSelectedRiseTrack | null; // Pre-selected track for random buildup
+  isHighCountdownActive: boolean; // Whether high countdown overlay is active
+  isRiseCountdownActive: boolean; // Whether rise countdown overlay is active
 
   // Trigger tracking (shared across screens)
   lastTriggeredPhase: string | null;
@@ -69,6 +83,15 @@ interface MusicContextValue {
     naturalEnding?: boolean;
     roundDurationSec?: number;
   }) => Promise<void>;
+
+  // High countdown methods
+  startHighCountdown: (options: { energy: PlayableEnergy; trackId?: string }) => void;
+  prepareHighAudio: () => Promise<void>;
+  completeHighCountdown: () => Promise<void>;
+  cancelHighCountdown: () => void;
+
+  // Rise countdown methods (for screen-level overlay)
+  setRiseCountdownActive: (active: boolean) => void;
 }
 
 const MusicContext = createContext<MusicContextValue | null>(null);
@@ -113,6 +136,15 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
 
   // Pre-selected rise track for random buildup
   const [preSelectedRiseTrack, setPreSelectedRiseTrack] = useState<PreSelectedRiseTrack | null>(null);
+
+  // High countdown state
+  const [isHighCountdownActive, setIsHighCountdownActive] = useState(false);
+  const [pendingHighTrigger, setPendingHighTrigger] = useState<PendingHighTrigger | null>(null);
+  const originalVolumeRef = useRef<number>(0.8); // Store original volume during ducking
+  const isHighAudioPreparedRef = useRef(false); // Track if audio was prepared early (skip playWithTrigger in complete)
+
+  // Rise countdown state (for screen-level overlay)
+  const [isRiseCountdownActive, setIsRiseCountdownActive] = useState(false);
 
   // Downloaded track filenames (for filtering selection to only playable tracks)
   const [downloadedFilenames, setDownloadedFilenames] = useState<Set<string>>(new Set());
@@ -528,6 +560,117 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     await playNextTrack({ energy, useBuildup });
   }, [tracks, downloadedFilenames, playNextTrack, startBuildupCountdown, clearBuildupCountdown, findSegmentAtTimestamp, preSelectedRiseTrack]);
 
+  // Start high countdown - ducks volume and prepares for high energy drop
+  const startHighCountdown = useCallback((options: { energy: PlayableEnergy; trackId?: string }) => {
+    console.log('[MusicProvider] startHighCountdown called:', options);
+
+    // Reset audio prepared flag (audio will be prepared early via prepareHighAudio)
+    isHighAudioPreparedRef.current = false;
+
+    // Store current volume and duck to 40%
+    originalVolumeRef.current = 0.8; // Default volume
+    const duckedVolume = originalVolumeRef.current * DUCKED_VOLUME_RATIO;
+    musicService.setVolume(duckedVolume);
+    console.log('[MusicProvider] Volume ducked to:', duckedVolume);
+
+    // Store the pending trigger
+    setPendingHighTrigger({
+      energy: options.energy,
+      trackId: options.trackId,
+    });
+
+    // Set dropTime for countdown overlay timing (4.5s from now)
+    const calculatedDropTime = Date.now() + HIGH_COUNTDOWN_DURATION_MS;
+    setDropTime(calculatedDropTime);
+    console.log('[MusicProvider] High countdown dropTime set to:', calculatedDropTime);
+
+    // Activate high countdown
+    setIsHighCountdownActive(true);
+  }, []);
+
+  // Prepare high audio early (called ~1s before countdown completes to account for loading latency)
+  const prepareHighAudio = useCallback(async () => {
+    console.log('[MusicProvider] prepareHighAudio called, pendingHighTrigger:', pendingHighTrigger);
+
+    if (!pendingHighTrigger) {
+      console.log('[MusicProvider] No pending high trigger for audio prepare');
+      return;
+    }
+
+    if (isHighAudioPreparedRef.current) {
+      console.log('[MusicProvider] Audio already prepared, skipping');
+      return;
+    }
+
+    // Mark as prepared BEFORE async operation to prevent double-triggering
+    isHighAudioPreparedRef.current = true;
+
+    // Restore volume to normal (needed for the new track)
+    musicService.setVolume(originalVolumeRef.current);
+    console.log('[MusicProvider] Volume restored for audio prepare to:', originalVolumeRef.current);
+
+    // Start playing the track now (async) - this accounts for loading latency
+    await playWithTrigger({
+      energy: pendingHighTrigger.energy,
+      trackId: pendingHighTrigger.trackId,
+      useBuildup: false, // No buildup - we want immediate HIGH
+    });
+
+    console.log('[MusicProvider] Audio prepared and playing');
+  }, [pendingHighTrigger, playWithTrigger]);
+
+  // Complete high countdown - clears state and plays if not already prepared
+  const completeHighCountdown = useCallback(async () => {
+    console.log('[MusicProvider] completeHighCountdown called, pendingHighTrigger:', pendingHighTrigger, 'isAudioPrepared:', isHighAudioPreparedRef.current);
+
+    // IMPORTANT: Clear countdown state FIRST, before any async operations
+    // This ensures the visual state transitions to 'exercise' immediately
+    const triggerToPlay = pendingHighTrigger;
+    setPendingHighTrigger(null);
+    setIsHighCountdownActive(false);
+    setDropTime(null);
+
+    // If audio was already prepared (started playing early), we're done
+    if (isHighAudioPreparedRef.current) {
+      console.log('[MusicProvider] Audio was prepared early, skipping playWithTrigger');
+      isHighAudioPreparedRef.current = false; // Reset for next countdown
+      return;
+    }
+
+    // Fallback: if audio wasn't prepared early, play now (will have ~1s latency)
+    if (!triggerToPlay) {
+      console.log('[MusicProvider] No pending high trigger, aborting');
+      return;
+    }
+
+    // Restore volume to normal
+    musicService.setVolume(originalVolumeRef.current);
+    console.log('[MusicProvider] Volume restored to:', originalVolumeRef.current);
+
+    // Play the new track at HIGH energy (async, but state already cleared)
+    await playWithTrigger({
+      energy: triggerToPlay.energy,
+      trackId: triggerToPlay.trackId,
+      useBuildup: false, // No buildup - we want immediate HIGH
+    });
+  }, [pendingHighTrigger, playWithTrigger]);
+
+  // Cancel high countdown (e.g., if user pauses or navigates away)
+  const cancelHighCountdown = useCallback(() => {
+    console.log('[MusicProvider] cancelHighCountdown called');
+
+    // Restore volume if ducked
+    if (isHighCountdownActive) {
+      musicService.setVolume(originalVolumeRef.current);
+      console.log('[MusicProvider] Volume restored on cancel to:', originalVolumeRef.current);
+    }
+
+    // Clear state
+    setPendingHighTrigger(null);
+    setIsHighCountdownActive(false);
+    setDropTime(null);
+  }, [isHighCountdownActive]);
+
   // Stop music on unmount to prevent orphaned audio during hot reload
   // Use immediate=true to skip fade-out and ensure cleanup completes before JS context is destroyed
   useEffect(() => {
@@ -743,6 +886,9 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     buildupCountdown,
     dropTime,
     preSelectedRiseTrack,
+    isHighCountdownActive,
+    isRiseCountdownActive,
+    setRiseCountdownActive: setIsRiseCountdownActive,
     lastTriggeredPhase,
     setLastTriggeredPhase,
     consumedTriggers,
@@ -761,6 +907,10 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     preSelectRiseTrack,
     clearPreSelectedRiseTrack,
     playWithTrigger,
+    startHighCountdown,
+    prepareHighAudio,
+    completeHighCountdown,
+    cancelHighCountdown,
   };
 
   return (

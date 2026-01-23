@@ -11,6 +11,7 @@ interface AMRAPRoundContainerProps {
   currentRoundIndex: number;
   totalRounds: number;
   totalDuration: number;
+  displayState?: string; // Visual state override (prevents flash during countdown)
 }
 
 export function AMRAPRoundContainer({
@@ -18,9 +19,13 @@ export function AMRAPRoundContainer({
   currentRound,
   currentRoundIndex,
   totalRounds,
-  totalDuration
+  totalDuration,
+  displayState,
 }: AMRAPRoundContainerProps) {
-  if (state.value === 'roundPreview') {
+  // Use displayState for rendering if provided, otherwise fall back to state.value
+  const renderState = displayState ?? state.value;
+
+  if (renderState === 'roundPreview') {
     return (
       <AMRAPRoundPreview 
         currentRound={currentRound}
@@ -30,7 +35,7 @@ export function AMRAPRoundContainer({
     );
   }
 
-  if (state.value === 'exercise') {
+  if (renderState === 'exercise') {
     return (
       <AMRAPExerciseView 
         currentRound={currentRound}

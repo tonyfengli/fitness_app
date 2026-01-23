@@ -21,6 +21,7 @@ interface MusicTrigger {
   energy?: PlayableEnergy;
   repeatOnAllSets?: boolean; // If true, trigger fires on every set (not just first)
   naturalEnding?: boolean; // If true, seek so music ends naturally with round end
+  showHighCountdown?: boolean; // If true, show 4.5s countdown before HIGH energy drop
 }
 
 interface RoundMusicConfig {
@@ -36,6 +37,7 @@ interface MusicTriggerResult {
   trackId?: string;
   repeatOnAllSets: boolean;
   naturalEnding: boolean;
+  showHighCountdown: boolean;
 }
 
 function evaluateMusicTrigger(
@@ -70,6 +72,7 @@ function evaluateMusicTrigger(
     trackId: trigger.trackId,
     repeatOnAllSets: trigger.repeatOnAllSets ?? false,
     naturalEnding: trigger.naturalEnding ?? false,
+    showHighCountdown: trigger.showHighCountdown ?? false,
   };
 }
 
@@ -202,7 +205,7 @@ export function useWorkoutMusic({
   circuitConfig,
   enabled = true,
 }: UseWorkoutMusicProps) {
-  const { playWithTrigger, isPlaying, currentEnergy, lastTriggeredPhase, setLastTriggeredPhase, consumedTriggers, clearConsumedTriggers } = useMusic();
+  const { playWithTrigger, isPlaying, currentEnergy, lastTriggeredPhase, setLastTriggeredPhase, consumedTriggers, clearConsumedTriggers, startHighCountdown } = useMusic();
 
   // Track previous enabled state to detect re-enable
   const prevEnabledRef = useRef(enabled);
@@ -312,13 +315,24 @@ export function useWorkoutMusic({
         ? calculateRemainingSetTime(circuitConfig, currentRoundIndex, currentExerciseIndex, phaseType)
         : undefined;
 
-      playWithTrigger({
-        energy: triggerResult.energy,
-        useBuildup: triggerResult.useBuildup,
-        trackId: triggerResult.trackId,
-        naturalEnding: shouldUseNaturalEnding,
-        roundDurationSec: remainingSetTime,
-      });
+      // If showHighCountdown is enabled and energy is high, use high countdown flow
+      // This ducks the current music and shows a 4.5s countdown before the drop
+      // High countdown takes precedence over Rise (useBuildup)
+      if (triggerResult.showHighCountdown && triggerResult.energy === 'high') {
+        console.log('[useWorkoutMusic] Using HIGH countdown flow (takes precedence over Rise)');
+        startHighCountdown({
+          energy: triggerResult.energy,
+          trackId: triggerResult.trackId,
+        });
+      } else {
+        playWithTrigger({
+          energy: triggerResult.energy,
+          useBuildup: triggerResult.useBuildup,
+          trackId: triggerResult.trackId,
+          naturalEnding: shouldUseNaturalEnding,
+          roundDurationSec: remainingSetTime,
+        });
+      }
     } else {
       console.log('[useWorkoutMusic] No trigger result for phase:', phaseKey);
     }
@@ -331,6 +345,7 @@ export function useWorkoutMusic({
     circuitConfig,
     enabled,
     playWithTrigger,
+    startHighCountdown,
     isPlaying,
     currentEnergy,
     lastTriggeredPhase,

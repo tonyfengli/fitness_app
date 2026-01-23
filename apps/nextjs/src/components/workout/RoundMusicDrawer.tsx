@@ -27,7 +27,8 @@ interface MusicTrigger {
   enabled: boolean;
   trackId?: string;
   trackName?: string;
-  useBuildup?: boolean; // Start at buildup point before the drop
+  useBuildup?: boolean; // Start at buildup point before the drop (Rise countdown)
+  showHighCountdown?: boolean; // Show 3-2-1 countdown before high energy drop
   energy?: EnergyLevel;
   repeatOnAllSets?: boolean; // If true, trigger fires on every set (not just first)
   naturalEnding?: boolean; // If true, seek so music ends naturally with round end
@@ -83,6 +84,7 @@ export function RoundMusicDrawer({
   const [detailRepeatOnAllSets, setDetailRepeatOnAllSets] = useState(false);
   const [detailNaturalEnding, setDetailNaturalEnding] = useState(false);
   const [detailUseBuildup, setDetailUseBuildup] = useState(false);
+  const [detailShowHighCountdown, setDetailShowHighCountdown] = useState(false);
 
   // Track picker state
   const [trackSearchQuery, setTrackSearchQuery] = useState("");
@@ -406,6 +408,11 @@ export function RoundMusicDrawer({
   // Open phase detail
   const handleOpenPhaseDetail = (phase: Phase) => {
     const trigger = getTriggerForPhase(phase);
+    console.log('[RoundMusicDrawer] Opening phase detail:', {
+      phase: phase.key,
+      trigger,
+      showHighCountdown: trigger?.showHighCountdown,
+    });
     setDetailEnabled(trigger?.enabled ?? false);
     setDetailTrackId(trigger?.trackId || null);
     setDetailTrackName(trigger?.trackName || "");
@@ -413,6 +420,7 @@ export function RoundMusicDrawer({
     setDetailRepeatOnAllSets(trigger?.repeatOnAllSets ?? false);
     setDetailNaturalEnding(trigger?.naturalEnding ?? false);
     setDetailUseBuildup(trigger?.useBuildup ?? false);
+    setDetailShowHighCountdown(trigger?.showHighCountdown ?? false);
     setViewState({ type: "phase-detail", phase });
   };
 
@@ -433,8 +441,15 @@ export function RoundMusicDrawer({
       energy: detailEnergy,
       naturalEnding: detailNaturalEnding,
       useBuildup: detailUseBuildup,
+      showHighCountdown: detailShowHighCountdown,
       ...(showRepeatOption ? { repeatOnAllSets: detailRepeatOnAllSets } : {}),
     };
+
+    console.log('[RoundMusicDrawer] Applying phase detail:', {
+      phase: phase.key,
+      detailShowHighCountdown,
+      updates,
+    });
 
     if (phase.phaseType === "preview") {
       newConfig.roundPreview = { ...(newConfig.roundPreview || defaultTrigger), ...updates };
@@ -508,6 +523,12 @@ export function RoundMusicDrawer({
 
     setLocalConfig(newConfig);
     setViewState({ type: "phases" });
+
+    console.log('[RoundMusicDrawer] Saving music config:', {
+      roundNumber,
+      newConfig,
+      exercise0: newConfig.exercises?.[0],
+    });
 
     // Save current round config
     await updateMusicConfig.mutateAsync({
@@ -873,7 +894,15 @@ export function RoundMusicDrawer({
                     return (
                       <button
                         key={energy}
-                        onClick={() => isAvailable && setDetailEnergy(energy)}
+                        onClick={() => {
+                          if (!isAvailable) return;
+                          setDetailEnergy(energy);
+                          // Clear energy-specific settings when changing energy
+                          // Rise countdown only applies to "medium" energy
+                          if (energy !== "medium") setDetailUseBuildup(false);
+                          // High countdown only applies to "high" energy
+                          if (energy !== "high") setDetailShowHighCountdown(false);
+                        }}
                         disabled={!isAvailable}
                         className={cn(
                           "flex-1 py-3 rounded-xl font-medium transition-all",
@@ -1075,6 +1104,57 @@ export function RoundMusicDrawer({
                           </svg>
                           <p className="text-sm text-amber-700 dark:text-amber-300">
                             Music starts at the buildup, countdown appears at 3 seconds before the drop
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </button>
+                )}
+
+                {/* High Countdown - Only show when energy is "High" */}
+                {detailEnergy === "high" && (
+                  <button
+                    onClick={() => setDetailShowHighCountdown(!detailShowHighCountdown)}
+                    className={cn(
+                      "w-full p-4 rounded-xl transition-all text-left",
+                      detailShowHighCountdown
+                        ? "bg-orange-50 dark:bg-orange-900/20 ring-1 ring-orange-300 dark:ring-orange-700"
+                        : "bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800"
+                    )}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-gray-900 dark:text-white">
+                          High countdown
+                        </p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+                          Show 3-2-1 countdown before the high energy drop
+                        </p>
+                      </div>
+                      <div
+                        className={cn(
+                          "relative w-12 h-7 rounded-full transition-all duration-200 flex-shrink-0 ml-4",
+                          detailShowHighCountdown ? "bg-orange-500" : "bg-gray-200 dark:bg-gray-700"
+                        )}
+                      >
+                        <div
+                          className={cn(
+                            "absolute top-1 w-5 h-5 rounded-full bg-white shadow-sm transition-transform duration-200",
+                            detailShowHighCountdown ? "translate-x-6" : "translate-x-1"
+                          )}
+                        />
+                      </div>
+                    </div>
+
+                    {/* High countdown info */}
+                    {detailShowHighCountdown && (
+                      <div className="mt-3 pt-3 border-t border-orange-200 dark:border-orange-800">
+                        <div className="flex items-start gap-2">
+                          <svg className="w-4 h-4 text-orange-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          <p className="text-sm text-orange-700 dark:text-orange-300">
+                            Current music ducks to 40%, countdown displays, then drops into high energy
                           </p>
                         </div>
                       </div>

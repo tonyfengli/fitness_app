@@ -1,9 +1,8 @@
-import React, { useMemo, useEffect, useState, useCallback } from 'react';
+import React, { useMemo, useEffect, useCallback } from 'react';
 import { View, Text, Pressable } from 'react-native';
 import { TOKENS, MattePanel, CircuitExercise, RoundData } from './shared';
 import { useNavigation } from '../../App';
 import { useMusic } from '../../providers/MusicProvider';
-import { RiseCountdownOverlay } from '../shared/RiseCountdownOverlay';
 import type { CircuitConfig } from '@acme/db';
 
 interface CircuitRoundPreviewProps {
@@ -22,10 +21,7 @@ interface CircuitRoundPreviewProps {
 export function CircuitRoundPreview({ currentRound, repeatTimes = 1, timeRemaining = 0, isTimerActive = false, roundNumber, currentRoundIndex = 0, circuitConfig, onStartExercise }: CircuitRoundPreviewProps) {
   const navigation = useNavigation();
   const sessionId = navigation.getParam('sessionId');
-  const { tracks, preSelectedRiseTrack, preSelectRiseTrack, clearPreSelectedRiseTrack, dropTime, playWithTrigger, addConsumedTrigger } = useMusic();
-
-  // Track if rise transition has been started
-  const [isRiseActive, setIsRiseActive] = useState(false);
+  const { tracks, preSelectedRiseTrack, preSelectRiseTrack, clearPreSelectedRiseTrack, playWithTrigger, addConsumedTrigger, isRiseCountdownActive, setRiseCountdownActive } = useMusic();
 
   // Extract round number from round name if not provided
   const extractedRoundNumber = roundNumber || (() => {
@@ -42,6 +38,7 @@ export function CircuitRoundPreview({ currentRound, repeatTimes = 1, timeRemaini
   }, [currentRoundIndex, circuitConfig]);
 
   // Pre-select rise track when entering round 1 preview with random buildup
+  // Rise only applies when energy is "medium" and useBuildup is true
   useEffect(() => {
     // Only for round 1
     if (currentRoundIndex !== 0) {
@@ -49,10 +46,9 @@ export function CircuitRoundPreview({ currentRound, repeatTimes = 1, timeRemaini
       return;
     }
 
-    // Check if exercise 1 has buildup enabled but no specific track
-    if (exercise1Trigger?.enabled && exercise1Trigger?.useBuildup && !exercise1Trigger?.trackId) {
-      const energy = exercise1Trigger.energy || 'medium';
-      preSelectRiseTrack(energy);
+    // Check if exercise 1 has Rise configured (medium energy + useBuildup + no specific track)
+    if (exercise1Trigger?.enabled && exercise1Trigger?.useBuildup && exercise1Trigger?.energy === 'medium' && !exercise1Trigger?.trackId) {
+      preSelectRiseTrack('medium');
     }
 
     // Cleanup when leaving round 1 preview
@@ -62,9 +58,12 @@ export function CircuitRoundPreview({ currentRound, repeatTimes = 1, timeRemaini
   }, [currentRoundIndex, exercise1Trigger, preSelectRiseTrack, clearPreSelectedRiseTrack]);
 
   // Calculate rise info for round 1 only (exercise 1 with buildup)
+  // Rise countdown only applies when energy is "medium" and useBuildup is true
   const riseInfo = useMemo(() => {
     if (currentRoundIndex !== 0) return null;
     if (!exercise1Trigger?.enabled || !exercise1Trigger?.useBuildup) return null;
+    // Rise countdown only makes sense for "medium" energy (buildup to high)
+    if (exercise1Trigger?.energy !== 'medium') return null;
 
     // Check for specific track first
     const trackId = exercise1Trigger.trackId;
@@ -101,10 +100,11 @@ export function CircuitRoundPreview({ currentRound, repeatTimes = 1, timeRemaini
 
   // Handle starting the rise transition
   const handleStartRise = useCallback(async () => {
-    console.log('[CircuitRoundPreview] handleStartRise called, riseInfo:', !!riseInfo, 'isRiseActive:', isRiseActive);
-    if (!riseInfo || isRiseActive) return;
+    console.log('[CircuitRoundPreview] handleStartRise called, riseInfo:', !!riseInfo, 'isRiseCountdownActive:', isRiseCountdownActive);
+    if (!riseInfo || isRiseCountdownActive) return;
 
-    setIsRiseActive(true);
+    // Set rise countdown active (overlay will show at screen level)
+    setRiseCountdownActive(true);
 
     // Mark the exercise 1 trigger as "consumed" so it won't fire again when we enter exercise 1
     const exercisePhaseKey = `exercise-${currentRoundIndex}-0-1`;
@@ -120,14 +120,14 @@ export function CircuitRoundPreview({ currentRound, repeatTimes = 1, timeRemaini
       useBuildup: true,
       trackId,
     });
-  }, [riseInfo, isRiseActive, exercise1Trigger, preSelectedRiseTrack, playWithTrigger, currentRoundIndex, addConsumedTrigger]);
+  }, [riseInfo, isRiseCountdownActive, exercise1Trigger, preSelectedRiseTrack, playWithTrigger, currentRoundIndex, addConsumedTrigger, setRiseCountdownActive]);
 
   // Reset rise state when leaving this preview (e.g., navigating away)
   useEffect(() => {
     return () => {
-      setIsRiseActive(false);
+      setRiseCountdownActive(false);
     };
-  }, []);
+  }, [setRiseCountdownActive]);
 
   // Calculate grid layout based on number of exercises
   const exerciseCount = currentRound.exercises.length;
@@ -303,7 +303,7 @@ export function CircuitRoundPreview({ currentRound, repeatTimes = 1, timeRemaini
       )}
 
       {/* Rise Info & Start Button - Only for round 1 with buildup configured */}
-      {riseInfo && !isRiseActive && (
+      {riseInfo && !isRiseCountdownActive && (
         <View style={{
           position: 'absolute',
           bottom: 40,
@@ -351,14 +351,6 @@ export function CircuitRoundPreview({ currentRound, repeatTimes = 1, timeRemaini
           </Pressable>
         </View>
       )}
-
-      {/* Rise Countdown Overlay - Shows GET READY then 3, 2, 1 before the drop */}
-      {/* Overlay handles all timing internally via dropTime and calls onComplete for transition */}
-      <RiseCountdownOverlay
-        dropTime={dropTime}
-        isVisible={isRiseActive && showRiseCountdown}
-        onComplete={onStartExercise}
-      />
     </View>
   );
 }

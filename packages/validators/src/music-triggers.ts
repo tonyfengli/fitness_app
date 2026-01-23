@@ -19,6 +19,8 @@ export interface MusicTriggerResult {
   repeatOnAllSets: boolean;
   /** Whether to show 3-2-1 countdown before the drop (only relevant when useBuildup is true) */
   showRiseCountdown: boolean;
+  /** Whether to show 4.5s countdown before high energy drop (only relevant when energy is "high") */
+  showHighCountdown: boolean;
 }
 
 /**
@@ -71,12 +73,14 @@ export function evaluateMusicTrigger(
 
   // Return the trigger result with defaults
   // showRiseCountdown defaults to true when useBuildup is true
+  // showHighCountdown defaults to false
   return {
     energy: trigger.energy ?? "high",
     useBuildup,
     trackId: trigger.trackId,
     repeatOnAllSets: trigger.repeatOnAllSets ?? false,
     showRiseCountdown: trigger.showRiseCountdown ?? useBuildup,
+    showHighCountdown: trigger.showHighCountdown ?? false,
   };
 }
 
