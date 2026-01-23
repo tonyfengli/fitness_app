@@ -13,11 +13,10 @@ interface WorkoutContentProps {
   state: any; // Will be typed more specifically later
   circuitConfig: CircuitConfig;
   getRoundTiming: (roundIndex: number) => any;
-  onStartExercise?: () => void; // Callback to start exercise (e.g., from rise countdown)
   visualState?: string; // Override for visual rendering (prevents flash during countdown)
 }
 
-export function WorkoutContent({ state, circuitConfig, getRoundTiming, onStartExercise, visualState }: WorkoutContentProps) {
+export function WorkoutContent({ state, circuitConfig, getRoundTiming, visualState }: WorkoutContentProps) {
   // Use visualState for rendering decisions if provided, otherwise fall back to state.value
   const displayState = visualState ?? state.value;
   // Get current round data
@@ -60,7 +59,6 @@ export function WorkoutContent({ state, circuitConfig, getRoundTiming, onStartEx
               restDuration={currentRoundTiming.restDuration}
               repeatTimes={currentRepeatTimes}
               circuitConfig={circuitConfig}
-              onStartExercise={onStartExercise}
               displayState={displayState}
             />
           )}

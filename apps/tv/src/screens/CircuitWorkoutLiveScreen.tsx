@@ -130,7 +130,7 @@ export function CircuitWorkoutLiveScreen() {
   } = useMusicPlayer();
 
   // Get high countdown state from music provider
-  const { isHighCountdownActive, isRiseCountdownActive, setRiseCountdownActive, dropTime, prepareHighAudio, completeHighCountdown, lastTriggeredPhase } = useMusic();
+  const { isHighCountdownActive, isRiseCountdownActive, setRiseCountdownActive, dropTime, prepareHighAudio, completeHighCountdown, lastTriggeredPhase, addConsumedTrigger, tracks } = useMusic();
 
   // Get circuit config with polling
   const { data: circuitConfig } = useQuery(
@@ -349,6 +349,67 @@ export function CircuitWorkoutLiveScreen() {
     return exercise1Trigger?.showRiseCountdown ?? (exercise1Trigger?.useBuildup ?? false);
   }, [circuitConfig, state.context.currentRoundIndex]);
 
+  // Check if any countdown (Rise or High) is configured for the current round's first exercise
+  // Used to show visual indicator on the START button
+  const countdownInfo = useMemo(() => {
+    const roundTemplates = circuitConfig?.config?.roundTemplates as any[] | undefined;
+    const currentRoundConfig = roundTemplates?.find(
+      (rt) => rt.roundNumber === state.context.currentRoundIndex + 1
+    );
+    const exercise1Trigger = currentRoundConfig?.music?.exercises?.[0];
+
+    console.log('[countdownInfo] Round:', state.context.currentRoundIndex + 1);
+    console.log('[countdownInfo] exercise1Trigger:', JSON.stringify(exercise1Trigger, null, 2));
+
+    if (!exercise1Trigger?.enabled) {
+      console.log('[countdownInfo] Not enabled, returning false');
+      return { hasCountdown: false, type: null, riseDuration: null };
+    }
+
+    // Rise countdown: useBuildup is true AND energy is medium (Rise = buildup from medium to high)
+    const hasRise = exercise1Trigger?.useBuildup === true && exercise1Trigger?.energy === 'medium';
+    // High countdown: showHighCountdown is true and energy is high
+    const hasHigh = exercise1Trigger?.showHighCountdown === true && exercise1Trigger?.energy === 'high';
+
+    console.log('[countdownInfo] energy:', exercise1Trigger?.energy);
+    console.log('[countdownInfo] useBuildup:', exercise1Trigger?.useBuildup);
+    console.log('[countdownInfo] showHighCountdown:', exercise1Trigger?.showHighCountdown);
+    console.log('[countdownInfo] hasRise:', hasRise, 'hasHigh:', hasHigh);
+
+    if (!hasRise && !hasHigh) {
+      console.log('[countdownInfo] No countdown configured');
+      return { hasCountdown: false, type: null, riseDuration: null };
+    }
+
+    // Calculate rise duration if it's a Rise countdown with a specific track
+    // For random tracks, we don't show duration since it's unknown until play time
+    let riseDuration: number | null = null;
+    if (hasRise) {
+      const trackId = exercise1Trigger?.trackId;
+      if (trackId) {
+        // Specific track - calculate from segments
+        const track = tracks.find(t => t.id === trackId);
+        if (track) {
+          const segments = track.segments || [];
+          const mediumSegment = segments.find((s: any) => s.energy === 'medium');
+          const highSegment = segments.find((s: any) => s.energy === 'high');
+          if (mediumSegment && highSegment) {
+            riseDuration = Math.round(highSegment.timestamp - mediumSegment.timestamp);
+          }
+        }
+      }
+      // For random tracks (no trackId), riseDuration stays null - we just show orange styling
+    }
+
+    return {
+      hasCountdown: true,
+      type: hasRise ? 'rise' : 'high',
+      riseDuration,
+    };
+  }, [circuitConfig, state.context.currentRoundIndex, tracks]);
+
+  const hasCountdownConfigured = countdownInfo.hasCountdown;
+
   // Callback for when rise countdown completes
   const handleRiseComplete = useCallback(() => {
     console.log('[CircuitWorkoutLiveScreen] Rise countdown complete, starting workout');
@@ -507,6 +568,53 @@ export function CircuitWorkoutLiveScreen() {
     setIsSettingsPanelOpen(false);
     send({ type: 'START_WORKOUT' });
   };
+
+  // Handle Rise-aware workout start (for both START button and forward/skip button)
+  // If Rise countdown is configured for the current round, trigger it instead of directly starting
+  // Rise = medium energy + useBuildup (buildup from medium to high)
+  const handleRiseAwareStart = useCallback(() => {
+    setIsSettingsPanelOpen(false);
+
+    // Check if Rise countdown is configured for current round's first exercise
+    const roundTemplates = circuitConfig?.config?.roundTemplates as any[] | undefined;
+    const currentRoundConfig = roundTemplates?.find(
+      (rt) => rt.roundNumber === state.context.currentRoundIndex + 1
+    );
+    const exercise1Trigger = currentRoundConfig?.music?.exercises?.[0];
+
+    // Rise only applies when useBuildup is true AND energy is medium (buildup from medium to high)
+    const hasRiseConfigured = exercise1Trigger?.enabled &&
+                              exercise1Trigger?.useBuildup === true &&
+                              exercise1Trigger?.energy === 'medium';
+
+    console.log('[handleRiseAwareStart] exercise1Trigger:', JSON.stringify(exercise1Trigger, null, 2));
+    console.log('[handleRiseAwareStart] hasRiseConfigured:', hasRiseConfigured);
+
+    if (hasRiseConfigured && !isRiseCountdownActive) {
+      console.log('[CircuitWorkoutLiveScreen] Rise configured, triggering Rise countdown');
+
+      // Set rise countdown active (overlay will show)
+      setRiseCountdownActive(true);
+
+      // Mark the exercise 1 trigger as "consumed" so it won't fire again when we enter exercise 1
+      const exercisePhaseKey = `exercise-${state.context.currentRoundIndex}-0-1`;
+      console.log('[CircuitWorkoutLiveScreen] Adding consumed trigger:', exercisePhaseKey);
+      addConsumedTrigger(exercisePhaseKey);
+
+      // Get trackId from trigger config
+      const trackId = exercise1Trigger?.trackId;
+
+      // Play with trigger (will select random track if no trackId specified)
+      playWithTrigger({
+        energy: 'medium',
+        useBuildup: true,
+        trackId,
+      });
+    } else {
+      // No Rise configured, proceed normally
+      send({ type: 'START_WORKOUT' });
+    }
+  }, [circuitConfig, state.context.currentRoundIndex, isRiseCountdownActive, setRiseCountdownActive, addConsumedTrigger, playWithTrigger, send, setIsSettingsPanelOpen]);
 
   // Auto-focus close button when modal opens, restore focus when modal closes
   useEffect(() => {
@@ -720,7 +828,7 @@ export function CircuitWorkoutLiveScreen() {
                 }}>
                 {/* Start Button */}
                 <Pressable
-                  onPress={handleStartWorkout}
+                  onPress={handleRiseAwareStart}
                   focusable
                   hasTVPreferredFocus
                 >
@@ -729,20 +837,22 @@ export function CircuitWorkoutLiveScreen() {
                       focused={focused}
                       radius={26}
                       style={{
-                        width: 94,
+                        width: hasCountdownConfigured && countdownInfo.type === 'rise' && countdownInfo.riseDuration ? 110 : 94,
                         height: 44,
                         alignItems: 'center',
                         justifyContent: 'center',
-                        backgroundColor: focused ?
-                          'rgba(255,255,255,0.15)' :
-                          'rgba(255,255,255,0.08)',
-                        borderColor: focused ? 'rgba(255,255,255,0.3)' : 'transparent',
-                        borderWidth: focused ? 1.5 : 0,
+                        backgroundColor: hasCountdownConfigured
+                          ? (focused ? 'rgba(255,149,0,0.2)' : 'rgba(255,149,0,0.1)')
+                          : (focused ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.08)'),
+                        borderColor: hasCountdownConfigured
+                          ? '#ff9500'
+                          : (focused ? 'rgba(255,255,255,0.3)' : 'transparent'),
+                        borderWidth: hasCountdownConfigured ? 1.5 : (focused ? 1.5 : 0),
                       }}
                     >
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
                         <Text style={{
-                          color: TOKENS.color.text,
+                          color: hasCountdownConfigured ? '#ff9500' : TOKENS.color.text,
                           fontSize: 13,
                           fontWeight: '700',
                           letterSpacing: 0.3,
@@ -750,7 +860,25 @@ export function CircuitWorkoutLiveScreen() {
                         }}>
                           START
                         </Text>
-                        <Icon name="play-arrow" size={18} color={TOKENS.color.text} />
+                        {/* Rise indicator - timer icon + optional duration */}
+                        {countdownInfo.type === 'rise' && (
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                            <Icon name="timer" size={13} color="#ff9500" style={{ opacity: 0.85 }} />
+                            {countdownInfo.riseDuration && (
+                              <Text style={{
+                                color: '#ff9500',
+                                fontSize: 11,
+                                fontWeight: '600',
+                                opacity: 0.85,
+                              }}>
+                                {countdownInfo.riseDuration}
+                              </Text>
+                            )}
+                          </View>
+                        )}
+                        {countdownInfo.type !== 'rise' && (
+                          <Icon name="play-arrow" size={18} color={hasCountdownConfigured ? '#ff9500' : TOKENS.color.text} />
+                        )}
                       </View>
                     </MattePanel>
                   )}
@@ -977,27 +1105,45 @@ export function CircuitWorkoutLiveScreen() {
                 </Pressable>
                 
                 {/* Start Round (was Skip Forward) */}
-                <Pressable onPress={() => { setIsSettingsPanelOpen(false); send({ type: 'START_WORKOUT' }); }} focusable>
+                <Pressable onPress={handleRiseAwareStart} focusable>
                   {({ focused }) => (
-                    <MattePanel
-                      focused={focused}
-                      radius={26}
-                      style={{
-                        width: 52,
-                        height: 44,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        backgroundColor: focused ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.08)',
-                        borderColor: focused ? 'rgba(255,255,255,0.3)' : 'transparent',
-                        borderWidth: focused ? 1.5 : 0,
-                      }}
-                    >
-                      <Icon
-                        name="skip-next"
-                        size={22}
-                        color={TOKENS.color.text}
-                      />
-                    </MattePanel>
+                    <View style={{ position: 'relative' }}>
+                      <MattePanel
+                        focused={focused}
+                        radius={26}
+                        style={{
+                          width: 52,
+                          height: 44,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          backgroundColor: hasCountdownConfigured
+                            ? (focused ? 'rgba(255,149,0,0.2)' : 'rgba(255,149,0,0.1)')
+                            : (focused ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.08)'),
+                          borderColor: hasCountdownConfigured
+                            ? '#ff9500'
+                            : (focused ? 'rgba(255,255,255,0.3)' : 'transparent'),
+                          borderWidth: hasCountdownConfigured ? 1.5 : (focused ? 1.5 : 0),
+                        }}
+                      >
+                        <Icon
+                          name="skip-next"
+                          size={22}
+                          color={hasCountdownConfigured ? '#ff9500' : TOKENS.color.text}
+                        />
+                      </MattePanel>
+                      {/* Rise indicator - tiny dot */}
+                      {countdownInfo.type === 'rise' && (
+                        <View style={{
+                          position: 'absolute',
+                          top: 10,
+                          right: 10,
+                          width: 6,
+                          height: 6,
+                          borderRadius: 3,
+                          backgroundColor: '#ff9500',
+                        }} />
+                      )}
+                    </View>
                   )}
                 </Pressable>
                 
@@ -1182,7 +1328,6 @@ export function CircuitWorkoutLiveScreen() {
               state={state}
               circuitConfig={circuitConfig}
               getRoundTiming={getRoundTiming}
-              onStartExercise={() => send({ type: 'START_WORKOUT' })}
               visualState={visualState}
             />
           </View>
@@ -1380,7 +1525,6 @@ export function CircuitWorkoutLiveScreen() {
               state={state}
               circuitConfig={circuitConfig}
               getRoundTiming={getRoundTiming}
-              onStartExercise={() => send({ type: 'START_WORKOUT' })}
               visualState={visualState}
             />
           </View>

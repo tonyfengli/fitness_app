@@ -385,11 +385,27 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
         isSwitchingTrackRef.current = true;
         naturalEndingActiveRef.current = false;
 
-        if (useBuildup && segment?.buildupDuration && segment.buildupDuration > 0) {
-          startBuildupCountdown(segment.buildupDuration);
+        // Handle buildup for Rise (medium to high transition)
+        let playSegment = segment;
+        if (useBuildup) {
+          const segments = track.segments || [];
+          const mediumSegment = segments.find(s => s.energy === 'medium');
+          const highSegment = segments.find(s => s.energy === 'high');
+
+          if (mediumSegment && highSegment) {
+            const riseDuration = highSegment.timestamp - mediumSegment.timestamp;
+            if (riseDuration > 0) {
+              console.log('[MusicProvider] playNextTrack - Rise duration calculated:', riseDuration);
+              startBuildupCountdown(riseDuration);
+              playSegment = mediumSegment; // Start at medium segment
+            }
+          } else if (segment?.buildupDuration && segment.buildupDuration > 0) {
+            // Fallback to segment's buildupDuration if no medium/high segments found
+            startBuildupCountdown(segment.buildupDuration);
+          }
         }
 
-        await musicService.play(track, { segment, useBuildup });
+        await musicService.play(track, { segment: playSegment, useBuildup: false });
         setError(null);
       } catch (err) {
         console.error(`[MusicProvider] Error playing track:`, err);

@@ -20,7 +20,6 @@ interface CircuitRoundContainerProps {
   restDuration: number;
   repeatTimes: number;
   circuitConfig?: CircuitConfig;
-  onStartExercise?: () => void; // Callback to start exercise (e.g., from rise countdown)
   displayState?: string; // Visual state override (prevents flash during countdown)
 }
 
@@ -35,7 +34,6 @@ export function CircuitRoundContainer({
   restDuration,
   repeatTimes,
   circuitConfig,
-  onStartExercise,
   displayState,
 }: CircuitRoundContainerProps) {
   const navigation = useNavigation();
@@ -48,13 +46,8 @@ export function CircuitRoundContainer({
     return (
       <CircuitRoundPreview
         currentRound={currentRound}
-        currentRoundIndex={currentRoundIndex}
-        totalRounds={totalRounds}
-        roundDuration={roundDuration}
         timeRemaining={state.context.timeRemaining}
         isTimerActive={state.context.currentRoundIndex > 0}
-        circuitConfig={circuitConfig}
-        onStartExercise={onStartExercise}
       />
     );
   }
