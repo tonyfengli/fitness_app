@@ -85,13 +85,14 @@ interface MusicContextValue {
   }) => Promise<void>;
 
   // High countdown methods
-  startHighCountdown: (options: { energy: PlayableEnergy; trackId?: string }) => void;
+  startHighCountdown: (options: { energy: PlayableEnergy; trackId?: string; durationMs?: number }) => void;
   prepareHighAudio: () => Promise<void>;
   completeHighCountdown: () => Promise<void>;
   cancelHighCountdown: () => void;
 
   // Rise countdown methods (for screen-level overlay)
   setRiseCountdownActive: (active: boolean) => void;
+  seekToHighSegment: () => void; // Seek current track to high energy segment (for skip)
 }
 
 const MusicContext = createContext<MusicContextValue | null>(null);
@@ -577,7 +578,7 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
   }, [tracks, downloadedFilenames, playNextTrack, startBuildupCountdown, clearBuildupCountdown, findSegmentAtTimestamp, preSelectedRiseTrack]);
 
   // Start high countdown - ducks volume and prepares for high energy drop
-  const startHighCountdown = useCallback((options: { energy: PlayableEnergy; trackId?: string }) => {
+  const startHighCountdown = useCallback((options: { energy: PlayableEnergy; trackId?: string; durationMs?: number }) => {
     console.log('[MusicProvider] startHighCountdown called:', options);
 
     // Reset audio prepared flag (audio will be prepared early via prepareHighAudio)
@@ -595,10 +596,12 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
       trackId: options.trackId,
     });
 
-    // Set dropTime for countdown overlay timing (4.5s from now)
-    const calculatedDropTime = Date.now() + HIGH_COUNTDOWN_DURATION_MS;
+    // Set dropTime for countdown overlay timing
+    // Use custom duration if provided, otherwise default to 4.5s
+    const countdownDuration = options.durationMs ?? HIGH_COUNTDOWN_DURATION_MS;
+    const calculatedDropTime = Date.now() + countdownDuration;
     setDropTime(calculatedDropTime);
-    console.log('[MusicProvider] High countdown dropTime set to:', calculatedDropTime);
+    console.log('[MusicProvider] High countdown dropTime set to:', calculatedDropTime, 'duration:', countdownDuration);
 
     // Activate high countdown
     setIsHighCountdownActive(true);
@@ -686,6 +689,27 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     setIsHighCountdownActive(false);
     setDropTime(null);
   }, [isHighCountdownActive]);
+
+  // Seek current track to high energy segment (for skip during Rise countdown)
+  const seekToHighSegment = useCallback(() => {
+    if (!currentTrack) {
+      console.log('[MusicProvider] seekToHighSegment - no current track');
+      return;
+    }
+
+    const segments = currentTrack.segments || [];
+    const highSegment = segments.find(s => s.energy === 'high');
+
+    if (highSegment) {
+      console.log('[MusicProvider] seekToHighSegment - seeking to:', highSegment.timestamp);
+      musicService.seekTo(highSegment.timestamp);
+      setCurrentSegment(highSegment);
+      setCurrentEnergy('high');
+      clearBuildupCountdown(); // Clear any buildup state
+    } else {
+      console.log('[MusicProvider] seekToHighSegment - no high segment found');
+    }
+  }, [currentTrack, clearBuildupCountdown]);
 
   // Stop music on unmount to prevent orphaned audio during hot reload
   // Use immediate=true to skip fade-out and ensure cleanup completes before JS context is destroyed
@@ -927,6 +951,7 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     prepareHighAudio,
     completeHighCountdown,
     cancelHighCountdown,
+    seekToHighSegment,
   };
 
   return (

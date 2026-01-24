@@ -205,7 +205,7 @@ export function useWorkoutMusic({
   circuitConfig,
   enabled = true,
 }: UseWorkoutMusicProps) {
-  const { playWithTrigger, isPlaying, currentEnergy, lastTriggeredPhase, setLastTriggeredPhase, consumedTriggers, clearConsumedTriggers, startHighCountdown } = useMusic();
+  const { playWithTrigger, isPlaying, currentEnergy, lastTriggeredPhase, setLastTriggeredPhase, consumedTriggers, clearConsumedTriggers, startHighCountdown, setRiseCountdownActive } = useMusic();
 
   // Track previous enabled state to detect re-enable
   const prevEnabledRef = useRef(enabled);
@@ -318,11 +318,23 @@ export function useWorkoutMusic({
       // If showHighCountdown is enabled and energy is high, use high countdown flow
       // This ducks the current music and shows a 4.5s countdown before the drop
       // High countdown takes precedence over Rise (useBuildup)
-      if (triggerResult.showHighCountdown && triggerResult.energy === 'high') {
-        console.log('[useWorkoutMusic] Using HIGH countdown flow (takes precedence over Rise)');
+      // NOTE: High countdown fires for exercise 1 (index 0) - the transition INTO exercise
+      if (triggerResult.showHighCountdown && triggerResult.energy === 'high' && phaseType === 'exercise' && phaseIndex === 0) {
+        console.log('[useWorkoutMusic] Using HIGH countdown flow (exercise 1)');
         startHighCountdown({
           energy: triggerResult.energy,
           trackId: triggerResult.trackId,
+        });
+      } else if (triggerResult.useBuildup && triggerResult.energy === 'medium' && phaseType === 'exercise' && phaseIndex === 0) {
+        // Rise countdown for exercise 1 - set overlay active before playing
+        console.log('[useWorkoutMusic] Using RISE countdown flow (exercise 1)');
+        setRiseCountdownActive(true);
+        playWithTrigger({
+          energy: triggerResult.energy,
+          useBuildup: true,
+          trackId: triggerResult.trackId,
+          naturalEnding: shouldUseNaturalEnding,
+          roundDurationSec: remainingSetTime,
         });
       } else {
         playWithTrigger({
@@ -346,6 +358,7 @@ export function useWorkoutMusic({
     enabled,
     playWithTrigger,
     startHighCountdown,
+    setRiseCountdownActive,
     isPlaying,
     currentEnergy,
     lastTriggeredPhase,

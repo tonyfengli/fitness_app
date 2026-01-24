@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Animated, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, Animated, Dimensions, Pressable } from 'react-native';
+import Icon from 'react-native-vector-icons/MaterialIcons';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -34,6 +35,8 @@ interface RiseCountdownOverlayProps {
   debug?: boolean;
   /** Whether to apply render latency offset (default: true for Rise, set false for High) */
   useLatencyOffset?: boolean;
+  /** Callback fired when user presses skip button - jumps to drop immediately */
+  onSkip?: () => void;
 }
 
 /**
@@ -54,6 +57,7 @@ export function RiseCountdownOverlay({
   audioPrepareLead = 1000,
   debug = false,
   useLatencyOffset = true,
+  onSkip,
 }: RiseCountdownOverlayProps) {
   // Current display phase - controlled by scheduled setTimeouts
   const [displayPhase, setDisplayPhase] = useState<DisplayPhase>('ready');
@@ -309,9 +313,9 @@ export function RiseCountdownOverlay({
   const displayNumber = typeof debugDisplayPhase === 'number' ? debugDisplayPhase : 3;
 
   return (
-    <View style={styles.overlay} pointerEvents="none">
+    <View style={styles.overlay} pointerEvents={onSkip ? 'box-none' : 'none'}>
       {/* Content container */}
-      <View style={styles.content}>
+      <View style={styles.content} pointerEvents="none">
         {/* Phase 1: GET READY (before 3-second countdown) */}
         {isReadyPhase && (
           <Text style={styles.readyText}>
@@ -367,6 +371,28 @@ export function RiseCountdownOverlay({
           </View>
         )}
       </View>
+
+      {/* Skip button - bottom right, subtle */}
+      {onSkip && (
+        <Pressable
+          style={styles.skipButton}
+          onPress={onSkip}
+          focusable
+        >
+          {({ focused }) => (
+            <View style={[
+              styles.skipButtonInner,
+              focused && styles.skipButtonFocused,
+            ]}>
+              <Icon
+                name="skip-next"
+                size={24}
+                color={focused ? '#ffffff' : 'rgba(255, 255, 255, 0.4)'}
+              />
+            </View>
+          )}
+        </Pressable>
+      )}
     </View>
   );
 }
@@ -465,5 +491,24 @@ const styles = StyleSheet.create({
     textShadowColor: TOKENS.color.accent,
     textShadowOffset: { width: 0, height: 0 },
     textShadowRadius: 40,
+  },
+
+  skipButton: {
+    position: 'absolute',
+    bottom: 40,
+    right: 48,
+  },
+  skipButtonInner: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  skipButtonFocused: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.4)',
   },
 });

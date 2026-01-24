@@ -276,19 +276,6 @@ export function WorkoutControls({
                     color={isStationsExercise ? '#fff5e6' : TOKENS.color.text}
                   />
                 </MattePanel>
-                {/* Indicator dot when panel is closed and has active states */}
-                {!isSettingsPanelOpen && (isLightingEnabled || isMusicEnabled) && (
-                  <View style={{
-                    position: 'absolute',
-                    top: 8,
-                    right: 8,
-                    width: 6,
-                    height: 6,
-                    borderRadius: 3,
-                    backgroundColor: TOKENS.color.accent,
-                    opacity: 0.5,
-                  }} />
-                )}
               </View>
             )}
           </Pressable>

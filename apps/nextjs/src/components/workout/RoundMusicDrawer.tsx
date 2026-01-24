@@ -416,7 +416,15 @@ export function RoundMusicDrawer({
     setDetailEnabled(trigger?.enabled ?? false);
     setDetailTrackId(trigger?.trackId || null);
     setDetailTrackName(trigger?.trackName || "");
-    setDetailEnergy((trigger?.energy as EnergyLevel) || (phase.phaseType === "rest" ? "low" : "high"));
+    // Rise (medium) is only allowed for preview/exercise phases - default to low for rest, high for setBreak
+    const savedEnergy = trigger?.energy as EnergyLevel | undefined;
+    const isRestOrSetBreak = phase.phaseType === "rest" || phase.phaseType === "setBreak";
+    const defaultEnergy = phase.phaseType === "rest" ? "low" : "high";
+    setDetailEnergy(
+      savedEnergy && !(isRestOrSetBreak && savedEnergy === "medium")
+        ? savedEnergy
+        : defaultEnergy
+    );
     setDetailRepeatOnAllSets(trigger?.repeatOnAllSets ?? false);
     setDetailNaturalEnding(trigger?.naturalEnding ?? false);
     setDetailUseBuildup(trigger?.useBuildup ?? false);
@@ -887,7 +895,15 @@ export function RoundMusicDrawer({
               <div className="mb-4">
                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">Energy</p>
                 <div className="flex gap-2">
-                  {(["low", "medium", "high"] as EnergyLevel[]).map((energy) => {
+                  {(["low", "medium", "high"] as EnergyLevel[])
+                    // Rise (medium) is only available for preview and exercise phases, not rest or setBreak
+                    .filter((energy) => {
+                      if (energy === "medium" && (viewState.phase.phaseType === "rest" || viewState.phase.phaseType === "setBreak")) {
+                        return false;
+                      }
+                      return true;
+                    })
+                    .map((energy) => {
                     const isAvailable = !availableEnergies || availableEnergies.includes(energy);
                     const isSelected = detailEnergy === energy;
 
@@ -1060,10 +1076,19 @@ export function RoundMusicDrawer({
                   </button>
                 )}
 
-                {/* Use Buildup - Only show when energy is "Rise" (medium) */}
-                {detailEnergy === "medium" && (
+                {/* Rise Countdown - Only for exercise phases (index 0 = first exercise), auto-selects Rise energy */}
+                {viewState.phase.phaseType === "exercise" && viewState.phase.index === 0 && (
                   <button
-                    onClick={() => setDetailUseBuildup(!detailUseBuildup)}
+                    onClick={() => {
+                      const newValue = !detailUseBuildup;
+                      setDetailUseBuildup(newValue);
+                      // Auto-select Rise (medium) energy when enabling Rise countdown
+                      if (newValue) {
+                        setDetailEnergy("medium");
+                        // Disable High countdown (mutually exclusive)
+                        setDetailShowHighCountdown(false);
+                      }
+                    }}
                     className={cn(
                       "w-full p-4 rounded-xl transition-all text-left",
                       detailUseBuildup
@@ -1077,7 +1102,7 @@ export function RoundMusicDrawer({
                           Rise countdown
                         </p>
                         <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-                          Show 3-2-1 countdown before the drop
+                          Buildup → 3-2-1 → Drop into high energy
                         </p>
                       </div>
                       <div
@@ -1111,10 +1136,19 @@ export function RoundMusicDrawer({
                   </button>
                 )}
 
-                {/* High Countdown - Only show when energy is "High" */}
-                {detailEnergy === "high" && (
+                {/* High Countdown - Only for exercise phases (index 0 = first exercise), auto-selects High energy */}
+                {viewState.phase.phaseType === "exercise" && viewState.phase.index === 0 && (
                   <button
-                    onClick={() => setDetailShowHighCountdown(!detailShowHighCountdown)}
+                    onClick={() => {
+                      const newValue = !detailShowHighCountdown;
+                      setDetailShowHighCountdown(newValue);
+                      // Auto-select High energy when enabling High countdown
+                      if (newValue) {
+                        setDetailEnergy("high");
+                        // Disable Rise countdown (mutually exclusive)
+                        setDetailUseBuildup(false);
+                      }
+                    }}
                     className={cn(
                       "w-full p-4 rounded-xl transition-all text-left",
                       detailShowHighCountdown
@@ -1128,7 +1162,7 @@ export function RoundMusicDrawer({
                           High countdown
                         </p>
                         <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-                          Show 3-2-1 countdown before the high energy drop
+                          Duck current music → 3-2-1 → Drop into high energy
                         </p>
                       </div>
                       <div
