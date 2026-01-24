@@ -22,6 +22,7 @@ import { useLightingControl } from '../hooks/useLightingControl';
 import { useAudio } from '../hooks/useAudio';
 import { useMusicPlayer } from '../hooks/useMusicPlayer';
 import { useWorkoutMusic, useMusic } from '../hooks/useWorkoutMusic';
+import { musicTriggerController } from '../music';
 import { RiseCountdownOverlay } from '../components/shared/RiseCountdownOverlay';
 
 // Re-export MattePanel for backward compatibility
@@ -130,7 +131,7 @@ export function CircuitWorkoutLiveScreen() {
   } = useMusicPlayer();
 
   // Get high countdown state from music provider
-  const { isHighCountdownActive, isRiseCountdownActive, setRiseCountdownActive, dropTime, prepareHighAudio, completeHighCountdown, startHighCountdown, lastTriggeredPhase, addConsumedTrigger, consumedTriggers, seekToHighSegment, tracks } = useMusic();
+  const { isHighCountdownActive, isRiseCountdownActive, setRiseCountdownActive, dropTime, prepareHighAudio, completeHighCountdown, startHighCountdown, seekToHighSegment, tracks } = useMusic();
 
   // Get circuit config with polling
   const { data: circuitConfig } = useQuery(
@@ -496,29 +497,30 @@ export function CircuitWorkoutLiveScreen() {
     const { currentRoundIndex, currentExerciseIndex, currentSetNumber } = state.context;
 
     // High countdown only triggers for exercise 0 (first exercise in round)
-    // This must match the condition in useWorkoutMusic
     if (currentExerciseIndex !== 0) return false;
 
-    const phaseKey = `exercise-${currentRoundIndex}-${currentExerciseIndex}-${currentSetNumber}`;
+    // Create phase key using controller
+    const phase = musicTriggerController.createPhaseKey('exercise', currentRoundIndex, currentExerciseIndex, currentSetNumber);
 
-    // If this phase already triggered, countdown already happened
-    if (lastTriggeredPhase === phaseKey) return false;
-
-    // If this phase was already consumed (e.g., countdown was triggered manually from preview),
-    // skip optimistic detection - the countdown already happened
-    if (consumedTriggers.has(phaseKey)) return false;
+    // If this phase already triggered or consumed, countdown already happened
+    if (musicTriggerController.isTriggered(phase) || musicTriggerController.isConsumed(phase)) {
+      return false;
+    }
 
     // Get the music trigger config for this exercise
     const roundTemplates = circuitConfig?.config?.roundTemplates as any[] | undefined;
     const roundConfig = roundTemplates?.find(rt => rt.roundNumber === currentRoundIndex + 1);
-    const exerciseTrigger = roundConfig?.music?.exercises?.[currentExerciseIndex];
+    const musicConfig = roundConfig?.music;
 
-    if (!exerciseTrigger?.enabled) return false;
-    if (!exerciseTrigger?.showHighCountdown) return false;
-    if (exerciseTrigger?.energy !== 'high') return false;
+    // Use controller to check if countdown should trigger
+    const { shouldTrigger, type } = musicTriggerController.shouldTriggerCountdown(phase, musicConfig);
 
-    // Multi-set logic (same as useWorkoutMusic)
+    // Only show optimistic state for 'high' countdown type
+    if (!shouldTrigger || type !== 'high') return false;
+
+    // Multi-set logic
     const totalSets = roundConfig?.template?.repeatTimes || 1;
+    const exerciseTrigger = musicConfig?.exercises?.[currentExerciseIndex];
     const isLastSet = currentSetNumber >= totalSets;
 
     // naturalEnding only fires on last set
@@ -533,8 +535,6 @@ export function CircuitWorkoutLiveScreen() {
     state.context.currentExerciseIndex,
     state.context.currentSetNumber,
     circuitConfig,
-    lastTriggeredPhase,
-    consumedTriggers,
   ]);
 
   // Whether to hold the visual state at the previous value (during countdown)
@@ -616,14 +616,14 @@ export function CircuitWorkoutLiveScreen() {
     // Mark that countdown needs to start workout when complete (automatic trigger from preview timer)
     countdownNeedsStartRef.current = true;
 
-    // Mark both the preview AND exercise 1 triggers as consumed
+    // Mark both the preview AND exercise 1 triggers as consumed using controller
     // Preview: prevents the preview trigger from firing when we RESUME after countdown completes
     // Exercise 1: prevents it from firing again when we transition to exercise state
-    const previewPhaseKey = `roundPreview-${state.context.currentRoundIndex}-0-${state.context.currentSetNumber}`;
-    const exercisePhaseKey = `exercise-${state.context.currentRoundIndex}-0-1`;
-    console.log('[CircuitWorkoutLiveScreen] Adding consumed triggers:', previewPhaseKey, exercisePhaseKey);
-    addConsumedTrigger(previewPhaseKey);
-    addConsumedTrigger(exercisePhaseKey);
+    const previewPhase = musicTriggerController.createPhaseKey('preview', state.context.currentRoundIndex, 0, state.context.currentSetNumber);
+    const exercisePhase = musicTriggerController.createPhaseKey('exercise', state.context.currentRoundIndex, 0, 1);
+    console.log('[CircuitWorkoutLiveScreen] Consuming triggers:', musicTriggerController.serializeKey(previewPhase), musicTriggerController.serializeKey(exercisePhase));
+    musicTriggerController.consumePhase(previewPhase);
+    musicTriggerController.consumePhase(exercisePhase);
 
     const trackId = exercise1Trigger?.trackId;
 
@@ -653,7 +653,6 @@ export function CircuitWorkoutLiveScreen() {
     isHighCountdownActive,
     isMusicEnabled,
     circuitConfig,
-    addConsumedTrigger,
     setRiseCountdownActive,
     playWithTrigger,
     startHighCountdown,
@@ -758,14 +757,12 @@ export function CircuitWorkoutLiveScreen() {
       // Set rise countdown active (overlay will show)
       setRiseCountdownActive(true);
 
-      // Mark both the preview AND exercise 1 triggers as "consumed"
-      // Preview: prevents the preview trigger from firing when we RESUME after countdown completes
-      // Exercise 1: prevents it from firing again when we transition to exercise state
-      const previewPhaseKey = `roundPreview-${state.context.currentRoundIndex}-0-${state.context.currentSetNumber}`;
-      const exercisePhaseKey = `exercise-${state.context.currentRoundIndex}-0-1`;
-      console.log('[CircuitWorkoutLiveScreen] Adding consumed triggers:', previewPhaseKey, exercisePhaseKey);
-      addConsumedTrigger(previewPhaseKey);
-      addConsumedTrigger(exercisePhaseKey);
+      // Mark both the preview AND exercise 1 triggers as consumed using controller
+      const previewPhase = musicTriggerController.createPhaseKey('preview', state.context.currentRoundIndex, 0, state.context.currentSetNumber);
+      const exercisePhase = musicTriggerController.createPhaseKey('exercise', state.context.currentRoundIndex, 0, 1);
+      console.log('[CircuitWorkoutLiveScreen] Consuming triggers:', musicTriggerController.serializeKey(previewPhase), musicTriggerController.serializeKey(exercisePhase));
+      musicTriggerController.consumePhase(previewPhase);
+      musicTriggerController.consumePhase(exercisePhase);
 
       // Get trackId from trigger config
       const trackId = exercise1Trigger?.trackId;
@@ -782,14 +779,12 @@ export function CircuitWorkoutLiveScreen() {
       // Mark that countdown needs to start workout when complete (manual trigger from preview)
       countdownNeedsStartRef.current = true;
 
-      // Mark both the preview AND exercise 1 triggers as "consumed"
-      // Preview: prevents the preview trigger from firing when we RESUME after countdown completes
-      // Exercise 1: prevents it from firing again when we transition to exercise state
-      const previewPhaseKey = `roundPreview-${state.context.currentRoundIndex}-0-${state.context.currentSetNumber}`;
-      const exercisePhaseKey = `exercise-${state.context.currentRoundIndex}-0-1`;
-      console.log('[CircuitWorkoutLiveScreen] Adding consumed triggers:', previewPhaseKey, exercisePhaseKey);
-      addConsumedTrigger(previewPhaseKey);
-      addConsumedTrigger(exercisePhaseKey);
+      // Mark both the preview AND exercise 1 triggers as consumed using controller
+      const previewPhase = musicTriggerController.createPhaseKey('preview', state.context.currentRoundIndex, 0, state.context.currentSetNumber);
+      const exercisePhase = musicTriggerController.createPhaseKey('exercise', state.context.currentRoundIndex, 0, 1);
+      console.log('[CircuitWorkoutLiveScreen] Consuming triggers:', musicTriggerController.serializeKey(previewPhase), musicTriggerController.serializeKey(exercisePhase));
+      musicTriggerController.consumePhase(previewPhase);
+      musicTriggerController.consumePhase(exercisePhase);
 
       // Get trackId from trigger config
       const trackId = exercise1Trigger?.trackId;
@@ -803,7 +798,7 @@ export function CircuitWorkoutLiveScreen() {
       // No countdown configured, proceed normally
       send({ type: 'START_WORKOUT' });
     }
-  }, [circuitConfig, state.context.currentRoundIndex, isRiseCountdownActive, isHighCountdownActive, setRiseCountdownActive, addConsumedTrigger, playWithTrigger, startHighCountdown, send, setIsSettingsPanelOpen]);
+  }, [circuitConfig, state.context.currentRoundIndex, state.context.currentSetNumber, isRiseCountdownActive, isHighCountdownActive, setRiseCountdownActive, playWithTrigger, startHighCountdown, send, setIsSettingsPanelOpen]);
 
   // Auto-focus close button when modal opens, restore focus when modal closes
   useEffect(() => {

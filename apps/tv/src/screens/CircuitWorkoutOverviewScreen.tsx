@@ -16,6 +16,7 @@ import { useLightingControl } from '../hooks/useLightingControl';
 import { useMusicPlayer } from '../hooks/useMusicPlayer';
 import { useWorkoutMusic } from '../hooks/useWorkoutMusic';
 import { useMusic } from '../providers/MusicProvider';
+import { musicTriggerController } from '../music';
 
 // Design tokens - matching other screens
 const TOKENS = {
@@ -604,8 +605,6 @@ export function CircuitWorkoutOverviewScreen() {
     playWithTrigger,
   } = useMusicPlayer();
 
-  // Get shared trigger state from music context
-  const { setLastTriggeredPhase } = useMusic();
 
   // Ensure settings panel is closed when this screen mounts
   useEffect(() => {
@@ -1112,7 +1111,8 @@ export function CircuitWorkoutOverviewScreen() {
                     trackId: previewTrigger?.trackId,
                   });
                   // Mark Round 1 Preview as triggered so CircuitWorkoutLive doesn't re-trigger
-                  setLastTriggeredPhase('roundPreview-0-0-1');
+                  const previewPhase = musicTriggerController.createPhaseKey('preview', 0, 0, 1);
+                  musicTriggerController.markTriggered(previewPhase);
                 }
               }}
               focusable={isSettingsPanelOpen}

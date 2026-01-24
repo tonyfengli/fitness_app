@@ -24,6 +24,15 @@ interface PendingHighTrigger {
   trackId?: string;
 }
 
+// Pending trigger for queue-based natural ending transitions
+interface PendingTrigger {
+  energy: PlayableEnergy;
+  useBuildup?: boolean;
+  trackId?: string;
+  naturalEnding?: boolean;
+  roundEndTime?: number;
+}
+
 // Configurable render latency offset (time from transition trigger to screen visible)
 // Adjust per device if needed
 const RENDER_LATENCY_MS = 150;
@@ -51,15 +60,7 @@ interface MusicContextValue {
   preSelectedRiseTrack: PreSelectedRiseTrack | null; // Pre-selected track for random buildup
   isHighCountdownActive: boolean; // Whether high countdown overlay is active
   isRiseCountdownActive: boolean; // Whether rise countdown overlay is active
-
-  // Trigger tracking (shared across screens)
-  lastTriggeredPhase: string | null;
-  setLastTriggeredPhase: (phase: string | null) => void;
-
-  // Pre-consumed triggers (for rise transition - marks triggers as already played)
-  consumedTriggers: Set<string>;
-  addConsumedTrigger: (phaseKey: string) => void;
-  clearConsumedTriggers: () => void;
+  isNaturalEndingActive: boolean; // Whether a natural ending track is currently playing
 
   // Actions
   start: () => Promise<void>;
@@ -81,7 +82,8 @@ interface MusicContextValue {
     useBuildup?: boolean;
     trackId?: string;
     naturalEnding?: boolean;
-    roundDurationSec?: number;
+    /** Absolute timestamp (ms) when round/set ends - for precision natural ending */
+    roundEndTime?: number;
   }) => Promise<void>;
 
   // High countdown methods
@@ -126,11 +128,6 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
   const [dropTime, setDropTime] = useState<number | null>(null); // Audio-sync: absolute timestamp when drop hits
 
   // Trigger tracking (shared across screens to prevent duplicate triggers)
-  const [lastTriggeredPhase, setLastTriggeredPhase] = useState<string | null>(null);
-
-  // Pre-consumed triggers (e.g., exercise trigger played early via rise transition)
-  const [consumedTriggers, setConsumedTriggers] = useState<Set<string>>(new Set());
-
   // Sync state
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<SyncResult | null>(null);
@@ -146,6 +143,9 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
 
   // Rise countdown state (for screen-level overlay)
   const [isRiseCountdownActive, setIsRiseCountdownActive] = useState(false);
+
+  // Natural ending state (exposed for skip optimization in useWorkoutMusic)
+  const [isNaturalEndingActive, setIsNaturalEndingActive] = useState(false);
 
   // Downloaded track filenames (for filtering selection to only playable tracks)
   const [downloadedFilenames, setDownloadedFilenames] = useState<Set<string>>(new Set());
@@ -180,6 +180,11 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
   const buildupIntervalRef = useRef<NodeJS.Timeout | null>(null);
   // Track if current track was played with natural ending (suppress auto-play on end)
   const naturalEndingActiveRef = useRef(false);
+
+  // Queue for triggers that arrive while natural ending is playing
+  // Only the latest trigger is kept (replaces previous)
+  const pendingTriggerRef = useRef<PendingTrigger | null>(null);
+  const pendingTriggerTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Cached tracks from AsyncStorage
   const [cachedTracks, setCachedTracks] = useState<MusicTrack[] | null>(null);
@@ -317,25 +322,13 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     setPreSelectedRiseTrack(null);
   }, []);
 
-  // Add a trigger to the consumed set (for rise transition)
-  const addConsumedTrigger = useCallback((phaseKey: string) => {
-    console.log('[MusicProvider] addConsumedTrigger:', phaseKey);
-    setConsumedTriggers(prev => {
-      const newSet = new Set(prev).add(phaseKey);
-      console.log('[MusicProvider] consumedTriggers now:', Array.from(newSet));
-      return newSet;
-    });
-  }, []);
-
-  // Clear consumed triggers (e.g., when starting a new workout)
-  const clearConsumedTriggers = useCallback(() => {
-    setConsumedTriggers(new Set());
-  }, []);
-
   // Play next random track (optionally filtered by energy)
   const playNextTrack = useCallback(async (options?: {
     energy?: PlayableEnergy;
     useBuildup?: boolean;
+    naturalEnding?: boolean;
+    /** Absolute timestamp (ms) when round/set ends - for precision natural ending */
+    roundEndTime?: number;
   }) => {
     // Guard against concurrent play calls
     if (isStartingRef.current) return;
@@ -350,11 +343,21 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
 
     const targetEnergy = options?.energy;
     const useBuildup = options?.useBuildup ?? false;
+    const naturalEnding = options?.naturalEnding ?? false;
+    const roundEndTime = options?.roundEndTime;
 
     // Filter downloaded tracks that have segments with the target energy
     let trackPool = targetEnergy
       ? downloadedTracks.filter(t => hasEnergySegment(t, targetEnergy))
       : downloadedTracks;
+
+    // For natural ending, also filter by tracks that have duration metadata
+    if (naturalEnding && roundEndTime) {
+      const tracksWithDuration = trackPool.filter(t => t.durationMs && t.durationMs > 0);
+      if (tracksWithDuration.length > 0) {
+        trackPool = tracksWithDuration;
+      }
+    }
 
     // Fallback to all downloaded tracks if no tracks match the energy
     if (trackPool.length === 0) trackPool = downloadedTracks;
@@ -375,20 +378,46 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
 
     if (track) {
       // Select a segment with the target energy (or first segment as fallback)
-      const segment = targetEnergy
+      let segment = targetEnergy
         ? getRandomSegmentByEnergy(track.segments || [], targetEnergy)
         : track.segments?.[0] || null;
+
+      // Handle natural ending - calculate seek point using precision timing
+      // Note: roundEndTime already includes smart drift buffer from useWorkoutMusic,
+      // so we don't add additional overshoot here. Music ends exactly at roundEndTime.
+      let seekTimestamp: number | undefined;
+      if (naturalEnding && roundEndTime && track.durationMs) {
+        const trackDurationSec = track.durationMs / 1000;
+        // Calculate remaining time from NOW (accounts for all latency up to this point)
+        const remainingMs = roundEndTime - Date.now();
+        const remainingSec = remainingMs / 1000;
+        // No additional overshoot - smart buffer already compensates for drift
+        seekTimestamp = trackDurationSec - remainingSec;
+        if (seekTimestamp < 0) seekTimestamp = 0;
+
+        console.log('[MusicProvider] playNextTrack natural ending precision calc:', {
+          trackDurationSec,
+          roundEndTime,
+          now: Date.now(),
+          remainingSec,
+          seekTimestamp,
+        });
+
+        // Find which segment the seek point falls into
+        segment = findSegmentAtTimestamp(track.segments || [], seekTimestamp);
+      }
 
       try {
         playedTracksHistory.current.push({ track, segment });
         setIsPaused(false);
         setCurrentEnergy(segment?.energy || null);
         isSwitchingTrackRef.current = true;
-        naturalEndingActiveRef.current = false;
+        naturalEndingActiveRef.current = naturalEnding;
+        setIsNaturalEndingActive(naturalEnding);
 
-        // Handle buildup for Rise (medium to high transition)
+        // Handle buildup for Rise (medium to high transition) - NOT for natural ending
         let playSegment = segment;
-        if (useBuildup) {
+        if (useBuildup && !naturalEnding) {
           const segments = track.segments || [];
           const mediumSegment = segments.find(s => s.energy === 'medium');
           const highSegment = segments.find(s => s.energy === 'high');
@@ -406,6 +435,11 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
           }
         }
 
+        // For natural ending, use calculated seek position
+        if (seekTimestamp !== undefined && playSegment) {
+          playSegment = { ...playSegment, timestamp: seekTimestamp };
+        }
+
         await musicService.play(track, { segment: playSegment, useBuildup: false });
         setError(null);
       } catch (err) {
@@ -419,7 +453,7 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     } else {
       isStartingRef.current = false;
     }
-  }, [downloadedTracks, tracks, startBuildupCountdown, clearBuildupCountdown]);
+  }, [downloadedTracks, tracks, startBuildupCountdown, clearBuildupCountdown, findSegmentAtTimestamp]);
 
   // Helper to find segment at a specific timestamp
   const findSegmentAtTimestamp = useCallback((segments: MusicSegment[], timestamp: number): MusicSegment | null => {
@@ -436,17 +470,68 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     return result;
   }, []);
 
+  // Clear pending trigger timeout (cleanup helper)
+  const clearPendingTriggerTimeout = useCallback(() => {
+    if (pendingTriggerTimeoutRef.current) {
+      clearTimeout(pendingTriggerTimeoutRef.current);
+      pendingTriggerTimeoutRef.current = null;
+    }
+  }, []);
+
+  // Cleanup pending trigger timeout on unmount
+  useEffect(() => {
+    return () => clearPendingTriggerTimeout();
+  }, [clearPendingTriggerTimeout]);
+
   // Play with trigger (specific track or energy-based selection)
+  // Handles queueing for natural ending transitions
   const playWithTrigger = useCallback(async (options: {
     energy: PlayableEnergy;
     useBuildup?: boolean;
     trackId?: string;
     naturalEnding?: boolean;
-    roundDurationSec?: number;
+    /** Absolute timestamp (ms) when round/set ends - for precision natural ending */
+    roundEndTime?: number;
   }) => {
-    const { energy, useBuildup = false, trackId, naturalEnding = false, roundDurationSec } = options;
+    const { energy, useBuildup = false, trackId, naturalEnding = false, roundEndTime } = options;
 
-    console.log('[MusicProvider] playWithTrigger called:', { energy, useBuildup, trackId, naturalEnding, isStarting: isStartingRef.current });
+    console.log('[MusicProvider] playWithTrigger called:', {
+      energy,
+      useBuildup,
+      trackId,
+      naturalEnding,
+      isStarting: isStartingRef.current,
+      naturalEndingActive: naturalEndingActiveRef.current,
+    });
+
+    // If a natural ending track is currently playing and this is NOT a natural ending trigger,
+    // queue this trigger to play after the natural ending finishes
+    if (naturalEndingActiveRef.current && !naturalEnding) {
+      console.log('[MusicProvider] Natural ending active - queueing trigger');
+
+      // Clear any existing timeout
+      clearPendingTriggerTimeout();
+
+      // Queue the trigger (replaces any previous queued trigger - only keep latest)
+      pendingTriggerRef.current = { energy, useBuildup, trackId, naturalEnding, roundEndTime };
+
+      // Safety net: if trackEnd never fires, process queue after timeout
+      const SAFETY_NET_TIMEOUT_MS = 10000; // 10 seconds should be more than enough
+      pendingTriggerTimeoutRef.current = setTimeout(() => {
+        if (pendingTriggerRef.current) {
+          console.warn('[MusicProvider] Safety net: processing queued trigger via timeout');
+          naturalEndingActiveRef.current = false;
+          setIsNaturalEndingActive(false);
+          const pending = pendingTriggerRef.current;
+          pendingTriggerRef.current = null;
+          clearPendingTriggerTimeout();
+          // Recursive call - now naturalEndingActiveRef is false, so it will play
+          playWithTrigger(pending);
+        }
+      }, SAFETY_NET_TIMEOUT_MS);
+
+      return;
+    }
 
     // Guard against concurrent play calls
     // EXCEPTION: Rise triggers (useBuildup=true) are user-initiated and have priority
@@ -478,11 +563,23 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
           let seekTimestamp: number | undefined;
 
           // Handle natural ending - calculate seek point so track ends when round ends
-          if (naturalEnding && roundDurationSec && specificTrack.durationMs) {
+          // Uses absolute roundEndTime for precision timing
+          // Note: roundEndTime already includes smart drift buffer + 3s overshoot from useWorkoutMusic
+          if (naturalEnding && roundEndTime && specificTrack.durationMs) {
             const trackDurationSec = specificTrack.durationMs / 1000;
-            const OVERSHOOT_BUFFER_SEC = 2.5;
-            seekTimestamp = trackDurationSec - roundDurationSec - OVERSHOOT_BUFFER_SEC;
+            // Calculate remaining time from NOW (accounts for all latency up to this point)
+            const remainingMs = roundEndTime - Date.now();
+            const remainingSec = remainingMs / 1000;
+            seekTimestamp = trackDurationSec - remainingSec;
             if (seekTimestamp < 0) seekTimestamp = 0;
+
+            console.log('[MusicProvider] Natural ending precision calc:', {
+              trackDurationSec,
+              roundEndTime,
+              now: Date.now(),
+              remainingSec,
+              seekTimestamp,
+            });
 
             // Find which segment the seek point falls into
             segment = findSegmentAtTimestamp(specificTrack.segments || [], seekTimestamp);
@@ -502,6 +599,7 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
 
           // Track if this is a natural ending track (suppress auto-play when it ends)
           naturalEndingActiveRef.current = naturalEnding;
+          setIsNaturalEndingActive(naturalEnding);
 
           // Handle buildup for specific tracks (not for natural ending)
           if (useBuildup && !naturalEnding) {
@@ -554,6 +652,7 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
           setIsEnabled(true);
           isSwitchingTrackRef.current = true;
           naturalEndingActiveRef.current = false;
+          setIsNaturalEndingActive(false);
 
           if (riseDuration && riseDuration > 0) {
             startBuildupCountdown(riseDuration);
@@ -572,10 +671,10 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
-    // Play random track with energy filter
+    // Play random track with energy filter (includes natural ending support)
     setIsEnabled(true);
-    await playNextTrack({ energy, useBuildup });
-  }, [tracks, downloadedFilenames, playNextTrack, startBuildupCountdown, clearBuildupCountdown, findSegmentAtTimestamp, preSelectedRiseTrack]);
+    await playNextTrack({ energy, useBuildup, naturalEnding, roundEndTime });
+  }, [tracks, downloadedFilenames, playNextTrack, startBuildupCountdown, clearBuildupCountdown, clearPendingTriggerTimeout, findSegmentAtTimestamp, preSelectedRiseTrack]);
 
   // Start high countdown - ducks volume and prepares for high energy drop
   const startHighCountdown = useCallback((options: { energy: PlayableEnergy; trackId?: string; durationMs?: number }) => {
@@ -736,10 +835,22 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
           setCurrentTrack(null);
           setCurrentSegment(null);
           clearBuildupCountdown();
-          // Suppress auto-play for natural ending tracks
+          // Handle natural ending tracks - check for queued triggers
           if (naturalEndingActiveRef.current) {
             naturalEndingActiveRef.current = false;
-            setIsPlaying(false);
+            setIsNaturalEndingActive(false);
+            // Clear safety net timeout
+            clearPendingTriggerTimeout();
+            // Check for queued trigger
+            if (pendingTriggerRef.current) {
+              console.log('[MusicProvider] Natural ending complete - processing queued trigger');
+              const pending = pendingTriggerRef.current;
+              pendingTriggerRef.current = null;
+              // Play the queued trigger
+              playWithTrigger(pending);
+            } else {
+              setIsPlaying(false);
+            }
           } else if (isEnabled && currentEnergy && currentEnergy !== 'outro') {
             playNextTrack({ energy: currentEnergy as PlayableEnergy });
           } else {
@@ -758,6 +869,7 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
           setIsEnabled(false);
           clearBuildupCountdown();
           naturalEndingActiveRef.current = false;
+          setIsNaturalEndingActive(false);
           break;
         case 'buildupComplete':
           clearBuildupCountdown();
@@ -771,7 +883,7 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     });
 
     return unsubscribe;
-  }, [isEnabled, playNextTrack, currentEnergy, clearBuildupCountdown]);
+  }, [isEnabled, playNextTrack, playWithTrigger, currentEnergy, clearBuildupCountdown, clearPendingTriggerTimeout]);
 
   // Start music
   const start = useCallback(async () => {
@@ -804,6 +916,7 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     setIsPaused(false);
     clearBuildupCountdown();
     naturalEndingActiveRef.current = false;
+    setIsNaturalEndingActive(false);
     await musicService.stop();
     setIsPlaying(false);
     setCurrentTrack(null);
@@ -928,12 +1041,8 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     preSelectedRiseTrack,
     isHighCountdownActive,
     isRiseCountdownActive,
+    isNaturalEndingActive,
     setRiseCountdownActive: setIsRiseCountdownActive,
-    lastTriggeredPhase,
-    setLastTriggeredPhase,
-    consumedTriggers,
-    addConsumedTrigger,
-    clearConsumedTriggers,
     start,
     stop,
     enable,
